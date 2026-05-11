@@ -66,9 +66,10 @@ Three things to disambiguate:
 - `services/campaign.service.ts` (1127 lines) vs `services/campaigns.service.ts` — singular/plural pair.
 - `services/screens.service.ts` vs `services/api/screens.api.ts` — the `.api.ts`-wrapping-a-`.service.ts`
   anti-pattern; `services/api/` contains only that one file.
-- Admin services cluster — `admin.service.ts` plus the `admin-*.service.ts` files (campaigns, events,
-  locations, recharges, screens, users) have overlapping methods that need consolidation. The Phase-1
-  backend's admin API surface depends on disambiguating these.
+- Admin services cluster — `admin.service.ts` plus the `admin-*.service.ts` files
+  (`admin-campaign-monitoring`, `admin-events`, `admin-recharges`, `admin-screens`, `admin-user`,
+  `admin-video`) have overlapping methods that need consolidation. The Phase-1 backend's admin API
+  surface depends on disambiguating these.
 
 Note `events.service.ts` vs `admin-events.service.ts` is a legit user/admin split, not a duplicate.
 → **Step 2b · #14**
