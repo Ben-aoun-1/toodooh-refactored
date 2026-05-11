@@ -57,14 +57,21 @@ Four "keep one, drop the other" pairs: `MyCart`/`CartPage`, `Perfor`/`OwnerPerfo
 files are also orphaned (referenced by no `<Route>`, or only inside `Dashboard`):
 `MyCart.tsx`, `CartPage.tsx`, `Perfor.tsx`, `Parcs.tsx`, `MyCampaigns.tsx`, `MyInvoices.tsx`,
 `MyClients.tsx`, `MyRecharges.tsx`, `UserProfile.tsx` (and `NewCampaign.tsx`, handled by Step 5).
-→ **Step 2 · #1**
+→ **Step 2a · #1**
 
 ### Duplicate / wrapper services
 
-`services/campaign.service.ts` (1127 lines) vs `services/campaigns.service.ts` (singular/plural
-pair); `services/screens.service.ts` vs `services/api/screens.api.ts` (the `.api.ts`-wrapping-a
-`.service.ts` anti-pattern; `services/api/` contains only that one file). Note `events.service.ts`
-vs `admin-events.service.ts` is a legit user/admin split, not a duplicate. → **Step 2 · #1**
+Three things to disambiguate:
+
+- `services/campaign.service.ts` (1127 lines) vs `services/campaigns.service.ts` — singular/plural pair.
+- `services/screens.service.ts` vs `services/api/screens.api.ts` — the `.api.ts`-wrapping-a-`.service.ts`
+  anti-pattern; `services/api/` contains only that one file.
+- Admin services cluster — `admin.service.ts` plus the `admin-*.service.ts` files (campaigns, events,
+  locations, recharges, screens, users) have overlapping methods that need consolidation. The Phase-1
+  backend's admin API surface depends on disambiguating these.
+
+Note `events.service.ts` vs `admin-events.service.ts` is a legit user/admin split, not a duplicate.
+→ **Step 2b · #14**
 
 ### DOOH calculation engine coupled to Supabase
 
@@ -174,7 +181,8 @@ Each step gets its own brainstorm → spec → plan → execute cycle.
 | #   | Step                                                                | Touches (roughly)                                                                                                                                                                               | Done when                                                                                                                                                                                                            | Issue | Status |
 | --- | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ------ |
 | 1   | Cleanup audit & roadmap (this doc)                                  | `docs/audit.md`, GitHub issues/milestone                                                                                                                                                        | doc committed; issues created                                                                                                                                                                                        | —     | ☑      |
-| 2   | Resolve duplicate pages & services                                  | `pages/*`, `services/*`, `App.tsx`                                                                                                                                                              | one impl per concept (winners chosen, not silent); orphan pages deleted; build OK                                                                                                                                    | #1    | ☐      |
+| 2a  | Resolve duplicate pages and delete orphans                          | `pages/*`, importers (`App.tsx`)                                                                                                                                                                | one winner chosen per duplicate page pair (not silent); confirmed-orphan page files deleted; imports rewired; build OK                                                                                               | #1    | ☐      |
+| 2b  | Resolve duplicate services                                          | `services/*`, `services/api/`, importers                                                                                                                                                        | one implementation per service concept (`campaign(s).service`, `screens.service`/`screens.api`, the `admin-*.service` cluster); Phase-1 API surface unambiguous; typecheck/lint not regressed; build OK              | #14   | ☐      |
 | 3   | Consolidate the auth-state layer                                    | `services/auth.service.ts` (session logic out), `stores/auth.store.ts`, the 8 `localStorage` files, `App.tsx` (drop `clearAuthCache` import)                                                    | single auth-state layer; no raw `localStorage` outside Zustand `persist`; debug import gone                                                                                                                          | #2    | ☐      |
 | 4   | Decouple DOOH calculation services from Supabase                    | `services/dooh-calculation.service.ts`, `services/dooh-hourly-grid.ts`, `services/campaign-hourly-location-plan.service.ts`, `services/dooh-location-affluence-engine.ts`; new pure-math module | failing `campaign-hourly-location-plan.service.test.ts` passes; pure functions live in a Supabase-independent module; persistence wrappers stay in service files but become thin; surfaced business rules documented | #12   | ☐      |
 | 5   | Decompose `Dashboard.tsx` / `NewCampaign.tsx`                       | `pages/Dashboard.tsx`, `pages/NewCampaign.tsx`, `App.tsx` routes                                                                                                                                | each route renders its own page; largest chunk materially smaller; no regressions                                                                                                                                    | #3    | ☐      |
