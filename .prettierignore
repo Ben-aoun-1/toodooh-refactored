@@ -1,0 +1,10 @@
+node_modules
+dist
+build
+coverage
+.vite
+pnpm-lock.yaml
+.pnpm-store
+
+# Hand-maintained spec document — keep authored formatting
+CLAUDE.md
