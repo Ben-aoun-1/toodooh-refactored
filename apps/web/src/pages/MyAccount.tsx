@@ -1,20 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  User, 
-  Building2, 
-  MapPin, 
-  Phone, 
-  Mail, 
-  Lock, 
-  CheckCircle, 
+import {
+  User,
+  Building2,
+  MapPin,
+  Phone,
+  Mail,
+  Lock,
+  CheckCircle,
   Save,
   ArrowLeft,
   Eye,
   EyeOff,
   Upload,
   FileText,
-  X
+  X,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAuthStore } from '../stores/auth.store';
@@ -27,7 +27,7 @@ const steps = [
   { id: 1, title: 'Profil', icon: User },
   { id: 2, title: 'Entreprise', icon: Building2 },
   { id: 3, title: 'Adresse', icon: MapPin },
-  { id: 4, title: 'Validation', icon: CheckCircle }
+  { id: 4, title: 'Validation', icon: CheckCircle },
 ];
 
 export default function MyAccount() {
@@ -53,23 +53,23 @@ export default function MyAccount() {
     phone: '',
     password: '',
     confirmPassword: '',
-    
+
     // Informations entreprise
     businessName: '',
     taxNumber: '',
     businessSectorId: '',
     businessType: 'local' as 'local' | 'national' | 'agency' | 'event_organizer',
-    
+
     // Adresse
     streetAddress: '',
     city: '',
     postalCode: '',
     governorateId: '',
-    
+
     // Documents
     registrationDocUrl: '',
     formule: '', // Formule choisie par le propriétaire
-    termsAccepted: true
+    termsAccepted: true,
   });
 
   useEffect(() => {
@@ -94,9 +94,9 @@ export default function MyAccount() {
     try {
       const profileData = await authService.getBusinessProfile();
       console.log('📋 Données du profil chargées:', profileData);
-      console.log('🏢 Type d\'entreprise actuel:', profileData?.business_type);
+      console.log("🏢 Type d'entreprise actuel:", profileData?.business_type);
       setProfile(profileData);
-      
+
       // Pré-remplir le formulaire avec les données existantes
       setFormData({
         firstName: profileData?.contact_name?.split(' ')[0] || '',
@@ -108,14 +108,16 @@ export default function MyAccount() {
         businessName: profileData?.business_name || '',
         taxNumber: profileData?.tax_number || '',
         businessSectorId: profileData?.business_sector_id || '',
-        businessType: profileData?.business_type as 'local' | 'national' | 'agency' | 'event_organizer' || 'local',
+        businessType:
+          (profileData?.business_type as 'local' | 'national' | 'agency' | 'event_organizer') ||
+          'local',
         streetAddress: profileData?.street_address || '',
         city: profileData?.city || '',
         postalCode: profileData?.postal_code || '',
         governorateId: profileData?.governorate_id || '',
         registrationDocUrl: profileData?.registration_doc_url || '',
         formule: profileData?.formule || '',
-        termsAccepted: true
+        termsAccepted: true,
       });
     } catch (error) {
       console.error('Erreur lors du chargement du profil:', error);
@@ -127,7 +129,7 @@ export default function MyAccount() {
     try {
       const [sectorsData, governoratesData] = await Promise.all([
         authService.getBusinessSectors(),
-        authService.getGovernorates()
+        authService.getGovernorates(),
       ]);
       setSectors(sectorsData);
       setGovernorates(governoratesData);
@@ -137,11 +139,10 @@ export default function MyAccount() {
   };
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [field]: value
+      [field]: value,
     }));
-    
   };
 
   const nextStep = () => {
@@ -176,58 +177,58 @@ export default function MyAccount() {
     try {
       console.log('📤 Upload du document...');
       const ext = documentFile.name.split('.').pop();
-      
+
       // Déterminer le type de document selon le profil
       const isIndividualOwner = profileType === 'individual_owner';
       const filePrefix = isIndividualOwner ? 'cin' : 'rne';
       const filePath = `${filePrefix}_${user.id}_${Date.now()}.${ext}`;
-      
+
       console.log(`📂 Upload fichier ${filePrefix}:`, filePath);
-      
+
       // Upload vers le bucket registres
       const { error: uploadError } = await supabase.storage
         .from('registres')
         .upload(filePath, documentFile);
-      
+
       if (uploadError) {
         console.error('❌ Erreur upload:', uploadError);
         throw uploadError;
       }
-      
+
       console.log('✅ Document uploadé avec succès');
-      
+
       // Créer une URL signée
       const { data: signedData, error: signedError } = await supabase.storage
         .from('registres')
         .createSignedUrl(filePath, 604800); // 7 jours
-      
+
       if (signedError || !signedData) {
         console.error('❌ Erreur création URL signée:', signedError);
-        throw signedError || new Error('Impossible de créer l\'URL signée');
+        throw signedError || new Error("Impossible de créer l'URL signée");
       }
-      
+
       // Mettre à jour le profil avec l'URL du document
       const updateField = isIndividualOwner ? 'cin_doc_url' : 'registration_doc_url';
-      
+
       const { error: updateError } = await supabase
         .from('business_profiles')
         .update({ [updateField]: signedData.signedUrl })
         .eq('user_id', user.id);
-      
+
       if (updateError) {
         console.error('❌ Erreur mise à jour profil:', updateError);
         throw updateError;
       }
-      
+
       console.log('✅ Document sauvegardé dans le profil');
-      
+
       // Recharger le profil
       await loadProfileData();
-      
+
       setDocumentFile(null);
       toast.success('✅ Document uploadé avec succès !');
     } catch (error: any) {
-      console.error('❌ Erreur lors de l\'upload:', error);
+      console.error("❌ Erreur lors de l'upload:", error);
       toast.error(`❌ Erreur lors de l'upload: ${error.message || 'Erreur inconnue'}`);
     } finally {
       setUploadingDocument(false);
@@ -236,17 +237,17 @@ export default function MyAccount() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (formData.password && formData.password !== formData.confirmPassword) {
       toast.error('Les mots de passe ne correspondent pas');
       return;
     }
 
     setSaving(true);
-    
+
     try {
       console.log('🔄 Début de la mise à jour du profil...');
-      
+
       // Mettre à jour le profil
       const updateData = {
         business_name: formData.businessName,
@@ -259,32 +260,36 @@ export default function MyAccount() {
         city: formData.city,
         postal_code: formData.postalCode,
         governorate_id: formData.governorateId,
-        registration_doc_url: formData.registrationDocUrl
+        registration_doc_url: formData.registrationDocUrl,
       };
 
       console.log('📝 Données à mettre à jour:', updateData);
       await authService.updateBusinessProfile(updateData);
       console.log('✅ Profil mis à jour avec succès');
-      
+
       // Mettre à jour le mot de passe si fourni
       if (formData.password) {
         console.log('🔐 Mise à jour du mot de passe...');
         console.log('🔍 Longueur du mot de passe:', formData.password.length);
         console.log('🔍 Mot de passe valide:', formData.password.length >= 6);
-        
+
         try {
           await authService.updatePassword(formData.password);
           console.log('✅ Mot de passe mis à jour avec succès');
         } catch (passwordError) {
           console.error('❌ Erreur lors de la mise à jour du mot de passe:', passwordError);
-          throw new Error(`Erreur lors de la mise à jour du mot de passe: ${passwordError instanceof Error ? passwordError.message : 'Erreur inconnue'}`);
+          throw new Error(
+            `Erreur lors de la mise à jour du mot de passe: ${passwordError instanceof Error ? passwordError.message : 'Erreur inconnue'}`,
+          );
         }
       }
 
       toast.success('Profil mis à jour avec succès');
-      
+
       // Demander confirmation avant de quitter
-      const shouldLeave = window.confirm('Profil mis à jour avec succès ! Voulez-vous retourner au tableau de bord ?');
+      const shouldLeave = window.confirm(
+        'Profil mis à jour avec succès ! Voulez-vous retourner au tableau de bord ?',
+      );
       if (shouldLeave) {
         // Forcer le rechargement pour mettre à jour l'affichage
         window.location.reload();
@@ -294,11 +299,13 @@ export default function MyAccount() {
       }
     } catch (error) {
       console.error('❌ Erreur lors de la mise à jour:', error);
-      console.error('Détails de l\'erreur:', {
+      console.error("Détails de l'erreur:", {
         message: error instanceof Error ? error.message : 'Erreur inconnue',
-        stack: error instanceof Error ? error.stack : undefined
+        stack: error instanceof Error ? error.stack : undefined,
       });
-      toast.error(`Erreur lors de la mise à jour du profil: ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
+      toast.error(
+        `Erreur lors de la mise à jour du profil: ${error instanceof Error ? error.message : 'Erreur inconnue'}`,
+      );
     } finally {
       setSaving(false);
     }
@@ -307,10 +314,10 @@ export default function MyAccount() {
   const isFieldDisabled = (field: string) => {
     // Champs non modifiables selon le profil
     const disabledFields = {
-      'individual_owner': ['businessType', 'taxNumber', 'registrationDocUrl'],
-      'fleet_owner': ['businessType', 'taxNumber', 'registrationDocUrl']
+      individual_owner: ['businessType', 'taxNumber', 'registrationDocUrl'],
+      fleet_owner: ['businessType', 'taxNumber', 'registrationDocUrl'],
     };
-    
+
     return disabledFields[profileType as keyof typeof disabledFields]?.includes(field) || false;
   };
 
@@ -329,7 +336,7 @@ export default function MyAccount() {
     <div className="min-h-screen bg-white">
       <div className="flex h-screen">
         <OwnerNavigation isDisabled={isDisabled} />
-        
+
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Header */}
           <header className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
@@ -358,33 +365,39 @@ export default function MyAccount() {
 
           <div className="flex-1 overflow-y-auto">
             <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-              
               {/* Progress Steps */}
               <div className="mb-8">
                 <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200">
                   <div className="flex items-center justify-between">
                     {steps.map((step, index) => (
                       <div key={step.id} className="flex items-center">
-                        <div className={`flex items-center justify-center w-10 h-10 rounded-full ${
-                          currentStep >= step.id 
-                            ? 'bg-[#00B3A6] text-white' 
-                            : 'bg-gray-100 text-gray-400'
-                        }`}>
+                        <div
+                          className={`flex items-center justify-center w-10 h-10 rounded-full ${
+                            currentStep >= step.id
+                              ? 'bg-[#00B3A6] text-white'
+                              : 'bg-gray-100 text-gray-400'
+                          }`}
+                        >
                           <step.icon className="h-5 w-5" />
                         </div>
                         {index < steps.length - 1 && (
-                          <div className={`w-16 h-1 mx-2 ${
-                            currentStep > step.id ? 'bg-[#00B3A6]' : 'bg-gray-200'
-                          }`} />
+                          <div
+                            className={`w-16 h-1 mx-2 ${
+                              currentStep > step.id ? 'bg-[#00B3A6]' : 'bg-gray-200'
+                            }`}
+                          />
                         )}
                       </div>
                     ))}
                   </div>
                   <div className="flex justify-between mt-2">
                     {steps.map((step) => (
-                      <span key={step.id} className={`text-xs ${
-                        currentStep >= step.id ? 'text-[#00B3A6]' : 'text-gray-500'
-                      }`}>
+                      <span
+                        key={step.id}
+                        className={`text-xs ${
+                          currentStep >= step.id ? 'text-[#00B3A6]' : 'text-gray-500'
+                        }`}
+                      >
                         {step.title}
                       </span>
                     ))}
@@ -397,7 +410,9 @@ export default function MyAccount() {
                 {/* Step 1: Profil */}
                 {currentStep === 1 && (
                   <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200">
-                    <h3 className="text-xl font-bold text-gray-900 mb-6">Informations Personnelles</h3>
+                    <h3 className="text-xl font-bold text-gray-900 mb-6">
+                      Informations Personnelles
+                    </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -413,9 +428,7 @@ export default function MyAccount() {
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Nom
-                        </label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Nom</label>
                         <input
                           type="text"
                           value={formData.lastName}
@@ -435,7 +448,9 @@ export default function MyAccount() {
                           className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-gray-500 cursor-not-allowed"
                           disabled
                         />
-                        <p className="text-xs text-gray-500 mt-1">L'email ne peut pas être modifié</p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          L'email ne peut pas être modifié
+                        </p>
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -457,7 +472,9 @@ export default function MyAccount() {
                 {/* Step 2: Entreprise */}
                 {currentStep === 2 && (
                   <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200">
-                    <h3 className="text-xl font-bold text-gray-900 mb-6">Informations Entreprise</h3>
+                    <h3 className="text-xl font-bold text-gray-900 mb-6">
+                      Informations Entreprise
+                    </h3>
                     <div className="space-y-6">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -472,7 +489,7 @@ export default function MyAccount() {
                           required
                         />
                       </div>
-                      
+
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                           Type d'entreprise
@@ -482,8 +499,8 @@ export default function MyAccount() {
                           onChange={(e) => handleInputChange('businessType', e.target.value)}
                           disabled={isFieldDisabled('businessType')}
                           className={`w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6] ${
-                            isFieldDisabled('businessType') 
-                              ? 'bg-gray-50 text-gray-500 cursor-not-allowed' 
+                            isFieldDisabled('businessType')
+                              ? 'bg-gray-50 text-gray-500 cursor-not-allowed'
                               : 'bg-white'
                           }`}
                         >
@@ -493,7 +510,9 @@ export default function MyAccount() {
                           <option value="event_organizer">Organisateur d'événements</option>
                         </select>
                         {isFieldDisabled('businessType') && (
-                          <p className="text-xs text-gray-500 mt-1">Ce champ ne peut pas être modifié</p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Ce champ ne peut pas être modifié
+                          </p>
                         )}
                       </div>
 
@@ -526,42 +545,45 @@ export default function MyAccount() {
                           onChange={(e) => handleInputChange('taxNumber', e.target.value)}
                           disabled={isFieldDisabled('taxNumber')}
                           className={`w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6] ${
-                            isFieldDisabled('taxNumber') 
-                              ? 'bg-gray-50 text-gray-500 cursor-not-allowed' 
+                            isFieldDisabled('taxNumber')
+                              ? 'bg-gray-50 text-gray-500 cursor-not-allowed'
                               : 'bg-white'
                           }`}
                           placeholder="Numéro fiscal de l'entreprise"
                         />
                         {isFieldDisabled('taxNumber') && (
-                          <p className="text-xs text-gray-500 mt-1">Ce champ ne peut pas être modifié</p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Ce champ ne peut pas être modifié
+                          </p>
                         )}
                       </div>
 
                       {/* Affichage de la formule pour les propriétaires */}
-                      {(profileType === 'individual_owner' || profileType === 'fleet_owner') && formData.formule && (
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Formule choisie
-                          </label>
-                          <div className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-gray-900">
-                            <div className="flex items-center">
-                              <span className="text-2xl mr-3">
-                                {formData.formule === 'loyer' && '💰'}
-                                {formData.formule === 'abonnement' && '📺'}
-                                {formData.formule === 'revenue_share' && '🤝'}
-                              </span>
-                              <span className="font-medium">
-                                {formData.formule === 'loyer' && 'Formule Loyer'}
-                                {formData.formule === 'abonnement' && 'Formule Abonnement'}
-                                {formData.formule === 'revenue_share' && 'Formule Revenue share'}
-                              </span>
+                      {(profileType === 'individual_owner' || profileType === 'fleet_owner') &&
+                        formData.formule && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              Formule choisie
+                            </label>
+                            <div className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-gray-900">
+                              <div className="flex items-center">
+                                <span className="text-2xl mr-3">
+                                  {formData.formule === 'loyer' && '💰'}
+                                  {formData.formule === 'abonnement' && '📺'}
+                                  {formData.formule === 'revenue_share' && '🤝'}
+                                </span>
+                                <span className="font-medium">
+                                  {formData.formule === 'loyer' && 'Formule Loyer'}
+                                  {formData.formule === 'abonnement' && 'Formule Abonnement'}
+                                  {formData.formule === 'revenue_share' && 'Formule Revenue share'}
+                                </span>
+                              </div>
                             </div>
+                            <p className="text-xs text-gray-500 mt-1">
+                              Cette formule a été sélectionnée lors de votre inscription
+                            </p>
                           </div>
-                          <p className="text-xs text-gray-500 mt-1">
-                            Cette formule a été sélectionnée lors de votre inscription
-                          </p>
-                        </div>
-                      )}
+                        )}
                     </div>
                   </div>
                 )}
@@ -584,7 +606,7 @@ export default function MyAccount() {
                           required
                         />
                       </div>
-                      
+
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -599,7 +621,7 @@ export default function MyAccount() {
                             required
                           />
                         </div>
-                        
+
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">
                             Code postal
@@ -613,7 +635,7 @@ export default function MyAccount() {
                             required
                           />
                         </div>
-                        
+
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">
                             Gouvernorat
@@ -646,26 +668,30 @@ export default function MyAccount() {
                         <FileText className="h-6 w-6 text-[#00B3A6] mr-2" />
                         Documents légaux
                       </h3>
-                      
+
                       {profileType === 'individual_owner' ? (
                         <div>
                           <p className="text-sm text-gray-600 mb-4">
                             Votre document CIN (Carte d'Identité Nationale)
                           </p>
-                          
+
                           {profile?.cin_doc_url ? (
                             <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center space-x-3">
                                   <FileText className="h-8 w-8 text-green-600" />
                                   <div>
-                                    <p className="font-medium text-green-900">Document CIN enregistré</p>
-                                    <p className="text-sm text-green-700">Votre document a été uploadé avec succès</p>
+                                    <p className="font-medium text-green-900">
+                                      Document CIN enregistré
+                                    </p>
+                                    <p className="text-sm text-green-700">
+                                      Votre document a été uploadé avec succès
+                                    </p>
                                   </div>
                                 </div>
-                                <a 
-                                  href={profile.cin_doc_url} 
-                                  target="_blank" 
+                                <a
+                                  href={profile.cin_doc_url}
+                                  target="_blank"
                                   rel="noopener noreferrer"
                                   className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
                                 >
@@ -676,19 +702,22 @@ export default function MyAccount() {
                           ) : (
                             <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
                               <p className="text-sm text-orange-800 mb-4">
-                                📄 Aucun document CIN enregistré. Uploadez votre CIN pour compléter votre profil.
+                                📄 Aucun document CIN enregistré. Uploadez votre CIN pour compléter
+                                votre profil.
                               </p>
-                              
+
                               <div className="space-y-3">
                                 <div className="flex items-center space-x-3">
                                   <label className="flex-1">
                                     <div className="flex items-center justify-center px-4 py-3 border-2 border-dashed border-[#00B3A6] rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
                                       <Upload className="h-5 w-5 text-[#00B3A6] mr-2" />
                                       <span className="text-sm font-medium text-gray-700">
-                                        {documentFile ? documentFile.name : 'Sélectionner un fichier CIN'}
+                                        {documentFile
+                                          ? documentFile.name
+                                          : 'Sélectionner un fichier CIN'}
                                       </span>
                                     </div>
-                                    <input 
+                                    <input
                                       type="file"
                                       accept=".pdf,.jpg,.jpeg,.png"
                                       onChange={(e) => {
@@ -703,7 +732,7 @@ export default function MyAccount() {
                                       className="hidden"
                                     />
                                   </label>
-                                  
+
                                   {documentFile && (
                                     <>
                                       <button
@@ -736,20 +765,24 @@ export default function MyAccount() {
                           <p className="text-sm text-gray-600 mb-4">
                             Votre Registre National des Entreprises (RNE)
                           </p>
-                          
+
                           {profile?.registration_doc_url ? (
                             <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center space-x-3">
                                   <FileText className="h-8 w-8 text-green-600" />
                                   <div>
-                                    <p className="font-medium text-green-900">Registre de commerce enregistré</p>
-                                    <p className="text-sm text-green-700">Votre document a été uploadé avec succès</p>
+                                    <p className="font-medium text-green-900">
+                                      Registre de commerce enregistré
+                                    </p>
+                                    <p className="text-sm text-green-700">
+                                      Votre document a été uploadé avec succès
+                                    </p>
                                   </div>
                                 </div>
-                                <a 
-                                  href={profile.registration_doc_url} 
-                                  target="_blank" 
+                                <a
+                                  href={profile.registration_doc_url}
+                                  target="_blank"
                                   rel="noopener noreferrer"
                                   className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
                                 >
@@ -760,19 +793,22 @@ export default function MyAccount() {
                           ) : (
                             <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
                               <p className="text-sm text-orange-800 mb-4">
-                                📄 Aucun registre de commerce enregistré. Uploadez votre RNE pour compléter votre profil.
+                                📄 Aucun registre de commerce enregistré. Uploadez votre RNE pour
+                                compléter votre profil.
                               </p>
-                              
+
                               <div className="space-y-3">
                                 <div className="flex items-center space-x-3">
                                   <label className="flex-1">
                                     <div className="flex items-center justify-center px-4 py-3 border-2 border-dashed border-[#00B3A6] rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
                                       <Upload className="h-5 w-5 text-[#00B3A6] mr-2" />
                                       <span className="text-sm font-medium text-gray-700">
-                                        {documentFile ? documentFile.name : 'Sélectionner un fichier RNE'}
+                                        {documentFile
+                                          ? documentFile.name
+                                          : 'Sélectionner un fichier RNE'}
                                       </span>
                                     </div>
-                                    <input 
+                                    <input
                                       type="file"
                                       accept=".pdf,.jpg,.jpeg,.png"
                                       onChange={(e) => {
@@ -787,7 +823,7 @@ export default function MyAccount() {
                                       className="hidden"
                                     />
                                   </label>
-                                  
+
                                   {documentFile && (
                                     <>
                                       <button
@@ -842,11 +878,15 @@ export default function MyAccount() {
                               onClick={() => setShowPassword(!showPassword)}
                               className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
                             >
-                              {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                              {showPassword ? (
+                                <EyeOff className="h-5 w-5" />
+                              ) : (
+                                <Eye className="h-5 w-5" />
+                              )}
                             </button>
                           </div>
                         </div>
-                        
+
                         {formData.password && (
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -876,7 +916,7 @@ export default function MyAccount() {
                   >
                     Précédent
                   </button>
-                  
+
                   {currentStep < 4 ? (
                     <button
                       type="button"

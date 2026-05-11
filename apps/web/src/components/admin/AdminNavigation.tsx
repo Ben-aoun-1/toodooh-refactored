@@ -1,18 +1,18 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminStore } from '../../stores/admin.store';
-import { 
-  BarChart3, 
-  Users, 
-  Monitor, 
-  Activity, 
-  CheckCircle, 
-  Settings, 
-  LogOut, 
-  Bell, 
-  MenuIcon, 
+import {
+  BarChart3,
+  Users,
+  Monitor,
+  Activity,
+  CheckCircle,
+  Settings,
+  LogOut,
+  Bell,
+  MenuIcon,
   X,
-  MapPin
+  MapPin,
 } from 'lucide-react';
 
 interface AdminNavigationProps {
@@ -66,44 +66,44 @@ export default function AdminNavigation({ children, title, subtitle }: AdminNavi
       name: 'Dashboard',
       href: '/admin-dashboard',
       icon: BarChart3,
-      roles: ['superadmin', 'admin', 'moderator']
+      roles: ['superadmin', 'admin', 'moderator'],
     },
     {
       name: 'Gestion des utilisateurs',
       href: '/admin-users',
       icon: Users,
-      roles: ['superadmin', 'admin']
+      roles: ['superadmin', 'admin'],
     },
     {
       name: 'Gestion des écrans',
       href: '/admin-screens',
       icon: Monitor,
-      roles: ['superadmin', 'admin', 'moderator']
+      roles: ['superadmin', 'admin', 'moderator'],
     },
     {
       name: 'Gestion des campagnes',
       href: '/admin-campaigns',
       icon: Activity,
-      roles: ['superadmin', 'admin', 'moderator']
+      roles: ['superadmin', 'admin', 'moderator'],
     },
     {
       name: 'Zones géographiques',
       href: '/admin-zones',
       icon: MapPin,
-      roles: ['superadmin', 'admin']
+      roles: ['superadmin', 'admin'],
     },
     {
       name: 'Vérifications',
       href: '/admin-verifications',
       icon: CheckCircle,
-      roles: ['superadmin', 'admin']
+      roles: ['superadmin', 'admin'],
     },
     {
       name: 'Administrateurs',
       href: '/admin-admins',
       icon: Settings,
-      roles: ['superadmin']
-    }
+      roles: ['superadmin'],
+    },
     // Masqué : Rapports
     // {
     //   name: 'Rapports',
@@ -113,18 +113,20 @@ export default function AdminNavigation({ children, title, subtitle }: AdminNavi
     // }
   ];
 
-  const filteredNavigationItems = navigationItems.filter(item => 
-    admin && item.roles.includes(admin.role)
+  const filteredNavigationItems = navigationItems.filter(
+    (item) => admin && item.roles.includes(admin.role),
   );
 
   return (
     <div className="min-h-screen bg-white">
       <div className="flex h-screen">
         {/* Sidebar */}
-        <aside className={`
+        <aside
+          className={`
           ${isMenuOpen ? 'block' : 'hidden'} 
           lg:block fixed lg:relative inset-y-0 left-0 z-30 w-64 bg-white border-r border-gray-200 shadow-lg flex flex-col
-        `}>
+        `}
+        >
           {/* Logo */}
           <div className="flex items-center justify-center h-16 px-4 border-b border-gray-200">
             <h1 className="text-xl font-bold text-[#00B3A6]">Admin Panel</h1>
@@ -135,14 +137,14 @@ export default function AdminNavigation({ children, title, subtitle }: AdminNavi
             {filteredNavigationItems.map((item) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.href;
-              
+
               return (
                 <button
                   key={item.name}
                   onClick={() => navigate(item.href)}
                   className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
-                    isActive 
-                      ? 'bg-[#00B3A6] text-white shadow-lg shadow-[#00B3A6]/25' 
+                    isActive
+                      ? 'bg-[#00B3A6] text-white shadow-lg shadow-[#00B3A6]/25'
                       : 'text-gray-700 hover:bg-gray-100 hover:text-[#00B3A6]'
                   }`}
                 >
@@ -159,7 +161,8 @@ export default function AdminNavigation({ children, title, subtitle }: AdminNavi
               <div className="flex-shrink-0">
                 <div className="h-8 w-8 bg-[#00B3A6] rounded-full flex items-center justify-center">
                   <span className="text-white text-sm font-medium">
-                    {admin?.first_name?.[0]}{admin?.last_name?.[0]}
+                    {admin?.first_name?.[0]}
+                    {admin?.last_name?.[0]}
                   </span>
                 </div>
               </div>
@@ -167,7 +170,9 @@ export default function AdminNavigation({ children, title, subtitle }: AdminNavi
                 <p className="text-sm font-medium text-gray-900">
                   {admin?.first_name} {admin?.last_name}
                 </p>
-                <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium border ${getRoleColor(admin?.role || '')}`}>
+                <span
+                  className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium border ${getRoleColor(admin?.role || '')}`}
+                >
                   {getRoleLabel(admin?.role || '')}
                 </span>
               </div>
@@ -189,24 +194,18 @@ export default function AdminNavigation({ children, title, subtitle }: AdminNavi
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className="flex justify-between items-center h-16">
                 <div className="flex items-center space-x-4">
-                  <button 
+                  <button
                     className="lg:hidden mr-4 p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-600"
                     onClick={() => setIsMenuOpen(!isMenuOpen)}
                   >
                     {isMenuOpen ? <X size={20} /> : <MenuIcon size={20} />}
                   </button>
                   <div>
-                    <h1 className="text-2xl font-bold text-gray-900">
-                      {title}
-                    </h1>
-                    {subtitle && (
-                      <p className="text-sm text-gray-600 mt-1">
-                        {subtitle}
-                      </p>
-                    )}
+                    <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
+                    {subtitle && <p className="text-sm text-gray-600 mt-1">{subtitle}</p>}
                   </div>
                 </div>
-                
+
                 <div className="flex items-center space-x-4">
                   <button className="p-2 rounded-lg hover:bg-gray-100 transition-colors relative text-gray-600">
                     <Bell className="h-6 w-6" />
@@ -221,35 +220,10 @@ export default function AdminNavigation({ children, title, subtitle }: AdminNavi
 
           {/* Main content area */}
           <main className="flex-1 overflow-y-auto">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-              {children}
-            </div>
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">{children}</div>
           </main>
         </div>
       </div>
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

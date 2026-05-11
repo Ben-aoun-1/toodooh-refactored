@@ -6,7 +6,7 @@ import {
   TopAdvertiser,
   MostUsedScreen,
   CampaignLocation,
-  CampaignImpressionProgress
+  CampaignImpressionProgress,
 } from '../types/campaign-monitoring';
 
 class AdminCampaignMonitoringService {
@@ -16,13 +16,13 @@ class AdminCampaignMonitoringService {
   async getGlobalStats(): Promise<CampaignGlobalStats> {
     try {
       console.log('📊 Fetching campaign global stats...');
-      
+
       // Essayer avec RPC d'abord
       const { data, error } = await supabase.rpc('get_campaigns_global_stats');
 
       if (error) {
         console.warn('⚠️ RPC get_campaigns_global_stats failed, using fallback:', error.message);
-        
+
         // Fallback: requête directe
         const { data: campaigns, error: fallbackError } = await supabase
           .from('campaigns')
@@ -32,14 +32,19 @@ class AdminCampaignMonitoringService {
 
         const stats: CampaignGlobalStats = {
           total_campaigns: campaigns?.length || 0,
-          active_campaigns: campaigns?.filter(c => c.status === 'active').length || 0,
-          pending_campaigns: campaigns?.filter(c => c.status === 'pending').length || 0,
-          completed_campaigns: campaigns?.filter(c => c.status === 'completed').length || 0,
-          paused_campaigns: campaigns?.filter(c => c.status === 'paused').length || 0,
+          active_campaigns: campaigns?.filter((c) => c.status === 'active').length || 0,
+          pending_campaigns: campaigns?.filter((c) => c.status === 'pending').length || 0,
+          completed_campaigns: campaigns?.filter((c) => c.status === 'completed').length || 0,
+          paused_campaigns: campaigns?.filter((c) => c.status === 'paused').length || 0,
           total_budget: campaigns?.reduce((sum, c) => sum + (parseFloat(c.budget) || 0), 0) || 0,
-          active_budget: campaigns?.filter(c => c.status === 'active').reduce((sum, c) => sum + (parseFloat(c.budget) || 0), 0) || 0,
+          active_budget:
+            campaigns
+              ?.filter((c) => c.status === 'active')
+              .reduce((sum, c) => sum + (parseFloat(c.budget) || 0), 0) || 0,
           total_views: campaigns?.reduce((sum, c) => sum + (c.views || 0), 0) || 0,
-          avg_budget: campaigns?.length ? (campaigns.reduce((sum, c) => sum + (parseFloat(c.budget) || 0), 0) / campaigns.length) : 0
+          avg_budget: campaigns?.length
+            ? campaigns.reduce((sum, c) => sum + (parseFloat(c.budget) || 0), 0) / campaigns.length
+            : 0,
         };
 
         return stats;
@@ -69,7 +74,7 @@ class AdminCampaignMonitoringService {
       if (!viewError && viewData) {
         return viewData.map((row: any) => ({
           ...row,
-          screens_list: []
+          screens_list: [],
         })) as CampaignMonitoringData[];
       }
 
@@ -80,14 +85,15 @@ class AdminCampaignMonitoringService {
       if (!rpcError && rpcData) {
         return (rpcData as any[]).map((row) => ({
           ...row,
-          screens_list: []
+          screens_list: [],
         })) as CampaignMonitoringData[];
       }
 
       // Fallback 2: requête directe consolidée (sans N+1)
       const { data: campaigns, error: directError } = await supabase
         .from('campaigns')
-        .select(`
+        .select(
+          `
           id,
           name,
           user_id,
@@ -101,7 +107,8 @@ class AdminCampaignMonitoringService {
           content_validation_status,
           video_id,
           created_at
-        `)
+        `,
+        )
         .order('created_at', { ascending: false });
 
       if (directError) throw directError;
@@ -116,10 +123,13 @@ class AdminCampaignMonitoringService {
         { data: profilesData },
         { data: clientsData },
         { data: videosData },
-        { data: campaignScreensData }
+        { data: campaignScreensData },
       ] = await Promise.all([
         advertiserIds.length
-          ? supabase.from('business_profiles').select('user_id, business_name, contact_name, email').in('user_id', advertiserIds)
+          ? supabase
+              .from('business_profiles')
+              .select('user_id, business_name, contact_name, email')
+              .in('user_id', advertiserIds)
           : Promise.resolve({ data: [] as any[] }),
         clientIds.length
           ? supabase.from('clients').select('id, name').in('id', clientIds)
@@ -165,7 +175,7 @@ class AdminCampaignMonitoringService {
           video_filename: video?.filename,
           screens_count: screensCountMap.get(String(campaign.id)) || 0,
           screens_list: [],
-          created_at: campaign.created_at
+          created_at: campaign.created_at,
         } as CampaignMonitoringData;
       });
     } catch (error) {
@@ -223,16 +233,19 @@ class AdminCampaignMonitoringService {
         if (fallbackError) throw fallbackError;
 
         // Grouper par catégorie
-        const grouped = campaigns?.reduce((acc, c) => {
-          const cat = c.category || 'other';
-          if (!acc[cat]) {
-            acc[cat] = { category: cat, count: 0, total_budget: 0, total_views: 0 };
-          }
-          acc[cat].count++;
-          acc[cat].total_budget += parseFloat(c.budget) || 0;
-          acc[cat].total_views += c.views || 0;
-          return acc;
-        }, {} as Record<string, CampaignByCategory>);
+        const grouped = campaigns?.reduce(
+          (acc, c) => {
+            const cat = c.category || 'other';
+            if (!acc[cat]) {
+              acc[cat] = { category: cat, count: 0, total_budget: 0, total_views: 0 };
+            }
+            acc[cat].count++;
+            acc[cat].total_budget += parseFloat(c.budget) || 0;
+            acc[cat].total_views += c.views || 0;
+            return acc;
+          },
+          {} as Record<string, CampaignByCategory>,
+        );
 
         return Object.values(grouped || {});
       }
@@ -294,7 +307,7 @@ class AdminCampaignMonitoringService {
       console.log(`🔍 Fetching campaign details for: ${campaignId}`);
 
       const campaigns = await this.getCampaignsWithScreens();
-      const campaign = campaigns.find(c => c.campaign_id === campaignId);
+      const campaign = campaigns.find((c) => c.campaign_id === campaignId);
 
       return campaign || null;
     } catch (error) {
@@ -325,30 +338,30 @@ class AdminCampaignMonitoringService {
           .select('screens(location_id)')
           .eq('campaign_id', campaignId);
         locationIds = Array.from(
-          new Set(
-            (campaignScreens || [])
-              .map((r: any) => r.screens?.location_id)
-              .filter(Boolean)
-          )
+          new Set((campaignScreens || []).map((r: any) => r.screens?.location_id).filter(Boolean)),
         ) as string[];
       }
 
       if (campaignLocationsError && locationIds.length === 0) throw campaignLocationsError;
       if (locationIds.length === 0) return [];
 
-      const [{ data: locationsData, error: locationsError }, { data: screensData, error: screensError }] =
-        await Promise.all([
-          supabase.from('locations').select('id, name, address, owner_id').in('id', locationIds),
-          supabase
-            .from('screens')
-            .select('id, location_id, status, is_online')
-            .in('location_id', locationIds),
-        ]);
+      const [
+        { data: locationsData, error: locationsError },
+        { data: screensData, error: screensError },
+      ] = await Promise.all([
+        supabase.from('locations').select('id, name, address, owner_id').in('id', locationIds),
+        supabase
+          .from('screens')
+          .select('id, location_id, status, is_online')
+          .in('location_id', locationIds),
+      ]);
 
       if (locationsError) throw locationsError;
       if (screensError) throw screensError;
 
-      const ownerIds = [...new Set((locationsData || []).map((l: any) => l.owner_id).filter(Boolean))];
+      const ownerIds = [
+        ...new Set((locationsData || []).map((l: any) => l.owner_id).filter(Boolean)),
+      ];
       const { data: ownersData } = ownerIds.length
         ? await supabase
             .from('business_profiles')
@@ -357,7 +370,7 @@ class AdminCampaignMonitoringService {
         : { data: [] as any[] };
 
       const ownerMap = new Map(
-        (ownersData || []).map((o: any) => [o.user_id, o.business_name || o.contact_name || 'N/A'])
+        (ownersData || []).map((o: any) => [o.user_id, o.business_name || o.contact_name || 'N/A']),
       );
 
       const screensByLocation = new Map<string, any[]>();
@@ -399,22 +412,22 @@ class AdminCampaignMonitoringService {
 
   async getCampaignImpressionProgress(campaignId: string): Promise<CampaignImpressionProgress> {
     try {
-      const [{ data: planRows, error: planError }, { data: campaignRow, error: campaignError }] = await Promise.all([
-        supabase
-          .from('campaign_hourly_location_plan')
-          .select('planned_impressions')
-          .eq('campaign_id', campaignId),
-        supabase
-          .from('campaigns')
-          .select('views')
-          .eq('id', campaignId)
-          .maybeSingle(),
-      ]);
+      const [{ data: planRows, error: planError }, { data: campaignRow, error: campaignError }] =
+        await Promise.all([
+          supabase
+            .from('campaign_hourly_location_plan')
+            .select('planned_impressions')
+            .eq('campaign_id', campaignId),
+          supabase.from('campaigns').select('views').eq('id', campaignId).maybeSingle(),
+        ]);
 
       if (planError) throw planError;
       if (campaignError) throw campaignError;
 
-      const planned = (planRows || []).reduce((sum: number, row: any) => sum + (Number(row.planned_impressions) || 0), 0);
+      const planned = (planRows || []).reduce(
+        (sum: number, row: any) => sum + (Number(row.planned_impressions) || 0),
+        0,
+      );
       const realized = Math.max(0, Number(campaignRow?.views) || 0);
       const completionRate = planned > 0 ? (realized / planned) * 100 : 0;
 
@@ -435,4 +448,3 @@ class AdminCampaignMonitoringService {
 }
 
 export const adminCampaignMonitoringService = new AdminCampaignMonitoringService();
-

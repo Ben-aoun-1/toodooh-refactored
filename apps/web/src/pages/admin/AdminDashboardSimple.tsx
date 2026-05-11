@@ -1,11 +1,7 @@
 import React from 'react';
 import { useAdminStore } from '../../stores/admin.store';
 import AdminLayout from '../../components/admin/AdminLayout';
-import { 
-  Users, 
-  BarChart3,
-  FileText
-} from 'lucide-react';
+import { Users, BarChart3, FileText } from 'lucide-react';
 
 export default function AdminDashboardSimple() {
   const { admin } = useAdminStore();
@@ -26,11 +22,10 @@ export default function AdminDashboardSimple() {
   return (
     <AdminLayout title="Administration">
       <div className="mb-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">
-          Tableau de bord Administrateur
-        </h2>
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Tableau de bord Administrateur</h2>
         <p className="text-gray-600">
-          Bienvenue, {admin.first_name} {admin.last_name}. Gérez votre plateforme depuis ce tableau de bord.
+          Bienvenue, {admin.first_name} {admin.last_name}. Gérez votre plateforme depuis ce tableau
+          de bord.
         </p>
       </div>
 

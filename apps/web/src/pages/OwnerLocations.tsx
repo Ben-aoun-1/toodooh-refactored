@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  MapPin, 
-  Monitor, 
-  Search, 
-  Filter, 
-  Plus, 
+import {
+  MapPin,
+  Monitor,
+  Search,
+  Filter,
+  Plus,
   Bell,
   Map,
   Navigation,
@@ -20,7 +20,7 @@ import {
   TrendingUp,
   AlertTriangle,
   CheckCircle,
-  XCircle
+  XCircle,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAuthStore } from '../stores/auth.store';
@@ -46,7 +46,7 @@ export default function OwnerLocations() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'map' | 'list'>('map');
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
-  
+
   // ✅ OPTIMISATION : Éviter les rechargements multiples
   const hasLoadedData = useRef(false);
 
@@ -55,10 +55,10 @@ export default function OwnerLocations() {
     try {
       console.log('=== CHARGEMENT DES ÉCRANS POUR LA CARTE ===');
       setLoading(true);
-      
+
       const screensData = await screensService.getScreens();
       console.log('Écrans chargés pour la carte:', screensData);
-      
+
       setScreens(screensData);
       setLoading(false);
       hasLoadedData.current = true; // ✅ Marquer comme chargé
@@ -131,29 +131,34 @@ export default function OwnerLocations() {
   };
 
   // Grouper les écrans par emplacement
-  const locations = screens.reduce((acc, screen) => {
-    const location = screen.location;
-    if (!acc[location]) {
-      acc[location] = [];
-    }
-    acc[location].push(screen);
-    return acc;
-  }, {} as Record<string, Screen[]>);
+  const locations = screens.reduce(
+    (acc, screen) => {
+      const location = screen.location;
+      if (!acc[location]) {
+        acc[location] = [];
+      }
+      acc[location].push(screen);
+      return acc;
+    },
+    {} as Record<string, Screen[]>,
+  );
 
   const filteredLocations = Object.entries(locations).filter(([location, screens]) => {
-    const matchesSearch = location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         screens.some(screen => screen.name.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesStatus = statusFilter === 'all' || screens.some(screen => screen.status === statusFilter);
+    const matchesSearch =
+      location.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      screens.some((screen) => screen.name.toLowerCase().includes(searchTerm.toLowerCase()));
+    const matchesStatus =
+      statusFilter === 'all' || screens.some((screen) => screen.status === statusFilter);
     return matchesSearch && matchesStatus;
   });
 
   // Calculer les statistiques
   const stats: LocationStats = {
     totalLocations: Object.keys(locations).length,
-    activeScreens: screens.filter(s => s.status === 'active').length,
+    activeScreens: screens.filter((s) => s.status === 'active').length,
     totalRevenue: screens.reduce((sum, s) => sum + s.monthly_revenue, 0),
     averageRating: 4.5, // À connecter avec un système de notation
-    totalVisitors: screens.reduce((sum, s) => sum + (s.monthly_revenue * 100), 0), // Estimation
+    totalVisitors: screens.reduce((sum, s) => sum + s.monthly_revenue * 100, 0), // Estimation
   };
 
   const handleScreenClick = (screen: Screen) => {
@@ -177,21 +182,19 @@ export default function OwnerLocations() {
     <div className="min-h-screen bg-gradient-to-br from-[#00263A] via-[#00263A]/95 to-[#00263A]">
       <div className="flex h-screen">
         <OwnerNavigation isDisabled={isDisabled} />
-        
+
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Header */}
           <header className="bg-white/10 backdrop-blur-md border-b border-white/20 sticky top-0 z-40">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className="flex justify-between items-center h-16">
                 <div className="flex items-center space-x-4">
-                  <h1 className="text-2xl font-bold text-white">
-                    Mes Emplacements
-                  </h1>
+                  <h1 className="text-2xl font-bold text-white">Mes Emplacements</h1>
                   <span className="px-3 py-1 text-sm font-medium bg-[#00B3A6]/20 backdrop-blur-sm text-[#00B3A6] border border-[#00B3A6]/30 rounded-full">
                     {stats.totalLocations} emplacement{stats.totalLocations > 1 ? 's' : ''}
                   </span>
                 </div>
-                
+
                 {/* Notifications et boutons */}
                 <div className="flex items-center space-x-4">
                   <button className="p-2 rounded-lg hover:bg-white/10 transition-colors relative text-white">
@@ -200,7 +203,6 @@ export default function OwnerLocations() {
                       3
                     </span>
                   </button>
-                  
                 </div>
               </div>
             </div>
@@ -208,7 +210,6 @@ export default function OwnerLocations() {
 
           <div className="flex-1 overflow-y-auto">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-              
               {/* Statistiques */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                 <div className="bg-white/10 backdrop-blur-sm rounded-xl p-6 shadow-2xl border border-white/20">
@@ -240,7 +241,10 @@ export default function OwnerLocations() {
                     <div>
                       <p className="text-white/60 text-sm">Revenus Mensuels</p>
                       <p className="text-2xl font-bold text-white">
-                        {stats.totalRevenue.toLocaleString('fr-TN', { style: 'currency', currency: 'TND' })}
+                        {stats.totalRevenue.toLocaleString('fr-TN', {
+                          style: 'currency',
+                          currency: 'TND',
+                        })}
                       </p>
                     </div>
                     <div className="p-3 bg-yellow-500/20 rounded-lg">
@@ -268,20 +272,20 @@ export default function OwnerLocations() {
                   <button
                     onClick={() => setViewMode('map')}
                     className={`px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 ${
-                      viewMode === 'map' 
-                        ? 'bg-[#00B3A6] text-white' 
+                      viewMode === 'map'
+                        ? 'bg-[#00B3A6] text-white'
                         : 'bg-white/10 text-white hover:bg-white/20'
                     }`}
                   >
                     <Map className="h-4 w-4" />
                     <span>Vue Carte</span>
                   </button>
-                  
+
                   <button
                     onClick={() => setViewMode('list')}
                     className={`px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 ${
-                      viewMode === 'list' 
-                        ? 'bg-[#00B3A6] text-white' 
+                      viewMode === 'list'
+                        ? 'bg-[#00B3A6] text-white'
                         : 'bg-white/10 text-white hover:bg-white/20'
                     }`}
                   >
@@ -314,18 +318,28 @@ export default function OwnerLocations() {
                       />
                     </div>
                   </div>
-                  
+
                   <div className="flex gap-4">
                     <select
                       value={statusFilter}
                       onChange={(e) => setStatusFilter(e.target.value)}
                       className="px-4 py-2 bg-[#00263A] border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
                     >
-                      <option value="all" className="bg-[#00263A] text-white">Tous les statuts</option>
-                      <option value="active" className="bg-[#00263A] text-white">Actif</option>
-                      <option value="maintenance" className="bg-[#00263A] text-white">Maintenance</option>
-                      <option value="inactive" className="bg-[#00263A] text-white">Inactif</option>
-                      <option value="unavailable" className="bg-[#00263A] text-white">Indisponible</option>
+                      <option value="all" className="bg-[#00263A] text-white">
+                        Tous les statuts
+                      </option>
+                      <option value="active" className="bg-[#00263A] text-white">
+                        Actif
+                      </option>
+                      <option value="maintenance" className="bg-[#00263A] text-white">
+                        Maintenance
+                      </option>
+                      <option value="inactive" className="bg-[#00263A] text-white">
+                        Inactif
+                      </option>
+                      <option value="unavailable" className="bg-[#00263A] text-white">
+                        Indisponible
+                      </option>
                     </select>
                   </div>
                 </div>
@@ -336,11 +350,13 @@ export default function OwnerLocations() {
                 /* Vue Carte */
                 <div className="bg-white/10 backdrop-blur-sm rounded-xl shadow-2xl border border-white/20 overflow-hidden">
                   <div className="h-[600px] relative">
-                    <LocationsMap 
-                      screens={screens.filter(screen => {
-                        const matchesSearch = screen.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                             screen.name.toLowerCase().includes(searchTerm.toLowerCase());
-                        const matchesStatus = statusFilter === 'all' || screen.status === statusFilter;
+                    <LocationsMap
+                      screens={screens.filter((screen) => {
+                        const matchesSearch =
+                          screen.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          screen.name.toLowerCase().includes(searchTerm.toLowerCase());
+                        const matchesStatus =
+                          statusFilter === 'all' || screen.status === statusFilter;
                         return matchesSearch && matchesStatus;
                       })}
                       onScreenClick={handleScreenClick}
@@ -362,43 +378,62 @@ export default function OwnerLocations() {
                           </div>
                           <div>
                             <h3 className="text-xl font-bold text-white">{location}</h3>
-                            <p className="text-white/60">{locationScreens.length} écran{locationScreens.length > 1 ? 's' : ''}</p>
+                            <p className="text-white/60">
+                              {locationScreens.length} écran{locationScreens.length > 1 ? 's' : ''}
+                            </p>
                           </div>
                         </div>
-                        
+
                         <div className="flex items-center space-x-4">
                           <div className="text-right">
                             <p className="text-white/60 text-sm">Revenus totaux</p>
                             <p className="text-lg font-bold text-white">
-                              {locationScreens.reduce((sum, s) => sum + s.monthly_revenue, 0).toLocaleString('fr-TN', { style: 'currency', currency: 'TND' })}
+                              {locationScreens
+                                .reduce((sum, s) => sum + s.monthly_revenue, 0)
+                                .toLocaleString('fr-TN', { style: 'currency', currency: 'TND' })}
                             </p>
                           </div>
                           <button
-                            onClick={() => setSelectedLocation(selectedLocation === location ? null : location)}
+                            onClick={() =>
+                              setSelectedLocation(selectedLocation === location ? null : location)
+                            }
                             className="p-2 rounded-lg hover:bg-white/10 transition-colors text-white"
                           >
-                            <ChevronDown className={`h-5 w-5 transform transition-transform ${selectedLocation === location ? 'rotate-180' : ''}`} />
+                            <ChevronDown
+                              className={`h-5 w-5 transform transition-transform ${selectedLocation === location ? 'rotate-180' : ''}`}
+                            />
                           </button>
                         </div>
                       </div>
 
                       {selectedLocation === location && (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4 pt-4 border-t border-white/20">
-                          {locationScreens.map(screen => (
+                          {locationScreens.map((screen) => (
                             <div
                               key={screen.id}
                               className="bg-white/5 rounded-lg p-4 border border-white/10"
                             >
                               <div className="flex items-center justify-between mb-2">
                                 <h4 className="font-medium text-white">{screen.name}</h4>
-                                <span className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(screen.status)}`}>
+                                <span
+                                  className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(screen.status)}`}
+                                >
                                   {getStatusIcon(screen.status)}
                                   <span className="ml-1">{getStatusText(screen.status)}</span>
                                 </span>
                               </div>
                               <div className="space-y-1 text-sm">
-                                <p className="text-white/80">Revenus: {screen.monthly_revenue.toLocaleString('fr-TN', { style: 'currency', currency: 'TND' })}</p>
-                                <p className="text-white/60">Dernière sync: {new Date(screen.updated_at).toLocaleString('fr-FR')}</p>
+                                <p className="text-white/80">
+                                  Revenus:{' '}
+                                  {screen.monthly_revenue.toLocaleString('fr-TN', {
+                                    style: 'currency',
+                                    currency: 'TND',
+                                  })}
+                                </p>
+                                <p className="text-white/60">
+                                  Dernière sync:{' '}
+                                  {new Date(screen.updated_at).toLocaleString('fr-FR')}
+                                </p>
                               </div>
                             </div>
                           ))}
@@ -410,8 +445,12 @@ export default function OwnerLocations() {
                   {filteredLocations.length === 0 && (
                     <div className="text-center py-12">
                       <MapPin className="h-12 w-12 text-white/40 mx-auto mb-4" />
-                      <h3 className="text-lg font-medium text-white/60 mb-2">Aucun emplacement trouvé</h3>
-                      <p className="text-white/40">Aucun emplacement ne correspond à vos critères de recherche.</p>
+                      <h3 className="text-lg font-medium text-white/60 mb-2">
+                        Aucun emplacement trouvé
+                      </h3>
+                      <p className="text-white/40">
+                        Aucun emplacement ne correspond à vos critères de recherche.
+                      </p>
                     </div>
                   )}
                 </div>
@@ -422,4 +461,4 @@ export default function OwnerLocations() {
       </div>
     </div>
   );
-} 
+}

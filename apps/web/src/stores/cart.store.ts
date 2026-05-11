@@ -38,11 +38,10 @@ export const useCartStore = create<CartState>()(
 
       clearCart: () => set({ items: [] }),
 
-      getSubtotal: () =>
-        get().items.reduce((sum, i) => sum + (i.budget || 0), 0),
+      getSubtotal: () => get().items.reduce((sum, i) => sum + (i.budget || 0), 0),
     }),
     {
       name: 'toodooh-cart',
-    }
-  )
+    },
+  ),
 );

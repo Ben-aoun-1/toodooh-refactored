@@ -1,10 +1,24 @@
 import React from 'react';
-import { motion, useAnimation, useCycle, useMotionValue, useTransform, animate, easeInOut } from 'framer-motion';
+import {
+  motion,
+  useAnimation,
+  useCycle,
+  useMotionValue,
+  useTransform,
+  animate,
+  easeInOut,
+} from 'framer-motion';
 
 // Logo SVG inspiré du logo en haut à gauche de l'image fournie
 // Les crochets sont animés (ouverture/fermeture)
 
-export default function AnimatedLogo({ size = 80, loop = true }: { size?: number; loop?: boolean }) {
+export default function AnimatedLogo({
+  size = 80,
+  loop = true,
+}: {
+  size?: number;
+  loop?: boolean;
+}) {
   // Animation des crochets (gauche/haut et droite/bas)
   const bracketVariants = {
     closed: {
@@ -26,7 +40,7 @@ export default function AnimatedLogo({ size = 80, loop = true }: { size?: number
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       initial="closed"
-      animate={loop ? "open" : "closed"}
+      animate={loop ? 'open' : 'closed'}
       whileHover="open"
       transition={{ repeat: loop ? Infinity : 0, repeatType: 'reverse', duration: 1.2 }}
       style={{ display: 'block' }}
@@ -63,4 +77,4 @@ export default function AnimatedLogo({ size = 80, loop = true }: { size?: number
       />
     </motion.svg>
   );
-} 
+}

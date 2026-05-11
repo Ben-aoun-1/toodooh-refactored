@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
-import { 
-  BarChart3, 
-  X, 
+import {
+  BarChart3,
+  X,
   DollarSign,
   TrendingUp,
   TrendingDown,
   Calendar,
   Monitor,
-  Filter
+  Filter,
 } from 'lucide-react';
 
 interface RevenueData {
@@ -42,18 +42,18 @@ export default function DetailedRevenue({ isOpen, onClose }: DetailedRevenueProp
       impressions: 12500,
       clicks: 125,
       date: '2024-01-15',
-      duration: 24
+      duration: 24,
     },
     {
       screenId: '1',
       screenName: 'Écran Centre-ville',
       campaignId: 'camp2',
       campaignName: 'Campagne Nike',
-      revenue: 320.50,
+      revenue: 320.5,
       impressions: 8900,
       clicks: 89,
       date: '2024-01-14',
-      duration: 18
+      duration: 18,
     },
     {
       screenId: '2',
@@ -64,18 +64,18 @@ export default function DetailedRevenue({ isOpen, onClose }: DetailedRevenueProp
       impressions: 7600,
       clicks: 76,
       date: '2024-01-15',
-      duration: 12
+      duration: 12,
     },
     {
       screenId: '2',
       screenName: 'Écran Mall',
       campaignId: 'camp4',
-      campaignName: 'Campagne McDonald\'s',
-      revenue: 195.30,
+      campaignName: "Campagne McDonald's",
+      revenue: 195.3,
       impressions: 5200,
       clicks: 52,
       date: '2024-01-13',
-      duration: 16
+      duration: 16,
     },
     {
       screenId: '3',
@@ -86,32 +86,32 @@ export default function DetailedRevenue({ isOpen, onClose }: DetailedRevenueProp
       impressions: 0,
       clicks: 0,
       date: '2024-01-15',
-      duration: 0
-    }
+      duration: 0,
+    },
   ];
 
   const screens = [
     { id: 'all', name: 'Tous les écrans' },
     { id: '1', name: 'Écran Centre-ville' },
     { id: '2', name: 'Écran Mall' },
-    { id: '3', name: 'Écran Station' }
+    { id: '3', name: 'Écran Station' },
   ];
 
   const periods = [
     { id: 'week', name: 'Cette semaine' },
     { id: 'month', name: 'Ce mois' },
     { id: 'quarter', name: 'Ce trimestre' },
-    { id: 'year', name: 'Cette année' }
+    { id: 'year', name: 'Cette année' },
   ];
 
-  const filteredData = revenueData.filter(item => 
-    selectedScreen === 'all' || item.screenId === selectedScreen
+  const filteredData = revenueData.filter(
+    (item) => selectedScreen === 'all' || item.screenId === selectedScreen,
   );
 
   const totalRevenue = filteredData.reduce((sum, item) => sum + item.revenue, 0);
   const totalImpressions = filteredData.reduce((sum, item) => sum + item.impressions, 0);
   const totalClicks = filteredData.reduce((sum, item) => sum + item.clicks, 0);
-  const avgCTR = totalImpressions > 0 ? (totalClicks / totalImpressions * 100).toFixed(2) : '0';
+  const avgCTR = totalImpressions > 0 ? ((totalClicks / totalImpressions) * 100).toFixed(2) : '0';
 
   const getRevenueChange = () => {
     // Simulation de variation
@@ -131,10 +131,7 @@ export default function DetailedRevenue({ isOpen, onClose }: DetailedRevenueProp
             <BarChart3 className="h-6 w-6 text-purple-600" />
             <h2 className="text-xl font-bold text-gray-900">Revenus Détaillés</h2>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-          >
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
             <X className="h-5 w-5 text-gray-600" />
           </button>
         </div>
@@ -156,7 +153,7 @@ export default function DetailedRevenue({ isOpen, onClose }: DetailedRevenueProp
                 ))}
               </select>
             </div>
-            
+
             <div className="flex items-center space-x-2">
               <Monitor className="h-4 w-4 text-gray-600" />
               <select
@@ -185,7 +182,9 @@ export default function DetailedRevenue({ isOpen, onClose }: DetailedRevenueProp
                     {totalRevenue.toLocaleString('fr-TN', { style: 'currency', currency: 'TND' })}
                   </p>
                 </div>
-                <div className={`flex items-center space-x-1 ${revenueChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                <div
+                  className={`flex items-center space-x-1 ${revenueChange >= 0 ? 'text-green-600' : 'text-red-600'}`}
+                >
                   {revenueChange >= 0 ? (
                     <TrendingUp className="h-4 w-4" />
                   ) : (
@@ -259,11 +258,16 @@ export default function DetailedRevenue({ isOpen, onClose }: DetailedRevenueProp
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {filteredData.map((item, index) => {
-                      const ctr = item.impressions > 0 ? (item.clicks / item.impressions * 100).toFixed(2) : '0';
+                      const ctr =
+                        item.impressions > 0
+                          ? ((item.clicks / item.impressions) * 100).toFixed(2)
+                          : '0';
                       return (
                         <tr key={index} className="hover:bg-gray-50">
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900">{item.screenName}</div>
+                            <div className="text-sm font-medium text-gray-900">
+                              {item.screenName}
+                            </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-900">{item.campaignName}</div>
@@ -291,7 +295,10 @@ export default function DetailedRevenue({ isOpen, onClose }: DetailedRevenueProp
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm font-medium text-gray-900">
-                              {item.revenue.toLocaleString('fr-TN', { style: 'currency', currency: 'TND' })}
+                              {item.revenue.toLocaleString('fr-TN', {
+                                style: 'currency',
+                                currency: 'TND',
+                              })}
                             </div>
                           </td>
                         </tr>
@@ -306,4 +313,4 @@ export default function DetailedRevenue({ isOpen, onClose }: DetailedRevenueProp
       </div>
     </div>
   );
-} 
+}

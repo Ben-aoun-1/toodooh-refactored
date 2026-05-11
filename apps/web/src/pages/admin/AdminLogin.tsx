@@ -31,9 +31,9 @@ export default function AdminLogin() {
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [e.target.name]: e.target.value
+      [e.target.name]: e.target.value,
     }));
   };
 
@@ -45,12 +45,8 @@ export default function AdminLogin() {
             <AnimatedLogo size={80} />
           </div>
         </div>
-        <h2 className="mt-6 text-center text-2xl font-semibold text-[#171717]">
-          Administration
-        </h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
-          Accès réservé aux administrateurs
-        </p>
+        <h2 className="mt-6 text-center text-2xl font-semibold text-[#171717]">Administration</h2>
+        <p className="mt-2 text-center text-sm text-gray-600">Accès réservé aux administrateurs</p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
@@ -146,7 +142,6 @@ export default function AdminLogin() {
               </button>
             </div>
           </div>
-
         </div>
       </div>
     </div>

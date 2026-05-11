@@ -5,14 +5,7 @@ import { balanceService } from '../services/balance.service';
 import { campaignService } from '../services/campaign.service';
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
-import {
-  Trash2,
-  ShoppingBag,
-  ArrowRight,
-  CheckCircle,
-  AlertCircle,
-  Loader2,
-} from 'lucide-react';
+import { Trash2, ShoppingBag, ArrowRight, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 
 export default function MyCart() {
   const navigate = useNavigate();
@@ -30,7 +23,7 @@ export default function MyCart() {
       if (balanceCheck && !balanceCheck.has_sufficient_balance) {
         toast.error(
           `Solde insuffisant pour "${item.name}". Disponible: ${balanceService.formatAmount(balanceCheck.available_balance)}, Coût: ${balanceService.formatAmount(balanceCheck.campaign_cost)}`,
-          { duration: 5000 }
+          { duration: 5000 },
         );
         return;
       }
@@ -68,7 +61,7 @@ export default function MyCart() {
       toast.success(
         videoIsValidated
           ? `"${item.name}" activée avec succès !`
-          : `"${item.name}" en attente de validation vidéo`
+          : `"${item.name}" en attente de validation vidéo`,
       );
     } catch (error: any) {
       toast.error(error.message || 'Erreur lors de la validation');
@@ -143,7 +136,9 @@ export default function MyCart() {
           <ShoppingBag className="h-10 w-10 text-gray-400" />
         </div>
         <h2 className="text-xl font-bold text-gray-900 mb-2">Votre panier est vide</h2>
-        <p className="text-sm text-gray-500 mb-6">Ajoutez des campagnes depuis la page de création</p>
+        <p className="text-sm text-gray-500 mb-6">
+          Ajoutez des campagnes depuis la page de création
+        </p>
         <button
           type="button"
           onClick={() => navigate('/new-campaign')}
@@ -167,7 +162,11 @@ export default function MyCart() {
           <div className="text-right">
             <p className="text-xs text-gray-500">Sous-total</p>
             <p className="text-xl font-bold text-gray-900">
-              {subtotal.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TND
+              {subtotal.toLocaleString('fr-FR', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}{' '}
+              TND
             </p>
           </div>
         </div>
@@ -189,13 +188,18 @@ export default function MyCart() {
                 <p className="text-sm font-semibold text-gray-900 truncate">{item.name}</p>
                 {item.startDate && item.endDate && (
                   <p className="text-xs text-gray-500 mt-0.5">
-                    {new Date(item.startDate).toLocaleDateString('fr-FR')} → {new Date(item.endDate).toLocaleDateString('fr-FR')}
+                    {new Date(item.startDate).toLocaleDateString('fr-FR')} →{' '}
+                    {new Date(item.endDate).toLocaleDateString('fr-FR')}
                   </p>
                 )}
               </div>
 
               <p className="text-sm font-bold text-gray-900 flex-shrink-0">
-                {item.budget.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TND
+                {item.budget.toLocaleString('fr-FR', {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}{' '}
+                TND
               </p>
 
               <div className="flex items-center gap-2 flex-shrink-0">

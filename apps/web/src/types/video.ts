@@ -8,13 +8,13 @@ export interface Video {
   file_size?: number;
   duration?: number;
   thumbnail_url?: string;
-  
+
   // Validation
   validation_status: 'pending' | 'approved' | 'rejected';
   validated_by?: string;
   validated_at?: string;
   validation_notes?: string;
-  
+
   // Metadata
   uploaded_by: string;
   uploaded_by_business?: string;
@@ -22,7 +22,7 @@ export interface Video {
   uploaded_by_email?: string;
   created_at: string;
   updated_at: string;
-  
+
   // Stats
   campaigns_count?: number;
   campaign_names?: string;

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  ArrowLeft, 
-  Calendar, 
-  MapPin, 
-  DollarSign, 
-  Eye, 
+import {
+  ArrowLeft,
+  Calendar,
+  MapPin,
+  DollarSign,
+  Eye,
   BarChart3,
   Clock,
   CheckCircle,
@@ -13,7 +13,7 @@ import {
   AlertCircle,
   Film,
   User,
-  Building
+  Building,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
@@ -41,8 +41,7 @@ interface Campaign {
 }
 
 const isMissingCampaignCategoriesTable = (error: any) =>
-  error?.code === 'PGRST205' &&
-  String(error?.message || '').includes('campaign_categories');
+  error?.code === 'PGRST205' && String(error?.message || '').includes('campaign_categories');
 
 interface Video {
   id: string;
@@ -74,7 +73,7 @@ export default function CampaignDetails() {
   const loadCampaign = async () => {
     try {
       setLoading(true);
-      
+
       // Charger la campagne
       const { data: campaignData, error: campaignError } = await supabase
         .from('campaigns')
@@ -84,16 +83,17 @@ export default function CampaignDetails() {
 
       if (campaignError) throw campaignError;
 
-      const [{ data: categoryRows, error: categoryError }, { data: campaignLocationRows }] = await Promise.all([
-        supabase
-          .from('campaign_categories')
-          .select('category')
-          .eq('campaign_id', campaignData.id),
-        supabase
-          .from('campaign_locations')
-          .select('location_id')
-          .eq('campaign_id', campaignData.id),
-      ]);
+      const [{ data: categoryRows, error: categoryError }, { data: campaignLocationRows }] =
+        await Promise.all([
+          supabase
+            .from('campaign_categories')
+            .select('category')
+            .eq('campaign_id', campaignData.id),
+          supabase
+            .from('campaign_locations')
+            .select('location_id')
+            .eq('campaign_id', campaignData.id),
+        ]);
 
       if (categoryError && !isMissingCampaignCategoriesTable(categoryError)) {
         throw categoryError;
@@ -113,10 +113,11 @@ export default function CampaignDetails() {
       const lng = Number(campaignData?.location_lng);
       const radius = Number(campaignData?.location_radius);
       if (Number.isFinite(lat) && Number.isFinite(lng) && Number.isFinite(radius)) {
-        const matched = (predefinedZonesRows || []).find((z: any) =>
-          Math.abs(Number(z.latitude) - lat) <= 0.0005 &&
-          Math.abs(Number(z.longitude) - lng) <= 0.0005 &&
-          Math.abs(Number(z.radius) - radius) <= 50
+        const matched = (predefinedZonesRows || []).find(
+          (z: any) =>
+            Math.abs(Number(z.latitude) - lat) <= 0.0005 &&
+            Math.abs(Number(z.longitude) - lng) <= 0.0005 &&
+            Math.abs(Number(z.radius) - radius) <= 50,
         );
         if (matched?.name) {
           selectedZones = [matched.name];
@@ -127,7 +128,12 @@ export default function CampaignDetails() {
 
       setCampaign({
         ...campaignData,
-        selected_categories: selectedCategories.length > 0 ? selectedCategories : (campaignData.category ? [campaignData.category] : []),
+        selected_categories:
+          selectedCategories.length > 0
+            ? selectedCategories
+            : campaignData.category
+              ? [campaignData.category]
+              : [],
         selected_zones: Array.from(new Set(selectedZones)),
         validated_impressions: Math.max(0, Number(campaignData.views) || 0),
       });
@@ -196,12 +202,14 @@ export default function CampaignDetails() {
             <ArrowLeft className="h-5 w-5 mr-2" />
             Retour à mes campagnes
           </button>
-          
+
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 mb-2">{campaign.name}</h1>
               <div className="flex items-center space-x-3">
-                <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${status.color}`}>
+                <span
+                  className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${status.color}`}
+                >
                   <StatusIcon className="h-4 w-4 mr-1" />
                   {status.label}
                 </span>
@@ -210,7 +218,7 @@ export default function CampaignDetails() {
                 </span>
               </div>
             </div>
-            
+
             {campaign.status !== 'active' && (
               <button
                 onClick={() => navigate(`/edit-campaign/${campaign.id}`, { state: { campaign } })}
@@ -229,7 +237,7 @@ export default function CampaignDetails() {
             {/* Informations générales */}
             <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
               <h2 className="text-xl font-bold text-gray-900 mb-4">Informations générales</h2>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {campaign.client && (
                   <div className="flex items-start space-x-3">
@@ -240,7 +248,7 @@ export default function CampaignDetails() {
                     </div>
                   </div>
                 )}
-                
+
                 <div className="flex items-start space-x-3">
                   <BarChart3 className="h-5 w-5 text-[#00B3A6] mt-1" />
                   <div>
@@ -248,7 +256,12 @@ export default function CampaignDetails() {
                     <div className="flex flex-wrap gap-1.5 mt-1">
                       {(campaign.selected_categories || []).length > 0 ? (
                         (campaign.selected_categories || []).map((cat) => (
-                          <span key={cat} className="inline-flex px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs">{cat}</span>
+                          <span
+                            key={cat}
+                            className="inline-flex px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs"
+                          >
+                            {cat}
+                          </span>
                         ))
                       ) : (
                         <p className="font-medium text-gray-900">—</p>
@@ -256,7 +269,7 @@ export default function CampaignDetails() {
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="flex items-start space-x-3">
                   <Calendar className="h-5 w-5 text-[#00B3A6] mt-1" />
                   <div>
@@ -266,7 +279,7 @@ export default function CampaignDetails() {
                     </p>
                   </div>
                 </div>
-                
+
                 <div className="flex items-start space-x-3">
                   <Calendar className="h-5 w-5 text-[#00B3A6] mt-1" />
                   <div>
@@ -276,13 +289,18 @@ export default function CampaignDetails() {
                     </p>
                   </div>
                 </div>
-                
+
                 <div className="flex items-start space-x-3">
                   <Clock className="h-5 w-5 text-[#00B3A6] mt-1" />
                   <div>
                     <p className="text-sm text-gray-500">Durée</p>
                     <p className="font-medium text-gray-900">
-                      {Math.ceil((new Date(campaign.end_date).getTime() - new Date(campaign.start_date).getTime()) / (1000 * 60 * 60 * 24))} jours
+                      {Math.ceil(
+                        (new Date(campaign.end_date).getTime() -
+                          new Date(campaign.start_date).getTime()) /
+                          (1000 * 60 * 60 * 24),
+                      )}{' '}
+                      jours
                     </p>
                   </div>
                 </div>
@@ -290,10 +308,11 @@ export default function CampaignDetails() {
             </div>
 
             {/* Localisation */}
-            {(campaign.location_lat && campaign.location_lng) || (campaign.selected_zones && campaign.selected_zones.length > 0) ? (
+            {(campaign.location_lat && campaign.location_lng) ||
+            (campaign.selected_zones && campaign.selected_zones.length > 0) ? (
               <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
                 <h2 className="text-xl font-bold text-gray-900 mb-4">Zone géographique</h2>
-                
+
                 <div className="flex items-start space-x-3">
                   <MapPin className="h-5 w-5 text-[#00B3A6] mt-1" />
                   <div>
@@ -301,7 +320,12 @@ export default function CampaignDetails() {
                     <div className="flex flex-wrap gap-1.5 mt-1">
                       {(campaign.selected_zones || []).length > 0 ? (
                         (campaign.selected_zones || []).map((zone) => (
-                          <span key={zone} className="inline-flex px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs">{zone}</span>
+                          <span
+                            key={zone}
+                            className="inline-flex px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs"
+                          >
+                            {zone}
+                          </span>
                         ))
                       ) : (
                         <p className="font-medium text-gray-900">—</p>
@@ -309,7 +333,8 @@ export default function CampaignDetails() {
                     </div>
                     {campaign.location_lat && campaign.location_lng && (
                       <p className="text-xs text-gray-500 mt-2">
-                        Coordonnées centre: {campaign.location_lat.toFixed(6)}, {campaign.location_lng.toFixed(6)}
+                        Coordonnées centre: {campaign.location_lat.toFixed(6)},{' '}
+                        {campaign.location_lng.toFixed(6)}
                       </p>
                     )}
                     {campaign.location_radius && (
@@ -326,7 +351,7 @@ export default function CampaignDetails() {
             {video && (
               <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
                 <h2 className="text-xl font-bold text-gray-900 mb-4">Contenu média</h2>
-                
+
                 <div className="space-y-3">
                   <div className="flex items-start space-x-3">
                     <Film className="h-5 w-5 text-[#00B3A6] mt-1" />
@@ -336,26 +361,29 @@ export default function CampaignDetails() {
                       <p className="text-sm text-gray-600 mt-1">Durée: {video.duration}s</p>
                     </div>
                   </div>
-                  
+
                   {video.url && (
-                    <video 
-                      src={video.url} 
-                      controls 
-                      className="w-full rounded-lg"
-                    >
+                    <video src={video.url} controls className="w-full rounded-lg">
                       Votre navigateur ne supporte pas la lecture de vidéos.
                     </video>
                   )}
-                  
+
                   <div className="flex items-center space-x-2">
                     <span className="text-sm text-gray-600">Statut de validation:</span>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      video.validation_status === 'approved' ? 'bg-green-100 text-green-800' :
-                      video.validation_status === 'rejected' ? 'bg-red-100 text-red-800' :
-                      'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {video.validation_status === 'approved' ? 'Approuvée' :
-                       video.validation_status === 'rejected' ? 'Rejetée' : 'En attente'}
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        video.validation_status === 'approved'
+                          ? 'bg-green-100 text-green-800'
+                          : video.validation_status === 'rejected'
+                            ? 'bg-red-100 text-red-800'
+                            : 'bg-yellow-100 text-yellow-800'
+                      }`}
+                    >
+                      {video.validation_status === 'approved'
+                        ? 'Approuvée'
+                        : video.validation_status === 'rejected'
+                          ? 'Rejetée'
+                          : 'En attente'}
                     </span>
                   </div>
                 </div>
@@ -392,46 +420,3 @@ export default function CampaignDetails() {
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

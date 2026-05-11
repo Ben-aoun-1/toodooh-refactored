@@ -29,22 +29,14 @@ export const clientsService = {
   },
 
   async getById(id: string) {
-    const { data, error } = await supabase
-      .from('clients')
-      .select('*')
-      .eq('id', id)
-      .single();
+    const { data, error } = await supabase.from('clients').select('*').eq('id', id).single();
 
     if (error) throw error;
     return data;
   },
 
   async create(client: CreateClientDTO) {
-    const { data, error } = await supabase
-      .from('clients')
-      .insert([client])
-      .select()
-      .single();
+    const { data, error } = await supabase.from('clients').insert([client]).select().single();
 
     if (error) throw error;
     return data;
@@ -63,10 +55,7 @@ export const clientsService = {
   },
 
   async delete(id: string) {
-    const { error } = await supabase
-      .from('clients')
-      .delete()
-      .eq('id', id);
+    const { error } = await supabase.from('clients').delete().eq('id', id);
 
     if (error) throw error;
   },

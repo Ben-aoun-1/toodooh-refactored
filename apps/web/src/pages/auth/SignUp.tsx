@@ -44,7 +44,11 @@ export default function SignUp() {
   const [profileType, setProfileType] = useState<string | null>(null);
   const isIndividualOwner = profileType === 'individual_owner';
   const isFleetOwner = profileType === 'fleet_owner';
-  const stepsMeta = isIndividualOwner ? stepsIndividualOwner : isFleetOwner ? stepsOwner : stepsDefault;
+  const stepsMeta = isIndividualOwner
+    ? stepsIndividualOwner
+    : isFleetOwner
+      ? stepsOwner
+      : stepsDefault;
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
@@ -65,13 +69,21 @@ export default function SignUp() {
                 <React.Fragment key={step.id}>
                   <div className="flex items-center gap-1.5">
                     <img src={imgSrc} alt="" className="w-8 h-8 object-contain" />
-                    <span className={`text-sm whitespace-nowrap ${
-                      isActive ? 'font-semibold text-gray-900' : isDone ? 'font-medium text-[#00B3A6]' : 'text-gray-400'
-                    }`}>
+                    <span
+                      className={`text-sm whitespace-nowrap ${
+                        isActive
+                          ? 'font-semibold text-gray-900'
+                          : isDone
+                            ? 'font-medium text-[#00B3A6]'
+                            : 'text-gray-400'
+                      }`}
+                    >
                       {step.title}
                     </span>
                   </div>
-                  {idx < stepsMeta.length - 1 && <ChevronRight className="w-4 h-4 text-gray-300 mx-1 flex-shrink-0" />}
+                  {idx < stepsMeta.length - 1 && (
+                    <ChevronRight className="w-4 h-4 text-gray-300 mx-1 flex-shrink-0" />
+                  )}
                 </React.Fragment>
               );
             })}
@@ -93,7 +105,11 @@ export default function SignUp() {
 
       {/* Content */}
       <main className="flex-1 flex flex-col">
-        <SignUpForm currentStep={currentStep} onStepChange={setCurrentStep} onProfileTypeChange={setProfileType} />
+        <SignUpForm
+          currentStep={currentStep}
+          onStepChange={setCurrentStep}
+          onProfileTypeChange={setProfileType}
+        />
       </main>
     </div>
   );

@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import AdminLayout from '../../components/admin/AdminLayout';
-import { 
-  adminRechargesService, 
-  type AdminRecharge, 
-  type RechargeStats 
+import {
+  adminRechargesService,
+  type AdminRecharge,
+  type RechargeStats,
 } from '../../services/admin-recharges.service';
 import { useAdminStore } from '../../stores/admin.store';
 import { supabase } from '../../lib/supabase';
-import { 
-  DollarSign, 
-  CheckCircle, 
-  XCircle, 
-  Clock, 
+import {
+  DollarSign,
+  CheckCircle,
+  XCircle,
+  Clock,
   Ban,
   Search,
   Eye,
@@ -20,7 +20,7 @@ import {
   Banknote,
   TrendingUp,
   Filter,
-  Plus
+  Plus,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -36,17 +36,19 @@ export default function RechargeManagement() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [validationNotes, setValidationNotes] = useState('');
   const [rejectReason, setRejectReason] = useState('');
-  
+
   // Formulaire création recharge
   const [newRecharge, setNewRecharge] = useState({
     user_id: '',
     amount: '',
     payment_method: 'bank' as 'card' | 'bank' | 'cash',
     description: '',
-    auto_validate: true
+    auto_validate: true,
   });
-  const [advertisers, setAdvertisers] = useState<Array<{ user_id: string; business_name: string; email: string }>>([]);
-  
+  const [advertisers, setAdvertisers] = useState<
+    Array<{ user_id: string; business_name: string; email: string }>
+  >([]);
+
   // Filtres et pagination
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -81,21 +83,21 @@ export default function RechargeManagement() {
     try {
       console.log('🔄 Chargement des données recharges...');
       setLoading(true);
-      
+
       // Charger les recharges
       const { data, total } = await adminRechargesService.getRecharges(
         {
           status: statusFilter,
-          search: searchTerm
+          search: searchTerm,
         },
         currentPage,
-        itemsPerPage
+        itemsPerPage,
       );
-      
+
       console.log('✅ Recharges chargées:', data.length, 'Total:', total);
       setRecharges(data);
       setTotalRecharges(total);
-      
+
       // Charger les stats
       const statsData = await adminRechargesService.getRechargeStats();
       console.log('✅ Stats chargées:', statsData);
@@ -103,16 +105,23 @@ export default function RechargeManagement() {
     } catch (error: any) {
       console.error('❌ Erreur chargement données:', error);
       console.error('❌ Détails:', error.message, error.code);
-      
+
       // Si la table n'existe pas encore
-      if (error.code === 'PGRST204' || error.code === 'PGRST205' || error.message?.includes('does not exist')) {
-        toast.error('La table recharges n\'existe pas encore. Veuillez exécuter create_recharges_table.sql', {
-          duration: 5000
-        });
+      if (
+        error.code === 'PGRST204' ||
+        error.code === 'PGRST205' ||
+        error.message?.includes('does not exist')
+      ) {
+        toast.error(
+          "La table recharges n'existe pas encore. Veuillez exécuter create_recharges_table.sql",
+          {
+            duration: 5000,
+          },
+        );
       } else {
         toast.error('Erreur lors du chargement des données');
       }
-      
+
       // Initialiser avec des données vides
       setRecharges([]);
       setTotalRecharges(0);
@@ -123,7 +132,7 @@ export default function RechargeManagement() {
         failed_count: 0,
         total_amount: 0,
         pending_amount: 0,
-        completed_amount: 0
+        completed_amount: 0,
       });
     } finally {
       setLoading(false);
@@ -132,14 +141,10 @@ export default function RechargeManagement() {
 
   const handleApprove = async () => {
     if (!selectedRecharge || !admin) return;
-    
+
     try {
-      await adminRechargesService.approveRecharge(
-        selectedRecharge.id,
-        admin.id,
-        validationNotes
-      );
-      
+      await adminRechargesService.approveRecharge(selectedRecharge.id, admin.id, validationNotes);
+
       toast.success('Recharge validée avec succès !');
       setShowValidateModal(false);
       setValidationNotes('');
@@ -155,14 +160,10 @@ export default function RechargeManagement() {
       toast.error('Veuillez indiquer une raison de rejet');
       return;
     }
-    
+
     try {
-      await adminRechargesService.rejectRecharge(
-        selectedRecharge.id,
-        admin.id,
-        rejectReason
-      );
-      
+      await adminRechargesService.rejectRecharge(selectedRecharge.id, admin.id, rejectReason);
+
       toast.success('Recharge rejetée');
       setShowRejectModal(false);
       setRejectReason('');
@@ -200,7 +201,9 @@ export default function RechargeManagement() {
           description: newRecharge.description || `Recharge manuelle par ${admin.full_name}`,
           validated_by: newRecharge.auto_validate ? admin.id : null,
           validated_at: newRecharge.auto_validate ? new Date().toISOString() : null,
-          validation_notes: newRecharge.auto_validate ? 'Validation automatique lors de la création' : null
+          validation_notes: newRecharge.auto_validate
+            ? 'Validation automatique lors de la création'
+            : null,
         })
         .select()
         .single();
@@ -208,9 +211,9 @@ export default function RechargeManagement() {
       if (error) throw error;
 
       toast.success(
-        newRecharge.auto_validate 
-          ? 'Recharge créée et validée avec succès !' 
-          : 'Recharge créée, en attente de validation'
+        newRecharge.auto_validate
+          ? 'Recharge créée et validée avec succès !'
+          : 'Recharge créée, en attente de validation',
       );
 
       // Réinitialiser le formulaire
@@ -219,7 +222,7 @@ export default function RechargeManagement() {
         amount: '',
         payment_method: 'bank',
         description: '',
-        auto_validate: true
+        auto_validate: true,
       });
       setShowCreateModal(false);
       loadData();
@@ -235,26 +238,26 @@ export default function RechargeManagement() {
     pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
     completed: 'bg-green-100 text-green-800 border-green-200',
     failed: 'bg-red-100 text-red-800 border-red-200',
-    cancelled: 'bg-gray-100 text-gray-800 border-gray-200'
+    cancelled: 'bg-gray-100 text-gray-800 border-gray-200',
   };
 
   const statusLabels = {
     pending: 'En attente',
     completed: 'Validée',
     failed: 'Rejetée',
-    cancelled: 'Annulée'
+    cancelled: 'Annulée',
   };
 
   const paymentMethodIcons = {
     card: <CreditCard className="h-4 w-4" />,
     bank: <Building className="h-4 w-4" />,
-    cash: <Banknote className="h-4 w-4" />
+    cash: <Banknote className="h-4 w-4" />,
   };
 
   const paymentMethodLabels = {
     card: 'Carte bancaire',
     bank: 'Virement bancaire',
-    cash: 'Espèces'
+    cash: 'Espèces',
   };
 
   if (loading && recharges.length === 0) {
@@ -416,9 +419,7 @@ export default function RechargeManagement() {
               {recharges.map((recharge) => (
                 <tr key={recharge.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">
-                      {recharge.reference}
-                    </div>
+                    <div className="text-sm font-medium text-gray-900">{recharge.reference}</div>
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-sm font-medium text-gray-900">
@@ -438,7 +439,9 @@ export default function RechargeManagement() {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full border ${statusColors[recharge.status]}`}>
+                    <span
+                      className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full border ${statusColors[recharge.status]}`}
+                    >
                       {statusLabels[recharge.status]}
                     </span>
                   </td>
@@ -513,9 +516,12 @@ export default function RechargeManagement() {
           <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
             <div>
               <p className="text-sm text-gray-700">
-                Affichage de <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> à{' '}
-                <span className="font-medium">{Math.min(currentPage * itemsPerPage, totalRecharges)}</span> sur{' '}
-                <span className="font-medium">{totalRecharges}</span> résultats
+                Affichage de{' '}
+                <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> à{' '}
+                <span className="font-medium">
+                  {Math.min(currentPage * itemsPerPage, totalRecharges)}
+                </span>{' '}
+                sur <span className="font-medium">{totalRecharges}</span> résultats
               </p>
             </div>
             <div className="flex items-center space-x-4">
@@ -532,7 +538,7 @@ export default function RechargeManagement() {
                 <option value={50}>50 par page</option>
                 <option value={100}>100 par page</option>
               </select>
-              
+
               <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
                 <button
                   onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
@@ -563,7 +569,7 @@ export default function RechargeManagement() {
           <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <h3 className="text-2xl font-bold text-[#00263A] mb-6">Détails de la recharge</h3>
-              
+
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -573,7 +579,9 @@ export default function RechargeManagement() {
                   <div>
                     <label className="text-sm font-medium text-gray-600">Statut</label>
                     <p>
-                      <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full border ${statusColors[selectedRecharge.status]}`}>
+                      <span
+                        className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full border ${statusColors[selectedRecharge.status]}`}
+                      >
                         {statusLabels[selectedRecharge.status]}
                       </span>
                     </p>
@@ -582,7 +590,9 @@ export default function RechargeManagement() {
 
                 <div>
                   <label className="text-sm font-medium text-gray-600">Annonceur</label>
-                  <p className="text-lg font-semibold text-gray-900">{selectedRecharge.business_name}</p>
+                  <p className="text-lg font-semibold text-gray-900">
+                    {selectedRecharge.business_name}
+                  </p>
                   <p className="text-sm text-gray-500">{selectedRecharge.user_email}</p>
                 </div>
 
@@ -605,7 +615,9 @@ export default function RechargeManagement() {
                 {selectedRecharge.transaction_id && (
                   <div>
                     <label className="text-sm font-medium text-gray-600">ID Transaction</label>
-                    <p className="text-sm font-mono text-gray-900">{selectedRecharge.transaction_id}</p>
+                    <p className="text-sm font-mono text-gray-900">
+                      {selectedRecharge.transaction_id}
+                    </p>
                   </div>
                 )}
 
@@ -625,7 +637,9 @@ export default function RechargeManagement() {
                   </div>
                   {selectedRecharge.validated_at && (
                     <div>
-                      <label className="text-sm font-medium text-gray-600">Date de validation</label>
+                      <label className="text-sm font-medium text-gray-600">
+                        Date de validation
+                      </label>
                       <p className="text-sm text-gray-900">
                         {new Date(selectedRecharge.validated_at).toLocaleString('fr-FR')}
                       </p>
@@ -672,11 +686,9 @@ export default function RechargeManagement() {
           <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full">
             <div className="p-6">
               <h3 className="text-2xl font-bold text-[#00263A] mb-4">Valider la recharge</h3>
-              
+
               <div className="mb-4">
-                <p className="text-gray-700">
-                  Êtes-vous sûr de vouloir valider cette recharge ?
-                </p>
+                <p className="text-gray-700">Êtes-vous sûr de vouloir valider cette recharge ?</p>
                 <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4">
                   <p className="text-sm font-medium text-green-800">
                     Référence: {selectedRecharge.reference}
@@ -733,11 +745,9 @@ export default function RechargeManagement() {
           <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full">
             <div className="p-6">
               <h3 className="text-2xl font-bold text-[#00263A] mb-4">Rejeter la recharge</h3>
-              
+
               <div className="mb-4">
-                <p className="text-gray-700">
-                  Veuillez indiquer la raison du rejet :
-                </p>
+                <p className="text-gray-700">Veuillez indiquer la raison du rejet :</p>
                 <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4">
                   <p className="text-sm font-medium text-red-800">
                     Référence: {selectedRecharge.reference}
@@ -792,8 +802,10 @@ export default function RechargeManagement() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
-              <h3 className="text-2xl font-bold text-[#00263A] mb-6">Créer une nouvelle recharge</h3>
-              
+              <h3 className="text-2xl font-bold text-[#00263A] mb-6">
+                Créer une nouvelle recharge
+              </h3>
+
               <div className="space-y-4">
                 {/* Sélection annonceur */}
                 <div>
@@ -839,7 +851,12 @@ export default function RechargeManagement() {
                   </label>
                   <select
                     value={newRecharge.payment_method}
-                    onChange={(e) => setNewRecharge({ ...newRecharge, payment_method: e.target.value as 'card' | 'bank' | 'cash' })}
+                    onChange={(e) =>
+                      setNewRecharge({
+                        ...newRecharge,
+                        payment_method: e.target.value as 'card' | 'bank' | 'cash',
+                      })
+                    }
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
                   >
                     <option value="bank">Virement bancaire</option>
@@ -855,7 +872,9 @@ export default function RechargeManagement() {
                   </label>
                   <textarea
                     value={newRecharge.description}
-                    onChange={(e) => setNewRecharge({ ...newRecharge, description: e.target.value })}
+                    onChange={(e) =>
+                      setNewRecharge({ ...newRecharge, description: e.target.value })
+                    }
                     rows={3}
                     placeholder="Ajouter une description..."
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
@@ -868,7 +887,9 @@ export default function RechargeManagement() {
                     type="checkbox"
                     id="auto_validate"
                     checked={newRecharge.auto_validate}
-                    onChange={(e) => setNewRecharge({ ...newRecharge, auto_validate: e.target.checked })}
+                    onChange={(e) =>
+                      setNewRecharge({ ...newRecharge, auto_validate: e.target.checked })
+                    }
                     className="h-4 w-4 text-[#00B3A6] focus:ring-[#00B3A6] border-gray-300 rounded"
                   />
                   <label htmlFor="auto_validate" className="text-sm text-gray-700">
@@ -883,7 +904,8 @@ export default function RechargeManagement() {
                 {newRecharge.amount && parseFloat(newRecharge.amount) > 0 && (
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <p className="text-sm font-medium text-blue-800">
-                      Montant à ajouter: {adminRechargesService.formatAmount(parseFloat(newRecharge.amount))}
+                      Montant à ajouter:{' '}
+                      {adminRechargesService.formatAmount(parseFloat(newRecharge.amount))}
                     </p>
                     {newRecharge.auto_validate && (
                       <p className="text-xs text-blue-600 mt-1">
@@ -903,7 +925,7 @@ export default function RechargeManagement() {
                       amount: '',
                       payment_method: 'bank',
                       description: '',
-                      auto_validate: true
+                      auto_validate: true,
                     });
                   }}
                   className="px-6 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
@@ -912,7 +934,11 @@ export default function RechargeManagement() {
                 </button>
                 <button
                   onClick={handleCreateRecharge}
-                  disabled={!newRecharge.user_id || !newRecharge.amount || parseFloat(newRecharge.amount) <= 0}
+                  disabled={
+                    !newRecharge.user_id ||
+                    !newRecharge.amount ||
+                    parseFloat(newRecharge.amount) <= 0
+                  }
                   className="px-6 py-2 bg-[#00B3A6] text-white rounded-lg hover:bg-[#00A095] transition-colors flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Plus className="h-5 w-5" />
@@ -926,4 +952,3 @@ export default function RechargeManagement() {
     </AdminLayout>
   );
 }
-

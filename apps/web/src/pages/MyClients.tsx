@@ -1,6 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Users, Loader2, Search, PlusCircle, User, Mail, Phone, Building2, Eye, Pencil, Trash2, X, Save } from 'lucide-react';
+import {
+  Users,
+  Loader2,
+  Search,
+  PlusCircle,
+  User,
+  Mail,
+  Phone,
+  Building2,
+  Eye,
+  Pencil,
+  Trash2,
+  X,
+  Save,
+} from 'lucide-react';
 import { useAuthStore } from '../stores/auth.store';
 import { toast } from 'react-hot-toast';
 
@@ -12,7 +26,7 @@ function getYear(dateStr: string) {
 }
 
 export default function MyClients() {
-  const user = useAuthStore(state => state.user);
+  const user = useAuthStore((state) => state.user);
   const [clients, setClients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -25,7 +39,7 @@ export default function MyClients() {
     name: '',
     contact_email: '',
     contact_phone: '',
-    societe: ''
+    societe: '',
   });
 
   useEffect(() => {
@@ -46,13 +60,17 @@ export default function MyClients() {
   // Stats
   const totalClients = clients.length;
   const now = new Date();
-  const newThisMonth = clients.filter(c => getMonth(c.created_at) === now.getMonth() + 1 && getYear(c.created_at) === now.getFullYear()).length;
+  const newThisMonth = clients.filter(
+    (c) =>
+      getMonth(c.created_at) === now.getMonth() + 1 && getYear(c.created_at) === now.getFullYear(),
+  ).length;
 
   // Filtrage
-  const filtered = clients.filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.contact_email.toLowerCase().includes(search.toLowerCase()) ||
-    c.societe?.toLowerCase().includes(search.toLowerCase())
+  const filtered = clients.filter(
+    (c) =>
+      c.name.toLowerCase().includes(search.toLowerCase()) ||
+      c.contact_email.toLowerCase().includes(search.toLowerCase()) ||
+      c.societe?.toLowerCase().includes(search.toLowerCase()),
   );
 
   // Fonctions utilitaires
@@ -61,15 +79,15 @@ export default function MyClients() {
       name: '',
       contact_email: '',
       contact_phone: '',
-      societe: ''
+      societe: '',
     });
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
   };
 
@@ -79,12 +97,12 @@ export default function MyClients() {
     if (!user) return;
 
     try {
-      const { error } = await supabase
-        .from('clients')
-        .insert([{
+      const { error } = await supabase.from('clients').insert([
+        {
           ...formData,
-          user_id: user.id
-        }]);
+          user_id: user.id,
+        },
+      ]);
 
       if (error) throw error;
 
@@ -99,8 +117,8 @@ export default function MyClients() {
         .order('created_at', { ascending: false });
       setClients(data || []);
     } catch (error) {
-      console.error('Erreur lors de l\'ajout:', error);
-      toast.error('Erreur lors de l\'ajout du client');
+      console.error("Erreur lors de l'ajout:", error);
+      toast.error("Erreur lors de l'ajout du client");
     }
   };
 
@@ -110,10 +128,7 @@ export default function MyClients() {
     if (!selectedClient) return;
 
     try {
-      const { error } = await supabase
-        .from('clients')
-        .update(formData)
-        .eq('id', selectedClient.id);
+      const { error } = await supabase.from('clients').update(formData).eq('id', selectedClient.id);
 
       if (error) throw error;
 
@@ -139,10 +154,7 @@ export default function MyClients() {
     if (!selectedClient) return;
 
     try {
-      const { error } = await supabase
-        .from('clients')
-        .delete()
-        .eq('id', selectedClient.id);
+      const { error } = await supabase.from('clients').delete().eq('id', selectedClient.id);
 
       if (error) throw error;
 
@@ -174,7 +186,7 @@ export default function MyClients() {
       name: client.name,
       contact_email: client.contact_email,
       contact_phone: client.contact_phone,
-      societe: client.societe || ''
+      societe: client.societe || '',
     });
     setShowEditModal(true);
   };
@@ -220,12 +232,12 @@ export default function MyClients() {
             type="text"
             placeholder="Rechercher un client..."
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent transition-all text-gray-700 bg-white shadow"
           />
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
         </div>
-        <button 
+        <button
           onClick={() => setShowAddModal(true)}
           className="inline-flex items-center px-5 py-3 bg-[#00B3A6] text-white rounded-xl font-semibold shadow hover:bg-[#00B3A6]/90 transition-all"
         >
@@ -249,49 +261,75 @@ export default function MyClients() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap min-w-[120px]">Nom</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap min-w-[180px]">Email</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap min-w-[130px]">Téléphone</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap min-w-[140px]">Société</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap min-w-[110px]">Date d'ajout</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap min-w-[160px]">Actions</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap min-w-[120px]">
+                    Nom
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap min-w-[180px]">
+                    Email
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap min-w-[130px]">
+                    Téléphone
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap min-w-[140px]">
+                    Société
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap min-w-[110px]">
+                    Date d'ajout
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap min-w-[160px]">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {filtered.map((client) => (
                   <tr key={client.id} className="hover:bg-gray-50 transition">
                     <td className="px-4 py-3 font-semibold text-gray-900 whitespace-nowrap min-w-[120px]">
-                      <span className="inline-flex items-center gap-2"><User className="h-4 w-4 text-[#00B3A6]" /> <span className="truncate max-w-[120px]">{client.name}</span></span>
+                      <span className="inline-flex items-center gap-2">
+                        <User className="h-4 w-4 text-[#00B3A6]" />{' '}
+                        <span className="truncate max-w-[120px]">{client.name}</span>
+                      </span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap min-w-[180px]">
-                      <span className="inline-flex items-center gap-2"><Mail className="h-4 w-4 text-gray-400" /> <span className="truncate max-w-[150px]">{client.contact_email}</span></span>
+                      <span className="inline-flex items-center gap-2">
+                        <Mail className="h-4 w-4 text-gray-400" />{' '}
+                        <span className="truncate max-w-[150px]">{client.contact_email}</span>
+                      </span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap min-w-[130px]">
-                      <span className="inline-flex items-center gap-2"><Phone className="h-4 w-4 text-gray-400" /> <span className="truncate max-w-[100px]">{client.contact_phone}</span></span>
+                      <span className="inline-flex items-center gap-2">
+                        <Phone className="h-4 w-4 text-gray-400" />{' '}
+                        <span className="truncate max-w-[100px]">{client.contact_phone}</span>
+                      </span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap min-w-[140px]">
-                      <span className="inline-flex items-center gap-2"><Building2 className="h-4 w-4 text-gray-400" /> <span className="truncate max-w-[110px]">{client.societe}</span></span>
+                      <span className="inline-flex items-center gap-2">
+                        <Building2 className="h-4 w-4 text-gray-400" />{' '}
+                        <span className="truncate max-w-[110px]">{client.societe}</span>
+                      </span>
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap min-w-[110px] text-gray-900">{new Date(client.created_at).toLocaleDateString()}</td>
+                    <td className="px-4 py-3 whitespace-nowrap min-w-[110px] text-gray-900">
+                      {new Date(client.created_at).toLocaleDateString()}
+                    </td>
                     <td className="px-4 py-3 text-right whitespace-nowrap min-w-[160px]">
                       <div className="inline-flex items-center gap-2">
-                        <button 
+                        <button
                           onClick={() => openViewModal(client)}
-                          className="p-2 rounded-full bg-[#00B3A6] text-white shadow hover:bg-[#00B3A6]/90 transition-all" 
+                          className="p-2 rounded-full bg-[#00B3A6] text-white shadow hover:bg-[#00B3A6]/90 transition-all"
                           title="Voir"
                         >
                           <Eye className="h-5 w-5" />
                         </button>
-                        <button 
+                        <button
                           onClick={() => openEditModal(client)}
-                          className="p-2 rounded-full bg-gray-200 text-gray-600 shadow hover:bg-gray-300 transition-all" 
+                          className="p-2 rounded-full bg-gray-200 text-gray-600 shadow hover:bg-gray-300 transition-all"
                           title="Éditer"
                         >
                           <Pencil className="h-5 w-5" />
                         </button>
-                        <button 
+                        <button
                           onClick={() => openDeleteModal(client)}
-                          className="p-2 rounded-full bg-red-100 text-red-600 shadow hover:bg-red-200 transition-all" 
+                          className="p-2 rounded-full bg-red-100 text-red-600 shadow hover:bg-red-200 transition-all"
                           title="Supprimer"
                         >
                           <Trash2 className="h-5 w-5" />
@@ -360,7 +398,9 @@ export default function MyClients() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Société (optionnel)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Société (optionnel)
+                </label>
                 <input
                   type="text"
                   name="societe"
@@ -440,7 +480,9 @@ export default function MyClients() {
               )}
               <div className="pt-4 border-t">
                 <p className="text-sm text-gray-600">Date d'ajout</p>
-                <p className="font-semibold text-gray-900">{new Date(selectedClient.created_at).toLocaleDateString()}</p>
+                <p className="font-semibold text-gray-900">
+                  {new Date(selectedClient.created_at).toLocaleDateString()}
+                </p>
               </div>
             </div>
           </div>
@@ -499,7 +541,9 @@ export default function MyClients() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Société (optionnel)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Société (optionnel)
+                </label>
                 <input
                   type="text"
                   name="societe"
@@ -551,8 +595,8 @@ export default function MyClients() {
             </div>
             <div className="p-6">
               <p className="text-gray-600 mb-6">
-                Êtes-vous sûr de vouloir supprimer le client <strong>{selectedClient.name}</strong> ? 
-                Cette action est irréversible.
+                Êtes-vous sûr de vouloir supprimer le client <strong>{selectedClient.name}</strong>{' '}
+                ? Cette action est irréversible.
               </p>
               <div className="flex justify-end space-x-3">
                 <button
@@ -578,4 +622,4 @@ export default function MyClients() {
       )}
     </div>
   );
-} 
+}

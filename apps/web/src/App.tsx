@@ -58,10 +58,10 @@ function AdvertiserRoute({ children }: { children: React.ReactNode }) {
   if (!user) {
     return <Navigate to="/login" />;
   }
-  
+
   // Les utilisateurs en attente peuvent accéder au dashboard
   // mais les fonctionnalités seront grisées/désactivées via isDisabled
-  
+
   // Utiliser le profileType du store au lieu de localStorage
   if (profileType === 'individual_owner' || profileType === 'fleet_owner') {
     return <Navigate to="/owner-dashboard" />;
@@ -85,10 +85,10 @@ function OwnerRoute({ children }: { children: React.ReactNode }) {
   if (!user) {
     return <Navigate to="/login" />;
   }
-  
+
   // Les utilisateurs en attente peuvent accéder au dashboard
   // mais les fonctionnalités seront grisées/désactivées via isDisabled
-  
+
   // Utiliser le profileType du store au lieu de localStorage
   if (profileType !== 'individual_owner' && profileType !== 'fleet_owner') {
     return <Navigate to="/dashboard" />;
@@ -99,7 +99,7 @@ function OwnerRoute({ children }: { children: React.ReactNode }) {
 
 function PublicRoute({ children }: { children: React.ReactNode }) {
   const { user, initialized, profileType, needsApproval } = useAuthStore();
-  
+
   if (!initialized) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
@@ -110,7 +110,7 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
-  
+
   // Si un utilisateur est connecté, le rediriger vers son dashboard
   // même s'il est en attente de validation (les fonctionnalités seront grisées)
   if (user) {
@@ -119,13 +119,13 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
     }
     return <Navigate to="/dashboard" />;
   }
-  
+
   return <>{children}</>;
 }
 
 export default function App() {
   const { initialize, initialized, loading } = useAuthStore();
-  
+
   useEffect(() => {
     if (!initialized && !loading) {
       initialize();
@@ -145,242 +145,374 @@ export default function App() {
     <>
       <Router>
         <Suspense fallback={<PageLoadingFallback />}>
-        <Routes>
-          {/* Route racine */}
-          <Route path="/" element={<Navigate to="/login" replace />} />
-          
-          {/* Routes publiques */}
-          <Route path="/login" element={
-            <PublicRoute>
-              <Login />
-            </PublicRoute>
-          } />
-          <Route path="/signup" element={
-            <PublicRoute>
-              <SignUp />
-            </PublicRoute>
-          } />
-          <Route path="/reset-password" element={
-            <PublicRoute>
-              <ResetPassword />
-            </PublicRoute>
-          } />
-          <Route path="/update-password" element={
-            <PublicRoute>
-              <UpdatePassword />
-            </PublicRoute>
-          } />
+          <Routes>
+            {/* Route racine */}
+            <Route path="/" element={<Navigate to="/login" replace />} />
 
-          {/* Routes protégées - Dashboard Annonceur */}
-          <Route path="/dashboard" element={
-            <AdvertiserRoute>
-              <Dashboard />
-            </AdvertiserRoute>
-          } />
-          <Route path="/profile" element={
-            <AdvertiserRoute>
-              <Dashboard />
-            </AdvertiserRoute>
-          } />
-          <Route path="/new-campaign" element={
-            <AdvertiserRoute>
-              <Dashboard />
-            </AdvertiserRoute>
-          } />
-          <Route path="/my-campaigns" element={
-            <AdvertiserRoute>
-              <Dashboard />
-            </AdvertiserRoute>
-          } />
-          <Route path="/parcs" element={
-            <AdvertiserRoute>
-              <Dashboard />
-            </AdvertiserRoute>
-          } />
-          <Route path="/evenements" element={
-            <AdvertiserRoute>
-              <Dashboard />
-            </AdvertiserRoute>
-          } />
-          <Route path="/perfor" element={
-            <AdvertiserRoute>
-              <Dashboard />
-            </AdvertiserRoute>
-          } />
-          <Route path="/new-event-campaign" element={
-            <AdvertiserRoute>
-              <Dashboard />
-            </AdvertiserRoute>
-          } />
-          <Route path="/campaign-details/:id" element={
-            <AdvertiserRoute>
-              <CampaignDetails />
-            </AdvertiserRoute>
-          } />
-          <Route path="/my-recharges" element={
-            <AdvertiserRoute>
-              <Dashboard />
-            </AdvertiserRoute>
-          } />
-          <Route path="/my-invoices" element={
-            <AdvertiserRoute>
-              <Dashboard />
-            </AdvertiserRoute>
-          } />
-          <Route path="/my-clients" element={
-            <AdvertiserRoute>
-              <Dashboard />
-            </AdvertiserRoute>
-          } />
-          <Route path="/my-cart" element={
-            <AdvertiserRoute>
-              <Dashboard />
-            </AdvertiserRoute>
-          } />
+            {/* Routes publiques */}
+            <Route
+              path="/login"
+              element={
+                <PublicRoute>
+                  <Login />
+                </PublicRoute>
+              }
+            />
+            <Route
+              path="/signup"
+              element={
+                <PublicRoute>
+                  <SignUp />
+                </PublicRoute>
+              }
+            />
+            <Route
+              path="/reset-password"
+              element={
+                <PublicRoute>
+                  <ResetPassword />
+                </PublicRoute>
+              }
+            />
+            <Route
+              path="/update-password"
+              element={
+                <PublicRoute>
+                  <UpdatePassword />
+                </PublicRoute>
+              }
+            />
 
-          {/* Routes protégées - Dashboard Propriétaire */}
-          <Route path="/owner-dashboard" element={
-            <OwnerRoute>
-              <OwnerDashboard />
-            </OwnerRoute>
-          } />
-          <Route path="/owner-screens" element={
-            <OwnerRoute>
-              <OwnerScreens />
-            </OwnerRoute>
-          } />
-          <Route path="/owner-campaigns" element={
-            <OwnerRoute>
-              <OwnerCampaigns />
-            </OwnerRoute>
-          } />
-          <Route path="/owner-locations" element={
-            <OwnerRoute>
-              <OwnerLocations />
-            </OwnerRoute>
-          } />
-          <Route path="/owner-revenue" element={
-            <OwnerRoute>
-              <OwnerRevenue />
-            </OwnerRoute>
-          } />
-          <Route path="/owner-performance" element={
-            <OwnerRoute>
-              <OwnerPerformance />
-            </OwnerRoute>
-          } />
-          <Route path="/owner-calendar-devices" element={
-            <OwnerRoute>
-              <OwnerCalendarDevices />
-            </OwnerRoute>
-          } />
-          <Route path="/owner-statements" element={
-            <OwnerRoute>
-              <OwnerStatementsPage />
-            </OwnerRoute>
-          } />
-          <Route path="/owner-statements/:statementId" element={
-            <OwnerRoute>
-              <OwnerStatementDetailPage />
-            </OwnerRoute>
-          } />
-          <Route path="/owner-activity" element={
-            <OwnerRoute>
-              <OwnerActivity />
-            </OwnerRoute>
-          } />
-          <Route path="/owner-maintenance" element={
-            <OwnerRoute>
-              <OwnerMaintenance />
-            </OwnerRoute>
-          } />
-          <Route path="/owner-campaign-approvals" element={
-            <OwnerRoute>
-              <OwnerCampaignApprovals />
-            </OwnerRoute>
-          } />
-          <Route path="/owner-settings" element={
-            <OwnerRoute>
-              <OwnerSettings />
-            </OwnerRoute>
-          } />
-          <Route path="/gift-catalog" element={
-            <OwnerRoute>
-              <GiftCatalogPage />
-            </OwnerRoute>
-          } />
-          <Route path="/my-account" element={
-            <OwnerRoute>
-              <MyAccount />
-            </OwnerRoute>
-          } />
-          <Route path="/contact" element={
-            <OwnerRoute>
-              <ContactPage />
-            </OwnerRoute>
-          } />
+            {/* Routes protégées - Dashboard Annonceur */}
+            <Route
+              path="/dashboard"
+              element={
+                <AdvertiserRoute>
+                  <Dashboard />
+                </AdvertiserRoute>
+              }
+            />
+            <Route
+              path="/profile"
+              element={
+                <AdvertiserRoute>
+                  <Dashboard />
+                </AdvertiserRoute>
+              }
+            />
+            <Route
+              path="/new-campaign"
+              element={
+                <AdvertiserRoute>
+                  <Dashboard />
+                </AdvertiserRoute>
+              }
+            />
+            <Route
+              path="/my-campaigns"
+              element={
+                <AdvertiserRoute>
+                  <Dashboard />
+                </AdvertiserRoute>
+              }
+            />
+            <Route
+              path="/parcs"
+              element={
+                <AdvertiserRoute>
+                  <Dashboard />
+                </AdvertiserRoute>
+              }
+            />
+            <Route
+              path="/evenements"
+              element={
+                <AdvertiserRoute>
+                  <Dashboard />
+                </AdvertiserRoute>
+              }
+            />
+            <Route
+              path="/perfor"
+              element={
+                <AdvertiserRoute>
+                  <Dashboard />
+                </AdvertiserRoute>
+              }
+            />
+            <Route
+              path="/new-event-campaign"
+              element={
+                <AdvertiserRoute>
+                  <Dashboard />
+                </AdvertiserRoute>
+              }
+            />
+            <Route
+              path="/campaign-details/:id"
+              element={
+                <AdvertiserRoute>
+                  <CampaignDetails />
+                </AdvertiserRoute>
+              }
+            />
+            <Route
+              path="/my-recharges"
+              element={
+                <AdvertiserRoute>
+                  <Dashboard />
+                </AdvertiserRoute>
+              }
+            />
+            <Route
+              path="/my-invoices"
+              element={
+                <AdvertiserRoute>
+                  <Dashboard />
+                </AdvertiserRoute>
+              }
+            />
+            <Route
+              path="/my-clients"
+              element={
+                <AdvertiserRoute>
+                  <Dashboard />
+                </AdvertiserRoute>
+              }
+            />
+            <Route
+              path="/my-cart"
+              element={
+                <AdvertiserRoute>
+                  <Dashboard />
+                </AdvertiserRoute>
+              }
+            />
 
-          {/* Routes Admin */}
-          <Route path="/admin-login" element={<AdminLogin />} />
-          <Route path="/admin-dashboard" element={
-            <AdminRoute>
-              <AdminDashboard />
-            </AdminRoute>
-          } />
-          <Route path="/admin-users" element={
-            <AdminRoute>
-              <UserManagement />
-            </AdminRoute>
-          } />
-          <Route path="/admin-videos" element={
-            <AdminRoute>
-              <VideoManagement />
-            </AdminRoute>
-          } />
-          <Route path="/admin-events" element={
-            <AdminRoute requiredRoles={['superadmin']}>
-              <EventManagement />
-            </AdminRoute>
-          } />
-          <Route path="/admin-campaigns" element={
-            <AdminRoute requiredRoles={['superadmin', 'admin']}>
-              <CampaignMonitoring />
-            </AdminRoute>
-          } />
-          <Route path="/admin-create" element={
-            <AdminRoute requiredRoles={['superadmin']}>
-              <CreateAdmin />
-            </AdminRoute>
-          } />
-          <Route path="/admin-management" element={
-            <AdminRoute requiredRoles={['superadmin']}>
-              <AdminManagement />
-            </AdminRoute>
-          } />
-          <Route path="/admin-screens" element={
-            <AdminRoute requiredRoles={['superadmin', 'admin']}>
-              <ScreenManagement />
-            </AdminRoute>
-          } />
-          <Route path="/admin-recharges" element={
-            <AdminRoute requiredRoles={['superadmin', 'admin']}>
-              <RechargeManagement />
-            </AdminRoute>
-          } />
-          <Route path="/admin-zones" element={
-            <AdminRoute requiredRoles={['superadmin', 'admin']}>
-              <GeographicZonesManagement />
-            </AdminRoute>
-          } />
-          <Route path="/admin-global-config" element={
-            <AdminRoute requiredRoles={['superadmin', 'admin']}>
-              <AdminGlobalConfiguration />
-            </AdminRoute>
-          } />
+            {/* Routes protégées - Dashboard Propriétaire */}
+            <Route
+              path="/owner-dashboard"
+              element={
+                <OwnerRoute>
+                  <OwnerDashboard />
+                </OwnerRoute>
+              }
+            />
+            <Route
+              path="/owner-screens"
+              element={
+                <OwnerRoute>
+                  <OwnerScreens />
+                </OwnerRoute>
+              }
+            />
+            <Route
+              path="/owner-campaigns"
+              element={
+                <OwnerRoute>
+                  <OwnerCampaigns />
+                </OwnerRoute>
+              }
+            />
+            <Route
+              path="/owner-locations"
+              element={
+                <OwnerRoute>
+                  <OwnerLocations />
+                </OwnerRoute>
+              }
+            />
+            <Route
+              path="/owner-revenue"
+              element={
+                <OwnerRoute>
+                  <OwnerRevenue />
+                </OwnerRoute>
+              }
+            />
+            <Route
+              path="/owner-performance"
+              element={
+                <OwnerRoute>
+                  <OwnerPerformance />
+                </OwnerRoute>
+              }
+            />
+            <Route
+              path="/owner-calendar-devices"
+              element={
+                <OwnerRoute>
+                  <OwnerCalendarDevices />
+                </OwnerRoute>
+              }
+            />
+            <Route
+              path="/owner-statements"
+              element={
+                <OwnerRoute>
+                  <OwnerStatementsPage />
+                </OwnerRoute>
+              }
+            />
+            <Route
+              path="/owner-statements/:statementId"
+              element={
+                <OwnerRoute>
+                  <OwnerStatementDetailPage />
+                </OwnerRoute>
+              }
+            />
+            <Route
+              path="/owner-activity"
+              element={
+                <OwnerRoute>
+                  <OwnerActivity />
+                </OwnerRoute>
+              }
+            />
+            <Route
+              path="/owner-maintenance"
+              element={
+                <OwnerRoute>
+                  <OwnerMaintenance />
+                </OwnerRoute>
+              }
+            />
+            <Route
+              path="/owner-campaign-approvals"
+              element={
+                <OwnerRoute>
+                  <OwnerCampaignApprovals />
+                </OwnerRoute>
+              }
+            />
+            <Route
+              path="/owner-settings"
+              element={
+                <OwnerRoute>
+                  <OwnerSettings />
+                </OwnerRoute>
+              }
+            />
+            <Route
+              path="/gift-catalog"
+              element={
+                <OwnerRoute>
+                  <GiftCatalogPage />
+                </OwnerRoute>
+              }
+            />
+            <Route
+              path="/my-account"
+              element={
+                <OwnerRoute>
+                  <MyAccount />
+                </OwnerRoute>
+              }
+            />
+            <Route
+              path="/contact"
+              element={
+                <OwnerRoute>
+                  <ContactPage />
+                </OwnerRoute>
+              }
+            />
 
-          {/* Redirection par défaut */}
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
+            {/* Routes Admin */}
+            <Route path="/admin-login" element={<AdminLogin />} />
+            <Route
+              path="/admin-dashboard"
+              element={
+                <AdminRoute>
+                  <AdminDashboard />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin-users"
+              element={
+                <AdminRoute>
+                  <UserManagement />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin-videos"
+              element={
+                <AdminRoute>
+                  <VideoManagement />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin-events"
+              element={
+                <AdminRoute requiredRoles={['superadmin']}>
+                  <EventManagement />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin-campaigns"
+              element={
+                <AdminRoute requiredRoles={['superadmin', 'admin']}>
+                  <CampaignMonitoring />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin-create"
+              element={
+                <AdminRoute requiredRoles={['superadmin']}>
+                  <CreateAdmin />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin-management"
+              element={
+                <AdminRoute requiredRoles={['superadmin']}>
+                  <AdminManagement />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin-screens"
+              element={
+                <AdminRoute requiredRoles={['superadmin', 'admin']}>
+                  <ScreenManagement />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin-recharges"
+              element={
+                <AdminRoute requiredRoles={['superadmin', 'admin']}>
+                  <RechargeManagement />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin-zones"
+              element={
+                <AdminRoute requiredRoles={['superadmin', 'admin']}>
+                  <GeographicZonesManagement />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin-global-config"
+              element={
+                <AdminRoute requiredRoles={['superadmin', 'admin']}>
+                  <AdminGlobalConfiguration />
+                </AdminRoute>
+              }
+            />
+
+            {/* Redirection par défaut */}
+            <Route path="*" element={<Navigate to="/login" replace />} />
+          </Routes>
         </Suspense>
       </Router>
       <Toaster position="top-right" />

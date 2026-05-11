@@ -15,7 +15,10 @@ export async function checkTableStructure() {
     if (permissionsError) {
       console.error('Erreur admin_permissions:', permissionsError);
     } else {
-      console.log('Colonnes admin_permissions:', permissionsStructure.length > 0 ? Object.keys(permissionsStructure[0]) : 'Table vide');
+      console.log(
+        'Colonnes admin_permissions:',
+        permissionsStructure.length > 0 ? Object.keys(permissionsStructure[0]) : 'Table vide',
+      );
       console.log('Données admin_permissions:', permissionsStructure);
     }
 
@@ -29,7 +32,10 @@ export async function checkTableStructure() {
     if (rolesError) {
       console.error('Erreur admin_roles:', rolesError);
     } else {
-      console.log('Colonnes admin_roles:', rolesStructure.length > 0 ? Object.keys(rolesStructure[0]) : 'Table vide');
+      console.log(
+        'Colonnes admin_roles:',
+        rolesStructure.length > 0 ? Object.keys(rolesStructure[0]) : 'Table vide',
+      );
       console.log('Données admin_roles:', rolesStructure);
     }
 
@@ -41,9 +47,12 @@ export async function checkTableStructure() {
       .limit(1);
 
     if (profilesError) {
-      console.error('admin_profiles n\'existe pas ou erreur:', profilesError);
+      console.error("admin_profiles n'existe pas ou erreur:", profilesError);
     } else {
-      console.log('Colonnes admin_profiles:', profilesStructure.length > 0 ? Object.keys(profilesStructure[0]) : 'Table vide');
+      console.log(
+        'Colonnes admin_profiles:',
+        profilesStructure.length > 0 ? Object.keys(profilesStructure[0]) : 'Table vide',
+      );
       console.log('Données admin_profiles:', profilesStructure);
     }
 
@@ -55,9 +64,12 @@ export async function checkTableStructure() {
       .limit(1);
 
     if (activitiesError) {
-      console.error('admin_activities n\'existe pas ou erreur:', activitiesError);
+      console.error("admin_activities n'existe pas ou erreur:", activitiesError);
     } else {
-      console.log('Colonnes admin_activities:', activitiesStructure.length > 0 ? Object.keys(activitiesStructure[0]) : 'Table vide');
+      console.log(
+        'Colonnes admin_activities:',
+        activitiesStructure.length > 0 ? Object.keys(activitiesStructure[0]) : 'Table vide',
+      );
       console.log('Données admin_activities:', activitiesStructure);
     }
 
@@ -71,47 +83,3 @@ export async function checkTableStructure() {
 if (typeof window !== 'undefined') {
   checkTableStructure();
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

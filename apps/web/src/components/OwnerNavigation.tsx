@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
-  Monitor, 
-  BarChart3, 
-  Settings, 
+  Monitor,
+  BarChart3,
+  Settings,
   LogOut,
   Menu,
   X,
@@ -21,7 +21,7 @@ import {
   MessageCircle,
   UserCircle,
   CheckCircle,
-  Megaphone
+  Megaphone,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAuthStore } from '../stores/auth.store';
@@ -62,8 +62,20 @@ function isAutreObjective(value: string): boolean {
 }
 
 const navigation = [
-  { name: 'Dashboard', href: '/owner-dashboard', icon: Home, iconSrc: dashboardIcon, iconSrcActive: dashboardIconActive },
-  { name: 'Mes campagnes', href: '/owner-campaigns', icon: Megaphone, iconSrc: campagneIcon, iconSrcActive: campagneIconActive },
+  {
+    name: 'Dashboard',
+    href: '/owner-dashboard',
+    icon: Home,
+    iconSrc: dashboardIcon,
+    iconSrcActive: dashboardIconActive,
+  },
+  {
+    name: 'Mes campagnes',
+    href: '/owner-campaigns',
+    icon: Megaphone,
+    iconSrc: campagneIcon,
+    iconSrcActive: campagneIconActive,
+  },
   {
     name: 'Mon calendrier et Mes dispositifs de diffusion',
     href: '/owner-calendar-devices',
@@ -71,8 +83,20 @@ const navigation = [
     iconSrc: parcTvIcon,
     iconSrcActive: parcTvIconActive,
   },
-  { name: 'Mes performance', href: '/owner-performance', icon: BarChart3, iconSrc: performanceIcon, iconSrcActive: performanceIconActive },
-  { name: 'Mes revenus', href: '/owner-revenue', icon: DollarSign, iconSrc: financeIcon, iconSrcActive: financeIconActive },
+  {
+    name: 'Mes performance',
+    href: '/owner-performance',
+    icon: BarChart3,
+    iconSrc: performanceIcon,
+    iconSrcActive: performanceIconActive,
+  },
+  {
+    name: 'Mes revenus',
+    href: '/owner-revenue',
+    icon: DollarSign,
+    iconSrc: financeIcon,
+    iconSrcActive: financeIconActive,
+  },
 ];
 
 function renderProfileTypeLabel(profileType: string | null | undefined) {
@@ -103,7 +127,9 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
   const [displayName, setDisplayName] = useState('');
   const [showSupportModal, setShowSupportModal] = useState(false);
   const [supportObjective, setSupportObjective] = useState('');
-  const [appointmentObjectives, setAppointmentObjectives] = useState<string[]>(APPOINTMENT_OBJECTIVES_FALLBACK);
+  const [appointmentObjectives, setAppointmentObjectives] = useState<string[]>(
+    APPOINTMENT_OBJECTIVES_FALLBACK,
+  );
   const [supportOtherDetail, setSupportOtherDetail] = useState('');
   const [supportMessage, setSupportMessage] = useState('');
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -119,7 +145,7 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
         }
       }
     };
-    
+
     fetchProfile();
   }, [user]);
 
@@ -166,23 +192,23 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
     console.log('🔴 Bouton déconnexion cliqué (OwnerNavigation)');
     console.log('🔍 Profil actuel:', profileType);
     console.log('🔍 Utilisateur actuel:', user?.id);
-    
+
     try {
       console.log('🔄 Appel de logout() du store...');
       await logout();
       console.log('✅ logout() du store terminé');
-      
+
       console.log('🔄 Redirection vers /login...');
       navigate('/login');
       console.log('✅ Redirection effectuée');
-      
+
       toast.success('Déconnexion réussie');
       console.log('✅ Toast affiché');
     } catch (error) {
       console.error('❌ Erreur lors de la déconnexion:', error);
-      console.error('❌ Détails de l\'erreur:', JSON.stringify(error, null, 2));
+      console.error("❌ Détails de l'erreur:", JSON.stringify(error, null, 2));
       toast.error('Erreur lors de la déconnexion');
-      
+
       // En cas d'erreur, forcer la redirection
       console.log('🔄 Redirection forcée vers /login...');
       navigate('/login');
@@ -209,11 +235,18 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
       {/* Sidebar for mobile - same Figma tokens */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
+          <div
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setSidebarOpen(false)}
+          />
           <div className="fixed inset-y-0 left-0 flex w-[272px] flex-col bg-white border-r border-[#E1E4EA] shadow-lg">
             <div className="flex h-[88px] items-center justify-between p-3 border-b border-[#E1E4EA]">
               <div className="flex-1 flex justify-center">
-                <img src={logoImage} alt="Logo" className="h-10 w-auto max-w-[178px] object-contain" />
+                <img
+                  src={logoImage}
+                  alt="Logo"
+                  className="h-10 w-auto max-w-[178px] object-contain"
+                />
               </div>
               <button
                 type="button"
@@ -227,8 +260,12 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
               {navigation.map((item) => {
                 const Icon = item.icon;
                 const active = isActive(item.href);
-                const iconSrc = 'iconSrc' in item ? (item as { iconSrc?: string }).iconSrc : undefined;
-                const iconSrcActive = 'iconSrcActive' in item ? (item as { iconSrcActive?: string }).iconSrcActive : undefined;
+                const iconSrc =
+                  'iconSrc' in item ? (item as { iconSrc?: string }).iconSrc : undefined;
+                const iconSrcActive =
+                  'iconSrcActive' in item
+                    ? (item as { iconSrcActive?: string }).iconSrcActive
+                    : undefined;
                 const imgSrc = iconSrc && (active && iconSrcActive ? iconSrcActive : iconSrc);
                 return (
                   <button
@@ -251,21 +288,33 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
                     ) : (
                       <Icon className="h-5 w-5 flex-shrink-0" strokeWidth={1.5} />
                     )}
-                    <span className="leading-5 text-left whitespace-normal break-words">{item.name}</span>
+                    <span className="leading-5 text-left whitespace-normal break-words">
+                      {item.name}
+                    </span>
                   </button>
                 );
               })}
             </nav>
             <div className="flex flex-col flex-none pt-2 pb-2 gap-2 px-3">
               <button
-                onClick={() => { navigate('/owner-settings'); setSidebarOpen(false); }}
+                onClick={() => {
+                  navigate('/owner-settings');
+                  setSidebarOpen(false);
+                }}
                 className="h-9 flex items-center w-full px-3 py-2 gap-3 rounded-lg text-sm font-medium transition-colors text-[#5C5C5C] hover:bg-gray-100/80"
               >
-                <img src={location.pathname === '/owner-settings' ? paramIconActive : paramIcon} alt="" className="h-5 w-5 flex-shrink-0 object-contain" />
+                <img
+                  src={location.pathname === '/owner-settings' ? paramIconActive : paramIcon}
+                  alt=""
+                  className="h-5 w-5 flex-shrink-0 object-contain"
+                />
                 <span className="leading-5 truncate">Paramètres</span>
               </button>
               <button
-                onClick={() => { setShowSupportModal(true); setSidebarOpen(false); }}
+                onClick={() => {
+                  setShowSupportModal(true);
+                  setSidebarOpen(false);
+                }}
                 className="h-9 flex items-center w-full px-3 py-2 gap-3 rounded-lg text-sm font-medium transition-colors text-[#5C5C5C] hover:bg-gray-100/80"
               >
                 <img src={supportIcon} alt="" className="h-5 w-5 flex-shrink-0 object-contain" />
@@ -278,7 +327,11 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
                 onClick={() => setShowLogoutConfirm(true)}
                 className="w-full h-12 flex flex-row items-center gap-3 rounded-none text-left px-3 py-3"
               >
-                <img src={deconnexionIcon} alt="" className="h-9 w-9 flex-shrink-0 object-contain" />
+                <img
+                  src={deconnexionIcon}
+                  alt=""
+                  className="h-9 w-9 flex-shrink-0 object-contain"
+                />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-[#5C5C5C] leading-5 tracking-[-0.006em] truncate">
                     {displayName}
@@ -301,11 +354,22 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
           {/* Header / Logo + bouton toggle */}
           <div className="flex flex-col justify-center items-start p-3 gap-2.5 h-[88px] border-b border-[#E1E4EA] flex-none">
             <div className="flex flex-row items-center w-full gap-2">
-              <div className={`flex items-center justify-center overflow-hidden transition-all ${sidebarExpanded ? 'flex-1 min-w-0' : 'w-10 h-10 flex-shrink-0'}`}>
+              <div
+                className={`flex items-center justify-center overflow-hidden transition-all ${sidebarExpanded ? 'flex-1 min-w-0' : 'w-10 h-10 flex-shrink-0'}`}
+              >
                 {sidebarExpanded ? (
-                  <img src={logoImage} alt="Logo" className="h-10 w-auto max-w-[178px] object-contain" />
+                  <img
+                    src={logoImage}
+                    alt="Logo"
+                    className="h-10 w-auto max-w-[178px] object-contain"
+                  />
                 ) : (
-                  <img src={logoCompany} alt="Logo" className="w-10 h-10 object-contain" title="Toodooh" />
+                  <img
+                    src={logoCompany}
+                    alt="Logo"
+                    className="w-10 h-10 object-contain"
+                    title="Toodooh"
+                  />
                 )}
               </div>
               <button
@@ -314,7 +378,11 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
                 className="flex-shrink-0 p-2 rounded-lg text-[#5C5C5C] hover:bg-gray-100 transition-colors"
                 title={sidebarExpanded ? 'Réduire le menu' : 'Ouvrir le menu'}
               >
-                {sidebarExpanded ? <ChevronLeft className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+                {sidebarExpanded ? (
+                  <ChevronLeft className="h-5 w-5" />
+                ) : (
+                  <ChevronRight className="h-5 w-5" />
+                )}
               </button>
             </div>
           </div>
@@ -323,8 +391,12 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
             {navigation.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.href);
-              const iconSrc = 'iconSrc' in item ? (item as { iconSrc?: string }).iconSrc : undefined;
-              const iconSrcActive = 'iconSrcActive' in item ? (item as { iconSrcActive?: string }).iconSrcActive : undefined;
+              const iconSrc =
+                'iconSrc' in item ? (item as { iconSrc?: string }).iconSrc : undefined;
+              const iconSrcActive =
+                'iconSrcActive' in item
+                  ? (item as { iconSrcActive?: string }).iconSrcActive
+                  : undefined;
               const imgSrc = iconSrc && (active && iconSrcActive ? iconSrcActive : iconSrc);
               return (
                 <button
@@ -333,7 +405,9 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
                   disabled={isDisabled}
                   title={!sidebarExpanded ? item.name : undefined}
                   className={`min-h-9 h-auto flex rounded-lg text-sm font-medium transition-colors tracking-[-0.006em] ${
-                    sidebarExpanded ? 'w-full max-w-[232px] px-3 py-2 gap-3 items-start' : 'w-10 justify-center items-center px-0 mx-auto'
+                    sidebarExpanded
+                      ? 'w-full max-w-[232px] px-3 py-2 gap-3 items-start'
+                      : 'w-10 justify-center items-center px-0 mx-auto'
                   } ${
                     active
                       ? 'bg-[#E4F9EB] text-[#132B1B]'
@@ -347,36 +421,56 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
                   ) : (
                     <Icon className="h-5 w-5 flex-shrink-0" strokeWidth={1.5} />
                   )}
-                  {sidebarExpanded && <span className="leading-5 text-left whitespace-normal break-words">{item.name}</span>}
+                  {sidebarExpanded && (
+                    <span className="leading-5 text-left whitespace-normal break-words">
+                      {item.name}
+                    </span>
+                  )}
                 </button>
               );
             })}
           </nav>
           {/* Paramètres + Support juste au-dessus de déconnexion (identique annonceur) */}
-          <div className={`flex flex-col flex-none pt-2 pb-2 gap-2 px-3 ${sidebarExpanded ? '' : 'items-center'}`}>
+          <div
+            className={`flex flex-col flex-none pt-2 pb-2 gap-2 px-3 ${sidebarExpanded ? '' : 'items-center'}`}
+          >
             <button
               onClick={() => navigate('/owner-settings')}
               title={!sidebarExpanded ? 'Mes informations' : undefined}
               className={`h-9 flex items-center rounded-lg text-sm font-medium transition-colors ${
-                sidebarExpanded ? 'w-full max-w-[232px] px-3 py-2 gap-3' : 'w-10 justify-center mx-auto'
+                sidebarExpanded
+                  ? 'w-full max-w-[232px] px-3 py-2 gap-3'
+                  : 'w-10 justify-center mx-auto'
               } ${location.pathname === '/owner-settings' ? 'bg-[#E6F7ED] text-[#132B1B]' : 'text-[#5C5C5C] hover:bg-gray-100/80'}`}
             >
-              <img src={location.pathname === '/owner-settings' ? paramIconActive : paramIcon} alt="" className="h-5 w-5 flex-shrink-0 object-contain" />
+              <img
+                src={location.pathname === '/owner-settings' ? paramIconActive : paramIcon}
+                alt=""
+                className="h-5 w-5 flex-shrink-0 object-contain"
+              />
               {sidebarExpanded && <span className="leading-5 truncate">Paramètres</span>}
             </button>
             <button
               onClick={() => setShowSupportModal(true)}
               title={!sidebarExpanded ? 'Support' : undefined}
               className={`h-9 flex items-center rounded-lg text-sm font-medium transition-colors ${
-                sidebarExpanded ? 'w-full max-w-[232px] px-3 py-2 gap-3' : 'w-10 justify-center mx-auto'
+                sidebarExpanded
+                  ? 'w-full max-w-[232px] px-3 py-2 gap-3'
+                  : 'w-10 justify-center mx-auto'
               } ${showSupportModal ? 'bg-[#E6F7ED] text-[#132B1B]' : 'text-[#5C5C5C] hover:bg-gray-100/80'}`}
             >
-              <img src={showSupportModal ? supportIconActive : supportIcon} alt="" className="h-5 w-5 flex-shrink-0 object-contain" />
+              <img
+                src={showSupportModal ? supportIconActive : supportIcon}
+                alt=""
+                className="h-5 w-5 flex-shrink-0 object-contain"
+              />
               {sidebarExpanded && <span className="leading-5 truncate">Support</span>}
             </button>
           </div>
           {/* Bloc utilisateur déconnexion (icône + nom, clic = confirmation) */}
-          <div className={`flex flex-col flex-none border-t border-[#E1E4EA] ${sidebarExpanded ? '' : 'items-center'}`}>
+          <div
+            className={`flex flex-col flex-none border-t border-[#E1E4EA] ${sidebarExpanded ? '' : 'items-center'}`}
+          >
             <button
               type="button"
               onClick={() => setShowLogoutConfirm(true)}
@@ -393,7 +487,10 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
                       {profile?.contact_name || user?.email?.split('@')[0] || 'Utilisateur'}
                     </p>
                   </div>
-                  <ChevronRight className="h-5 w-5 flex-shrink-0 text-[#5C5C5C]" strokeWidth={1.5} />
+                  <ChevronRight
+                    className="h-5 w-5 flex-shrink-0 text-[#5C5C5C]"
+                    strokeWidth={1.5}
+                  />
                 </>
               )}
             </button>
@@ -403,11 +500,15 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
 
       {/* Modal confirmation déconnexion */}
       {showLogoutConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowLogoutConfirm(false)}>
-          <div className="bg-white rounded-xl p-6 max-w-sm w-full shadow-xl border border-gray-200" onClick={e => e.stopPropagation()}>
-            <p className="text-gray-800 text-center mb-6">
-              Vous allez être déconnecté.
-            </p>
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowLogoutConfirm(false)}
+        >
+          <div
+            className="bg-white rounded-xl p-6 max-w-sm w-full shadow-xl border border-gray-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-gray-800 text-center mb-6">Vous allez être déconnecté.</p>
             <div className="flex gap-3">
               <button
                 type="button"
@@ -418,7 +519,10 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
               </button>
               <button
                 type="button"
-                onClick={async () => { setShowLogoutConfirm(false); await handleLogout(); }}
+                onClick={async () => {
+                  setShowLogoutConfirm(false);
+                  await handleLogout();
+                }}
                 className="flex-1 py-2.5 px-4 rounded-xl font-medium text-white transition-colors hover:opacity-90"
                 style={{ background: '#76E6AB' }}
               >
@@ -441,7 +545,9 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
                   </div>
                   <div className="min-w-0">
                     <h3 className="text-lg font-bold text-gray-900">Support</h3>
-                    <p className="text-sm text-gray-500 mt-0.5">Prendre rendez-vous avec un agent toodooh</p>
+                    <p className="text-sm text-gray-500 mt-0.5">
+                      Prendre rendez-vous avec un agent toodooh
+                    </p>
                   </div>
                 </div>
                 <button
@@ -470,22 +576,34 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
               }}
             >
               <div>
-                <label className="block text-sm font-bold text-gray-900 mb-1.5">Choisissez vos objectifs *</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1.5">
+                  Choisissez vos objectifs *
+                </label>
                 <select
                   value={supportObjective}
                   onChange={(e) => setSupportObjective(e.target.value)}
                   className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 focus:ring-2 focus:ring-[#97d8a5] focus:border-[#97d8a5] appearance-none cursor-pointer"
-                  style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center', backgroundSize: '1.25rem', paddingRight: '2.5rem' }}
+                  style={{
+                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
+                    backgroundRepeat: 'no-repeat',
+                    backgroundPosition: 'right 0.75rem center',
+                    backgroundSize: '1.25rem',
+                    paddingRight: '2.5rem',
+                  }}
                 >
                   <option value="">Choisissez vos objectifs</option>
                   {appointmentObjectives.map((obj) => (
-                    <option key={obj} value={obj}>{obj}</option>
+                    <option key={obj} value={obj}>
+                      {obj}
+                    </option>
                   ))}
                 </select>
               </div>
               {isAutreObjective(supportObjective) && (
                 <div>
-                  <label className="block text-sm font-bold text-gray-900 mb-1.5">Précision *</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1.5">
+                    Précision *
+                  </label>
                   <input
                     type="text"
                     value={supportOtherDetail}
@@ -496,7 +614,9 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
                 </div>
               )}
               <div>
-                <label className="block text-sm font-bold text-gray-900 mb-1.5">Commentaire additionnels</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1.5">
+                  Commentaire additionnels
+                </label>
                 <textarea
                   rows={3}
                   value={supportMessage}
@@ -527,4 +647,4 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
       )}
     </>
   );
-} 
+}

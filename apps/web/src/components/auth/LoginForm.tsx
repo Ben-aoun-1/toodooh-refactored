@@ -6,7 +6,7 @@ import { toast } from 'react-hot-toast';
 
 export default function LoginForm() {
   const navigate = useNavigate();
-  const login = useAuthStore(state => state.login);
+  const login = useAuthStore((state) => state.login);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
@@ -31,7 +31,7 @@ export default function LoginForm() {
 
       toast.success('Connexion réussie');
     } catch (error: any) {
-      toast.error(error?.message || 'Une erreur inattendue s\'est produite');
+      toast.error(error?.message || "Une erreur inattendue s'est produite");
     } finally {
       setLoading(false);
     }
@@ -132,7 +132,10 @@ export default function LoginForm() {
       {/* Lien inscription */}
       <p className="text-center text-sm text-gray-500 pt-2">
         Pas encore de compte ?{' '}
-        <Link to="/signup" className="text-gray-700 underline underline-offset-2 hover:text-gray-900 transition-colors">
+        <Link
+          to="/signup"
+          className="text-gray-700 underline underline-offset-2 hover:text-gray-900 transition-colors"
+        >
           S&apos;inscrire
         </Link>
       </p>

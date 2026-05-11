@@ -7,23 +7,23 @@ export interface PlatformGlobalStats {
   approved_users: number;
   owners_count: number;
   advertisers_count: number;
-  
+
   // Écrans
   total_screens: number;
   active_screens: number;
   inactive_screens: number;
   online_screens: number;
-  
+
   // Campagnes
   total_campaigns: number;
   active_campaigns: number;
   pending_campaigns: number;
-  
+
   // Vidéos
   total_videos: number;
   pending_videos: number;
   approved_videos: number;
-  
+
   // Événements
   total_events: number;
   active_events: number;
@@ -78,47 +78,3 @@ export interface RecentActivity {
   description: string;
   user_name: string;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

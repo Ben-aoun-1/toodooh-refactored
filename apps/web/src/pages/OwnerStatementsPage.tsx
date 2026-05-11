@@ -7,7 +7,10 @@ import OwnerNavigation from '../components/OwnerNavigation';
 import OwnerNotificationsBell from '../components/OwnerNotificationsBell';
 import { exportService } from '../services/export.service';
 import { authService } from '../services/auth.service';
-import { listOwnerStatementSummaries, getOwnerStatementDetail } from '../data/ownerStatementDetails';
+import {
+  listOwnerStatementSummaries,
+  getOwnerStatementDetail,
+} from '../data/ownerStatementDetails';
 import { buildStatementRecipient } from '../utils/statementRecipient';
 
 export interface PaymentStatement {
@@ -62,15 +65,12 @@ export default function OwnerStatementsPage() {
         setDownloadingId(null);
       }
     },
-    [user?.email]
+    [user?.email],
   );
 
   const sortedStatements = useMemo(
-    () =>
-      [...statements].sort(
-        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-      ),
-    [statements]
+    () => [...statements].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+    [statements],
   );
 
   useEffect(() => {

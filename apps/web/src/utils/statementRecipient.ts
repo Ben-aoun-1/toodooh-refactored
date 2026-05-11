@@ -12,7 +12,7 @@ const DEMO_RECIPIENT: StatementRecipientDisplay = {
 
 export function buildStatementRecipient(
   profile: BusinessProfile | null,
-  userEmail?: string | null
+  userEmail?: string | null,
 ): StatementRecipientDisplay {
   const email = userEmail?.trim() || DEMO_RECIPIENT.email;
   if (!profile) {

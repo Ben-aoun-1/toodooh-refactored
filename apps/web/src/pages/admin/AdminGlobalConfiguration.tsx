@@ -58,7 +58,11 @@ export default function AdminGlobalConfiguration() {
         const prevVal = row.value_text.trim();
         if (nextVal === prevVal) continue;
 
-        const v = validateValueForKey(row.key, nextVal, row.value_type as GlobalConfigurationValueType);
+        const v = validateValueForKey(
+          row.key,
+          nextVal,
+          row.value_type as GlobalConfigurationValueType,
+        );
         if (!v.ok) {
           toast.error(`${row.key}: ${v.message}`);
           setSaving(false);
@@ -112,7 +116,9 @@ export default function AdminGlobalConfiguration() {
               <tbody>
                 {rows.map((row) => (
                   <tr key={row.key} className="border-b border-gray-100 last:border-0">
-                    <td className="px-4 py-3 font-mono text-xs text-gray-800 align-top">{row.key}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-gray-800 align-top">
+                      {row.key}
+                    </td>
                     <td className="px-4 py-3 align-top">
                       <input
                         type={inputTypeForRow(row)}
@@ -123,7 +129,9 @@ export default function AdminGlobalConfiguration() {
                       />
                     </td>
                     <td className="px-4 py-3 text-gray-600 align-top">{row.value_type}</td>
-                    <td className="px-4 py-3 text-gray-600 align-top max-w-md">{row.description || '—'}</td>
+                    <td className="px-4 py-3 text-gray-600 align-top max-w-md">
+                      {row.description || '—'}
+                    </td>
                   </tr>
                 ))}
               </tbody>

@@ -38,7 +38,7 @@ export const campaignOwnerApprovalService = {
       if (screensError) throw screensError;
       if (!screens || screens.length === 0) return [];
 
-      const screenIds = screens.map(s => s.id);
+      const screenIds = screens.map((s) => s.id);
 
       // Récupérer les campagnes actives ou en attente qui utilisent ces écrans
       const { data: campaignScreens, error: csError } = await supabase
@@ -51,7 +51,7 @@ export const campaignOwnerApprovalService = {
 
       // Grouper par campagne
       const campaignMap = new Map<string, string[]>();
-      campaignScreens.forEach(cs => {
+      campaignScreens.forEach((cs) => {
         if (!campaignMap.has(cs.campaign_id)) {
           campaignMap.set(cs.campaign_id, []);
         }
@@ -64,7 +64,8 @@ export const campaignOwnerApprovalService = {
       // Trier par date de création décroissante (plus récente en premier)
       const { data: campaigns, error: campaignsError } = await supabase
         .from('campaigns')
-        .select(`
+        .select(
+          `
           id,
           name,
           start_date,
@@ -73,7 +74,8 @@ export const campaignOwnerApprovalService = {
           created_at,
           video_id,
           content_validation_status
-        `)
+        `,
+        )
         .in('id', campaignIds)
         .eq('status', 'active')
         .order('created_at', { ascending: false });
@@ -83,7 +85,7 @@ export const campaignOwnerApprovalService = {
 
       // Garder uniquement les campagnes avec vidéo validée/active
       const videoIds = Array.from(
-        new Set((campaigns || []).map((c: any) => c.video_id).filter(Boolean))
+        new Set((campaigns || []).map((c: any) => c.video_id).filter(Boolean)),
       );
       const approvedVideoIdSet = new Set<string>();
       if (videoIds.length > 0) {
@@ -116,7 +118,7 @@ export const campaignOwnerApprovalService = {
       if (approvalsError) throw approvalsError;
 
       const approvalMap = new Map<string, CampaignOwnerApproval>();
-      (approvals || []).forEach(approval => {
+      (approvals || []).forEach((approval) => {
         approvalMap.set(approval.campaign_id, approval);
       });
 
@@ -133,10 +135,8 @@ export const campaignOwnerApprovalService = {
           continue;
         }
 
-        const ownerScreenIds = campaignScreenIds.filter(id => screenIds.includes(id));
-        const screenNames = screens
-          .filter(s => ownerScreenIds.includes(s.id))
-          .map(s => s.name);
+        const ownerScreenIds = campaignScreenIds.filter((id) => screenIds.includes(id));
+        const screenNames = screens.filter((s) => ownerScreenIds.includes(s.id)).map((s) => s.name);
 
         pendingCampaigns.push({
           campaign_id: campaign.id,
@@ -146,7 +146,7 @@ export const campaignOwnerApprovalService = {
           screen_ids: ownerScreenIds,
           screen_names: screenNames,
           approval_id: existingApproval?.id,
-          approval_status: existingApproval?.status || 'pending'
+          approval_status: existingApproval?.status || 'pending',
         });
       }
 
@@ -175,7 +175,7 @@ export const campaignOwnerApprovalService = {
   async getPendingCount(ownerId: string): Promise<number> {
     try {
       const pendingCampaigns = await this.getPendingCampaigns(ownerId);
-      return pendingCampaigns.filter(c => c.approval_status === 'pending').length;
+      return pendingCampaigns.filter((c) => c.approval_status === 'pending').length;
     } catch (error) {
       console.error('Erreur lors du comptage des campagnes en attente:', error);
       return 0;
@@ -183,19 +183,24 @@ export const campaignOwnerApprovalService = {
   },
 
   // Approuver automatiquement une campagne (compat legacy)
-  async autoApproveCampaign(campaignId: string, ownerId: string, screenIds: string[]): Promise<void> {
+  async autoApproveCampaign(
+    campaignId: string,
+    ownerId: string,
+    screenIds: string[],
+  ): Promise<void> {
     try {
-      const { error } = await supabase
-        .from('campaign_owner_approvals')
-        .upsert({
+      const { error } = await supabase.from('campaign_owner_approvals').upsert(
+        {
           campaign_id: campaignId,
           owner_id: ownerId,
           screen_ids: [],
           status: 'approved',
-          approved_at: new Date().toISOString()
-        }, {
-          onConflict: 'campaign_id,owner_id'
-        });
+          approved_at: new Date().toISOString(),
+        },
+        {
+          onConflict: 'campaign_id,owner_id',
+        },
+      );
 
       if (error) throw error;
 
@@ -205,7 +210,7 @@ export const campaignOwnerApprovalService = {
         actorOwnerId: ownerId,
       });
     } catch (error) {
-      console.error('Erreur lors de l\'approbation automatique:', error);
+      console.error("Erreur lors de l'approbation automatique:", error);
       throw error;
     }
   },
@@ -215,17 +220,18 @@ export const campaignOwnerApprovalService = {
     try {
       void screenIds;
 
-      const { error } = await supabase
-        .from('campaign_owner_approvals')
-        .upsert({
+      const { error } = await supabase.from('campaign_owner_approvals').upsert(
+        {
           campaign_id: campaignId,
           owner_id: ownerId,
           screen_ids: [],
           status: 'approved',
-          approved_at: new Date().toISOString()
-        }, {
-          onConflict: 'campaign_id,owner_id'
-        });
+          approved_at: new Date().toISOString(),
+        },
+        {
+          onConflict: 'campaign_id,owner_id',
+        },
+      );
 
       if (error) throw error;
 
@@ -235,26 +241,31 @@ export const campaignOwnerApprovalService = {
         actorOwnerId: ownerId,
       });
     } catch (error) {
-      console.error('Erreur lors de l\'approbation de la campagne:', error);
+      console.error("Erreur lors de l'approbation de la campagne:", error);
       throw error;
     }
   },
 
   // Rejeter une campagne
-  async rejectCampaign(campaignId: string, ownerId: string, rejectionReason?: string): Promise<void> {
+  async rejectCampaign(
+    campaignId: string,
+    ownerId: string,
+    rejectionReason?: string,
+  ): Promise<void> {
     try {
-      const { error } = await supabase
-        .from('campaign_owner_approvals')
-        .upsert({
+      const { error } = await supabase.from('campaign_owner_approvals').upsert(
+        {
           campaign_id: campaignId,
           owner_id: ownerId,
           screen_ids: [],
           status: 'rejected',
           rejected_at: new Date().toISOString(),
-          rejection_reason: rejectionReason
-        }, {
-          onConflict: 'campaign_id,owner_id'
-        });
+          rejection_reason: rejectionReason,
+        },
+        {
+          onConflict: 'campaign_id,owner_id',
+        },
+      );
 
       if (error) throw error;
 
@@ -267,6 +278,5 @@ export const campaignOwnerApprovalService = {
       console.error('Erreur lors du rejet de la campagne:', error);
       throw error;
     }
-  }
+  },
 };
-

@@ -45,17 +45,21 @@ export interface ScreenRevenue {
 
 class RevenueService {
   // Récupérer les revenus par écran
-  async getRevenueByScreen(period: 'monthly' | 'quarterly' | 'yearly' = 'monthly'): Promise<ScreenRevenue[]> {
+  async getRevenueByScreen(
+    period: 'monthly' | 'quarterly' | 'yearly' = 'monthly',
+  ): Promise<ScreenRevenue[]> {
     try {
       console.log('📊 Récupération des revenus par écran...');
-      
+
       // Récupérer l'utilisateur connecté
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) {
         console.log('❌ Aucun utilisateur connecté');
         return [];
       }
-      
+
       // Récupérer UNIQUEMENT les écrans du propriétaire connecté
       const { data: screens, error: screensError } = await supabase
         .from('screens')
@@ -66,18 +70,18 @@ class RevenueService {
       if (screensError) throw screensError;
 
       // Simuler des données de revenus détaillées
-      const screenRevenues: ScreenRevenue[] = screens.map(screen => {
+      const screenRevenues: ScreenRevenue[] = screens.map((screen) => {
         const baseRevenue = screen.monthly_revenue;
         const totalRevenue = screen.total_revenue;
-        
+
         // Générer un historique de revenus pour les 12 derniers mois
         const revenueHistory: RevenueData[] = [];
         const now = new Date();
-        
+
         for (let i = 11; i >= 0; i--) {
           const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
           const monthRevenue = baseRevenue * (0.8 + Math.random() * 0.4); // Variation ±20%
-          
+
           revenueHistory.push({
             id: `rev_${screen.id}_${i}`,
             screen_id: screen.id,
@@ -87,7 +91,7 @@ class RevenueService {
             period: 'monthly',
             date: date.toISOString().split('T')[0],
             created_at: date.toISOString(),
-            updated_at: date.toISOString()
+            updated_at: date.toISOString(),
           });
         }
 
@@ -98,7 +102,7 @@ class RevenueService {
           total_revenue: totalRevenue,
           monthly_revenue: baseRevenue,
           average_revenue: Math.round(totalRevenue / 12),
-          revenue_history: revenueHistory
+          revenue_history: revenueHistory,
         };
       });
 
@@ -114,14 +118,16 @@ class RevenueService {
   async getRevenueByPeriod(period: 'monthly' | 'quarterly' | 'yearly'): Promise<RevenueData[]> {
     try {
       console.log(`📊 Récupération des revenus par période: ${period}`);
-      
+
       // Récupérer l'utilisateur connecté
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) {
         console.log('❌ Aucun utilisateur connecté');
         return [];
       }
-      
+
       // Récupérer UNIQUEMENT les écrans du propriétaire connecté
       const { data: screens, error: screensError } = await supabase
         .from('screens')
@@ -151,13 +157,17 @@ class RevenueService {
             period: 'monthly',
             date: date.toISOString().split('T')[0],
             created_at: date.toISOString(),
-            updated_at: date.toISOString()
+            updated_at: date.toISOString(),
           });
         }
       } else if (period === 'quarterly') {
         // Données trimestrielles pour les 4 derniers trimestres
         for (let i = 3; i >= 0; i--) {
-          const quarterStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3 - (i * 3), 1);
+          const quarterStart = new Date(
+            now.getFullYear(),
+            Math.floor(now.getMonth() / 3) * 3 - i * 3,
+            1,
+          );
           const quarterTotal = screens.reduce((sum, screen) => {
             const quarterRevenue = screen.monthly_revenue * 3 * (0.8 + Math.random() * 0.4);
             return sum + quarterRevenue;
@@ -172,7 +182,7 @@ class RevenueService {
             period: 'quarterly',
             date: quarterStart.toISOString().split('T')[0],
             created_at: quarterStart.toISOString(),
-            updated_at: quarterStart.toISOString()
+            updated_at: quarterStart.toISOString(),
           });
         }
       } else {
@@ -193,7 +203,7 @@ class RevenueService {
             period: 'yearly',
             date: yearStart.toISOString().split('T')[0],
             created_at: yearStart.toISOString(),
-            updated_at: yearStart.toISOString()
+            updated_at: yearStart.toISOString(),
           });
         }
       }
@@ -210,9 +220,11 @@ class RevenueService {
   async getRevenueStats(): Promise<RevenueStats> {
     try {
       console.log('📊 Récupération des statistiques de revenus...');
-      
+
       // Récupérer l'utilisateur connecté
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) {
         console.log('❌ Aucun utilisateur connecté');
         return {
@@ -225,10 +237,10 @@ class RevenueService {
           growthRate: 0,
           activeScreens: 0,
           totalScreens: 0,
-          loyaltyPoints: 0
+          loyaltyPoints: 0,
         };
       }
-      
+
       // Récupérer UNIQUEMENT les écrans du propriétaire connecté
       const { data: screens, error: screensError } = await supabase
         .from('screens')
@@ -249,7 +261,7 @@ class RevenueService {
           growthRate: 0,
           activeScreens: 0,
           totalScreens: 0,
-          loyaltyPoints: 0
+          loyaltyPoints: 0,
         };
       }
 
@@ -260,14 +272,14 @@ class RevenueService {
       const averagePerScreen = totalRevenue / screens.length;
 
       // Trouver l'écran le plus performant
-      const topScreen = screens.reduce((max, screen) => 
-        screen.total_revenue > max.total_revenue ? screen : max
+      const topScreen = screens.reduce((max, screen) =>
+        screen.total_revenue > max.total_revenue ? screen : max,
       );
 
       // Calculer le taux de croissance (simulation)
       const growthRate = 12.5; // +12.5% par rapport au mois précédent
 
-      const activeScreens = screens.filter(screen => screen.status === 'active').length;
+      const activeScreens = screens.filter((screen) => screen.status === 'active').length;
       const totalScreens = screens.length;
       const loyaltyPoints = screens.reduce((sum, screen) => sum + screen.loyalty_points, 0);
 
@@ -281,7 +293,7 @@ class RevenueService {
         growthRate,
         activeScreens,
         totalScreens,
-        loyaltyPoints
+        loyaltyPoints,
       };
 
       console.log('✅ Statistiques de revenus récupérées');
@@ -296,14 +308,16 @@ class RevenueService {
   async getMonthlyComparison(): Promise<MonthlyComparison[]> {
     try {
       console.log('📊 Récupération des comparaisons mensuelles...');
-      
+
       // Récupérer l'utilisateur connecté
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) {
         console.log('❌ Aucun utilisateur connecté');
         return [];
       }
-      
+
       // Récupérer UNIQUEMENT les écrans du propriétaire connecté
       const { data: screens, error: screensError } = await supabase
         .from('screens')
@@ -313,8 +327,18 @@ class RevenueService {
       if (screensError) throw screensError;
 
       const months = [
-        'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
-        'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'
+        'Janvier',
+        'Février',
+        'Mars',
+        'Avril',
+        'Mai',
+        'Juin',
+        'Juillet',
+        'Août',
+        'Septembre',
+        'Octobre',
+        'Novembre',
+        'Décembre',
       ];
 
       const now = new Date();
@@ -325,17 +349,21 @@ class RevenueService {
         const monthRevenue = screens.reduce((sum, screen) => {
           const baseRevenue = screen.monthly_revenue;
           const variation = 0.8 + Math.random() * 0.4; // Variation ±20%
-          return sum + (baseRevenue * variation);
+          return sum + baseRevenue * variation;
         }, 0);
 
-        const previousMonthRevenue = i < 11 ? comparisons[comparisons.length - 1]?.revenue || monthRevenue : monthRevenue;
-        const growth = previousMonthRevenue > 0 ? ((monthRevenue - previousMonthRevenue) / previousMonthRevenue) * 100 : 0;
+        const previousMonthRevenue =
+          i < 11 ? comparisons[comparisons.length - 1]?.revenue || monthRevenue : monthRevenue;
+        const growth =
+          previousMonthRevenue > 0
+            ? ((monthRevenue - previousMonthRevenue) / previousMonthRevenue) * 100
+            : 0;
 
         comparisons.push({
           month: months[monthIndex],
           revenue: Math.round(monthRevenue),
           screens: screens.length,
-          growth: Math.round(growth * 100) / 100
+          growth: Math.round(growth * 100) / 100,
         });
       }
 
@@ -348,4 +376,4 @@ class RevenueService {
   }
 }
 
-export const revenueService = new RevenueService(); 
+export const revenueService = new RevenueService();

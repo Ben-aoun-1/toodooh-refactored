@@ -28,7 +28,7 @@ describe('validateValueForKey', () => {
     const r = validateValueForKey(
       GLOBAL_CONFIGURATION_KEYS.max_billable_spot_rate_per_hour,
       '2',
-      'numeric'
+      'numeric',
     );
     expect(r.ok).toBe(false);
   });

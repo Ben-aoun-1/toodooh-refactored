@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback, Component } from 'react';
-import { 
-  Calendar, 
-  Megaphone, 
-  Wallet, 
-  FileText, 
-  Users, 
+import {
+  Calendar,
+  Megaphone,
+  Wallet,
+  FileText,
+  Users,
   MessageCircle,
   ChevronDown,
   ChevronLeft,
@@ -34,7 +34,10 @@ import {
 } from 'lucide-react';
 
 /** Affiche l'erreur à l'écran pour déboguer la page blanche */
-class ContentErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean; error: Error | null }> {
+class ContentErrorBoundary extends Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
   state = { hasError: false, error: null as Error | null };
   static getDerivedStateFromError(error: Error) {
     return { hasError: true, error };
@@ -50,7 +53,9 @@ class ContentErrorBoundary extends Component<{ children: React.ReactNode }, { ha
           <pre className="text-sm text-red-700 whitespace-pre-wrap break-words overflow-auto max-h-96">
             {this.state.error.message}
           </pre>
-          <p className="text-xs text-gray-600 mt-2">Vérifiez la console (F12) pour plus de détails.</p>
+          <p className="text-xs text-gray-600 mt-2">
+            Vérifiez la console (F12) pour plus de détails.
+          </p>
         </div>
       );
     }
@@ -127,8 +132,7 @@ const APPOINTMENT_OBJECTIVES_FALLBACK = [
 
 const DISABLE_ONBOARDING_POPUPS = true;
 const isMissingCampaignCategoriesTable = (error: any) =>
-  error?.code === 'PGRST205' &&
-  String(error?.message || '').includes('campaign_categories');
+  error?.code === 'PGRST205' && String(error?.message || '').includes('campaign_categories');
 
 function isAutreObjective(value: string): boolean {
   return value.trim().toLowerCase() === 'autre';
@@ -171,7 +175,20 @@ function isDatePast(date: Date) {
   return d < today;
 }
 
-const MONTHS_FR = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+const MONTHS_FR = [
+  'Janvier',
+  'Février',
+  'Mars',
+  'Avril',
+  'Mai',
+  'Juin',
+  'Juillet',
+  'Août',
+  'Septembre',
+  'Octobre',
+  'Novembre',
+  'Décembre',
+];
 const WEEKDAYS_FR = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
 type ActionCardProps = {
@@ -183,21 +200,32 @@ type ActionCardProps = {
   disabled?: boolean;
 };
 
-function ActionCard({ icon, title, subtitle, actionLabel, onClick, disabled = false }: ActionCardProps) {
+function ActionCard({
+  icon,
+  title,
+  subtitle,
+  actionLabel,
+  onClick,
+  disabled = false,
+}: ActionCardProps) {
   return (
-    <div className={`bg-white rounded-xl shadow-lg border border-gray-200 p-6 flex flex-col justify-between min-h-[180px] transition ${
-      disabled 
-        ? 'opacity-60 cursor-not-allowed' 
-        : 'hover:shadow-xl'
-    }`}>
+    <div
+      className={`bg-white rounded-xl shadow-lg border border-gray-200 p-6 flex flex-col justify-between min-h-[180px] transition ${
+        disabled ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-xl'
+      }`}
+    >
       <div className="flex items-center mb-4">
-        <div className={`p-3 rounded-xl mr-4 shadow-lg flex items-center justify-center ${
-          disabled ? 'bg-gray-400' : 'bg-[#00B3A6]'
-        }`}>
+        <div
+          className={`p-3 rounded-xl mr-4 shadow-lg flex items-center justify-center ${
+            disabled ? 'bg-gray-400' : 'bg-[#00B3A6]'
+          }`}
+        >
           {icon}
         </div>
         <div>
-          <h3 className={`text-lg font-bold mb-1 ${disabled ? 'text-gray-500' : 'text-gray-900'}`}>{title}</h3>
+          <h3 className={`text-lg font-bold mb-1 ${disabled ? 'text-gray-500' : 'text-gray-900'}`}>
+            {title}
+          </h3>
           <p className={`text-sm ${disabled ? 'text-gray-400' : 'text-gray-600'}`}>{subtitle}</p>
         </div>
       </div>
@@ -205,9 +233,7 @@ function ActionCard({ icon, title, subtitle, actionLabel, onClick, disabled = fa
         onClick={onClick}
         disabled={disabled}
         className={`mt-auto font-semibold flex items-center gap-2 focus:outline-none ${
-          disabled 
-            ? 'text-gray-400 cursor-not-allowed' 
-            : 'text-[#00B3A6] hover:underline'
+          disabled ? 'text-gray-400 cursor-not-allowed' : 'text-[#00B3A6] hover:underline'
         }`}
       >
         {actionLabel} <ArrowRight className="h-4 w-4" />
@@ -219,12 +245,12 @@ function ActionCard({ icon, title, subtitle, actionLabel, onClick, disabled = fa
 export default function Dashboard() {
   const navigate = useNavigate();
   const location = useLocation();
-  const logout = useAuthStore(state => state.logout);
-  const profileType = useAuthStore(state => state.profileType);
-  const user = useAuthStore(state => state.user);
-  const shouldOnboard = useAuthStore(state => state.shouldOnboard);
-  const needsApproval = useAuthStore(state => state.needsApproval);
-  const validationStatus = useAuthStore(state => state.validationStatus);
+  const logout = useAuthStore((state) => state.logout);
+  const profileType = useAuthStore((state) => state.profileType);
+  const user = useAuthStore((state) => state.user);
+  const shouldOnboard = useAuthStore((state) => state.shouldOnboard);
+  const needsApproval = useAuthStore((state) => state.needsApproval);
+  const validationStatus = useAuthStore((state) => state.validationStatus);
   const [profile, setProfile] = useState<any>(null);
   const [onboardingCompleted, setOnboardingCompleted] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -232,7 +258,9 @@ export default function Dashboard() {
   const [showContactModal, setShowContactModal] = useState(false);
   const [showSupportModal, setShowSupportModal] = useState(false);
   const [supportObjective, setSupportObjective] = useState('');
-  const [appointmentObjectives, setAppointmentObjectives] = useState<string[]>(APPOINTMENT_OBJECTIVES_FALLBACK);
+  const [appointmentObjectives, setAppointmentObjectives] = useState<string[]>(
+    APPOINTMENT_OBJECTIVES_FALLBACK,
+  );
   const [supportOtherDetail, setSupportOtherDetail] = useState('');
   const [supportMessage, setSupportMessage] = useState('');
   const [contactObjective, setContactObjective] = useState('');
@@ -271,20 +299,20 @@ export default function Dashboard() {
     };
   }, []);
 
-  
   // Fonction pour déterminer si les fonctionnalités sont désactivées
   const isDisabled = needsApproval && validationStatus === 'pending';
   const hasRegistrationDocument = Boolean(
-    profile?.registration_doc_path || profile?.registration_doc_url
+    profile?.registration_doc_path || profile?.registration_doc_url,
   );
-  const canRechargeAccount = !isDisabled && validationStatus === 'approved' && profile?.is_active !== false;
+  const canRechargeAccount =
+    !isDisabled && validationStatus === 'approved' && profile?.is_active !== false;
   const canLaunchCampaign = !isDisabled && validationStatus === 'approved';
-  
+
   // Charger le profil complet pour vérifier onboarding_completed (une seule fois)
   useEffect(() => {
     const loadProfile = async () => {
       if (!user?.id || profileLoadedRef.current) return;
-      
+
       // Vérifier d'abord le localStorage pour éviter les requêtes inutiles
       const onboardingCompletedLocal = localStorage.getItem('onboardingCompleted') === 'true';
       if (onboardingCompletedLocal) {
@@ -292,7 +320,7 @@ export default function Dashboard() {
         profileLoadedRef.current = true;
         return;
       }
-      
+
       try {
         profileLoadedRef.current = true;
         const { data, error } = await supabase
@@ -302,7 +330,7 @@ export default function Dashboard() {
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
-        
+
         if (!error && data) {
           const isCompleted = data.onboarding_completed || false;
           setOnboardingCompleted(isCompleted);
@@ -315,10 +343,10 @@ export default function Dashboard() {
         profileLoadedRef.current = false; // Réessayer en cas d'erreur
       }
     };
-    
+
     loadProfile();
   }, [user?.id]); // Utiliser user?.id au lieu de user pour éviter les re-renders
-  
+
   // Debug logs
   useEffect(() => {
     console.log('🔍 Dashboard - État utilisateur:', {
@@ -327,27 +355,27 @@ export default function Dashboard() {
       isDisabled,
       onboardingCompleted,
       profileType,
-      user: user?.email
+      user: user?.email,
     });
   }, [needsApproval, validationStatus, isDisabled, onboardingCompleted, profileType, user]);
-  
+
   const [runTour, setRunTour] = useState(false);
   const [tourStepIndex, setTourStepIndex] = useState(0);
   const [showOnboarding, setShowOnboarding] = useState(
-    DISABLE_ONBOARDING_POPUPS ? false : shouldOnboard
+    DISABLE_ONBOARDING_POPUPS ? false : shouldOnboard,
   );
   const onboardingModalInitializedRef = useRef(false);
-  
+
   // Debug pour showOnboarding (désactivé pour réduire les logs)
   // useEffect(() => {
   //   console.log('🔔 showOnboarding changé:', showOnboarding);
   // }, [showOnboarding]);
-  
+
   // Fonction helper pour ouvrir le modal d'onboarding
   const openOnboardingModal = () => {
     if (DISABLE_ONBOARDING_POPUPS) return;
-    console.log('📂 Ouverture du modal d\'onboarding');
-    
+    console.log("📂 Ouverture du modal d'onboarding");
+
     // Nettoyer le localStorage pour éviter les conflits
     const oldValue = localStorage.getItem('onboardingCompleted');
     if (oldValue === 'true') {
@@ -355,7 +383,7 @@ export default function Dashboard() {
       console.log('🧹 Nettoyage du localStorage');
       localStorage.removeItem('onboardingCompleted');
     }
-    
+
     setShowOnboarding(true);
     console.log('✅ Modal ouvert');
   };
@@ -370,28 +398,28 @@ export default function Dashboard() {
     prevYearCampaigns: 0,
     prevYearViews: 0,
     prevYearDurationSeconds: 0,
-    prevYearBudget: 0
+    prevYearBudget: 0,
   });
   const [loadingStats, setLoadingStats] = useState(true);
   const [availableBalanceTnd, setAvailableBalanceTnd] = useState(0);
   const [totalCreatedCampaignsCount, setTotalCreatedCampaignsCount] = useState(0);
-  const [lastCampaigns, setLastCampaigns] = useState<Array<{
-    id: string;
-    name: string;
-    status: string;
-    start_date: string;
-    end_date: string;
-    budget: number;
-    views: number;
-    category: string | null;
-    selected_categories: string[];
-    selected_zones: string[];
-    validated_impressions: number;
-  }>>([]);
+  const [lastCampaigns, setLastCampaigns] = useState<
+    Array<{
+      id: string;
+      name: string;
+      status: string;
+      start_date: string;
+      end_date: string;
+      budget: number;
+      views: number;
+      category: string | null;
+      selected_categories: string[];
+      selected_zones: string[];
+      validated_impressions: number;
+    }>
+  >([]);
   const hideGettingStartedBlock =
-    hasRegistrationDocument &&
-    availableBalanceTnd > 0 &&
-    totalCreatedCampaignsCount > 0;
+    hasRegistrationDocument && availableBalanceTnd > 0 && totalCreatedCampaignsCount > 0;
   const [loadingLastCampaigns, setLoadingLastCampaigns] = useState(false);
 
   // Vérifier le type de profil et rediriger si nécessaire
@@ -432,7 +460,7 @@ export default function Dashboard() {
 
       try {
         setLoadingStats(true);
-        
+
         // Récupérer les campagnes de l'utilisateur (avec date pour comparaison année précédente)
         const { data: campaigns, error: campaignsError } = await supabase
           .from('campaigns')
@@ -466,29 +494,39 @@ export default function Dashboard() {
 
         // Campagnes diffusées = campagnes créées / diffusées sur la période (année en cours vs année précédente)
         const campaignsDiffused = currentCampaigns.length;
-        const activeCampaigns = currentCampaigns.filter(c => c.status === 'active').length || 0;
+        const activeCampaigns = currentCampaigns.filter((c) => c.status === 'active').length || 0;
         const totalViews = currentCampaigns.reduce((sum, c) => sum + (c.views || 0), 0) || 0;
-        const totalBudget = currentCampaigns.reduce((sum, c) => sum + (parseFloat(String(c.budget)) || 0), 0) || 0;
+        const totalBudget =
+          currentCampaigns.reduce((sum, c) => sum + (parseFloat(String(c.budget)) || 0), 0) || 0;
         // Durée totale de diffusion : proxy = vues × 30 secondes (temps moyen par spot)
         const totalDurationSeconds = totalViews * 30;
 
         const prevYearCampaigns = prevYearCampaignsList.length;
-        const prevYearViews = prevYearCampaignsList.reduce((sum, c) => sum + (c.views || 0), 0) || 0;
-        const prevYearBudget = prevYearCampaignsList.reduce((sum, c) => sum + (parseFloat(String(c.budget)) || 0), 0) || 0;
+        const prevYearViews =
+          prevYearCampaignsList.reduce((sum, c) => sum + (c.views || 0), 0) || 0;
+        const prevYearBudget =
+          prevYearCampaignsList.reduce((sum, c) => sum + (parseFloat(String(c.budget)) || 0), 0) ||
+          0;
         const prevYearDurationSeconds = prevYearViews * 30;
-        
+
         // Récupérer le vrai solde depuis le service
         let balance = 0;
         try {
           // Récupérer les infos détaillées de balance
           const balanceInfo = await balanceService.getBalanceInfo(user.id);
-          
+
           if (balanceInfo) {
             balance = balanceInfo.available_balance;
             console.log('💰 DÉTAILS DU SOLDE:');
-            console.log('  - Total rechargé:', balanceService.formatAmount(balanceInfo.total_recharged));
+            console.log(
+              '  - Total rechargé:',
+              balanceService.formatAmount(balanceInfo.total_recharged),
+            );
             console.log('  - Total dépensé:', balanceService.formatAmount(balanceInfo.total_spent));
-            console.log('  - Solde disponible:', balanceService.formatAmount(balanceInfo.available_balance));
+            console.log(
+              '  - Solde disponible:',
+              balanceService.formatAmount(balanceInfo.available_balance),
+            );
             console.log('  - Campagnes draft:', balanceInfo.draft_campaigns_count);
             console.log('  - Campagnes actives:', balanceInfo.active_campaigns_count);
           } else {
@@ -500,8 +538,8 @@ export default function Dashboard() {
           console.error('❌ Erreur récupération solde:', error);
           balance = 0;
         }
-        
-        const conversionRate = totalViews > 0 ? ((activeCampaigns / totalViews) * 100) : 0;
+
+        const conversionRate = totalViews > 0 ? (activeCampaigns / totalViews) * 100 : 0;
 
         const formatAmountFr = (amount: number) =>
           `${new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount)} TND`;
@@ -517,10 +555,9 @@ export default function Dashboard() {
           prevYearCampaigns,
           prevYearViews,
           prevYearDurationSeconds,
-          prevYearBudget
+          prevYearBudget,
         });
         setAvailableBalanceTnd(balance);
-
       } catch (error) {
         console.error('Error loading dashboard stats:', error);
         setAvailableBalanceTnd(0);
@@ -555,16 +592,17 @@ export default function Dashboard() {
         const zonesByCampaign = new Map<string, string[]>();
 
         if (campaignIds.length > 0) {
-          const [{ data: categoryRows, error: categoryError }, { data: predefinedZonesRows }] = await Promise.all([
-            supabase
-              .from('campaign_categories')
-              .select('campaign_id, category')
-              .in('campaign_id', campaignIds),
-            supabase
-              .from('predefined_zones')
-              .select('name, latitude, longitude, radius')
-              .eq('is_active', true),
-          ]);
+          const [{ data: categoryRows, error: categoryError }, { data: predefinedZonesRows }] =
+            await Promise.all([
+              supabase
+                .from('campaign_categories')
+                .select('campaign_id, category')
+                .in('campaign_id', campaignIds),
+              supabase
+                .from('predefined_zones')
+                .select('name, latitude, longitude, radius')
+                .eq('is_active', true),
+            ]);
 
           if (categoryError && !isMissingCampaignCategoriesTable(categoryError)) {
             console.error('Error fetching campaign categories:', categoryError);
@@ -582,10 +620,11 @@ export default function Dashboard() {
             const lng = Number(c?.location_lng);
             const radius = Number(c?.location_radius);
             if (!Number.isFinite(lat) || !Number.isFinite(lng) || !Number.isFinite(radius)) return;
-            const matched = (predefinedZonesRows || []).find((z: any) =>
-              Math.abs(Number(z.latitude) - lat) <= 0.0005 &&
-              Math.abs(Number(z.longitude) - lng) <= 0.0005 &&
-              Math.abs(Number(z.radius) - radius) <= 50
+            const matched = (predefinedZonesRows || []).find(
+              (z: any) =>
+                Math.abs(Number(z.latitude) - lat) <= 0.0005 &&
+                Math.abs(Number(z.longitude) - lng) <= 0.0005 &&
+                Math.abs(Number(z.radius) - radius) <= 50,
             );
             if (matched?.name) {
               zonesByCampaign.set(c.id, [matched.name]);
@@ -593,25 +632,27 @@ export default function Dashboard() {
               zonesByCampaign.set(c.id, ['Grand Tunis']);
             }
           });
-
         }
 
-        setLastCampaigns(rows.map((c: any) => {
-          const selectedCategories = categoriesByCampaign.get(c.id) || (c.category ? [c.category] : []);
-          return {
-            id: c.id,
-            name: c.name || 'Sans nom',
-            status: c.status || 'draft',
-            start_date: c.start_date || '',
-            end_date: c.end_date || '',
-            budget: parseFloat(String(c.budget)) || 0,
-            views: c.views || 0,
-            category: c.category || null,
-            selected_categories: selectedCategories,
-            selected_zones: zonesByCampaign.get(c.id) || [],
-            validated_impressions: Math.max(0, Number(c.views) || 0),
-          };
-        }));
+        setLastCampaigns(
+          rows.map((c: any) => {
+            const selectedCategories =
+              categoriesByCampaign.get(c.id) || (c.category ? [c.category] : []);
+            return {
+              id: c.id,
+              name: c.name || 'Sans nom',
+              status: c.status || 'draft',
+              start_date: c.start_date || '',
+              end_date: c.end_date || '',
+              budget: parseFloat(String(c.budget)) || 0,
+              views: c.views || 0,
+              category: c.category || null,
+              selected_categories: selectedCategories,
+              selected_zones: zonesByCampaign.get(c.id) || [],
+              validated_impressions: Math.max(0, Number(c.views) || 0),
+            };
+          }),
+        );
       } catch (e) {
         console.error('Exception loadLastCampaigns:', e);
       } finally {
@@ -632,7 +673,7 @@ export default function Dashboard() {
           console.log('Business name:', data?.business_name);
           console.log('Profile type:', data?.profile_type);
           setProfile(data);
-          
+
           // Mettre à jour le localStorage avec le nom et prénom
           if (data?.contact_name) {
             localStorage.setItem('user_raison_social', data.contact_name);
@@ -645,7 +686,7 @@ export default function Dashboard() {
         setProfile(null);
       }
     };
-    
+
     // Forcer le rechargement à chaque fois
     if (user) {
       fetchProfile();
@@ -660,7 +701,7 @@ export default function Dashboard() {
     }
     // Vérifier le localStorage et l'état pour éviter les boucles infinies
     if (onboardingModalInitializedRef.current) return; // Ne s'exécuter qu'une fois
-    
+
     const onboardingCompletedLocal = localStorage.getItem('onboardingCompleted') === 'true';
     if (onboardingCompletedLocal || onboardingCompleted) {
       setShowOnboarding(false);
@@ -710,7 +751,9 @@ export default function Dashboard() {
     try {
       const raw = localStorage.getItem('campaign_cart_items');
       const current = raw ? JSON.parse(raw) : [];
-      const next = Array.isArray(current) ? current.filter((item: { id?: string }) => item?.id !== campaignId) : [];
+      const next = Array.isArray(current)
+        ? current.filter((item: { id?: string }) => item?.id !== campaignId)
+        : [];
       localStorage.setItem('campaign_cart_items', JSON.stringify(next));
       setCartItems(next);
       window.dispatchEvent(new CustomEvent('toodooh:cart-updated', { detail: {} }));
@@ -727,30 +770,32 @@ export default function Dashboard() {
       const list = await eventsService.getFeaturedEvents(3);
       if (!cancelled) setFeaturedEvents(list);
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [location.pathname]);
 
-  const balance = user ? "2,500 TND" : null;
+  const balance = user ? '2,500 TND' : null;
 
   const handleLogout = async () => {
     console.log('🔴 Bouton déconnexion cliqué (Annonceur)');
     try {
       console.log('🔄 Nettoyage du localStorage...');
-      
+
       // Nettoyer le localStorage
       localStorage.removeItem('onboardingCompleted');
       localStorage.removeItem('justOnboarded');
       localStorage.removeItem('user_profile_type');
-      
+
       console.log('🔄 Appel de logout()...');
       await logout();
-      
+
       console.log('✅ Déconnexion réussie, redirection vers /login');
       navigate('/login');
       toast.success('Déconnexion réussie');
     } catch (error: any) {
       console.error('❌ Erreur lors de la déconnexion:', error);
-      toast.error(error?.message || 'Une erreur inattendue s\'est produite');
+      toast.error(error?.message || "Une erreur inattendue s'est produite");
       // En cas d'erreur, forcer la redirection
       console.log('🔄 Redirection forcée vers /login');
       navigate('/login');
@@ -759,34 +804,34 @@ export default function Dashboard() {
 
   const campaignActions = [
     {
-      title: "Lancer une nouvelle campagne",
-      description: "Créez et configurez une nouvelle campagne publicitaire",
+      title: 'Lancer une nouvelle campagne',
+      description: 'Créez et configurez une nouvelle campagne publicitaire',
       icon: PlusCircle,
-      gradient: "from-[#00B3A6] to-[#00B3A6]/80",
-      action: () => navigate('/new-campaign')
+      gradient: 'from-[#00B3A6] to-[#00B3A6]/80',
+      action: () => navigate('/new-campaign'),
     },
     {
-      title: "Modifier une campagne active",
-      description: "Gérez et optimisez vos campagnes en cours",
+      title: 'Modifier une campagne active',
+      description: 'Gérez et optimisez vos campagnes en cours',
       icon: Edit,
-      gradient: "from-[#00263A] to-[#00B3A6]",
-      action: () => navigate('/my-campaigns')
-    }
+      gradient: 'from-[#00263A] to-[#00B3A6]',
+      action: () => navigate('/my-campaigns'),
+    },
   ];
 
   const quickActions = [
-    { 
-      icon: Wallet, 
-      title: "Recharger le compte",
-      description: "Ajoutez des fonds à votre portefeuille",
-      gradient: "from-[#00B3A6] to-[#00263A]" 
+    {
+      icon: Wallet,
+      title: 'Recharger le compte',
+      description: 'Ajoutez des fonds à votre portefeuille',
+      gradient: 'from-[#00B3A6] to-[#00263A]',
     },
-    { 
-      icon: FileText, 
-      title: "Consulter les factures",
+    {
+      icon: FileText,
+      title: 'Consulter les factures',
       description: "Accédez à l'historique de vos factures",
-      gradient: "from-[#00263A] to-[#00B3A6]" 
-    }
+      gradient: 'from-[#00263A] to-[#00B3A6]',
+    },
   ];
 
   // Format durée HH:MM:SS pour le widget "Durée totale de diffusion"
@@ -800,10 +845,14 @@ export default function Dashboard() {
   function renderProfileTypeLabel(type: string | null) {
     if (!type) return null;
     switch (type) {
-      case 'advertiser': return 'Annonceur';
-      case 'individual_owner': return 'Propriétaire individuel';
-      case 'fleet_owner': return 'Propriétaire de parc';
-      default: return type;
+      case 'advertiser':
+        return 'Annonceur';
+      case 'individual_owner':
+        return 'Propriétaire individuel';
+      case 'fleet_owner':
+        return 'Propriétaire de parc';
+      default:
+        return type;
     }
   }
 
@@ -820,13 +869,13 @@ export default function Dashboard() {
   const handleOnboardingComplete = useCallback(async () => {
     if (onboardingCheckRef.current) return; // Éviter les appels multiples
     onboardingCheckRef.current = true;
-    
+
     console.log('Onboarding completed');
     setShowOnboarding(false);
-    
+
     // Marquer l'onboarding comme terminé dans localStorage d'abord
     localStorage.setItem('onboardingCompleted', 'true');
-    
+
     // Marquer l'onboarding comme terminé dans la base de données
     if (user?.id) {
       try {
@@ -834,19 +883,19 @@ export default function Dashboard() {
           .from('business_profiles')
           .update({ onboarding_completed: true })
           .eq('user_id', user.id);
-        
+
         if (error) {
           console.error('Erreur lors de la mise à jour onboarding_completed:', error);
           onboardingCheckRef.current = false; // Réessayer en cas d'erreur
         } else {
           console.log('Onboarding marked as completed in database');
-          
+
           // Recharger l'état onboarding_completed
           setOnboardingCompleted(true);
           console.log('✅ État onboardingCompleted mis à jour dans le Dashboard');
         }
       } catch (error) {
-        console.error('Erreur lors de la completion de l\'onboarding:', error);
+        console.error("Erreur lors de la completion de l'onboarding:", error);
         onboardingCheckRef.current = false; // Réessayer en cas d'erreur
       }
     }
@@ -855,10 +904,10 @@ export default function Dashboard() {
   const handleOnboardingClose = async () => {
     console.log('Onboarding closed');
     setShowOnboarding(false);
-    
+
     // Marquer l'onboarding comme terminé dans localStorage d'abord
     localStorage.setItem('onboardingCompleted', 'true');
-    
+
     // Marquer l'onboarding comme terminé pour éviter qu'il se relance
     if (user) {
       try {
@@ -866,14 +915,14 @@ export default function Dashboard() {
           .from('business_profiles')
           .update({ onboarding_completed: true })
           .eq('user_id', user.id);
-        
+
         if (error) {
           console.error('Erreur lors de la mise à jour onboarding_completed:', error);
         } else {
           console.log('Onboarding marked as completed in database');
         }
       } catch (error) {
-        console.error('Erreur lors de la fermeture de l\'onboarding:', error);
+        console.error("Erreur lors de la fermeture de l'onboarding:", error);
       }
     }
   };
@@ -915,7 +964,13 @@ export default function Dashboard() {
               continuous
               showSkipButton
               showProgress
-              locale={{ back: 'Précédent', close: 'Fermer', last: 'Terminer', next: 'Suivant', skip: 'Passer' }}
+              locale={{
+                back: 'Précédent',
+                close: 'Fermer',
+                last: 'Terminer',
+                next: 'Suivant',
+                skip: 'Passer',
+              }}
               callback={handleJoyrideCallback}
               styles={{ options: { zIndex: 9999 } }}
             />
@@ -933,7 +988,9 @@ export default function Dashboard() {
                     type="button"
                     onClick={() => {
                       if (isDisabled) {
-                        toast.error('⚠️ Veuillez compléter vos informations pour accéder à cette fonctionnalité');
+                        toast.error(
+                          '⚠️ Veuillez compléter vos informations pour accéder à cette fonctionnalité',
+                        );
                         openOnboardingModal();
                       } else {
                         navigate('/my-recharges');
@@ -958,13 +1015,19 @@ export default function Dashboard() {
                 <div className="w-14 h-14 flex items-center justify-center mb-3">
                   <img src={smart3Icon} alt="" className="h-14 w-auto object-contain" />
                 </div>
-                <h3 className="text-base font-bold text-gray-900 mb-1 whitespace-nowrap">Prêt à démarrer ?</h3>
-                <p className="text-sm text-gray-600 mb-4">Diffusez votre campagne publicitaire en quelques clics</p>
+                <h3 className="text-base font-bold text-gray-900 mb-1 whitespace-nowrap">
+                  Prêt à démarrer ?
+                </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Diffusez votre campagne publicitaire en quelques clics
+                </p>
                 <button
                   type="button"
                   onClick={() => {
                     if (isDisabled) {
-                      toast.error('⚠️ Veuillez compléter vos informations pour accéder à cette fonctionnalité');
+                      toast.error(
+                        '⚠️ Veuillez compléter vos informations pour accéder à cette fonctionnalité',
+                      );
                       openOnboardingModal();
                     } else {
                       navigate('/new-campaign');
@@ -983,30 +1046,50 @@ export default function Dashboard() {
               <div className="mb-8">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   {featuredEvents.map((event) => {
-                    const typeConfig: Record<string, { bg: string; text: string; label: string }> = {
-                      sport: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Sport' },
-                      ramadan: { bg: 'bg-amber-100', text: 'text-amber-900', label: 'Ramadan' },
-                      culture: { bg: 'bg-purple-100', text: 'text-purple-800', label: 'Culture' },
-                      concert: { bg: 'bg-purple-100', text: 'text-purple-800', label: 'Concert' },
-                      festival: { bg: 'bg-pink-100', text: 'text-pink-800', label: 'Festival' },
-                      conference: { bg: 'bg-indigo-100', text: 'text-indigo-800', label: 'Conférence' },
-                      exposition: { bg: 'bg-green-100', text: 'text-green-800', label: 'Exposition' },
-                      salon: { bg: 'bg-orange-100', text: 'text-orange-800', label: 'Salon' },
-                      autre: { bg: 'bg-gray-100', text: 'text-gray-800', label: 'Autre' },
-                    };
+                    const typeConfig: Record<string, { bg: string; text: string; label: string }> =
+                      {
+                        sport: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Sport' },
+                        ramadan: { bg: 'bg-amber-100', text: 'text-amber-900', label: 'Ramadan' },
+                        culture: { bg: 'bg-purple-100', text: 'text-purple-800', label: 'Culture' },
+                        concert: { bg: 'bg-purple-100', text: 'text-purple-800', label: 'Concert' },
+                        festival: { bg: 'bg-pink-100', text: 'text-pink-800', label: 'Festival' },
+                        conference: {
+                          bg: 'bg-indigo-100',
+                          text: 'text-indigo-800',
+                          label: 'Conférence',
+                        },
+                        exposition: {
+                          bg: 'bg-green-100',
+                          text: 'text-green-800',
+                          label: 'Exposition',
+                        },
+                        salon: { bg: 'bg-orange-100', text: 'text-orange-800', label: 'Salon' },
+                        autre: { bg: 'bg-gray-100', text: 'text-gray-800', label: 'Autre' },
+                      };
                     const typeStyle = typeConfig[event.event_type] || typeConfig.autre;
                     const start = new Date(event.start_date);
                     const end = new Date(event.end_date);
-                    const dateStr = start.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
+                    const dateStr = start.toLocaleDateString('fr-FR', {
+                      day: 'numeric',
+                      month: 'long',
+                    });
                     const timeStr = `${start.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} - ${end.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
-                    const impressions = event.expected_attendance != null
-                      ? `${event.expected_attendance.toLocaleString('fr-FR').replace(/\s/g, ' ')}`
-                      : '184 500';
+                    const impressions =
+                      event.expected_attendance != null
+                        ? `${event.expected_attendance.toLocaleString('fr-FR').replace(/\s/g, ' ')}`
+                        : '184 500';
                     return (
-                      <div key={event.id} className="bg-white rounded-t-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col">
+                      <div
+                        key={event.id}
+                        className="bg-white rounded-t-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col"
+                      >
                         <div className="aspect-[16/10] bg-gray-200 overflow-hidden">
                           {event.image_url ? (
-                            <img src={event.image_url} alt={event.name} className="w-full h-full object-cover" />
+                            <img
+                              src={event.image_url}
+                              alt={event.name}
+                              className="w-full h-full object-cover"
+                            />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
                               <Megaphone className="h-12 w-12 text-gray-400" />
@@ -1015,25 +1098,36 @@ export default function Dashboard() {
                         </div>
                         <div className="p-4 flex flex-col flex-1">
                           <div className="flex items-start justify-between gap-2 mb-2">
-                            <h3 className="text-base font-bold text-gray-900 flex-1">{event.name}</h3>
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium flex-shrink-0 ${typeStyle.bg} ${typeStyle.text}`}>
+                            <h3 className="text-base font-bold text-gray-900 flex-1">
+                              {event.name}
+                            </h3>
+                            <span
+                              className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium flex-shrink-0 ${typeStyle.bg} ${typeStyle.text}`}
+                            >
                               {typeStyle.label}
                             </span>
                           </div>
                           <div className="flex flex-wrap gap-1.5 mb-2">
-                            <span className="inline-flex px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs">Restaurants</span>
-                            <span className="inline-flex px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs">Salles de sport</span>
+                            <span className="inline-flex px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs">
+                              Restaurants
+                            </span>
+                            <span className="inline-flex px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs">
+                              Salles de sport
+                            </span>
                           </div>
                           <div className="flex items-center gap-1.5 text-sm text-gray-600 mb-1">
                             <Calendar className="h-4 w-4 flex-shrink-0" />
-                            <span>{dateStr} | {timeStr}</span>
+                            <span>
+                              {dateStr} | {timeStr}
+                            </span>
                           </div>
                           <div className="flex items-center gap-1.5 text-sm text-gray-600 mb-2">
                             <TrendingUp className="h-4 w-4 flex-shrink-0" />
                             <span>~ {impressions} impressions</span>
                           </div>
                           <p className="text-xs text-gray-500 mb-4">
-                            (En incluant automatiquement toutes les catégories de commerces susceptibles de diffuser l&apos;événement)
+                            (En incluant automatiquement toutes les catégories de commerces
+                            susceptibles de diffuser l&apos;événement)
                           </p>
                           <button
                             type="button"
@@ -1055,7 +1149,9 @@ export default function Dashboard() {
               {/* Campagnes diffusées */}
               <div className="rounded-xl p-5 min-h-[120px] flex flex-col bg-[#e8f6ed] border border-[#85cc95]/30">
                 <div className="flex items-center justify-between gap-2 mb-3 min-h-[1.25rem]">
-                  <span className="text-xs font-semibold text-[#85cc95] whitespace-nowrap truncate min-w-0">Campagnes diffusées</span>
+                  <span className="text-xs font-semibold text-[#85cc95] whitespace-nowrap truncate min-w-0">
+                    Campagnes diffusées
+                  </span>
                   <img src={statIcon1} alt="" className="h-5 w-5 object-contain flex-shrink-0" />
                 </div>
                 <p className="text-3xl font-bold text-[#1a1a1a] tabular-nums font-sans mt-auto">
@@ -1065,17 +1161,23 @@ export default function Dashboard() {
               {/* Impressions générées */}
               <div className="rounded-xl p-5 min-h-[120px] flex flex-col bg-[#edf1fe] border border-[#6e82f6]/30">
                 <div className="flex items-center justify-between gap-2 mb-3 min-h-[1.25rem]">
-                  <span className="text-xs font-semibold text-[#6e82f6] whitespace-nowrap truncate min-w-0">Impressions générées</span>
+                  <span className="text-xs font-semibold text-[#6e82f6] whitespace-nowrap truncate min-w-0">
+                    Impressions générées
+                  </span>
                   <img src={statIcon4} alt="" className="h-5 w-5 object-contain flex-shrink-0" />
                 </div>
                 <p className="text-3xl font-bold text-[#1a1a1a] tabular-nums font-sans mt-auto">
-                  {loadingStats ? '...' : stats.totalViews.toLocaleString('fr-FR').replace(/\s/g, ' ')}
+                  {loadingStats
+                    ? '...'
+                    : stats.totalViews.toLocaleString('fr-FR').replace(/\s/g, ' ')}
                 </p>
               </div>
               {/* Durée totale de diffusion */}
               <div className="rounded-xl p-5 min-h-[120px] flex flex-col bg-[#eeecfd] border border-[#a08cf0]/30">
                 <div className="flex items-center justify-between gap-2 mb-3 min-h-[1.25rem]">
-                  <span className="text-xs font-semibold text-[#a08cf0] whitespace-nowrap truncate min-w-0">Durée totale de diffusion</span>
+                  <span className="text-xs font-semibold text-[#a08cf0] whitespace-nowrap truncate min-w-0">
+                    Durée totale de diffusion
+                  </span>
                   <img src={statIcon2} alt="" className="h-5 w-5 object-contain flex-shrink-0" />
                 </div>
                 <p className="text-3xl font-bold text-[#1a1a1a] tabular-nums font-sans mt-auto font-mono">
@@ -1085,11 +1187,15 @@ export default function Dashboard() {
               {/* Budget total alloué */}
               <div className="rounded-xl p-5 min-h-[120px] flex flex-col bg-[#fdfaed] border border-[#edcc7a]/30">
                 <div className="flex items-center justify-between gap-2 mb-3 min-h-[1.25rem]">
-                  <span className="text-xs font-semibold text-[#edcc7a] whitespace-nowrap truncate min-w-0">Budget total alloué</span>
+                  <span className="text-xs font-semibold text-[#edcc7a] whitespace-nowrap truncate min-w-0">
+                    Budget total alloué
+                  </span>
                   <img src={statIcon3} alt="" className="h-5 w-5 object-contain flex-shrink-0" />
                 </div>
                 <p className="text-3xl font-bold text-[#1a1a1a] tabular-nums font-sans mt-auto">
-                  {loadingStats ? '...' : `${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(stats.totalBudget)} TND`}
+                  {loadingStats
+                    ? '...'
+                    : `${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(stats.totalBudget)} TND`}
                 </p>
               </div>
             </div>
@@ -1097,7 +1203,9 @@ export default function Dashboard() {
             {/* Mes campagnes — 5 dernières + bloc Gagnez du temps */}
             <div className="mb-10 rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
               <div className="flex flex-row items-center p-0 gap-6 px-5 py-4 border-b border-gray-200 bg-gray-50/50 min-h-[24px]">
-                <h2 className="text-lg font-normal leading-6 text-gray-900 flex-1 order-0">Mes campagnes</h2>
+                <h2 className="text-lg font-normal leading-6 text-gray-900 flex-1 order-0">
+                  Mes campagnes
+                </h2>
                 <button
                   type="button"
                   onClick={() => navigate('/my-campaigns')}
@@ -1107,187 +1215,271 @@ export default function Dashboard() {
                 </button>
               </div>
               <div className="p-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {loadingLastCampaigns ? (
-                  [...Array(5)].map((_, i) => (
-                    <div key={i} className="rounded-xl bg-gray-100 border border-gray-200 p-5 min-h-[220px] animate-pulse" />
-                  ))
-                ) : (
-                  lastCampaigns.map((campaign) => {
-                    const statusMap: Record<string, { label: string; bg: string; text: string; dot: string }> = {
-                      draft: { label: 'Non validé', bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500' },
-                      rejected: { label: 'Non validé', bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500' },
-                      pending: { label: 'En attente', bg: 'bg-amber-50', text: 'text-amber-700', dot: 'bg-amber-500' },
-                      active: { label: 'Active', bg: 'bg-green-50', text: 'text-green-700', dot: 'bg-green-500' },
-                      completed: { label: 'Terminée', bg: 'bg-gray-100', text: 'text-gray-700', dot: 'bg-gray-500' },
-                      paused: { label: 'En pause', bg: 'bg-gray-100', text: 'text-gray-700', dot: 'bg-gray-500' }
-                    };
-                    const statusConf = statusMap[campaign.status] || statusMap.draft;
-                    const start = campaign.start_date ? new Date(campaign.start_date) : null;
-                    const end = campaign.end_date ? new Date(campaign.end_date) : null;
-                    const dateStr = start && end
-                      ? `${start.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })} - ${end.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}`
-                      : '—';
-                    const isActive = campaign.status === 'active';
-                    return (
-                      <div key={campaign.id} className="rounded-xl bg-white border border-gray-200 p-5 shadow-sm flex flex-col">
-                        <div className="flex items-start justify-between gap-2 mb-3">
-                          <h3 className="text-base font-semibold text-gray-900 truncate flex-1">{campaign.name}</h3>
-                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium flex-shrink-0 ${statusConf.bg} ${statusConf.text}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${statusConf.dot}`} />
-                            {statusConf.label}
-                          </span>
-                        </div>
-                        <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs text-gray-600 mb-2">
-                          <span className="flex items-center gap-1.5">
-                            <Calendar className="h-3.5 w-3.5 flex-shrink-0 text-gray-500" />
-                            {dateStr}
-                          </span>
-                          <span className="flex items-center gap-1.5">
-                            <MapPin className="h-3.5 w-3.5 flex-shrink-0 text-gray-500" />
-                            {(campaign.selected_zones && campaign.selected_zones.length > 0)
-                              ? campaign.selected_zones.join(', ')
-                              : '—'}
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap gap-1.5 mb-3">
-                          {(campaign.selected_categories || []).map((cat) => (
-                            <span key={cat} className="inline-flex px-2 py-0.5 rounded bg-gray-200 text-gray-700 text-xs">{cat}</span>
-                          ))}
-                        </div>
-                        <div className="flex items-center justify-between gap-4 mb-4 mt-auto">
-                          <div>
-                            <div className="flex items-center gap-1 text-xs text-gray-500">
-                              <DollarSign className="h-3.5 w-3.5 text-[#60ba76]" />
-                              <span>BUDGET</span>
-                            </div>
-                            <p className="text-base font-bold text-gray-900 tabular-nums">
-                              {new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(campaign.budget)} TND
-                            </p>
-                          </div>
-                          <div className="flex items-start gap-1.5 justify-end">
-                            <div className="flex flex-col items-start">
-                              <TrendingUp className="h-3.5 w-3.5 text-[#7e51f5] flex-shrink-0" />
-                              <p className="text-base font-bold text-gray-900 tabular-nums mt-0.5">{(campaign.validated_impressions || 0).toLocaleString('fr-FR').replace(/\s/g, ' ')}</p>
-                            </div>
-                            <div className="text-right text-xs text-gray-500 pt-0.5">IMPRESSIONS</div>
-                          </div>
-                        </div>
-                        <div className="flex gap-2 pt-4 mt-4 border-t border-gray-200 -mx-5 px-5">
-                          <button
-                            type="button"
-                            onClick={() => navigate('/my-campaigns')}
-                            className="flex-1 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {loadingLastCampaigns
+                    ? [...Array(5)].map((_, i) => (
+                        <div
+                          key={i}
+                          className="rounded-xl bg-gray-100 border border-gray-200 p-5 min-h-[220px] animate-pulse"
+                        />
+                      ))
+                    : lastCampaigns.map((campaign) => {
+                        const statusMap: Record<
+                          string,
+                          { label: string; bg: string; text: string; dot: string }
+                        > = {
+                          draft: {
+                            label: 'Non validé',
+                            bg: 'bg-red-50',
+                            text: 'text-red-700',
+                            dot: 'bg-red-500',
+                          },
+                          rejected: {
+                            label: 'Non validé',
+                            bg: 'bg-red-50',
+                            text: 'text-red-700',
+                            dot: 'bg-red-500',
+                          },
+                          pending: {
+                            label: 'En attente',
+                            bg: 'bg-amber-50',
+                            text: 'text-amber-700',
+                            dot: 'bg-amber-500',
+                          },
+                          active: {
+                            label: 'Active',
+                            bg: 'bg-green-50',
+                            text: 'text-green-700',
+                            dot: 'bg-green-500',
+                          },
+                          completed: {
+                            label: 'Terminée',
+                            bg: 'bg-gray-100',
+                            text: 'text-gray-700',
+                            dot: 'bg-gray-500',
+                          },
+                          paused: {
+                            label: 'En pause',
+                            bg: 'bg-gray-100',
+                            text: 'text-gray-700',
+                            dot: 'bg-gray-500',
+                          },
+                        };
+                        const statusConf = statusMap[campaign.status] || statusMap.draft;
+                        const start = campaign.start_date ? new Date(campaign.start_date) : null;
+                        const end = campaign.end_date ? new Date(campaign.end_date) : null;
+                        const dateStr =
+                          start && end
+                            ? `${start.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })} - ${end.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}`
+                            : '—';
+                        const isActive = campaign.status === 'active';
+                        return (
+                          <div
+                            key={campaign.id}
+                            className="rounded-xl bg-white border border-gray-200 p-5 shadow-sm flex flex-col"
                           >
-                            Consulter
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => navigate('/my-campaigns')}
-                            className="flex-1 py-2 rounded-lg bg-[#e3f7ec] text-[#66bc74] text-sm font-medium hover:bg-[#cceee0] transition-colors inline-flex items-center justify-center gap-1.5"
-                          >
-                            {isActive ? <><Rocket className="h-4 w-4" /> Booster</> : <><RotateCcw className="h-4 w-4" /> Reprendre</>}
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-                {/* Bloc Gagnez du temps */}
-                <div className="rounded-xl bg-[#f5f5f5] border border-gray-200 p-5 shadow-sm flex flex-col items-center justify-center text-center">
-                  <img src={statIcon5} alt="" className="h-12 w-12 object-contain mb-3" />
-                  <h3 className="text-sm font-bold text-gray-900 mb-1 whitespace-nowrap">Gagnez du temps</h3>
-                  <p className="text-sm text-gray-600 mb-4">Capitalisez sur des campagnes enregistrées ou déjà jouées</p>
-                  <div className="flex flex-col gap-2 w-full">
-                    <button
-                      type="button"
-                      onClick={() => navigate('/my-campaigns?status=completed')}
-                      className="w-full py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
-                    >
-                      Rejouer les campagnes passées
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => navigate('/my-campaigns?status=draft')}
-                      className="w-full py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
-                    >
-                      Reprendre les brouillons
-                    </button>
+                            <div className="flex items-start justify-between gap-2 mb-3">
+                              <h3 className="text-base font-semibold text-gray-900 truncate flex-1">
+                                {campaign.name}
+                              </h3>
+                              <span
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium flex-shrink-0 ${statusConf.bg} ${statusConf.text}`}
+                              >
+                                <span className={`w-1.5 h-1.5 rounded-full ${statusConf.dot}`} />
+                                {statusConf.label}
+                              </span>
+                            </div>
+                            <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs text-gray-600 mb-2">
+                              <span className="flex items-center gap-1.5">
+                                <Calendar className="h-3.5 w-3.5 flex-shrink-0 text-gray-500" />
+                                {dateStr}
+                              </span>
+                              <span className="flex items-center gap-1.5">
+                                <MapPin className="h-3.5 w-3.5 flex-shrink-0 text-gray-500" />
+                                {campaign.selected_zones && campaign.selected_zones.length > 0
+                                  ? campaign.selected_zones.join(', ')
+                                  : '—'}
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5 mb-3">
+                              {(campaign.selected_categories || []).map((cat) => (
+                                <span
+                                  key={cat}
+                                  className="inline-flex px-2 py-0.5 rounded bg-gray-200 text-gray-700 text-xs"
+                                >
+                                  {cat}
+                                </span>
+                              ))}
+                            </div>
+                            <div className="flex items-center justify-between gap-4 mb-4 mt-auto">
+                              <div>
+                                <div className="flex items-center gap-1 text-xs text-gray-500">
+                                  <DollarSign className="h-3.5 w-3.5 text-[#60ba76]" />
+                                  <span>BUDGET</span>
+                                </div>
+                                <p className="text-base font-bold text-gray-900 tabular-nums">
+                                  {new Intl.NumberFormat('en-US', {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  }).format(campaign.budget)}{' '}
+                                  TND
+                                </p>
+                              </div>
+                              <div className="flex items-start gap-1.5 justify-end">
+                                <div className="flex flex-col items-start">
+                                  <TrendingUp className="h-3.5 w-3.5 text-[#7e51f5] flex-shrink-0" />
+                                  <p className="text-base font-bold text-gray-900 tabular-nums mt-0.5">
+                                    {(campaign.validated_impressions || 0)
+                                      .toLocaleString('fr-FR')
+                                      .replace(/\s/g, ' ')}
+                                  </p>
+                                </div>
+                                <div className="text-right text-xs text-gray-500 pt-0.5">
+                                  IMPRESSIONS
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex gap-2 pt-4 mt-4 border-t border-gray-200 -mx-5 px-5">
+                              <button
+                                type="button"
+                                onClick={() => navigate('/my-campaigns')}
+                                className="flex-1 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+                              >
+                                Consulter
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => navigate('/my-campaigns')}
+                                className="flex-1 py-2 rounded-lg bg-[#e3f7ec] text-[#66bc74] text-sm font-medium hover:bg-[#cceee0] transition-colors inline-flex items-center justify-center gap-1.5"
+                              >
+                                {isActive ? (
+                                  <>
+                                    <Rocket className="h-4 w-4" /> Booster
+                                  </>
+                                ) : (
+                                  <>
+                                    <RotateCcw className="h-4 w-4" /> Reprendre
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  {/* Bloc Gagnez du temps */}
+                  <div className="rounded-xl bg-[#f5f5f5] border border-gray-200 p-5 shadow-sm flex flex-col items-center justify-center text-center">
+                    <img src={statIcon5} alt="" className="h-12 w-12 object-contain mb-3" />
+                    <h3 className="text-sm font-bold text-gray-900 mb-1 whitespace-nowrap">
+                      Gagnez du temps
+                    </h3>
+                    <p className="text-sm text-gray-600 mb-4">
+                      Capitalisez sur des campagnes enregistrées ou déjà jouées
+                    </p>
+                    <div className="flex flex-col gap-2 w-full">
+                      <button
+                        type="button"
+                        onClick={() => navigate('/my-campaigns?status=completed')}
+                        className="w-full py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+                      >
+                        Rejouer les campagnes passées
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => navigate('/my-campaigns?status=draft')}
+                        className="w-full py-2.5 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+                      >
+                        Reprendre les brouillons
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
               </div>
             </div>
 
             {/* Parcs / Enseignes — masqué à la demande */}
             {false && (
-            <div className="mb-10 rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-              <div className="flex flex-row items-center p-0 gap-6 px-5 py-4 border-b border-gray-200 bg-gray-50/50 min-h-[24px]">
-                <h2 className="text-lg font-normal leading-6 text-gray-900 flex-1 order-0">Diffusez votre spot publicitaire sur une même enseigne</h2>
-                <button
-                  type="button"
-                  onClick={() => navigate('/my-campaigns')}
-                  className="inline-flex items-center justify-center px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-800 text-sm font-medium hover:bg-gray-50 hover:border-gray-300 transition-colors flex-none shadow-sm"
-                >
-                  Voir tous les parcs
-                </button>
-              </div>
-              <div className="p-5">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="rounded-xl bg-white border border-gray-200 p-5 shadow-sm flex flex-col">
-                      <div className="flex items-center gap-3 mb-3">
-                        <img src="https://back.carrefour.tn/media/logos/logo_car_25.png" alt="Carrefour" className="w-10 h-10 rounded-lg object-contain flex-shrink-0 bg-white" />
-                        <span className="font-semibold text-gray-900">Carrefour</span>
-                      </div>
-                      <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs text-gray-600 mb-2">
-                        <span className="flex items-center gap-1.5">
-                          <Monitor className="h-3.5 w-3.5 flex-shrink-0 text-gray-500" />
-                          32 écrans
-                        </span>
-                        <span className="flex items-center gap-1.5">
-                          <MapPin className="h-3.5 w-3.5 flex-shrink-0 text-gray-500" />
-                          12 établissements
-                        </span>
-                      </div>
-                      <div className="mb-3">
-                        <span className="inline-flex px-2.5 py-1 rounded-full bg-gray-200 text-gray-700 text-xs font-medium">Sport</span>
-                      </div>
-                      <div className="flex items-center justify-between gap-3 mb-4">
-                        <div>
-                          <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-gray-500">
-                            <Crosshair className="h-3 w-3 flex-shrink-0 text-gray-500" />
-                            <span>CIBLE DOMINANTE</span>
-                          </div>
-                          <p className="text-xs font-medium text-gray-900 mt-0.5">18 - 35 ans</p>
+              <div className="mb-10 rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                <div className="flex flex-row items-center p-0 gap-6 px-5 py-4 border-b border-gray-200 bg-gray-50/50 min-h-[24px]">
+                  <h2 className="text-lg font-normal leading-6 text-gray-900 flex-1 order-0">
+                    Diffusez votre spot publicitaire sur une même enseigne
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/my-campaigns')}
+                    className="inline-flex items-center justify-center px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-800 text-sm font-medium hover:bg-gray-50 hover:border-gray-300 transition-colors flex-none shadow-sm"
+                  >
+                    Voir tous les parcs
+                  </button>
+                </div>
+                <div className="p-5">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                    {[1, 2, 3].map((i) => (
+                      <div
+                        key={i}
+                        className="rounded-xl bg-white border border-gray-200 p-5 shadow-sm flex flex-col"
+                      >
+                        <div className="flex items-center gap-3 mb-3">
+                          <img
+                            src="https://back.carrefour.tn/media/logos/logo_car_25.png"
+                            alt="Carrefour"
+                            className="w-10 h-10 rounded-lg object-contain flex-shrink-0 bg-white"
+                          />
+                          <span className="font-semibold text-gray-900">Carrefour</span>
                         </div>
-                        <div className="flex flex-col items-end">
-                          <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-gray-500">
-                            <TrendingUp className="h-3 w-3 text-[#7e51f5] flex-shrink-0" />
-                            <span>IMPRESSIONS</span>
+                        <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs text-gray-600 mb-2">
+                          <span className="flex items-center gap-1.5">
+                            <Monitor className="h-3.5 w-3.5 flex-shrink-0 text-gray-500" />
+                            32 écrans
+                          </span>
+                          <span className="flex items-center gap-1.5">
+                            <MapPin className="h-3.5 w-3.5 flex-shrink-0 text-gray-500" />
+                            12 établissements
+                          </span>
+                        </div>
+                        <div className="mb-3">
+                          <span className="inline-flex px-2.5 py-1 rounded-full bg-gray-200 text-gray-700 text-xs font-medium">
+                            Sport
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3 mb-4">
+                          <div>
+                            <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-gray-500">
+                              <Crosshair className="h-3 w-3 flex-shrink-0 text-gray-500" />
+                              <span>CIBLE DOMINANTE</span>
+                            </div>
+                            <p className="text-xs font-medium text-gray-900 mt-0.5">18 - 35 ans</p>
                           </div>
-                          <p className="text-xs font-semibold text-gray-900 tabular-nums mt-0.5">145 000</p>
+                          <div className="flex flex-col items-end">
+                            <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-gray-500">
+                              <TrendingUp className="h-3 w-3 text-[#7e51f5] flex-shrink-0" />
+                              <span>IMPRESSIONS</span>
+                            </div>
+                            <p className="text-xs font-semibold text-gray-900 tabular-nums mt-0.5">
+                              145 000
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex pt-4 mt-auto border-t border-gray-200 -mx-5 px-5">
+                          <button
+                            type="button"
+                            className="w-full py-2.5 rounded-lg bg-gray-700 text-white text-sm font-medium hover:bg-gray-800 transition-colors"
+                          >
+                            Diffuser sur ce parc
+                          </button>
                         </div>
                       </div>
-                      <div className="flex pt-4 mt-auto border-t border-gray-200 -mx-5 px-5">
-                        <button
-                          type="button"
-                          className="w-full py-2.5 rounded-lg bg-gray-700 text-white text-sm font-medium hover:bg-gray-800 transition-colors"
-                        >
-                          Diffuser sur ce parc
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
             )}
 
             {/* Mes événements — 2 cartes événement + Suggérez un événement */}
             <div className="mb-10 rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
               <div className="flex flex-row items-center p-0 gap-6 px-5 py-4 border-b border-gray-200 bg-gray-50/50 min-h-[24px]">
-                <h2 className="text-lg font-normal leading-6 text-gray-900 flex-1 order-0">Mes événements</h2>
+                <h2 className="text-lg font-normal leading-6 text-gray-900 flex-1 order-0">
+                  Mes événements
+                </h2>
                 <button
                   type="button"
                   onClick={() => navigate('/evenements')}
@@ -1300,32 +1492,58 @@ export default function Dashboard() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                   {/* Deux cartes événement (contenu statique inspiré du bloc Mis en avant) */}
                   {[
-                    { title: 'Derby Tunis VS Sfax', type: 'sport', date: '12 Mars', time: '20h00 - 22h30', impressions: '184 500' },
-                    { title: 'Derby Tunis VS Sfax', type: 'sport', date: '12 Mars', time: '20h00 - 22h30', impressions: '184 500' }
+                    {
+                      title: 'Derby Tunis VS Sfax',
+                      type: 'sport',
+                      date: '12 Mars',
+                      time: '20h00 - 22h30',
+                      impressions: '184 500',
+                    },
+                    {
+                      title: 'Derby Tunis VS Sfax',
+                      type: 'sport',
+                      date: '12 Mars',
+                      time: '20h00 - 22h30',
+                      impressions: '184 500',
+                    },
                   ].map((evt, idx) => (
-                    <div key={idx} className="bg-white rounded-xl shadow-sm border border-[#76E6AB]/60 overflow-hidden flex flex-col">
+                    <div
+                      key={idx}
+                      className="bg-white rounded-xl shadow-sm border border-[#76E6AB]/60 overflow-hidden flex flex-col"
+                    >
                       <div className="aspect-[16/10] bg-gray-200 overflow-hidden">
                         <img src={matchImg} alt="" className="w-full h-full object-cover" />
                       </div>
                       <div className="p-4 flex flex-col flex-1">
                         <div className="flex items-start justify-between gap-2 mb-2">
-                          <h3 className="text-sm font-normal text-gray-900 flex-1 truncate">{evt.title}</h3>
-                          <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium flex-shrink-0 bg-blue-100 text-blue-800">Sport</span>
+                          <h3 className="text-sm font-normal text-gray-900 flex-1 truncate">
+                            {evt.title}
+                          </h3>
+                          <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium flex-shrink-0 bg-blue-100 text-blue-800">
+                            Sport
+                          </span>
                         </div>
                         <div className="flex flex-wrap gap-1.5 mb-2">
-                          <span className="inline-flex px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs">Restaurants</span>
-                          <span className="inline-flex px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs">Salles de sport</span>
+                          <span className="inline-flex px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs">
+                            Restaurants
+                          </span>
+                          <span className="inline-flex px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs">
+                            Salles de sport
+                          </span>
                         </div>
                         <div className="flex items-center gap-1.5 text-sm text-gray-600 mb-1">
                           <Calendar className="h-4 w-4 flex-shrink-0 text-gray-500" />
-                          <span>{evt.date} | {evt.time}</span>
+                          <span>
+                            {evt.date} | {evt.time}
+                          </span>
                         </div>
                         <div className="flex items-center gap-1.5 text-sm text-gray-600 mb-2">
                           <TrendingUp className="h-4 w-4 flex-shrink-0 text-gray-500" />
                           <span>~ {evt.impressions} impressions</span>
                         </div>
                         <p className="text-xs text-gray-500 mb-4">
-                          (En incluant automatiquement toutes les catégories de commerces qui diffusent pendant le match)
+                          (En incluant automatiquement toutes les catégories de commerces qui
+                          diffusent pendant le match)
                         </p>
                         <button
                           type="button"
@@ -1343,7 +1561,9 @@ export default function Dashboard() {
                     <div className="w-12 h-12 rounded-full bg-[#76E6AB]/30 flex items-center justify-center mb-2">
                       <Megaphone className="h-6 w-6 text-[#2d9f6e]" />
                     </div>
-                    <h3 className="text-sm font-bold text-gray-900 mb-2 whitespace-nowrap">Suggérez un événement</h3>
+                    <h3 className="text-sm font-bold text-gray-900 mb-2 whitespace-nowrap">
+                      Suggérez un événement
+                    </h3>
                     <p className="text-sm text-gray-600 mb-3 leading-snug">
                       <span className="block">Vous souhaitez diffuser votre spot</span>
                       <span className="block">lors d&apos;un événement</span>
@@ -1363,100 +1583,92 @@ export default function Dashboard() {
 
             {/* Pour bien commencer */}
             {!hideGettingStartedBlock && (
-            <div className="mb-10 rounded-2xl border border-gray-200 bg-[#F8FAFC] p-5 shadow-sm">
-              <h2 className="text-lg font-bold text-gray-900">
-                Pour bien commencer
-              </h2>
-              <p className="text-sm text-gray-600 mt-1 mb-4">
-                Suivez ces étapes pour configurer votre compte
-              </p>
+              <div className="mb-10 rounded-2xl border border-gray-200 bg-[#F8FAFC] p-5 shadow-sm">
+                <h2 className="text-lg font-bold text-gray-900">Pour bien commencer</h2>
+                <p className="text-sm text-gray-600 mt-1 mb-4">
+                  Suivez ces étapes pour configurer votre compte
+                </p>
 
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-                <div className="rounded-2xl border border-[#E4E7EC] bg-white p-5 flex items-start gap-4">
-                  {hasRegistrationDocument ? (
-                    <div className="w-10 h-10 rounded-full bg-[#60BA76] flex items-center justify-center flex-shrink-0">
-                      <Check className="h-5 w-5 text-white" strokeWidth={3} />
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                  <div className="rounded-2xl border border-[#E4E7EC] bg-white p-5 flex items-start gap-4">
+                    {hasRegistrationDocument ? (
+                      <div className="w-10 h-10 rounded-full bg-[#60BA76] flex items-center justify-center flex-shrink-0">
+                        <Check className="h-5 w-5 text-white" strokeWidth={3} />
+                      </div>
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-[#EFF5F2] text-[#171717] flex items-center justify-center text-sm font-semibold flex-shrink-0">
+                        1
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-xl font-semibold text-gray-900">
+                        Complétez votre profil
+                      </h3>
+                      <p className="text-sm text-gray-600 mt-1">
+                        Uploadez votre registre de commerce
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => navigate('/profile?tab=entreprise&sub=documents')}
+                        disabled={hasRegistrationDocument}
+                        className={`mt-4 inline-flex items-center justify-center px-5 py-2 rounded-xl text-sm font-medium transition-colors ${
+                          hasRegistrationDocument
+                            ? 'bg-[#F2F4F7] text-[#98A2B3] cursor-not-allowed'
+                            : 'bg-white border border-[#D0D5DD] text-[#344054] hover:bg-gray-50'
+                        }`}
+                      >
+                        {hasRegistrationDocument ? 'OK' : 'Upload'}
+                      </button>
                     </div>
-                  ) : (
-                    <div className="w-8 h-8 rounded-full bg-[#EFF5F2] text-[#171717] flex items-center justify-center text-sm font-semibold flex-shrink-0">
-                      1
+                  </div>
+
+                  <div className="rounded-2xl border border-[#E4E7EC] bg-white p-5 flex items-start gap-4">
+                    <div className="w-8 h-8 rounded-full bg-[#EFF5F2] text-[#171717] flex items-center justify-center text-sm font-semibold">
+                      2
                     </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-xl font-semibold text-gray-900">
-                      Complétez votre profil
-                    </h3>
-                    <p className="text-sm text-gray-600 mt-1">
-                      Uploadez votre registre de commerce
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => navigate('/profile?tab=entreprise&sub=documents')}
-                      disabled={hasRegistrationDocument}
-                      className={`mt-4 inline-flex items-center justify-center px-5 py-2 rounded-xl text-sm font-medium transition-colors ${
-                        hasRegistrationDocument
-                          ? 'bg-[#F2F4F7] text-[#98A2B3] cursor-not-allowed'
-                          : 'bg-white border border-[#D0D5DD] text-[#344054] hover:bg-gray-50'
-                      }`}
-                    >
-                      {hasRegistrationDocument ? 'OK' : 'Upload'}
-                    </button>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-xl font-semibold text-gray-900">Rechargez votre solde</h3>
+                      <p className="text-sm text-gray-600 mt-1">
+                        Ajoutez vos fonds pour vos campagnes
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => navigate('/my-recharges')}
+                        disabled={!canRechargeAccount}
+                        className={`mt-4 inline-flex items-center justify-center px-5 py-2 rounded-xl text-sm font-medium transition-colors ${
+                          canRechargeAccount
+                            ? 'bg-white border border-[#D0D5DD] text-[#344054] hover:bg-gray-50'
+                            : 'bg-[#F2F4F7] text-[#98A2B3] cursor-not-allowed'
+                        }`}
+                      >
+                        Recharger
+                      </button>
+                    </div>
                   </div>
-                </div>
 
-                <div className="rounded-2xl border border-[#E4E7EC] bg-white p-5 flex items-start gap-4">
-                  <div className="w-8 h-8 rounded-full bg-[#EFF5F2] text-[#171717] flex items-center justify-center text-sm font-semibold">
-                    2
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-xl font-semibold text-gray-900">
-                      Rechargez votre solde
-                    </h3>
-                    <p className="text-sm text-gray-600 mt-1">
-                      Ajoutez vos fonds pour vos campagnes
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => navigate('/my-recharges')}
-                      disabled={!canRechargeAccount}
-                      className={`mt-4 inline-flex items-center justify-center px-5 py-2 rounded-xl text-sm font-medium transition-colors ${
-                        canRechargeAccount
-                          ? 'bg-white border border-[#D0D5DD] text-[#344054] hover:bg-gray-50'
-                          : 'bg-[#F2F4F7] text-[#98A2B3] cursor-not-allowed'
-                      }`}
-                    >
-                      Recharger
-                    </button>
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-[#E4E7EC] bg-white p-5 flex items-start gap-4">
-                  <div className="w-8 h-8 rounded-full bg-[#EFF5F2] text-[#171717] flex items-center justify-center text-sm font-semibold">
-                    3
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-xl font-semibold text-gray-900">
-                      Lancez une campagne
-                    </h3>
-                    <p className="text-sm text-gray-600 mt-1">
-                      Creez votre premiere campagne
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => navigate('/new-campaign')}
-                      disabled={!canLaunchCampaign}
-                      className={`mt-4 inline-flex items-center justify-center px-5 py-2 rounded-xl text-sm font-medium transition-colors ${
-                        canLaunchCampaign
-                          ? 'bg-white border border-[#D0D5DD] text-[#344054] hover:bg-gray-50'
-                          : 'bg-[#F2F4F7] text-[#98A2B3] cursor-not-allowed'
-                      }`}
-                    >
-                      Commencer
-                    </button>
+                  <div className="rounded-2xl border border-[#E4E7EC] bg-white p-5 flex items-start gap-4">
+                    <div className="w-8 h-8 rounded-full bg-[#EFF5F2] text-[#171717] flex items-center justify-center text-sm font-semibold">
+                      3
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-xl font-semibold text-gray-900">Lancez une campagne</h3>
+                      <p className="text-sm text-gray-600 mt-1">Creez votre premiere campagne</p>
+                      <button
+                        type="button"
+                        onClick={() => navigate('/new-campaign')}
+                        disabled={!canLaunchCampaign}
+                        className={`mt-4 inline-flex items-center justify-center px-5 py-2 rounded-xl text-sm font-medium transition-colors ${
+                          canLaunchCampaign
+                            ? 'bg-white border border-[#D0D5DD] text-[#344054] hover:bg-gray-50'
+                            : 'bg-[#F2F4F7] text-[#98A2B3] cursor-not-allowed'
+                        }`}
+                      >
+                        Commencer
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
             )}
 
             {/* Insights clés — conforme au CSS fourni */}
@@ -1465,9 +1677,7 @@ export default function Dashboard() {
               style={{ boxShadow: '0px 1px 2px rgba(10, 13, 20, 0.0313726)' }}
             >
               <div className="flex w-full flex-col items-start gap-1">
-                <h2 className="text-lg font-bold leading-6 text-gray-900">
-                  Insights clés
-                </h2>
+                <h2 className="text-lg font-bold leading-6 text-gray-900">Insights clés</h2>
                 <p className="text-sm font-normal text-gray-600">
                   Recommandations basées sur l&apos;analyse de vos données
                 </p>
@@ -1523,7 +1733,6 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
-
           </div>
         );
     }
@@ -1532,155 +1741,278 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-white flex flex-col lg:flex-row">
       {/* Sidebar : à gauche, fixe au scroll (sticky), pleine hauteur */}
-      <aside className={`
+      <aside
+        className={`
         ${isMenuOpen ? 'flex' : 'hidden'} lg:flex
         fixed left-0 z-30 flex flex-col bg-white border-r border-[#E1E4EA] isolate transition-[width] duration-200 ease-in-out overflow-hidden
         top-0 bottom-0 h-full lg:h-screen lg:sticky lg:top-0
         w-[272px] ${sidebarExpanded ? 'lg:w-[272px]' : 'lg:w-[80px]'} lg:flex-shrink-0
-      `}>
-          {/* Header logo + toggle */}
-          <div className="flex flex-col justify-center items-start p-3 gap-2.5 h-[88px] border-b border-[#E1E4EA] flex-none">
-            <div className="flex flex-row items-center w-full gap-2">
-              <div className={`flex items-center justify-center overflow-hidden transition-all ${sidebarExpanded ? 'flex-1 min-w-0' : 'w-10 h-10 flex-shrink-0'}`}>
-                {sidebarExpanded ? (
-                  <img src={logoImage} alt="Logo" className="h-10 w-auto max-w-[178px] object-contain" />
-                ) : (
-                  <img src={logoCompany} alt="Logo" className="w-10 h-10 object-contain" />
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => setSidebarExpanded((v) => !v)}
-                className="flex-shrink-0 p-2 rounded-lg text-[#5C5C5C] hover:bg-gray-100 transition-colors hidden lg:flex"
-                title={sidebarExpanded ? 'Réduire le menu' : 'Ouvrir le menu'}
-              >
-                {sidebarExpanded ? <ChevronLeft className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
-              </button>
-              <button type="button" onClick={() => setIsMenuOpen(false)} className="lg:hidden p-2 rounded-lg text-[#5C5C5C] hover:bg-gray-100">
-                <X className="h-5 w-5" />
-              </button>
+      `}
+      >
+        {/* Header logo + toggle */}
+        <div className="flex flex-col justify-center items-start p-3 gap-2.5 h-[88px] border-b border-[#E1E4EA] flex-none">
+          <div className="flex flex-row items-center w-full gap-2">
+            <div
+              className={`flex items-center justify-center overflow-hidden transition-all ${sidebarExpanded ? 'flex-1 min-w-0' : 'w-10 h-10 flex-shrink-0'}`}
+            >
+              {sidebarExpanded ? (
+                <img
+                  src={logoImage}
+                  alt="Logo"
+                  className="h-10 w-auto max-w-[178px] object-contain"
+                />
+              ) : (
+                <img src={logoCompany} alt="Logo" className="w-10 h-10 object-contain" />
+              )}
             </div>
-          </div>
-          <nav className="flex flex-col flex-1 py-5 gap-2 px-3">
-            {/* Dashboard */}
-            <button
-              onClick={() => { navigate('/dashboard'); setIsMenuOpen(false); }}
-              title={!sidebarExpanded ? 'Dashboard' : undefined}
-              className={`h-9 flex items-center rounded-lg text-sm font-medium transition-colors tracking-[-0.006em] ${
-                sidebarExpanded ? 'w-full max-w-[232px] px-3 py-2 gap-3' : 'w-10 justify-center px-0 mx-auto'
-              } ${location.pathname === '/dashboard' ? 'bg-[#E4F9EB] text-[#132B1B]' : 'text-[#5C5C5C] hover:bg-gray-100/80'}`}
-            >
-              <img src={location.pathname === '/dashboard' ? dashboardIconActive : dashboardIcon} alt="" className="h-5 w-5 flex-shrink-0 object-contain" />
-              {sidebarExpanded && <span className="leading-5 truncate">Dashboard</span>}
-            </button>
-            {/* Mes campagnes */}
-            <button
-              onClick={() => { if (isDisabled) { toast.error('⚠️ Veuillez compléter vos informations pour accéder à cette fonctionnalité'); openOnboardingModal(); } else { navigate('/my-campaigns'); setIsMenuOpen(false); } }}
-              disabled={isDisabled}
-              title={!sidebarExpanded ? 'Mes campagnes' : undefined}
-              className={`h-9 flex items-center rounded-lg text-sm font-medium transition-colors ${
-                sidebarExpanded ? 'w-full max-w-[232px] px-3 py-2 gap-3' : 'w-10 justify-center mx-auto'
-              } ${isDisabled ? 'text-[#5C5C5C] opacity-50 cursor-not-allowed' : location.pathname === '/my-campaigns' ? 'bg-[#E4F9EB] text-[#132B1B]' : 'text-[#5C5C5C] hover:bg-gray-100/80'}`}
-            >
-              <img src={location.pathname === '/my-campaigns' ? campagneIconActive : campagneIcon} alt="" className="h-5 w-5 flex-shrink-0 object-contain" />
-              {sidebarExpanded && <span className="leading-5 truncate">Mes campagnes</span>}
-            </button>
-            {/* Événements */}
-            <button
-              onClick={() => { if (isDisabled) { toast.error('⚠️ Veuillez compléter vos informations pour accéder à cette fonctionnalité'); openOnboardingModal(); } else { navigate('/evenements'); setIsMenuOpen(false); } }}
-              disabled={isDisabled}
-              title={!sidebarExpanded ? 'Événements' : undefined}
-              className={`h-9 flex items-center rounded-lg text-sm font-medium transition-colors ${
-                sidebarExpanded ? 'w-full max-w-[232px] px-3 py-2 gap-3' : 'w-10 justify-center mx-auto'
-              } ${isDisabled ? 'text-[#5C5C5C] opacity-50 cursor-not-allowed' : location.pathname === '/evenements' ? 'bg-[#E4F9EB] text-[#132B1B]' : 'text-[#5C5C5C] hover:bg-gray-100/80'}`}
-            >
-              <img src={location.pathname === '/evenements' ? agendaIconActive : agendaIcon} alt="" className="h-5 w-5 flex-shrink-0 object-contain" />
-              {sidebarExpanded && <span className="leading-5 truncate">Événements</span>}
-            </button>
-            {/* Mes performances */}
-            <button
-              onClick={() => { if (isDisabled) { toast.error('⚠️ Veuillez compléter vos informations pour accéder à cette fonctionnalité'); openOnboardingModal(); } else { navigate('/perfor'); setIsMenuOpen(false); } }}
-              disabled={isDisabled}
-              title={!sidebarExpanded ? 'Mes performances' : undefined}
-              className={`h-9 flex items-center rounded-lg text-sm font-medium transition-colors ${
-                sidebarExpanded ? 'w-full max-w-[232px] px-3 py-2 gap-3' : 'w-10 justify-center mx-auto'
-              } ${isDisabled ? 'text-[#5C5C5C] opacity-50 cursor-not-allowed' : location.pathname === '/perfor' ? 'bg-[#E4F9EB] text-[#132B1B]' : 'text-[#5C5C5C] hover:bg-gray-100/80'}`}
-            >
-              <img src={location.pathname === '/perfor' ? performanceIconActive : performanceIcon} alt="" className="h-5 w-5 flex-shrink-0 object-contain" />
-              {sidebarExpanded && <span className="leading-5 truncate">Mes performances</span>}
-            </button>
-            {/* Mes finances */}
-            <button
-              onClick={() => { if (isDisabled) { toast.error('⚠️ Veuillez compléter vos informations pour accéder à cette fonctionnalité'); openOnboardingModal(); } else { navigate('/my-recharges'); setIsMenuOpen(false); } }}
-              disabled={isDisabled}
-              title={!sidebarExpanded ? 'Mes finances' : undefined}
-              className={`h-9 flex items-center rounded-lg text-sm font-medium transition-colors ${
-                sidebarExpanded ? 'w-full max-w-[232px] px-3 py-2 gap-3' : 'w-10 justify-center mx-auto'
-              } ${isDisabled ? 'text-[#5C5C5C] opacity-50 cursor-not-allowed' : location.pathname === '/my-recharges' ? 'bg-[#E4F9EB] text-[#132B1B]' : 'text-[#5C5C5C] hover:bg-gray-100/80'}`}
-            >
-              <img src={location.pathname === '/my-recharges' ? financeIconActive : financeIcon} alt="" className="h-5 w-5 flex-shrink-0 object-contain" />
-              {sidebarExpanded && <span className="leading-5 truncate">Mes finances</span>}
-            </button>
-            {(profileType === 'advertising_agency' || profileType === 'event_organizer') && (
-              <button
-                onClick={() => { if (isDisabled) { toast.error('⚠️ Veuillez compléter vos informations pour accéder à cette fonctionnalité'); openOnboardingModal(); } else { navigate('/my-clients'); setIsMenuOpen(false); } }}
-                disabled={isDisabled}
-                title={!sidebarExpanded ? 'Mes clients' : undefined}
-                className={`h-9 flex items-center rounded-lg text-sm font-medium transition-colors ${
-                  sidebarExpanded ? 'w-full max-w-[232px] px-3 py-2 gap-3' : 'w-10 justify-center mx-auto'
-                } ${isDisabled ? 'text-[#5C5C5C] opacity-50 cursor-not-allowed' : location.pathname === '/my-clients' ? 'bg-[#E4F9EB] text-[#132B1B]' : 'text-[#5C5C5C] hover:bg-gray-100/80'}`}
-              >
-                <Users className="h-5 w-5 flex-shrink-0" strokeWidth={1.5} />
-                {sidebarExpanded && <span className="leading-5 truncate">Mes clients</span>}
-              </button>
-            )}
-          </nav>
-          {/* Paramètres + Support juste au-dessus de déconnexion */}
-          <div className={`flex flex-col flex-none pt-2 pb-2 gap-2 px-3 ${sidebarExpanded ? '' : 'items-center'}`}>
-            <button
-              onClick={() => { navigate('/profile'); setIsMenuOpen(false); }}
-              title={!sidebarExpanded ? 'Mes informations' : undefined}
-              className={`h-9 flex items-center rounded-lg text-sm font-medium transition-colors ${
-                sidebarExpanded ? 'w-full max-w-[232px] px-3 py-2 gap-3' : 'w-10 justify-center mx-auto'
-              } ${location.pathname === '/profile' ? 'bg-[#E6F7ED] text-[#132B1B]' : 'text-[#5C5C5C] hover:bg-gray-100/80'}`}
-            >
-              <img src={location.pathname === '/profile' ? paramIconActive : paramIcon} alt="" className="h-5 w-5 flex-shrink-0 object-contain" />
-              {sidebarExpanded && <span className="leading-5 truncate">Paramètres</span>}
-            </button>
-            <button
-              onClick={() => { setShowSupportModal(true); setIsMenuOpen(false); }}
-              title={!sidebarExpanded ? 'Support' : undefined}
-              className={`h-9 flex items-center rounded-lg text-sm font-medium transition-colors ${
-                sidebarExpanded ? 'w-full max-w-[232px] px-3 py-2 gap-3' : 'w-10 justify-center mx-auto'
-              } ${showSupportModal ? 'bg-[#E6F7ED] text-[#132B1B]' : 'text-[#5C5C5C] hover:bg-gray-100/80'}`}
-            >
-              <img src={showSupportModal ? supportIconActive : supportIcon} alt="" className="h-5 w-5 flex-shrink-0 object-contain" />
-              {sidebarExpanded && <span className="leading-5 truncate">Support</span>}
-            </button>
-          </div>
-          {/* Bloc utilisateur déconnexion (icône + nom, clic = confirmation) */}
-          <div className={`flex flex-col flex-none border-t border-[#E1E4EA] ${sidebarExpanded ? '' : 'items-center'}`}>
             <button
               type="button"
-              onClick={() => setShowLogoutConfirm(true)}
-              title={sidebarExpanded ? 'Déconnexion' : undefined}
-              className={`w-full h-12 flex flex-row items-center gap-3 rounded-none text-left ${
-                sidebarExpanded ? 'px-3 py-3' : 'justify-center p-2'
-              }`}
+              onClick={() => setSidebarExpanded((v) => !v)}
+              className="flex-shrink-0 p-2 rounded-lg text-[#5C5C5C] hover:bg-gray-100 transition-colors hidden lg:flex"
+              title={sidebarExpanded ? 'Réduire le menu' : 'Ouvrir le menu'}
             >
-              <img src={deconnexionIcon} alt="" className="h-9 w-9 flex-shrink-0 object-contain" />
-              {sidebarExpanded && (
-                <>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-[#5C5C5C] leading-5 tracking-[-0.006em] truncate">
-                      {profile?.contact_name || user?.email?.split('@')[0] || 'Utilisateur'}
-                    </p>
-                  </div>
-                  <ChevronRight className="h-5 w-5 flex-shrink-0 text-[#5C5C5C]" strokeWidth={1.5} />
-                </>
+              {sidebarExpanded ? (
+                <ChevronLeft className="h-5 w-5" />
+              ) : (
+                <ChevronRight className="h-5 w-5" />
               )}
             </button>
+            <button
+              type="button"
+              onClick={() => setIsMenuOpen(false)}
+              className="lg:hidden p-2 rounded-lg text-[#5C5C5C] hover:bg-gray-100"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
+        </div>
+        <nav className="flex flex-col flex-1 py-5 gap-2 px-3">
+          {/* Dashboard */}
+          <button
+            onClick={() => {
+              navigate('/dashboard');
+              setIsMenuOpen(false);
+            }}
+            title={!sidebarExpanded ? 'Dashboard' : undefined}
+            className={`h-9 flex items-center rounded-lg text-sm font-medium transition-colors tracking-[-0.006em] ${
+              sidebarExpanded
+                ? 'w-full max-w-[232px] px-3 py-2 gap-3'
+                : 'w-10 justify-center px-0 mx-auto'
+            } ${location.pathname === '/dashboard' ? 'bg-[#E4F9EB] text-[#132B1B]' : 'text-[#5C5C5C] hover:bg-gray-100/80'}`}
+          >
+            <img
+              src={location.pathname === '/dashboard' ? dashboardIconActive : dashboardIcon}
+              alt=""
+              className="h-5 w-5 flex-shrink-0 object-contain"
+            />
+            {sidebarExpanded && <span className="leading-5 truncate">Dashboard</span>}
+          </button>
+          {/* Mes campagnes */}
+          <button
+            onClick={() => {
+              if (isDisabled) {
+                toast.error(
+                  '⚠️ Veuillez compléter vos informations pour accéder à cette fonctionnalité',
+                );
+                openOnboardingModal();
+              } else {
+                navigate('/my-campaigns');
+                setIsMenuOpen(false);
+              }
+            }}
+            disabled={isDisabled}
+            title={!sidebarExpanded ? 'Mes campagnes' : undefined}
+            className={`h-9 flex items-center rounded-lg text-sm font-medium transition-colors ${
+              sidebarExpanded
+                ? 'w-full max-w-[232px] px-3 py-2 gap-3'
+                : 'w-10 justify-center mx-auto'
+            } ${isDisabled ? 'text-[#5C5C5C] opacity-50 cursor-not-allowed' : location.pathname === '/my-campaigns' ? 'bg-[#E4F9EB] text-[#132B1B]' : 'text-[#5C5C5C] hover:bg-gray-100/80'}`}
+          >
+            <img
+              src={location.pathname === '/my-campaigns' ? campagneIconActive : campagneIcon}
+              alt=""
+              className="h-5 w-5 flex-shrink-0 object-contain"
+            />
+            {sidebarExpanded && <span className="leading-5 truncate">Mes campagnes</span>}
+          </button>
+          {/* Événements */}
+          <button
+            onClick={() => {
+              if (isDisabled) {
+                toast.error(
+                  '⚠️ Veuillez compléter vos informations pour accéder à cette fonctionnalité',
+                );
+                openOnboardingModal();
+              } else {
+                navigate('/evenements');
+                setIsMenuOpen(false);
+              }
+            }}
+            disabled={isDisabled}
+            title={!sidebarExpanded ? 'Événements' : undefined}
+            className={`h-9 flex items-center rounded-lg text-sm font-medium transition-colors ${
+              sidebarExpanded
+                ? 'w-full max-w-[232px] px-3 py-2 gap-3'
+                : 'w-10 justify-center mx-auto'
+            } ${isDisabled ? 'text-[#5C5C5C] opacity-50 cursor-not-allowed' : location.pathname === '/evenements' ? 'bg-[#E4F9EB] text-[#132B1B]' : 'text-[#5C5C5C] hover:bg-gray-100/80'}`}
+          >
+            <img
+              src={location.pathname === '/evenements' ? agendaIconActive : agendaIcon}
+              alt=""
+              className="h-5 w-5 flex-shrink-0 object-contain"
+            />
+            {sidebarExpanded && <span className="leading-5 truncate">Événements</span>}
+          </button>
+          {/* Mes performances */}
+          <button
+            onClick={() => {
+              if (isDisabled) {
+                toast.error(
+                  '⚠️ Veuillez compléter vos informations pour accéder à cette fonctionnalité',
+                );
+                openOnboardingModal();
+              } else {
+                navigate('/perfor');
+                setIsMenuOpen(false);
+              }
+            }}
+            disabled={isDisabled}
+            title={!sidebarExpanded ? 'Mes performances' : undefined}
+            className={`h-9 flex items-center rounded-lg text-sm font-medium transition-colors ${
+              sidebarExpanded
+                ? 'w-full max-w-[232px] px-3 py-2 gap-3'
+                : 'w-10 justify-center mx-auto'
+            } ${isDisabled ? 'text-[#5C5C5C] opacity-50 cursor-not-allowed' : location.pathname === '/perfor' ? 'bg-[#E4F9EB] text-[#132B1B]' : 'text-[#5C5C5C] hover:bg-gray-100/80'}`}
+          >
+            <img
+              src={location.pathname === '/perfor' ? performanceIconActive : performanceIcon}
+              alt=""
+              className="h-5 w-5 flex-shrink-0 object-contain"
+            />
+            {sidebarExpanded && <span className="leading-5 truncate">Mes performances</span>}
+          </button>
+          {/* Mes finances */}
+          <button
+            onClick={() => {
+              if (isDisabled) {
+                toast.error(
+                  '⚠️ Veuillez compléter vos informations pour accéder à cette fonctionnalité',
+                );
+                openOnboardingModal();
+              } else {
+                navigate('/my-recharges');
+                setIsMenuOpen(false);
+              }
+            }}
+            disabled={isDisabled}
+            title={!sidebarExpanded ? 'Mes finances' : undefined}
+            className={`h-9 flex items-center rounded-lg text-sm font-medium transition-colors ${
+              sidebarExpanded
+                ? 'w-full max-w-[232px] px-3 py-2 gap-3'
+                : 'w-10 justify-center mx-auto'
+            } ${isDisabled ? 'text-[#5C5C5C] opacity-50 cursor-not-allowed' : location.pathname === '/my-recharges' ? 'bg-[#E4F9EB] text-[#132B1B]' : 'text-[#5C5C5C] hover:bg-gray-100/80'}`}
+          >
+            <img
+              src={location.pathname === '/my-recharges' ? financeIconActive : financeIcon}
+              alt=""
+              className="h-5 w-5 flex-shrink-0 object-contain"
+            />
+            {sidebarExpanded && <span className="leading-5 truncate">Mes finances</span>}
+          </button>
+          {(profileType === 'advertising_agency' || profileType === 'event_organizer') && (
+            <button
+              onClick={() => {
+                if (isDisabled) {
+                  toast.error(
+                    '⚠️ Veuillez compléter vos informations pour accéder à cette fonctionnalité',
+                  );
+                  openOnboardingModal();
+                } else {
+                  navigate('/my-clients');
+                  setIsMenuOpen(false);
+                }
+              }}
+              disabled={isDisabled}
+              title={!sidebarExpanded ? 'Mes clients' : undefined}
+              className={`h-9 flex items-center rounded-lg text-sm font-medium transition-colors ${
+                sidebarExpanded
+                  ? 'w-full max-w-[232px] px-3 py-2 gap-3'
+                  : 'w-10 justify-center mx-auto'
+              } ${isDisabled ? 'text-[#5C5C5C] opacity-50 cursor-not-allowed' : location.pathname === '/my-clients' ? 'bg-[#E4F9EB] text-[#132B1B]' : 'text-[#5C5C5C] hover:bg-gray-100/80'}`}
+            >
+              <Users className="h-5 w-5 flex-shrink-0" strokeWidth={1.5} />
+              {sidebarExpanded && <span className="leading-5 truncate">Mes clients</span>}
+            </button>
+          )}
+        </nav>
+        {/* Paramètres + Support juste au-dessus de déconnexion */}
+        <div
+          className={`flex flex-col flex-none pt-2 pb-2 gap-2 px-3 ${sidebarExpanded ? '' : 'items-center'}`}
+        >
+          <button
+            onClick={() => {
+              navigate('/profile');
+              setIsMenuOpen(false);
+            }}
+            title={!sidebarExpanded ? 'Mes informations' : undefined}
+            className={`h-9 flex items-center rounded-lg text-sm font-medium transition-colors ${
+              sidebarExpanded
+                ? 'w-full max-w-[232px] px-3 py-2 gap-3'
+                : 'w-10 justify-center mx-auto'
+            } ${location.pathname === '/profile' ? 'bg-[#E6F7ED] text-[#132B1B]' : 'text-[#5C5C5C] hover:bg-gray-100/80'}`}
+          >
+            <img
+              src={location.pathname === '/profile' ? paramIconActive : paramIcon}
+              alt=""
+              className="h-5 w-5 flex-shrink-0 object-contain"
+            />
+            {sidebarExpanded && <span className="leading-5 truncate">Paramètres</span>}
+          </button>
+          <button
+            onClick={() => {
+              setShowSupportModal(true);
+              setIsMenuOpen(false);
+            }}
+            title={!sidebarExpanded ? 'Support' : undefined}
+            className={`h-9 flex items-center rounded-lg text-sm font-medium transition-colors ${
+              sidebarExpanded
+                ? 'w-full max-w-[232px] px-3 py-2 gap-3'
+                : 'w-10 justify-center mx-auto'
+            } ${showSupportModal ? 'bg-[#E6F7ED] text-[#132B1B]' : 'text-[#5C5C5C] hover:bg-gray-100/80'}`}
+          >
+            <img
+              src={showSupportModal ? supportIconActive : supportIcon}
+              alt=""
+              className="h-5 w-5 flex-shrink-0 object-contain"
+            />
+            {sidebarExpanded && <span className="leading-5 truncate">Support</span>}
+          </button>
+        </div>
+        {/* Bloc utilisateur déconnexion (icône + nom, clic = confirmation) */}
+        <div
+          className={`flex flex-col flex-none border-t border-[#E1E4EA] ${sidebarExpanded ? '' : 'items-center'}`}
+        >
+          <button
+            type="button"
+            onClick={() => setShowLogoutConfirm(true)}
+            title={sidebarExpanded ? 'Déconnexion' : undefined}
+            className={`w-full h-12 flex flex-row items-center gap-3 rounded-none text-left ${
+              sidebarExpanded ? 'px-3 py-3' : 'justify-center p-2'
+            }`}
+          >
+            <img src={deconnexionIcon} alt="" className="h-9 w-9 flex-shrink-0 object-contain" />
+            {sidebarExpanded && (
+              <>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-[#5C5C5C] leading-5 tracking-[-0.006em] truncate">
+                    {profile?.contact_name || user?.email?.split('@')[0] || 'Utilisateur'}
+                  </p>
+                </div>
+                <ChevronRight className="h-5 w-5 flex-shrink-0 text-[#5C5C5C]" strokeWidth={1.5} />
+              </>
+            )}
+          </button>
+        </div>
       </aside>
 
       {/* Zone centrale : header + contenu (entre sidebar gauche et colonne panier droite) */}
@@ -1699,73 +2031,136 @@ export default function Dashboard() {
               </button>
               {location.pathname === '/my-campaigns' ? (
                 <>
-                  <img src={headerCampagnesIcon} alt="" className="h-12 w-12 flex-shrink-0 object-contain" />
+                  <img
+                    src={headerCampagnesIcon}
+                    alt=""
+                    className="h-12 w-12 flex-shrink-0 object-contain"
+                  />
                   <div className="min-w-0">
-                    <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">Mes campagnes</h1>
-                    <p className="text-xs text-gray-500 truncate hidden sm:block">Gérez vos campagnes actives</p>
+                    <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">
+                      Mes campagnes
+                    </h1>
+                    <p className="text-xs text-gray-500 truncate hidden sm:block">
+                      Gérez vos campagnes actives
+                    </p>
                   </div>
                 </>
               ) : location.pathname === '/parcs' ? (
                 <>
-                  <img src={headerParcsIcon} alt="" className="h-12 w-12 flex-shrink-0 object-contain" />
+                  <img
+                    src={headerParcsIcon}
+                    alt=""
+                    className="h-12 w-12 flex-shrink-0 object-contain"
+                  />
                   <div className="min-w-0">
-                    <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">Parcs TV</h1>
-                    <p className="text-xs text-gray-500 truncate hidden sm:block">Wording Youssef</p>
+                    <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">
+                      Parcs TV
+                    </h1>
+                    <p className="text-xs text-gray-500 truncate hidden sm:block">
+                      Wording Youssef
+                    </p>
                   </div>
                 </>
               ) : location.pathname === '/evenements' ? (
                 <>
-                  <img src={headerAgendaIcon} alt="" className="h-12 w-12 flex-shrink-0 object-contain" />
+                  <img
+                    src={headerAgendaIcon}
+                    alt=""
+                    className="h-12 w-12 flex-shrink-0 object-contain"
+                  />
                   <div className="min-w-0">
-                    <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">Événements</h1>
-                    <p className="text-xs text-gray-500 truncate hidden sm:block">Profitez des pics d'audience des événements pour amplifier votre impact</p>
+                    <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">
+                      Événements
+                    </h1>
+                    <p className="text-xs text-gray-500 truncate hidden sm:block">
+                      Profitez des pics d'audience des événements pour amplifier votre impact
+                    </p>
                   </div>
                 </>
               ) : location.pathname === '/perfor' ? (
                 <>
-                  <img src={headerPerformanceIcon} alt="" className="h-12 w-12 flex-shrink-0 object-contain" />
+                  <img
+                    src={headerPerformanceIcon}
+                    alt=""
+                    className="h-12 w-12 flex-shrink-0 object-contain"
+                  />
                   <div className="min-w-0">
-                    <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">Mes performances</h1>
-                    <p className="text-xs text-gray-500 truncate hidden sm:block">Analysez la performance de vos campagnes en un coup d&apos;oeil</p>
+                    <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">
+                      Mes performances
+                    </h1>
+                    <p className="text-xs text-gray-500 truncate hidden sm:block">
+                      Analysez la performance de vos campagnes en un coup d&apos;oeil
+                    </p>
                   </div>
                 </>
               ) : location.pathname === '/my-recharges' ? (
                 <>
-                  <img src={headerFinanceIcon} alt="" className="h-12 w-12 flex-shrink-0 object-contain" />
+                  <img
+                    src={headerFinanceIcon}
+                    alt=""
+                    className="h-12 w-12 flex-shrink-0 object-contain"
+                  />
                   <div className="min-w-0">
-                    <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">Mes Finances</h1>
-                    <p className="text-xs text-gray-500 truncate hidden sm:block">Gérez votre solde et consultez l&apos;historique de vos transactions</p>
+                    <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">
+                      Mes Finances
+                    </h1>
+                    <p className="text-xs text-gray-500 truncate hidden sm:block">
+                      Gérez votre solde et consultez l&apos;historique de vos transactions
+                    </p>
                   </div>
                 </>
               ) : location.pathname === '/my-invoices' ? (
                 <>
-                  <img src={headerFinanceIcon} alt="" className="h-12 w-12 flex-shrink-0 object-contain" />
+                  <img
+                    src={headerFinanceIcon}
+                    alt=""
+                    className="h-12 w-12 flex-shrink-0 object-contain"
+                  />
                   <div className="min-w-0 flex items-center gap-1.5">
-                    <span className="text-base sm:text-lg font-bold text-gray-400 truncate">Mes Finances</span>
+                    <span className="text-base sm:text-lg font-bold text-gray-400 truncate">
+                      Mes Finances
+                    </span>
                     <ChevronRight className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                    <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">Mes factures</h1>
+                    <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">
+                      Mes factures
+                    </h1>
                   </div>
                 </>
               ) : location.pathname === '/profile' ? (
                 <>
-                  <img src={headerParamsIcon} alt="" className="h-12 w-12 flex-shrink-0 object-contain" />
+                  <img
+                    src={headerParamsIcon}
+                    alt=""
+                    className="h-12 w-12 flex-shrink-0 object-contain"
+                  />
                   <div className="min-w-0">
-                    <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">Paramètres</h1>
-                    <p className="text-xs text-gray-500 truncate hidden sm:block">Gérez vos préférences et configurez différentes options.</p>
+                    <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">
+                      Paramètres
+                    </h1>
+                    <p className="text-xs text-gray-500 truncate hidden sm:block">
+                      Gérez vos préférences et configurez différentes options.
+                    </p>
                   </div>
                 </>
               ) : (
                 <>
                   <div className="hidden md:flex items-center gap-1 flex-shrink-0">
-                    <button type="button" className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500" aria-label="Vue grille">
+                    <button
+                      type="button"
+                      className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500"
+                      aria-label="Vue grille"
+                    >
                       <LayoutGrid className="h-5 w-5" />
                     </button>
                   </div>
                   <div className="min-w-0">
                     <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">
-                      Bonjour, {profile?.contact_name || user?.email?.split('@')[0] || 'Utilisateur'}
+                      Bonjour,{' '}
+                      {profile?.contact_name || user?.email?.split('@')[0] || 'Utilisateur'}
                     </h1>
-                    <p className="text-xs text-gray-500 truncate hidden sm:block">Gérez vos campagnes et suivez vos performances en temps réel</p>
+                    <p className="text-xs text-gray-500 truncate hidden sm:block">
+                      Gérez vos campagnes et suivez vos performances en temps réel
+                    </p>
                   </div>
                 </>
               )}
@@ -1776,7 +2171,10 @@ export default function Dashboard() {
               <button
                 type="button"
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-lg font-medium text-sm whitespace-nowrap ${
-                  location.pathname === '/my-campaigns' || location.pathname === '/parcs' || location.pathname === '/evenements' || location.pathname === '/perfor'
+                  location.pathname === '/my-campaigns' ||
+                  location.pathname === '/parcs' ||
+                  location.pathname === '/evenements' ||
+                  location.pathname === '/perfor'
                     ? 'bg-[#76E6AB] hover:opacity-90 text-gray-900'
                     : 'bg-[#9ae2b0] hover:bg-[#85d99e] text-gray-900'
                 }`}
@@ -1798,7 +2196,10 @@ export default function Dashboard() {
                 type="button"
                 onClick={() => setCartOpen((v) => !v)}
                 className={`flex items-center gap-1.5 px-2.5 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap ${
-                  location.pathname === '/my-campaigns' || location.pathname === '/parcs' || location.pathname === '/evenements' || location.pathname === '/perfor'
+                  location.pathname === '/my-campaigns' ||
+                  location.pathname === '/parcs' ||
+                  location.pathname === '/evenements' ||
+                  location.pathname === '/perfor'
                     ? 'bg-white border border-gray-200 hover:bg-gray-50 text-gray-700'
                     : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
                 }`}
@@ -1811,9 +2212,7 @@ export default function Dashboard() {
           </div>
         </header>
         <main className="flex-1 min-h-0 overflow-auto p-8">
-          <ContentErrorBoundary>
-            {renderContent()}
-          </ContentErrorBoundary>
+          <ContentErrorBoundary>{renderContent()}</ContentErrorBoundary>
         </main>
       </div>
 
@@ -1828,7 +2227,11 @@ export default function Dashboard() {
             <div className="flex-none p-4 flex flex-col gap-2 border-b border-[#E1E4EA]">
               <p className="text-xs text-gray-500">Sous-total</p>
               <p className="text-base font-bold text-gray-900">
-                {cartSubtotal.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TND
+                {cartSubtotal.toLocaleString('fr-FR', {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}{' '}
+                TND
               </p>
               <button
                 type="button"
@@ -1843,7 +2246,10 @@ export default function Dashboard() {
                 <p className="text-xs text-gray-500 text-center py-4">Panier vide</p>
               ) : (
                 cartItems.map((item) => (
-                  <div key={item.id} className="bg-white rounded-lg border border-gray-200 p-2 shadow-sm flex flex-col">
+                  <div
+                    key={item.id}
+                    className="bg-white rounded-lg border border-gray-200 p-2 shadow-sm flex flex-col"
+                  >
                     <div className="flex items-start justify-between gap-1 mb-2">
                       <p className="text-[11px] font-semibold text-gray-900 break-words leading-tight flex-1 min-w-0">
                         {item.name || 'Nom de la campagne'}
@@ -1867,7 +2273,11 @@ export default function Dashboard() {
                       </p>
                     )}
                     <p className="text-sm font-bold text-gray-900">
-                      {item.amount.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TND
+                      {item.amount.toLocaleString('fr-FR', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}{' '}
+                      TND
                     </p>
                   </div>
                 ))
@@ -1884,11 +2294,15 @@ export default function Dashboard() {
 
       {/* Modal confirmation déconnexion */}
       {showLogoutConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowLogoutConfirm(false)}>
-          <div className="bg-white rounded-xl p-6 max-w-sm w-full shadow-xl border border-gray-200" onClick={e => e.stopPropagation()}>
-            <p className="text-gray-800 text-center mb-6">
-              Vous allez être déconnecté.
-            </p>
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowLogoutConfirm(false)}
+        >
+          <div
+            className="bg-white rounded-xl p-6 max-w-sm w-full shadow-xl border border-gray-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-gray-800 text-center mb-6">Vous allez être déconnecté.</p>
             <div className="flex gap-3">
               <button
                 type="button"
@@ -1899,7 +2313,10 @@ export default function Dashboard() {
               </button>
               <button
                 type="button"
-                onClick={async () => { setShowLogoutConfirm(false); await handleLogout(); }}
+                onClick={async () => {
+                  setShowLogoutConfirm(false);
+                  await handleLogout();
+                }}
                 className="flex-1 py-2.5 px-4 rounded-xl font-medium text-white transition-colors hover:opacity-90"
                 style={{ background: '#76E6AB' }}
               >
@@ -1922,7 +2339,9 @@ export default function Dashboard() {
                   </div>
                   <div className="min-w-0">
                     <h3 className="text-lg font-bold text-gray-900">Support</h3>
-                    <p className="text-sm text-gray-500 mt-0.5">Prendre rendez-vous avec un agent toodooh</p>
+                    <p className="text-sm text-gray-500 mt-0.5">
+                      Prendre rendez-vous avec un agent toodooh
+                    </p>
                   </div>
                 </div>
                 <button
@@ -1951,22 +2370,34 @@ export default function Dashboard() {
               }}
             >
               <div>
-                <label className="block text-sm font-bold text-gray-900 mb-1.5">Choisissez vos objectifs *</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1.5">
+                  Choisissez vos objectifs *
+                </label>
                 <select
                   value={supportObjective}
                   onChange={(e) => setSupportObjective(e.target.value)}
                   className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 focus:ring-2 focus:ring-[#97d8a5] focus:border-[#97d8a5] appearance-none cursor-pointer"
-                  style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center', backgroundSize: '1.25rem', paddingRight: '2.5rem' }}
+                  style={{
+                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
+                    backgroundRepeat: 'no-repeat',
+                    backgroundPosition: 'right 0.75rem center',
+                    backgroundSize: '1.25rem',
+                    paddingRight: '2.5rem',
+                  }}
                 >
                   <option value="">Choisissez vos objectifs</option>
                   {appointmentObjectives.map((obj) => (
-                    <option key={obj} value={obj}>{obj}</option>
+                    <option key={obj} value={obj}>
+                      {obj}
+                    </option>
                   ))}
                 </select>
               </div>
               {isAutreObjective(supportObjective) && (
                 <div>
-                  <label className="block text-sm font-bold text-gray-900 mb-1.5">Précision *</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-1.5">
+                    Précision *
+                  </label>
                   <input
                     type="text"
                     value={supportOtherDetail}
@@ -1977,7 +2408,9 @@ export default function Dashboard() {
                 </div>
               )}
               <div>
-                <label className="block text-sm font-bold text-gray-900 mb-1.5">Commentaire additionnels</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1.5">
+                  Commentaire additionnels
+                </label>
                 <textarea
                   rows={3}
                   value={supportMessage}
@@ -2018,8 +2451,12 @@ export default function Dashboard() {
                     <Users className="h-4 w-4 text-gray-600" />
                   </div>
                   <div className="min-w-0">
-                    <h3 className="text-base font-bold text-gray-900 uppercase tracking-tight">Prendre rendez-vous</h3>
-                    <p className="text-xs text-gray-500 mt-0.5">Rencontrez un agent Toodooh pour répondre à vos besoins</p>
+                    <h3 className="text-base font-bold text-gray-900 uppercase tracking-tight">
+                      Prendre rendez-vous
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Rencontrez un agent Toodooh pour répondre à vos besoins
+                    </p>
                   </div>
                 </div>
                 <button
@@ -2049,16 +2486,26 @@ export default function Dashboard() {
               }}
             >
               <div className="flex-shrink-0">
-                <label className="block text-sm font-bold text-gray-900 mb-1">Choisissez vos objectifs *</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">
+                  Choisissez vos objectifs *
+                </label>
                 <select
                   value={contactObjective}
                   onChange={(e) => setContactObjective(e.target.value)}
                   className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-900 focus:ring-2 focus:ring-[#97d8a5] focus:border-[#97d8a5] appearance-none cursor-pointer"
-                  style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.75rem center', backgroundSize: '1.25rem', paddingRight: '2.5rem' }}
+                  style={{
+                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
+                    backgroundRepeat: 'no-repeat',
+                    backgroundPosition: 'right 0.75rem center',
+                    backgroundSize: '1.25rem',
+                    paddingRight: '2.5rem',
+                  }}
                 >
                   <option value="">Choisissez vos objectifs</option>
                   {appointmentObjectives.map((obj) => (
-                    <option key={obj} value={obj}>{obj}</option>
+                    <option key={obj} value={obj}>
+                      {obj}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -2075,22 +2522,29 @@ export default function Dashboard() {
                 </div>
               )}
               <div className="flex-shrink-0">
-                <label className="block text-sm font-bold text-gray-900 mb-1">Choisissez un créneau *</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">
+                  Choisissez un créneau *
+                </label>
                 <div className="border border-gray-200 rounded-xl p-2 bg-gray-50/50">
                   <div className="flex items-center justify-between mb-2">
                     <button
                       type="button"
-                      onClick={() => setContactCalendarMonth((d) => new Date(d.getFullYear(), d.getMonth() - 1))}
+                      onClick={() =>
+                        setContactCalendarMonth((d) => new Date(d.getFullYear(), d.getMonth() - 1))
+                      }
                       className="p-1 rounded-lg hover:bg-gray-200 text-gray-600"
                     >
                       <ChevronLeft className="h-4 w-4" />
                     </button>
                     <span className="text-xs font-semibold text-gray-900">
-                      {MONTHS_FR[contactCalendarMonth.getMonth()]} {contactCalendarMonth.getFullYear()}
+                      {MONTHS_FR[contactCalendarMonth.getMonth()]}{' '}
+                      {contactCalendarMonth.getFullYear()}
                     </span>
                     <button
                       type="button"
-                      onClick={() => setContactCalendarMonth((d) => new Date(d.getFullYear(), d.getMonth() + 1))}
+                      onClick={() =>
+                        setContactCalendarMonth((d) => new Date(d.getFullYear(), d.getMonth() + 1))
+                      }
                       className="p-1 rounded-lg hover:bg-gray-200 text-gray-600"
                     >
                       <ChevronRight className="h-4 w-4" />
@@ -2098,26 +2552,46 @@ export default function Dashboard() {
                   </div>
                   <div className="grid grid-cols-7 gap-0.5 text-center">
                     {WEEKDAYS_FR.map((wd) => (
-                      <div key={wd} className="text-[10px] font-medium text-gray-500 py-0.5">{wd}</div>
+                      <div key={wd} className="text-[10px] font-medium text-gray-500 py-0.5">
+                        {wd}
+                      </div>
                     ))}
-                    {getCalendarDays(contactCalendarMonth.getFullYear(), contactCalendarMonth.getMonth()).map((cell, idx) => {
-                      const unavailable = !cell.currentMonth || isDatePast(cell.date) || isDateUnavailable(cell.date);
-                      const selected = contactDate && cell.currentMonth && contactDate.getDate() === cell.day && contactDate.getMonth() === contactCalendarMonth.getMonth() && contactDate.getFullYear() === contactCalendarMonth.getFullYear();
+                    {getCalendarDays(
+                      contactCalendarMonth.getFullYear(),
+                      contactCalendarMonth.getMonth(),
+                    ).map((cell, idx) => {
+                      const unavailable =
+                        !cell.currentMonth || isDatePast(cell.date) || isDateUnavailable(cell.date);
+                      const selected =
+                        contactDate &&
+                        cell.currentMonth &&
+                        contactDate.getDate() === cell.day &&
+                        contactDate.getMonth() === contactCalendarMonth.getMonth() &&
+                        contactDate.getFullYear() === contactCalendarMonth.getFullYear();
                       return (
                         <button
                           key={idx}
                           type="button"
                           disabled={!cell.currentMonth || isDatePast(cell.date)}
                           onClick={() => {
-                            if (cell.currentMonth && !isDatePast(cell.date) && !isDateUnavailable(cell.date)) {
+                            if (
+                              cell.currentMonth &&
+                              !isDatePast(cell.date) &&
+                              !isDateUnavailable(cell.date)
+                            ) {
                               setContactDate(cell.date);
                             }
                           }}
                           className={`py-1 rounded-md text-xs font-medium transition-colors ${
-                            !cell.currentMonth ? 'text-gray-300' :
-                            isDatePast(cell.date) ? 'text-gray-400 cursor-not-allowed' :
-                            isDateUnavailable(cell.date) ? 'bg-red-100 text-red-700 cursor-not-allowed' :
-                            selected ? 'bg-[#97d8a5] text-black' : 'bg-[#E6F7ED] text-gray-900 hover:bg-[#97d8a5]/80'
+                            !cell.currentMonth
+                              ? 'text-gray-300'
+                              : isDatePast(cell.date)
+                                ? 'text-gray-400 cursor-not-allowed'
+                                : isDateUnavailable(cell.date)
+                                  ? 'bg-red-100 text-red-700 cursor-not-allowed'
+                                  : selected
+                                    ? 'bg-[#97d8a5] text-black'
+                                    : 'bg-[#E6F7ED] text-gray-900 hover:bg-[#97d8a5]/80'
                           }`}
                         >
                           {cell.day}
@@ -2128,7 +2602,9 @@ export default function Dashboard() {
                 </div>
               </div>
               <div className="flex-shrink-0">
-                <label className="block text-sm font-bold text-gray-900 mb-1">Aidez-nous à préparer au mieux l&apos;entretien</label>
+                <label className="block text-sm font-bold text-gray-900 mb-1">
+                  Aidez-nous à préparer au mieux l&apos;entretien
+                </label>
                 <textarea
                   rows={2}
                   value={contactMessage}

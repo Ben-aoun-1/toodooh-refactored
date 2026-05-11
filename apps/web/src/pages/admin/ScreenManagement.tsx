@@ -17,7 +17,8 @@ export default function ScreenManagement() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [itemsPerPage, setItemsPerPage] = useState(20);
-  const [selectedLocationForAffluence, setSelectedLocationForAffluence] = useState<AdminLocation | null>(null);
+  const [selectedLocationForAffluence, setSelectedLocationForAffluence] =
+    useState<AdminLocation | null>(null);
   const [expandedLocationId, setExpandedLocationId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -32,7 +33,7 @@ export default function ScreenManagement() {
     try {
       const ownersData = await adminScreensService.getOwners();
       console.log('✅ Propriétaires chargés:', ownersData.length);
-      setOwners(ownersData.map(o => ({ id: o.user_id, name: o.business_name })));
+      setOwners(ownersData.map((o) => ({ id: o.user_id, name: o.business_name })));
     } catch (error) {
       console.error('Error loading owners:', error);
       toast.error('Erreur lors du chargement des propriétaires');
@@ -74,7 +75,9 @@ export default function ScreenManagement() {
       no_screens: 'Sans écran',
     };
     return (
-      <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${config[status]}`}>
+      <span
+        className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${config[status]}`}
+      >
         {label[status]}
       </span>
     );
@@ -97,11 +100,18 @@ export default function ScreenManagement() {
           : status === 'inactive'
             ? 'Inactif'
             : 'Indisponible';
-    return <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${classes}`}>{label}</span>;
+    return (
+      <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${classes}`}>
+        {label}
+      </span>
+    );
   };
 
   return (
-    <AdminLayout title="Gestion des Localités et écrans" subtitle="Affichez les localités, leurs statuts et l'affluence par localité">
+    <AdminLayout
+      title="Gestion des Localités et écrans"
+      subtitle="Affichez les localités, leurs statuts et l'affluence par localité"
+    >
       <div className="space-y-6">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -138,8 +148,10 @@ export default function ScreenManagement() {
               className="px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="all">Tous les propriétaires</option>
-              {owners.map(owner => (
-                <option key={owner.id} value={owner.id}>{owner.name}</option>
+              {owners.map((owner) => (
+                <option key={owner.id} value={owner.id}>
+                  {owner.name}
+                </option>
               ))}
             </select>
 
@@ -158,7 +170,7 @@ export default function ScreenManagement() {
               <option value="100">100 par page</option>
             </select>
           </div>
-          
+
           {/* Résumé des filtres */}
           <div className="mt-4 flex items-center justify-between">
             <div className="text-sm text-gray-600">
@@ -202,105 +214,150 @@ export default function ScreenManagement() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Localité</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Propriétaire</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Statut</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Écrans</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">En ligne</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Revenu mensuel</th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      Localité
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      Propriétaire
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      Statut
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      Écrans
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      En ligne
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      Revenu mensuel
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {locations.map((location) => {
                     const isExpanded = expandedLocationId === location.id;
                     return (
-                    <React.Fragment key={location.id}>
-                    <tr className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <button
-                          onClick={() => setExpandedLocationId(isExpanded ? null : location.id)}
-                          className="flex items-center text-left"
-                        >
-                          {isExpanded ? (
-                            <ChevronDown className="mr-2 h-4 w-4 text-gray-500" />
-                          ) : (
-                            <ChevronRight className="mr-2 h-4 w-4 text-gray-500" />
-                          )}
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">{location.name}</div>
-                            <div className="text-sm text-gray-500 flex items-center mt-1">
-                              <MapPin className="w-3 h-3 mr-1" />
-                              {location.address || 'Adresse non renseignée'}
+                      <React.Fragment key={location.id}>
+                        <tr className="hover:bg-gray-50 transition-colors">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <button
+                              onClick={() => setExpandedLocationId(isExpanded ? null : location.id)}
+                              className="flex items-center text-left"
+                            >
+                              {isExpanded ? (
+                                <ChevronDown className="mr-2 h-4 w-4 text-gray-500" />
+                              ) : (
+                                <ChevronRight className="mr-2 h-4 w-4 text-gray-500" />
+                              )}
+                              <div>
+                                <div className="text-sm font-medium text-gray-900">
+                                  {location.name}
+                                </div>
+                                <div className="text-sm text-gray-500 flex items-center mt-1">
+                                  <MapPin className="w-3 h-3 mr-1" />
+                                  {location.address || 'Adresse non renseignée'}
+                                </div>
+                              </div>
+                            </button>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">
+                              {location.owner_business_name}
                             </div>
-                          </div>
-                        </button>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{location.owner_business_name}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {getLocationStatusBadge(location.status)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{location.screens_count}</td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          location.online_screens_count > 0 ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                        }`}>
-                          {location.online_screens_count}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {location.monthly_revenue.toFixed(2)} TND
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <button
-                          onClick={() => setSelectedLocationForAffluence(location)}
-                          className="text-blue-600 hover:text-blue-900 p-1 rounded hover:bg-blue-50"
-                          title="Gérer l'affluence de la localité"
-                        >
-                          <Activity className="w-5 h-5" />
-                        </button>
-                      </td>
-                    </tr>
-                    {isExpanded && (
-                      <tr>
-                        <td colSpan={7} className="bg-gray-50 px-6 py-4">
-                          {location.screens.length === 0 ? (
-                            <div className="rounded-lg border border-dashed border-gray-300 bg-white p-4 text-sm text-gray-600">
-                              Aucun écran rattaché à cette localité.
-                            </div>
-                          ) : (
-                            <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-                              <table className="min-w-full divide-y divide-gray-200">
-                                <thead className="bg-gray-50">
-                                  <tr>
-                                    <th className="px-4 py-2 text-left text-xs font-medium uppercase text-gray-500">Écran</th>
-                                    <th className="px-4 py-2 text-left text-xs font-medium uppercase text-gray-500">Type</th>
-                                    <th className="px-4 py-2 text-left text-xs font-medium uppercase text-gray-500">Statut</th>
-                                    <th className="px-4 py-2 text-left text-xs font-medium uppercase text-gray-500">Connexion</th>
-                                    <th className="px-4 py-2 text-left text-xs font-medium uppercase text-gray-500">Revenu</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-200">
-                                  {location.screens.map((screen) => (
-                                    <tr key={screen.id}>
-                                      <td className="px-4 py-2 text-sm text-gray-900">{screen.name}</td>
-                                      <td className="px-4 py-2 text-sm text-gray-700">{screen.screen_type.toUpperCase()}</td>
-                                      <td className="px-4 py-2 text-sm">{getScreenStatusBadge(screen.status)}</td>
-                                      <td className="px-4 py-2 text-sm text-gray-700">{screen.is_online ? 'En ligne' : 'Hors ligne'}</td>
-                                      <td className="px-4 py-2 text-sm text-gray-700">{(Number(screen.monthly_revenue) || 0).toFixed(2)} TND</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    )}
-                    </React.Fragment>
-                  )})}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {getLocationStatusBadge(location.status)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {location.screens_count}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span
+                              className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                location.online_screens_count > 0
+                                  ? 'bg-green-100 text-green-800'
+                                  : 'bg-gray-100 text-gray-800'
+                              }`}
+                            >
+                              {location.online_screens_count}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {location.monthly_revenue.toFixed(2)} TND
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <button
+                              onClick={() => setSelectedLocationForAffluence(location)}
+                              className="text-blue-600 hover:text-blue-900 p-1 rounded hover:bg-blue-50"
+                              title="Gérer l'affluence de la localité"
+                            >
+                              <Activity className="w-5 h-5" />
+                            </button>
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr>
+                            <td colSpan={7} className="bg-gray-50 px-6 py-4">
+                              {location.screens.length === 0 ? (
+                                <div className="rounded-lg border border-dashed border-gray-300 bg-white p-4 text-sm text-gray-600">
+                                  Aucun écran rattaché à cette localité.
+                                </div>
+                              ) : (
+                                <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+                                  <table className="min-w-full divide-y divide-gray-200">
+                                    <thead className="bg-gray-50">
+                                      <tr>
+                                        <th className="px-4 py-2 text-left text-xs font-medium uppercase text-gray-500">
+                                          Écran
+                                        </th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium uppercase text-gray-500">
+                                          Type
+                                        </th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium uppercase text-gray-500">
+                                          Statut
+                                        </th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium uppercase text-gray-500">
+                                          Connexion
+                                        </th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium uppercase text-gray-500">
+                                          Revenu
+                                        </th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-200">
+                                      {location.screens.map((screen) => (
+                                        <tr key={screen.id}>
+                                          <td className="px-4 py-2 text-sm text-gray-900">
+                                            {screen.name}
+                                          </td>
+                                          <td className="px-4 py-2 text-sm text-gray-700">
+                                            {screen.screen_type.toUpperCase()}
+                                          </td>
+                                          <td className="px-4 py-2 text-sm">
+                                            {getScreenStatusBadge(screen.status)}
+                                          </td>
+                                          <td className="px-4 py-2 text-sm text-gray-700">
+                                            {screen.is_online ? 'En ligne' : 'Hors ligne'}
+                                          </td>
+                                          <td className="px-4 py-2 text-sm text-gray-700">
+                                            {(Number(screen.monthly_revenue) || 0).toFixed(2)} TND
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -311,9 +368,12 @@ export default function ScreenManagement() {
               <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
                 <div>
                   <p className="text-sm text-gray-700">
-                    Affichage de <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> à{' '}
-                    <span className="font-medium">{Math.min(currentPage * itemsPerPage, total)}</span> sur{' '}
-                    <span className="font-medium">{total}</span> résultats
+                    Affichage de{' '}
+                    <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> à{' '}
+                    <span className="font-medium">
+                      {Math.min(currentPage * itemsPerPage, total)}
+                    </span>{' '}
+                    sur <span className="font-medium">{total}</span> résultats
                   </p>
                 </div>
                 <div>
@@ -327,7 +387,7 @@ export default function ScreenManagement() {
                     >
                       «
                     </button>
-                    
+
                     {/* Précédent */}
                     <button
                       onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
@@ -336,7 +396,7 @@ export default function ScreenManagement() {
                     >
                       ‹
                     </button>
-                    
+
                     {/* Pages */}
                     {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                       let pageNumber;
@@ -363,7 +423,7 @@ export default function ScreenManagement() {
                         </button>
                       );
                     })}
-                    
+
                     {/* Suivant */}
                     <button
                       onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
@@ -372,7 +432,7 @@ export default function ScreenManagement() {
                     >
                       ›
                     </button>
-                    
+
                     {/* Dernière page */}
                     <button
                       onClick={() => setCurrentPage(totalPages)}
@@ -400,4 +460,3 @@ export default function ScreenManagement() {
     </AdminLayout>
   );
 }
-

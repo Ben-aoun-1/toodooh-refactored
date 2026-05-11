@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
+import {
   Calendar,
   Clock,
   X,
@@ -9,10 +9,14 @@ import {
   ChevronRight,
   Monitor,
   MapPin,
-  CalendarX
+  CalendarX,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { UnavailabilityPeriod, Screen as ScreenType, screensService } from '../services/screens.service';
+import {
+  UnavailabilityPeriod,
+  Screen as ScreenType,
+  screensService,
+} from '../services/screens.service';
 
 interface ScreenCalendarProps {
   screens: ScreenType[];
@@ -20,7 +24,11 @@ interface ScreenCalendarProps {
   onClose: () => void;
 }
 
-export default function ScreenCalendar({ screens, onUnavailabilityAdded, onClose }: ScreenCalendarProps) {
+export default function ScreenCalendar({
+  screens,
+  onUnavailabilityAdded,
+  onClose,
+}: ScreenCalendarProps) {
   const [selectedScreens, setSelectedScreens] = useState<string[]>([]);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -35,22 +43,24 @@ export default function ScreenCalendar({ screens, onUnavailabilityAdded, onClose
   useEffect(() => {
     const checkExpiredUnavailability = () => {
       const now = new Date();
-      setUnavailabilityPeriods(prev => prev.map(period => {
-        const periodEnd = new Date(`${period.end_date}T${period.end_time}`);
-        
-        // Si la période est expirée, la marquer comme terminée
-        if (now > periodEnd && period.status !== 'completed') {
-          return { ...period, status: 'completed' as const };
-        }
-        
-        // Si la période est en cours, la marquer comme active
-        const periodStart = new Date(`${period.start_date}T${period.start_time}`);
-        if (now >= periodStart && now <= periodEnd && period.status === 'pending') {
-          return { ...period, status: 'active' as const };
-        }
-        
-        return period;
-      }));
+      setUnavailabilityPeriods((prev) =>
+        prev.map((period) => {
+          const periodEnd = new Date(`${period.end_date}T${period.end_time}`);
+
+          // Si la période est expirée, la marquer comme terminée
+          if (now > periodEnd && period.status !== 'completed') {
+            return { ...period, status: 'completed' as const };
+          }
+
+          // Si la période est en cours, la marquer comme active
+          const periodStart = new Date(`${period.start_date}T${period.start_time}`);
+          if (now >= periodStart && now <= periodEnd && period.status === 'pending') {
+            return { ...period, status: 'active' as const };
+          }
+
+          return period;
+        }),
+      );
     };
 
     // Vérifier immédiatement
@@ -72,7 +82,7 @@ export default function ScreenCalendar({ screens, onUnavailabilityAdded, onClose
     const startingDayOfWeek = firstDay.getDay();
 
     const days = [];
-    
+
     // Ajouter les jours du mois précédent pour remplir la première semaine
     for (let i = 0; i < startingDayOfWeek; i++) {
       const prevDate = new Date(year, month, -startingDayOfWeek + i + 1);
@@ -80,7 +90,7 @@ export default function ScreenCalendar({ screens, onUnavailabilityAdded, onClose
         date: prevDate,
         isCurrentMonth: false,
         isToday: false,
-        hasUnavailability: false
+        hasUnavailability: false,
       });
     }
 
@@ -88,10 +98,12 @@ export default function ScreenCalendar({ screens, onUnavailabilityAdded, onClose
     for (let i = 1; i <= daysInMonth; i++) {
       const currentDate = new Date(year, month, i);
       const dateString = currentDate.toISOString().split('T')[0];
-      const hasUnavailability = unavailabilityPeriods.some(period => {
+      const hasUnavailability = unavailabilityPeriods.some((period) => {
         const periodStart = new Date(period.start_date);
         const periodEnd = new Date(period.end_date);
-        return currentDate >= periodStart && currentDate <= periodEnd && period.status !== 'completed';
+        return (
+          currentDate >= periodStart && currentDate <= periodEnd && period.status !== 'completed'
+        );
       });
 
       days.push({
@@ -99,7 +111,7 @@ export default function ScreenCalendar({ screens, onUnavailabilityAdded, onClose
         isCurrentMonth: true,
         isToday: currentDate.toDateString() === new Date().toDateString(),
         hasUnavailability,
-        dateString
+        dateString,
       });
     }
 
@@ -111,7 +123,7 @@ export default function ScreenCalendar({ screens, onUnavailabilityAdded, onClose
         date: nextDate,
         isCurrentMonth: false,
         isToday: false,
-        hasUnavailability: false
+        hasUnavailability: false,
       });
     }
 
@@ -121,10 +133,8 @@ export default function ScreenCalendar({ screens, onUnavailabilityAdded, onClose
   const days = getDaysInMonth(currentMonth);
 
   const handleScreenToggle = (screenId: string) => {
-    setSelectedScreens(prev => 
-      prev.includes(screenId) 
-        ? prev.filter(id => id !== screenId)
-        : [...prev, screenId]
+    setSelectedScreens((prev) =>
+      prev.includes(screenId) ? prev.filter((id) => id !== screenId) : [...prev, screenId],
     );
   };
 
@@ -142,7 +152,7 @@ export default function ScreenCalendar({ screens, onUnavailabilityAdded, onClose
 
     // 2. Vérifier que la date de début n'est pas antérieure à aujourd'hui
     if (startDate < today) {
-      toast.error('La date de début ne peut pas être antérieure à aujourd\'hui');
+      toast.error("La date de début ne peut pas être antérieure à aujourd'hui");
       return false;
     }
 
@@ -154,27 +164,29 @@ export default function ScreenCalendar({ screens, onUnavailabilityAdded, onClose
 
     // 4. Si c'est aujourd'hui, vérifier que l'heure de début n'est pas antérieure à l'heure actuelle
     if (startDate === today && startTime < currentTime) {
-      toast.error('L\'heure de début ne peut pas être antérieure à l\'heure actuelle pour aujourd\'hui');
+      toast.error(
+        "L'heure de début ne peut pas être antérieure à l'heure actuelle pour aujourd'hui",
+      );
       return false;
     }
 
     // 5. Vérifier que l'heure de fin n'est pas antérieure à l'heure de début (même jour)
     if (startDate === endDate && endTime <= startTime) {
-      toast.error('L\'heure de fin doit être postérieure à l\'heure de début pour la même journée');
+      toast.error("L'heure de fin doit être postérieure à l'heure de début pour la même journée");
       return false;
     }
 
     // 6. Vérifier que les heures sont dans un format valide (HH:MM)
     const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
     if (!timeRegex.test(startTime) || !timeRegex.test(endTime)) {
-      toast.error('Format d\'heure invalide. Utilisez le format HH:MM (ex: 09:00)');
+      toast.error("Format d'heure invalide. Utilisez le format HH:MM (ex: 09:00)");
       return false;
     }
 
     // 7. Vérifier que les heures sont dans des plages raisonnables
     const startHour = parseInt(startTime.split(':')[0]);
     const endHour = parseInt(endTime.split(':')[0]);
-    
+
     if (startHour < 0 || startHour > 23 || endHour < 0 || endHour > 23) {
       toast.error('Les heures doivent être comprises entre 00:00 et 23:59');
       return false;
@@ -192,7 +204,7 @@ export default function ScreenCalendar({ screens, onUnavailabilityAdded, onClose
 
     // Vérifier les dates
     if (startDate && startDate < today) {
-      errors.push('La date de début ne peut pas être antérieure à aujourd\'hui');
+      errors.push("La date de début ne peut pas être antérieure à aujourd'hui");
     }
 
     if (startDate && endDate && endDate < startDate) {
@@ -201,33 +213,43 @@ export default function ScreenCalendar({ screens, onUnavailabilityAdded, onClose
 
     // Vérifier les heures
     if (startDate === today && startTime && startTime < currentTime) {
-      errors.push('L\'heure de début ne peut pas être antérieure à l\'heure actuelle pour aujourd\'hui');
+      errors.push(
+        "L'heure de début ne peut pas être antérieure à l'heure actuelle pour aujourd'hui",
+      );
     }
 
-    if (startDate && endDate && startDate === endDate && startTime && endTime && endTime <= startTime) {
-      errors.push('L\'heure de fin doit être postérieure à l\'heure de début pour la même journée');
+    if (
+      startDate &&
+      endDate &&
+      startDate === endDate &&
+      startTime &&
+      endTime &&
+      endTime <= startTime
+    ) {
+      errors.push("L'heure de fin doit être postérieure à l'heure de début pour la même journée");
     }
 
     // Vérifier le format des heures
     const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
     if (startTime && !timeRegex.test(startTime)) {
-      errors.push('Format d\'heure de début invalide (HH:MM)');
+      errors.push("Format d'heure de début invalide (HH:MM)");
     }
     if (endTime && !timeRegex.test(endTime)) {
-      errors.push('Format d\'heure de fin invalide (HH:MM)');
+      errors.push("Format d'heure de fin invalide (HH:MM)");
     }
 
     return errors;
   };
 
   const validationErrors = getValidationErrors();
-  const isFormValid = selectedScreens.length > 0 && 
-                     startDate && 
-                     endDate && 
-                     startTime && 
-                     endTime && 
-                     reason.trim() && 
-                     validationErrors.length === 0;
+  const isFormValid =
+    selectedScreens.length > 0 &&
+    startDate &&
+    endDate &&
+    startTime &&
+    endTime &&
+    reason.trim() &&
+    validationErrors.length === 0;
 
   // Debug pour voir l'état de validation
   console.log('🔍 Debug validation:', {
@@ -238,7 +260,7 @@ export default function ScreenCalendar({ screens, onUnavailabilityAdded, onClose
     endTime,
     reason: reason.trim(),
     validationErrors: validationErrors.length,
-    isFormValid
+    isFormValid,
   });
 
   const handleSubmit = async () => {
@@ -258,23 +280,27 @@ export default function ScreenCalendar({ screens, onUnavailabilityAdded, onClose
     }
 
     try {
-      console.log('📅 Création de périodes d\'indisponibilité pour', selectedScreens.length, 'écran(s)');
+      console.log(
+        "📅 Création de périodes d'indisponibilité pour",
+        selectedScreens.length,
+        'écran(s)',
+      );
       console.log('📅 Données validées:', {
         startDate,
         endDate,
         startTime,
         endTime,
-        reason
+        reason,
       });
-      
+
       // Créer une période d'indisponibilité pour chaque écran sélectionné
       const createdPeriods = [];
-      
+
       for (const screenId of selectedScreens) {
-        const screen = screens.find(s => s.id === screenId);
+        const screen = screens.find((s) => s.id === screenId);
         if (screen) {
-          console.log('🔄 Création de la période pour l\'écran:', screen.name);
-          
+          console.log("🔄 Création de la période pour l'écran:", screen.name);
+
           // Créer la période en base de données
           const newPeriod = await screensService.createUnavailabilityPeriod({
             screen_id: screenId,
@@ -282,17 +308,17 @@ export default function ScreenCalendar({ screens, onUnavailabilityAdded, onClose
             end_date: endDate,
             start_time: startTime,
             end_time: endTime,
-            reason
+            reason,
           });
-          
+
           console.log('✅ Période créée en base de données:', newPeriod);
-          
+
           // Ajouter à l'état local
-          setUnavailabilityPeriods(prev => [...prev, newPeriod]);
-          
+          setUnavailabilityPeriods((prev) => [...prev, newPeriod]);
+
           // Notifier le composant parent
           onUnavailabilityAdded(newPeriod);
-          
+
           createdPeriods.push(newPeriod);
         }
       }
@@ -307,10 +333,9 @@ export default function ScreenCalendar({ screens, onUnavailabilityAdded, onClose
       setViewMode('calendar');
 
       toast.success(`${createdPeriods.length} période(s) d'indisponibilité créée(s) avec succès`);
-      
     } catch (error) {
-      console.error('❌ Erreur lors de la création des périodes d\'indisponibilité:', error);
-      toast.error('Erreur lors de la création des périodes d\'indisponibilité');
+      console.error("❌ Erreur lors de la création des périodes d'indisponibilité:", error);
+      toast.error("Erreur lors de la création des périodes d'indisponibilité");
     }
   };
 
@@ -328,7 +353,7 @@ export default function ScreenCalendar({ screens, onUnavailabilityAdded, onClose
 
   const getUnavailabilityForDate = (date: Date) => {
     const dateString = date.toISOString().split('T')[0];
-    return unavailabilityPeriods.filter(period => {
+    return unavailabilityPeriods.filter((period) => {
       const periodStart = new Date(period.start_date);
       const periodEnd = new Date(period.end_date);
       return date >= periodStart && date <= periodEnd && period.status !== 'completed';
@@ -371,17 +396,13 @@ export default function ScreenCalendar({ screens, onUnavailabilityAdded, onClose
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
-        
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b">
           <div className="flex items-center space-x-3">
             <Calendar className="h-6 w-6 text-[#00B3A6]" />
             <h2 className="text-xl font-bold text-gray-900">Calendrier des Indisponibilités</h2>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-          >
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
             <X className="h-5 w-5 text-gray-600" />
           </button>
         </div>
@@ -391,8 +412,8 @@ export default function ScreenCalendar({ screens, onUnavailabilityAdded, onClose
           <button
             onClick={() => setViewMode('calendar')}
             className={`px-4 py-2 rounded-lg transition-colors ${
-              viewMode === 'calendar' 
-                ? 'bg-[#00B3A6] text-white' 
+              viewMode === 'calendar'
+                ? 'bg-[#00B3A6] text-white'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
@@ -402,8 +423,8 @@ export default function ScreenCalendar({ screens, onUnavailabilityAdded, onClose
           <button
             onClick={() => setViewMode('form')}
             className={`px-4 py-2 rounded-lg transition-colors ${
-              viewMode === 'form' 
-                ? 'bg-[#00B3A6] text-white' 
+              viewMode === 'form'
+                ? 'bg-[#00B3A6] text-white'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
@@ -438,7 +459,7 @@ export default function ScreenCalendar({ screens, onUnavailabilityAdded, onClose
             <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
               {/* En-têtes des jours */}
               <div className="grid grid-cols-7 gap-1 mb-2">
-                {['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'].map(day => (
+                {['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'].map((day) => (
                   <div key={day} className="text-center text-sm font-medium text-gray-600 py-2">
                     {day}
                   </div>
@@ -457,19 +478,17 @@ export default function ScreenCalendar({ screens, onUnavailabilityAdded, onClose
                           ? day.isToday
                             ? 'bg-[#00B3A6]/20 border-[#00B3A6] text-gray-900'
                             : day.hasUnavailability
-                            ? 'bg-red-100 border-red-300 text-gray-900'
-                            : 'bg-white border-gray-200 text-gray-900 hover:bg-gray-50'
+                              ? 'bg-red-100 border-red-300 text-gray-900'
+                              : 'bg-white border-gray-200 text-gray-900 hover:bg-gray-50'
                           : 'bg-gray-100 border-gray-200 text-gray-400'
                       }`}
                     >
-                      <div className="text-sm font-medium mb-1">
-                        {day.date.getDate()}
-                      </div>
-                      
+                      <div className="text-sm font-medium mb-1">{day.date.getDate()}</div>
+
                       {/* Indicateurs d'indisponibilité */}
                       {unavailabilityForDay.length > 0 && (
                         <div className="space-y-1">
-                          {unavailabilityForDay.slice(0, 2).map(period => (
+                          {unavailabilityForDay.slice(0, 2).map((period) => (
                             <div
                               key={period.id}
                               className={`text-xs px-1 py-0.5 rounded truncate ${getPeriodStatusColor(period)}`}
@@ -518,7 +537,7 @@ export default function ScreenCalendar({ screens, onUnavailabilityAdded, onClose
             <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Sélection des Écrans</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {screens.map(screen => (
+                {screens.map((screen) => (
                   <label
                     key={screen.id}
                     className={`flex items-center p-3 rounded-lg border cursor-pointer transition-colors ${
@@ -534,11 +553,13 @@ export default function ScreenCalendar({ screens, onUnavailabilityAdded, onClose
                       className="sr-only"
                     />
                     <div className="flex items-center space-x-3">
-                      <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
-                        selectedScreens.includes(screen.id)
-                          ? 'bg-[#00B3A6] border-[#00B3A6]'
-                          : 'border-gray-300'
-                      }`}>
+                      <div
+                        className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
+                          selectedScreens.includes(screen.id)
+                            ? 'bg-[#00B3A6] border-[#00B3A6]'
+                            : 'border-gray-300'
+                        }`}
+                      >
                         {selectedScreens.includes(screen.id) && (
                           <Check className="h-3 w-3 text-white" />
                         )}
@@ -577,7 +598,9 @@ export default function ScreenCalendar({ screens, onUnavailabilityAdded, onClose
                       }`}
                     />
                     {startDate && startDate < new Date().toISOString().split('T')[0] && (
-                      <p className="text-red-600 text-xs mt-1">La date de début ne peut pas être antérieure à aujourd'hui</p>
+                      <p className="text-red-600 text-xs mt-1">
+                        La date de début ne peut pas être antérieure à aujourd'hui
+                      </p>
                     )}
                   </div>
                   <div>
@@ -596,7 +619,9 @@ export default function ScreenCalendar({ screens, onUnavailabilityAdded, onClose
                       }`}
                     />
                     {startDate && endDate && endDate < startDate && (
-                      <p className="text-red-600 text-xs mt-1">La date de fin ne peut pas être antérieure à la date de début</p>
+                      <p className="text-red-600 text-xs mt-1">
+                        La date de fin ne peut pas être antérieure à la date de début
+                      </p>
                     )}
                   </div>
                 </div>
@@ -614,14 +639,21 @@ export default function ScreenCalendar({ screens, onUnavailabilityAdded, onClose
                       value={startTime}
                       onChange={(e) => setStartTime(e.target.value)}
                       className={`w-full px-3 py-2 bg-white border rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent ${
-                        startDate === new Date().toISOString().split('T')[0] && startTime && startTime < new Date().toTimeString().split(' ')[0].substring(0, 5)
+                        startDate === new Date().toISOString().split('T')[0] &&
+                        startTime &&
+                        startTime < new Date().toTimeString().split(' ')[0].substring(0, 5)
                           ? 'border-red-500'
                           : 'border-gray-300'
                       }`}
                     />
-                    {startDate === new Date().toISOString().split('T')[0] && startTime && startTime < new Date().toTimeString().split(' ')[0].substring(0, 5) && (
-                      <p className="text-red-600 text-xs mt-1">L'heure de début ne peut pas être antérieure à l'heure actuelle pour aujourd'hui</p>
-                    )}
+                    {startDate === new Date().toISOString().split('T')[0] &&
+                      startTime &&
+                      startTime < new Date().toTimeString().split(' ')[0].substring(0, 5) && (
+                        <p className="text-red-600 text-xs mt-1">
+                          L'heure de début ne peut pas être antérieure à l'heure actuelle pour
+                          aujourd'hui
+                        </p>
+                      )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -633,14 +665,27 @@ export default function ScreenCalendar({ screens, onUnavailabilityAdded, onClose
                       onChange={(e) => setEndTime(e.target.value)}
                       min={startDate === endDate ? startTime : undefined}
                       className={`w-full px-3 py-2 bg-white border rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent ${
-                        startDate && endDate && startDate === endDate && startTime && endTime && endTime <= startTime
+                        startDate &&
+                        endDate &&
+                        startDate === endDate &&
+                        startTime &&
+                        endTime &&
+                        endTime <= startTime
                           ? 'border-red-500'
                           : 'border-gray-300'
                       }`}
                     />
-                    {startDate && endDate && startDate === endDate && startTime && endTime && endTime <= startTime && (
-                      <p className="text-red-600 text-xs mt-1">L'heure de fin doit être postérieure à l'heure de début pour la même journée</p>
-                    )}
+                    {startDate &&
+                      endDate &&
+                      startDate === endDate &&
+                      startTime &&
+                      endTime &&
+                      endTime <= startTime && (
+                        <p className="text-red-600 text-xs mt-1">
+                          L'heure de fin doit être postérieure à l'heure de début pour la même
+                          journée
+                        </p>
+                      )}
                   </div>
                 </div>
               </div>
@@ -648,7 +693,9 @@ export default function ScreenCalendar({ screens, onUnavailabilityAdded, onClose
 
             {/* Raison de l'indisponibilité */}
             <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Raison de l'indisponibilité</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                Raison de l'indisponibilité
+              </h3>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Motif <span className="text-red-500">*</span>
@@ -661,7 +708,9 @@ export default function ScreenCalendar({ screens, onUnavailabilityAdded, onClose
                   className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
                 />
                 {!reason.trim() && (
-                  <p className="text-red-600 text-xs mt-1">Veuillez indiquer une raison pour l'indisponibilité</p>
+                  <p className="text-red-600 text-xs mt-1">
+                    Veuillez indiquer une raison pour l'indisponibilité
+                  </p>
                 )}
               </div>
             </div>
@@ -707,4 +756,4 @@ export default function ScreenCalendar({ screens, onUnavailabilityAdded, onClose
       </div>
     </div>
   );
-} 
+}

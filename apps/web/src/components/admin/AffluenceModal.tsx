@@ -80,7 +80,7 @@ export default function AffluenceModal({ location, onClose }: AffluenceModalProp
           Array.from(map.values()).sort((a, b) => {
             if (a.day_of_week !== b.day_of_week) return a.day_of_week - b.day_of_week;
             return a.hour - b.hour;
-          })
+          }),
         );
       } catch (error) {
         console.error('Erreur chargement affluence localité:', error);
@@ -95,7 +95,7 @@ export default function AffluenceModal({ location, onClose }: AffluenceModalProp
 
   const totalWeekImpressions = useMemo(
     () => rows.reduce((sum, row) => sum + (Number(row.estimated_impressions) || 0), 0),
-    [rows]
+    [rows],
   );
 
   const valueByCell = useMemo(() => {
@@ -111,8 +111,8 @@ export default function AffluenceModal({ location, onClose }: AffluenceModalProp
       prev.map((row) =>
         row.day_of_week === dayOfWeek && row.hour === hour
           ? { ...row, estimated_impressions: Math.max(0, Number(value) || 0) }
-          : row
-      )
+          : row,
+      ),
     );
   };
 
@@ -133,12 +133,14 @@ export default function AffluenceModal({ location, onClose }: AffluenceModalProp
         if (upsertError) throw upsertError;
       }
 
-      toast.success("Affluence de la localité enregistrée");
+      toast.success('Affluence de la localité enregistrée');
       setEditing(false);
     } catch (error: any) {
-      console.error("Erreur enregistrement affluence localité:", error);
+      console.error('Erreur enregistrement affluence localité:', error);
       const details = [error?.message, error?.details, error?.hint].filter(Boolean).join(' | ');
-      toast.error(details ? `Erreur enregistrement: ${details}` : "Erreur lors de l'enregistrement");
+      toast.error(
+        details ? `Erreur enregistrement: ${details}` : "Erreur lors de l'enregistrement",
+      );
     } finally {
       setSaving(false);
     }
@@ -171,7 +173,8 @@ export default function AffluenceModal({ location, onClose }: AffluenceModalProp
             <div className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="text-sm text-gray-700">
-                  Somme hebdo `estimated_impressions`: <span className="font-semibold">{totalWeekImpressions}</span>
+                  Somme hebdo `estimated_impressions`:{' '}
+                  <span className="font-semibold">{totalWeekImpressions}</span>
                 </div>
                 {!editing ? (
                   <button
@@ -205,7 +208,9 @@ export default function AffluenceModal({ location, onClose }: AffluenceModalProp
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">hour</th>
+                      <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        hour
+                      </th>
                       {DAYS.map((day) => (
                         <th
                           key={day.id}

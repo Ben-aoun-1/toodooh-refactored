@@ -91,4 +91,3 @@ export interface CampaignFilters {
   advertiser?: string;
   searchTerm?: string;
 }
-

@@ -82,7 +82,7 @@ function shouldDebugDoohSlotMatching(explicit: boolean | undefined): boolean {
 function countPositiveAffluenceCellsForDbDay(
   weeklyByLoc: Map<string, Map<string, number>>,
   locationIds: readonly string[],
-  dbDayOfWeek: number
+  dbDayOfWeek: number,
 ): number {
   let n = 0;
   for (const locId of locationIds) {
@@ -145,7 +145,9 @@ function slotKey(dayOfWeek: number, hour: number): string {
  * Grille hebdo : clé `${dow}:${hour}` → somme des `estimated_impressions` (plusieurs lignes DB / wizard = addition).
  * L’affluence brute d’un créneau calendaire est toujours issue de cette colonne, jamais du nombre de lignes.
  */
-export function buildLocationWeeklyAffluenceLookup(slots: readonly AffluenceSlot[]): Map<string, number> {
+export function buildLocationWeeklyAffluenceLookup(
+  slots: readonly AffluenceSlot[],
+): Map<string, number> {
   const m = new Map<string, number>();
   for (const s of slots) {
     const k = slotKey(Number(s.day_of_week), Number(s.hour));
@@ -158,14 +160,14 @@ export function buildLocationWeeklyAffluenceLookup(slots: readonly AffluenceSlot
 /** Compat : `locationId` ignoré (grille purement hebdo). */
 export function buildLocationAffluenceLookup(
   _locationId: string,
-  slots: readonly AffluenceSlot[]
+  slots: readonly AffluenceSlot[],
 ): Map<string, number> {
   return buildLocationWeeklyAffluenceLookup(slots);
 }
 
 /** `locationId` → grille hebdo. */
 export function buildAllLocationWeeklyLookups(
-  locationScheduleSlots: ReadonlyMap<string, readonly AffluenceSlot[]>
+  locationScheduleSlots: ReadonlyMap<string, readonly AffluenceSlot[]>,
 ): Map<string, Map<string, number>> {
   const out = new Map<string, Map<string, number>>();
   for (const [locId, slots] of locationScheduleSlots) {
@@ -178,7 +180,7 @@ export function buildAllLocationWeeklyLookups(
 export function rawAffluenceForWeeklySlot(
   weeklyGrid: ReadonlyMap<string, number> | undefined,
   dayOfWeek: number,
-  hour: number
+  hour: number,
 ): number {
   if (!weeklyGrid) return 0;
   const v = weeklyGrid.get(slotKey(dayOfWeek, hour));
@@ -205,7 +207,7 @@ export function localSlotRange(dateCalendar: Date, hour: number): { start: Date;
 export function isUnavailableInSlot(
   slotStart: Date,
   slotEnd: Date,
-  periods: readonly UnavailabilityPeriod[]
+  periods: readonly UnavailabilityPeriod[],
 ): boolean {
   for (const p of periods) {
     const ps = new Date(`${p.start_date}T${p.start_time}`);
@@ -223,7 +225,7 @@ export function isEventOverlapInSlot(
   slotStart: Date,
   slotEnd: Date,
   events: readonly SpecialEventWindow[],
-  excludeEventId: string | null
+  excludeEventId: string | null,
 ): boolean {
   for (const e of events) {
     if (excludeEventId && e.id === excludeEventId) continue;
@@ -241,7 +243,7 @@ export function isEventOverlapInSlot(
  */
 export function aggregateOccupiedRepetitionsByLocation(
   screenToLocation: ReadonlyMap<string, string>,
-  occupiedByScreen: ReadonlyMap<string, number>
+  occupiedByScreen: ReadonlyMap<string, number>,
 ): Map<string, number> {
   const byLoc = new Map<string, number>();
   for (const [sid, rph] of occupiedByScreen) {
@@ -256,7 +258,7 @@ export function aggregateOccupiedRepetitionsByLocation(
 
 export function aggregateUnavailabilityByLocation(
   screenToLocation: ReadonlyMap<string, string>,
-  unavailabilityByScreen: ReadonlyMap<string, UnavailabilityPeriod[]>
+  unavailabilityByScreen: ReadonlyMap<string, UnavailabilityPeriod[]>,
 ): Map<string, UnavailabilityPeriod[]> {
   const byLoc = new Map<string, UnavailabilityPeriod[]>();
   for (const [sid, periods] of unavailabilityByScreen) {
@@ -333,7 +335,7 @@ export type LocationAffluenceEngineResult = {
  * chaque heure 0–23, chaque localité.
  */
 export function computeDoohLocationAffluenceCampaign(
-  input: LocationAffluenceEngineInput
+  input: LocationAffluenceEngineInput,
 ): LocationAffluenceEngineResult {
   const rate = Math.min(1, Math.max(0, input.config.max_billable_spot_rate_per_hour));
   const refRph = Math.max(input.config.dooh_occupation_reference_rph, 1e-6);
@@ -358,8 +360,10 @@ export function computeDoohLocationAffluenceCampaign(
   const dayCount = computeCampaignDayCount(input.campaignStart, input.campaignEnd);
 
   if (debug) {
-    const grilleParLoc: Record<string, { lignes_source: number; cles_grille: number; dows_en_base: number[] }> =
-      {};
+    const grilleParLoc: Record<
+      string,
+      { lignes_source: number; cles_grille: number; dows_en_base: number[] }
+    > = {};
     for (const locId of input.locationIds) {
       const slots = input.locationScheduleSlots.get(locId) ?? [];
       const g = weeklyByLoc.get(locId);
@@ -391,7 +395,7 @@ export function computeDoohLocationAffluenceCampaign(
     const slotsPositifsCeJour = countPositiveAffluenceCellsForDbDay(
       weeklyByLoc,
       input.locationIds,
-      mappedDay
+      mappedDay,
     );
     if (slotsPositifsCeJour > 0) daysWithPositiveRawSlots += 1;
 
@@ -415,7 +419,7 @@ export function computeDoohLocationAffluenceCampaign(
         slotStart,
         slotEnd,
         input.activeEvents,
-        input.ownEventId
+        input.ownEventId,
       );
 
       for (const locationId of input.locationIds) {
@@ -440,11 +444,11 @@ export function computeDoohLocationAffluenceCampaign(
         totalImpressions += adjustedImpressions;
         perLocationAffluence.set(
           locationId,
-          (perLocationAffluence.get(locationId) ?? 0) + effectiveAffluence
+          (perLocationAffluence.get(locationId) ?? 0) + effectiveAffluence,
         );
         perLocationImpressions.set(
           locationId,
-          (perLocationImpressions.get(locationId) ?? 0) + adjustedImpressions
+          (perLocationImpressions.get(locationId) ?? 0) + adjustedImpressions,
         );
       }
     }
@@ -521,7 +525,7 @@ export type DoohLocationSlotRow = {
  * Même logique que `computeDoohLocationAffluenceCampaign` (déterministe).
  */
 export function enumerateDoohLocationCampaignSlots(
-  input: LocationAffluenceEngineInput
+  input: LocationAffluenceEngineInput,
 ): DoohLocationSlotRow[] {
   const rate = Math.min(1, Math.max(0, input.config.max_billable_spot_rate_per_hour));
   const refRph = Math.max(input.config.dooh_occupation_reference_rph, 1e-6);
@@ -543,7 +547,7 @@ export function enumerateDoohLocationCampaignSlots(
         slotStart,
         slotEnd,
         input.activeEvents,
-        input.ownEventId
+        input.ownEventId,
       );
 
       for (const locationId of input.locationIds) {
@@ -579,7 +583,7 @@ export function enumerateDoohLocationCampaignSlots(
 /** Répartition des impressions par localité vers les écrans (parts égales) — couche persistence. */
 export function splitLocationImpressionsToScreens(
   perLocationImpressions: ReadonlyMap<string, number>,
-  screensByLocation: ReadonlyMap<string, readonly string[]>
+  screensByLocation: ReadonlyMap<string, readonly string[]>,
 ): Map<string, number> {
   const perScreen = new Map<string, number>();
   for (const [locId, imp] of perLocationImpressions) {

@@ -44,7 +44,10 @@ function loadImageAsBase64(src: string): Promise<string> {
       canvas.width = img.naturalWidth;
       canvas.height = img.naturalHeight;
       const ctx = canvas.getContext('2d');
-      if (!ctx) { reject(new Error('Canvas context unavailable')); return; }
+      if (!ctx) {
+        reject(new Error('Canvas context unavailable'));
+        return;
+      }
       ctx.drawImage(img, 0, 0);
       resolve(canvas.toDataURL('image/png'));
     };
@@ -54,7 +57,11 @@ function loadImageAsBase64(src: string): Promise<string> {
 }
 
 function formatAmount(n: number): string {
-  return new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n) + ' TND';
+  return (
+    new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
+      n,
+    ) + ' TND'
+  );
 }
 
 function formatDateLong(d: string | Date): string {
@@ -62,17 +69,18 @@ function formatDateLong(d: string | Date): string {
   return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
-export async function generateInvoicePDF(
-  invoice: InvoiceData,
-  userId: string
-): Promise<void> {
+export async function generateInvoicePDF(invoice: InvoiceData, userId: string): Promise<void> {
   const { data: businessProfile } = await supabase
     .from('business_profiles')
-    .select('business_name, contact_name, contact_phone, street_address, city, postal_code, tax_number')
+    .select(
+      'business_name, contact_name, contact_phone, street_address, city, postal_code, tax_number',
+    )
     .eq('user_id', userId)
     .single();
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   const userEmail = user?.email || '';
 
   const client: BusinessProfileData = {
@@ -96,15 +104,27 @@ export async function generateInvoicePDF(
     .limit(20);
 
   if (invoiceCampaigns && invoiceCampaigns.length > 0) {
-    campaigns = invoiceCampaigns.map(c => ({ name: c.name || 'Campagne', budget: parseFloat(c.budget) || 0 }));
+    campaigns = invoiceCampaigns.map((c) => ({
+      name: c.name || 'Campagne',
+      budget: parseFloat(c.budget) || 0,
+    }));
   }
 
   if (campaigns.length === 0) {
-    campaigns = [{ name: invoice.campaign_name || invoice.description || 'Facture mensuelle', budget: invoice.montant }];
+    campaigns = [
+      {
+        name: invoice.campaign_name || invoice.description || 'Facture mensuelle',
+        budget: invoice.montant,
+      },
+    ];
   }
 
   let logoBase64: string | null = null;
-  try { logoBase64 = await loadImageAsBase64(logoFullSrc); } catch { /* fallback: no image */ }
+  try {
+    logoBase64 = await loadImageAsBase64(logoFullSrc);
+  } catch {
+    /* fallback: no image */
+  }
 
   const doc = new jsPDF();
   const pw = doc.internal.pageSize.getWidth();
@@ -160,7 +180,8 @@ export async function generateInvoicePDF(
   if (client.contact_name) clientLines.push(client.contact_name);
   if (client.business_name) clientLines.push(client.business_name);
   if (client.street_address) clientLines.push(client.street_address);
-  if (client.postal_code || client.city) clientLines.push(`${client.postal_code} ${client.city}`.trim() + ', Tunisie');
+  if (client.postal_code || client.city)
+    clientLines.push(`${client.postal_code} ${client.city}`.trim() + ', Tunisie');
   if (client.email) clientLines.push(client.email);
 
   const maxLines = Math.max(emetteurLines.length, clientLines.length);
@@ -201,7 +222,7 @@ export async function generateInvoicePDF(
 
   let sousTotalHT = 0;
 
-  campaigns.forEach(c => {
+  campaigns.forEach((c) => {
     y += rowH;
     doc.text(c.name, colDesc + 3, y - 3);
     doc.text('1', colQty + 8, y - 3);
@@ -243,10 +264,10 @@ export async function generateInvoicePDF(
   doc.setTextColor(150, 150, 150);
   doc.setFont('helvetica', 'normal');
   doc.text(
-    'Merci pour votre confiance. Pour toute question, contactez-nous à l\'adresse contact@too-dooh.com',
+    "Merci pour votre confiance. Pour toute question, contactez-nous à l'adresse contact@too-dooh.com",
     pw / 2,
     footerY,
-    { align: 'center' }
+    { align: 'center' },
   );
 
   doc.save(`Facture_${invoice.numero}.pdf`);

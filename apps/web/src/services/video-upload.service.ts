@@ -82,10 +82,12 @@ export const videoUploadService = {
   // Upload une vidéo dans Supabase Storage
   async uploadVideo(
     file: File,
-    onProgress?: (progress: UploadProgress) => void
+    onProgress?: (progress: UploadProgress) => void,
   ): Promise<{ url: string; path: string }> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) throw new Error('Utilisateur non connecté');
 
       // Validation du fichier
@@ -94,12 +96,18 @@ export const videoUploadService = {
         throw new Error('Le fichier est trop volumineux (max 100 MB)');
       }
 
-      const allowedTypes = ['video/mp4', 'video/mpeg', 'video/quicktime', 'video/x-msvideo', 'video/webm'];
+      const allowedTypes = [
+        'video/mp4',
+        'video/mpeg',
+        'video/quicktime',
+        'video/x-msvideo',
+        'video/webm',
+      ];
       if (!allowedTypes.includes(file.type)) {
         throw new Error('Type de fichier non supporté. Utilisez MP4, MOV, AVI ou WebM');
       }
 
-      onProgress?.({ progress: 0, status: 'uploading', message: 'Préparation de l\'upload...' });
+      onProgress?.({ progress: 0, status: 'uploading', message: "Préparation de l'upload..." });
 
       // Créer un nom de fichier unique dans le dossier campaign-videos
       const timestamp = Date.now();
@@ -109,15 +117,13 @@ export const videoUploadService = {
       console.log('📤 Upload de la vidéo:', filePath);
 
       // Upload le fichier dans le bucket 'media'
-      const { data, error } = await supabase.storage
-        .from('media')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
+      const { data, error } = await supabase.storage.from('media').upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false,
+      });
 
       if (error) {
-        console.error('❌ Erreur lors de l\'upload:', error);
+        console.error("❌ Erreur lors de l'upload:", error);
         throw error;
       }
 
@@ -131,13 +137,13 @@ export const videoUploadService = {
       if (signedError) {
         console.error('Erreur création URL signée:', signedError);
         // Fallback sur URL publique
-        const { data: { publicUrl } } = supabase.storage
-          .from('media')
-          .getPublicUrl(filePath);
-        
+        const {
+          data: { publicUrl },
+        } = supabase.storage.from('media').getPublicUrl(filePath);
+
         return {
           url: publicUrl,
-          path: filePath
+          path: filePath,
         };
       }
 
@@ -145,14 +151,14 @@ export const videoUploadService = {
 
       return {
         url: signedUrlData.signedUrl,
-        path: filePath
+        path: filePath,
       };
     } catch (error: any) {
-      console.error('❌ Erreur lors de l\'upload de la vidéo:', error);
-      onProgress?.({ 
-        progress: 0, 
-        status: 'error', 
-        message: error.message || 'Erreur lors de l\'upload' 
+      console.error("❌ Erreur lors de l'upload de la vidéo:", error);
+      onProgress?.({
+        progress: 0,
+        status: 'error',
+        message: error.message || "Erreur lors de l'upload",
       });
       throw error;
     }
@@ -161,9 +167,7 @@ export const videoUploadService = {
   // Supprimer une vidéo
   async deleteVideo(path: string): Promise<boolean> {
     try {
-      const { error } = await supabase.storage
-        .from('media')
-        .remove([path]);
+      const { error } = await supabase.storage.from('media').remove([path]);
 
       if (error) {
         console.error('Erreur lors de la suppression:', error);
@@ -179,9 +183,9 @@ export const videoUploadService = {
 
   // Récupérer l'URL d'une vidéo
   getVideoUrl(path: string): string {
-    const { data: { publicUrl } } = supabase.storage
-      .from('media')
-      .getPublicUrl(path);
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from('media').getPublicUrl(path);
 
     return publicUrl;
   },
@@ -192,10 +196,12 @@ export const videoUploadService = {
     videoPath: string,
     filename: string,
     fileSize?: number,
-    durationSeconds?: number | null
+    durationSeconds?: number | null,
   ): Promise<any> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) throw new Error('Utilisateur non connecté');
 
       const insertRow: Record<string, unknown> = {
@@ -223,13 +229,13 @@ export const videoUploadService = {
       }
 
       if (error) {
-        console.error('Erreur lors de la création de l\'entrée vidéo:', error);
+        console.error("Erreur lors de la création de l'entrée vidéo:", error);
         throw error;
       }
 
       return data;
     } catch (error) {
-      console.error('Erreur lors de la création de l\'entrée vidéo:', error);
+      console.error("Erreur lors de la création de l'entrée vidéo:", error);
       throw error;
     }
   },
@@ -247,4 +253,3 @@ export const videoUploadService = {
     }
   },
 };
-

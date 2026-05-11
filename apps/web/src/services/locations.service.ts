@@ -9,18 +9,16 @@ export const locationsService = {
       .eq('owner_id', ownerId)
       .order('name');
     if (error) throw new Error(error.message);
-    return (data || []).map(row => ({
+    return (data || []).map((row) => ({
       ...row,
-      coordinates: row.coordinates ? { x: row.coordinates.x ?? row.coordinates[0], y: row.coordinates.y ?? row.coordinates[1] } : undefined,
+      coordinates: row.coordinates
+        ? { x: row.coordinates.x ?? row.coordinates[0], y: row.coordinates.y ?? row.coordinates[1] }
+        : undefined,
     }));
   },
 
   async getById(id: string): Promise<Location | null> {
-    const { data, error } = await supabase
-      .from('locations')
-      .select('*')
-      .eq('id', id)
-      .single();
+    const { data, error } = await supabase.from('locations').select('*').eq('id', id).single();
     if (error) {
       if (error.code === 'PGRST116') return null;
       throw new Error(error.message);
@@ -28,11 +26,19 @@ export const locationsService = {
     if (!data) return null;
     return {
       ...data,
-      coordinates: data.coordinates ? { x: data.coordinates.x ?? data.coordinates[0], y: data.coordinates.y ?? data.coordinates[1] } : undefined,
+      coordinates: data.coordinates
+        ? {
+            x: data.coordinates.x ?? data.coordinates[0],
+            y: data.coordinates.y ?? data.coordinates[1],
+          }
+        : undefined,
     };
   },
 
-  async create(ownerId: string, params: { name: string; address?: string; coordinates?: { lat: number; lng: number } }): Promise<Location> {
+  async create(
+    ownerId: string,
+    params: { name: string; address?: string; coordinates?: { lat: number; lng: number } },
+  ): Promise<Location> {
     const point = params.coordinates
       ? `(${params.coordinates.lng},${params.coordinates.lat})`
       : null;
@@ -49,11 +55,19 @@ export const locationsService = {
     if (error) throw new Error(error.message);
     return {
       ...data,
-      coordinates: data.coordinates ? { x: data.coordinates.x ?? data.coordinates[0], y: data.coordinates.y ?? data.coordinates[1] } : undefined,
+      coordinates: data.coordinates
+        ? {
+            x: data.coordinates.x ?? data.coordinates[0],
+            y: data.coordinates.y ?? data.coordinates[1],
+          }
+        : undefined,
     };
   },
 
-  async update(id: string, params: { name?: string; address?: string; coordinates?: { lat: number; lng: number } }): Promise<Location> {
+  async update(
+    id: string,
+    params: { name?: string; address?: string; coordinates?: { lat: number; lng: number } },
+  ): Promise<Location> {
     const updates: Record<string, unknown> = {};
     if (params.name != null) updates.name = params.name;
     if (params.address != null) updates.address = params.address;
@@ -69,7 +83,12 @@ export const locationsService = {
     if (error) throw new Error(error.message);
     return {
       ...data,
-      coordinates: data.coordinates ? { x: data.coordinates.x ?? data.coordinates[0], y: data.coordinates.y ?? data.coordinates[1] } : undefined,
+      coordinates: data.coordinates
+        ? {
+            x: data.coordinates.x ?? data.coordinates[0],
+            y: data.coordinates.y ?? data.coordinates[1],
+          }
+        : undefined,
     };
   },
 
@@ -92,7 +111,12 @@ export const locationsService = {
 
   /** Enregistrer la grille d'affluence (upsert des 168 créneaux 7×24) */
   async saveAffluenceSchedule(locationId: string, grid: LocationAffluenceGrid): Promise<void> {
-    const rows: { location_id: string; day_of_week: number; hour: number; estimated_impressions: number }[] = [];
+    const rows: {
+      location_id: string;
+      day_of_week: number;
+      hour: number;
+      estimated_impressions: number;
+    }[] = [];
     for (let dow = 1; dow <= 7; dow++) {
       const dayRow = grid[dow];
       if (!dayRow) continue;
@@ -112,9 +136,7 @@ export const locationsService = {
       .eq('location_id', locationId);
     if (delErr) throw new Error(delErr.message);
     if (rows.length > 0) {
-      const { error: insErr } = await supabase
-        .from('location_affluence_schedule')
-        .insert(rows);
+      const { error: insErr } = await supabase.from('location_affluence_schedule').insert(rows);
       if (insErr) throw new Error(insErr.message);
     }
   },

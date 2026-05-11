@@ -27,12 +27,15 @@ export const useAuthStore = create<AuthState>((set) => {
     const cachedValidationStatus = localStorage.getItem('user_validation_status');
     const cachedProfileTypeLs = localStorage.getItem('user_profile_type');
 
-    const knownValidationStatus = storeState.validationStatus || cachedValidationStatus || undefined;
-    const knownProfileType = storeState.profileType || cachedProfileType || cachedProfileTypeLs || null;
-    const wasApproved = knownValidationStatus === 'approved' || knownValidationStatus === 'verified';
+    const knownValidationStatus =
+      storeState.validationStatus || cachedValidationStatus || undefined;
+    const knownProfileType =
+      storeState.profileType || cachedProfileType || cachedProfileTypeLs || null;
+    const wasApproved =
+      knownValidationStatus === 'approved' || knownValidationStatus === 'verified';
 
     if (wasApproved && knownProfileType) {
-      console.warn('⚠️ Erreur/timeout fetchProfileType — conservation de l\'état approuvé connu');
+      console.warn("⚠️ Erreur/timeout fetchProfileType — conservation de l'état approuvé connu");
       return {
         profileType: knownProfileType,
         onboardingCompleted: true,
@@ -41,7 +44,9 @@ export const useAuthStore = create<AuthState>((set) => {
       };
     }
 
-    console.warn('⚠️ Erreur/timeout fetchProfileType — aucun état approuvé connu, fallback pending');
+    console.warn(
+      '⚠️ Erreur/timeout fetchProfileType — aucun état approuvé connu, fallback pending',
+    );
     return {
       profileType: knownProfileType,
       onboardingCompleted: false,
@@ -54,7 +59,7 @@ export const useAuthStore = create<AuthState>((set) => {
   const fetchProfileType = async (userId: string, forceRefresh = false) => {
     try {
       console.log('🔄 fetchProfileType called for user:', userId, 'forceRefresh:', forceRefresh);
-      
+
       // Vérifier si c'est un admin (vérifier dans admin-storage)
       const adminStorage = localStorage.getItem('admin-storage');
       if (adminStorage) {
@@ -62,23 +67,24 @@ export const useAuthStore = create<AuthState>((set) => {
           const adminData = JSON.parse(adminStorage);
           if (adminData?.state?.admin?.id) {
             console.log('✅ Admin détecté, skip fetchProfileType');
-            return { 
-              profileType: null, 
+            return {
+              profileType: null,
               onboardingCompleted: true,
               needsApproval: false,
-              validationStatus: 'approved'
+              validationStatus: 'approved',
             };
           }
         } catch (e) {
           // Ignore parsing errors
         }
       }
-      
+
       // Vérifier le cache localStorage d'abord
       const onboardingCompleted = localStorage.getItem('onboardingCompleted') === 'true';
       const cachedProfileType = localStorage.getItem('user_profile_type');
       const cachedValidationStatus = localStorage.getItem('user_validation_status');
-      const isCachedApproved = cachedValidationStatus === 'approved' || cachedValidationStatus === 'verified';
+      const isCachedApproved =
+        cachedValidationStatus === 'approved' || cachedValidationStatus === 'verified';
 
       // Porte du cache assouplie: si l'utilisateur est approuvé/verified,
       // on peut utiliser le cache même si l'onboarding n'est pas marqué terminé.
@@ -99,115 +105,124 @@ export const useAuthStore = create<AuthState>((set) => {
         return {
           profileType: cachedProfileType,
           onboardingCompleted: true,
-          needsApproval: cachedValidationStatus !== 'approved' && cachedValidationStatus !== 'verified',
+          needsApproval:
+            cachedValidationStatus !== 'approved' && cachedValidationStatus !== 'verified',
           validationStatus: cachedValidationStatus,
         };
       }
-      
-        // Sinon, récupérer depuis business_profiles
+
+      // Sinon, récupérer depuis business_profiles
+      try {
+        console.log('📊 Fetching from business_profiles for user:', userId);
+
+        // Timeout plus tolérant (30s) car en arrière-plan les navigateurs throttlent les timers/fetchs.
+        // Si l'onglet est inactif, une requête peut légitimement dépasser 10s. Mieux vaut attendre
+        // une vraie réponse que de rétrograder l'utilisateur par erreur.
+        let timeoutId: NodeJS.Timeout;
+        const timeoutPromise = new Promise((_, reject) => {
+          timeoutId = setTimeout(
+            () => reject(new Error('Timeout: requête Supabase trop longue')),
+            30000,
+          );
+        });
+
+        const queryPromise = supabase
+          .from('business_profiles')
+          .select(
+            'profile_type, business_name, verification_status, contact_name, onboarding_completed, is_active',
+          )
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        let result: any;
         try {
-          console.log('📊 Fetching from business_profiles for user:', userId);
-          
-          // Timeout plus tolérant (30s) car en arrière-plan les navigateurs throttlent les timers/fetchs.
-          // Si l'onglet est inactif, une requête peut légitimement dépasser 10s. Mieux vaut attendre
-          // une vraie réponse que de rétrograder l'utilisateur par erreur.
-          let timeoutId: NodeJS.Timeout;
-          const timeoutPromise = new Promise((_, reject) => {
-            timeoutId = setTimeout(() => reject(new Error('Timeout: requête Supabase trop longue')), 30000);
-          });
-
-          const queryPromise = supabase
-            .from('business_profiles')
-            .select('profile_type, business_name, verification_status, contact_name, onboarding_completed, is_active')
-            .eq('user_id', userId)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          let result: any;
-          try {
-            result = await Promise.race([
-              queryPromise.then(r => {
-                clearTimeout(timeoutId);
-                return r;
-              }),
-              timeoutPromise
-            ]);
-          } catch (timeoutError: any) {
-            clearTimeout(timeoutId);
-            if (timeoutError?.message?.includes('Timeout')) {
-              console.error('⏱️ Timeout lors de la requête business_profiles — conservation de l\'état connu');
-              return getPreservedStateOnError(cachedProfileType);
-            }
-            throw timeoutError;
-          }
-
-          const { data, error } = result;
-
-          if (error) {
-            console.error('❌ Error fetching user info:', error);
-            if (error.code === 'PGRST116') {
-              console.log('⚠️ Table business_profiles not found');
-            }
-            // Erreur transitoire/réseau/RLS: on conserve l'état connu si possible
+          result = await Promise.race([
+            queryPromise.then((r) => {
+              clearTimeout(timeoutId);
+              return r;
+            }),
+            timeoutPromise,
+          ]);
+        } catch (timeoutError: any) {
+          clearTimeout(timeoutId);
+          if (timeoutError?.message?.includes('Timeout')) {
+            console.error(
+              "⏱️ Timeout lors de la requête business_profiles — conservation de l'état connu",
+            );
             return getPreservedStateOnError(cachedProfileType);
           }
+          throw timeoutError;
+        }
 
-          // Pas de données = pas de profil en base. Ici on ne doit PAS préserver un ancien
-          // état "approved": c'est un état avéré par la DB, donc on retourne bien pending.
-          if (!data) {
-            console.log('⚠️ No business profile found for user');
-            return {
-              profileType: cachedProfileType || null,
-              onboardingCompleted: false,
-              needsApproval: true,
-              validationStatus: 'pending',
-            };
-          }
+        const { data, error } = result;
 
-          if (data.is_active === false) {
-            console.log('⚠️ Compte désactivé, déconnexion');
-            await authService.logout();
-            return {
-              profileType: cachedProfileType || null,
-              onboardingCompleted: false,
-              needsApproval: true,
-              validationStatus: 'pending',
-            };
+        if (error) {
+          console.error('❌ Error fetching user info:', error);
+          if (error.code === 'PGRST116') {
+            console.log('⚠️ Table business_profiles not found');
           }
+          // Erreur transitoire/réseau/RLS: on conserve l'état connu si possible
+          return getPreservedStateOnError(cachedProfileType);
+        }
+
+        // Pas de données = pas de profil en base. Ici on ne doit PAS préserver un ancien
+        // état "approved": c'est un état avéré par la DB, donc on retourne bien pending.
+        if (!data) {
+          console.log('⚠️ No business profile found for user');
+          return {
+            profileType: cachedProfileType || null,
+            onboardingCompleted: false,
+            needsApproval: true,
+            validationStatus: 'pending',
+          };
+        }
+
+        if (data.is_active === false) {
+          console.log('⚠️ Compte désactivé, déconnexion');
+          await authService.logout();
+          return {
+            profileType: cachedProfileType || null,
+            onboardingCompleted: false,
+            needsApproval: true,
+            validationStatus: 'pending',
+          };
+        }
 
         // IMPORTANT: Logger les données récupérées pour débogage
         console.log('✅ Données utilisateur récupérées:', {
           profile_type: data.profile_type,
           business_name: data.business_name,
-          verification_status: data.verification_status
+          verification_status: data.verification_status,
         });
 
         // Permettre la connexion même si pending, mais marquer needsApproval
         // Vérifier uniquement verification_status (status n'existe pas dans business_profiles)
-        const isPending = data.verification_status !== 'verified' && data.verification_status !== 'approved';
-        
+        const isPending =
+          data.verification_status !== 'verified' && data.verification_status !== 'approved';
+
         if (isPending) {
           console.log('⚠️ Utilisateur en attente de validation');
           console.log('   - verification_status:', data.verification_status);
           console.log('   → needsApproval: TRUE');
-          
+
           // Retourner le profileType mais indiquer qu'ils ont besoin d'approbation
-          return { 
+          return {
             profileType: data.profile_type,
-            onboardingCompleted: false, 
+            onboardingCompleted: false,
             needsApproval: true,
-            validationStatus: data.verification_status
+            validationStatus: data.verification_status,
           };
         }
-        
+
         // Utilisateur approuvé
         console.log('✅ Utilisateur validé et approuvé - Accès complet autorisé');
-        
+
         const profileType = data?.profile_type || null;
         const contactName = data?.contact_name || null;
         const validationStatus = data?.verification_status || 'approved';
-        
+
         // Mettre en cache les données pour éviter les requêtes futures
         if (profileType) {
           localStorage.setItem('user_profile_type', profileType);
@@ -217,19 +232,19 @@ export const useAuthStore = create<AuthState>((set) => {
           console.log('📝 Nom et prénom stockés dans localStorage:', contactName);
           console.log('📝 Validation status stocké dans localStorage:', validationStatus);
         }
-        
+
         // Utiliser onboarding_completed de la DB si disponible, sinon utiliser le localStorage
         const dbOnboardingCompleted = data?.onboarding_completed ?? onboardingCompleted;
         if (dbOnboardingCompleted) {
           localStorage.setItem('onboardingCompleted', 'true');
         }
-        
+
         // Utilisateur approuvé - accès complet
-        return { 
-          profileType, 
+        return {
+          profileType,
           onboardingCompleted: dbOnboardingCompleted,
           needsApproval: false,
-          validationStatus: validationStatus
+          validationStatus: validationStatus,
         };
       } catch (dbError: any) {
         console.error('Database error in fetchProfileType:', dbError);
@@ -260,7 +275,14 @@ export const useAuthStore = create<AuthState>((set) => {
     // Ne pas s'initialiser si on est sur une route admin
     if (window.location.pathname.startsWith('/admin')) {
       console.log('On admin route, skipping auth listener initialization');
-      set({ user: null, profileType: null, initialized: true, loading: false, needsApproval: false, validationStatus: undefined });
+      set({
+        user: null,
+        profileType: null,
+        initialized: true,
+        loading: false,
+        needsApproval: false,
+        validationStatus: undefined,
+      });
       return;
     }
 
@@ -269,10 +291,12 @@ export const useAuthStore = create<AuthState>((set) => {
       const now = Date.now();
 
       // Déduplication : ignorer les événements identiques dans un court laps de temps
-      if (lastProcessedEvent &&
-          lastProcessedEvent.event === event &&
-          lastProcessedEvent.userId === userId &&
-          (now - lastProcessedEvent.timestamp) < DEBOUNCE_MS) {
+      if (
+        lastProcessedEvent &&
+        lastProcessedEvent.event === event &&
+        lastProcessedEvent.userId === userId &&
+        now - lastProcessedEvent.timestamp < DEBOUNCE_MS
+      ) {
         console.log('⏭️ Événement auth dédupliqué, ignoré:', event, userId);
         return;
       }
@@ -295,7 +319,12 @@ export const useAuthStore = create<AuthState>((set) => {
       }
 
       // Si l'userId n'a pas changé pour un événement non-SIGN_IN/OUT, inutile de refetch
-      if (userId === lastKnownUserId && event !== 'SIGNED_IN' && event !== 'SIGNED_OUT' && event !== 'INITIAL_SESSION') {
+      if (
+        userId === lastKnownUserId &&
+        event !== 'SIGNED_IN' &&
+        event !== 'SIGNED_OUT' &&
+        event !== 'INITIAL_SESSION'
+      ) {
         console.log('⏭️ userId inchangé, skip fetchProfileType pour événement:', event);
         if (user) {
           set({ user });
@@ -321,7 +350,12 @@ export const useAuthStore = create<AuthState>((set) => {
           needsApproval = result.needsApproval || false;
           validationStatus = result.validationStatus;
 
-          console.log('✅ Auth listener: Variables assigned:', { profileType, shouldOnboard, needsApproval, validationStatus });
+          console.log('✅ Auth listener: Variables assigned:', {
+            profileType,
+            shouldOnboard,
+            needsApproval,
+            validationStatus,
+          });
         } catch (error) {
           console.error('❌ Auth listener error:', error);
           // En cas d'erreur inattendue, conserver l'état actuel du store plutôt
@@ -334,8 +368,20 @@ export const useAuthStore = create<AuthState>((set) => {
         }
       }
 
-      console.log('✅ Auth listener: About to set state:', { user: !!user, profileType, shouldOnboard, needsApproval, validationStatus });
-      set({ user, profileType, shouldOnboard: shouldOnboard || false, needsApproval: needsApproval || false, validationStatus });
+      console.log('✅ Auth listener: About to set state:', {
+        user: !!user,
+        profileType,
+        shouldOnboard,
+        needsApproval,
+        validationStatus,
+      });
+      set({
+        user,
+        profileType,
+        shouldOnboard: shouldOnboard || false,
+        needsApproval: needsApproval || false,
+        validationStatus,
+      });
       console.log('✅ Auth listener: State set successfully!');
     });
 
@@ -352,16 +398,16 @@ export const useAuthStore = create<AuthState>((set) => {
     initialize: async () => {
       try {
         set({ loading: true });
-        
+
         // Initialiser le listener d'auth seulement une fois
         initializeAuthListener();
-        
+
         const user = await authService.getCurrentUser();
         let profileType = null;
         let shouldOnboard = false;
         let needsApproval = false;
         let validationStatus = undefined;
-        
+
         if (user) {
           try {
             // Ajouter un timeout global pour éviter que l'initialisation bloque
@@ -369,15 +415,20 @@ export const useAuthStore = create<AuthState>((set) => {
             const timeoutPromise = new Promise((_, reject) => {
               initTimeoutId = setTimeout(() => reject(new Error('Timeout initialization')), 15000); // 15 secondes max
             });
-            
-            const profilePromise = fetchProfileType(user.id).then(result => {
+
+            const profilePromise = fetchProfileType(user.id).then((result) => {
               clearTimeout(initTimeoutId);
               return result;
             });
-            
-            const result = await Promise.race([profilePromise, timeoutPromise]) as any;
+
+            const result = (await Promise.race([profilePromise, timeoutPromise])) as any;
             clearTimeout(initTimeoutId);
-            const { profileType: pt, onboardingCompleted, needsApproval: na, validationStatus: vs } = result || {};
+            const {
+              profileType: pt,
+              onboardingCompleted,
+              needsApproval: na,
+              validationStatus: vs,
+            } = result || {};
             profileType = pt;
             shouldOnboard = !onboardingCompleted;
             needsApproval = na || false;
@@ -386,19 +437,37 @@ export const useAuthStore = create<AuthState>((set) => {
             console.error('Error fetching profile type:', profileError);
             // Si timeout, continuer avec des valeurs par défaut
             if (profileError?.message?.includes('Timeout')) {
-              console.warn('⏱️ Timeout lors de l\'initialisation, utilisation de valeurs par défaut');
+              console.warn(
+                "⏱️ Timeout lors de l'initialisation, utilisation de valeurs par défaut",
+              );
             }
             // Continuer sans profileType si il y a une erreur
           }
         }
-        
+
         // Toujours initialiser, même en cas d'erreur
-        set({ user, initialized: true, profileType, shouldOnboard, needsApproval, validationStatus, loading: false });
+        set({
+          user,
+          initialized: true,
+          profileType,
+          shouldOnboard,
+          needsApproval,
+          validationStatus,
+          loading: false,
+        });
         console.log('✅ Auth initialized:', { hasUser: !!user, profileType, initialized: true });
       } catch (error) {
         console.error('Error initializing auth:', error);
         // Toujours initialiser pour éviter le blocage
-        set({ user: null, initialized: true, profileType: null, shouldOnboard: false, needsApproval: false, validationStatus: undefined, loading: false });
+        set({
+          user: null,
+          initialized: true,
+          profileType: null,
+          shouldOnboard: false,
+          needsApproval: false,
+          validationStatus: undefined,
+          loading: false,
+        });
       }
     },
 
@@ -408,35 +477,50 @@ export const useAuthStore = create<AuthState>((set) => {
         const { user } = await authService.login(email, password);
         let profileType = null;
         let shouldOnboard = false;
-        
+
         let needsApproval = false;
         let validationStatus = undefined;
-        
+
         if (user) {
           // D'abord vérifier le localStorage (mis à jour par authService.login)
           const storedProfileType = localStorage.getItem('user_profile_type');
           const onboardingCompleted = localStorage.getItem('onboardingCompleted') === 'true';
-          
+
           console.log('🔍 Store login - localStorage check:', {
             storedProfileType,
             onboardingCompleted,
-            userId: user.id
+            userId: user.id,
           });
-          
+
           // Toujours appeler fetchProfileType pour obtenir le statut à jour depuis la DB
           console.log('🔄 Appel de fetchProfileType pour obtenir le statut de validation...');
-          const { profileType: pt, onboardingCompleted: oc, needsApproval: na, validationStatus: vs } = await fetchProfileType(user.id);
+          const {
+            profileType: pt,
+            onboardingCompleted: oc,
+            needsApproval: na,
+            validationStatus: vs,
+          } = await fetchProfileType(user.id);
           profileType = pt;
           shouldOnboard = !oc;
           needsApproval = na || false;
           validationStatus = vs;
-          console.log('✅ Statut récupéré:', { profileType: pt, needsApproval: na, validationStatus: vs });
+          console.log('✅ Statut récupéré:', {
+            profileType: pt,
+            needsApproval: na,
+            validationStatus: vs,
+          });
         }
-        
+
         console.log('🔍 Store mis à jour avec profileType:', profileType);
         set({ user, loading: false, profileType, shouldOnboard, needsApproval, validationStatus });
       } catch (error) {
-        set({ loading: false, profileType: null, shouldOnboard: false, needsApproval: false, validationStatus: undefined });
+        set({
+          loading: false,
+          profileType: null,
+          shouldOnboard: false,
+          needsApproval: false,
+          validationStatus: undefined,
+        });
         throw error;
       }
     },
@@ -451,7 +535,14 @@ export const useAuthStore = create<AuthState>((set) => {
         localStorage.removeItem('user_profile_type');
         localStorage.removeItem('user_raison_social');
         localStorage.removeItem('user_validation_status');
-        set({ user: null, loading: false, profileType: null, shouldOnboard: false, needsApproval: false, validationStatus: undefined });
+        set({
+          user: null,
+          loading: false,
+          profileType: null,
+          shouldOnboard: false,
+          needsApproval: false,
+          validationStatus: undefined,
+        });
       } catch (error) {
         set({ loading: false });
         throw error;
@@ -461,28 +552,29 @@ export const useAuthStore = create<AuthState>((set) => {
     refreshUserStatus: async () => {
       const { user } = useAuthStore.getState();
       if (!user) return;
-      
+
       set({ loading: true });
       try {
         console.log('🔄 Refreshing user status...');
-        
+
         // Nettoyer le cache localStorage
         localStorage.removeItem('user_profile_type');
         localStorage.removeItem('user_raison_social');
         localStorage.removeItem('user_validation_status');
         localStorage.removeItem('onboardingCompleted');
-        
+
         // Forcer le refresh depuis la DB
-        const { profileType, onboardingCompleted, needsApproval, validationStatus } = await fetchProfileType(user.id, true);
-        
-        set({ 
-          profileType, 
-          shouldOnboard: !onboardingCompleted, 
-          needsApproval, 
-          validationStatus, 
-          loading: false 
+        const { profileType, onboardingCompleted, needsApproval, validationStatus } =
+          await fetchProfileType(user.id, true);
+
+        set({
+          profileType,
+          shouldOnboard: !onboardingCompleted,
+          needsApproval,
+          validationStatus,
+          loading: false,
         });
-        
+
         console.log('✅ User status refreshed:', { profileType, needsApproval, validationStatus });
       } catch (error) {
         console.error('❌ Error refreshing user status:', error);

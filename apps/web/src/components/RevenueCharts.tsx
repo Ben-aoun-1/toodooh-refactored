@@ -14,7 +14,7 @@ import {
   Legend,
   ResponsiveContainer,
   AreaChart,
-  Area
+  Area,
 } from 'recharts';
 import { TrendingUp, TrendingDown, DollarSign, Monitor, MapPin } from 'lucide-react';
 
@@ -41,30 +41,42 @@ interface RevenueChartsProps {
   period: 'monthly' | 'quarterly' | 'yearly';
 }
 
-const COLORS = ['#00B3A6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4', '#84CC16', '#F97316'];
+const COLORS = [
+  '#00B3A6',
+  '#10B981',
+  '#F59E0B',
+  '#EF4444',
+  '#8B5CF6',
+  '#06B6D4',
+  '#84CC16',
+  '#F97316',
+];
 
 export default function RevenueCharts({ monthlyData, screenData, period }: RevenueChartsProps) {
   // Préparer les données pour le graphique en barres des écrans
   const screenChartData = screenData
     .sort((a, b) => b.total_revenue - a.total_revenue)
     .slice(0, 8) // Top 8 écrans
-    .map(screen => ({
+    .map((screen) => ({
       name: screen.screen_name,
       revenue: screen.total_revenue,
       monthly: screen.monthly_revenue,
-      location: screen.location
+      location: screen.location,
     }));
 
   // Préparer les données pour le graphique circulaire par emplacement
-  const locationData = screenData.reduce((acc, screen) => {
-    const location = screen.location;
-    if (!acc[location]) {
-      acc[location] = { name: location, value: 0, count: 0 };
-    }
-    acc[location].value += screen.total_revenue;
-    acc[location].count += 1;
-    return acc;
-  }, {} as Record<string, { name: string; value: number; count: number }>);
+  const locationData = screenData.reduce(
+    (acc, screen) => {
+      const location = screen.location;
+      if (!acc[location]) {
+        acc[location] = { name: location, value: 0, count: 0 };
+      }
+      acc[location].value += screen.total_revenue;
+      acc[location].count += 1;
+      return acc;
+    },
+    {} as Record<string, { name: string; value: number; count: number }>,
+  );
 
   const locationChartData = Object.values(locationData)
     .sort((a, b) => b.value - a.value)
@@ -76,7 +88,7 @@ export default function RevenueCharts({ monthlyData, screenData, period }: Reven
       style: 'currency',
       currency: 'TND',
       minimumFractionDigits: 0,
-      maximumFractionDigits: 0
+      maximumFractionDigits: 0,
     }).format(value);
   };
 
@@ -120,32 +132,36 @@ export default function RevenueCharts({ monthlyData, screenData, period }: Reven
                 ) : (
                   <TrendingDown className="h-4 w-4 text-red-600" />
                 )}
-                <span className={`font-semibold ${
-                  monthlyData[monthlyData.length - 1]?.growth >= 0 ? 'text-green-600' : 'text-red-600'
-                }`}>
+                <span
+                  className={`font-semibold ${
+                    monthlyData[monthlyData.length - 1]?.growth >= 0
+                      ? 'text-green-600'
+                      : 'text-red-600'
+                  }`}
+                >
                   {formatPercentage(monthlyData[monthlyData.length - 1]?.growth || 0)}
                 </span>
               </div>
             </div>
           </div>
         </div>
-        
+
         <ResponsiveContainer width="100%" height={300}>
           <AreaChart data={monthlyData}>
             <defs>
               <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#00B3A6" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="#00B3A6" stopOpacity={0.1}/>
+                <stop offset="5%" stopColor="#00B3A6" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#00B3A6" stopOpacity={0.1} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.1)" />
-            <XAxis 
-              dataKey="month" 
+            <XAxis
+              dataKey="month"
               stroke="rgba(0,0,0,0.6)"
               fontSize={12}
               tick={{ fill: 'rgba(0,0,0,0.7)' }}
             />
-            <YAxis 
+            <YAxis
               stroke="rgba(0,0,0,0.6)"
               fontSize={12}
               tick={{ fill: 'rgba(0,0,0,0.7)' }}
@@ -176,12 +192,12 @@ export default function RevenueCharts({ monthlyData, screenData, period }: Reven
             <span className="text-sm">{screenData.length} écrans</span>
           </div>
         </div>
-        
+
         <ResponsiveContainer width="100%" height={300}>
           <BarChart data={screenChartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.1)" />
-            <XAxis 
-              dataKey="name" 
+            <XAxis
+              dataKey="name"
               stroke="rgba(0,0,0,0.6)"
               fontSize={11}
               angle={-45}
@@ -189,7 +205,7 @@ export default function RevenueCharts({ monthlyData, screenData, period }: Reven
               height={80}
               tick={{ fill: 'rgba(0,0,0,0.7)' }}
             />
-            <YAxis 
+            <YAxis
               stroke="rgba(0,0,0,0.6)"
               fontSize={12}
               tick={{ fill: 'rgba(0,0,0,0.7)' }}
@@ -215,7 +231,7 @@ export default function RevenueCharts({ monthlyData, screenData, period }: Reven
               <span className="text-sm">{locationChartData.length} zones</span>
             </div>
           </div>
-          
+
           <ResponsiveContainer width="100%" height={250}>
             <PieChart>
               <Pie
@@ -232,14 +248,14 @@ export default function RevenueCharts({ monthlyData, screenData, period }: Reven
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip 
+              <Tooltip
                 formatter={(value: number) => [formatCurrency(value), 'Revenus']}
                 labelStyle={{ color: '#000' }}
-                contentStyle={{ 
-                  backgroundColor: 'white', 
+                contentStyle={{
+                  backgroundColor: 'white',
                   border: '1px solid #e5e7eb',
                   borderRadius: '8px',
-                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
                 }}
               />
             </PieChart>
@@ -258,17 +274,19 @@ export default function RevenueCharts({ monthlyData, screenData, period }: Reven
               <span className="text-sm">Période: {period}</span>
             </div>
           </div>
-          
+
           <ResponsiveContainer width="100%" height={250}>
-            <LineChart data={monthlyData.slice(-6)}> {/* 6 derniers mois */}
+            <LineChart data={monthlyData.slice(-6)}>
+              {' '}
+              {/* 6 derniers mois */}
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.1)" />
-              <XAxis 
-                dataKey="month" 
+              <XAxis
+                dataKey="month"
                 stroke="rgba(0,0,0,0.6)"
                 fontSize={11}
                 tick={{ fill: 'rgba(0,0,0,0.7)' }}
               />
-              <YAxis 
+              <YAxis
                 stroke="rgba(0,0,0,0.6)"
                 fontSize={11}
                 tick={{ fill: 'rgba(0,0,0,0.7)' }}
@@ -289,7 +307,6 @@ export default function RevenueCharts({ monthlyData, screenData, period }: Reven
           </ResponsiveContainer>
         </div>
       </div>
-
     </div>
   );
-} 
+}

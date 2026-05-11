@@ -21,7 +21,7 @@ export default function UpdatePasswordForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validatePassword(password)) {
       toast.error('Le mot de passe ne respecte pas les critères de sécurité');
       return;
@@ -38,7 +38,7 @@ export default function UpdatePasswordForm() {
       toast.success('Mot de passe mis à jour avec succès');
       navigate('/login');
     } catch (error: any) {
-      toast.error(error?.message || 'Une erreur inattendue s\'est produite');
+      toast.error(error?.message || "Une erreur inattendue s'est produite");
     } finally {
       setLoading(false);
     }
@@ -76,29 +76,37 @@ export default function UpdatePasswordForm() {
             {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
           </button>
         </div>
-        
+
         {/* Indicateurs de validation du mot de passe */}
         <div className="mt-3 space-y-2">
           <div className="flex items-center text-xs">
-            <CheckCircle className={`w-4 h-4 mr-2 ${passwordValidation.minLength ? 'text-[#00B3A6]' : 'text-white/40'}`} />
+            <CheckCircle
+              className={`w-4 h-4 mr-2 ${passwordValidation.minLength ? 'text-[#00B3A6]' : 'text-white/40'}`}
+            />
             <span className={passwordValidation.minLength ? 'text-white' : 'text-white/60'}>
               Au moins 8 caractères
             </span>
           </div>
           <div className="flex items-center text-xs">
-            <CheckCircle className={`w-4 h-4 mr-2 ${passwordValidation.hasUpperCase ? 'text-[#00B3A6]' : 'text-white/40'}`} />
+            <CheckCircle
+              className={`w-4 h-4 mr-2 ${passwordValidation.hasUpperCase ? 'text-[#00B3A6]' : 'text-white/40'}`}
+            />
             <span className={passwordValidation.hasUpperCase ? 'text-white' : 'text-white/60'}>
               Une lettre majuscule
             </span>
           </div>
           <div className="flex items-center text-xs">
-            <CheckCircle className={`w-4 h-4 mr-2 ${passwordValidation.hasLowerCase ? 'text-[#00B3A6]' : 'text-white/40'}`} />
+            <CheckCircle
+              className={`w-4 h-4 mr-2 ${passwordValidation.hasLowerCase ? 'text-[#00B3A6]' : 'text-white/40'}`}
+            />
             <span className={passwordValidation.hasLowerCase ? 'text-white' : 'text-white/60'}>
               Une lettre minuscule
             </span>
           </div>
           <div className="flex items-center text-xs">
-            <CheckCircle className={`w-4 h-4 mr-2 ${passwordValidation.hasNumber ? 'text-[#00B3A6]' : 'text-white/40'}`} />
+            <CheckCircle
+              className={`w-4 h-4 mr-2 ${passwordValidation.hasNumber ? 'text-[#00B3A6]' : 'text-white/40'}`}
+            />
             <span className={passwordValidation.hasNumber ? 'text-white' : 'text-white/60'}>
               Un chiffre
             </span>
@@ -123,9 +131,7 @@ export default function UpdatePasswordForm() {
           />
         </div>
         {confirmPassword && password !== confirmPassword && (
-          <p className="mt-2 text-sm text-red-400">
-            Les mots de passe ne correspondent pas
-          </p>
+          <p className="mt-2 text-sm text-red-400">Les mots de passe ne correspondent pas</p>
         )}
       </div>
 

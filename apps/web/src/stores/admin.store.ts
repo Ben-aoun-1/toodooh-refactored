@@ -8,7 +8,7 @@ interface AdminState {
   admin: AdminProfile | null;
   loading: boolean;
   initialized: boolean;
-  
+
   // Actions
   initialize: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
@@ -27,12 +27,12 @@ export const useAdminStore = create<AdminState>()(
         try {
           console.log('🔄 Admin store: Starting initialization...');
           set({ loading: true });
-          
+
           // Vérifier la session actuelle d'abord
           console.log('🔄 Admin store: Getting current admin...');
           const admin = await adminService.getCurrentAdmin();
           console.log('✅ Admin store: Current admin:', admin);
-          
+
           set({ admin, initialized: true, loading: false });
           console.log('✅ Admin store: Initialization complete');
         } catch (error) {
@@ -69,10 +69,10 @@ export const useAdminStore = create<AdminState>()(
     }),
     {
       name: 'admin-storage',
-      partialize: (state) => ({ 
+      partialize: (state) => ({
         admin: state.admin,
-        initialized: state.admin ? state.initialized : false
+        initialized: state.admin ? state.initialized : false,
       }),
-    }
-  )
+    },
+  ),
 );

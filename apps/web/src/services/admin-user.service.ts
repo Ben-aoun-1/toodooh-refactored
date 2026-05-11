@@ -34,13 +34,13 @@ export const adminUserService = {
   async getUsers(): Promise<AdminUser[]> {
     try {
       console.log('🔍 Fetching users from business_profiles...');
-      
+
       // Récupérer les données de business_profiles (en excluant les admins)
       const { data, error } = await supabase
         .from('business_profiles')
         .select('*')
         .order('created_at', { ascending: false });
-      
+
       if (error) {
         console.error('❌ Error fetching users:', error);
         console.error('❌ Error details:', JSON.stringify(error, null, 2));
@@ -49,26 +49,29 @@ export const adminUserService = {
 
       // Debug: Logger les données récupérées pour vérifier la colonne formule
       console.log('🔍 Admin service - Données récupérées:', data?.slice(0, 2));
-      console.log('🔍 Admin service - Colonnes disponibles:', data?.[0] ? Object.keys(data[0]) : 'Aucune donnée');
+      console.log(
+        '🔍 Admin service - Colonnes disponibles:',
+        data?.[0] ? Object.keys(data[0]) : 'Aucune donnée',
+      );
 
       // Filtrer les utilisateurs qui sont aussi des admins
-      const userIds = (data || []).map(u => u.user_id);
+      const userIds = (data || []).map((u) => u.user_id);
       const { data: adminProfiles } = await supabase
         .from('admin_profiles')
         .select('user_id')
         .in('user_id', userIds);
-      
-      const adminUserIds = new Set((adminProfiles || []).map(a => a.user_id));
-      
+
+      const adminUserIds = new Set((adminProfiles || []).map((a) => a.user_id));
+
       // Filtrer les admins de la liste
-      const filteredData = (data || []).filter(u => !adminUserIds.has(u.user_id));
+      const filteredData = (data || []).filter((u) => !adminUserIds.has(u.user_id));
 
       console.log('✅ Users fetched successfully:', data?.length || 0, 'users');
       console.log('🔒 Admins filtered:', adminUserIds.size, 'admins excluded');
       console.log('📊 Final count:', filteredData.length, 'business users');
-      
+
       // Transformer les données pour correspondre à l'interface AdminUser
-      const transformedUsers: AdminUser[] = filteredData.map(user => ({
+      const transformedUsers: AdminUser[] = filteredData.map((user) => ({
         id: user.id,
         user_id: user.user_id,
         email: user.email || 'N/A', // L'email est maintenant dans business_profiles
@@ -79,7 +82,7 @@ export const adminUserService = {
         city: user.city || 'N/A',
         postal_code: user.postal_code || user.zip_code || 'N/A',
         profile_type: user.profile_type || 'advertiser',
-        status: user.status || 'pending' as const,
+        status: user.status || ('pending' as const),
         created_at: user.created_at,
         updated_at: user.updated_at,
         validation_notes: user.validation_notes,
@@ -94,9 +97,9 @@ export const adminUserService = {
         cin_doc_url: user.cin_doc_url, // Document CIN pour les propriétaires individuels
         formule: user.formule, // Formule choisie par le propriétaire
         agent_toodooh: user.agent_toodooh, // Agent Toodooh pour les propriétaires
-        number_of_screens: user.number_of_screens // Nombre d'écrans pour les propriétaires
+        number_of_screens: user.number_of_screens, // Nombre d'écrans pour les propriétaires
       }));
-      
+
       return transformedUsers;
     } catch (error) {
       console.error('❌ Exception in getUsers:', error);
@@ -123,7 +126,7 @@ export const adminUserService = {
         updated_at: '2024-01-15T10:30:00Z',
         verification_status: 'pending',
         business_type: 'local',
-        tax_number: 'TEMP-123456'
+        tax_number: 'TEMP-123456',
       },
       {
         id: '2',
@@ -141,7 +144,7 @@ export const adminUserService = {
         updated_at: '2024-01-20T09:15:00Z',
         verification_status: 'approved',
         business_type: 'local',
-        tax_number: 'TEMP-789012'
+        tax_number: 'TEMP-789012',
       },
       {
         id: '3',
@@ -158,8 +161,8 @@ export const adminUserService = {
         updated_at: '2024-01-05T16:45:00Z',
         verification_status: 'rejected',
         business_type: 'local',
-        tax_number: 'TEMP-345678'
-      }
+        tax_number: 'TEMP-345678',
+      },
     ];
   },
 
@@ -167,23 +170,23 @@ export const adminUserService = {
   async approveUser(userId: string, adminId?: string, notes?: string): Promise<boolean> {
     try {
       console.log('🔄 Approving user:', userId, 'by admin:', adminId);
-      
+
       const updateData: any = {
         status: 'approved',
         verification_status: 'approved', // ✅ IMPORTANT : Mettre à jour verification_status aussi
         onboarding_completed: true, // ✅ Active la porte du cache côté client (évite les re-fetchs inutiles)
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       };
-      
+
       if (adminId) {
         updateData.validated_by = adminId;
         updateData.validated_at = new Date().toISOString();
       }
-      
+
       if (notes) {
         updateData.validation_notes = notes;
       }
-      
+
       const { error } = await supabase
         .from('business_profiles')
         .update(updateData)
@@ -207,22 +210,22 @@ export const adminUserService = {
   async rejectUser(userId: string, adminId?: string, notes?: string): Promise<boolean> {
     try {
       console.log('🔄 Rejecting user:', userId, 'by admin:', adminId);
-      
+
       const updateData: any = {
         status: 'rejected',
         verification_status: 'rejected', // ✅ IMPORTANT : Mettre à jour verification_status aussi
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       };
-      
+
       if (adminId) {
         updateData.validated_by = adminId;
         updateData.validated_at = new Date().toISOString();
       }
-      
+
       if (notes) {
         updateData.validation_notes = notes;
       }
-      
+
       const { error } = await supabase
         .from('business_profiles')
         .update(updateData)
@@ -247,7 +250,8 @@ export const adminUserService = {
     try {
       const { data, error } = await supabase
         .from('business_profiles')
-        .select(`
+        .select(
+          `
           id,
           user_id,
           business_name,
@@ -259,7 +263,8 @@ export const adminUserService = {
           profile_type,
           created_at,
           updated_at
-        `)
+        `,
+        )
         .eq('id', userId)
         .single();
 
@@ -279,7 +284,7 @@ export const adminUserService = {
         validated_at: undefined,
         verification_status: undefined,
         business_type: undefined,
-        tax_number: undefined
+        tax_number: undefined,
       };
 
       return transformedUser;
@@ -293,7 +298,7 @@ export const adminUserService = {
   async deleteUser(userId: string): Promise<boolean> {
     try {
       console.log('🗑️ Starting complete user deletion for:', userId);
-      
+
       // 1. Récupérer le user_id depuis business_profiles
       const { data: businessProfile, error: profileError } = await supabase
         .from('business_profiles')
@@ -310,7 +315,7 @@ export const adminUserService = {
       console.log('🔍 Found auth user_id:', authUserId);
 
       // 2. Supprimer de toutes les tables liées (dans l'ordre pour respecter les contraintes de clés étrangères)
-      
+
       // Supprimer les campagnes publicitaires
       const { error: campaignsError } = await supabase
         .from('advertising_campaigns')
@@ -396,13 +401,15 @@ export const adminUserService = {
         return false;
       }
 
-      console.log('✅ Vérification : Le profil n\'existe plus dans la base');
+      console.log("✅ Vérification : Le profil n'existe plus dans la base");
 
       // 3. Note : L'utilisateur d'authentification n'est pas supprimé car cela nécessite
       // des permissions service_role qui ne sont pas disponibles côté client.
       // L'utilisateur auth restera mais n'aura plus de profil business associé.
-      console.log('ℹ️ Business profile and related data deleted. Auth user remains but cannot access the system.');
-      
+      console.log(
+        'ℹ️ Business profile and related data deleted. Auth user remains but cannot access the system.',
+      );
+
       console.log('✅ User deletion completed successfully');
       return true;
     } catch (error) {
@@ -425,9 +432,7 @@ export const adminUserService = {
     };
   }> {
     try {
-      const { data, error } = await supabase
-        .from('business_profiles')
-        .select('profile_type');
+      const { data, error } = await supabase.from('business_profiles').select('profile_type');
 
       if (error) {
         console.error('Error fetching user stats:', error);
@@ -440,8 +445,8 @@ export const adminUserService = {
             individual_owner: 0,
             fleet_owner: 0,
             advertiser: 0,
-            agency: 0
-          }
+            agency: 0,
+          },
         };
       }
 
@@ -453,11 +458,11 @@ export const adminUserService = {
         approved: 0,
         rejected: 0,
         byType: {
-          individual_owner: data.filter(u => u.profile_type === 'individual_owner').length,
-          fleet_owner: data.filter(u => u.profile_type === 'fleet_owner').length,
-          advertiser: data.filter(u => u.profile_type === 'advertiser').length,
-          agency: data.filter(u => u.profile_type === 'agency').length
-        }
+          individual_owner: data.filter((u) => u.profile_type === 'individual_owner').length,
+          fleet_owner: data.filter((u) => u.profile_type === 'fleet_owner').length,
+          advertiser: data.filter((u) => u.profile_type === 'advertiser').length,
+          agency: data.filter((u) => u.profile_type === 'agency').length,
+        },
       };
 
       return stats;
@@ -472,9 +477,9 @@ export const adminUserService = {
           individual_owner: 0,
           fleet_owner: 0,
           advertiser: 0,
-          agency: 0
-        }
+          agency: 0,
+        },
       };
     }
-  }
+  },
 };

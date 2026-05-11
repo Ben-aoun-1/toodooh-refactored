@@ -1,8 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Circle, useMapEvents, Marker } from 'react-leaflet';
-import { predefinedZonesService, type PredefinedZone } from '../../services/predefined-zones.service';
+import {
+  predefinedZonesService,
+  type PredefinedZone,
+} from '../../services/predefined-zones.service';
 import AdminLayout from '../../components/admin/AdminLayout';
-import { MapPin, Plus, Edit, Trash2, Search, X, Eye, EyeOff, Save, Upload, Flame } from 'lucide-react';
+import {
+  MapPin,
+  Plus,
+  Edit,
+  Trash2,
+  Search,
+  X,
+  Eye,
+  EyeOff,
+  Save,
+  Upload,
+  Flame,
+} from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -16,7 +31,11 @@ L.Icon.Default.mergeOptions({
 });
 
 // Composant pour capturer les clics sur la carte
-function MapClickHandler({ onLocationSelect }: { onLocationSelect: (lat: number, lng: number) => void }) {
+function MapClickHandler({
+  onLocationSelect,
+}: {
+  onLocationSelect: (lat: number, lng: number) => void;
+}) {
   useMapEvents({
     click: (e) => {
       onLocationSelect(e.latlng.lat, e.latlng.lng);
@@ -32,8 +51,13 @@ export default function GeographicZonesManagement() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [showModal, setShowModal] = useState(false);
   const [editingZone, setEditingZone] = useState<PredefinedZone | null>(null);
-  const [selectedLocations, setSelectedLocations] = useState<Array<{ lat: number; lng: number }>>([]);
-  const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number }>({ lat: 36.8065, lng: 10.1815 }); // Tunis par défaut
+  const [selectedLocations, setSelectedLocations] = useState<Array<{ lat: number; lng: number }>>(
+    [],
+  );
+  const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number }>({
+    lat: 36.8065,
+    lng: 10.1815,
+  }); // Tunis par défaut
   const [radius, setRadius] = useState(5000); // 5km par défaut
   const [zoneName, setZoneName] = useState('');
   const [zoneDescription, setZoneDescription] = useState('');
@@ -61,10 +85,12 @@ export default function GeographicZonesManagement() {
     }
   };
 
-  const filteredZones = zones.filter(zone => {
-    const matchesSearch = zone.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  const filteredZones = zones.filter((zone) => {
+    const matchesSearch =
+      zone.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (zone.description && zone.description.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesStatus = statusFilter === 'all' || 
+    const matchesStatus =
+      statusFilter === 'all' ||
       (statusFilter === 'active' && zone.is_active) ||
       (statusFilter === 'inactive' && !zone.is_active);
     return matchesSearch && matchesStatus;
@@ -73,8 +99,8 @@ export default function GeographicZonesManagement() {
   const handleAddLocation = (lat: number, lng: number) => {
     setCurrentLocation({ lat, lng });
     // Ajouter à la liste des emplacements sélectionnés si pas déjà présent
-    const exists = selectedLocations.some(loc => 
-      Math.abs(loc.lat - lat) < 0.0001 && Math.abs(loc.lng - lng) < 0.0001
+    const exists = selectedLocations.some(
+      (loc) => Math.abs(loc.lat - lat) < 0.0001 && Math.abs(loc.lng - lng) < 0.0001,
     );
     if (!exists) {
       setSelectedLocations([...selectedLocations, { lat, lng }]);
@@ -139,7 +165,7 @@ export default function GeographicZonesManagement() {
       setZoneImageUrl(url);
       toast.success('Image mise à jour');
     } catch (err: any) {
-      toast.error(err?.message || 'Erreur lors de l\'upload');
+      toast.error(err?.message || "Erreur lors de l'upload");
     } finally {
       setUploadingImage(false);
       e.target.value = '';
@@ -223,8 +249,10 @@ export default function GeographicZonesManagement() {
 
   const handleBulkToggleActive = async (ids: string[], activate: boolean) => {
     try {
-      await Promise.all(ids.map(id => predefinedZonesService.toggleActive(id, activate)));
-      toast.success(`${ids.length} zone(s) ${activate ? 'publiée(s)' : 'dépubliée(s)'} avec succès`);
+      await Promise.all(ids.map((id) => predefinedZonesService.toggleActive(id, activate)));
+      toast.success(
+        `${ids.length} zone(s) ${activate ? 'publiée(s)' : 'dépubliée(s)'} avec succès`,
+      );
       loadZones();
     } catch (error: any) {
       console.error('Erreur lors du changement de statut en masse:', error);
@@ -233,7 +261,10 @@ export default function GeographicZonesManagement() {
   };
 
   return (
-    <AdminLayout title="Gestion des Zones Géographiques" subtitle="Gérez les zones géographiques prédéfinies">
+    <AdminLayout
+      title="Gestion des Zones Géographiques"
+      subtitle="Gérez les zones géographiques prédéfinies"
+    >
       <div className="space-y-6">
         {/* Barre de recherche et filtres */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
@@ -284,10 +315,7 @@ export default function GeographicZonesManagement() {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      <input
-                        type="checkbox"
-                        className="rounded border-gray-300"
-                      />
+                      <input type="checkbox" className="rounded border-gray-300" />
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Image
@@ -319,14 +347,15 @@ export default function GeographicZonesManagement() {
                   {filteredZones.map((zone) => (
                     <tr key={zone.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <input
-                          type="checkbox"
-                          className="rounded border-gray-300"
-                        />
+                        <input type="checkbox" className="rounded border-gray-300" />
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {zone.image_url ? (
-                          <img src={zone.image_url} alt="" className="w-12 h-12 object-cover rounded-lg border border-gray-200" />
+                          <img
+                            src={zone.image_url}
+                            alt=""
+                            className="w-12 h-12 object-cover rounded-lg border border-gray-200"
+                          />
                         ) : (
                           <div className="w-12 h-12 rounded-lg border border-gray-200 bg-gray-100 flex items-center justify-center">
                             <MapPin className="w-5 h-5 text-gray-400" />
@@ -361,11 +390,13 @@ export default function GeographicZonesManagement() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                          zone.is_active
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-gray-100 text-gray-800'
-                        }`}>
+                        <span
+                          className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                            zone.is_active
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-gray-100 text-gray-800'
+                          }`}
+                        >
                           {zone.is_active ? 'Publiée' : 'Dépubliée'}
                         </span>
                       </td>
@@ -376,7 +407,11 @@ export default function GeographicZonesManagement() {
                             className="text-blue-600 hover:text-blue-900"
                             title={zone.is_active ? 'Dépublier' : 'Publier'}
                           >
-                            {zone.is_active ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            {zone.is_active ? (
+                              <EyeOff className="w-4 h-4" />
+                            ) : (
+                              <Eye className="w-4 h-4" />
+                            )}
                           </button>
                           <button
                             onClick={() => handleOpenModal(zone)}
@@ -411,10 +446,7 @@ export default function GeographicZonesManagement() {
               <h3 className="text-xl font-bold text-gray-900">
                 {editingZone ? 'Modifier la zone' : 'Ajouter une nouvelle zone'}
               </h3>
-              <button
-                onClick={handleCloseModal}
-                className="text-gray-400 hover:text-gray-600"
-              >
+              <button onClick={handleCloseModal} className="text-gray-400 hover:text-gray-600">
                 <X className="w-6 h-6" />
               </button>
             </div>
@@ -454,7 +486,11 @@ export default function GeographicZonesManagement() {
                       </label>
                       <div className="flex items-center gap-4">
                         {zoneImageUrl ? (
-                          <img src={zoneImageUrl} alt={zoneName} className="w-24 h-24 object-cover rounded-xl border border-gray-200" />
+                          <img
+                            src={zoneImageUrl}
+                            alt={zoneName}
+                            className="w-24 h-24 object-cover rounded-xl border border-gray-200"
+                          />
                         ) : (
                           <div className="w-24 h-24 rounded-xl border border-gray-200 bg-gray-50 flex items-center justify-center">
                             <MapPin className="w-8 h-8 text-gray-300" />
@@ -462,8 +498,18 @@ export default function GeographicZonesManagement() {
                         )}
                         <label className="cursor-pointer flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50">
                           <Upload className="w-4 h-4" />
-                          {uploadingImage ? 'Upload...' : (zoneImageUrl ? 'Changer' : 'Ajouter une image')}
-                          <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} disabled={uploadingImage} />
+                          {uploadingImage
+                            ? 'Upload...'
+                            : zoneImageUrl
+                              ? 'Changer'
+                              : 'Ajouter une image'}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={handleImageChange}
+                            disabled={uploadingImage}
+                          />
                         </label>
                       </div>
                     </div>
@@ -476,7 +522,10 @@ export default function GeographicZonesManagement() {
                       onChange={(e) => setZoneIsHot(e.target.checked)}
                       className="rounded border-gray-300 text-[#00B3A6] focus:ring-[#00B3A6]"
                     />
-                    <label htmlFor="zone-is-hot" className="flex items-center gap-1.5 text-sm font-medium text-gray-700">
+                    <label
+                      htmlFor="zone-is-hot"
+                      className="flex items-center gap-1.5 text-sm font-medium text-gray-700"
+                    >
                       <Flame className="w-4 h-4 text-orange-500" />
                       Tag &quot;Hot right now&quot; (zone très utilisée)
                     </label>
@@ -514,7 +563,7 @@ export default function GeographicZonesManagement() {
                       step="100"
                       className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#00B3A6]"
                       style={{
-                        background: `linear-gradient(to right, #00B3A6 0%, #00B3A6 ${((radius - 100) / (50000 - 100)) * 100}%, #e5e7eb ${((radius - 100) / (50000 - 100)) * 100}%, #e5e7eb 100%)`
+                        background: `linear-gradient(to right, #00B3A6 0%, #00B3A6 ${((radius - 100) / (50000 - 100)) * 100}%, #e5e7eb ${((radius - 100) / (50000 - 100)) * 100}%, #e5e7eb 100%)`,
                       }}
                     />
                     <div className="flex justify-between text-xs text-gray-500 mt-1">
@@ -531,7 +580,10 @@ export default function GeographicZonesManagement() {
                       </label>
                       <div className="space-y-2 max-h-32 overflow-y-auto">
                         {selectedLocations.map((loc, index) => (
-                          <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                          <div
+                            key={index}
+                            className="flex items-center justify-between p-2 bg-gray-50 rounded-lg"
+                          >
                             <span className="text-sm text-gray-700">
                               {loc.lat.toFixed(4)}, {loc.lng.toFixed(4)}
                             </span>
@@ -570,7 +622,7 @@ export default function GeographicZonesManagement() {
                       minZoom={8}
                     />
                     <MapClickHandler onLocationSelect={handleAddLocation} />
-                    
+
                     {/* Cercles pour chaque emplacement sélectionné */}
                     {selectedLocations.map((loc, index) => (
                       <Circle
@@ -585,7 +637,7 @@ export default function GeographicZonesManagement() {
                         }}
                       />
                     ))}
-                    
+
                     {/* Marqueur pour l'emplacement actuel */}
                     {currentLocation && (
                       <Marker position={[currentLocation.lat, currentLocation.lng]} />
@@ -597,8 +649,9 @@ export default function GeographicZonesManagement() {
               {/* Instructions */}
               <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
                 <p className="text-sm text-blue-800">
-                  <strong>Instructions :</strong> Cliquez sur la carte pour sélectionner un ou plusieurs emplacements. 
-                  Chaque emplacement créera une zone avec le nom et le rayon spécifiés.
+                  <strong>Instructions :</strong> Cliquez sur la carte pour sélectionner un ou
+                  plusieurs emplacements. Chaque emplacement créera une zone avec le nom et le rayon
+                  spécifiés.
                 </p>
               </div>
 
@@ -625,4 +678,3 @@ export default function GeographicZonesManagement() {
     </AdminLayout>
   );
 }
-

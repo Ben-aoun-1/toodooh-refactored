@@ -1,12 +1,5 @@
 import React, { useState } from 'react';
-import { 
-  Calendar, 
-  X, 
-  Save, 
-  Monitor,
-  AlertTriangle,
-  CheckCircle
-} from 'lucide-react';
+import { Calendar, X, Save, Monitor, AlertTriangle, CheckCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 interface Screen {
@@ -29,7 +22,12 @@ interface UnavailabilityCalendarProps {
   defaultTab?: 'calendar' | 'declare';
 }
 
-export default function UnavailabilityCalendar({ isOpen, onClose, screens, defaultTab = 'calendar' }: UnavailabilityCalendarProps) {
+export default function UnavailabilityCalendar({
+  isOpen,
+  onClose,
+  screens,
+  defaultTab = 'calendar',
+}: UnavailabilityCalendarProps) {
   const [activeTab, setActiveTab] = useState<'calendar' | 'declare'>(defaultTab);
   const [selectedScreen, setSelectedScreen] = useState<string>('');
   const [startDate, setStartDate] = useState<string>('');
@@ -39,7 +37,7 @@ export default function UnavailabilityCalendar({ isOpen, onClose, screens, defau
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!selectedScreen || !startDate || !endDate || !reason) {
       toast.error('Veuillez remplir tous les champs');
       return;
@@ -51,25 +49,27 @@ export default function UnavailabilityCalendar({ isOpen, onClose, screens, defau
     }
 
     setIsSubmitting(true);
-    
+
     try {
       // Simuler l'envoi des données
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const selectedScreenData = screens.find(s => s.id === selectedScreen);
-      
-      toast.success(`Indisponibilité déclarée pour ${selectedScreenData?.name} du ${new Date(startDate).toLocaleDateString()} au ${new Date(endDate).toLocaleDateString()}`);
-      
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      const selectedScreenData = screens.find((s) => s.id === selectedScreen);
+
+      toast.success(
+        `Indisponibilité déclarée pour ${selectedScreenData?.name} du ${new Date(startDate).toLocaleDateString()} au ${new Date(endDate).toLocaleDateString()}`,
+      );
+
       // Reset form
       setSelectedScreen('');
       setStartDate('');
       setEndDate('');
       setReason('');
-      
+
       // Fermer le modal
       onClose();
     } catch (error) {
-      toast.error('Erreur lors de la déclaration d\'indisponibilité');
+      toast.error("Erreur lors de la déclaration d'indisponibilité");
     } finally {
       setIsSubmitting(false);
     }
@@ -86,10 +86,7 @@ export default function UnavailabilityCalendar({ isOpen, onClose, screens, defau
             <Calendar className="h-6 w-6 text-blue-600" />
             <h2 className="text-xl font-bold text-gray-900">Calendrier des Indisponibilités</h2>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-          >
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
             <X className="h-5 w-5 text-gray-600" />
           </button>
         </div>
@@ -129,8 +126,12 @@ export default function UnavailabilityCalendar({ isOpen, onClose, screens, defau
             <div className="space-y-6">
               <div className="text-center py-12">
                 <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Calendrier des Indisponibilités</h3>
-                <p className="text-gray-600 mb-6">Visualisez et gérez les périodes d'indisponibilité de vos écrans</p>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  Calendrier des Indisponibilités
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  Visualisez et gérez les périodes d'indisponibilité de vos écrans
+                </p>
                 <div className="space-y-4">
                   <button
                     onClick={() => setActiveTab('declare')}
@@ -139,7 +140,9 @@ export default function UnavailabilityCalendar({ isOpen, onClose, screens, defau
                     <AlertTriangle className="h-5 w-5" />
                     <span>Déclarer une nouvelle indisponibilité</span>
                   </button>
-                  <p className="text-sm text-gray-500">Ou utilisez l'onglet "Déclarer Indisponibilité" ci-dessus</p>
+                  <p className="text-sm text-gray-500">
+                    Ou utilisez l'onglet "Déclarer Indisponibilité" ci-dessus
+                  </p>
                 </div>
               </div>
             </div>
@@ -224,7 +227,7 @@ export default function UnavailabilityCalendar({ isOpen, onClose, screens, defau
                   className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
                 >
                   <Save className="h-4 w-4" />
-                  <span>{isSubmitting ? 'Enregistrement...' : 'Valider l\'indisponibilité'}</span>
+                  <span>{isSubmitting ? 'Enregistrement...' : "Valider l'indisponibilité"}</span>
                 </button>
               </div>
             </form>

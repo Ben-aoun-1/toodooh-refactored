@@ -56,25 +56,27 @@ export const campaignScreensService = {
       console.log('🔍 Chargement de tous les écrans actifs...');
       const { data, error } = await supabase
         .from('screens')
-        .select('id, name, location, address, coordinates, screen_type, status, is_online, monthly_revenue, owner_id')
+        .select(
+          'id, name, location, address, coordinates, screen_type, status, is_online, monthly_revenue, owner_id',
+        )
         .eq('status', 'active');
-        // Enlever le filtre is_online pour afficher tous les écrans actifs
+      // Enlever le filtre is_online pour afficher tous les écrans actifs
 
       if (error) {
         console.error('Erreur lors de la récupération des écrans:', error);
         return [];
       }
-      
+
       console.log('📊 Écrans récupérés:', data?.length || 0);
-      
+
       // Récupérer les noms des propriétaires
-      const ownerIds = [...new Set((data || []).map(s => s.owner_id))];
+      const ownerIds = [...new Set((data || []).map((s) => s.owner_id))];
       const { data: owners } = await supabase
         .from('business_profiles')
         .select('user_id, business_name')
         .in('user_id', ownerIds);
-      
-      const ownerMap = new Map(owners?.map(o => [o.user_id, o.business_name]) || []);
+
+      const ownerMap = new Map(owners?.map((o) => [o.user_id, o.business_name]) || []);
 
       // Récupérer les données d'affluence pour chaque écran
       const screensWithAffluence = await Promise.all(
@@ -83,7 +85,7 @@ export const campaignScreensService = {
           if (index < 3) {
             console.log(`📊 Écran ${index + 1}:`, screen.name, '- Affluence:', affluenceData);
           }
-          
+
           // Extraire les coordonnées (format POINT PostgreSQL)
           let coordinates = undefined;
           if (screen.coordinates) {
@@ -94,14 +96,14 @@ export const campaignScreensService = {
                 if (match) {
                   coordinates = {
                     lng: parseFloat(match[1]),
-                    lat: parseFloat(match[2])
+                    lat: parseFloat(match[2]),
                   };
                   console.log('✅ Coordonnées parsées:', screen.name, coordinates);
                 }
               } else if (screen.coordinates.x !== undefined && screen.coordinates.y !== undefined) {
                 coordinates = {
                   lng: screen.coordinates.x,
-                  lat: screen.coordinates.y
+                  lat: screen.coordinates.y,
                 };
                 console.log('✅ Coordonnées objet:', screen.name, coordinates);
               }
@@ -109,11 +111,11 @@ export const campaignScreensService = {
               console.error('❌ Erreur parsing coordinates:', e, screen.coordinates);
             }
           }
-          
+
           if (!coordinates) {
             console.warn('⚠️ Écran sans coordonnées:', screen.name, screen.coordinates);
           }
-          
+
           return {
             id: screen.id,
             name: screen.name,
@@ -125,14 +127,14 @@ export const campaignScreensService = {
             is_online: screen.is_online,
             monthly_revenue: screen.monthly_revenue,
             owner_name: ownerMap.get(screen.owner_id) || 'N/A',
-            affluence_data: affluenceData
+            affluence_data: affluenceData,
           };
-        })
+        }),
       );
 
       console.log('✅ Écrans avec affluence:', screensWithAffluence.length);
       console.log('📍 Exemple coordonnées:', screensWithAffluence[0]?.coordinates);
-      
+
       return screensWithAffluence;
     } catch (error) {
       console.error('Erreur lors de la récupération des écrans:', error);
@@ -162,11 +164,16 @@ export const campaignScreensService = {
           peak_count: 0,
           total_measurements: 0,
           last_heartbeat: new Date().toISOString(),
-          unique_sensors: 0
+          unique_sensors: 0,
         };
       }
-      
-      console.log('✅ Config trouvée pour écran:', screenId, '- Impressions/h:', configData.estimated_impressions_per_hour);
+
+      console.log(
+        '✅ Config trouvée pour écran:',
+        screenId,
+        '- Impressions/h:',
+        configData.estimated_impressions_per_hour,
+      );
 
       // Pour les annonceurs, on utilise uniquement la config (pas besoin de screen_affluence_data)
       return {
@@ -175,13 +182,16 @@ export const campaignScreensService = {
         avg_stay_time: configData.avg_stay_time_ms || 0,
         estimated_impressions_per_hour: configData.estimated_impressions_per_hour || 0,
         peak_hour: configData.peak_hour_start || 12,
-        peak_count: Math.round((configData.avg_passby_per_hour + configData.avg_turnback_per_hour) * (configData.peak_multiplier || 1.5)),
+        peak_count: Math.round(
+          (configData.avg_passby_per_hour + configData.avg_turnback_per_hour) *
+            (configData.peak_multiplier || 1.5),
+        ),
         total_measurements: 0,
         last_heartbeat: new Date().toISOString(),
-        unique_sensors: 1
+        unique_sensors: 1,
       };
     } catch (error) {
-      console.error('Erreur lors de la récupération des données d\'affluence:', error);
+      console.error("Erreur lors de la récupération des données d'affluence:", error);
       return undefined;
     }
   },
@@ -190,33 +200,35 @@ export const campaignScreensService = {
   async getScreensInArea(lat: number, lng: number, radiusKm: number): Promise<CampaignScreen[]> {
     try {
       console.log('🔍 getScreensInArea - Centre:', lat, lng, 'Rayon:', radiusKm, 'km');
-      
+
       // Récupérer tous les écrans actifs
       const { data, error } = await supabase
         .from('screens')
-        .select('id, name, location, address, coordinates, screen_type, status, is_online, monthly_revenue, owner_id')
+        .select(
+          'id, name, location, address, coordinates, screen_type, status, is_online, monthly_revenue, owner_id',
+        )
         .eq('status', 'active');
-        // Enlever le filtre is_online pour afficher tous les écrans actifs
+      // Enlever le filtre is_online pour afficher tous les écrans actifs
 
       if (error) {
         console.error('Erreur lors de la récupération des écrans dans la zone:', error);
         return [];
       }
-      
+
       console.log('📊 Total écrans actifs pour filtrage:', data?.length || 0);
-      
+
       // Récupérer les noms des propriétaires
-      const ownerIds = [...new Set((data || []).map(s => s.owner_id))];
+      const ownerIds = [...new Set((data || []).map((s) => s.owner_id))];
       const { data: owners } = await supabase
         .from('business_profiles')
         .select('user_id, business_name')
         .in('user_id', ownerIds);
-      
-      const ownerMap = new Map(owners?.map(o => [o.user_id, o.business_name]) || []);
+
+      const ownerMap = new Map(owners?.map((o) => [o.user_id, o.business_name]) || []);
 
       // Filtrer par distance et transformer
       const screensInZone: CampaignScreen[] = [];
-      
+
       for (const screen of data || []) {
         // Extraire les coordonnées (POINT PostGIS: x=lng, y=lat)
         let coordinates = undefined;
@@ -227,26 +239,26 @@ export const campaignScreensService = {
               if (match) {
                 coordinates = {
                   lng: parseFloat(match[1]),
-                  lat: parseFloat(match[2])
+                  lat: parseFloat(match[2]),
                 };
               }
             } else if (screen.coordinates.x !== undefined && screen.coordinates.y !== undefined) {
               coordinates = {
                 lng: screen.coordinates.x,
-                lat: screen.coordinates.y
+                lat: screen.coordinates.y,
               };
             }
           } catch (e) {
             console.error('Erreur parsing coordinates:', e);
           }
         }
-        
+
         if (coordinates) {
           const distance = this.calculateDistance(lat, lng, coordinates.lat, coordinates.lng);
-          
+
           if (distance <= radiusKm) {
             const affluenceData = await this.getScreenAffluenceData(screen.id);
-            
+
             screensInZone.push({
               id: screen.id,
               name: screen.name,
@@ -258,12 +270,12 @@ export const campaignScreensService = {
               is_online: screen.is_online,
               monthly_revenue: screen.monthly_revenue,
               owner_name: ownerMap.get(screen.owner_id) || 'N/A',
-              affluence_data: affluenceData
+              affluence_data: affluenceData,
             });
           }
         }
       }
-      
+
       console.log('✅ Écrans filtrés dans la zone:', screensInZone.length);
 
       return screensInZone;
@@ -282,23 +294,32 @@ export const campaignScreensService = {
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
       Math.cos((lat1 * Math.PI) / 180) *
         Math.cos((lat2 * Math.PI) / 180) *
-        Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        Math.sin(dLng / 2) *
+        Math.sin(dLng / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   },
 
   /** Récupérer les localités dans un rayon (carte : un marqueur par localité, pas par écran) */
-  async getLocationsInArea(lat: number, lng: number, radiusKm: number): Promise<CampaignLocation[]> {
+  async getLocationsInArea(
+    lat: number,
+    lng: number,
+    radiusKm: number,
+  ): Promise<CampaignLocation[]> {
     const [locsRes, screenCountsRes] = await Promise.all([
       supabase.from('locations').select('id, name, address, coordinates, owner_id, owner_category'),
-      supabase.from('screens').select('location_id').eq('status', 'active').not('location_id', 'is', null),
+      supabase
+        .from('screens')
+        .select('location_id')
+        .eq('status', 'active')
+        .not('location_id', 'is', null),
     ]);
     const { data: locs, error } = locsRes;
     if (error) {
       console.error('Erreur getLocationsInArea:', error);
       return [];
     }
-    const ownerIds = [...new Set((locs || []).map(l => l.owner_id))];
+    const ownerIds = [...new Set((locs || []).map((l) => l.owner_id))];
     const countByLoc = new Map<string, number>();
     for (const row of screenCountsRes.data || []) {
       if (row.location_id) {
@@ -309,7 +330,8 @@ export const campaignScreensService = {
     const locIdsWithCoords: string[] = [];
     const coordMap = new Map<string, { lat: number; lng: number }>();
     for (const loc of locs || []) {
-      if ((countByLoc.get(loc.id) || 0) === 0) continue; /* Règle : n'afficher que les localités avec au moins un écran */
+      if ((countByLoc.get(loc.id) || 0) === 0)
+        continue; /* Règle : n'afficher que les localités avec au moins un écran */
       let coords: { lat: number; lng: number } | undefined;
       if (loc.coordinates) {
         const c = loc.coordinates as { x?: number; y?: number } | string;
@@ -328,14 +350,36 @@ export const campaignScreensService = {
     }
 
     const [ownersRes, scheduleRes] = await Promise.all([
-      ownerIds.length ? supabase.from('business_profiles').select('user_id, business_name').in('user_id', ownerIds) : { data: [] },
-      locIdsWithCoords.length ? supabase.from('location_affluence_schedule').select('location_id, day_of_week, hour, estimated_impressions').in('location_id', locIdsWithCoords) : { data: [] },
+      ownerIds.length
+        ? supabase
+            .from('business_profiles')
+            .select('user_id, business_name')
+            .in('user_id', ownerIds)
+        : { data: [] },
+      locIdsWithCoords.length
+        ? supabase
+            .from('location_affluence_schedule')
+            .select('location_id, day_of_week, hour, estimated_impressions')
+            .in('location_id', locIdsWithCoords)
+        : { data: [] },
     ]);
-    const ownerMap = new Map((ownersRes.data || []).map((o: { user_id: string; business_name: string }) => [o.user_id, o.business_name]));
-    const scheduleByLoc = new Map<string, { day_of_week: number; hour: number; estimated_impressions: number }[]>();
+    const ownerMap = new Map(
+      (ownersRes.data || []).map((o: { user_id: string; business_name: string }) => [
+        o.user_id,
+        o.business_name,
+      ]),
+    );
+    const scheduleByLoc = new Map<
+      string,
+      { day_of_week: number; hour: number; estimated_impressions: number }[]
+    >();
     for (const row of scheduleRes.data || []) {
       const list = scheduleByLoc.get(row.location_id) || [];
-      list.push({ day_of_week: row.day_of_week, hour: row.hour, estimated_impressions: row.estimated_impressions || 0 });
+      list.push({
+        day_of_week: row.day_of_week,
+        hour: row.hour,
+        estimated_impressions: row.estimated_impressions || 0,
+      });
       scheduleByLoc.set(row.location_id, list);
     }
 
@@ -354,7 +398,12 @@ export const campaignScreensService = {
         owner_category: loc.owner_category ?? null,
         owner_name: ownerMap.get(loc.owner_id) || undefined,
         screen_count: countByLoc.get(loc.id) || 0,
-        affluence_schedule: schedule.map(r => ({ location_id: loc.id, day_of_week: r.day_of_week, hour: r.hour, estimated_impressions: r.estimated_impressions })),
+        affluence_schedule: schedule.map((r) => ({
+          location_id: loc.id,
+          day_of_week: r.day_of_week,
+          hour: r.hour,
+          estimated_impressions: r.estimated_impressions,
+        })),
         total_impressions_per_week: totalPerWeek,
       });
     }
@@ -365,7 +414,11 @@ export const campaignScreensService = {
   async getAllLocationsForMap(): Promise<CampaignLocation[]> {
     const [locsRes, screenCountsRes] = await Promise.all([
       supabase.from('locations').select('id, name, address, coordinates, owner_id, owner_category'),
-      supabase.from('screens').select('location_id').eq('status', 'active').not('location_id', 'is', null),
+      supabase
+        .from('screens')
+        .select('location_id')
+        .eq('status', 'active')
+        .not('location_id', 'is', null),
     ]);
     const { data: locs, error } = locsRes;
     if (error) {
@@ -381,7 +434,8 @@ export const campaignScreensService = {
     const locIdsWithCoords: string[] = [];
     const coordMap = new Map<string, { lat: number; lng: number }>();
     for (const loc of locs || []) {
-      if ((countByLoc.get(loc.id) || 0) === 0) continue; /* Règle 1 : pas d'affichage si aucun écran dans la localité */
+      if ((countByLoc.get(loc.id) || 0) === 0)
+        continue; /* Règle 1 : pas d'affichage si aucun écran dans la localité */
       let coords: { lat: number; lng: number } | undefined;
       if (loc.coordinates) {
         const c = loc.coordinates as { x?: number; y?: number } | string;
@@ -396,16 +450,38 @@ export const campaignScreensService = {
       locIdsWithCoords.push(loc.id);
       coordMap.set(loc.id, coords);
     }
-    const ownerIds = [...new Set((locs || []).map(l => l.owner_id))];
+    const ownerIds = [...new Set((locs || []).map((l) => l.owner_id))];
     const [ownersRes, scheduleRes] = await Promise.all([
-      ownerIds.length ? supabase.from('business_profiles').select('user_id, business_name').in('user_id', ownerIds) : { data: [] },
-      locIdsWithCoords.length ? supabase.from('location_affluence_schedule').select('location_id, day_of_week, hour, estimated_impressions').in('location_id', locIdsWithCoords) : { data: [] },
+      ownerIds.length
+        ? supabase
+            .from('business_profiles')
+            .select('user_id, business_name')
+            .in('user_id', ownerIds)
+        : { data: [] },
+      locIdsWithCoords.length
+        ? supabase
+            .from('location_affluence_schedule')
+            .select('location_id, day_of_week, hour, estimated_impressions')
+            .in('location_id', locIdsWithCoords)
+        : { data: [] },
     ]);
-    const ownerMap = new Map((ownersRes.data || []).map((o: { user_id: string; business_name: string }) => [o.user_id, o.business_name]));
-    const scheduleByLoc = new Map<string, { day_of_week: number; hour: number; estimated_impressions: number }[]>();
+    const ownerMap = new Map(
+      (ownersRes.data || []).map((o: { user_id: string; business_name: string }) => [
+        o.user_id,
+        o.business_name,
+      ]),
+    );
+    const scheduleByLoc = new Map<
+      string,
+      { day_of_week: number; hour: number; estimated_impressions: number }[]
+    >();
     for (const row of scheduleRes.data || []) {
       const list = scheduleByLoc.get(row.location_id) || [];
-      list.push({ day_of_week: row.day_of_week, hour: row.hour, estimated_impressions: row.estimated_impressions || 0 });
+      list.push({
+        day_of_week: row.day_of_week,
+        hour: row.hour,
+        estimated_impressions: row.estimated_impressions || 0,
+      });
       scheduleByLoc.set(row.location_id, list);
     }
     const result: CampaignLocation[] = [];
@@ -423,7 +499,12 @@ export const campaignScreensService = {
         owner_category: loc.owner_category ?? null,
         owner_name: ownerMap.get(loc.owner_id) || undefined,
         screen_count: countByLoc.get(loc.id) || 0,
-        affluence_schedule: schedule.map(r => ({ location_id: loc.id, day_of_week: r.day_of_week, hour: r.hour, estimated_impressions: r.estimated_impressions })),
+        affluence_schedule: schedule.map((r) => ({
+          location_id: loc.id,
+          day_of_week: r.day_of_week,
+          hour: r.hour,
+          estimated_impressions: r.estimated_impressions,
+        })),
         total_impressions_per_week: totalPerWeek,
       });
     }
@@ -432,7 +513,9 @@ export const campaignScreensService = {
 
   /** Récupérer les localités avec affluence (pour liste / parcs). Optionnel : filtrer par owner_ids. */
   async getLocationsWithAffluence(ownerIds?: string[]): Promise<CampaignLocation[]> {
-    let q = supabase.from('locations').select('id, name, address, coordinates, owner_id, owner_category');
+    let q = supabase
+      .from('locations')
+      .select('id, name, address, coordinates, owner_id, owner_category');
     if (ownerIds?.length) {
       q = q.in('owner_id', ownerIds);
     }
@@ -441,12 +524,12 @@ export const campaignScreensService = {
       console.error('Erreur getLocationsWithAffluence:', error);
       return [];
     }
-    const ownerIdList = [...new Set((locs || []).map(l => l.owner_id))];
+    const ownerIdList = [...new Set((locs || []).map((l) => l.owner_id))];
     const { data: owners } = await supabase
       .from('business_profiles')
       .select('user_id, business_name')
       .in('user_id', ownerIdList);
-    const ownerMap = new Map(owners?.map(o => [o.user_id, o.business_name]) || []);
+    const ownerMap = new Map(owners?.map((o) => [o.user_id, o.business_name]) || []);
 
     const { data: screens } = await supabase
       .from('screens')
@@ -488,7 +571,7 @@ export const campaignScreensService = {
         owner_category: loc.owner_category ?? null,
         owner_name: ownerMap.get(loc.owner_id) || undefined,
         screen_count: screenCount,
-        affluence_schedule: (schedule || []).map(r => ({
+        affluence_schedule: (schedule || []).map((r) => ({
           location_id: loc.id,
           day_of_week: r.day_of_week,
           hour: r.hour,
@@ -517,7 +600,12 @@ export const campaignScreensService = {
       .from('business_profiles')
       .select('user_id, business_name')
       .in('user_id', ownerIds);
-    const ownerMap = new Map((owners || []).map((o: { user_id: string; business_name: string }) => [o.user_id, o.business_name]));
+    const ownerMap = new Map(
+      (owners || []).map((o: { user_id: string; business_name: string }) => [
+        o.user_id,
+        o.business_name,
+      ]),
+    );
     const { data: screens } = await supabase
       .from('screens')
       .select('location_id')
@@ -533,10 +621,17 @@ export const campaignScreensService = {
       .from('location_affluence_schedule')
       .select('location_id, day_of_week, hour, estimated_impressions')
       .in('location_id', locationIds);
-    const scheduleByLoc = new Map<string, { day_of_week: number; hour: number; estimated_impressions: number }[]>();
+    const scheduleByLoc = new Map<
+      string,
+      { day_of_week: number; hour: number; estimated_impressions: number }[]
+    >();
     for (const row of scheduleRows || []) {
       const list = scheduleByLoc.get(row.location_id) || [];
-      list.push({ day_of_week: row.day_of_week, hour: row.hour, estimated_impressions: row.estimated_impressions || 0 });
+      list.push({
+        day_of_week: row.day_of_week,
+        hour: row.hour,
+        estimated_impressions: row.estimated_impressions || 0,
+      });
       scheduleByLoc.set(row.location_id, list);
     }
     const result: CampaignLocation[] = [];
@@ -552,7 +647,10 @@ export const campaignScreensService = {
         }
       }
       const schedule = scheduleByLoc.get(loc.id) || [];
-      const totalPerWeek = schedule.reduce((s: number, r: { estimated_impressions?: number }) => s + (r.estimated_impressions || 0), 0);
+      const totalPerWeek = schedule.reduce(
+        (s: number, r: { estimated_impressions?: number }) => s + (r.estimated_impressions || 0),
+        0,
+      );
       result.push({
         id: loc.id,
         name: loc.name,
@@ -562,12 +660,19 @@ export const campaignScreensService = {
         owner_category: loc.owner_category ?? null,
         owner_name: ownerMap.get(loc.owner_id) || undefined,
         screen_count: countByLoc.get(loc.id) || 0,
-        affluence_schedule: schedule.map((r: { location_id: string; day_of_week: number; hour: number; estimated_impressions: number }) => ({
-          location_id: loc.id,
-          day_of_week: r.day_of_week,
-          hour: r.hour,
-          estimated_impressions: r.estimated_impressions,
-        })),
+        affluence_schedule: schedule.map(
+          (r: {
+            location_id: string;
+            day_of_week: number;
+            hour: number;
+            estimated_impressions: number;
+          }) => ({
+            location_id: loc.id,
+            day_of_week: r.day_of_week,
+            hour: r.hour,
+            estimated_impressions: r.estimated_impressions,
+          }),
+        ),
         total_impressions_per_week: totalPerWeek,
       });
     }
@@ -586,6 +691,6 @@ export const campaignScreensService = {
       console.error('Erreur getScreenIdsByLocationIds:', error);
       return [];
     }
-    return (data || []).map(r => r.id);
+    return (data || []).map((r) => r.id);
   },
 };

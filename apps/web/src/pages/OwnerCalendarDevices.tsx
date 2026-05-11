@@ -40,7 +40,9 @@ export default function OwnerCalendarDevices() {
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
   const [selectedEstablishment, setSelectedEstablishment] = useState<string>('all');
   const [selectedDates, setSelectedDates] = useState<string[]>([]);
-  const [processingAvailability, setProcessingAvailability] = useState<null | 'available' | 'unavailable'>(null);
+  const [processingAvailability, setProcessingAvailability] = useState<
+    null | 'available' | 'unavailable'
+  >(null);
 
   useEffect(() => {
     const load = async () => {
@@ -50,7 +52,7 @@ export default function OwnerCalendarDevices() {
         await screensService.checkUnavailabilityStatus();
         const [screensData, periodData] = await Promise.all([
           screensService.getScreens(),
-          screensService.getUnavailabilityPeriods()
+          screensService.getUnavailabilityPeriods(),
         ]);
         setScreens(screensData || []);
         setPeriods(periodData || []);
@@ -62,18 +64,36 @@ export default function OwnerCalendarDevices() {
   }, [user?.id]);
 
   const establishments = useMemo(() => {
-    const byLocation = new Map<string, { name: string; screens: Screen[]; status: EstablishmentStatus }>();
+    const byLocation = new Map<
+      string,
+      { name: string; screens: Screen[]; status: EstablishmentStatus }
+    >();
     (screens || []).forEach((s) => {
       const loc = s.location || s.name || 'Établissement';
       if (!byLocation.has(loc)) {
-        byLocation.set(loc, { name: loc, screens: [s], status: (s.status as EstablishmentStatus) || 'inactive' });
+        byLocation.set(loc, {
+          name: loc,
+          screens: [s],
+          status: (s.status as EstablishmentStatus) || 'inactive',
+        });
       } else {
         const entry = byLocation.get(loc)!;
         entry.screens.push(s);
         if (s.status === 'active') entry.status = 'active';
-        else if (s.status === 'maintenance' && entry.status !== 'active') entry.status = 'maintenance';
-        else if (s.status === 'unavailable' && entry.status !== 'active' && entry.status !== 'maintenance') entry.status = 'unavailable';
-        else if (entry.status !== 'active' && entry.status !== 'maintenance' && entry.status !== 'unavailable') entry.status = 'inactive';
+        else if (s.status === 'maintenance' && entry.status !== 'active')
+          entry.status = 'maintenance';
+        else if (
+          s.status === 'unavailable' &&
+          entry.status !== 'active' &&
+          entry.status !== 'maintenance'
+        )
+          entry.status = 'unavailable';
+        else if (
+          entry.status !== 'active' &&
+          entry.status !== 'maintenance' &&
+          entry.status !== 'unavailable'
+        )
+          entry.status = 'inactive';
       }
     });
     return Array.from(byLocation.values());
@@ -84,12 +104,18 @@ export default function OwnerCalendarDevices() {
     return establishments.filter((e) => e.name === selectedEstablishment);
   }, [establishments, selectedEstablishment]);
 
-  const filteredScreens = useMemo(() => filteredEstablishments.flatMap((e) => e.screens), [filteredEstablishments]);
-  const filteredScreenIds = useMemo(() => new Set(filteredScreens.map((s) => s.id)), [filteredScreens]);
+  const filteredScreens = useMemo(
+    () => filteredEstablishments.flatMap((e) => e.screens),
+    [filteredEstablishments],
+  );
+  const filteredScreenIds = useMemo(
+    () => new Set(filteredScreens.map((s) => s.id)),
+    [filteredScreens],
+  );
 
   const filteredPeriods = useMemo(
     () => periods.filter((p) => filteredScreenIds.has(p.screen_id)),
-    [periods, filteredScreenIds]
+    [periods, filteredScreenIds],
   );
   const selectedDateSet = useMemo(() => new Set(selectedDates), [selectedDates]);
 
@@ -102,30 +128,44 @@ export default function OwnerCalendarDevices() {
     const daysInMonth = last.getDate();
     const cells: Date[] = [];
 
-    for (let i = 0; i < mondayStartOffset; i++) cells.push(new Date(year, month, 1 - (mondayStartOffset - i)));
+    for (let i = 0; i < mondayStartOffset; i++)
+      cells.push(new Date(year, month, 1 - (mondayStartOffset - i)));
     for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
-    while (cells.length % 7 !== 0) cells.push(new Date(year, month + 1, cells.length - (mondayStartOffset + daysInMonth) + 1));
+    while (cells.length % 7 !== 0)
+      cells.push(new Date(year, month + 1, cells.length - (mondayStartOffset + daysInMonth) + 1));
 
     return cells;
   }, [currentMonth]);
 
   const monthLabel = useMemo(
     () => currentMonth.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }),
-    [currentMonth]
+    [currentMonth],
   );
 
   const statusConfig = {
     active: { label: 'Active', bg: 'bg-[#E8F8ED]', text: 'text-[#16A34A]', dot: 'bg-[#16A34A]' },
     inactive: { label: 'Inactif', bg: 'bg-[#FFF1F2]', text: 'text-[#DC2626]', dot: 'bg-[#DC2626]' },
-    maintenance: { label: 'Inactif', bg: 'bg-[#FFF1F2]', text: 'text-[#DC2626]', dot: 'bg-[#DC2626]' },
-    unavailable: { label: 'Inactif', bg: 'bg-[#FFF1F2]', text: 'text-[#DC2626]', dot: 'bg-[#DC2626]' }
+    maintenance: {
+      label: 'Inactif',
+      bg: 'bg-[#FFF1F2]',
+      text: 'text-[#DC2626]',
+      dot: 'bg-[#DC2626]',
+    },
+    unavailable: {
+      label: 'Inactif',
+      bg: 'bg-[#FFF1F2]',
+      text: 'text-[#DC2626]',
+      dot: 'bg-[#DC2626]',
+    },
   } as const;
 
   const toggleDateSelection = (day: Date) => {
     const isCurrentMonth = day.getMonth() === currentMonth.getMonth();
     if (!isCurrentMonth) return;
     const isoDate = toIso(day);
-    setSelectedDates((prev) => (prev.includes(isoDate) ? prev.filter((d) => d !== isoDate) : [...prev, isoDate]));
+    setSelectedDates((prev) =>
+      prev.includes(isoDate) ? prev.filter((d) => d !== isoDate) : [...prev, isoDate],
+    );
   };
 
   const clearSelectedDates = () => setSelectedDates([]);
@@ -163,22 +203,30 @@ export default function OwnerCalendarDevices() {
               end_date: dateIso,
               start_time: '00:00',
               end_time: '23:59',
-              reason: 'Indisponibilité planifiée depuis calendrier'
-            }))
+              reason: 'Indisponibilité planifiée depuis calendrier',
+            })),
         );
 
-        const createdPeriods = await Promise.all(toCreate.map((payload) => screensService.createUnavailabilityPeriod(payload)));
+        const createdPeriods = await Promise.all(
+          toCreate.map((payload) => screensService.createUnavailabilityPeriod(payload)),
+        );
         if (createdPeriods.length > 0) setPeriods((prev) => [...prev, ...createdPeriods]);
 
-        await Promise.all(filteredScreens.map((screen) => screensService.updateScreen(screen.id, { status: 'unavailable' })));
+        await Promise.all(
+          filteredScreens.map((screen) =>
+            screensService.updateScreen(screen.id, { status: 'unavailable' }),
+          ),
+        );
         setScreens((prev) =>
           prev.map((screen) =>
-            filteredScreenIds.has(screen.id) ? { ...screen, status: 'unavailable' } : screen
-          )
+            filteredScreenIds.has(screen.id) ? { ...screen, status: 'unavailable' } : screen,
+          ),
         );
         toast.success('Établissement mis en indisponible pour les dates sélectionnées');
       } else {
-        const selectedDateMillis = new Set(selectedDates.map((d) => normalizeDateOnly(d).getTime()));
+        const selectedDateMillis = new Set(
+          selectedDates.map((d) => normalizeDateOnly(d).getTime()),
+        );
         const periodsToDelete = periods.filter((p) => {
           if (!filteredScreenIds.has(p.screen_id)) return false;
           if (p.status === 'completed' || p.status === 'cancelled') return false;
@@ -191,7 +239,9 @@ export default function OwnerCalendarDevices() {
         });
 
         if (periodsToDelete.length > 0) {
-          await Promise.all(periodsToDelete.map((p) => screensService.deleteUnavailabilityPeriod(p.id)));
+          await Promise.all(
+            periodsToDelete.map((p) => screensService.deleteUnavailabilityPeriod(p.id)),
+          );
           const deletedIds = new Set(periodsToDelete.map((p) => p.id));
           setPeriods((prev) => prev.filter((p) => !deletedIds.has(p.id)));
         }
@@ -210,10 +260,14 @@ export default function OwnerCalendarDevices() {
           .map((s) => s.id);
 
         if (screenIdsToActivate.length > 0) {
-          await Promise.all(screenIdsToActivate.map((id) => screensService.updateScreen(id, { status: 'active' })));
+          await Promise.all(
+            screenIdsToActivate.map((id) => screensService.updateScreen(id, { status: 'active' })),
+          );
           const activateSet = new Set(screenIdsToActivate);
           setScreens((prev) =>
-            prev.map((screen) => (activateSet.has(screen.id) ? { ...screen, status: 'active' } : screen))
+            prev.map((screen) =>
+              activateSet.has(screen.id) ? { ...screen, status: 'active' } : screen,
+            ),
           );
         }
 
@@ -242,8 +296,13 @@ export default function OwnerCalendarDevices() {
                     <Calendar className="h-5 w-5 text-gray-700" />
                   </div>
                   <div className="min-w-0">
-                    <h1 className="text-xl font-semibold text-[#171717] truncate">Mon calendrier et mes dispositifs de diffusion</h1>
-                    <p className="text-sm text-gray-500 truncate">Planifiez les périodes d&apos;activation de votre établissement et suivez le statut de vos dispositifs de diffusion</p>
+                    <h1 className="text-xl font-semibold text-[#171717] truncate">
+                      Mon calendrier et mes dispositifs de diffusion
+                    </h1>
+                    <p className="text-sm text-gray-500 truncate">
+                      Planifiez les périodes d&apos;activation de votre établissement et suivez le
+                      statut de vos dispositifs de diffusion
+                    </p>
                   </div>
                 </div>
                 <OwnerNotificationsBell userId={user?.id} />
@@ -260,15 +319,21 @@ export default function OwnerCalendarDevices() {
                       <Users className="h-5 w-5 text-gray-700" />
                     </div>
                     <div>
-                      <h2 className="text-xl font-semibold text-[#171717]">DISPONIBILITÉS DE MES ÉTABLISSEMENTS</h2>
-                      <p className="text-sm text-gray-500">Définissez les périodes de disponibilité de vos établissements</p>
+                      <h2 className="text-xl font-semibold text-[#171717]">
+                        DISPONIBILITÉS DE MES ÉTABLISSEMENTS
+                      </h2>
+                      <p className="text-sm text-gray-500">
+                        Définissez les périodes de disponibilité de vos établissements
+                      </p>
                     </div>
                   </div>
                 </div>
 
                 <div className="p-4">
                   <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Choix l&apos;établissement</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Choix l&apos;établissement
+                    </label>
                     <select
                       value={selectedEstablishment}
                       onChange={(e) => setSelectedEstablishment(e.target.value)}
@@ -276,26 +341,49 @@ export default function OwnerCalendarDevices() {
                     >
                       <option value="all">Toutes</option>
                       {establishments.map((e) => (
-                        <option key={e.name} value={e.name}>{e.name}</option>
+                        <option key={e.name} value={e.name}>
+                          {e.name}
+                        </option>
                       ))}
                     </select>
                   </div>
 
-                  <p className="text-base font-semibold text-[#171717] mb-3">Définissez les périodes de disponibilité et d’indisponibilité <span className="text-red-500">*</span></p>
+                  <p className="text-base font-semibold text-[#171717] mb-3">
+                    Définissez les périodes de disponibilité et d’indisponibilité{' '}
+                    <span className="text-red-500">*</span>
+                  </p>
 
                   <div className="rounded-xl border border-gray-200 overflow-hidden">
                     <div className="h-12 bg-gray-50 border-b border-gray-200 flex items-center justify-between px-3">
-                      <button type="button" onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))} className="p-2 rounded-md hover:bg-white">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setCurrentMonth(
+                            new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1),
+                          )
+                        }
+                        className="p-2 rounded-md hover:bg-white"
+                      >
                         <ChevronLeft className="h-4 w-4 text-gray-600" />
                       </button>
                       <p className="font-semibold text-gray-700 capitalize">{monthLabel}</p>
-                      <button type="button" onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))} className="p-2 rounded-md hover:bg-white">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setCurrentMonth(
+                            new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1),
+                          )
+                        }
+                        className="p-2 rounded-md hover:bg-white"
+                      >
                         <ChevronRight className="h-4 w-4 text-gray-600" />
                       </button>
                     </div>
                     <div className="grid grid-cols-7 border-b border-gray-100">
                       {dayHeaders.map((d) => (
-                        <div key={d} className="px-3 py-2 text-sm text-gray-500">{d}</div>
+                        <div key={d} className="px-3 py-2 text-sm text-gray-500">
+                          {d}
+                        </div>
                       ))}
                     </div>
                     <div className="grid grid-cols-7 gap-y-2 px-3 py-3">
@@ -303,7 +391,9 @@ export default function OwnerCalendarDevices() {
                         const inCurrentMonth = day.getMonth() === currentMonth.getMonth();
                         const unavailable = isDayUnavailable(day, filteredPeriods);
                         const selected = selectedDateSet.has(toIso(day));
-                        const bg = unavailable ? 'bg-[#FDECEC] text-[#D94848]' : 'bg-[#EAF8EE] text-[#2B8A57]';
+                        const bg = unavailable
+                          ? 'bg-[#FDECEC] text-[#D94848]'
+                          : 'bg-[#EAF8EE] text-[#2B8A57]';
                         return (
                           <div key={`${toIso(day)}-${idx}`} className="h-10 flex items-center">
                             {inCurrentMonth ? (
@@ -317,7 +407,9 @@ export default function OwnerCalendarDevices() {
                                 {day.getDate()}
                               </button>
                             ) : (
-                              <div className="h-9 w-9 rounded-lg text-sm text-gray-300 flex items-center justify-center">{day.getDate()}</div>
+                              <div className="h-9 w-9 rounded-lg text-sm text-gray-300 flex items-center justify-center">
+                                {day.getDate()}
+                              </div>
                             )}
                           </div>
                         );
@@ -332,7 +424,9 @@ export default function OwnerCalendarDevices() {
                       onClick={() => applyAvailability('unavailable')}
                       className="inline-flex items-center px-4 py-2 rounded-xl bg-[#FDECEC] text-[#D94848] font-medium text-sm disabled:opacity-60"
                     >
-                      {processingAvailability === 'unavailable' ? 'Traitement...' : 'Mettre indisponible'}
+                      {processingAvailability === 'unavailable'
+                        ? 'Traitement...'
+                        : 'Mettre indisponible'}
                     </button>
                     <button
                       type="button"
@@ -340,7 +434,9 @@ export default function OwnerCalendarDevices() {
                       onClick={() => applyAvailability('available')}
                       className="inline-flex items-center px-4 py-2 rounded-xl bg-[#EAF8EE] text-[#2B8A57] font-medium text-sm disabled:opacity-60"
                     >
-                      {processingAvailability === 'available' ? 'Traitement...' : 'Mettre disponible'}
+                      {processingAvailability === 'available'
+                        ? 'Traitement...'
+                        : 'Mettre disponible'}
                     </button>
                     <button
                       type="button"
@@ -351,7 +447,9 @@ export default function OwnerCalendarDevices() {
                       Effacer la sélection
                     </button>
                     {selectedDates.length > 0 ? (
-                      <span className="text-sm text-gray-500">{selectedDates.length} date(s) sélectionnée(s)</span>
+                      <span className="text-sm text-gray-500">
+                        {selectedDates.length} date(s) sélectionnée(s)
+                      </span>
                     ) : null}
                   </div>
                 </div>
@@ -365,7 +463,10 @@ export default function OwnerCalendarDevices() {
                     </div>
                     <div>
                       <h2 className="text-xl font-semibold text-[#171717]">ÉTAT DU DISPOSITIF</h2>
-                      <p className="text-sm text-gray-500">Consultez en temps réel l&apos;état du dispositif de diffusion de cet établissement</p>
+                      <p className="text-sm text-gray-500">
+                        Consultez en temps réel l&apos;état du dispositif de diffusion de cet
+                        établissement
+                      </p>
                     </div>
                   </div>
                   <button type="button" className="text-gray-400 hover:text-gray-600">
@@ -378,9 +479,14 @@ export default function OwnerCalendarDevices() {
                     {filteredEstablishments.map((est) => {
                       const sc = statusConfig[est.status];
                       return (
-                        <div key={est.name} className="rounded-xl border border-gray-200 bg-white px-4 py-3 flex items-center justify-between">
+                        <div
+                          key={est.name}
+                          className="rounded-xl border border-gray-200 bg-white px-4 py-3 flex items-center justify-between"
+                        >
                           <p className="font-medium text-gray-900 truncate">{est.name}</p>
-                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium ${sc.bg} ${sc.text}`}>
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium ${sc.bg} ${sc.text}`}
+                          >
                             <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
                             {sc.label}
                           </span>
@@ -391,11 +497,18 @@ export default function OwnerCalendarDevices() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {filteredScreens.map((screen) => {
-                      const sc = statusConfig[(screen.status as EstablishmentStatus) || 'inactive'] || statusConfig.inactive;
+                      const sc =
+                        statusConfig[(screen.status as EstablishmentStatus) || 'inactive'] ||
+                        statusConfig.inactive;
                       return (
-                        <div key={screen.id} className="rounded-xl border border-gray-200 bg-white px-4 py-3 flex items-center justify-between">
+                        <div
+                          key={screen.id}
+                          className="rounded-xl border border-gray-200 bg-white px-4 py-3 flex items-center justify-between"
+                        >
                           <p className="font-medium text-gray-900 truncate">{screen.name}</p>
-                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium ${sc.bg} ${sc.text}`}>
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium ${sc.bg} ${sc.text}`}
+                          >
                             <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
                             {sc.label}
                           </span>
@@ -425,4 +538,3 @@ export default function OwnerCalendarDevices() {
     </div>
   );
 }
-

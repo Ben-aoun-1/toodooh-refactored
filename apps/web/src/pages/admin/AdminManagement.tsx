@@ -14,7 +14,7 @@ import {
   Eye,
   XCircle,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -50,8 +50,8 @@ export default function AdminManagement() {
   };
 
   // Filtrage
-  const filteredAdmins = admins.filter(a => {
-    const matchesSearch = 
+  const filteredAdmins = admins.filter((a) => {
+    const matchesSearch =
       a.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       a.last_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       a.email.toLowerCase().includes(searchTerm.toLowerCase());
@@ -86,7 +86,7 @@ export default function AdminManagement() {
           action: 'deactivate_admin',
           target_type: 'admin',
           target_id: adminToDeactivate.id,
-          description: `Désactivation de ${adminToDeactivate.first_name} ${adminToDeactivate.last_name}`
+          description: `Désactivation de ${adminToDeactivate.first_name} ${adminToDeactivate.last_name}`,
         });
       }
     } catch (error: any) {
@@ -117,7 +117,7 @@ export default function AdminManagement() {
           action: 'reactivate_admin',
           target_type: 'admin',
           target_id: adminToReactivate.id,
-          description: `Réactivation de ${adminToReactivate.first_name} ${adminToReactivate.last_name}`
+          description: `Réactivation de ${adminToReactivate.first_name} ${adminToReactivate.last_name}`,
         });
       }
     } catch (error: any) {
@@ -128,14 +128,21 @@ export default function AdminManagement() {
 
   const getRoleBadge = (role: string) => {
     const badges = {
-      superadmin: { bg: 'bg-purple-100', text: 'text-purple-800', label: 'Super Admin', icon: Shield },
+      superadmin: {
+        bg: 'bg-purple-100',
+        text: 'text-purple-800',
+        label: 'Super Admin',
+        icon: Shield,
+      },
       admin: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Administrateur', icon: Shield },
-      moderator: { bg: 'bg-green-100', text: 'text-green-800', label: 'Modérateur', icon: User }
+      moderator: { bg: 'bg-green-100', text: 'text-green-800', label: 'Modérateur', icon: User },
     };
     const badge = badges[role as keyof typeof badges] || badges.moderator;
     const Icon = badge.icon;
     return (
-      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${badge.bg} ${badge.text}`}>
+      <span
+        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${badge.bg} ${badge.text}`}
+      >
         <Icon className="w-3 h-3 mr-1" />
         {badge.label}
       </span>
@@ -211,7 +218,7 @@ export default function AdminManagement() {
             <div>
               <p className="text-sm font-medium text-gray-600">Super Admins</p>
               <p className="text-3xl font-bold text-purple-600 mt-2">
-                {admins.filter(a => a.role === 'superadmin').length}
+                {admins.filter((a) => a.role === 'superadmin').length}
               </p>
             </div>
             <Shield className="h-12 w-12 text-purple-500" />
@@ -223,7 +230,7 @@ export default function AdminManagement() {
             <div>
               <p className="text-sm font-medium text-gray-600">Administrateurs</p>
               <p className="text-3xl font-bold text-blue-600 mt-2">
-                {admins.filter(a => a.role === 'admin').length}
+                {admins.filter((a) => a.role === 'admin').length}
               </p>
             </div>
             <Shield className="h-12 w-12 text-blue-500" />
@@ -235,7 +242,7 @@ export default function AdminManagement() {
             <div>
               <p className="text-sm font-medium text-gray-600">Modérateurs</p>
               <p className="text-3xl font-bold text-green-600 mt-2">
-                {admins.filter(a => a.role === 'moderator').length}
+                {admins.filter((a) => a.role === 'moderator').length}
               </p>
             </div>
             <User className="h-12 w-12 text-green-500" />
@@ -247,7 +254,10 @@ export default function AdminManagement() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+            <Search
+              className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+              size={20}
+            />
             <input
               type="text"
               placeholder="Rechercher un administrateur..."
@@ -316,7 +326,8 @@ export default function AdminManagement() {
                     <div className="flex items-center">
                       <div className="h-10 w-10 bg-[#00B3A6] rounded-full flex items-center justify-center">
                         <span className="text-white text-sm font-medium">
-                          {adminProfile.first_name.charAt(0)}{adminProfile.last_name.charAt(0)}
+                          {adminProfile.first_name.charAt(0)}
+                          {adminProfile.last_name.charAt(0)}
                         </span>
                       </div>
                       <div className="ml-4">
@@ -329,9 +340,7 @@ export default function AdminManagement() {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">{adminProfile.email}</div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {getRoleBadge(adminProfile.role)}
-                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">{getRoleBadge(adminProfile.role)}</td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     {getStatusBadge(adminProfile.is_active)}
                   </td>
@@ -341,7 +350,9 @@ export default function AdminManagement() {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{formatDate(adminProfile.created_at)}</div>
+                    <div className="text-sm text-gray-900">
+                      {formatDate(adminProfile.created_at)}
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <button
@@ -407,11 +418,15 @@ export default function AdminManagement() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="text-sm font-medium text-gray-600">Prénom</label>
-                      <p className="text-sm text-gray-900 mt-1 font-semibold">{selectedAdmin.first_name}</p>
+                      <p className="text-sm text-gray-900 mt-1 font-semibold">
+                        {selectedAdmin.first_name}
+                      </p>
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-600">Nom</label>
-                      <p className="text-sm text-gray-900 mt-1 font-semibold">{selectedAdmin.last_name}</p>
+                      <p className="text-sm text-gray-900 mt-1 font-semibold">
+                        {selectedAdmin.last_name}
+                      </p>
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-600">Email</label>
@@ -439,10 +454,14 @@ export default function AdminManagement() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="text-sm font-medium text-gray-600">Date de création</label>
-                      <p className="text-sm text-gray-900 mt-1">{formatDate(selectedAdmin.created_at)}</p>
+                      <p className="text-sm text-gray-900 mt-1">
+                        {formatDate(selectedAdmin.created_at)}
+                      </p>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-gray-600">Dernière connexion</label>
+                      <label className="text-sm font-medium text-gray-600">
+                        Dernière connexion
+                      </label>
                       <p className="text-sm text-gray-900 mt-1">
                         {selectedAdmin.last_login ? formatDate(selectedAdmin.last_login) : 'Jamais'}
                       </p>
@@ -476,11 +495,17 @@ export default function AdminManagement() {
                 <h3 className="text-lg font-semibold text-gray-900">Désactiver l'administrateur</h3>
               </div>
             </div>
-            
+
             <p className="text-gray-600 mb-6">
-              Êtes-vous sûr de vouloir désactiver <strong>{adminToDeactivate.first_name} {adminToDeactivate.last_name}</strong> ?
+              Êtes-vous sûr de vouloir désactiver{' '}
+              <strong>
+                {adminToDeactivate.first_name} {adminToDeactivate.last_name}
+              </strong>{' '}
+              ?
               <br />
-              <span className="text-sm">Cette action empêchera cet utilisateur de se connecter.</span>
+              <span className="text-sm">
+                Cette action empêchera cet utilisateur de se connecter.
+              </span>
             </p>
 
             <div className="flex justify-end space-x-3">
@@ -516,11 +541,17 @@ export default function AdminManagement() {
                 <h3 className="text-lg font-semibold text-gray-900">Réactiver l'administrateur</h3>
               </div>
             </div>
-            
+
             <p className="text-gray-600 mb-6">
-              Êtes-vous sûr de vouloir réactiver <strong>{adminToReactivate.first_name} {adminToReactivate.last_name}</strong> ?
+              Êtes-vous sûr de vouloir réactiver{' '}
+              <strong>
+                {adminToReactivate.first_name} {adminToReactivate.last_name}
+              </strong>{' '}
+              ?
               <br />
-              <span className="text-sm">Cet utilisateur pourra à nouveau se connecter à la plateforme.</span>
+              <span className="text-sm">
+                Cet utilisateur pourra à nouveau se connecter à la plateforme.
+              </span>
             </p>
 
             <div className="flex justify-end space-x-3">
@@ -546,4 +577,3 @@ export default function AdminManagement() {
     </AdminLayout>
   );
 }
-

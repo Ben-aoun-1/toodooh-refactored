@@ -35,7 +35,10 @@ describe('parseLocalCampaignCalendarDay', () => {
 
 describe('computeCampaignDayCount', () => {
   it('compte les jours calendaires de façon inclusive', () => {
-    const dayCount = computeCampaignDayCount('2026-04-06T23:00:00.000Z', '2026-04-13T23:00:00.000Z');
+    const dayCount = computeCampaignDayCount(
+      '2026-04-06T23:00:00.000Z',
+      '2026-04-13T23:00:00.000Z',
+    );
     expect(dayCount).toBe(8);
   });
 });
@@ -67,7 +70,12 @@ describe('isEventOverlapInSlot', () => {
   it('excludes own event id', () => {
     const slotStart = new Date('2026-04-10T12:00:00');
     const slotEnd = new Date('2026-04-10T13:00:00');
-    const overlap = isEventOverlapInSlot(slotStart, slotEnd, [{ id: 'e1', start_date: '2026-04-10', end_date: '2026-04-10' }], 'e1');
+    const overlap = isEventOverlapInSlot(
+      slotStart,
+      slotEnd,
+      [{ id: 'e1', start_date: '2026-04-10', end_date: '2026-04-10' }],
+      'e1',
+    );
     expect(overlap).toBe(false);
   });
 });
@@ -138,7 +146,9 @@ describe('computeHourlyDoohGridByLocation', () => {
       debugSlotMatching: false,
     });
     expect(r.slotsEvaluated).toBe(24);
-    expect(r.totalRawImpressions).toBeCloseTo(24 * 240 * DEFAULT_DOOH_CONFIG_NUMBERS.max_billable_spot_rate_per_hour);
+    expect(r.totalRawImpressions).toBeCloseTo(
+      24 * 240 * DEFAULT_DOOH_CONFIG_NUMBERS.max_billable_spot_rate_per_hour,
+    );
     expect(r.perLocationRawImpressions.get(locId)).toBeCloseTo(r.totalRawImpressions);
   });
 });

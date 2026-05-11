@@ -3,7 +3,7 @@
 
 export const clearAuthCache = () => {
   console.log('🧹 Clearing all auth cache...');
-  
+
   // Nettoyer le localStorage
   localStorage.removeItem('onboardingCompleted');
   localStorage.removeItem('justOnboarded');
@@ -11,12 +11,12 @@ export const clearAuthCache = () => {
   localStorage.removeItem('user_raison_social');
   localStorage.removeItem('user_validation_status');
   localStorage.removeItem('admin-storage');
-  
+
   // Nettoyer le sessionStorage
   sessionStorage.clear();
-  
+
   console.log('✅ Auth cache cleared');
-  
+
   // Recharger la page
   window.location.href = '/login';
 };
@@ -26,47 +26,3 @@ if (typeof window !== 'undefined') {
   (window as any).clearAuthCache = clearAuthCache;
   console.log('💡 Utilitaire chargé: window.clearAuthCache()');
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

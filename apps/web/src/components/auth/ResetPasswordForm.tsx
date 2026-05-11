@@ -18,7 +18,7 @@ export default function ResetPasswordForm() {
       toast.success('Un email de réinitialisation vous a été envoyé');
       navigate('/login');
     } catch (error: any) {
-      toast.error(error?.message || 'Une erreur inattendue s\'est produite');
+      toast.error(error?.message || "Une erreur inattendue s'est produite");
     } finally {
       setLoading(false);
     }

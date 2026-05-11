@@ -8,22 +8,27 @@ import {
   Calendar,
   RefreshCw,
   Search,
-  ShieldCheck
+  ShieldCheck,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAuthStore } from '../stores/auth.store';
-import { campaignOwnerApprovalService, PendingCampaign } from '../services/campaign-owner-approval.service';
+import {
+  campaignOwnerApprovalService,
+  PendingCampaign,
+} from '../services/campaign-owner-approval.service';
 import OwnerNavigation from '../components/OwnerNavigation';
 
 export default function OwnerCampaignApprovals() {
   const navigate = useNavigate();
   const { user, needsApproval, validationStatus } = useAuthStore();
   const isDisabled = needsApproval && validationStatus === 'pending';
-  
+
   const [loading, setLoading] = useState(true);
   const [campaigns, setCampaigns] = useState<PendingCampaign[]>([]);
   const [processingId, setProcessingId] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>(
+    'pending',
+  );
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
@@ -48,7 +53,6 @@ export default function OwnerCampaignApprovals() {
     }
   };
 
-
   const handleApprove = async (campaignId: string) => {
     try {
       setProcessingId(campaignId);
@@ -56,8 +60,8 @@ export default function OwnerCampaignApprovals() {
       toast.success('Campagne approuvée avec succès');
       await loadCampaigns();
     } catch (error) {
-      console.error('Erreur lors de l\'approbation:', error);
-      toast.error('Erreur lors de l\'approbation de la campagne');
+      console.error("Erreur lors de l'approbation:", error);
+      toast.error("Erreur lors de l'approbation de la campagne");
     } finally {
       setProcessingId(null);
     }
@@ -82,7 +86,7 @@ export default function OwnerCampaignApprovals() {
     return new Date(dateString).toLocaleDateString('fr-FR', {
       day: 'numeric',
       month: 'long',
-      year: 'numeric'
+      year: 'numeric',
     });
   };
 
@@ -94,7 +98,7 @@ export default function OwnerCampaignApprovals() {
       total: campaigns.length,
       pending,
       approved,
-      rejected
+      rejected,
     };
   }, [campaigns]);
 
@@ -107,7 +111,11 @@ export default function OwnerCampaignApprovals() {
       const searchOk =
         normalizedSearch.length === 0 ||
         campaignName.includes(normalizedSearch) ||
-        screenNames.some((name) => String(name || '').toLowerCase().includes(normalizedSearch));
+        screenNames.some((name) =>
+          String(name || '')
+            .toLowerCase()
+            .includes(normalizedSearch),
+        );
       return statusOk && searchOk;
     });
   }, [campaigns, searchTerm, statusFilter]);
@@ -127,7 +135,7 @@ export default function OwnerCampaignApprovals() {
     <div className="min-h-screen bg-gray-50/80">
       <div className="flex h-screen">
         <OwnerNavigation isDisabled={isDisabled} />
-        
+
         <div className="flex-1 flex flex-col overflow-hidden">
           <header className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
@@ -137,7 +145,9 @@ export default function OwnerCampaignApprovals() {
                     <ShieldCheck className="h-5 w-5 text-gray-700" />
                   </div>
                   <div className="min-w-0">
-                    <h1 className="text-xl font-semibold text-[#171717] truncate">Validation des campagnes</h1>
+                    <h1 className="text-xl font-semibold text-[#171717] truncate">
+                      Validation des campagnes
+                    </h1>
                     <p className="text-sm text-gray-500 truncate">
                       Approuvez ou rejetez les campagnes liées à vos dispositifs.
                     </p>
@@ -182,12 +192,14 @@ export default function OwnerCampaignApprovals() {
                       { id: 'pending', label: 'En attente' },
                       { id: 'approved', label: 'Approuvées' },
                       { id: 'rejected', label: 'Rejetées' },
-                      { id: 'all', label: 'Toutes' }
+                      { id: 'all', label: 'Toutes' },
                     ].map((tab) => (
                       <button
                         key={tab.id}
                         type="button"
-                        onClick={() => setStatusFilter(tab.id as 'all' | 'pending' | 'approved' | 'rejected')}
+                        onClick={() =>
+                          setStatusFilter(tab.id as 'all' | 'pending' | 'approved' | 'rejected')
+                        }
                         className={`h-9 px-4 rounded-xl text-sm font-medium transition-colors ${
                           statusFilter === tab.id
                             ? 'bg-[#E4F9EB] text-[#132B1B]'
@@ -237,7 +249,8 @@ export default function OwnerCampaignApprovals() {
                               <div className="flex items-center">
                                 <Calendar className="h-4 w-4 mr-2 text-[#00B3A6]" />
                                 <span>
-                                  Du {formatDate(campaign.campaign_start_date)} au {formatDate(campaign.campaign_end_date)}
+                                  Du {formatDate(campaign.campaign_start_date)} au{' '}
+                                  {formatDate(campaign.campaign_end_date)}
                                 </span>
                               </div>
                             </div>
@@ -265,10 +278,14 @@ export default function OwnerCampaignApprovals() {
                         {/* Liste des écrans du propriétaire concernés */}
                         <div className="mb-4">
                           <h4 className="text-sm font-medium text-gray-700 mb-2">
-                            Vos écrans concernés ({Array.isArray(campaign.screen_ids) ? campaign.screen_ids.length : 0}) :
+                            Vos écrans concernés (
+                            {Array.isArray(campaign.screen_ids) ? campaign.screen_ids.length : 0}) :
                           </h4>
                           <div className="flex flex-wrap gap-2">
-                            {(Array.isArray(campaign.screen_names) ? campaign.screen_names : []).map((name, index) => (
+                            {(Array.isArray(campaign.screen_names)
+                              ? campaign.screen_names
+                              : []
+                            ).map((name, index) => (
                               <span
                                 key={index}
                                 className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-[#00B3A6]/10 text-[#00B3A6] border border-[#00B3A6]/20"
@@ -322,4 +339,3 @@ export default function OwnerCampaignApprovals() {
     </div>
   );
 }
-

@@ -8,32 +8,23 @@ import {
   ResponsiveContainer,
   Tooltip,
   XAxis,
-  YAxis
+  YAxis,
 } from 'recharts';
-import {
-  Clock3,
-  Eye,
-  Users,
-  Monitor,
-  Wallet,
-  MapPin,
-  ArrowDown,
-  ArrowUp
-} from 'lucide-react';
+import { Clock3, Eye, Users, Monitor, Wallet, MapPin, ArrowDown, ArrowUp } from 'lucide-react';
 import { performanceService } from '../services/performance.service';
 import performanceIntroIcon from '../assets/performance/1.png';
 import type {
   PerformanceDataset,
   PerformanceFilters,
   PerformanceKpis,
-  PerformancePeriodPreset
+  PerformancePeriodPreset,
 } from '../types/performance';
 
 const presetButtons: { key: PerformancePeriodPreset; label: string }[] = [
   { key: 'month', label: 'Ce mois' },
   { key: 'quarter', label: 'Trimestre' },
   { key: 'year', label: 'Année' },
-  { key: 'custom', label: 'Personnalisé' }
+  { key: 'custom', label: 'Personnalisé' },
 ];
 
 const safeNumber = (value: unknown): number => {
@@ -80,9 +71,15 @@ const getPresetRange = (preset: PerformancePeriodPreset) => {
   }
   if (preset === 'quarter') {
     const quarterStartMonth = Math.floor(today.getMonth() / 3) * 3;
-    return { startDate: toIsoDate(new Date(today.getFullYear(), quarterStartMonth, 1)), endDate: toIsoDate(today) };
+    return {
+      startDate: toIsoDate(new Date(today.getFullYear(), quarterStartMonth, 1)),
+      endDate: toIsoDate(today),
+    };
   }
-  return { startDate: toIsoDate(new Date(today.getFullYear(), today.getMonth(), 1)), endDate: toIsoDate(today) };
+  return {
+    startDate: toIsoDate(new Date(today.getFullYear(), today.getMonth(), 1)),
+    endDate: toIsoDate(today),
+  };
 };
 
 type KpiCardProps = {
@@ -108,7 +105,9 @@ function KpiCard({ title, value, diff, icon }: KpiCardProps) {
         ) : (
           <ArrowDown className="h-4 w-4 text-rose-500" />
         )}
-        <span className={`text-sm font-semibold ${positive ? 'text-emerald-500' : 'text-rose-500'}`}>
+        <span
+          className={`text-sm font-semibold ${positive ? 'text-emerald-500' : 'text-rose-500'}`}
+        >
           {`${positive ? '+' : ''}${safeDiff.toFixed(0)}%`}
         </span>
         <span className="text-sm text-gray-500">Le mois dernier</span>
@@ -118,7 +117,9 @@ function KpiCard({ title, value, diff, icon }: KpiCardProps) {
 }
 
 export default function Perfor() {
-  const [filters, setFilters] = useState<PerformanceFilters>(performanceService.buildDefaultFilters());
+  const [filters, setFilters] = useState<PerformanceFilters>(
+    performanceService.buildDefaultFilters(),
+  );
   const [dataset, setDataset] = useState<PerformanceDataset | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
@@ -154,7 +155,7 @@ export default function Perfor() {
         ...prev,
         preset,
         startDate: range.startDate,
-        endDate: range.endDate
+        endDate: range.endDate,
       }));
       return;
     }
@@ -167,7 +168,7 @@ export default function Perfor() {
       impressions: 0,
       affluence: 0,
       activeScreens: 0,
-      spend: 0
+      spend: 0,
     };
     const previous = dataset?.previousKpis || current;
 
@@ -176,32 +177,32 @@ export default function Perfor() {
         title: 'Durée de diffusion',
         value: formatDuration(current.diffusionSeconds),
         diff: percentageDiff(current.diffusionSeconds, previous.diffusionSeconds),
-        icon: <Clock3 className="h-4 w-4" />
+        icon: <Clock3 className="h-4 w-4" />,
       },
       {
         title: 'Impressions générées',
         value: formatInt(current.impressions),
         diff: percentageDiff(current.impressions, previous.impressions),
-        icon: <Eye className="h-4 w-4" />
+        icon: <Eye className="h-4 w-4" />,
       },
       {
         title: "Analyse de l'affluence",
         value: formatInt(current.affluence),
         diff: percentageDiff(current.affluence, previous.affluence),
-        icon: <Users className="h-4 w-4" />
+        icon: <Users className="h-4 w-4" />,
       },
       {
         title: 'Écrans actifs',
         value: formatInt(current.activeScreens),
         diff: percentageDiff(current.activeScreens, previous.activeScreens),
-        icon: <Monitor className="h-4 w-4" />
+        icon: <Monitor className="h-4 w-4" />,
       },
       {
         title: 'Dépenses ce mois',
         value: formatCurrency(current.spend),
         diff: percentageDiff(current.spend, previous.spend),
-        icon: <Wallet className="h-4 w-4" />
-      }
+        icon: <Wallet className="h-4 w-4" />,
+      },
     ];
   }, [dataset]);
 
@@ -275,7 +276,9 @@ export default function Perfor() {
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-semibold text-gray-700">Type de campagne</label>
+            <label className="mb-1 block text-sm font-semibold text-gray-700">
+              Type de campagne
+            </label>
             <select
               value={filters.campaignType}
               onChange={(e) => onFilterChange('campaignType', e.target.value)}
@@ -341,14 +344,22 @@ export default function Perfor() {
         <>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
             {kpiValues.map((kpi) => (
-              <KpiCard key={kpi.title} title={kpi.title} value={kpi.value} diff={kpi.diff} icon={kpi.icon} />
+              <KpiCard
+                key={kpi.title}
+                title={kpi.title}
+                value={kpi.value}
+                diff={kpi.diff}
+                icon={kpi.icon}
+              />
             ))}
           </div>
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
             <div className="rounded-2xl border border-gray-200 bg-white p-4">
               <h3 className="text-lg font-medium text-gray-900">Évolution des impressions</h3>
-              <p className="mb-4 text-sm text-gray-500">Comparaison période actuelle vs précédente</p>
+              <p className="mb-4 text-sm text-gray-500">
+                Comparaison période actuelle vs précédente
+              </p>
               <div className="h-[270px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={dataset?.trend || []}>
@@ -389,7 +400,9 @@ export default function Perfor() {
 
             <div className="rounded-2xl border border-gray-200 bg-white p-4">
               <h3 className="text-lg font-medium text-gray-900">Performance par catégorie</h3>
-              <p className="mb-4 text-sm text-gray-500">Impressions générées par type de campagne</p>
+              <p className="mb-4 text-sm text-gray-500">
+                Impressions générées par type de campagne
+              </p>
               <div className="h-[270px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={dataset?.categoryPerformance || []}>
@@ -413,7 +426,9 @@ export default function Perfor() {
                 Générer rapport de la recherche
               </button>
             </div>
-            <h3 className="mb-4 text-xl font-medium tracking-tight text-gray-900">Vos performances globales</h3>
+            <h3 className="mb-4 text-xl font-medium tracking-tight text-gray-900">
+              Vos performances globales
+            </h3>
 
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
               <div className="rounded-2xl border border-gray-200 bg-white p-4">
@@ -428,9 +443,13 @@ export default function Perfor() {
                             {idx + 1}
                           </div>
                           <div className="min-w-0">
-                            <p className="truncate text-base font-medium text-gray-900">{campaign.name}</p>
+                            <p className="truncate text-base font-medium text-gray-900">
+                              {campaign.name}
+                            </p>
                             <div className="mt-1 flex items-center gap-2 text-xs text-gray-500">
-                              <span className={`rounded-full px-2 py-0.5 font-semibold ${statusBadgeClass(campaign.status)}`}>
+                              <span
+                                className={`rounded-full px-2 py-0.5 font-semibold ${statusBadgeClass(campaign.status)}`}
+                              >
                                 {campaign.status}
                               </span>
                               <span>{formatInt(campaign.impressions)} impressions</span>
@@ -440,7 +459,10 @@ export default function Perfor() {
                         <div className="text-right">
                           <div className="flex items-center justify-end gap-1">
                             <ArrowUp className="h-4 w-4 text-[#76E6AB]" />
-                            <span className="text-lg font-medium text-[#76E6AB]" style={{ color: '#76E6AB' }}>
+                            <span
+                              className="text-lg font-medium text-[#76E6AB]"
+                              style={{ color: '#76E6AB' }}
+                            >
                               {campaign.roi.toFixed(1)}
                             </span>
                           </div>
@@ -469,7 +491,9 @@ export default function Perfor() {
                         </div>
                       </div>
                       <div className="mb-2 flex items-end justify-between">
-                        <p className="text-base font-medium text-gray-900">{formatInt(zone.impressions)} impressions</p>
+                        <p className="text-base font-medium text-gray-900">
+                          {formatInt(zone.impressions)} impressions
+                        </p>
                         <p className="text-sm text-gray-500">{zone.sharePercent.toFixed(1)}%</p>
                       </div>
                       <div className="h-2 w-full rounded-full bg-gray-100">
@@ -490,14 +514,18 @@ export default function Perfor() {
             style={{ boxShadow: '0px 1px 2px rgba(10, 13, 20, 0.0313726)' }}
           >
             <h4 className="text-lg font-medium text-gray-900">Métriques détaillées</h4>
-            <p className="mb-4 text-sm text-gray-500">Indicateurs de performance depuis mon inscription</p>
+            <p className="mb-4 text-sm text-gray-500">
+              Indicateurs de performance depuis mon inscription
+            </p>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
               <div
                 className="rounded-xl border border-[#76E6AB] bg-white p-4"
                 style={{ boxShadow: '0px 1px 2px rgba(10, 13, 20, 0.0313726)' }}
               >
                 <p className="text-xs font-semibold text-gray-900">Durée moyenne</p>
-                <p className="mt-2 text-2xl font-medium text-gray-900">{formatInt(dataset?.detailedMetrics.averageDurationDays || 0)} jours</p>
+                <p className="mt-2 text-2xl font-medium text-gray-900">
+                  {formatInt(dataset?.detailedMetrics.averageDurationDays || 0)} jours
+                </p>
                 <p className="mt-2 text-sm text-gray-500">Par campagne</p>
               </div>
               <div
@@ -505,7 +533,9 @@ export default function Perfor() {
                 style={{ boxShadow: '0px 1px 2px rgba(10, 13, 20, 0.0313726)' }}
               >
                 <p className="text-xs font-semibold text-gray-900">Lieux touchés</p>
-                <p className="mt-2 text-2xl font-medium text-gray-900">{formatInt(dataset?.detailedMetrics.placesTouched || 0)}</p>
+                <p className="mt-2 text-2xl font-medium text-gray-900">
+                  {formatInt(dataset?.detailedMetrics.placesTouched || 0)}
+                </p>
                 <p className="mt-2 text-sm text-gray-500">Établissements</p>
               </div>
               <div
@@ -513,7 +543,9 @@ export default function Perfor() {
                 style={{ boxShadow: '0px 1px 2px rgba(10, 13, 20, 0.0313726)' }}
               >
                 <p className="text-xs font-semibold text-gray-900">Budget total</p>
-                <p className="mt-2 text-2xl font-medium text-gray-900">{formatCurrency(dataset?.detailedMetrics.totalBudget || 0)}</p>
+                <p className="mt-2 text-2xl font-medium text-gray-900">
+                  {formatCurrency(dataset?.detailedMetrics.totalBudget || 0)}
+                </p>
                 <p className="mt-2 text-sm text-gray-500">Période analysée</p>
               </div>
               <div
@@ -521,7 +553,9 @@ export default function Perfor() {
                 style={{ boxShadow: '0px 1px 2px rgba(10, 13, 20, 0.0313726)' }}
               >
                 <p className="text-xs font-semibold text-gray-900">Taux de complétion</p>
-                <p className="mt-2 text-2xl font-medium text-gray-900">{safeNumber(dataset?.detailedMetrics.completionRate || 0).toFixed(1)}%</p>
+                <p className="mt-2 text-2xl font-medium text-gray-900">
+                  {safeNumber(dataset?.detailedMetrics.completionRate || 0).toFixed(1)}%
+                </p>
                 <p className="mt-2 text-sm text-gray-500">Campagnes finalisées</p>
               </div>
             </div>

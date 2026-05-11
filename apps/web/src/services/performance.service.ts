@@ -6,7 +6,7 @@ import type {
   PerformanceTrendPoint,
   PerformanceTopCampaign,
   PerformanceZonePoint,
-  PerformanceDetailedMetrics
+  PerformanceDetailedMetrics,
 } from '../types/performance';
 
 type CampaignRow = {
@@ -91,7 +91,7 @@ const circlesOverlap = (
   radius1: number,
   lat2: number,
   lng2: number,
-  radius2: number
+  radius2: number,
 ) => haversineMeters(lat1, lng1, lat2, lng2) <= radius1 + radius2;
 const statusLabel = (status?: string | null) => {
   const key = (status || '').toLowerCase();
@@ -124,12 +124,7 @@ const addDays = (date: Date, days: number) => {
 const getDaysInclusive = (start: Date, end: Date) =>
   Math.max(1, Math.floor((end.getTime() - start.getTime()) / 86400000) + 1);
 
-const clampRange = (
-  campaignStart: Date,
-  campaignEnd: Date,
-  filterStart: Date,
-  filterEnd: Date
-) => {
+const clampRange = (campaignStart: Date, campaignEnd: Date, filterStart: Date, filterEnd: Date) => {
   const start = campaignStart > filterStart ? campaignStart : filterStart;
   const end = campaignEnd < filterEnd ? campaignEnd : filterEnd;
   if (start > end) return null;
@@ -147,7 +142,7 @@ const categoryLabel = (category?: string | null) => {
     cultural: 'Événement culturel',
     promotional: 'Promotion spéciale',
     institutional: 'Annonce institutionnelle',
-    parc: 'Parc TV'
+    parc: 'Parc TV',
   };
   return reverse[key] || category;
 };
@@ -161,7 +156,7 @@ const toBudget = (value: number | string | null | undefined) => {
 const getDateRangeFromPreset = (
   preset: PerformanceFilters['preset'],
   customStart?: string,
-  customEnd?: string
+  customEnd?: string,
 ) => {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -190,7 +185,7 @@ const computeKpis = (
   campaignScreensByCampaign: Map<string, CampaignScreenRow[]>,
   activeScreenIdsByCampaign: Map<string, Set<string>>,
   rangeStart: Date,
-  rangeEnd: Date
+  rangeEnd: Date,
 ): PerformanceKpis => {
   let diffusionSeconds = 0;
   let impressions = 0;
@@ -236,7 +231,7 @@ const computeKpis = (
     impressions: safeRound(impressions),
     affluence: safeRound(affluence),
     activeScreens: activeScreens.size,
-    spend: safeNumber(Math.round(safeNumber(spend) * 100) / 100)
+    spend: safeNumber(Math.round(safeNumber(spend) * 100) / 100),
   };
 };
 
@@ -244,7 +239,7 @@ const computeTrend = (
   campaigns: CampaignRow[],
   rangeStart: Date,
   rangeEnd: Date,
-  previousStart: Date
+  previousStart: Date,
 ): PerformanceTrendPoint[] => {
   const points: PerformanceTrendPoint[] = [];
   const pointCount = getDaysInclusive(rangeStart, rangeEnd);
@@ -271,7 +266,7 @@ const computeTrend = (
     points.push({
       label: formatTrendLabel(currentDay),
       current: safeRound(currentValue),
-      previous: safeRound(previousValue)
+      previous: safeRound(previousValue),
     });
   }
 
@@ -289,13 +284,13 @@ export const performanceService = {
       locationId: '',
       campaignType: '',
       category: '',
-      zoneId: ''
+      zoneId: '',
     };
   },
 
   async getDataset(
     filters: PerformanceFilters,
-    options?: { campaignIds?: string[] }
+    options?: { campaignIds?: string[] },
   ): Promise<PerformanceDataset> {
     const { data: authData } = await supabase.auth.getUser();
     if (!authData.user) {
@@ -309,7 +304,9 @@ export const performanceService = {
       const scopedCampaignIds = options?.campaignIds;
       let withGeoQuery = supabase
         .from('campaigns')
-        .select('id, name, start_date, end_date, budget, views, status, category, event_id, location_lat, location_lng, location_radius, publication_schedule')
+        .select(
+          'id, name, start_date, end_date, budget, views, status, category, event_id, location_lat, location_lng, location_radius, publication_schedule',
+        )
         .order('created_at', { ascending: false });
 
       if (Array.isArray(scopedCampaignIds)) {
@@ -322,30 +319,56 @@ export const performanceService = {
         withGeoQuery = withGeoQuery.eq('user_id', authData.user.id);
       }
 
-      const { data: campaignsWithGeo, error: withGeoError } = Array.isArray(scopedCampaignIds) && scopedCampaignIds.length === 0
-        ? { data: [], error: null as any }
-        : await withGeoQuery;
+      const { data: campaignsWithGeo, error: withGeoError } =
+        Array.isArray(scopedCampaignIds) && scopedCampaignIds.length === 0
+          ? { data: [], error: null as any }
+          : await withGeoQuery;
 
       if (!withGeoError) {
         allCampaigns = (campaignsWithGeo || []) as CampaignRow[];
       } else {
         let baseQuery = supabase
           .from('campaigns')
-          .select('id, name, start_date, end_date, budget, views, status, category, event_id, publication_schedule')
+          .select(
+            'id, name, start_date, end_date, budget, views, status, category, event_id, publication_schedule',
+          )
           .order('created_at', { ascending: false });
         if (Array.isArray(scopedCampaignIds)) {
           if (scopedCampaignIds.length === 0) {
             allCampaigns = [];
             return {
               filters,
-              options: { campaigns: [], locations: [], campaignTypes: [], categories: [], zones: [] },
-              kpis: { diffusionSeconds: 0, impressions: 0, affluence: 0, activeScreens: 0, spend: 0 },
-              previousKpis: { diffusionSeconds: 0, impressions: 0, affluence: 0, activeScreens: 0, spend: 0 },
+              options: {
+                campaigns: [],
+                locations: [],
+                campaignTypes: [],
+                categories: [],
+                zones: [],
+              },
+              kpis: {
+                diffusionSeconds: 0,
+                impressions: 0,
+                affluence: 0,
+                activeScreens: 0,
+                spend: 0,
+              },
+              previousKpis: {
+                diffusionSeconds: 0,
+                impressions: 0,
+                affluence: 0,
+                activeScreens: 0,
+                spend: 0,
+              },
               trend: [],
               categoryPerformance: [],
               topCampaigns: [],
               zonePerformance: [],
-              detailedMetrics: { averageDurationDays: 0, placesTouched: 0, totalBudget: 0, completionRate: 0 }
+              detailedMetrics: {
+                averageDurationDays: 0,
+                placesTouched: 0,
+                totalBudget: 0,
+                completionRate: 0,
+              },
             };
           }
           baseQuery = baseQuery.in('id', scopedCampaignIds);
@@ -354,11 +377,15 @@ export const performanceService = {
         }
         const { data: campaignsBase, error: baseError } = await baseQuery;
         if (baseError) throw baseError;
-        allCampaigns = ((campaignsBase || []) as Array<Omit<CampaignRow, 'location_lat' | 'location_lng' | 'location_radius'>>).map((row) => ({
+        allCampaigns = (
+          (campaignsBase || []) as Array<
+            Omit<CampaignRow, 'location_lat' | 'location_lng' | 'location_radius'>
+          >
+        ).map((row) => ({
           ...row,
           location_lat: null,
           location_lng: null,
-          location_radius: null
+          location_radius: null,
         }));
       }
     }
@@ -380,7 +407,7 @@ export const performanceService = {
         supabase
           .from('campaign_locations')
           .select('campaign_id, location_id')
-          .in('campaign_id', campaignIds)
+          .in('campaign_id', campaignIds),
       ]);
 
       campaignScreens = (csData || []) as CampaignScreenRow[];
@@ -394,7 +421,9 @@ export const performanceService = {
           .in('id', screenIds);
 
         const activeScreenIds = new Set(
-          ((screensData || []) as ScreenRow[]).filter((s) => s.status === 'active').map((s) => s.id)
+          ((screensData || []) as ScreenRow[])
+            .filter((s) => s.status === 'active')
+            .map((s) => s.id),
         );
 
         for (const row of campaignScreens) {
@@ -439,7 +468,11 @@ export const performanceService = {
       campaignLocationIds.set(row.campaign_id, list);
     }
 
-    const { start, end } = getDateRangeFromPreset(filters.preset, filters.startDate, filters.endDate);
+    const { start, end } = getDateRangeFromPreset(
+      filters.preset,
+      filters.startDate,
+      filters.endDate,
+    );
     const rangeDays = getDaysInclusive(start, end);
     const previousEnd = addDays(start, -1);
     const previousStart = addDays(previousEnd, -(rangeDays - 1));
@@ -453,7 +486,8 @@ export const performanceService = {
         filters.category &&
         campaign.category !== filters.category &&
         categoryLabel(campaign.category) !== filters.category
-      ) return false;
+      )
+        return false;
       if (filters.locationId) {
         const linkedLocationIds = campaignLocationIds.get(campaign.id) || [];
         if (!linkedLocationIds.includes(filters.locationId)) return false;
@@ -471,11 +505,16 @@ export const performanceService = {
           radius,
           safeNumber(selectedZone.latitude),
           safeNumber(selectedZone.longitude),
-          safeNumber(selectedZone.radius)
+          safeNumber(selectedZone.radius),
         );
         if (!overlap) return false;
       }
-      const overlap = clampRange(normalizeDate(campaign.start_date), normalizeDate(campaign.end_date), start, end);
+      const overlap = clampRange(
+        normalizeDate(campaign.start_date),
+        normalizeDate(campaign.end_date),
+        start,
+        end,
+      );
       return Boolean(overlap);
     });
 
@@ -491,7 +530,7 @@ export const performanceService = {
       campaignScreensByCampaign,
       activeScreenIdsByCampaign,
       start,
-      end
+      end,
     );
 
     const previousKpis = computeKpis(
@@ -499,7 +538,7 @@ export const performanceService = {
       campaignScreensByCampaign,
       activeScreenIdsByCampaign,
       previousStart,
-      previousEnd
+      previousEnd,
     );
 
     const trend = computeTrend(filteredCampaigns, start, end, previousStart);
@@ -507,7 +546,10 @@ export const performanceService = {
     const categoryMap = new Map<string, number>();
     for (const campaign of filteredCampaigns) {
       const key = categoryLabel(campaign.category);
-      categoryMap.set(key, safeNumber((categoryMap.get(key) || 0) + safeNumber(campaign.views || 0)));
+      categoryMap.set(
+        key,
+        safeNumber((categoryMap.get(key) || 0) + safeNumber(campaign.views || 0)),
+      );
     }
     const categoryPerformance = Array.from(categoryMap.entries())
       .map(([category, impressions]) => ({ category, impressions: safeRound(impressions) }))
@@ -529,13 +571,16 @@ export const performanceService = {
           name: campaign.name || 'Campagne sans nom',
           status: statusLabel(campaign.status),
           impressions,
-          roi
+          roi,
         };
       })
       .sort((a, b) => b.roi - a.roi)
       .slice(0, 4);
 
-    const zoneAgg = new Map<string, { zoneName: string; impressions: number; screens: Set<string> }>();
+    const zoneAgg = new Map<
+      string,
+      { zoneName: string; impressions: number; screens: Set<string> }
+    >();
     for (const zone of predefinedZones) {
       zoneAgg.set(zone.id, { zoneName: zone.name, impressions: 0, screens: new Set<string>() });
     }
@@ -551,8 +596,8 @@ export const performanceService = {
           radius,
           safeNumber(zone.latitude),
           safeNumber(zone.longitude),
-          safeNumber(zone.radius)
-        )
+          safeNumber(zone.radius),
+        ),
       );
       if (overlaps.length === 0) continue;
       const cStart = normalizeDate(campaign.start_date || '');
@@ -562,7 +607,9 @@ export const performanceService = {
       const campaignDays = getDaysInclusive(cStart, cEnd);
       const ratio = safeNumber(overlap.days / campaignDays);
       const splitImpressions = safeNumber((campaign.views || 0) * ratio) / overlaps.length;
-      const screenIds = (campaignScreensByCampaign.get(campaign.id) || []).map((row) => row.screen_id);
+      const screenIds = (campaignScreensByCampaign.get(campaign.id) || []).map(
+        (row) => row.screen_id,
+      );
       for (const zone of overlaps) {
         const agg = zoneAgg.get(zone.id);
         if (!agg) continue;
@@ -570,14 +617,18 @@ export const performanceService = {
         screenIds.forEach((id) => agg.screens.add(id));
       }
     }
-    const totalZoneImpressions = Array.from(zoneAgg.values()).reduce((sum, item) => sum + item.impressions, 0);
+    const totalZoneImpressions = Array.from(zoneAgg.values()).reduce(
+      (sum, item) => sum + item.impressions,
+      0,
+    );
     const zonePerformance: PerformanceZonePoint[] = Array.from(zoneAgg.entries())
       .map(([zoneId, agg]) => ({
         zoneId,
         zoneName: agg.zoneName,
         impressions: safeRound(agg.impressions),
         screensCount: agg.screens.size,
-        sharePercent: totalZoneImpressions > 0 ? safeNumber((agg.impressions / totalZoneImpressions) * 100) : 0
+        sharePercent:
+          totalZoneImpressions > 0 ? safeNumber((agg.impressions / totalZoneImpressions) * 100) : 0,
       }))
       .filter((item) => item.impressions > 0)
       .sort((a, b) => b.impressions - a.impressions)
@@ -587,15 +638,23 @@ export const performanceService = {
     filteredCampaigns.forEach((campaign) => {
       (campaignLocationIds.get(campaign.id) || []).forEach((id) => placesTouched.add(id));
     });
-    const completedCount = filteredCampaigns.filter((c) => (c.status || '').toLowerCase() === 'completed').length;
+    const completedCount = filteredCampaigns.filter(
+      (c) => (c.status || '').toLowerCase() === 'completed',
+    ).length;
     const detailedMetrics: PerformanceDetailedMetrics = {
       averageDurationDays:
         filteredCampaigns.length > 0
           ? safeRound(
               filteredCampaigns.reduce((sum, campaign) => {
                 if (!campaign.start_date || !campaign.end_date) return sum;
-                return sum + getDaysInclusive(normalizeDate(campaign.start_date), normalizeDate(campaign.end_date));
-              }, 0) / filteredCampaigns.length
+                return (
+                  sum +
+                  getDaysInclusive(
+                    normalizeDate(campaign.start_date),
+                    normalizeDate(campaign.end_date),
+                  )
+                );
+              }, 0) / filteredCampaigns.length,
             )
           : 0,
       placesTouched: placesTouched.size,
@@ -603,12 +662,12 @@ export const performanceService = {
       completionRate:
         filteredCampaigns.length > 0
           ? safeNumber((completedCount / filteredCampaigns.length) * 100)
-          : 0
+          : 0,
     };
 
     const campaignOptions = allCampaigns.map((c) => ({
       value: c.id,
-      label: c.name || 'Campagne sans nom'
+      label: c.name || 'Campagne sans nom',
     }));
     const locationById = new Map<string, LocationRow>(locations.map((loc) => [loc.id, loc]));
     const locationOptions = Array.from(new Set(campaignLocations.map((cl) => cl.location_id)))
@@ -616,35 +675,34 @@ export const performanceService = {
         const loc = locationById.get(id);
         return {
           value: id,
-          label: loc?.name || loc?.address || 'Établissement'
+          label: loc?.name || loc?.address || 'Établissement',
         };
       })
       .sort((a, b) => a.label.localeCompare(b.label));
-    const categoryOptions = ownerCategoryNames
-      .map((name) => ({ value: name, label: name }));
+    const categoryOptions = ownerCategoryNames.map((name) => ({ value: name, label: name }));
     if (filters.category && !categoryOptions.some((option) => option.value === filters.category)) {
       categoryOptions.push({ value: filters.category, label: filters.category });
     }
     const zoneOptions = predefinedZones.map((zone) => ({
       value: zone.id,
-      label: zone.name
+      label: zone.name,
     }));
 
     return {
       filters: {
         ...filters,
         startDate: start.toISOString().split('T')[0],
-        endDate: end.toISOString().split('T')[0]
+        endDate: end.toISOString().split('T')[0],
       },
       options: {
         campaigns: campaignOptions,
         locations: locationOptions,
         campaignTypes: [
           { value: 'standard', label: 'Standard' },
-          { value: 'event', label: 'Événementielle' }
+          { value: 'event', label: 'Événementielle' },
         ],
         categories: categoryOptions,
-        zones: zoneOptions
+        zones: zoneOptions,
       },
       kpis,
       previousKpis,
@@ -652,7 +710,7 @@ export const performanceService = {
       categoryPerformance,
       topCampaigns,
       zonePerformance,
-      detailedMetrics
+      detailedMetrics,
     };
-  }
+  },
 };

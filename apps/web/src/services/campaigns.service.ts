@@ -38,12 +38,14 @@ export const campaignsService = {
   async getAll() {
     const { data, error } = await supabase
       .from('campaigns')
-      .select(`
+      .select(
+        `
         *,
         client:clients(id, name),
         locations:campaign_locations(*),
         media:campaign_media(*)
-      `)
+      `,
+      )
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -53,12 +55,14 @@ export const campaignsService = {
   async getById(id: string) {
     const { data, error } = await supabase
       .from('campaigns')
-      .select(`
+      .select(
+        `
         *,
         client:clients(id, name),
         locations:campaign_locations(*),
         media:campaign_media(*)
-      `)
+      `,
+      )
       .eq('id', id)
       .single();
 
@@ -77,22 +81,22 @@ export const campaignsService = {
     if (campaignError) throw campaignError;
 
     // Add location
-    const { error: locationError } = await supabase
-      .from('campaign_locations')
-      .insert([{
+    const { error: locationError } = await supabase.from('campaign_locations').insert([
+      {
         campaign_id: campaignData.id,
-        ...location
-      }]);
+        ...location,
+      },
+    ]);
 
     if (locationError) throw locationError;
 
     // Add media
-    const { error: mediaError } = await supabase
-      .from('campaign_media')
-      .insert([{
+    const { error: mediaError } = await supabase.from('campaign_media').insert([
+      {
         campaign_id: campaignData.id,
-        ...media
-      }]);
+        ...media,
+      },
+    ]);
 
     if (mediaError) throw mediaError;
 
@@ -130,10 +134,7 @@ export const campaignsService = {
   },
 
   async delete(id: string) {
-    const { error } = await supabase
-      .from('campaigns')
-      .delete()
-      .eq('id', id);
+    const { error } = await supabase.from('campaigns').delete().eq('id', id);
 
     if (error) throw error;
   },

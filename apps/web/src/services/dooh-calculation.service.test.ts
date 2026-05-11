@@ -96,9 +96,21 @@ describe('sumImpressionsTranches', () => {
   it('sums impressions_tranche', () => {
     expect(
       sumImpressionsTranches([
-        { impressions_tranche: 1, allowed_repetitions_per_hour: 0, billable_spots_per_hour: 0, remaining_spots_per_hour: 0, repetitions_per_hour_video: 0 },
-        { impressions_tranche: 2, allowed_repetitions_per_hour: 0, billable_spots_per_hour: 0, remaining_spots_per_hour: 0, repetitions_per_hour_video: 0 },
-      ])
+        {
+          impressions_tranche: 1,
+          allowed_repetitions_per_hour: 0,
+          billable_spots_per_hour: 0,
+          remaining_spots_per_hour: 0,
+          repetitions_per_hour_video: 0,
+        },
+        {
+          impressions_tranche: 2,
+          allowed_repetitions_per_hour: 0,
+          billable_spots_per_hour: 0,
+          remaining_spots_per_hour: 0,
+          repetitions_per_hour_video: 0,
+        },
+      ]),
     ).toBe(3);
   });
 });

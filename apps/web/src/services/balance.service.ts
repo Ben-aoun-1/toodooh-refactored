@@ -26,7 +26,7 @@ class BalanceService {
       console.log('💰 Récupération du solde pour:', userId);
 
       const { data, error } = await supabase.rpc('get_user_balance', {
-        p_user_id: userId
+        p_user_id: userId,
       });
 
       if (error) {
@@ -55,7 +55,8 @@ class BalanceService {
         .eq('user_id', userId)
         .eq('status', 'completed');
 
-      const totalRecharged = recharges?.reduce((sum, r) => sum + parseFloat(r.amount.toString()), 0) || 0;
+      const totalRecharged =
+        recharges?.reduce((sum, r) => sum + parseFloat(r.amount.toString()), 0) || 0;
 
       // Récupérer les campagnes actives/complétées
       // Le budget est stocké en HT, on doit ajouter 19% de TVA pour le montant réel dépensé
@@ -67,11 +68,12 @@ class BalanceService {
         .in('status', ['active', 'completed']);
 
       // Calculer le total dépensé avec TVA (budget HT * 1.19)
-      const totalSpent = campaigns?.reduce((sum, c) => {
-        const budgetHT = parseFloat(c.budget.toString()) || 0;
-        const budgetTTC = budgetHT * (1 + TVA_RATE);
-        return sum + budgetTTC;
-      }, 0) || 0;
+      const totalSpent =
+        campaigns?.reduce((sum, c) => {
+          const budgetHT = parseFloat(c.budget.toString()) || 0;
+          const budgetTTC = budgetHT * (1 + TVA_RATE);
+          return sum + budgetTTC;
+        }, 0) || 0;
 
       return totalRecharged - totalSpent;
     } catch (error) {
@@ -98,7 +100,7 @@ class BalanceService {
         total_recharged: parseFloat(data.total_recharged || '0'),
         total_spent: parseFloat(data.total_spent || '0'),
         draft_campaigns_count: data.draft_campaigns_count || 0,
-        active_campaigns_count: data.active_campaigns_count || 0
+        active_campaigns_count: data.active_campaigns_count || 0,
       };
     } catch (error) {
       console.error('Erreur récupération balance info:', error);
@@ -115,7 +117,7 @@ class BalanceService {
       console.log('🔍 Vérification du solde pour la campagne:', campaignId);
 
       const { data, error } = await supabase.rpc('check_campaign_balance', {
-        p_campaign_id: campaignId
+        p_campaign_id: campaignId,
       });
 
       if (error) {
@@ -127,14 +129,16 @@ class BalanceService {
       const TVA_RATE = 0.19;
       const budgetHT = data?.campaign_cost || 0;
       const budgetTTC = budgetHT * (1 + TVA_RATE);
-      
+
       // Ajuster les valeurs avec TVA
       const adjustedData = {
         ...data,
         campaign_cost: budgetTTC,
         balance_after: data?.available_balance ? data.available_balance - budgetTTC : 0,
-        has_sufficient_balance: data?.available_balance ? data.available_balance >= budgetTTC : false,
-        message: data?.message || ''
+        has_sufficient_balance: data?.available_balance
+          ? data.available_balance >= budgetTTC
+          : false,
+        message: data?.message || '',
       };
 
       console.log('📊 Résultat vérification (HT:', budgetHT, 'TTC:', budgetTTC, '):', adjustedData);
@@ -151,7 +155,7 @@ class BalanceService {
   async calculateCampaignCost(campaignId: string): Promise<number> {
     try {
       const { data, error } = await supabase.rpc('calculate_campaign_cost', {
-        p_campaign_id: campaignId
+        p_campaign_id: campaignId,
       });
 
       if (error) throw error;
@@ -169,55 +173,10 @@ class BalanceService {
   formatAmount(amount: number): string {
     const formatted = new Intl.NumberFormat('en-US', {
       minimumFractionDigits: 2,
-      maximumFractionDigits: 2
+      maximumFractionDigits: 2,
     }).format(amount);
     return `${formatted} TND`;
   }
 }
 
 export const balanceService = new BalanceService();
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

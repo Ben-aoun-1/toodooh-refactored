@@ -8,7 +8,7 @@ import {
   CampaignGlobalStats,
   CampaignByCategory,
   CampaignLocation,
-  CampaignImpressionProgress
+  CampaignImpressionProgress,
 } from '../../types/campaign-monitoring';
 import AdminLayout from '../../components/admin/AdminLayout';
 import {
@@ -31,7 +31,7 @@ import {
   ChevronRight,
   FileVideo,
   AlertCircle,
-  StopCircle
+  StopCircle,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -41,18 +41,23 @@ export default function CampaignMonitoring() {
   const [campaigns, setCampaigns] = useState<CampaignMonitoringData[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'pending' | 'completed' | 'paused'>('all');
+  const [statusFilter, setStatusFilter] = useState<
+    'all' | 'active' | 'pending' | 'completed' | 'paused'
+  >('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [selectedCampaign, setSelectedCampaign] = useState<CampaignMonitoringData | null>(null);
-  const [selectedCampaignLocations, setSelectedCampaignLocations] = useState<CampaignLocation[]>([]);
-  const [selectedCampaignImpressionProgress, setSelectedCampaignImpressionProgress] = useState<CampaignImpressionProgress | null>(null);
+  const [selectedCampaignLocations, setSelectedCampaignLocations] = useState<CampaignLocation[]>(
+    [],
+  );
+  const [selectedCampaignImpressionProgress, setSelectedCampaignImpressionProgress] =
+    useState<CampaignImpressionProgress | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showStopModal, setShowStopModal] = useState(false);
   const [campaignToStop, setCampaignToStop] = useState<CampaignMonitoringData | null>(null);
   const [stopReason, setStopReason] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
-  
+
   // Statistiques
   const [stats, setStats] = useState<CampaignGlobalStats>({
     total_campaigns: 0,
@@ -63,7 +68,7 @@ export default function CampaignMonitoring() {
     total_budget: 0,
     active_budget: 0,
     total_views: 0,
-    avg_budget: 0
+    avg_budget: 0,
   });
   const [categoriesData, setCategoriesData] = useState<CampaignByCategory[]>([]);
 
@@ -71,7 +76,12 @@ export default function CampaignMonitoring() {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const status = params.get('status');
-    if (status === 'active' || status === 'pending' || status === 'completed' || status === 'paused') {
+    if (
+      status === 'active' ||
+      status === 'pending' ||
+      status === 'completed' ||
+      status === 'paused'
+    ) {
       setStatusFilter(status);
     }
   }, [location.search]);
@@ -97,7 +107,7 @@ export default function CampaignMonitoring() {
     // Charger stats et catégories en arrière-plan (sans bloquer le rendu principal)
     Promise.allSettled([
       adminCampaignMonitoringService.getGlobalStats(),
-      adminCampaignMonitoringService.getCampaignsByCategory()
+      adminCampaignMonitoringService.getCampaignsByCategory(),
     ]).then((results) => {
       const [statsResult, categoriesResult] = results;
       if (statsResult.status === 'fulfilled') setStats(statsResult.value);
@@ -106,10 +116,11 @@ export default function CampaignMonitoring() {
   };
 
   // Filtrage des campagnes
-  const filteredCampaigns = campaigns.filter(campaign => {
-    const matchesSearch = campaign.campaign_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         campaign.advertiser_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         campaign.client_name.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredCampaigns = campaigns.filter((campaign) => {
+    const matchesSearch =
+      campaign.campaign_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      campaign.advertiser_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      campaign.client_name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || campaign.status === statusFilter;
     const matchesCategory = categoryFilter === 'all' || campaign.category === categoryFilter;
     return matchesSearch && matchesStatus && matchesCategory;
@@ -149,7 +160,7 @@ export default function CampaignMonitoring() {
     setShowDetailsModal(true);
     setSelectedCampaignLocations([]);
     setSelectedCampaignImpressionProgress(null);
-    
+
     // Charger les localités de la campagne
     try {
       const [locations, progress] = await Promise.all([
@@ -169,12 +180,14 @@ export default function CampaignMonitoring() {
     if (!campaignToStop || !admin) return;
 
     if (!stopReason.trim()) {
-      toast.error('Veuillez indiquer une raison d\'arrêt');
+      toast.error("Veuillez indiquer une raison d'arrêt");
       return;
     }
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) throw new Error('Non authentifié');
 
       // Arrêter immédiatement la campagne
@@ -182,7 +195,7 @@ export default function CampaignMonitoring() {
         .from('campaigns')
         .update({
           status: 'paused',
-          validation_notes: `⚠️ ARRÊT D'URGENCE par ${admin.full_name}\nRaison: ${stopReason}\nDate: ${new Date().toLocaleString('fr-FR')}`
+          validation_notes: `⚠️ ARRÊT D'URGENCE par ${admin.full_name}\nRaison: ${stopReason}\nDate: ${new Date().toLocaleString('fr-FR')}`,
         })
         .eq('id', campaignToStop.campaign_id);
 
@@ -198,7 +211,7 @@ export default function CampaignMonitoring() {
 
       toast.success('Campagne arrêtée immédiatement !', {
         icon: '⚠️',
-        duration: 4000
+        duration: 4000,
       });
 
       setShowStopModal(false);
@@ -207,7 +220,7 @@ export default function CampaignMonitoring() {
       loadData();
     } catch (error: any) {
       console.error('Erreur arrêt campagne:', error);
-      toast.error(error.message || 'Erreur lors de l\'arrêt de la campagne');
+      toast.error(error.message || "Erreur lors de l'arrêt de la campagne");
     }
   };
 
@@ -216,12 +229,14 @@ export default function CampaignMonitoring() {
       active: { bg: 'bg-green-100', text: 'text-green-800', icon: Play, label: 'Active' },
       pending: { bg: 'bg-yellow-100', text: 'text-yellow-800', icon: Clock, label: 'En attente' },
       completed: { bg: 'bg-blue-100', text: 'text-blue-800', icon: CheckCircle, label: 'Terminée' },
-      paused: { bg: 'bg-gray-100', text: 'text-gray-800', icon: Pause, label: 'En pause' }
+      paused: { bg: 'bg-gray-100', text: 'text-gray-800', icon: Pause, label: 'En pause' },
     };
     const badge = badges[status as keyof typeof badges] || badges.pending;
     const Icon = badge.icon;
     return (
-      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${badge.bg} ${badge.text}`}>
+      <span
+        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${badge.bg} ${badge.text}`}
+      >
         <Icon className="w-3 h-3 mr-1" />
         {badge.label}
       </span>
@@ -232,11 +247,13 @@ export default function CampaignMonitoring() {
     const badges = {
       approved: { bg: 'bg-green-100', text: 'text-green-800', label: 'Validé' },
       pending: { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'En attente' },
-      rejected: { bg: 'bg-red-100', text: 'text-red-800', label: 'Rejeté' }
+      rejected: { bg: 'bg-red-100', text: 'text-red-800', label: 'Rejeté' },
     };
     const badge = badges[status as keyof typeof badges] || badges.pending;
     return (
-      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${badge.bg} ${badge.text}`}>
+      <span
+        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${badge.bg} ${badge.text}`}
+      >
         {badge.label}
       </span>
     );
@@ -248,7 +265,7 @@ export default function CampaignMonitoring() {
       institutional: 'Institutionnel',
       cultural: 'Culturel',
       social: 'Social',
-      other: 'Autre'
+      other: 'Autre',
     };
     return labels[category] || category;
   };
@@ -266,7 +283,10 @@ export default function CampaignMonitoring() {
 
   if (loading) {
     return (
-      <AdminLayout title="Monitoring des Campagnes" subtitle="Suivez toutes les campagnes en temps réel">
+      <AdminLayout
+        title="Monitoring des Campagnes"
+        subtitle="Suivez toutes les campagnes en temps réel"
+      >
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[#00B3A6]"></div>
         </div>
@@ -275,7 +295,10 @@ export default function CampaignMonitoring() {
   }
 
   return (
-    <AdminLayout title="Monitoring des Campagnes" subtitle="Suivez toutes les campagnes en temps réel">
+    <AdminLayout
+      title="Monitoring des Campagnes"
+      subtitle="Suivez toutes les campagnes en temps réel"
+    >
       {/* Statistiques globales */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -293,8 +316,12 @@ export default function CampaignMonitoring() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Budget Total</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">{formatCurrency(stats.total_budget)}</p>
-              <p className="text-xs text-gray-500 mt-1">{formatCurrency(stats.active_budget)} actif</p>
+              <p className="text-3xl font-bold text-gray-900 mt-2">
+                {formatCurrency(stats.total_budget)}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                {formatCurrency(stats.active_budget)} actif
+              </p>
             </div>
             <DollarSign className="h-12 w-12 text-green-500" />
           </div>
@@ -304,7 +331,9 @@ export default function CampaignMonitoring() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Vues Totales</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">{stats.total_views.toLocaleString()}</p>
+              <p className="text-3xl font-bold text-gray-900 mt-2">
+                {stats.total_views.toLocaleString()}
+              </p>
               <p className="text-xs text-gray-500 mt-1">Toutes campagnes</p>
             </div>
             <TrendingUp className="h-12 w-12 text-blue-500" />
@@ -315,7 +344,9 @@ export default function CampaignMonitoring() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Budget Moyen</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">{formatCurrency(stats.avg_budget)}</p>
+              <p className="text-3xl font-bold text-gray-900 mt-2">
+                {formatCurrency(stats.avg_budget)}
+              </p>
               <p className="text-xs text-gray-500 mt-1">Par campagne</p>
             </div>
             <Monitor className="h-12 w-12 text-purple-500" />
@@ -327,7 +358,10 @@ export default function CampaignMonitoring() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+            <Search
+              className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+              size={20}
+            />
             <input
               type="text"
               placeholder="Rechercher une campagne..."
@@ -338,7 +372,10 @@ export default function CampaignMonitoring() {
           </div>
 
           <div className="relative">
-            <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+            <Filter
+              className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+              size={20}
+            />
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as any)}
@@ -353,7 +390,10 @@ export default function CampaignMonitoring() {
           </div>
 
           <div className="relative">
-            <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+            <Filter
+              className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+              size={20}
+            />
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
@@ -410,7 +450,9 @@ export default function CampaignMonitoring() {
               {paginatedCampaigns.map((campaign) => (
                 <tr key={campaign.campaign_id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{campaign.campaign_name}</div>
+                    <div className="text-sm font-medium text-gray-900">
+                      {campaign.campaign_name}
+                    </div>
                     <div className="text-xs text-gray-500">{campaign.client_name}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -418,10 +460,14 @@ export default function CampaignMonitoring() {
                     <div className="text-xs text-gray-500">{campaign.advertiser_email}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm text-gray-900">{getCategoryLabel(campaign.category)}</span>
+                    <span className="text-sm text-gray-900">
+                      {getCategoryLabel(campaign.category)}
+                    </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm font-medium text-gray-900">{formatCurrency(campaign.budget)}</span>
+                    <span className="text-sm font-medium text-gray-900">
+                      {formatCurrency(campaign.budget)}
+                    </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
@@ -429,9 +475,7 @@ export default function CampaignMonitoring() {
                       {campaign.screens_count}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {getStatusBadge(campaign.status)}
-                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">{getStatusBadge(campaign.status)}</td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     {getValidationBadge(campaign.content_validation_status)}
                   </td>
@@ -472,14 +516,14 @@ export default function CampaignMonitoring() {
           <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
             <div className="flex-1 flex justify-between sm:hidden">
               <button
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
                 disabled={currentPage === 1}
                 className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
               >
                 Précédent
               </button>
               <button
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
                 disabled={currentPage === totalPages}
                 className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
               >
@@ -490,14 +534,16 @@ export default function CampaignMonitoring() {
               <div>
                 <p className="text-sm text-gray-700">
                   Affichage de <span className="font-medium">{startIndex + 1}</span> à{' '}
-                  <span className="font-medium">{Math.min(endIndex, filteredCampaigns.length)}</span> sur{' '}
-                  <span className="font-medium">{filteredCampaigns.length}</span> résultats
+                  <span className="font-medium">
+                    {Math.min(endIndex, filteredCampaigns.length)}
+                  </span>{' '}
+                  sur <span className="font-medium">{filteredCampaigns.length}</span> résultats
                 </p>
               </div>
               <div>
                 <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
                   <button
-                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
                     disabled={currentPage === 1}
                     className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
                   >
@@ -517,7 +563,7 @@ export default function CampaignMonitoring() {
                     </button>
                   ))}
                   <button
-                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
                     disabled={currentPage === totalPages}
                     className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
                   >
@@ -529,7 +575,6 @@ export default function CampaignMonitoring() {
           </div>
         )}
       </div>
-
 
       {/* Modal de détails */}
       {showDetailsModal && selectedCampaign && (
@@ -557,7 +602,7 @@ export default function CampaignMonitoring() {
                   </div>
                   <p className="text-2xl font-bold">{formatCurrency(selectedCampaign.budget)}</p>
                   <p className="text-xs mt-1 opacity-80">
-                    {selectedCampaign.screens_count > 0 
+                    {selectedCampaign.screens_count > 0
                       ? `${formatCurrency(selectedCampaign.budget / selectedCampaign.screens_count)} / écran`
                       : 'Aucun écran'}
                   </p>
@@ -570,7 +615,7 @@ export default function CampaignMonitoring() {
                   </div>
                   <p className="text-2xl font-bold">{selectedCampaign.views.toLocaleString()}</p>
                   <p className="text-xs mt-1 opacity-80">
-                    {selectedCampaign.screens_count > 0 
+                    {selectedCampaign.screens_count > 0
                       ? `${Math.round(selectedCampaign.views / selectedCampaign.screens_count)} / écran`
                       : 'Aucune vue'}
                   </p>
@@ -593,7 +638,11 @@ export default function CampaignMonitoring() {
                     <span className="text-xs opacity-80">Durée</span>
                   </div>
                   <p className="text-2xl font-bold">
-                    {Math.ceil((new Date(selectedCampaign.end_date).getTime() - new Date(selectedCampaign.start_date).getTime()) / (1000 * 60 * 60 * 24))}
+                    {Math.ceil(
+                      (new Date(selectedCampaign.end_date).getTime() -
+                        new Date(selectedCampaign.start_date).getTime()) /
+                        (1000 * 60 * 60 * 24),
+                    )}
                   </p>
                   <p className="text-xs mt-1 opacity-80">jours</p>
                 </div>
@@ -608,8 +657,12 @@ export default function CampaignMonitoring() {
                 <div className="bg-gray-50 rounded-lg p-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-sm font-medium text-gray-600">Nom de la campagne</label>
-                      <p className="text-sm text-gray-900 mt-1 font-semibold">{selectedCampaign.campaign_name}</p>
+                      <label className="text-sm font-medium text-gray-600">
+                        Nom de la campagne
+                      </label>
+                      <p className="text-sm text-gray-900 mt-1 font-semibold">
+                        {selectedCampaign.campaign_name}
+                      </p>
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-600">Client</label>
@@ -617,16 +670,23 @@ export default function CampaignMonitoring() {
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-600">Annonceur</label>
-                      <p className="text-sm text-gray-900 mt-1 font-semibold">{selectedCampaign.advertiser_name}</p>
+                      <p className="text-sm text-gray-900 mt-1 font-semibold">
+                        {selectedCampaign.advertiser_name}
+                      </p>
                       <p className="text-xs text-gray-500 mt-0.5">
-                        <a href={`mailto:${selectedCampaign.advertiser_email}`} className="hover:underline">
+                        <a
+                          href={`mailto:${selectedCampaign.advertiser_email}`}
+                          className="hover:underline"
+                        >
                           {selectedCampaign.advertiser_email}
                         </a>
                       </p>
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-600">Catégorie</label>
-                      <p className="text-sm text-gray-900 mt-1">{getCategoryLabel(selectedCampaign.category)}</p>
+                      <p className="text-sm text-gray-900 mt-1">
+                        {getCategoryLabel(selectedCampaign.category)}
+                      </p>
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-600">Période</label>
@@ -639,15 +699,23 @@ export default function CampaignMonitoring() {
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-600">Date de création</label>
-                      <p className="text-sm text-gray-900 mt-1">{formatDate(selectedCampaign.created_at)}</p>
+                      <p className="text-sm text-gray-900 mt-1">
+                        {formatDate(selectedCampaign.created_at)}
+                      </p>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-gray-600">Statut de la campagne</label>
+                      <label className="text-sm font-medium text-gray-600">
+                        Statut de la campagne
+                      </label>
                       <div className="mt-1">{getStatusBadge(selectedCampaign.status)}</div>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-gray-600">Validation du contenu</label>
-                      <div className="mt-1">{getValidationBadge(selectedCampaign.content_validation_status)}</div>
+                      <label className="text-sm font-medium text-gray-600">
+                        Validation du contenu
+                      </label>
+                      <div className="mt-1">
+                        {getValidationBadge(selectedCampaign.content_validation_status)}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -670,13 +738,15 @@ export default function CampaignMonitoring() {
                     <div className="bg-white rounded-lg border border-gray-200 p-3">
                       <p className="text-xs text-gray-500">Impressions réalisées</p>
                       <p className="text-xl font-bold text-gray-900 mt-1">
-                        {formatNumber(selectedCampaignImpressionProgress?.realized_impressions || 0)}
+                        {formatNumber(
+                          selectedCampaignImpressionProgress?.realized_impressions || 0,
+                        )}
                       </p>
                     </div>
                     <div className="bg-white rounded-lg border border-gray-200 p-3">
                       <p className="text-xs text-gray-500">Taux de réalisation</p>
                       <p className="text-xl font-bold text-[#00B3A6] mt-1">
-                        {((selectedCampaignImpressionProgress?.completion_rate || 0)).toFixed(1)}%
+                        {(selectedCampaignImpressionProgress?.completion_rate || 0).toFixed(1)}%
                       </p>
                     </div>
                   </div>
@@ -685,7 +755,11 @@ export default function CampaignMonitoring() {
                     <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
                       <span>Réalisé / Planifié</span>
                       <span>
-                        {formatNumber(selectedCampaignImpressionProgress?.realized_impressions || 0)} / {formatNumber(selectedCampaignImpressionProgress?.planned_impressions || 0)}
+                        {formatNumber(
+                          selectedCampaignImpressionProgress?.realized_impressions || 0,
+                        )}{' '}
+                        /{' '}
+                        {formatNumber(selectedCampaignImpressionProgress?.planned_impressions || 0)}
                       </span>
                     </div>
                     <div className="h-3 w-full rounded-full bg-gray-200 overflow-hidden">
@@ -713,7 +787,9 @@ export default function CampaignMonitoring() {
                         <FileVideo className="h-8 w-8 text-[#00B3A6]" />
                       </div>
                       <div>
-                        <p className="text-sm text-gray-900 font-medium">{selectedCampaign.video_filename}</p>
+                        <p className="text-sm text-gray-900 font-medium">
+                          {selectedCampaign.video_filename}
+                        </p>
                         <p className="text-xs text-gray-500 mt-1">
                           Statut: {getValidationBadge(selectedCampaign.content_validation_status)}
                         </p>
@@ -743,29 +819,36 @@ export default function CampaignMonitoring() {
                 {selectedCampaignLocations.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {selectedCampaignLocations.map((locationRow) => (
-                      <div key={locationRow.location_id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                      <div
+                        key={locationRow.location_id}
+                        className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+                      >
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex items-start">
                             <div className="bg-[#00B3A6] bg-opacity-10 p-2 rounded-lg mr-3">
                               <MapPin className="h-5 w-5 text-[#00B3A6]" />
                             </div>
                             <div>
-                              <p className="text-sm font-semibold text-gray-900">{locationRow.location_name}</p>
+                              <p className="text-sm font-semibold text-gray-900">
+                                {locationRow.location_name}
+                              </p>
                               <p className="text-xs text-gray-500 mt-1 flex items-center">
                                 <MapPin className="h-3 w-3 mr-1" />
                                 {locationRow.location_address}
                               </p>
                             </div>
                           </div>
-                          <span className={`text-xs px-2 py-1 rounded font-medium ${
-                            locationRow.location_status === 'active' 
-                              ? 'bg-green-100 text-green-800' 
-                              : locationRow.location_status === 'maintenance'
-                                ? 'bg-yellow-100 text-yellow-800'
-                                : locationRow.location_status === 'inactive'
-                                  ? 'bg-gray-100 text-gray-800'
-                                  : 'bg-red-100 text-red-800'
-                        }`}>
+                          <span
+                            className={`text-xs px-2 py-1 rounded font-medium ${
+                              locationRow.location_status === 'active'
+                                ? 'bg-green-100 text-green-800'
+                                : locationRow.location_status === 'maintenance'
+                                  ? 'bg-yellow-100 text-yellow-800'
+                                  : locationRow.location_status === 'inactive'
+                                    ? 'bg-gray-100 text-gray-800'
+                                    : 'bg-red-100 text-red-800'
+                            }`}
+                          >
                             {locationRow.location_status === 'active'
                               ? 'Active'
                               : locationRow.location_status === 'maintenance'
@@ -780,7 +863,8 @@ export default function CampaignMonitoring() {
                         <div className="text-xs text-gray-500 mt-2 space-y-1">
                           <p className="flex items-center">
                             <Monitor className="h-3 w-3 mr-1" />
-                            Écrans: {locationRow.screens_count} ({locationRow.online_screens_count} en ligne)
+                            Écrans: {locationRow.screens_count} ({locationRow.online_screens_count}{' '}
+                            en ligne)
                           </p>
                           <p className="flex items-center">
                             <Users className="h-3 w-3 mr-1" />
@@ -793,7 +877,9 @@ export default function CampaignMonitoring() {
                 ) : (
                   <div className="text-center py-8 bg-gray-50 rounded-lg">
                     <MapPin className="h-12 w-12 text-gray-300 mx-auto mb-2" />
-                    <p className="text-sm text-gray-500">Aucune localité associée à cette campagne</p>
+                    <p className="text-sm text-gray-500">
+                      Aucune localité associée à cette campagne
+                    </p>
                   </div>
                 )}
               </div>
@@ -814,7 +900,7 @@ export default function CampaignMonitoring() {
                   <span>Arrêt d'Urgence</span>
                 </button>
               )}
-              
+
               <button
                 onClick={() => setShowDetailsModal(false)}
                 className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors ml-auto"
@@ -838,18 +924,16 @@ export default function CampaignMonitoring() {
                 </div>
                 <div>
                   <h3 className="text-2xl font-bold text-red-600">Arrêt d'Urgence</h3>
-                  <p className="text-sm text-gray-600">Cette action est immédiate et irréversible</p>
+                  <p className="text-sm text-gray-600">
+                    Cette action est immédiate et irréversible
+                  </p>
                 </div>
               </div>
-              
+
               {/* Informations de la campagne */}
               <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-                <p className="text-sm font-semibold text-red-800 mb-2">
-                  Campagne à arrêter :
-                </p>
-                <p className="text-base font-bold text-red-900">
-                  {campaignToStop.campaign_name}
-                </p>
+                <p className="text-sm font-semibold text-red-800 mb-2">Campagne à arrêter :</p>
+                <p className="text-base font-bold text-red-900">{campaignToStop.campaign_name}</p>
                 <div className="mt-2 text-xs text-red-700">
                   <p>Annonceur: {campaignToStop.advertiser_name}</p>
                   <p>Budget: {formatCurrency(campaignToStop.budget)}</p>
@@ -919,4 +1003,3 @@ export default function CampaignMonitoring() {
     </AdminLayout>
   );
 }
-

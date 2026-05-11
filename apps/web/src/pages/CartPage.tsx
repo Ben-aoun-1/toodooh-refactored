@@ -68,14 +68,18 @@ export default function CartPage() {
     eventsService.getFeaturedEvents(5).then((list) => {
       if (!cancelled) setSuggestedEvents(list);
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const removeFromCart = (campaignId: string) => {
     try {
       const raw = localStorage.getItem(CART_STORAGE_KEY);
       const current = raw ? JSON.parse(raw) : [];
-      const next = Array.isArray(current) ? current.filter((item: CartItemSidebar) => item.id !== campaignId) : [];
+      const next = Array.isArray(current)
+        ? current.filter((item: CartItemSidebar) => item.id !== campaignId)
+        : [];
       localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(next));
       setCartItems(next);
       window.dispatchEvent(new CustomEvent('toodooh:cart-updated', { detail: {} }));
@@ -145,7 +149,7 @@ export default function CartPage() {
               .from('campaigns')
               .update({
                 status: 'draft',
-                content_validation_status: 'pending'
+                content_validation_status: 'pending',
               })
               .eq('id', item.id)
               .eq('user_id', user.id);
@@ -174,7 +178,7 @@ export default function CartPage() {
             .from('campaigns')
             .update({
               status: nextStatus,
-              content_validation_status: videoIsValidated ? 'approved' : 'pending'
+              content_validation_status: videoIsValidated ? 'approved' : 'pending',
             })
             .eq('id', item.id)
             .eq('user_id', user.id);
@@ -238,90 +242,119 @@ export default function CartPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Bloc gauche : Récapitulatif */}
         <div className="lg:col-span-2 bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-6">Récapitulatif</h2>
+          <h2 className="text-xl font-bold text-gray-900 mb-6">Récapitulatif</h2>
 
-            {/* CAMPAGNES */}
-            <div className="mb-8">
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-4">Campagnes</p>
-              {cartItems.length === 0 ? (
-                <p className="text-sm text-gray-500 py-4">Aucune campagne dans le panier.</p>
-              ) : (
-                <ul className="space-y-4">
-                  {cartItems.map((item) => (
-                    <li key={item.id} className="flex gap-4 p-4 rounded-xl border border-gray-100 bg-gray-50/50 hover:bg-gray-50">
-                      <div className="w-20 h-20 rounded-lg bg-gray-200 flex-shrink-0 overflow-hidden flex items-center justify-center">
-                        <ShoppingBag className="h-8 w-8 text-gray-400" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-gray-900">{item.name || 'Nom de la campagne'}</p>
-                        <div className="flex items-center gap-2 sm:gap-3 mt-1 text-xs text-gray-500 min-w-0">
-                          <span className="flex items-center gap-1 min-w-0 shrink">
-                            <Calendar className="h-3.5 w-3.5 flex-shrink-0" />
-                            <span className="truncate">{item.periodLabel || 'Période à définir'}</span>
-                          </span>
-                          <span className="text-gray-300 flex-shrink-0" aria-hidden>
-                            |
-                          </span>
-                          <span className="flex items-center gap-1 min-w-0 shrink">
-                            <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
-                            <span className="truncate">{item.zonesLabel || 'Zones à définir'}</span>
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap gap-1.5 mt-2">
-                          <span className="inline-flex px-2 py-0.5 rounded bg-gray-200 text-gray-600 text-xs">Restaurants</span>
-                          <span className="inline-flex px-2 py-0.5 rounded bg-gray-200 text-gray-600 text-xs">Salles de sport</span>
-                        </div>
-                        <div className="flex items-center gap-2 mt-2">
-                          <button
-                            type="button"
-                            onClick={() => navigate('/my-campaigns')}
-                            className="p-1.5 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-200"
-                            title="Modifier"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => removeFromCart(item.id)}
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50"
-                            title="Supprimer du panier"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-                      <p className="text-base font-bold text-gray-900 flex-shrink-0">
-                        {item.amount.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TND
+          {/* CAMPAGNES */}
+          <div className="mb-8">
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-4">
+              Campagnes
+            </p>
+            {cartItems.length === 0 ? (
+              <p className="text-sm text-gray-500 py-4">Aucune campagne dans le panier.</p>
+            ) : (
+              <ul className="space-y-4">
+                {cartItems.map((item) => (
+                  <li
+                    key={item.id}
+                    className="flex gap-4 p-4 rounded-xl border border-gray-100 bg-gray-50/50 hover:bg-gray-50"
+                  >
+                    <div className="w-20 h-20 rounded-lg bg-gray-200 flex-shrink-0 overflow-hidden flex items-center justify-center">
+                      <ShoppingBag className="h-8 w-8 text-gray-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-gray-900">
+                        {item.name || 'Nom de la campagne'}
                       </p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+                      <div className="flex items-center gap-2 sm:gap-3 mt-1 text-xs text-gray-500 min-w-0">
+                        <span className="flex items-center gap-1 min-w-0 shrink">
+                          <Calendar className="h-3.5 w-3.5 flex-shrink-0" />
+                          <span className="truncate">
+                            {item.periodLabel || 'Période à définir'}
+                          </span>
+                        </span>
+                        <span className="text-gray-300 flex-shrink-0" aria-hidden>
+                          |
+                        </span>
+                        <span className="flex items-center gap-1 min-w-0 shrink">
+                          <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
+                          <span className="truncate">{item.zonesLabel || 'Zones à définir'}</span>
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        <span className="inline-flex px-2 py-0.5 rounded bg-gray-200 text-gray-600 text-xs">
+                          Restaurants
+                        </span>
+                        <span className="inline-flex px-2 py-0.5 rounded bg-gray-200 text-gray-600 text-xs">
+                          Salles de sport
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-2">
+                        <button
+                          type="button"
+                          onClick={() => navigate('/my-campaigns')}
+                          className="p-1.5 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-200"
+                          title="Modifier"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeFromCart(item.id)}
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50"
+                          title="Supprimer du panier"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-base font-bold text-gray-900 flex-shrink-0">
+                      {item.amount.toLocaleString('fr-FR', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}{' '}
+                      TND
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
 
-            {/* ÉVÉNEMENTS (vide pour l’instant, lié aux campagnes événement) */}
-            <div>
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-4">Événements</p>
-              <p className="text-sm text-gray-500 py-2">Aucun événement dans le panier.</p>
-            </div>
+          {/* ÉVÉNEMENTS (vide pour l’instant, lié aux campagnes événement) */}
+          <div>
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-4">
+              Événements
+            </p>
+            <p className="text-sm text-gray-500 py-2">Aucun événement dans le panier.</p>
+          </div>
         </div>
 
         {/* Bloc droit : Prêt à diffuser (style capture) */}
         <div className="lg:col-span-1">
           <div className="rounded-2xl border border-[#9adfb4] bg-white overflow-hidden">
             <div className="p-6">
-              <h3 className="text-2xl font-semibold text-gray-900 mb-5 leading-tight">Prêt à diffuser</h3>
+              <h3 className="text-2xl font-semibold text-gray-900 mb-5 leading-tight">
+                Prêt à diffuser
+              </h3>
               <div className="space-y-4">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-700">Coût réel (HT):</span>
                   <span className="text-gray-900">
-                    {subtotalHT.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TND
+                    {subtotalHT.toLocaleString('fr-FR', {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}{' '}
+                    TND
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-700">TVA (19%):</span>
                   <span className="text-gray-900">
-                    {tva.toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} TND
+                    {tva.toLocaleString('fr-FR', {
+                      minimumFractionDigits: 3,
+                      maximumFractionDigits: 3,
+                    })}{' '}
+                    TND
                   </span>
                 </div>
               </div>
@@ -330,7 +363,11 @@ export default function CartPage() {
               <div className="flex items-center justify-between gap-3">
                 <span className="text-lg font-medium text-gray-900 leading-none">Total TTC:</span>
                 <span className="text-xl font-bold text-gray-900 leading-none">
-                  {totalTTC.toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} TND
+                  {totalTTC.toLocaleString('fr-FR', {
+                    minimumFractionDigits: 3,
+                    maximumFractionDigits: 3,
+                  })}{' '}
+                  TND
                 </span>
               </div>
             </div>
@@ -361,15 +398,30 @@ export default function CartPage() {
               {suggestedEvents.map((event) => {
                 const start = new Date(event.start_date);
                 const end = new Date(event.end_date);
-                const dateStr = start.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+                const dateStr = start.toLocaleDateString('fr-FR', {
+                  day: 'numeric',
+                  month: 'short',
+                });
                 const timeStr = `${start.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} - ${end.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
-                const typeLabel = event.event_type === 'sport' ? 'Sport' : event.event_type === 'culture' ? 'Culture' : event.event_type || 'Autre';
+                const typeLabel =
+                  event.event_type === 'sport'
+                    ? 'Sport'
+                    : event.event_type === 'culture'
+                      ? 'Culture'
+                      : event.event_type || 'Autre';
                 return (
-                  <li key={event.id} className="flex flex-col gap-4 p-4 rounded-xl border border-gray-100 hover:bg-gray-50/50">
+                  <li
+                    key={event.id}
+                    className="flex flex-col gap-4 p-4 rounded-xl border border-gray-100 hover:bg-gray-50/50"
+                  >
                     <div className="flex gap-4">
                       <div className="w-24 h-20 rounded-lg bg-gray-200 flex-shrink-0 overflow-hidden flex items-center justify-center">
                         {event.image_url ? (
-                          <img src={event.image_url} alt="" className="w-full h-full object-cover" />
+                          <img
+                            src={event.image_url}
+                            alt=""
+                            className="w-full h-full object-cover"
+                          />
                         ) : (
                           <Megaphone className="h-8 w-8 text-gray-400" />
                         )}
@@ -392,8 +444,12 @@ export default function CartPage() {
                           </span>
                         </div>
                         <div className="flex flex-wrap gap-1.5 mt-2">
-                          <span className="inline-flex px-2 py-0.5 rounded bg-gray-200 text-gray-600 text-xs">Restaurants</span>
-                          <span className="inline-flex px-2 py-0.5 rounded bg-gray-200 text-gray-600 text-xs">Salles de sport</span>
+                          <span className="inline-flex px-2 py-0.5 rounded bg-gray-200 text-gray-600 text-xs">
+                            Restaurants
+                          </span>
+                          <span className="inline-flex px-2 py-0.5 rounded bg-gray-200 text-gray-600 text-xs">
+                            Salles de sport
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -414,8 +470,14 @@ export default function CartPage() {
 
       {/* Modal succès — Félicitations */}
       {showSuccessModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setShowSuccessModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 relative text-center" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+          onClick={() => setShowSuccessModal(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 relative text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
               type="button"
               onClick={() => setShowSuccessModal(false)}
@@ -439,7 +501,10 @@ export default function CartPage() {
             </p>
             <button
               type="button"
-              onClick={() => { setShowSuccessModal(false); navigate('/my-campaigns'); }}
+              onClick={() => {
+                setShowSuccessModal(false);
+                navigate('/my-campaigns');
+              }}
               className="w-full py-3 rounded-xl font-medium text-gray-900 transition-colors hover:opacity-90"
               style={{ background: '#9adfb4' }}
             >
@@ -451,8 +516,14 @@ export default function CartPage() {
 
       {/* Modal solde insuffisant */}
       {showInsufficientModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setShowInsufficientModal(false)}>
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 relative text-center" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+          onClick={() => setShowInsufficientModal(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 relative text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
             <button
               type="button"
               onClick={() => setShowInsufficientModal(false)}
@@ -475,14 +546,19 @@ export default function CartPage() {
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={() => { setShowInsufficientModal(false); }}
+                onClick={() => {
+                  setShowInsufficientModal(false);
+                }}
                 className="flex-1 py-3 rounded-xl font-medium text-gray-900 border border-gray-300 bg-white hover:bg-gray-50 transition-colors"
               >
                 Mon panier
               </button>
               <button
                 type="button"
-                onClick={() => { setShowInsufficientModal(false); navigate('/my-recharges'); }}
+                onClick={() => {
+                  setShowInsufficientModal(false);
+                  navigate('/my-recharges');
+                }}
                 className="flex-1 py-3 rounded-xl font-medium text-gray-900 transition-colors hover:opacity-90"
                 style={{ background: '#9adfb4' }}
               >

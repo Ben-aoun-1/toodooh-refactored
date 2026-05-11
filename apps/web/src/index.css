@@ -69,24 +69,24 @@
   background: rgba(255, 255, 255, 0.9) !important;
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.2) !important;
-  color: #00263A !important;
+  color: #00263a !important;
   font-weight: 600 !important;
 }
 
 .leaflet-control-zoom a:hover {
   background: rgba(255, 255, 255, 1) !important;
-  color: #00B3A6 !important;
+  color: #00b3a6 !important;
 }
 
 /* Styles pour les popups */
 .leaflet-popup-close-button {
-  color: #6B7280 !important;
+  color: #6b7280 !important;
   font-size: 18px !important;
   font-weight: bold !important;
 }
 
 .leaflet-popup-close-button:hover {
-  color: #EF4444 !important;
+  color: #ef4444 !important;
 }
 
 .btn-leviosa {
@@ -128,10 +128,14 @@
     animation: slideInLeft 0.7s cubic-bezier(0.23, 1, 0.32, 1);
   }
   .shadow-dynamic {
-    transition: box-shadow 0.3s cubic-bezier(0.23, 1, 0.32, 1), transform 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+    transition:
+      box-shadow 0.3s cubic-bezier(0.23, 1, 0.32, 1),
+      transform 0.3s cubic-bezier(0.23, 1, 0.32, 1);
   }
   .shadow-dynamic:hover {
-    box-shadow: 0 8px 32px 0 rgba(102,45,140,0.18), 0 1.5px 6px 0 rgba(46,49,146,0.12);
+    box-shadow:
+      0 8px 32px 0 rgba(102, 45, 140, 0.18),
+      0 1.5px 6px 0 rgba(46, 49, 146, 0.12);
     transform: translateY(-2px) scale(1.02);
   }
   .font-poppins {
@@ -140,12 +144,24 @@
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(16px); }
-  to { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 @keyframes slideInLeft {
-  from { opacity: 0; transform: translateX(-32px); }
-  to { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: translateX(-32px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* Animations de délai pour les éléments de fond */
@@ -184,15 +200,24 @@ body {
   padding: 0;
 }
 
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-family: 'Poppins', 'Inter', 'Nunito', 'Roboto', Arial, sans-serif;
   font-weight: 700;
   letter-spacing: 0.01em;
-  color: #2E3192;
+  color: #2e3192;
   margin: 0;
 }
 
-label, p, span, a, li {
+label,
+p,
+span,
+a,
+li {
   font-family: 'Poppins', 'Inter', 'Nunito', 'Roboto', Arial, sans-serif;
   color: #22223b;
   margin: 0;
@@ -204,7 +229,8 @@ label, p, span, a, li {
 }
 
 /* Styles pour les éléments de base */
-html, body {
+html,
+body {
   height: 100%;
   width: 100%;
 }

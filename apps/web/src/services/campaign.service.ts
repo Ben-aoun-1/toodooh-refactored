@@ -1,6 +1,9 @@
 import { supabase } from '../lib/supabase';
 import { getDoohConfigNumbers } from './global-configuration.service';
-import { computeRepetitionsPerHourVideo, resolveEffectiveVideoDuration } from './dooh-calculation.service';
+import {
+  computeRepetitionsPerHourVideo,
+  resolveEffectiveVideoDuration,
+} from './dooh-calculation.service';
 import {
   aggregateOccupiedRepetitionsByLocation,
   aggregateUnavailabilityByLocation,
@@ -45,16 +48,18 @@ export interface CreateCampaignData {
   screen_ids?: string[];
 }
 
-function slotOccupationKey(locationId: string, diffusionDate: string, diffusionHour: number): string {
+function slotOccupationKey(
+  locationId: string,
+  diffusionDate: string,
+  diffusionHour: number,
+): string {
   return `${locationId}|${diffusionDate}|${diffusionHour}`;
 }
 
 function isMissingCampaignCategoriesTable(error: unknown): boolean {
   const err = error as { code?: string; message?: string } | null;
   return Boolean(
-    err &&
-      err.code === 'PGRST205' &&
-      String(err.message || '').includes('campaign_categories')
+    err && err.code === 'PGRST205' && String(err.message || '').includes('campaign_categories'),
   );
 }
 
@@ -72,7 +77,9 @@ async function getOccupiedRepetitionsByLocationSlotFromHourlyPlan(input: {
 
   const { data: rows, error } = await supabase
     .from('campaign_hourly_location_plan')
-    .select('campaign_id, location_id, diffusion_date, diffusion_hour, planned_repetitions_per_hour')
+    .select(
+      'campaign_id, location_id, diffusion_date, diffusion_hour, planned_repetitions_per_hour',
+    )
     .in('location_id', locationIds)
     .gte('diffusion_date', start)
     .lte('diffusion_date', end);
@@ -80,7 +87,7 @@ async function getOccupiedRepetitionsByLocationSlotFromHourlyPlan(input: {
   if (error) {
     console.warn(
       'getOccupiedRepetitionsByLocationSlotFromHourlyPlan: lecture indisponible, occupation concurrente à 0.',
-      error
+      error,
     );
     return new Map<string, number>();
   }
@@ -105,7 +112,7 @@ async function getOccupiedRepetitionsByLocationSlotFromHourlyPlan(input: {
   if (campaignsError) {
     console.warn(
       'getOccupiedRepetitionsByLocationSlotFromHourlyPlan: lecture statuts campagnes indisponible, occupation concurrente à 0.',
-      campaignsError
+      campaignsError,
     );
     return new Map<string, number>();
   }
@@ -126,10 +133,14 @@ export const campaignService = {
   // Créer ou mettre à jour une campagne en draft
   async saveCampaignDraft(campaignData: CreateCampaignData, campaignId?: string): Promise<any> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) throw new Error('Utilisateur non connecté');
 
-      const primaryCategory = (campaignData.categories?.length ? campaignData.categories[0] : campaignData.category) as string;
+      const primaryCategory = (
+        campaignData.categories?.length ? campaignData.categories[0] : campaignData.category
+      ) as string;
       const campaignRecord: Record<string, unknown> = {
         name: campaignData.name,
         client_id: campaignData.client_id,
@@ -143,7 +154,7 @@ export const campaignService = {
         user_id: user.id,
         location_lat: campaignData.location_lat,
         location_lng: campaignData.location_lng,
-        location_radius: campaignData.location_radius
+        location_radius: campaignData.location_radius,
       };
       if (campaignData.event_id != null) {
         campaignRecord.event_id = campaignData.event_id;
@@ -180,9 +191,9 @@ export const campaignService = {
 
       // Ciblage par localités : remplir campaign_locations puis dériver campaign_screens
       if (campaignResult && campaignData.location_ids && campaignData.location_ids.length > 0) {
-        const locInserts = campaignData.location_ids.map(locationId => ({
+        const locInserts = campaignData.location_ids.map((locationId) => ({
           campaign_id: campaignResult.id,
-          location_id: locationId
+          location_id: locationId,
         }));
         const { error: locErr } = await supabase.from('campaign_locations').insert(locInserts);
         if (locErr) {
@@ -193,38 +204,51 @@ export const campaignService = {
             .select('id')
             .in('location_id', campaignData.location_ids)
             .eq('status', 'active');
-          const screenIds = (screensInLocs || []).map(s => s.id);
+          const screenIds = (screensInLocs || []).map((s) => s.id);
           if (screenIds.length > 0) {
-            const screenInserts = screenIds.map(screenId => ({
+            const screenInserts = screenIds.map((screenId) => ({
               campaign_id: campaignResult.id,
-              screen_id: screenId
+              screen_id: screenId,
             }));
             await supabase.from('campaign_screens').insert(screenInserts);
-            console.log('✅', campaignData.location_ids.length, 'localité(s),', screenIds.length, 'écran(s) ajoutés');
+            console.log(
+              '✅',
+              campaignData.location_ids.length,
+              'localité(s),',
+              screenIds.length,
+              'écran(s) ajoutés',
+            );
           }
         }
       } else if (campaignResult && campaignData.screen_ids && campaignData.screen_ids.length > 0) {
         // Legacy : ciblage direct par écrans
-        const screenInserts = campaignData.screen_ids.map(screenId => ({
+        const screenInserts = campaignData.screen_ids.map((screenId) => ({
           campaign_id: campaignResult.id,
-          screen_id: screenId
+          screen_id: screenId,
         }));
-        const { error: screensError } = await supabase.from('campaign_screens').insert(screenInserts);
+        const { error: screensError } = await supabase
+          .from('campaign_screens')
+          .insert(screenInserts);
         if (screensError) console.error('Erreur ajout écrans:', screensError);
         else console.log('✅ Écrans ajoutés avec succès');
       }
 
       // Synchroniser les catégories multiples (campaign_categories)
-      const categoriesToSync = campaignData.categories?.length ? campaignData.categories : [primaryCategory];
+      const categoriesToSync = campaignData.categories?.length
+        ? campaignData.categories
+        : [primaryCategory];
       const cid = campaignResult.id;
-      const { error: delErr } = await supabase.from('campaign_categories').delete().eq('campaign_id', cid);
+      const { error: delErr } = await supabase
+        .from('campaign_categories')
+        .delete()
+        .eq('campaign_id', cid);
       if (delErr && !isMissingCampaignCategoriesTable(delErr)) {
         console.error('Erreur suppression campaign_categories:', delErr);
       }
       if (categoriesToSync.length > 0) {
-        const { error: insErr } = await supabase.from('campaign_categories').insert(
-          categoriesToSync.map((cat) => ({ campaign_id: cid, category: cat }))
-        );
+        const { error: insErr } = await supabase
+          .from('campaign_categories')
+          .insert(categoriesToSync.map((cat) => ({ campaign_id: cid, category: cat })));
         if (insErr && !isMissingCampaignCategoriesTable(insErr)) {
           console.error('Erreur insertion campaign_categories:', insErr);
         }
@@ -291,7 +315,7 @@ export const campaignService = {
        * Permet de scoper l'écriture aux localités réellement liées à ses écrans.
        */
       actorOwnerId?: string;
-    }
+    },
   ): Promise<void> {
     try {
       // Créer d'abord les approbations automatiques pour les écrans avec auto_accept
@@ -318,7 +342,7 @@ export const campaignService = {
         throw screensError;
       }
 
-      let screenIds = campaignScreens?.map(cs => cs.screen_id) || [];
+      let screenIds = campaignScreens?.map((cs) => cs.screen_id) || [];
       if (screenIds.length === 0) {
         throw new Error('Aucun écran trouvé pour la campagne.');
       }
@@ -335,7 +359,7 @@ export const campaignService = {
       }
 
       // Récupérer les validations des propriétaires
-      const ownerIds = [...new Set(screens?.map(s => s.owner_id) || [])];
+      const ownerIds = [...new Set(screens?.map((s) => s.owner_id) || [])];
       const { data: approvals, error: approvalsError } = await supabase
         .from('campaign_owner_approvals')
         .select('owner_id, status')
@@ -346,11 +370,13 @@ export const campaignService = {
       if (approvalsError) {
         throw approvalsError;
       }
-      const approvedOwnerIds = new Set((approvals || []).map((a: { owner_id: string }) => a.owner_id));
+      const approvedOwnerIds = new Set(
+        (approvals || []).map((a: { owner_id: string }) => a.owner_id),
+      );
 
       // Construire la liste des écrans approuvés
       const approvedScreenIds = new Set<string>();
-      
+
       // Pour chaque propriétaire: filtrage strict aux owners approuvés.
       // Modèle localité: on ne dépend pas de screen_configurations ici.
       for (const screen of screens || []) {
@@ -364,18 +390,21 @@ export const campaignService = {
 
       // Filtrer pour ne garder que les écrans approuvés
       screenIds = Array.from(approvedScreenIds);
-      
+
       if (screenIds.length === 0) {
         console.log(
-          `ℹ️ Aucun propriétaire approuvé pour la campagne ${campaignId}: nettoyage du plan horaire (0 ligne active).`
+          `ℹ️ Aucun propriétaire approuvé pour la campagne ${campaignId}: nettoyage du plan horaire (0 ligne active).`,
         );
         await replaceCampaignHourlyLocationPlan(campaignId, []);
         return;
       }
 
-      console.log(`✅ ${screenIds.length} écran(s) approuvé(s) pour la campagne ${campaignId}:`, screenIds);
       console.log(
-        '[DOOH] Un tableau « planning par créneau » (localité / jour / heure) sera affiché après calcul des répétitions.'
+        `✅ ${screenIds.length} écran(s) approuvé(s) pour la campagne ${campaignId}:`,
+        screenIds,
+      );
+      console.log(
+        '[DOOH] Un tableau « planning par créneau » (localité / jour / heure) sera affiché après calcul des répétitions.',
       );
 
       // Récupérer les écrans avec leur location_id pour grouper par localité
@@ -398,7 +427,9 @@ export const campaignService = {
           screensByLocation.set(s.location_id, arr);
         }
       });
-      const locationIds = [...new Set((screensWithData || []).map((s: any) => s.location_id).filter(Boolean))];
+      const locationIds = [
+        ...new Set((screensWithData || []).map((s: any) => s.location_id).filter(Boolean)),
+      ];
 
       // Affluence par localité : créneaux réels `location_affluence_schedule` (day_of_week + hour), sans moyenne hebdo.
       const locationScheduleSlots = new Map<string, AffluenceSlot[]>();
@@ -497,7 +528,7 @@ export const campaignService = {
       if (specialEventsError) {
         console.warn(
           '⚠️ Lecture special_events impossible (RLS ?). Chevauchements événement ignorés pour la grille horaire:',
-          specialEventsError.message
+          specialEventsError.message,
         );
       }
 
@@ -524,7 +555,7 @@ export const campaignService = {
       } catch (e) {
         console.warn(
           'injectCampaignPublicationSchedule: lecture occupation depuis campaign_hourly_location_plan impossible, fallback campaign_screens.',
-          e
+          e,
         );
         const { data: otherCsRows } = await supabase
           .from('campaign_screens')
@@ -559,13 +590,13 @@ export const campaignService = {
         });
         occupiedRepetitionsByLocation = aggregateOccupiedRepetitionsByLocation(
           screenToLocation,
-          occupiedRepetitionsByScreen
+          occupiedRepetitionsByScreen,
         );
       }
 
       const unavailabilityByLocation = aggregateUnavailabilityByLocation(
         screenToLocation,
-        unavailabilityByScreen
+        unavailabilityByScreen,
       );
       const orderedLocationIds = [...locationIds].sort();
 
@@ -585,22 +616,21 @@ export const campaignService = {
 
       const perScreenRawImpressions = splitLocationRawImpressionsToScreens(
         hourlyGrid.perLocationRawImpressions,
-        screensByLocation
+        screensByLocation,
       );
 
       const calculatedImpressions = Math.round((Number(campaign.budget) / cpmTnd) * 1000);
       const slotCapImpressions = hourlyGrid.totalRawImpressions;
       const storedViews = Math.max(0, Number((campaign as { views?: number | null }).views) || 0);
       const finalImpressions = storedViews > 0 ? Math.round(storedViews) : calculatedImpressions;
-      const hourlyScale =
-        slotCapImpressions > 0 ? finalImpressions / slotCapImpressions : 0;
+      const hourlyScale = slotCapImpressions > 0 ? finalImpressions / slotCapImpressions : 0;
       const totalSlotHours = totalDays * 24;
 
       const screenIdsOrdered = (screensWithData || []).map((s: { id: string }) => s.id);
       const nScreens = Math.max(1, screenIdsOrdered.length);
       const rawSumScreens = screenIdsOrdered.reduce(
         (sum, sid) => sum + (perScreenRawImpressions.get(sid) ?? 0),
-        0
+        0,
       );
 
       /** Charge moyenne pondérée sur la période (impressions facturables / heure calendaire), issue du moteur. */
@@ -614,8 +644,7 @@ export const campaignService = {
 
       const screenSchedules = screensWithImpressions.map((screen) => {
         const rawScreen = perScreenRawImpressions.get(screen.id) ?? 0;
-        const capacityRatio =
-          rawSumScreens > 0 ? rawScreen / rawSumScreens : 1 / nScreens;
+        const capacityRatio = rawSumScreens > 0 ? rawScreen / rawSumScreens : 1 / nScreens;
 
         let impressionsPerHourForScreen: number;
         if (slotCapImpressions > 0 && hourlyScale > 0) {
@@ -624,25 +653,27 @@ export const campaignService = {
           impressionsPerHourForScreen =
             totalSlotHours > 0 ? finalImpressions / nScreens / totalSlotHours : 0;
         }
-        
+
         // S'assurer qu'on a au moins une petite allocation si l'écran a une capacité
         // Cela garantit qu'on aura au moins 1 répétition
         if (screen.impressions_per_hour > 0 && impressionsPerHourForScreen === 0) {
           // Allouer au moins 1% de la capacité de l'écran pour garantir au moins 1 répétition
           impressionsPerHourForScreen = screen.impressions_per_hour * 0.01;
         }
-        
+
         // Calculer le nombre de répétitions par heure pour cet écran
         // IMPORTANT : Le nombre de répétitions doit être proportionnel à la capacité d'impression
         // Un écran avec 1000 imp/h doit avoir plus de répétitions qu'un écran avec 100 imp/h
-        
+
         // Pour garantir que les écrans avec plus de capacité ont plus de répétitions,
         // on utilise un facteur de répétition qui DIMINUE avec la capacité
         // Cela signifie qu'un écran avec plus de capacité génère MOINS d'impressions par répétition
         // (en pourcentage), donc il a besoin de PLUS de répétitions pour générer les mêmes impressions
-        
+
         // Calculer la capacité minimale et maximale pour normaliser
-        const capacities = screensWithImpressions.map(s => s.impressions_per_hour).filter(c => c > 0);
+        const capacities = screensWithImpressions
+          .map((s) => s.impressions_per_hour)
+          .filter((c) => c > 0);
         // S'assurer qu'on a au moins une capacité valide
         if (capacities.length === 0) {
           console.warn(`⚠️ Aucune capacité valide pour l'écran ${screen.id}`);
@@ -654,13 +685,13 @@ export const campaignService = {
             repetitions_per_hour: 1,
             total_impressions_allocated: Math.round(rawScreen * hourlyScale),
             impressions_per_repetition: 0,
-            repetition_factor: 0.15
+            repetition_factor: 0.15,
           };
         }
         const minCapacity = Math.min(...capacities);
         const maxCapacity = Math.max(...capacities);
         const capacityRange = maxCapacity - minCapacity;
-        
+
         // Facteur de répétition : varie entre 0.25 (écrans faibles) et 0.10 (écrans forts)
         // Écrans avec plus de capacité → facteur plus faible → moins d'impressions par répétition → plus de répétitions nécessaires
         let repetitionFactor: number;
@@ -669,24 +700,24 @@ export const campaignService = {
           const normalizedCapacity = (screen.impressions_per_hour - minCapacity) / capacityRange;
           // Facteur inverse : écrans forts (normalizedCapacity proche de 1) → facteur proche de 0.10
           // Écrans faibles (normalizedCapacity proche de 0) → facteur proche de 0.25
-          repetitionFactor = 0.25 - (normalizedCapacity * 0.15); // Entre 0.25 et 0.10
+          repetitionFactor = 0.25 - normalizedCapacity * 0.15; // Entre 0.25 et 0.10
         } else {
           // Tous les écrans ont la même capacité → facteur moyen
           repetitionFactor = 0.15;
         }
-        
+
         // Calculer les impressions générées par une répétition pour cet écran
         // Écran avec 1000 imp/h et facteur 0.10 → 100 impressions/répétition
         // Écran avec 100 imp/h et facteur 0.25 → 25 impressions/répétition
         const impressionsPerRepetition = screen.impressions_per_hour * repetitionFactor;
-        
+
         // Calculer le nombre de répétitions nécessaires pour atteindre les impressions allouées
         // Écran avec 1000 imp/h et 500 imp allouées → 500/100 = 5 répétitions
         // Écran avec 100 imp/h et 50 imp allouées → 50/25 = 2 répétitions
-        
+
         // Calculer le nombre de répétitions nécessaires pour atteindre les impressions allouées
         let repetitionsPerHour = 1; // Minimum par défaut
-        
+
         if (impressionsPerRepetition > 0 && impressionsPerHourForScreen > 0) {
           const calculatedRepetitions = impressionsPerHourForScreen / impressionsPerRepetition;
           // Utiliser Math.ceil pour s'assurer qu'on a au moins 1 répétition si on a des impressions allouées
@@ -695,36 +726,41 @@ export const campaignService = {
           // Si impressionsPerRepetition est 0 mais qu'on a des impressions allouées, utiliser un minimum
           repetitionsPerHour = 1;
         }
-        
+
         // Ajustement supplémentaire : garantir que les écrans avec plus de capacité
         // ont proportionnellement plus de répétitions (au moins 50% du ratio de capacité)
         if (minCapacity > 0 && screen.impressions_per_hour > 0) {
           const capacityRatioForRepetitions = screen.impressions_per_hour / minCapacity;
           // S'assurer qu'on a au moins 1 répétition basée sur la capacité
-          const minRepetitionsBasedOnCapacity = Math.max(1, Math.ceil(capacityRatioForRepetitions * 0.5));
-          
+          const minRepetitionsBasedOnCapacity = Math.max(
+            1,
+            Math.ceil(capacityRatioForRepetitions * 0.5),
+          );
+
           // Prendre le maximum entre le calcul basé sur les impressions et le minimum basé sur la capacité
           repetitionsPerHour = Math.max(repetitionsPerHour, minRepetitionsBasedOnCapacity);
         }
-        
+
         // Garantie finale : toujours au moins 1 répétition par heure
         repetitionsPerHour = Math.max(1, repetitionsPerHour);
 
         // Si l'écran a une capacité d'impression, on doit avoir au moins 1 répétition
         if (screen.impressions_per_hour > 0 && repetitionsPerHour === 0) {
-          console.warn(`⚠️ Répétitions à 0 pour écran ${screen.id} avec capacité ${screen.impressions_per_hour}, forcer à 1`);
+          console.warn(
+            `⚠️ Répétitions à 0 pour écran ${screen.id} avec capacité ${screen.impressions_per_hour}, forcer à 1`,
+          );
           repetitionsPerHour = 1;
         }
-        
+
         // Log pour debug
         console.log(`📊 Écran ${screen.id}:`, {
           impressions_per_hour: screen.impressions_per_hour,
           impressionsPerHourForScreen: impressionsPerHourForScreen,
           impressionsPerRepetition: impressionsPerRepetition,
           repetitionFactor: repetitionFactor,
-          repetitionsPerHour: repetitionsPerHour
+          repetitionsPerHour: repetitionsPerHour,
         });
-        
+
         return {
           screen_id: screen.id,
           impressions_per_hour: screen.impressions_per_hour,
@@ -733,7 +769,7 @@ export const campaignService = {
           repetitions_per_hour: repetitionsPerHour,
           total_impressions_allocated: Math.round(rawScreen * hourlyScale),
           impressions_per_repetition: impressionsPerRepetition,
-          repetition_factor: repetitionFactor
+          repetition_factor: repetitionFactor,
         };
       });
 
@@ -748,7 +784,7 @@ export const campaignService = {
       } catch (e) {
         console.warn(
           'injectCampaignPublicationSchedule: lecture occupation par créneau indisponible, occupation concurrente à 0.',
-          e
+          e,
         );
         occupiedRepetitionsBySlot = new Map<string, number>();
       }
@@ -756,12 +792,12 @@ export const campaignService = {
       const repetitionsPerHourVideo = computeRepetitionsPerHourVideo(effectiveVideoSeconds);
       const billableSpotsPerHour = Math.max(
         0,
-        doohConfig.max_spots_per_hour * doohConfig.max_billable_spot_rate_per_hour
+        doohConfig.max_spots_per_hour * doohConfig.max_billable_spot_rate_per_hour,
       );
 
       const normalizedSlotsDetail = normalizeLocationScheduleSlotsForEngine(
         orderedLocationIds,
-        locationScheduleSlots
+        locationScheduleSlots,
       );
       const slotDetailRows = enumerateDoohLocationCampaignSlots({
         campaignStart: startDate,
@@ -777,11 +813,15 @@ export const campaignService = {
 
       const hourlyPlanInput: HourlyPlanSlotInput[] = slotDetailRows.map((s) => {
         const occupationKey = slotOccupationKey(s.locationId, s.date, s.hour);
-        const occupiedByOtherCampaigns = Math.max(0, occupiedRepetitionsBySlot.get(occupationKey) ?? 0);
+        const occupiedByOtherCampaigns = Math.max(
+          0,
+          occupiedRepetitionsBySlot.get(occupationKey) ?? 0,
+        );
         const remainingSpotsPerHour = Math.max(0, billableSpotsPerHour - occupiedByOtherCampaigns);
         const allowed = Math.max(0, Math.min(repetitionsPerHourVideo, remainingSpotsPerHour));
         const maxRepetitionsPerHour = allowed > 0 ? Math.max(1, Math.floor(allowed)) : 0;
-        const slotMaxImpressions = Math.max(0, s.effectiveAffluence) * Math.max(0, maxRepetitionsPerHour);
+        const slotMaxImpressions =
+          Math.max(0, s.effectiveAffluence) * Math.max(0, maxRepetitionsPerHour);
         return {
           locationId: s.locationId,
           diffusionDate: s.date,
@@ -804,7 +844,7 @@ export const campaignService = {
       } = await supabase.auth.getUser();
       const actorOwnerId = options?.actorOwnerId ?? currentUser?.id;
       const isCampaignAdvertiser = Boolean(
-        actorOwnerId && actorOwnerId === (campaign as { user_id?: string | null }).user_id
+        actorOwnerId && actorOwnerId === (campaign as { user_id?: string | null }).user_id,
       );
 
       let scopedLocationIds: string[] | undefined;
@@ -814,13 +854,18 @@ export const campaignService = {
         const actorScreenIds = new Set(
           (screens || [])
             .filter((s: { id: string; owner_id: string }) => s.owner_id === actorOwnerId)
-            .map((s: { id: string }) => s.id)
+            .map((s: { id: string }) => s.id),
         );
-        const scopedFromScreens = [...new Set(
-          (screensWithData || [])
-            .filter((s: { id: string; location_id: string | null }) => actorScreenIds.has(s.id) && Boolean(s.location_id))
-            .map((s: { location_id: string | null }) => String(s.location_id))
-        )];
+        const scopedFromScreens = [
+          ...new Set(
+            (screensWithData || [])
+              .filter(
+                (s: { id: string; location_id: string | null }) =>
+                  actorScreenIds.has(s.id) && Boolean(s.location_id),
+              )
+              .map((s: { location_id: string | null }) => String(s.location_id)),
+          ),
+        ];
 
         if (scopedFromScreens.length > 0) {
           scopedLocationIds = scopedFromScreens;
@@ -842,7 +887,7 @@ export const campaignService = {
 
         if ((scopedLocationIds || []).length === 0) {
           throw new Error(
-            `Aucune localité écrivable pour le propriétaire ${actorOwnerId} sur la campagne ${campaignId}.`
+            `Aucune localité écrivable pour le propriétaire ${actorOwnerId} sur la campagne ${campaignId}.`,
           );
         }
       }
@@ -855,12 +900,12 @@ export const campaignService = {
           `✅ campaign_hourly_location_plan mis à jour pour ${campaignId}: ${finalHourlyPlan.length} ligne(s)` +
             (scopedLocationIds?.length
               ? ` (scope localités owner: ${scopedLocationIds.length})`
-              : '')
+              : ''),
         );
       } catch (planWriteError) {
         console.error(
           `❌ Échec écriture campaign_hourly_location_plan pour ${campaignId}`,
-          planWriteError
+          planWriteError,
         );
         throw planWriteError;
       }
@@ -875,11 +920,13 @@ export const campaignService = {
           impressions_a_generer: s.plannedImpressions,
         }));
 
-      console.log(`📊 Total ${screensWithData.length} écran(s) — injection planning (moteur créneaux date×heure)`);
+      console.log(
+        `📊 Total ${screensWithData.length} écran(s) — injection planning (moteur créneaux date×heure)`,
+      );
       const nPlanning = planningTableParCreneau.length;
       console.log(
         `%c📋 Planning par créneau : ${nPlanning} ligne(s) (localité × jour × heure, répétitions/heure, impressions allouées)`,
-        'font-weight:bold'
+        'font-weight:bold',
       );
       if (nPlanning === 0) {
         const effPos = slotDetailRows.filter((s) => s.effectiveAffluence > 0).length;
@@ -890,18 +937,22 @@ export const campaignService = {
             creneaux_affluence_effective_strictement_positive: effPos,
             localites: orderedLocationIds.length,
             hourlyScale,
-          }
+          },
         );
       } else {
         console.table(planningTableParCreneau);
         const maxLines = 40;
-        const lines = planningTableParCreneau.slice(0, maxLines).map(
-          (r) =>
-            `  ${r.localite_id} | ${r.jour} | h ${String(r.heure).padStart(2, '0')} | rph ${r.repetitions_par_heure} | imp ${r.impressions_a_generer}`
-        );
+        const lines = planningTableParCreneau
+          .slice(0, maxLines)
+          .map(
+            (r) =>
+              `  ${r.localite_id} | ${r.jour} | h ${String(r.heure).padStart(2, '0')} | rph ${r.repetitions_par_heure} | imp ${r.impressions_a_generer}`,
+          );
         console.log(
           `📋 Même planning en texte (${Math.min(maxLines, nPlanning)} / ${nPlanning}) :\n${lines.join('\n')}` +
-            (nPlanning > maxLines ? `\n  … +${nPlanning - maxLines} lignes (voir aussi console.table ci-dessus)` : '')
+            (nPlanning > maxLines
+              ? `\n  … +${nPlanning - maxLines} lignes (voir aussi console.table ci-dessus)`
+              : ''),
         );
       }
 
@@ -910,20 +961,24 @@ export const campaignService = {
         return sum + schedule.repetitions_per_hour;
       }, 0);
 
-      console.log(`📊 Total de ${screenSchedules.length} écran(s) à mettre à jour avec ${totalRepetitionsPerHour} répétitions/heure au total`);
+      console.log(
+        `📊 Total de ${screenSchedules.length} écran(s) à mettre à jour avec ${totalRepetitionsPerHour} répétitions/heure au total`,
+      );
 
       // Mettre à jour chaque écran dans campaign_screens avec ses informations de répétition
       // Utiliser upsert pour créer ou mettre à jour
-      console.log(`🔄 Début de la mise à jour de ${screenSchedules.length} écran(s) dans campaign_screens`);
-      
+      console.log(
+        `🔄 Début de la mise à jour de ${screenSchedules.length} écran(s) dans campaign_screens`,
+      );
+
       for (const schedule of screenSchedules) {
         console.log(`📝 Mise à jour écran ${schedule.screen_id}:`, {
           repetitions_per_hour: schedule.repetitions_per_hour,
           impressions_per_hour: schedule.impressions_per_hour,
           impressions_allocated_per_hour: schedule.impressions_allocated_per_hour,
-          capacity_ratio: schedule.capacity_ratio
+          capacity_ratio: schedule.capacity_ratio,
         });
-        
+
         // Utiliser update d'abord, et si aucune ligne n'est affectée, utiliser insert
         // Cela évite les problèmes avec les contraintes UNIQUE
         const { data: existingScreen, error: checkError } = await supabase
@@ -945,24 +1000,29 @@ export const campaignService = {
               impressions_per_hour: schedule.impressions_per_hour,
               impressions_allocated_per_hour: schedule.impressions_allocated_per_hour,
               capacity_ratio: schedule.capacity_ratio,
-              total_impressions_allocated: schedule.total_impressions_allocated
+              total_impressions_allocated: schedule.total_impressions_allocated,
             })
             .eq('campaign_id', campaignId)
             .eq('screen_id', schedule.screen_id)
             .select()
             .single();
-          
+
           updateData = data;
           screenUpdateError = error;
         } else {
           // L'écran n'existe pas, mais normalement il devrait exister
           // Si ce n'est pas le cas, on ne met pas à jour
-          console.warn(`⚠️ L'écran ${schedule.screen_id} n'existe pas dans campaign_screens pour la campagne ${campaignId}`);
+          console.warn(
+            `⚠️ L'écran ${schedule.screen_id} n'existe pas dans campaign_screens pour la campagne ${campaignId}`,
+          );
           continue;
         }
 
         if (screenUpdateError) {
-          console.error(`❌ Erreur lors de la mise à jour de l'écran ${schedule.screen_id}:`, screenUpdateError);
+          console.error(
+            `❌ Erreur lors de la mise à jour de l'écran ${schedule.screen_id}:`,
+            screenUpdateError,
+          );
           console.error('Code:', screenUpdateError.code);
           console.error('Message:', screenUpdateError.message);
           console.error('Details:', screenUpdateError.details);
@@ -973,7 +1033,7 @@ export const campaignService = {
           console.log(`   - ${schedule.impressions_per_hour} impressions/heure`);
         }
       }
-      
+
       console.log(`✅ Mise à jour terminée pour ${screenSchedules.length} écran(s)`);
 
       const aggregateImpressionsPerHour =
@@ -1010,8 +1070,8 @@ export const campaignService = {
       // Mettre à jour la campagne avec les informations de publication
       const { error: updateError } = await supabase
         .from('campaigns')
-        .update({ 
-          publication_schedule: publicationSchedule
+        .update({
+          publication_schedule: publicationSchedule,
         })
         .eq('id', campaignId);
 
@@ -1021,7 +1081,7 @@ export const campaignService = {
         console.log('✅ Planning de publication injecté avec succès:', publicationSchedule);
       }
     } catch (error) {
-      console.error('❌ Erreur lors de l\'injection du planning de publication:', error);
+      console.error("❌ Erreur lors de l'injection du planning de publication:", error);
       throw error;
     }
   },
@@ -1031,11 +1091,13 @@ export const campaignService = {
     campaignId: string,
     options?: {
       actorOwnerId?: string;
-    }
+    },
   ): Promise<void> {
     try {
-      console.log(`🔄 Recalcul des répétitions pour la campagne ${campaignId} après validation propriétaire`);
-      
+      console.log(
+        `🔄 Recalcul des répétitions pour la campagne ${campaignId} après validation propriétaire`,
+      );
+
       // Réinjecter le planning avec les nouveaux écrans approuvés
       await this.injectCampaignPublicationSchedule(campaignId, {
         actorOwnerId: options?.actorOwnerId,
@@ -1051,7 +1113,7 @@ export const campaignService = {
     try {
       // Exécuter la fonction PostgreSQL qui met à jour les campagnes expirées
       const { error } = await supabase.rpc('update_expired_campaigns');
-      
+
       if (error) {
         console.error('❌ Erreur lors de la mise à jour des campagnes expirées:', error);
       } else {
@@ -1060,6 +1122,5 @@ export const campaignService = {
     } catch (error) {
       console.error('❌ Erreur lors de la vérification des campagnes expirées:', error);
     }
-  }
+  },
 };
-

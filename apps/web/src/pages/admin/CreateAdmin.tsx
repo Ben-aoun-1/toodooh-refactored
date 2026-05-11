@@ -3,15 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAdminStore } from '../../stores/admin.store';
 import { adminService } from '../../services/admin.service';
 import AdminLayout from '../../components/admin/AdminLayout';
-import {
-  UserPlus,
-  Shield,
-  User,
-  Mail,
-  Lock,
-  AlertCircle,
-  CheckCircle
-} from 'lucide-react';
+import { UserPlus, Shield, User, Mail, Lock, AlertCircle, CheckCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 interface AdminFormData {
@@ -33,13 +25,13 @@ export default function CreateAdmin() {
     confirmPassword: '',
     first_name: '',
     last_name: '',
-    role: 'admin'
+    role: 'admin',
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value
+      [e.target.name]: e.target.value,
     });
   };
 
@@ -87,13 +79,15 @@ export default function CreateAdmin() {
           first_name: formData.first_name,
           last_name: formData.last_name,
           role: formData.role,
-          permissions: []
+          permissions: [],
         },
-        admin.id
+        admin.id,
       );
 
-      toast.success(`${formData.role === 'admin' ? 'Administrateur' : 'Modérateur'} créé avec succès !`);
-      
+      toast.success(
+        `${formData.role === 'admin' ? 'Administrateur' : 'Modérateur'} créé avec succès !`,
+      );
+
       // Réinitialiser le formulaire
       setFormData({
         email: '',
@@ -101,7 +95,7 @@ export default function CreateAdmin() {
         confirmPassword: '',
         first_name: '',
         last_name: '',
-        role: 'admin'
+        role: 'admin',
       });
 
       // Log l'activité
@@ -109,9 +103,8 @@ export default function CreateAdmin() {
         admin_id: admin.id,
         action: 'create_admin',
         target_type: 'admin',
-        description: `Création d'un ${formData.role === 'admin' ? 'administrateur' : 'modérateur'}: ${formData.first_name} ${formData.last_name}`
+        description: `Création d'un ${formData.role === 'admin' ? 'administrateur' : 'modérateur'}: ${formData.first_name} ${formData.last_name}`,
       });
-
     } catch (error: any) {
       console.error('Error creating admin:', error);
       toast.error(error.message || 'Erreur lors de la création');
@@ -149,9 +142,13 @@ export default function CreateAdmin() {
           <div className="flex items-start">
             <Shield className="h-6 w-6 text-blue-600 mr-3 mt-0.5" />
             <div>
-              <h4 className="text-sm font-semibold text-blue-900 mb-1">Création de compte administrateur</h4>
+              <h4 className="text-sm font-semibold text-blue-900 mb-1">
+                Création de compte administrateur
+              </h4>
               <p className="text-sm text-blue-700">
-                <strong>Administrateur :</strong> Accès complet à toutes les fonctionnalités (sauf création d'autres admins)<br />
+                <strong>Administrateur :</strong> Accès complet à toutes les fonctionnalités (sauf
+                création d'autres admins)
+                <br />
                 <strong>Modérateur :</strong> Accès limité aux fonctions de modération et validation
               </p>
             </div>
@@ -176,12 +173,16 @@ export default function CreateAdmin() {
                       : 'border-gray-300 hover:border-gray-400'
                   }`}
                 >
-                  <Shield className={`h-8 w-8 mx-auto mb-2 ${
-                    formData.role === 'admin' ? 'text-[#00B3A6]' : 'text-gray-400'
-                  }`} />
-                  <p className={`font-semibold ${
-                    formData.role === 'admin' ? 'text-[#00B3A6]' : 'text-gray-700'
-                  }`}>
+                  <Shield
+                    className={`h-8 w-8 mx-auto mb-2 ${
+                      formData.role === 'admin' ? 'text-[#00B3A6]' : 'text-gray-400'
+                    }`}
+                  />
+                  <p
+                    className={`font-semibold ${
+                      formData.role === 'admin' ? 'text-[#00B3A6]' : 'text-gray-700'
+                    }`}
+                  >
                     Administrateur
                   </p>
                   <p className="text-xs text-gray-500 mt-1">Accès complet</p>
@@ -196,12 +197,16 @@ export default function CreateAdmin() {
                       : 'border-gray-300 hover:border-gray-400'
                   }`}
                 >
-                  <User className={`h-8 w-8 mx-auto mb-2 ${
-                    formData.role === 'moderator' ? 'text-[#00B3A6]' : 'text-gray-400'
-                  }`} />
-                  <p className={`font-semibold ${
-                    formData.role === 'moderator' ? 'text-[#00B3A6]' : 'text-gray-700'
-                  }`}>
+                  <User
+                    className={`h-8 w-8 mx-auto mb-2 ${
+                      formData.role === 'moderator' ? 'text-[#00B3A6]' : 'text-gray-400'
+                    }`}
+                  />
+                  <p
+                    className={`font-semibold ${
+                      formData.role === 'moderator' ? 'text-[#00B3A6]' : 'text-gray-700'
+                    }`}
+                  >
                     Modérateur
                   </p>
                   <p className="text-xs text-gray-500 mt-1">Accès limité</p>
@@ -212,9 +217,7 @@ export default function CreateAdmin() {
             {/* Informations personnelles */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Prénom *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Prénom *</label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
                   <input
@@ -230,9 +233,7 @@ export default function CreateAdmin() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Nom *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Nom *</label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
                   <input
@@ -269,9 +270,7 @@ export default function CreateAdmin() {
 
             {/* Mot de passe */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Mot de passe *
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Mot de passe *</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
                 <input
@@ -312,7 +311,10 @@ export default function CreateAdmin() {
                 <CheckCircle className="h-5 w-5 text-green-600 mr-3 mt-0.5" />
                 <div className="text-sm text-green-700">
                   <p className="font-medium mb-1">Le compte sera activé immédiatement</p>
-                  <p>L'utilisateur pourra se connecter dès la création du compte avec ses identifiants.</p>
+                  <p>
+                    L'utilisateur pourra se connecter dès la création du compte avec ses
+                    identifiants.
+                  </p>
                 </div>
               </div>
             </div>

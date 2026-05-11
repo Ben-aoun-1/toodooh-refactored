@@ -10,9 +10,16 @@ function EnseigneWidgets() {
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
       {[1, 2, 3, 4, 5, 6].map((i) => (
-        <div key={i} className="rounded-xl bg-white border border-gray-200 p-5 shadow-sm flex flex-col">
+        <div
+          key={i}
+          className="rounded-xl bg-white border border-gray-200 p-5 shadow-sm flex flex-col"
+        >
           <div className="flex items-center gap-3 mb-3">
-            <img src={CARREFOUR_LOGO} alt="Carrefour" className="w-10 h-10 rounded-lg object-contain flex-shrink-0 bg-white" />
+            <img
+              src={CARREFOUR_LOGO}
+              alt="Carrefour"
+              className="w-10 h-10 rounded-lg object-contain flex-shrink-0 bg-white"
+            />
             <span className="font-semibold text-gray-900">Carrefour</span>
           </div>
           <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs text-gray-600 mb-2">
@@ -26,7 +33,9 @@ function EnseigneWidgets() {
             </span>
           </div>
           <div className="mb-3">
-            <span className="inline-flex px-2.5 py-1 rounded-full bg-gray-200 text-gray-700 text-xs font-medium">Sport</span>
+            <span className="inline-flex px-2.5 py-1 rounded-full bg-gray-200 text-gray-700 text-xs font-medium">
+              Sport
+            </span>
           </div>
           <div className="flex items-center justify-between gap-3 mb-4">
             <div>
@@ -67,9 +76,9 @@ export default function Parcs() {
       {/* Introduction */}
       <div className="bg-white rounded-xl p-6 sm:p-8 shadow-sm">
         <p className="text-base text-gray-900 leading-relaxed">
-          Bienvenue dans les PARCS TV : ici, vous choisissez non pas un écran mais un réseau entier d'établissements
-          appartenant à une même enseigne. Votre message accompagne les clients dans leurs lieux de fréquentation
-          habituels, créant une exposition répétée et naturelle.
+          Bienvenue dans les PARCS TV : ici, vous choisissez non pas un écran mais un réseau entier
+          d'établissements appartenant à une même enseigne. Votre message accompagne les clients
+          dans leurs lieux de fréquentation habituels, créant une exposition répétée et naturelle.
         </p>
       </div>
 
@@ -86,9 +95,10 @@ export default function Parcs() {
       {/* Conclusion */}
       <div className="bg-white rounded-xl p-6 sm:p-8 shadow-sm">
         <p className="text-base text-gray-900 leading-relaxed">
-          Grâce à notre moteur intelligent, tous les écrans actifs du réseau sont automatiquement intégrés pour
-          maximiser l'impact, garantir une cohérence de diffusion et renforcer durablement la mémorisation de votre
-          marque auprès d'une audience fidèle et hautement qualifiée.
+          Grâce à notre moteur intelligent, tous les écrans actifs du réseau sont automatiquement
+          intégrés pour maximiser l'impact, garantir une cohérence de diffusion et renforcer
+          durablement la mémorisation de votre marque auprès d'une audience fidèle et hautement
+          qualifiée.
         </p>
       </div>
     </div>

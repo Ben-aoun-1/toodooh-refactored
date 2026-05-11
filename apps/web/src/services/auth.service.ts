@@ -1,24 +1,33 @@
 import { getAppUrl } from '../lib/app-url';
 import { supabase } from '../lib/supabase';
-import { SignUpData, BusinessProfile, BusinessSector, Governorate, SignUpResult, CompanySizeOption, SupportObjectiveOption } from '../types/auth';
+import {
+  SignUpData,
+  BusinessProfile,
+  BusinessSector,
+  Governorate,
+  SignUpResult,
+  CompanySizeOption,
+  SupportObjectiveOption,
+} from '../types/auth';
 
 // Fonction pour mapper les erreurs techniques vers des messages fonctionnels
 const mapAuthError = (error: any): string => {
-  const errorMessage = error?.message || error?.error_description || 'Une erreur inattendue s\'est produite';
-  
+  const errorMessage =
+    error?.message || error?.error_description || "Une erreur inattendue s'est produite";
+
   // Log de débogage pour identifier l'erreur complète
   console.log('🔍 Erreur détectée:', {
     message: errorMessage,
     code: error?.code,
     details: error?.details,
-    hint: error?.hint
+    hint: error?.hint,
   });
-  
+
   // Erreurs d'inscription
   if (errorMessage.includes('User already registered')) {
     return '📧 Cette adresse email est déjà associée à un compte existant. Si c\'est votre compte, veuillez vous connecter. Si vous avez oublié votre mot de passe, utilisez la fonction "Mot de passe oublié".';
   }
-  
+
   // NOTE: Email confirmation désactivée dans Supabase pour la phase de test
   // Les utilisateurs sont automatiquement connectés après inscription
   /*
@@ -26,11 +35,11 @@ const mapAuthError = (error: any): string => {
     return '✉️ Votre adresse email n\'est pas encore confirmée. Veuillez consulter votre boîte mail (vérifiez aussi les spams) et cliquer sur le lien de confirmation que nous vous avons envoyé.';
   }
   */
-  
+
   if (errorMessage.includes('Invalid email')) {
-    return '❌ L\'adresse email saisie n\'est pas valide. Veuillez vérifier le format (exemple: nom@entreprise.com) et réessayer.';
+    return "❌ L'adresse email saisie n'est pas valide. Veuillez vérifier le format (exemple: nom@entreprise.com) et réessayer.";
   }
-  
+
   if (errorMessage.includes('Password should be at least')) {
     return '🔒 Le mot de passe doit contenir au moins 6 caractères. Pour votre sécurité, utilisez une combinaison de lettres majuscules, minuscules et chiffres.';
   }
@@ -41,39 +50,43 @@ const mapAuthError = (error: any): string => {
   }
 
   // Nouveau mot de passe identique à l'ancien
-  if (errorMessage.includes('same as') || errorMessage.includes('should be different') || errorMessage.includes('different from')) {
-    return '🔒 Le nouveau mot de passe doit être différent de l\'ancien.';
+  if (
+    errorMessage.includes('same as') ||
+    errorMessage.includes('should be different') ||
+    errorMessage.includes('different from')
+  ) {
+    return "🔒 Le nouveau mot de passe doit être différent de l'ancien.";
   }
-  
+
   if (errorMessage.includes('Unable to validate email address')) {
-    return '⚠️ Impossible de valider l\'adresse email. Veuillez vérifier qu\'elle est correctement écrite et qu\'il s\'agit d\'une adresse email valide.';
+    return "⚠️ Impossible de valider l'adresse email. Veuillez vérifier qu'elle est correctement écrite et qu'il s'agit d'une adresse email valide.";
   }
-  
+
   // Erreurs de connexion
   if (errorMessage.includes('Invalid login credentials')) {
     return '🔐 Email ou mot de passe incorrect. Veuillez vérifier vos identifiants. Si vous avez oublié votre mot de passe, cliquez sur "Mot de passe oublié".';
   }
-  
+
   // NOTE: Email confirmation désactivée dans Supabase pour la phase de test
   /*
   if (errorMessage.includes('Email not confirmed')) {
     return '✉️ Votre compte n\'est pas encore activé. Veuillez vérifier votre boîte mail (y compris les spams) et cliquer sur le lien de confirmation pour activer votre compte.';
   }
   */
-  
+
   if (errorMessage.includes('Too many requests')) {
     return '⏱️ Trop de tentatives de connexion. Par sécurité, veuillez patienter quelques minutes avant de réessayer.';
   }
-  
+
   if (errorMessage.includes('For security purposes, you can only request this after')) {
     return '🔒 Pour des raisons de sécurité, veuillez patienter quelques secondes avant de réessayer.';
   }
-  
+
   // Erreurs de réinitialisation de mot de passe
   if (errorMessage.includes('Unable to send email')) {
-    return '📧 Impossible d\'envoyer l\'email de réinitialisation du mot de passe. Veuillez vérifier votre connexion internet et réessayer dans quelques instants.';
+    return "📧 Impossible d'envoyer l'email de réinitialisation du mot de passe. Veuillez vérifier votre connexion internet et réessayer dans quelques instants.";
   }
-  
+
   // Erreurs de profil - Doublons
   if (errorMessage.includes('duplicate key value violates unique constraint')) {
     // Extraire la valeur en double si possible
@@ -83,7 +96,7 @@ const mapAuthError = (error: any): string => {
       const field = keyMatch[1];
       const value = keyMatch[2];
       duplicateValue = ` (Valeur en double: ${value})`;
-      
+
       // Messages spécifiques selon le champ
       if (field === 'tax_number') {
         return `🏢 Ce numéro de matricule fiscal (${value}) est déjà enregistré dans notre système. Si c'est votre entreprise, veuillez vous connecter avec votre compte existant. Pour toute assistance, contactez le support.`;
@@ -95,70 +108,78 @@ const mapAuthError = (error: any): string => {
         return `📧 Cette adresse email (${value}) est déjà associée à un compte existant. Veuillez vous connecter ou utiliser une adresse email différente. Si vous avez oublié votre mot de passe, cliquez sur "Mot de passe oublié".`;
       }
     }
-    
+
     // Fallback si on ne peut pas extraire les détails
     if (errorMessage.includes('tax_number')) {
-      return '🏢 Le numéro de matricule fiscal que vous avez saisi est déjà enregistré dans notre système. Si c\'est votre entreprise, veuillez vous connecter avec votre compte existant.';
+      return "🏢 Le numéro de matricule fiscal que vous avez saisi est déjà enregistré dans notre système. Si c'est votre entreprise, veuillez vous connecter avec votre compte existant.";
     }
     if (errorMessage.includes('contact_phone')) {
       return '📞 Le numéro de téléphone que vous avez saisi est déjà associé à un compte existant. Veuillez vous connecter ou utiliser un numéro différent.';
     }
     if (errorMessage.includes('email')) {
-      return '📧 L\'adresse email que vous avez saisie est déjà associée à un compte existant. Veuillez vous connecter ou utiliser une adresse email différente.';
+      return "📧 L'adresse email que vous avez saisie est déjà associée à un compte existant. Veuillez vous connecter ou utiliser une adresse email différente.";
     }
-    
+
     // Message générique avec le plus de détails possible
     return `⚠️ Une information que vous avez saisie existe déjà dans notre système${duplicateValue}. Veuillez vérifier vos données ou vous connecter si vous avez déjà un compte.`;
   }
-  
+
   if (errorMessage.includes('row-level security policy')) {
-    return '🚫 Vous n\'avez pas les permissions nécessaires pour effectuer cette action. Veuillez contacter l\'administrateur si vous pensez que c\'est une erreur.';
+    return "🚫 Vous n'avez pas les permissions nécessaires pour effectuer cette action. Veuillez contacter l'administrateur si vous pensez que c'est une erreur.";
   }
-  
+
   if (errorMessage.includes('foreign key constraint')) {
     // Identifier le champ spécifique qui pose problème
     if (errorMessage.includes('business_sector_id') || errorMessage.includes('business_sectors')) {
-      return '🏢 Le secteur d\'activité sélectionné n\'est pas valide. Veuillez actualiser la page et choisir un secteur dans la liste déroulante.';
+      return "🏢 Le secteur d'activité sélectionné n'est pas valide. Veuillez actualiser la page et choisir un secteur dans la liste déroulante.";
     }
     if (errorMessage.includes('governorate_id') || errorMessage.includes('governorates')) {
-      return '📍 Le gouvernorat sélectionné n\'est pas valide. Veuillez actualiser la page et choisir un gouvernorat dans la liste déroulante.';
+      return "📍 Le gouvernorat sélectionné n'est pas valide. Veuillez actualiser la page et choisir un gouvernorat dans la liste déroulante.";
     }
     if (errorMessage.includes('user_id')) {
       return '❌ Erreur technique lors de la création du compte. Veuillez réessayer. Si le problème persiste, contactez le support technique avec le code: ERR_USER_ID';
     }
     // Message générique si on ne peut pas identifier le champ
-    return '⚠️ Une information sélectionnée n\'est pas valide. Veuillez actualiser la page et vérifier que vous avez bien sélectionné un secteur d\'activité et un gouvernorat dans les listes déroulantes.';
+    return "⚠️ Une information sélectionnée n'est pas valide. Veuillez actualiser la page et vérifier que vous avez bien sélectionné un secteur d'activité et un gouvernorat dans les listes déroulantes.";
   }
-  
+
   // Erreurs de réseau
   if (errorMessage.includes('fetch')) {
     return '🌐 Problème de connexion détecté. Veuillez vérifier votre connexion internet et réessayer.';
   }
-  
+
   if (errorMessage.includes('timeout')) {
     return '⏱️ La demande a pris trop de temps à se terminer. Veuillez vérifier votre connexion et réessayer.';
   }
-  
+
   // Erreurs génériques
   if (errorMessage.includes('JWT')) {
     return '🔓 Votre session a expiré pour des raisons de sécurité. Veuillez vous reconnecter pour continuer.';
   }
-  
+
   if (errorMessage.includes('not found')) {
-    return '🔍 La ressource demandée n\'existe pas ou a été supprimée.';
+    return "🔍 La ressource demandée n'existe pas ou a été supprimée.";
   }
-  
+
   // Pour les erreurs auth courtes et explicites (ex: validation mot de passe), les afficher telles quelles
-  if (error?.code && errorMessage.length < 200 && (errorMessage.toLowerCase().includes('password') || errorMessage.toLowerCase().includes('mot de passe'))) {
+  if (
+    error?.code &&
+    errorMessage.length < 200 &&
+    (errorMessage.toLowerCase().includes('password') ||
+      errorMessage.toLowerCase().includes('mot de passe'))
+  ) {
     return errorMessage;
   }
 
   // Par défaut, retourner un message générique
-  return '❌ Une erreur s\'est produite. Veuillez réessayer dans quelques instants. Si le problème persiste, contactez notre support technique.';
+  return "❌ Une erreur s'est produite. Veuillez réessayer dans quelques instants. Si le problème persiste, contactez notre support technique.";
 };
 
 /** Crée les lignes `locations` pour un propriétaire de parc après inscription. */
-async function insertFleetEstablishmentsAfterSignup(userId: string, data: SignUpData): Promise<void> {
+async function insertFleetEstablishmentsAfterSignup(
+  userId: string,
+  data: SignUpData,
+): Promise<void> {
   const est = data.fleet_establishments;
   if (!est?.length || data.profile_type !== 'fleet_owner') return;
   const rows = est.map((e) => ({
@@ -181,7 +202,10 @@ async function insertFleetEstablishmentsAfterSignup(userId: string, data: SignUp
 }
 
 export const authService = {
-  async checkSignupConflicts(email: string, contactPhone: string): Promise<{ emailExists: boolean; phoneExists: boolean }> {
+  async checkSignupConflicts(
+    email: string,
+    contactPhone: string,
+  ): Promise<{ emailExists: boolean; phoneExists: boolean }> {
     const normalizedEmail = (email || '').trim().toLowerCase();
     const normalizedPhone = (contactPhone || '').replace(/\s+/g, '').trim();
 
@@ -217,13 +241,16 @@ export const authService = {
     if (existing) return;
     void email;
     throw new Error(
-      'Profil business introuvable pour ce compte. Vérifiez que les champs obligatoires d’inscription sont bien fournis (type de profil, type business, nom entreprise, contact, adresse, conditions).'
+      'Profil business introuvable pour ce compte. Vérifiez que les champs obligatoires d’inscription sont bien fournis (type de profil, type business, nom entreprise, contact, adresse, conditions).',
     );
   },
 
   async getCurrentUser() {
     try {
-      const { data: { user }, error } = await supabase.auth.getUser();
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser();
       if (error) {
         // Ne pas logger les erreurs de session manquante (normal quand pas connecté)
         if (error.message !== 'Auth session missing!') {
@@ -247,11 +274,11 @@ export const authService = {
       password,
     });
     if (error) throw new Error(mapAuthError(error));
-    
+
     // Après connexion réussie, récupérer les informations utilisateur
     if (data.user) {
       console.log('🔐 Connexion réussie, récupération des infos utilisateur...');
-      
+
       try {
         // Récupération depuis business_profiles
         console.log('🔍 Récupération du profil utilisateur depuis business_profiles...');
@@ -262,16 +289,16 @@ export const authService = {
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
-        
+
         if (userError) {
           console.error('❌ Erreur lors de la récupération business_profiles:', userError);
-          console.error('❌ Détails de l\'erreur:', {
+          console.error("❌ Détails de l'erreur:", {
             code: userError.code,
             message: userError.message,
             details: userError.details,
-            hint: userError.hint
+            hint: userError.hint,
           });
-          
+
           // Ne pas forcer un profile_type par défaut ici :
           // le store déterminera un état restreint si le profil est indisponible.
           localStorage.removeItem('user_profile_type');
@@ -279,9 +306,9 @@ export const authService = {
         } else {
           console.log('✅ Infos utilisateur trouvées dans business_profiles:', {
             contact_name: userData.contact_name,
-            profile_type: userData.profile_type
+            profile_type: userData.profile_type,
           });
-          
+
           // Stocker le profile_type dans localStorage
           if (userData.profile_type) {
             localStorage.setItem('user_profile_type', userData.profile_type);
@@ -300,7 +327,7 @@ export const authService = {
         localStorage.removeItem('user_raison_social');
       }
     }
-    
+
     return data;
   },
 
@@ -347,7 +374,7 @@ export const authService = {
     if (!String(data.agent_toodooh || '').trim()) pushMissing('agent_toodooh');
     if (missingFields.length > 0) {
       throw new Error(
-        `Impossible de créer business_profiles: champs manquants -> ${missingFields.join(', ')}`
+        `Impossible de créer business_profiles: champs manquants -> ${missingFields.join(', ')}`,
       );
     }
 
@@ -355,18 +382,18 @@ export const authService = {
     // si le profile_type n'est pas accepté par l'enum/check DB, on bloque tout de suite.
     const { data: profileTypeCheckData, error: profileTypeCheckError } = await supabase.rpc(
       'validate_signup_profile_type',
-      { p_profile_type: requestedProfileType }
+      { p_profile_type: requestedProfileType },
     );
     if (profileTypeCheckError) {
       // Compatibilité ascendante: si la RPC n'existe pas encore,
       // ne pas bloquer l'inscription (sinon régression annonceur).
       if (profileTypeCheckError.code === 'PGRST202') {
         console.warn(
-          '⚠️ RPC validate_signup_profile_type absente; précheck ignoré temporairement.'
+          '⚠️ RPC validate_signup_profile_type absente; précheck ignoré temporairement.',
         );
       } else {
         throw new Error(
-          `Impossible de valider la configuration d'inscription (${profileTypeCheckError.code || 'UNKNOWN'}): ${profileTypeCheckError.message}`
+          `Impossible de valider la configuration d'inscription (${profileTypeCheckError.code || 'UNKNOWN'}): ${profileTypeCheckError.message}`,
         );
       }
     } else {
@@ -376,7 +403,7 @@ export const authService = {
       if (!profileTypeCheck?.is_valid) {
         throw new Error(
           profileTypeCheck?.error_message ||
-            "Configuration base incompatible avec le type de profil demandé."
+            'Configuration base incompatible avec le type de profil demandé.',
         );
       }
     }
@@ -390,8 +417,13 @@ export const authService = {
         .order('display_order', { ascending: true });
 
       if (sectorsError) {
-        console.error('❌ Impossible de charger business_sectors pour profil agence:', sectorsError);
-        throw new Error('Configuration des secteurs indisponible. Réessayez dans quelques instants.');
+        console.error(
+          '❌ Impossible de charger business_sectors pour profil agence:',
+          sectorsError,
+        );
+        throw new Error(
+          'Configuration des secteurs indisponible. Réessayez dans quelques instants.',
+        );
       }
 
       const sectors = sectorsRows || [];
@@ -415,14 +447,13 @@ export const authService = {
       contact_phone: normalizedPhone,
     });
 
-    const { emailExists } = await this.checkSignupConflicts(
-      normalizedEmail,
-      normalizedPhone
-    );
+    const { emailExists } = await this.checkSignupConflicts(normalizedEmail, normalizedPhone);
 
     if (emailExists) {
       console.error('❌ Email déjà utilisé');
-      throw new Error('📧 Cette adresse email est déjà associée à un compte existant. Veuillez vous connecter ou utiliser une autre adresse.');
+      throw new Error(
+        '📧 Cette adresse email est déjà associée à un compte existant. Veuillez vous connecter ou utiliser une autre adresse.',
+      );
     }
 
     // Vérifier le matricule fiscal (seulement s'il est fourni)
@@ -434,61 +465,74 @@ export const authService = {
         .select('user_id')
         .eq('tax_number', data.tax_number)
         .limit(1);
-      
+
       if (existingTax && existingTax.length > 0) {
         if (requestedProfileType === 'fleet_owner') {
           fleetOwnerTaxNumberConflict = true;
-          console.warn('⚠️ fleet_owner: tax_number déjà utilisé, génération d\'un matricule technique.');
+          console.warn(
+            "⚠️ fleet_owner: tax_number déjà utilisé, génération d'un matricule technique.",
+          );
         } else {
           console.error('❌ Matricule fiscal déjà utilisé');
-          throw new Error('🏢 Ce numéro de matricule fiscal est déjà enregistré dans notre système. Si c\'est votre entreprise, veuillez vous connecter avec votre compte existant.');
+          throw new Error(
+            "🏢 Ce numéro de matricule fiscal est déjà enregistré dans notre système. Si c'est votre entreprise, veuillez vous connecter avec votre compte existant.",
+          );
         }
       }
     }
-    
+
     // 2. Créer l'utilisateur auth
     console.log('📝 Création du compte Auth...');
     const { data: authData, error: signUpError } = await supabase.auth.signUp({
       email: data.email,
       password: data.password,
       options: {
-        emailRedirectTo: getAppUrl('/login')
-      }
+        emailRedirectTo: getAppUrl('/login'),
+      },
     });
 
     if (signUpError) {
-      console.error('❌ Erreur Auth lors de l\'inscription:', signUpError);
+      console.error("❌ Erreur Auth lors de l'inscription:", signUpError);
       throw new Error(mapAuthError(signUpError));
     }
-    
+
     if (!authData.user) {
       console.error('❌ Aucun utilisateur retourné par Supabase Auth');
       throw new Error('La création du compte a échoué. Veuillez réessayer.');
     }
-    
+
     // Vérifier si l'utilisateur a déjà été créé (identité existante)
     if (authData.user.identities && authData.user.identities.length === 0) {
       console.error('❌ Email déjà enregistré (identities vide)');
-      throw new Error('📧 Cette adresse email est déjà associée à un compte existant. Si c\'est votre compte, veuillez vous connecter. Si vous avez oublié votre mot de passe, utilisez la fonction "Mot de passe oublié".');
+      throw new Error(
+        '📧 Cette adresse email est déjà associée à un compte existant. Si c\'est votre compte, veuillez vous connecter. Si vous avez oublié votre mot de passe, utilisez la fonction "Mot de passe oublié".',
+      );
     }
 
     console.log('✅ Utilisateur créé dans Auth:', authData.user.id);
     console.log('📧 Email:', authData.user.email);
     console.log('🆔 Identities:', authData.user.identities?.length);
-    
+
     // 3. Attendre un court instant pour que l'utilisateur soit synchronisé dans la base de données
-    console.log('⏳ Attente de synchronisation de l\'utilisateur...');
-    await new Promise(resolve => setTimeout(resolve, 1000)); // Attendre 1 seconde
+    console.log("⏳ Attente de synchronisation de l'utilisateur...");
+    await new Promise((resolve) => setTimeout(resolve, 1000)); // Attendre 1 seconde
 
     // 4. Créer le profil business
     // Générer un matricule temporaire si vide (pour propriétaires individuels)
     let taxNumber = data.tax_number;
-    if (!taxNumber || taxNumber.trim() === '' || (requestedProfileType === 'fleet_owner' && fleetOwnerTaxNumberConflict)) {
+    if (
+      !taxNumber ||
+      taxNumber.trim() === '' ||
+      (requestedProfileType === 'fleet_owner' && fleetOwnerTaxNumberConflict)
+    ) {
       // Générer un matricule temporaire unique basé sur l'ID utilisateur et timestamp
       taxNumber = `TEMP-${authData.user.id.substring(0, 8)}-${Date.now()}`;
-      console.log('ℹ️ Matricule fiscal non fourni, génération d\'un matricule temporaire:', taxNumber);
+      console.log(
+        "ℹ️ Matricule fiscal non fourni, génération d'un matricule temporaire:",
+        taxNumber,
+      );
     }
-    
+
     const profileType = requestedProfileType;
     console.log('📋 signUp: création du profil avec profile_type:', profileType);
 
@@ -518,9 +562,9 @@ export const authService = {
       terms_accepted_at: new Date().toISOString(),
       verification_status: 'pending', // En attente de validation admin
       onboarding_completed: false,
-      is_admin: false
+      is_admin: false,
     };
-    
+
     console.log('📝 Tentative de création du profil business:', signupData);
 
     // 5. Essayer de créer le profil avec plusieurs stratégies
@@ -536,57 +580,57 @@ export const authService = {
     const uploadDocument = async () => {
       if (data.registration_doc) {
         try {
-          console.log('📤 Upload du document fourni lors de l\'inscription...');
+          console.log("📤 Upload du document fourni lors de l'inscription...");
           const ext = data.registration_doc.name.split('.').pop();
-          
+
           // Déterminer le type de document et le nom du fichier
           const isIndividualOwner = data.profile_type === 'individual_owner';
           const filePrefix = isIndividualOwner ? 'cin' : 'rne';
           const filePath = `${filePrefix}_${authData.user.id}_${Date.now()}.${ext}`;
-          
+
           console.log(`📂 Upload fichier ${filePrefix}:`, filePath);
-          
+
           // Upload vers le bucket registres
           const { error: uploadError } = await supabase.storage
             .from('registres')
             .upload(filePath, data.registration_doc);
-          
+
           if (uploadError) {
             console.error('⚠️ Erreur upload document (non bloquante):', uploadError);
             return;
           }
-          
+
           console.log('✅ Document uploadé avec succès');
-          
+
           // Créer une URL signée
           const { data: signedData, error: signedError } = await supabase.storage
             .from('registres')
             .createSignedUrl(filePath, 604800); // 7 jours
-          
+
           if (signedError || !signedData) {
             console.error('⚠️ Erreur création URL signée:', signedError);
             return;
           }
-          
+
           // Mettre à jour le profil avec l'URL du document
           const updateField = isIndividualOwner ? 'cin_doc_url' : 'registration_doc_url';
           console.log(`💾 Sauvegarde URL dans le champ: ${updateField}`);
-          
+
           const { error: updateError } = await supabase
             .from('business_profiles')
             .update({ [updateField]: signedData.signedUrl })
             .eq('user_id', authData.user.id);
-          
+
           if (updateError) {
             console.error('⚠️ Erreur sauvegarde URL (non bloquante):', updateError);
           } else {
             console.log(`✅ URL du document ${filePrefix} sauvegardée dans le profil`);
           }
         } catch (fileError) {
-          console.error('⚠️ Erreur lors de l\'upload du document (non bloquante):', fileError);
+          console.error("⚠️ Erreur lors de l'upload du document (non bloquante):", fileError);
         }
       } else {
-        console.log('ℹ️ Aucun document fourni lors de l\'inscription');
+        console.log("ℹ️ Aucun document fourni lors de l'inscription");
       }
     };
 
@@ -653,10 +697,10 @@ export const authService = {
         message: directInsertError.message,
         code: directInsertError.code,
         details: directInsertError.details,
-        hint: directInsertError.hint
+        hint: directInsertError.hint,
       });
       profileError = directInsertError;
-      
+
       // Stratégie 2: Utiliser la fonction RPC create_business_profile avec
       // les bons noms de paramètres (p_*) si disponible.
       try {
@@ -704,15 +748,19 @@ export const authService = {
       const pErr = profileError as any;
       if (
         pErr?.code === '22P02' &&
-        String(pErr?.message || '').toLowerCase().includes('profile_type') &&
-        String(pErr?.message || '').toLowerCase().includes('agency')
+        String(pErr?.message || '')
+          .toLowerCase()
+          .includes('profile_type') &&
+        String(pErr?.message || '')
+          .toLowerCase()
+          .includes('agency')
       ) {
         throw new Error(
-          "Configuration base incomplète: l'enum public.profile_type ne contient pas 'agency'. Appliquez la migration 20260411152000_ensure_agency_profile_type_compat.sql puis réessayez."
+          "Configuration base incomplète: l'enum public.profile_type ne contient pas 'agency'. Appliquez la migration 20260411152000_ensure_agency_profile_type_compat.sql puis réessayez.",
         );
       }
       throw new Error(
-        `Echec création business_profiles (${pErr?.code || 'UNKNOWN'}): ${pErr?.message || 'Erreur inconnue'}${pErr?.details ? ` | details: ${pErr.details}` : ''}${pErr?.hint ? ` | hint: ${pErr.hint}` : ''}`
+        `Echec création business_profiles (${pErr?.code || 'UNKNOWN'}): ${pErr?.message || 'Erreur inconnue'}${pErr?.details ? ` | details: ${pErr.details}` : ''}${pErr?.hint ? ` | hint: ${pErr.hint}` : ''}`,
       );
     }
 
@@ -724,13 +772,13 @@ export const authService = {
 
     // Harmoniser les champs optionnels après la création du profil
     await enrichProfileOptionalFields();
-    
+
     // Uploader le document avant de retourner
     await uploadDocument();
     await uploadCompanyLogo();
 
     await insertFleetEstablishmentsAfterSignup(authData.user.id, data);
-    
+
     return authData;
   },
 
@@ -749,27 +797,27 @@ export const authService = {
   async updatePassword(password: string) {
     console.log('🔐 Tentative de mise à jour du mot de passe...');
     console.log('🔍 Longueur du mot de passe:', password.length);
-    
+
     // Vérifier les critères de base
     if (password.length < 6) {
       throw new Error('Le mot de passe doit contenir au moins 6 caractères');
     }
-    
+
     const { data, error } = await supabase.auth.updateUser({
       password,
     });
-    
+
     if (error) {
       console.error('❌ Erreur lors de la mise à jour du mot de passe:', error);
-      console.error('Détails de l\'erreur:', {
+      console.error("Détails de l'erreur:", {
         message: error.message,
         details: (error as any).details,
         hint: (error as any).hint,
-        code: error.code
+        code: error.code,
       });
       throw new Error(mapAuthError(error));
     }
-    
+
     console.log('✅ Mot de passe mis à jour avec succès');
     return data;
   },
@@ -777,8 +825,10 @@ export const authService = {
   async updateBusinessProfile(updateData: Partial<BusinessProfile>) {
     console.log('🔍 Mise à jour du profil business...');
     console.log('Données à mettre à jour:', updateData);
-    
-    const { data: { user } } = await supabase.auth.getUser();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) {
       console.error('❌ Utilisateur non connecté');
       throw new Error('Utilisateur non connecté');
@@ -794,11 +844,11 @@ export const authService = {
 
     if (error) {
       console.error('❌ Erreur Supabase:', error);
-      console.error('Détails de l\'erreur:', {
+      console.error("Détails de l'erreur:", {
         message: error.message,
         details: error.details,
         hint: error.hint,
-        code: error.code
+        code: error.code,
       });
       throw new Error(`Erreur lors de la mise à jour du profil: ${error.message}`);
     }
@@ -809,7 +859,9 @@ export const authService = {
 
   async updatePasswordWithOld(currentPassword: string, newPassword: string) {
     // First verify the current password
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) throw new Error('Utilisateur non connecté');
 
     const { error: signInError } = await supabase.auth.signInWithPassword({
@@ -825,18 +877,19 @@ export const authService = {
     });
     if (error) {
       const mapped = mapAuthError(error);
-      const generic = '❌ Une erreur s\'est produite. Veuillez réessayer dans quelques instants. Si le problème persiste, contactez notre support technique.';
-      throw new Error(mapped === generic ? (error?.message || mapped) : mapped);
+      const generic =
+        "❌ Une erreur s'est produite. Veuillez réessayer dans quelques instants. Si le problème persiste, contactez notre support technique.";
+      throw new Error(mapped === generic ? error?.message || mapped : mapped);
     }
   },
 
   async getBusinessProfile(): Promise<BusinessProfile | null> {
     const user = await this.getCurrentUser();
     if (!user) throw new Error('Utilisateur non connecté');
-    
+
     console.log('Getting business profile for user:', user.id);
     console.log('User email:', user.email);
-    
+
     try {
       // 1. Essayer de récupérer le profil normalement
       const { data: profile, error } = await supabase
@@ -846,16 +899,15 @@ export const authService = {
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
-      
+
       if (error) {
         console.log('Erreur lors de la récupération du profil:', error);
         if (error.code === 'PGRST116') return null;
         return null;
       }
-      
+
       console.log('✅ Profil trouvé:', profile);
       return profile;
-      
     } catch (error) {
       console.error('Error in getBusinessProfile:', error);
       throw error;
@@ -875,27 +927,29 @@ export const authService = {
     await this.logout();
   },
 
-  async updateProfile(data: Partial<{
-    contact_name: string;
-    contact_phone: string;
-    fonction: string | null;
-    business_name: string;
-    tax_number: string;
-    business_sector_id: string | null;
-    number_of_screens: number | null;
-    number_of_rooms: number | null;
-    company_size: string | null;
-    logo_url: string | null;
-    notify_news_updates: boolean | null;
-    notify_reminders_events: boolean | null;
-    notify_promotions_offers: boolean | null;
-    street_address: string;
-    city: string;
-    postal_code: string;
-    governorate_id: string | null;
-    registration_doc_url: string | null;
-    registration_doc_path: string | null;
-  }>) {
+  async updateProfile(
+    data: Partial<{
+      contact_name: string;
+      contact_phone: string;
+      fonction: string | null;
+      business_name: string;
+      tax_number: string;
+      business_sector_id: string | null;
+      number_of_screens: number | null;
+      number_of_rooms: number | null;
+      company_size: string | null;
+      logo_url: string | null;
+      notify_news_updates: boolean | null;
+      notify_reminders_events: boolean | null;
+      notify_promotions_offers: boolean | null;
+      street_address: string;
+      city: string;
+      postal_code: string;
+      governorate_id: string | null;
+      registration_doc_url: string | null;
+      registration_doc_path: string | null;
+    }>,
+  ) {
     const userId = (await this.getCurrentUser())?.id;
     if (!userId) throw new Error('Non connecté');
     const payload: Record<string, unknown> = {};
@@ -925,11 +979,13 @@ export const authService = {
       .select('business_sector_id, name, display_order')
       .order('display_order', { ascending: true });
     if (error) throw new Error(mapAuthError(error));
-    return (data ?? []).map((row: { business_sector_id: string; name: string; display_order: number | null }) => ({
-      id: row.business_sector_id,
-      name: row.name,
-      display_order: row.display_order,
-    }));
+    return (data ?? []).map(
+      (row: { business_sector_id: string; name: string; display_order: number | null }) => ({
+        id: row.business_sector_id,
+        name: row.name,
+        display_order: row.display_order,
+      }),
+    );
   },
 
   async getCompanySizeOptions(): Promise<CompanySizeOption[]> {
@@ -982,11 +1038,8 @@ export const authService = {
   },
 
   async getGovernorates(): Promise<Governorate[]> {
-    const { data, error } = await supabase
-      .from('governorates')
-      .select('*')
-      .order('name');
-    
+    const { data, error } = await supabase.from('governorates').select('*').order('name');
+
     if (error) throw new Error(mapAuthError(error));
     return data;
   },
@@ -996,7 +1049,7 @@ export const authService = {
     void userId;
     void email;
     throw new Error(
-      'Création de profil par défaut désactivée. Fournissez explicitement les champs requis de business_profiles: profile_type, business_type, business_name, contact_name, contact_phone, street_address, city, postal_code, governorate_id.'
+      'Création de profil par défaut désactivée. Fournissez explicitement les champs requis de business_profiles: profile_type, business_type, business_name, contact_name, contact_phone, street_address, city, postal_code, governorate_id.',
     );
   },
 };

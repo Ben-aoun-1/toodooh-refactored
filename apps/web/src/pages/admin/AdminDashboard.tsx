@@ -7,10 +7,10 @@ import {
   PlatformRevenueStats,
   ScreensOccupancyStats,
   CampaignsPerformance,
-  TopPerformingScreen
+  TopPerformingScreen,
 } from '../../types/platform-stats';
 import AdminLayout from '../../components/admin/AdminLayout';
-import { 
+import {
   Users,
   Monitor,
   Video,
@@ -23,7 +23,7 @@ import {
   CheckCircle,
   Clock,
   Star,
-  BarChart3
+  BarChart3,
 } from 'lucide-react';
 
 export default function AdminDashboard() {
@@ -43,15 +43,15 @@ export default function AdminDashboard() {
   const loadAllStats = async () => {
     try {
       setLoading(true);
-      
+
       const [global, revenue, occupancy, campaigns, top] = await Promise.all([
         platformStatsService.getGlobalStats(),
         platformStatsService.getRevenueStats(),
         platformStatsService.getOccupancyStats(),
         platformStatsService.getCampaignsPerformance(),
-        platformStatsService.getTopScreens(5)
+        platformStatsService.getTopScreens(5),
       ]);
-      
+
       setGlobalStats(global);
       setRevenueStats(revenue);
       setOccupancyStats(occupancy);
@@ -69,7 +69,7 @@ export default function AdminDashboard() {
       style: 'currency',
       currency: 'TND',
       minimumFractionDigits: 2,
-      maximumFractionDigits: 2
+      maximumFractionDigits: 2,
     }).format(amount);
   };
 
@@ -102,9 +102,7 @@ export default function AdminDashboard() {
   return (
     <AdminLayout title="Tableau de Bord">
       <div className="mb-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">
-          Vue d'ensemble de la plateforme
-        </h2>
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Vue d'ensemble de la plateforme</h2>
         <p className="text-gray-600">
           Bienvenue, {admin.first_name} {admin.last_name}. Voici les chiffres clés de TooDooh.
         </p>
@@ -183,7 +181,9 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Total</p>
-                  <p className="text-2xl font-bold text-gray-900">{globalStats?.total_users || 0}</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {globalStats?.total_users || 0}
+                  </p>
                 </div>
                 <Users className="h-8 w-8 text-gray-400" />
               </div>
@@ -195,7 +195,9 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">En attente</p>
-                  <p className="text-2xl font-bold text-yellow-600">{globalStats?.pending_users || 0}</p>
+                  <p className="text-2xl font-bold text-yellow-600">
+                    {globalStats?.pending_users || 0}
+                  </p>
                 </div>
                 <Clock className="h-8 w-8 text-yellow-500" />
               </div>
@@ -204,7 +206,9 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Propriétaires</p>
-                  <p className="text-2xl font-bold text-gray-900">{globalStats?.owners_count || 0}</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {globalStats?.owners_count || 0}
+                  </p>
                 </div>
                 <Monitor className="h-8 w-8 text-blue-500" />
               </div>
@@ -213,7 +217,9 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Annonceurs</p>
-                  <p className="text-2xl font-bold text-gray-900">{globalStats?.advertisers_count || 0}</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {globalStats?.advertisers_count || 0}
+                  </p>
                 </div>
                 <Users className="h-8 w-8 text-purple-500" />
               </div>
@@ -228,7 +234,9 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Total</p>
-                  <p className="text-2xl font-bold text-gray-900">{globalStats?.total_screens || 0}</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {globalStats?.total_screens || 0}
+                  </p>
                 </div>
                 <Monitor className="h-8 w-8 text-gray-400" />
               </div>
@@ -237,7 +245,9 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">En ligne</p>
-                  <p className="text-2xl font-bold text-green-600">{globalStats?.online_screens || 0}</p>
+                  <p className="text-2xl font-bold text-green-600">
+                    {globalStats?.online_screens || 0}
+                  </p>
                 </div>
                 <CheckCircle className="h-8 w-8 text-green-500" />
               </div>
@@ -246,7 +256,9 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Taux d'occupation</p>
-                  <p className="text-2xl font-bold text-gray-900">{occupancyStats?.occupancy_rate || 0}%</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {occupancyStats?.occupancy_rate || 0}%
+                  </p>
                 </div>
                 <Activity className="h-8 w-8 text-[#00B3A6]" />
               </div>
@@ -255,7 +267,9 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Uptime moyen</p>
-                  <p className="text-2xl font-bold text-gray-900">{occupancyStats?.average_uptime || 0}%</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {occupancyStats?.average_uptime || 0}%
+                  </p>
                 </div>
                 <CheckCircle className="h-8 w-8 text-blue-500" />
               </div>
@@ -276,7 +290,9 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Total</p>
-                  <p className="text-2xl font-bold text-gray-900">{campaignsPerf?.total_campaigns || 0}</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {campaignsPerf?.total_campaigns || 0}
+                  </p>
                 </div>
                 <Video className="h-8 w-8 text-gray-400" />
               </div>
@@ -288,7 +304,9 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Actives</p>
-                  <p className="text-2xl font-bold text-green-600">{campaignsPerf?.active_campaigns || 0}</p>
+                  <p className="text-2xl font-bold text-green-600">
+                    {campaignsPerf?.active_campaigns || 0}
+                  </p>
                 </div>
                 <CheckCircle className="h-8 w-8 text-green-500" />
               </div>
@@ -297,7 +315,9 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Vues totales</p>
-                  <p className="text-2xl font-bold text-gray-900">{campaignsPerf?.total_views?.toLocaleString('fr-FR') || 0}</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {campaignsPerf?.total_views?.toLocaleString('fr-FR') || 0}
+                  </p>
                 </div>
                 <Eye className="h-8 w-8 text-blue-500" />
               </div>
@@ -326,7 +346,9 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Vidéos totales</p>
-                  <p className="text-2xl font-bold text-gray-900">{globalStats?.total_videos || 0}</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {globalStats?.total_videos || 0}
+                  </p>
                 </div>
                 <Video className="h-8 w-8 text-gray-400" />
               </div>
@@ -338,7 +360,9 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">À valider</p>
-                  <p className="text-2xl font-bold text-yellow-600">{globalStats?.pending_videos || 0}</p>
+                  <p className="text-2xl font-bold text-yellow-600">
+                    {globalStats?.pending_videos || 0}
+                  </p>
                 </div>
                 <Clock className="h-8 w-8 text-yellow-500" />
               </div>
@@ -350,7 +374,9 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Événements</p>
-                  <p className="text-2xl font-bold text-gray-900">{globalStats?.total_events || 0}</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {globalStats?.total_events || 0}
+                  </p>
                 </div>
                 <Calendar className="h-8 w-8 text-gray-400" />
               </div>
@@ -359,7 +385,9 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">À venir</p>
-                  <p className="text-2xl font-bold text-blue-600">{globalStats?.upcoming_events || 0}</p>
+                  <p className="text-2xl font-bold text-blue-600">
+                    {globalStats?.upcoming_events || 0}
+                  </p>
                 </div>
                 <Calendar className="h-8 w-8 text-blue-500" />
               </div>
@@ -424,16 +452,28 @@ export default function AdminDashboard() {
 
       {/* Top écrans performants */}
       <div className="mb-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">⭐ Top 5 Écrans les Plus Rentables</h3>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+          ⭐ Top 5 Écrans les Plus Rentables
+        </h3>
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rang</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Écran</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Propriétaire</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Revenu Total</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Revenu Mensuel</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Rang
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Écran
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Propriétaire
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Revenu Total
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  Revenu Mensuel
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -441,7 +481,9 @@ export default function AdminDashboard() {
                 <tr key={screen.screen_id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      {idx === 0 && <Star className="h-5 w-5 text-yellow-500 fill-yellow-500 mr-2" />}
+                      {idx === 0 && (
+                        <Star className="h-5 w-5 text-yellow-500 fill-yellow-500 mr-2" />
+                      )}
                       <span className="text-sm font-medium text-gray-900">#{idx + 1}</span>
                     </div>
                   </td>
@@ -479,11 +521,15 @@ export default function AdminDashboard() {
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-600">Vidéos</span>
-              <span className="font-semibold text-gray-900">{globalStats?.pending_videos || 0}</span>
+              <span className="font-semibold text-gray-900">
+                {globalStats?.pending_videos || 0}
+              </span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-600">Campagnes</span>
-              <span className="font-semibold text-gray-900">{globalStats?.pending_campaigns || 0}</span>
+              <span className="font-semibold text-gray-900">
+                {globalStats?.pending_campaigns || 0}
+              </span>
             </div>
           </div>
         </div>
@@ -496,11 +542,15 @@ export default function AdminDashboard() {
           <div className="space-y-3">
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-600">Taux d'occupation</span>
-              <span className="font-semibold text-[#00B3A6]">{occupancyStats?.occupancy_rate || 0}%</span>
+              <span className="font-semibold text-[#00B3A6]">
+                {occupancyStats?.occupancy_rate || 0}%
+              </span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-600">Disponibles</span>
-              <span className="font-semibold text-gray-900">{occupancyStats?.available_screens || 0}</span>
+              <span className="font-semibold text-gray-900">
+                {occupancyStats?.available_screens || 0}
+              </span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-600">Revenu moyen/écran</span>
@@ -519,7 +569,9 @@ export default function AdminDashboard() {
           <div className="space-y-3">
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-600">Revenus</span>
-              <span className="font-semibold text-green-600">+{revenueStats?.revenue_growth_rate || 0}%</span>
+              <span className="font-semibold text-green-600">
+                +{revenueStats?.revenue_growth_rate || 0}%
+              </span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-600">Nouveaux utilisateurs</span>
@@ -527,7 +579,9 @@ export default function AdminDashboard() {
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-600">Nouvelles campagnes</span>
-              <span className="font-semibold text-gray-900">{globalStats?.pending_campaigns || 0}</span>
+              <span className="font-semibold text-gray-900">
+                {globalStats?.pending_campaigns || 0}
+              </span>
             </div>
           </div>
         </div>
@@ -541,6 +595,6 @@ function formatCurrency(amount: number): string {
     style: 'currency',
     currency: 'TND',
     minimumFractionDigits: 2,
-    maximumFractionDigits: 2
+    maximumFractionDigits: 2,
   }).format(amount);
 }

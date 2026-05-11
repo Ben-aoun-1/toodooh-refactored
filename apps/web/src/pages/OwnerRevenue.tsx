@@ -46,9 +46,7 @@ export default function OwnerRevenue() {
 
   const [showPaymentMethodModal, setShowPaymentMethodModal] = useState(false);
   const [showBankDetailsModal, setShowBankDetailsModal] = useState(false);
-  const [registeredPaymentLabel, setRegisteredPaymentLabel] = useState(
-    'RIB Mohamed Ben Mohamed'
-  );
+  const [registeredPaymentLabel, setRegisteredPaymentLabel] = useState('RIB Mohamed Ben Mohamed');
 
   const [bankFullName, setBankFullName] = useState('');
   const [bankRib, setBankRib] = useState('');
@@ -174,7 +172,8 @@ export default function OwnerRevenue() {
         const { data: signedData, error: signedError } = await supabase.storage
           .from('registres')
           .createSignedUrl(path, 604800);
-        if (signedError || !signedData?.signedUrl) throw signedError || new Error('URL signée introuvable');
+        if (signedError || !signedData?.signedUrl)
+          throw signedError || new Error('URL signée introuvable');
 
         uploadedPath = path;
         signedUrl = signedData.signedUrl;
@@ -210,7 +209,7 @@ export default function OwnerRevenue() {
 
   const transactions: OwnerTransactionRow[] = useMemo(() => {
     const sorted = [...periodRevenues].sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
     );
     return sorted.map((r, index) => ({
       id: r.id,
@@ -616,7 +615,10 @@ export default function OwnerRevenue() {
               <div className="rounded-xl border border-gray-200 bg-gray-50/80 px-4 py-3 flex gap-3 items-start">
                 <Building2 className="w-5 h-5 text-gray-500 shrink-0 mt-0.5" strokeWidth={1.75} />
                 <div className="flex-1 min-w-0">
-                  <label htmlFor="bank-rib" className="block text-xs font-medium text-gray-600 mb-1.5">
+                  <label
+                    htmlFor="bank-rib"
+                    className="block text-xs font-medium text-gray-600 mb-1.5"
+                  >
                     RIB
                   </label>
                   <input
@@ -634,7 +636,10 @@ export default function OwnerRevenue() {
               <div className="rounded-xl border border-gray-200 bg-gray-50/80 px-4 py-3 flex gap-3 items-start">
                 <Building2 className="w-5 h-5 text-gray-500 shrink-0 mt-0.5" strokeWidth={1.75} />
                 <div className="flex-1 min-w-0">
-                  <label htmlFor="bank-iban" className="block text-xs font-medium text-gray-600 mb-1.5">
+                  <label
+                    htmlFor="bank-iban"
+                    className="block text-xs font-medium text-gray-600 mb-1.5"
+                  >
                     IBAN
                   </label>
                   <input

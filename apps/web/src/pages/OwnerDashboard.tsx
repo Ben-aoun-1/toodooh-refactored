@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
+import {
   Plus,
   AlertTriangle,
   CheckCircle,
@@ -29,7 +29,7 @@ import {
   Megaphone,
   Eye,
   Building2,
-  Wallet
+  Wallet,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { authService } from '../services/auth.service';
@@ -67,7 +67,7 @@ const SHOW_OWNER_DASHBOARD_LEGACY_SECTIONS = false;
 export default function OwnerDashboard() {
   const navigate = useNavigate();
   const { user, profileType, needsApproval, validationStatus } = useAuthStore();
-  
+
   // Fonction pour déterminer si les fonctionnalités sont désactivées
   const isDisabled = needsApproval && validationStatus === 'pending';
   const [loading, setLoading] = useState(true);
@@ -82,7 +82,7 @@ export default function OwnerDashboard() {
     growthRate: 0,
     activeScreens: 0,
     totalScreens: 0,
-    loyaltyPoints: 0
+    loyaltyPoints: 0,
   });
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [accountStatus, setAccountStatus] = useState<'active' | 'pending' | 'suspended'>('active');
@@ -92,7 +92,7 @@ export default function OwnerDashboard() {
   const [showAddScreen, setShowAddScreen] = useState(false);
   const [selectedEstablishment, setSelectedEstablishment] = useState<string | null>(null);
   const [ownerNotifications, setOwnerNotifications] = useState<OwnerDashboardNotification[]>([]);
-  
+
   // ✅ OPTIMISATION : useRef pour éviter les rechargements multiples
   const hasLoadedData = useRef(false);
 
@@ -101,7 +101,7 @@ export default function OwnerDashboard() {
     try {
       console.log('=== CHARGEMENT DES DONNÉES DU DASHBOARD ===');
       setLoading(true);
-      
+
       // Charger le profil utilisateur
       const profileData = await authService.getBusinessProfile();
       setProfile(profileData);
@@ -114,7 +114,7 @@ export default function OwnerDashboard() {
       } catch {
         setBusinessSectorName('');
       }
-      
+
       // Charger les écrans depuis la base de données
       const screensData = await screensService.getScreens();
       console.log('Écrans chargés:', screensData);
@@ -123,46 +123,46 @@ export default function OwnerDashboard() {
       // Charger les statistiques de revenus complètes
       const revenueStats = await revenueService.getRevenueStats();
       console.log('Statistiques de revenus:', revenueStats);
-      
+
       // Utiliser directement les statistiques du service
       setStats(revenueStats);
 
       // Générer les alertes basées sur les données réelles
       const generatedAlerts: Alert[] = [];
-      
+
       // Alerte pour les écrans en maintenance
-      const maintenanceScreens = screensData.filter(screen => screen.status === 'maintenance');
+      const maintenanceScreens = screensData.filter((screen) => screen.status === 'maintenance');
       if (maintenanceScreens.length > 0) {
         generatedAlerts.push({
           id: 'maintenance',
           type: 'warning',
           title: 'Écrans en maintenance',
           message: `${maintenanceScreens.length} écran(s) sont actuellement en maintenance.`,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
       }
 
       // Alerte pour les écrans inactifs
-      const inactiveScreens = screensData.filter(screen => screen.status === 'inactive');
+      const inactiveScreens = screensData.filter((screen) => screen.status === 'inactive');
       if (inactiveScreens.length > 0) {
         generatedAlerts.push({
           id: 'inactive',
           type: 'info',
           title: 'Écrans inactifs',
           message: `${inactiveScreens.length} écran(s) sont inactifs et ne génèrent pas de revenus.`,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
       }
 
       // Alerte pour les écrans indisponibles
-      const unavailableScreens = screensData.filter(screen => screen.status === 'unavailable');
+      const unavailableScreens = screensData.filter((screen) => screen.status === 'unavailable');
       if (unavailableScreens.length > 0) {
         generatedAlerts.push({
           id: 'unavailable',
           type: 'warning',
           title: 'Écrans indisponibles',
           message: `${unavailableScreens.length} écran(s) sont temporairement indisponibles.`,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
       }
 
@@ -173,7 +173,7 @@ export default function OwnerDashboard() {
           type: 'success',
           title: 'Revenus générés',
           message: `Vos écrans ont généré ${revenueStats.monthlyRevenue.toLocaleString('fr-TN', { style: 'currency', currency: 'TND' })} ce mois-ci.`,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
       }
 
@@ -184,7 +184,7 @@ export default function OwnerDashboard() {
           type: 'info',
           title: 'Points fidélité disponibles',
           message: `Vous avez ${revenueStats.loyaltyPoints} points fidélité à échanger dans le catalogue.`,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
       }
 
@@ -193,7 +193,9 @@ export default function OwnerDashboard() {
       const currentUser = await authService.getCurrentUser();
       if (currentUser?.id) {
         try {
-          const pendingCampaigns = await campaignOwnerApprovalService.getPendingCampaigns(currentUser.id);
+          const pendingCampaigns = await campaignOwnerApprovalService.getPendingCampaigns(
+            currentUser.id,
+          );
           const mappedNotifications: OwnerDashboardNotification[] = (pendingCampaigns || [])
             .filter((c) => (c.approval_status || 'pending') === 'pending')
             .map((c) => ({
@@ -207,7 +209,10 @@ export default function OwnerDashboard() {
             }));
           setOwnerNotifications(mappedNotifications);
         } catch (notificationError) {
-          console.error('Erreur chargement notifications dashboard propriétaire:', notificationError);
+          console.error(
+            'Erreur chargement notifications dashboard propriétaire:',
+            notificationError,
+          );
           setOwnerNotifications([]);
         }
       } else {
@@ -216,7 +221,6 @@ export default function OwnerDashboard() {
 
       console.log('✅ Données du dashboard chargées avec succès');
       hasLoadedData.current = true; // ✅ Marquer comme chargé
-      
     } catch (error) {
       console.error('❌ Erreur lors du chargement des données:', error);
       toast.error('Erreur lors du chargement des données');
@@ -224,7 +228,6 @@ export default function OwnerDashboard() {
       setLoading(false);
     }
   }, []); // ✅ Pas de dépendances - la fonction ne change jamais
-
 
   // ✅ OPTIMISATION : useEffect séparé pour l'authentification
   useEffect(() => {
@@ -370,15 +373,25 @@ export default function OwnerDashboard() {
     return `il y a ${days} j`;
   };
 
-  const ownerKpi = useMemo(() => ({
-    campaignsDiffused: 0,
-    impressions: 0,
-    totalDurationSeconds: 0,
-  }), []);
+  const ownerKpi = useMemo(
+    () => ({
+      campaignsDiffused: 0,
+      impressions: 0,
+      totalDurationSeconds: 0,
+    }),
+    [],
+  );
 
   const establishmentsWithStatus = useMemo(() => {
     const list = Array.isArray(screens) ? screens : [];
-    const byLocation = new Map<string, { name: string; screens: Screen[]; status: 'active' | 'inactive' | 'maintenance' | 'unavailable' }>();
+    const byLocation = new Map<
+      string,
+      {
+        name: string;
+        screens: Screen[];
+        status: 'active' | 'inactive' | 'maintenance' | 'unavailable';
+      }
+    >();
     list.forEach((s) => {
       const loc = s.location || s.name || 'Établissement';
       if (!byLocation.has(loc)) {
@@ -395,9 +408,16 @@ export default function OwnerDashboard() {
         const entry = byLocation.get(loc)!;
         entry.screens.push(s);
         if (s.status === 'active') entry.status = 'active';
-        else if (s.status === 'maintenance' && entry.status !== 'active') entry.status = 'maintenance';
-        else if (s.status === 'unavailable' && entry.status !== 'active' && entry.status !== 'maintenance') entry.status = 'unavailable';
-        else if (entry.status !== 'active' && entry.status !== 'maintenance') entry.status = 'inactive';
+        else if (s.status === 'maintenance' && entry.status !== 'active')
+          entry.status = 'maintenance';
+        else if (
+          s.status === 'unavailable' &&
+          entry.status !== 'active' &&
+          entry.status !== 'maintenance'
+        )
+          entry.status = 'unavailable';
+        else if (entry.status !== 'active' && entry.status !== 'maintenance')
+          entry.status = 'inactive';
       }
     });
     return Array.from(byLocation.values());
@@ -419,8 +439,8 @@ export default function OwnerDashboard() {
         id: screen.id,
         establishmentName: est.name,
         screenName: screen.name || 'Écran',
-        status: screen.status
-      }))
+        status: screen.status,
+      })),
     );
   }, [establishmentsWithStatus, selectedEstablishment]);
 
@@ -429,13 +449,13 @@ export default function OwnerDashboard() {
     return [...ownerNotifications].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
   }, [ownerNotifications]);
   const hasOwnerLegalDocument = Boolean(
-    profile?.cin_doc_url || profile?.registration_doc_path || profile?.registration_doc_url
+    profile?.cin_doc_url || profile?.registration_doc_path || profile?.registration_doc_url,
   );
   const hasOwnerBankDetails = Boolean(
     profile?.bank_account_holder &&
-      profile?.bank_rib &&
-      profile?.bank_iban &&
-      (profile?.bank_doc_path || profile?.bank_doc_url)
+    profile?.bank_rib &&
+    profile?.bank_iban &&
+    (profile?.bank_doc_path || profile?.bank_doc_url),
   );
   const isOwnerAccountActive = validationStatus === 'approved' && profile?.is_active !== false;
   const hideOwnerGettingStartedBlock =
@@ -457,7 +477,7 @@ export default function OwnerDashboard() {
       <div className="flex h-screen">
         {/* Navigation */}
         <OwnerNavigation isDisabled={isDisabled} />
-        
+
         {/* Main content */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Header (même design que annonceur) */}
@@ -478,35 +498,64 @@ export default function OwnerDashboard() {
               </div>
 
               <div className="flex items-center gap-2 flex-shrink-0">
-                  {/* Message de validation en attente ou badge actif */}
-                  {needsApproval && validationStatus === 'pending' ? (
-                    // En attente de validation admin
-                    <div className="flex items-center px-4 py-2 bg-blue-100 text-blue-800 rounded-lg border border-blue-300">
-                      <svg className="h-4 w-4 mr-2 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      <span className="text-sm font-medium">Votre compte est en cours de validation par un administrateur</span>
-                    </div>
-                  ) : !needsApproval && validationStatus === 'approved' ? (
-                    // Compte validé
-                    <div className="flex items-center px-4 py-2 bg-green-100 text-green-800 rounded-lg border border-green-300">
-                      <svg className="h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <span className="text-sm font-medium">Compte actif</span>
-                    </div>
-                  ) : null}
-                  
-                  <OwnerNotificationsBell userId={user?.id} />
-                  
-                  <button 
-                    onClick={() => navigate('/my-account')}
-                    className="hidden p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-600"
-                    aria-hidden
-                  >
-                    <Settings className="h-5 w-5" />
-                  </button>
+                {/* Message de validation en attente ou badge actif */}
+                {needsApproval && validationStatus === 'pending' ? (
+                  // En attente de validation admin
+                  <div className="flex items-center px-4 py-2 bg-blue-100 text-blue-800 rounded-lg border border-blue-300">
+                    <svg
+                      className="h-4 w-4 mr-2 animate-spin"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    <span className="text-sm font-medium">
+                      Votre compte est en cours de validation par un administrateur
+                    </span>
+                  </div>
+                ) : !needsApproval && validationStatus === 'approved' ? (
+                  // Compte validé
+                  <div className="flex items-center px-4 py-2 bg-green-100 text-green-800 rounded-lg border border-green-300">
+                    <svg
+                      className="h-4 w-4 mr-2"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                    <span className="text-sm font-medium">Compte actif</span>
+                  </div>
+                ) : null}
+
+                <OwnerNotificationsBell userId={user?.id} />
+
+                <button
+                  onClick={() => navigate('/my-account')}
+                  className="hidden p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-600"
+                  aria-hidden
+                >
+                  <Settings className="h-5 w-5" />
+                </button>
               </div>
             </div>
           </header>
@@ -518,7 +567,9 @@ export default function OwnerDashboard() {
                 <div className="rounded-2xl bg-gradient-to-tr from-[#3db39a] via-[#1a6b5a] to-[#0a3d32] p-8 sm:p-10 shadow-lg min-h-[160px] sm:min-h-[180px] flex flex-col justify-center">
                   <p className="text-lg font-medium text-white/95 mb-3">Revenus</p>
                   <p className="text-3xl sm:text-4xl font-bold text-white tracking-tight tabular-nums font-sans">
-                    {loading ? '...' : `${(stats.totalRevenue ?? 0).toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} TND`}
+                    {loading
+                      ? '...'
+                      : `${(stats.totalRevenue ?? 0).toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} TND`}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-[#E1E4EA] bg-white p-6 sm:p-8 shadow-lg min-h-[160px] sm:min-h-[180px] flex flex-row items-center gap-5 sm:gap-6">
@@ -531,7 +582,9 @@ export default function OwnerDashboard() {
                   </div>
                   <div className="flex-1 w-full min-w-0 flex flex-col justify-center gap-4">
                     <div className="w-full flex flex-col gap-1.5">
-                      <span className="text-xs font-semibold text-gray-600 leading-tight">Catégorie</span>
+                      <span className="text-xs font-semibold text-gray-600 leading-tight">
+                        Catégorie
+                      </span>
                       <div className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-gray-200 text-gray-900 text-sm bg-gray-50/80 flex items-center">
                         {loading ? (
                           <span className="text-gray-400">…</span>
@@ -542,7 +595,9 @@ export default function OwnerDashboard() {
                     </div>
                     <div className="w-full flex flex-col gap-1.5">
                       <span className="text-xs font-semibold text-gray-600 leading-tight">
-                        {profile?.profile_type === 'individual_owner' ? 'Zone géographique' : 'Taille du réseau'}
+                        {profile?.profile_type === 'individual_owner'
+                          ? 'Zone géographique'
+                          : 'Taille du réseau'}
                       </span>
                       <div className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-gray-200 text-gray-900 text-sm bg-gray-50/80 flex items-center">
                         {loading ? (
@@ -550,8 +605,12 @@ export default function OwnerDashboard() {
                         ) : (
                           <span className="font-medium">
                             {profile?.profile_type === 'individual_owner'
-                              ? (profile?.zone?.trim() ? profile.zone : '—')
-                              : (profile?.company_size?.trim() ? profile.company_size : '—')}
+                              ? profile?.zone?.trim()
+                                ? profile.zone
+                                : '—'
+                              : profile?.company_size?.trim()
+                                ? profile.company_size
+                                : '—'}
                           </span>
                         )}
                       </div>
@@ -581,10 +640,30 @@ export default function OwnerDashboard() {
                   ) : (
                     establishmentsWithStatus.map((est, idx) => {
                       const statusConfig = {
-                        active: { label: 'Actif', bg: 'bg-[#e8f6ed]', text: 'text-[#16a34a]', dot: 'bg-[#16a34a]' },
-                        inactive: { label: 'Inactif', bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-500' },
-                        maintenance: { label: 'En panne', bg: 'bg-amber-50', text: 'text-amber-600', dot: 'bg-amber-500' },
-                        unavailable: { label: 'En panne', bg: 'bg-amber-50', text: 'text-amber-600', dot: 'bg-amber-500' },
+                        active: {
+                          label: 'Actif',
+                          bg: 'bg-[#e8f6ed]',
+                          text: 'text-[#16a34a]',
+                          dot: 'bg-[#16a34a]',
+                        },
+                        inactive: {
+                          label: 'Inactif',
+                          bg: 'bg-red-50',
+                          text: 'text-red-600',
+                          dot: 'bg-red-500',
+                        },
+                        maintenance: {
+                          label: 'En panne',
+                          bg: 'bg-amber-50',
+                          text: 'text-amber-600',
+                          dot: 'bg-amber-500',
+                        },
+                        unavailable: {
+                          label: 'En panne',
+                          bg: 'bg-amber-50',
+                          text: 'text-amber-600',
+                          dot: 'bg-amber-500',
+                        },
                       };
                       const sc = statusConfig[est.status];
                       const isSelected = selectedEstablishment === est.name;
@@ -592,15 +671,23 @@ export default function OwnerDashboard() {
                         <button
                           key={idx}
                           type="button"
-                          onClick={() => setSelectedEstablishment((prev) => (prev === est.name ? null : est.name))}
+                          onClick={() =>
+                            setSelectedEstablishment((prev) =>
+                              prev === est.name ? null : est.name,
+                            )
+                          }
                           className={`rounded-xl border bg-white p-4 shadow-sm flex items-center justify-between gap-3 text-left transition-colors ${
-                            isSelected ? 'border-[#76E6AB] ring-1 ring-[#76E6AB]/60' : 'border-gray-200 hover:border-gray-300'
+                            isSelected
+                              ? 'border-[#76E6AB] ring-1 ring-[#76E6AB]/60'
+                              : 'border-gray-200 hover:border-gray-300'
                           }`}
                         >
                           <div className="min-w-0 flex-1">
                             <p className="font-medium text-gray-900 truncate">{est.name}</p>
                           </div>
-                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium flex-shrink-0 ${sc.bg} ${sc.text}`}>
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium flex-shrink-0 ${sc.bg} ${sc.text}`}
+                          >
                             <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
                             {sc.label}
                           </span>
@@ -614,18 +701,43 @@ export default function OwnerDashboard() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                       {establishmentScreenRows.map((row) => {
                         const statusConfig = {
-                          active: { label: 'Active', bg: 'bg-[#e8f6ed]', text: 'text-[#16a34a]', dot: 'bg-[#16a34a]' },
-                          inactive: { label: 'Inactif', bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-500' },
-                          maintenance: { label: 'En panne', bg: 'bg-amber-50', text: 'text-amber-600', dot: 'bg-amber-500' },
-                          unavailable: { label: 'En panne', bg: 'bg-amber-50', text: 'text-amber-600', dot: 'bg-amber-500' },
+                          active: {
+                            label: 'Active',
+                            bg: 'bg-[#e8f6ed]',
+                            text: 'text-[#16a34a]',
+                            dot: 'bg-[#16a34a]',
+                          },
+                          inactive: {
+                            label: 'Inactif',
+                            bg: 'bg-red-50',
+                            text: 'text-red-600',
+                            dot: 'bg-red-500',
+                          },
+                          maintenance: {
+                            label: 'En panne',
+                            bg: 'bg-amber-50',
+                            text: 'text-amber-600',
+                            dot: 'bg-amber-500',
+                          },
+                          unavailable: {
+                            label: 'En panne',
+                            bg: 'bg-amber-50',
+                            text: 'text-amber-600',
+                            dot: 'bg-amber-500',
+                          },
                         } as const;
                         const sc = statusConfig[row.status] || statusConfig.inactive;
                         return (
-                          <div key={row.id} className="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm flex items-center justify-between gap-3">
+                          <div
+                            key={row.id}
+                            className="rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm flex items-center justify-between gap-3"
+                          >
                             <p className="font-medium text-gray-900 truncate">
                               {row.establishmentName} {row.screenName}
                             </p>
-                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium flex-shrink-0 ${sc.bg} ${sc.text}`}>
+                            <span
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium flex-shrink-0 ${sc.bg} ${sc.text}`}
+                            >
                               <span className={`w-1.5 h-1.5 rounded-full ${sc.dot}`} />
                               {sc.label}
                             </span>
@@ -641,19 +753,31 @@ export default function OwnerDashboard() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                 <div className="rounded-xl p-5 min-h-[120px] flex flex-col bg-[#fdfaed] border border-[#edcc7a]/30">
                   <div className="flex items-center justify-between gap-2 mb-3 min-h-[1.25rem]">
-                    <span className="text-xs font-semibold text-[#c9a227] whitespace-nowrap truncate min-w-0">Revenus cumulés</span>
+                    <span className="text-xs font-semibold text-[#c9a227] whitespace-nowrap truncate min-w-0">
+                      Revenus cumulés
+                    </span>
                     <DollarSign className="h-5 w-5 text-[#c9a227] flex-shrink-0" />
                   </div>
                   <p className="text-3xl font-bold text-[#1a1a1a] tabular-nums font-sans mt-auto">
-                    {loading ? '...' : (stats.totalRevenue ?? 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    {loading
+                      ? '...'
+                      : (stats.totalRevenue ?? 0).toLocaleString('fr-FR', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
                   </p>
-                  <p className={`text-xs mt-1 ${(stats.growthRate ?? 0) >= 0 ? 'text-[#16a34a]' : 'text-red-500'}`}>
-                    {(stats.growthRate ?? 0) >= 0 ? '+' : ''}{(stats.growthRate ?? 0)}% Année précédente
+                  <p
+                    className={`text-xs mt-1 ${(stats.growthRate ?? 0) >= 0 ? 'text-[#16a34a]' : 'text-red-500'}`}
+                  >
+                    {(stats.growthRate ?? 0) >= 0 ? '+' : ''}
+                    {stats.growthRate ?? 0}% Année précédente
                   </p>
                 </div>
                 <div className="rounded-xl p-5 min-h-[120px] flex flex-col bg-[#e8f6ed] border border-[#85cc95]/30">
                   <div className="flex items-center justify-between gap-2 mb-3 min-h-[1.25rem]">
-                    <span className="text-xs font-semibold text-[#85cc95] whitespace-nowrap truncate min-w-0">Campagnes diffusées</span>
+                    <span className="text-xs font-semibold text-[#85cc95] whitespace-nowrap truncate min-w-0">
+                      Campagnes diffusées
+                    </span>
                     <Megaphone className="h-5 w-5 text-[#85cc95] flex-shrink-0" />
                   </div>
                   <p className="text-3xl font-bold text-[#1a1a1a] tabular-nums font-sans mt-auto">
@@ -663,17 +787,23 @@ export default function OwnerDashboard() {
                 </div>
                 <div className="rounded-xl p-5 min-h-[120px] flex flex-col bg-[#edf1fe] border border-[#6e82f6]/30">
                   <div className="flex items-center justify-between gap-2 mb-3 min-h-[1.25rem]">
-                    <span className="text-xs font-semibold text-[#6e82f6] whitespace-nowrap truncate min-w-0">Impressions générées</span>
+                    <span className="text-xs font-semibold text-[#6e82f6] whitespace-nowrap truncate min-w-0">
+                      Impressions générées
+                    </span>
                     <Eye className="h-5 w-5 text-[#6e82f6] flex-shrink-0" />
                   </div>
                   <p className="text-3xl font-bold text-[#1a1a1a] tabular-nums font-sans mt-auto">
-                    {loading ? '...' : ownerKpi.impressions.toLocaleString('fr-FR').replace(/\s/g, ' ')}
+                    {loading
+                      ? '...'
+                      : ownerKpi.impressions.toLocaleString('fr-FR').replace(/\s/g, ' ')}
                   </p>
                   <p className="text-xs mt-1 text-red-500">-22% Année précédente</p>
                 </div>
                 <div className="rounded-xl p-5 min-h-[120px] flex flex-col bg-[#eeecfd] border border-[#a08cf0]/30">
                   <div className="flex items-center justify-between gap-2 mb-3 min-h-[1.25rem]">
-                    <span className="text-xs font-semibold text-[#a08cf0] whitespace-nowrap truncate min-w-0">Durée totale de diffusion</span>
+                    <span className="text-xs font-semibold text-[#a08cf0] whitespace-nowrap truncate min-w-0">
+                      Durée totale de diffusion
+                    </span>
                     <Monitor className="h-5 w-5 text-[#a08cf0] flex-shrink-0" />
                   </div>
                   <p className="text-3xl font-bold text-[#1a1a1a] tabular-nums font-sans mt-auto font-mono">
@@ -685,80 +815,78 @@ export default function OwnerDashboard() {
 
               {/* Pour bien commencer (propriétaire) */}
               {!hideOwnerGettingStartedBlock && (
-              <div className="rounded-2xl border border-gray-200 bg-[#F8FAFC] p-5 shadow-sm">
-                <h2 className="text-lg font-bold text-gray-900">
-                  Pour bien commencer
-                </h2>
-                <p className="text-sm text-gray-600 mt-1 mb-4">
-                  Suivez ces étapes pour configurer votre compte
-                </p>
+                <div className="rounded-2xl border border-gray-200 bg-[#F8FAFC] p-5 shadow-sm">
+                  <h2 className="text-lg font-bold text-gray-900">Pour bien commencer</h2>
+                  <p className="text-sm text-gray-600 mt-1 mb-4">
+                    Suivez ces étapes pour configurer votre compte
+                  </p>
 
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                  <div className="rounded-2xl border border-[#E4E7EC] bg-white p-5 flex items-start gap-4">
-                    {hasOwnerLegalDocument ? (
-                      <div className="w-10 h-10 rounded-full bg-[#60BA76] flex items-center justify-center flex-shrink-0">
-                        <CheckCircle className="h-5 w-5 text-white" />
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                    <div className="rounded-2xl border border-[#E4E7EC] bg-white p-5 flex items-start gap-4">
+                      {hasOwnerLegalDocument ? (
+                        <div className="w-10 h-10 rounded-full bg-[#60BA76] flex items-center justify-center flex-shrink-0">
+                          <CheckCircle className="h-5 w-5 text-white" />
+                        </div>
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-[#EFF5F2] text-[#171717] flex items-center justify-center text-sm font-semibold flex-shrink-0">
+                          1
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-xl font-semibold text-gray-900">
+                          Complétez votre profil
+                        </h3>
+                        <p className="text-sm text-gray-600 mt-1">Uploadez votre document légal</p>
+                        <button
+                          type="button"
+                          onClick={() => navigate('/owner-settings?tab=entreprise&sub=documents')}
+                          disabled={hasOwnerLegalDocument}
+                          className={`mt-4 inline-flex items-center justify-center px-5 py-2 rounded-xl text-sm font-medium transition-colors ${
+                            hasOwnerLegalDocument
+                              ? 'bg-[#F2F4F7] text-[#98A2B3] cursor-not-allowed'
+                              : 'bg-white border border-[#D0D5DD] text-[#344054] hover:bg-gray-50'
+                          }`}
+                        >
+                          {hasOwnerLegalDocument ? 'OK' : 'Upload'}
+                        </button>
                       </div>
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-[#EFF5F2] text-[#171717] flex items-center justify-center text-sm font-semibold flex-shrink-0">
-                        1
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-xl font-semibold text-gray-900">
-                        Complétez votre profil
-                      </h3>
-                      <p className="text-sm text-gray-600 mt-1">
-                        Uploadez votre document légal
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => navigate('/owner-settings?tab=entreprise&sub=documents')}
-                        disabled={hasOwnerLegalDocument}
-                        className={`mt-4 inline-flex items-center justify-center px-5 py-2 rounded-xl text-sm font-medium transition-colors ${
-                          hasOwnerLegalDocument
-                            ? 'bg-[#F2F4F7] text-[#98A2B3] cursor-not-allowed'
-                            : 'bg-white border border-[#D0D5DD] text-[#344054] hover:bg-gray-50'
-                        }`}
-                      >
-                        {hasOwnerLegalDocument ? 'OK' : 'Upload'}
-                      </button>
                     </div>
-                  </div>
 
-                  <div className="rounded-2xl border border-[#E4E7EC] bg-white p-5 flex items-start gap-4">
-                    {hasOwnerBankDetails ? (
-                      <div className="w-10 h-10 rounded-full bg-[#60BA76] flex items-center justify-center flex-shrink-0">
-                        <CheckCircle className="h-5 w-5 text-white" />
+                    <div className="rounded-2xl border border-[#E4E7EC] bg-white p-5 flex items-start gap-4">
+                      {hasOwnerBankDetails ? (
+                        <div className="w-10 h-10 rounded-full bg-[#60BA76] flex items-center justify-center flex-shrink-0">
+                          <CheckCircle className="h-5 w-5 text-white" />
+                        </div>
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-[#EFF5F2] text-[#171717] flex items-center justify-center text-sm font-semibold">
+                          2
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-xl font-semibold text-gray-900">
+                          Ajouter les coordonnées bancaires de votre établissement
+                        </h3>
+                        <p className="text-sm text-gray-600 mt-1">
+                          Configurez votre moyen de versement
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            navigate('/owner-settings?tab=entreprise&sub=coordonnees-bancaires')
+                          }
+                          disabled={hasOwnerBankDetails}
+                          className={`mt-4 inline-flex items-center justify-center px-5 py-2 rounded-xl text-sm font-medium transition-colors ${
+                            hasOwnerBankDetails
+                              ? 'bg-[#F2F4F7] text-[#98A2B3] cursor-not-allowed'
+                              : 'bg-white border border-[#D0D5DD] text-[#344054] hover:bg-gray-50'
+                          }`}
+                        >
+                          {hasOwnerBankDetails ? 'OK' : 'Ajouter'}
+                        </button>
                       </div>
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-[#EFF5F2] text-[#171717] flex items-center justify-center text-sm font-semibold">
-                        2
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-xl font-semibold text-gray-900">
-                        Ajouter les coordonnées bancaires de votre établissement
-                      </h3>
-                      <p className="text-sm text-gray-600 mt-1">
-                        Configurez votre moyen de versement
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => navigate('/owner-settings?tab=entreprise&sub=coordonnees-bancaires')}
-                        disabled={hasOwnerBankDetails}
-                        className={`mt-4 inline-flex items-center justify-center px-5 py-2 rounded-xl text-sm font-medium transition-colors ${
-                          hasOwnerBankDetails
-                            ? 'bg-[#F2F4F7] text-[#98A2B3] cursor-not-allowed'
-                            : 'bg-white border border-[#D0D5DD] text-[#344054] hover:bg-gray-50'
-                        }`}
-                      >
-                        {hasOwnerBankDetails ? 'OK' : 'Ajouter'}
-                      </button>
                     </div>
                   </div>
                 </div>
-              </div>
               )}
 
               {/* Bloc Notifications propriétaire (dernière notif ou message vide) */}
@@ -809,247 +937,280 @@ export default function OwnerDashboard() {
               </section>
 
               {SHOW_OWNER_DASHBOARD_LEGACY_SECTIONS && (
-              <>
-              {/* Section Mes Écrans */}
-              <div className="mb-8">
-                <h3 className="text-2xl font-bold text-gray-900 mb-4 flex items-center">
-                  <Monitor className="h-6 w-6 text-[#00B3A6] mr-2" />
-                  Mes Écrans
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                  {/* Ajouter un Écran */}
-                  <button
-                    onClick={() => setShowAddScreen(true)}
-                    disabled={isDisabled}
-                    className={`bg-white rounded-xl p-6 shadow-lg transition-all duration-300 border border-gray-200 text-left ${
-                      isDisabled 
-                        ? 'opacity-50 cursor-not-allowed' 
-                        : 'hover:shadow-xl transform hover:-translate-y-1 cursor-pointer group'
-                    }`}
-                  >
-                    <div className="flex items-center justify-center mb-4">
-                      <div className="p-4 rounded-xl bg-gradient-to-br from-[#00B3A6] to-[#00B3A6]/80 shadow-lg group-hover:scale-110 transition-transform">
-                        <Plus className="h-8 w-8 text-white" />
-                      </div>
-                    </div>
-                    <p className="text-sm font-medium text-gray-600 text-center">Enregistrer un nouvel écran</p>
-                  </button>
-
-                  {/* Déclarer Indisponibilité */}
-                  <button
-                    onClick={handleDeclareUnavailability}
-                    disabled={isDisabled}
-                    className={`bg-white rounded-xl p-6 shadow-lg transition-all duration-300 border border-gray-200 text-left ${
-                      isDisabled 
-                        ? 'opacity-50 cursor-not-allowed' 
-                        : 'hover:shadow-xl transform hover:-translate-y-1 cursor-pointer group'
-                    }`}
-                  >
-                    <div className="flex items-center justify-center mb-4">
-                      <div className="p-4 rounded-xl bg-gradient-to-br from-red-500/20 to-red-600/20 border border-red-500/30 shadow-lg group-hover:scale-110 transition-transform">
-                        <CalendarX className="h-8 w-8 text-red-400" />
-                      </div>
-                    </div>
-                    <p className="text-sm font-medium text-gray-600 text-center">Marquer des écrans comme indisponibles</p>
-                  </button>
-
-                  {/* Écrans Actifs */}
-                  <button
-                    onClick={handleNavigateToScreens}
-                    disabled={isDisabled}
-                    className={`bg-white rounded-xl p-6 shadow-lg transition-all duration-300 border border-gray-200 ${
-                      isDisabled 
-                        ? 'opacity-50 cursor-not-allowed' 
-                        : 'hover:shadow-xl transform hover:-translate-y-1 cursor-pointer group'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-600 mb-1">Écrans Actifs</p>
-                        <p className="text-3xl font-bold text-gray-900 group-hover:text-[#00B3A6] transition-colors">{stats.activeScreens}/{stats.totalScreens}</p>
-                      </div>
-                      <div className="p-3 rounded-xl bg-gradient-to-br from-[#00B3A6] to-[#00B3A6]/80 shadow-lg group-hover:scale-110 transition-transform flex-shrink-0 ml-3">
-                        <Monitor className="h-6 w-6 text-white" />
-                      </div>
-                    </div>
-                  </button>
-                </div>
-
-                {/* Widgets d'état des écrans */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* Écrans en maintenance */}
-                  <div className="bg-white rounded-xl p-4 shadow-lg border border-gray-200">
-                    <div className="flex items-center space-x-3">
-                      <div className="p-2 rounded-lg bg-gradient-to-br from-yellow-500/20 to-yellow-600/20 border border-yellow-500/30">
-                        <AlertTriangle className="h-5 w-5 text-yellow-400" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-gray-700">Écrans en maintenance</p>
-                        <p className="text-xs text-gray-500">1 écran(s) sont actuellement en maintenance</p>
-                        <p className="text-xs text-gray-400 mt-1">15/08 14:05</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Écrans inactifs */}
-                  <div className="bg-white rounded-xl p-4 shadow-lg border border-gray-200">
-                    <div className="flex items-center space-x-3">
-                      <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500/20 to-blue-600/20 border border-blue-500/30">
-                        <Monitor className="h-5 w-5 text-blue-400" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-gray-700">Écrans inactifs</p>
-                        <p className="text-xs text-gray-500">1 écran(s) sont inactifs et ne génèrent pas de revenus</p>
-                        <p className="text-xs text-gray-400 mt-1">15/08 14:05</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Écrans indisponibles */}
-                  <div className="bg-white rounded-xl p-4 shadow-lg border border-gray-200">
-                    <div className="flex items-center space-x-3">
-                      <div className="p-2 rounded-lg bg-gradient-to-br from-yellow-500/20 to-yellow-600/20 border border-yellow-500/30">
-                        <AlertTriangle className="h-5 w-5 text-yellow-400" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-gray-700">Écrans indisponibles</p>
-                        <p className="text-xs text-gray-500">1 écran(s) sont temporairement indisponibles</p>
-                        <p className="text-xs text-gray-400 mt-1">15/08 14:05</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Section Mes Revenus */}
-              <div className="mb-8">
-                <h3 className="text-2xl font-bold text-gray-900 mb-4 flex items-center">
-                  <DollarSign className="h-6 w-6 text-[#00B3A6] mr-2" />
-                  Mes Revenus
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {/* Revenus du Mois */}
-                  <button
-                    onClick={handleNavigateToRevenue}
-                    disabled={isDisabled}
-                    className={`bg-white rounded-xl p-6 shadow-lg transition-all duration-300 border border-gray-200 ${
-                      isDisabled 
-                        ? 'opacity-50 cursor-not-allowed' 
-                        : 'hover:shadow-xl transform hover:-translate-y-1 cursor-pointer group'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-600 mb-1">Revenus du Mois</p>
-                        <p className="text-2xl font-bold text-gray-900 group-hover:text-[#00B3A6] transition-colors truncate">
-                          {stats.monthlyRevenue.toLocaleString('fr-TN', { style: 'currency', currency: 'TND' })}
+                <>
+                  {/* Section Mes Écrans */}
+                  <div className="mb-8">
+                    <h3 className="text-2xl font-bold text-gray-900 mb-4 flex items-center">
+                      <Monitor className="h-6 w-6 text-[#00B3A6] mr-2" />
+                      Mes Écrans
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                      {/* Ajouter un Écran */}
+                      <button
+                        onClick={() => setShowAddScreen(true)}
+                        disabled={isDisabled}
+                        className={`bg-white rounded-xl p-6 shadow-lg transition-all duration-300 border border-gray-200 text-left ${
+                          isDisabled
+                            ? 'opacity-50 cursor-not-allowed'
+                            : 'hover:shadow-xl transform hover:-translate-y-1 cursor-pointer group'
+                        }`}
+                      >
+                        <div className="flex items-center justify-center mb-4">
+                          <div className="p-4 rounded-xl bg-gradient-to-br from-[#00B3A6] to-[#00B3A6]/80 shadow-lg group-hover:scale-110 transition-transform">
+                            <Plus className="h-8 w-8 text-white" />
+                          </div>
+                        </div>
+                        <p className="text-sm font-medium text-gray-600 text-center">
+                          Enregistrer un nouvel écran
                         </p>
-                        <p className="text-xs text-gray-500 mt-2">Cliquer pour voir les détails &gt;</p>
-                      </div>
-                      <div className="p-3 rounded-xl bg-gradient-to-br from-[#00263A] to-[#00B3A6] shadow-lg group-hover:scale-110 transition-transform flex-shrink-0 ml-3">
-                        <DollarSign className="h-6 w-6 text-white" />
-                      </div>
-                    </div>
-                  </button>
+                      </button>
 
-                  {/* Revenus Totaux */}
-                  <button
-                    onClick={handleNavigateToRevenue}
-                    disabled={isDisabled}
-                    className={`bg-white rounded-xl p-6 shadow-lg transition-all duration-300 border border-gray-200 ${
-                      isDisabled 
-                        ? 'opacity-50 cursor-not-allowed' 
-                        : 'hover:shadow-xl transform hover:-translate-y-1 cursor-pointer group'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-600 mb-1">Revenus Totaux</p>
-                        <p className="text-2xl font-bold text-gray-900 group-hover:text-[#00B3A6] transition-colors truncate">
-                          {stats.totalRevenue.toLocaleString('fr-TN', { style: 'currency', currency: 'TND' })}
+                      {/* Déclarer Indisponibilité */}
+                      <button
+                        onClick={handleDeclareUnavailability}
+                        disabled={isDisabled}
+                        className={`bg-white rounded-xl p-6 shadow-lg transition-all duration-300 border border-gray-200 text-left ${
+                          isDisabled
+                            ? 'opacity-50 cursor-not-allowed'
+                            : 'hover:shadow-xl transform hover:-translate-y-1 cursor-pointer group'
+                        }`}
+                      >
+                        <div className="flex items-center justify-center mb-4">
+                          <div className="p-4 rounded-xl bg-gradient-to-br from-red-500/20 to-red-600/20 border border-red-500/30 shadow-lg group-hover:scale-110 transition-transform">
+                            <CalendarX className="h-8 w-8 text-red-400" />
+                          </div>
+                        </div>
+                        <p className="text-sm font-medium text-gray-600 text-center">
+                          Marquer des écrans comme indisponibles
                         </p>
-                        <p className="text-xs text-gray-500 mt-2">Cliquer pour voir l'historique &gt;</p>
-                      </div>
-                      <div className="p-3 rounded-xl bg-gradient-to-br from-[#00263A] to-[#00B3A6] shadow-lg group-hover:scale-110 transition-transform flex-shrink-0 ml-3">
-                        <TrendingUp className="h-6 w-6 text-white" />
-                      </div>
-                    </div>
-                  </button>
+                      </button>
 
-                  {/* Revenus Détaillés */}
-                  <button
-                    onClick={handleViewDetailedRevenue}
-                    disabled={isDisabled}
-                    className={`bg-white rounded-xl p-6 shadow-lg transition-all duration-300 border border-gray-200 text-left ${
-                      isDisabled 
-                        ? 'opacity-50 cursor-not-allowed' 
-                        : 'hover:shadow-xl transform hover:-translate-y-1 cursor-pointer group'
-                    }`}
-                  >
-                    <div className="flex items-center justify-center mb-4">
-                      <div className="p-4 rounded-xl bg-gradient-to-br from-[#00B3A6] to-[#00B3A6]/80 shadow-lg group-hover:scale-110 transition-transform">
-                        <BarChart3 className="h-8 w-8 text-white" />
-                      </div>
+                      {/* Écrans Actifs */}
+                      <button
+                        onClick={handleNavigateToScreens}
+                        disabled={isDisabled}
+                        className={`bg-white rounded-xl p-6 shadow-lg transition-all duration-300 border border-gray-200 ${
+                          isDisabled
+                            ? 'opacity-50 cursor-not-allowed'
+                            : 'hover:shadow-xl transform hover:-translate-y-1 cursor-pointer group'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-600 mb-1">Écrans Actifs</p>
+                            <p className="text-3xl font-bold text-gray-900 group-hover:text-[#00B3A6] transition-colors">
+                              {stats.activeScreens}/{stats.totalScreens}
+                            </p>
+                          </div>
+                          <div className="p-3 rounded-xl bg-gradient-to-br from-[#00B3A6] to-[#00B3A6]/80 shadow-lg group-hover:scale-110 transition-transform flex-shrink-0 ml-3">
+                            <Monitor className="h-6 w-6 text-white" />
+                          </div>
+                        </div>
+                      </button>
                     </div>
-                    <p className="text-sm font-medium text-gray-600 text-center">Analyser les performances</p>
-                  </button>
-                </div>
-              </div>
 
-              {/* Section Rewards */}
-              <div className="mb-8">
-                <h3 className="text-2xl font-bold text-gray-900 mb-4 flex items-center">
-                  <Gift className="h-6 w-6 text-[#00B3A6] mr-2" />
-                  Rewards
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Points Fidélité */}
-                  <button
-                    onClick={handleNavigateToGiftCatalog}
-                    className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 border border-gray-200 cursor-pointer group"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-600 mb-1">Points Fidélité</p>
-                        <p className="text-3xl font-bold text-gray-900 group-hover:text-[#00B3A6] transition-colors">{stats.loyaltyPoints}</p>
+                    {/* Widgets d'état des écrans */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Écrans en maintenance */}
+                      <div className="bg-white rounded-xl p-4 shadow-lg border border-gray-200">
+                        <div className="flex items-center space-x-3">
+                          <div className="p-2 rounded-lg bg-gradient-to-br from-yellow-500/20 to-yellow-600/20 border border-yellow-500/30">
+                            <AlertTriangle className="h-5 w-5 text-yellow-400" />
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-700">
+                              Écrans en maintenance
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              1 écran(s) sont actuellement en maintenance
+                            </p>
+                            <p className="text-xs text-gray-400 mt-1">15/08 14:05</p>
+                          </div>
+                        </div>
                       </div>
-                      <div className="p-3 rounded-xl bg-gradient-to-br from-[#00B3A6] to-[#00B3A6]/80 shadow-lg group-hover:scale-110 transition-transform flex-shrink-0 ml-3">
-                        <Star className="h-6 w-6 text-white" />
-                      </div>
-                    </div>
-                  </button>
 
-                  {/* Catalogue Cadeaux */}
-                  <button
-                    onClick={handleNavigateToGiftCatalog}
-                    className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 border border-gray-200 cursor-pointer group text-left"
-                  >
-                    <div className="flex items-center justify-center mb-4">
-                      <div className="p-4 rounded-xl bg-gradient-to-br from-[#00B3A6] to-[#00B3A6]/80 shadow-lg group-hover:scale-110 transition-transform">
-                        <Gift className="h-8 w-8 text-white" />
+                      {/* Écrans inactifs */}
+                      <div className="bg-white rounded-xl p-4 shadow-lg border border-gray-200">
+                        <div className="flex items-center space-x-3">
+                          <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500/20 to-blue-600/20 border border-blue-500/30">
+                            <Monitor className="h-5 w-5 text-blue-400" />
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-700">Écrans inactifs</p>
+                            <p className="text-xs text-gray-500">
+                              1 écran(s) sont inactifs et ne génèrent pas de revenus
+                            </p>
+                            <p className="text-xs text-gray-400 mt-1">15/08 14:05</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Écrans indisponibles */}
+                      <div className="bg-white rounded-xl p-4 shadow-lg border border-gray-200">
+                        <div className="flex items-center space-x-3">
+                          <div className="p-2 rounded-lg bg-gradient-to-br from-yellow-500/20 to-yellow-600/20 border border-yellow-500/30">
+                            <AlertTriangle className="h-5 w-5 text-yellow-400" />
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-700">
+                              Écrans indisponibles
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              1 écran(s) sont temporairement indisponibles
+                            </p>
+                            <p className="text-xs text-gray-400 mt-1">15/08 14:05</p>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    <p className="text-sm font-medium text-gray-600 text-center">Échanger vos points fidélité</p>
-                  </button>
-                </div>
-              </div>
-              </>
+                  </div>
+
+                  {/* Section Mes Revenus */}
+                  <div className="mb-8">
+                    <h3 className="text-2xl font-bold text-gray-900 mb-4 flex items-center">
+                      <DollarSign className="h-6 w-6 text-[#00B3A6] mr-2" />
+                      Mes Revenus
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      {/* Revenus du Mois */}
+                      <button
+                        onClick={handleNavigateToRevenue}
+                        disabled={isDisabled}
+                        className={`bg-white rounded-xl p-6 shadow-lg transition-all duration-300 border border-gray-200 ${
+                          isDisabled
+                            ? 'opacity-50 cursor-not-allowed'
+                            : 'hover:shadow-xl transform hover:-translate-y-1 cursor-pointer group'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-600 mb-1">
+                              Revenus du Mois
+                            </p>
+                            <p className="text-2xl font-bold text-gray-900 group-hover:text-[#00B3A6] transition-colors truncate">
+                              {stats.monthlyRevenue.toLocaleString('fr-TN', {
+                                style: 'currency',
+                                currency: 'TND',
+                              })}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-2">
+                              Cliquer pour voir les détails &gt;
+                            </p>
+                          </div>
+                          <div className="p-3 rounded-xl bg-gradient-to-br from-[#00263A] to-[#00B3A6] shadow-lg group-hover:scale-110 transition-transform flex-shrink-0 ml-3">
+                            <DollarSign className="h-6 w-6 text-white" />
+                          </div>
+                        </div>
+                      </button>
+
+                      {/* Revenus Totaux */}
+                      <button
+                        onClick={handleNavigateToRevenue}
+                        disabled={isDisabled}
+                        className={`bg-white rounded-xl p-6 shadow-lg transition-all duration-300 border border-gray-200 ${
+                          isDisabled
+                            ? 'opacity-50 cursor-not-allowed'
+                            : 'hover:shadow-xl transform hover:-translate-y-1 cursor-pointer group'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-600 mb-1">Revenus Totaux</p>
+                            <p className="text-2xl font-bold text-gray-900 group-hover:text-[#00B3A6] transition-colors truncate">
+                              {stats.totalRevenue.toLocaleString('fr-TN', {
+                                style: 'currency',
+                                currency: 'TND',
+                              })}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-2">
+                              Cliquer pour voir l'historique &gt;
+                            </p>
+                          </div>
+                          <div className="p-3 rounded-xl bg-gradient-to-br from-[#00263A] to-[#00B3A6] shadow-lg group-hover:scale-110 transition-transform flex-shrink-0 ml-3">
+                            <TrendingUp className="h-6 w-6 text-white" />
+                          </div>
+                        </div>
+                      </button>
+
+                      {/* Revenus Détaillés */}
+                      <button
+                        onClick={handleViewDetailedRevenue}
+                        disabled={isDisabled}
+                        className={`bg-white rounded-xl p-6 shadow-lg transition-all duration-300 border border-gray-200 text-left ${
+                          isDisabled
+                            ? 'opacity-50 cursor-not-allowed'
+                            : 'hover:shadow-xl transform hover:-translate-y-1 cursor-pointer group'
+                        }`}
+                      >
+                        <div className="flex items-center justify-center mb-4">
+                          <div className="p-4 rounded-xl bg-gradient-to-br from-[#00B3A6] to-[#00B3A6]/80 shadow-lg group-hover:scale-110 transition-transform">
+                            <BarChart3 className="h-8 w-8 text-white" />
+                          </div>
+                        </div>
+                        <p className="text-sm font-medium text-gray-600 text-center">
+                          Analyser les performances
+                        </p>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Section Rewards */}
+                  <div className="mb-8">
+                    <h3 className="text-2xl font-bold text-gray-900 mb-4 flex items-center">
+                      <Gift className="h-6 w-6 text-[#00B3A6] mr-2" />
+                      Rewards
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Points Fidélité */}
+                      <button
+                        onClick={handleNavigateToGiftCatalog}
+                        className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 border border-gray-200 cursor-pointer group"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-gray-600 mb-1">
+                              Points Fidélité
+                            </p>
+                            <p className="text-3xl font-bold text-gray-900 group-hover:text-[#00B3A6] transition-colors">
+                              {stats.loyaltyPoints}
+                            </p>
+                          </div>
+                          <div className="p-3 rounded-xl bg-gradient-to-br from-[#00B3A6] to-[#00B3A6]/80 shadow-lg group-hover:scale-110 transition-transform flex-shrink-0 ml-3">
+                            <Star className="h-6 w-6 text-white" />
+                          </div>
+                        </div>
+                      </button>
+
+                      {/* Catalogue Cadeaux */}
+                      <button
+                        onClick={handleNavigateToGiftCatalog}
+                        className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 border border-gray-200 cursor-pointer group text-left"
+                      >
+                        <div className="flex items-center justify-center mb-4">
+                          <div className="p-4 rounded-xl bg-gradient-to-br from-[#00B3A6] to-[#00B3A6]/80 shadow-lg group-hover:scale-110 transition-transform">
+                            <Gift className="h-8 w-8 text-white" />
+                          </div>
+                        </div>
+                        <p className="text-sm font-medium text-gray-600 text-center">
+                          Échanger vos points fidélité
+                        </p>
+                      </button>
+                    </div>
+                  </div>
+                </>
               )}
-
             </div>
           </div>
         </div>
       </div>
-      
+
       {/* Gift Catalog Modal */}
       <GiftCatalog
         isOpen={showGiftCatalog}
         onClose={() => setShowGiftCatalog(false)}
         userPoints={stats.loyaltyPoints}
       />
-      
-      
-      
+
       {/* Add Screen Modal */}
       <AddScreen
         isOpen={showAddScreen}
@@ -1058,4 +1219,4 @@ export default function OwnerDashboard() {
       />
     </div>
   );
-} 
+}

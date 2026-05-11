@@ -6,10 +6,34 @@ import {
 
 function sampleSlots(): HourlyPlanSlotInput[] {
   return [
-    { locationId: 'loc-a', diffusionDate: '2026-04-06', diffusionHour: 10, maxImpressions: 120, maxRepetitionsPerHour: 6 },
-    { locationId: 'loc-a', diffusionDate: '2026-04-06', diffusionHour: 11, maxImpressions: 80, maxRepetitionsPerHour: 4 },
-    { locationId: 'loc-b', diffusionDate: '2026-04-06', diffusionHour: 10, maxImpressions: 100, maxRepetitionsPerHour: 5 },
-    { locationId: 'loc-b', diffusionDate: '2026-04-06', diffusionHour: 11, maxImpressions: 60, maxRepetitionsPerHour: 3 },
+    {
+      locationId: 'loc-a',
+      diffusionDate: '2026-04-06',
+      diffusionHour: 10,
+      maxImpressions: 120,
+      maxRepetitionsPerHour: 6,
+    },
+    {
+      locationId: 'loc-a',
+      diffusionDate: '2026-04-06',
+      diffusionHour: 11,
+      maxImpressions: 80,
+      maxRepetitionsPerHour: 4,
+    },
+    {
+      locationId: 'loc-b',
+      diffusionDate: '2026-04-06',
+      diffusionHour: 10,
+      maxImpressions: 100,
+      maxRepetitionsPerHour: 5,
+    },
+    {
+      locationId: 'loc-b',
+      diffusionDate: '2026-04-06',
+      diffusionHour: 11,
+      maxImpressions: 60,
+      maxRepetitionsPerHour: 3,
+    },
   ];
 }
 
@@ -23,7 +47,7 @@ describe('buildHybridAdjustedHourlyPlan', () => {
     });
 
     const activeLocs = new Set(
-      out.filter((r) => r.plannedRepetitionsPerHour > 0).map((r) => r.locationId)
+      out.filter((r) => r.plannedRepetitionsPerHour > 0).map((r) => r.locationId),
     );
     expect(activeLocs.has('loc-a')).toBe(true);
     expect(activeLocs.has('loc-b')).toBe(true);
@@ -38,15 +62,23 @@ describe('buildHybridAdjustedHourlyPlan', () => {
     });
 
     const activeLocs = new Set(
-      out.filter((r) => r.plannedRepetitionsPerHour > 0).map((r) => r.locationId)
+      out.filter((r) => r.plannedRepetitionsPerHour > 0).map((r) => r.locationId),
     );
     expect(activeLocs.size).toBeLessThanOrEqual(2);
   });
 
   it('est déterministe pour les mêmes entrées', () => {
     const slots = sampleSlots();
-    const a = buildHybridAdjustedHourlyPlan({ slots, targetImpressions: 211, keepLocationsFirst: true });
-    const b = buildHybridAdjustedHourlyPlan({ slots, targetImpressions: 211, keepLocationsFirst: true });
+    const a = buildHybridAdjustedHourlyPlan({
+      slots,
+      targetImpressions: 211,
+      keepLocationsFirst: true,
+    });
+    const b = buildHybridAdjustedHourlyPlan({
+      slots,
+      targetImpressions: 211,
+      keepLocationsFirst: true,
+    });
     expect(a).toEqual(b);
   });
 

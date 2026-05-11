@@ -1,22 +1,29 @@
 import { supabase } from '../lib/supabase';
-import { AdminProfile, AdminLoginData, AdminSignUpData, AdminDashboardStats, AdminActivity } from '../types/admin';
+import {
+  AdminProfile,
+  AdminLoginData,
+  AdminSignUpData,
+  AdminDashboardStats,
+  AdminActivity,
+} from '../types/admin';
 
 // Fonction pour mapper les erreurs admin
 const mapAdminError = (error: any): string => {
-  const errorMessage = error?.message || error?.error_description || 'Une erreur inattendue s\'est produite';
-  
+  const errorMessage =
+    error?.message || error?.error_description || "Une erreur inattendue s'est produite";
+
   if (errorMessage.includes('Invalid login credentials')) {
     return 'Email ou mot de passe incorrect.';
   }
-  
+
   if (errorMessage.includes('User already registered')) {
     return 'Un compte admin existe déjà avec cette adresse email.';
   }
-  
+
   if (errorMessage.includes('Email not confirmed')) {
-    return 'Votre compte admin n\'est pas encore activé.';
+    return "Votre compte admin n'est pas encore activé.";
   }
-  
+
   return errorMessage;
 };
 
@@ -25,7 +32,7 @@ export const adminService = {
   async login(email: string, password: string): Promise<AdminProfile> {
     try {
       console.log('Attempting admin login for:', email);
-      
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -53,11 +60,11 @@ export const adminService = {
 
       if (profileError) {
         console.error('Profile error:', profileError);
-        throw new Error('Accès refusé. Ce compte n\'est pas autorisé.');
+        throw new Error("Accès refusé. Ce compte n'est pas autorisé.");
       }
-      
+
       if (!adminProfile) {
-        throw new Error('Accès refusé. Ce compte n\'est pas autorisé.');
+        throw new Error("Accès refusé. Ce compte n'est pas autorisé.");
       }
 
       console.log('Admin profile found:', adminProfile);
@@ -86,7 +93,9 @@ export const adminService = {
 
   async getCurrentAdmin(): Promise<AdminProfile | null> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) {
         console.log('No user found in getCurrentAdmin');
         return null;
@@ -105,7 +114,7 @@ export const adminService = {
         console.error('Error getting current admin:', error);
         return null;
       }
-      
+
       if (!adminProfile) {
         console.log('No admin profile found for user:', user.id);
         return null;
@@ -132,9 +141,9 @@ export const adminService = {
           data: {
             first_name: adminData.first_name,
             last_name: adminData.last_name,
-            role: adminData.role
-          }
-        }
+            role: adminData.role,
+          },
+        },
       });
 
       if (authError) {
@@ -203,7 +212,7 @@ export const adminService = {
       if (error) throw error;
       return data;
     } catch (error: any) {
-      throw new Error('Erreur lors de la mise à jour de l\'administrateur');
+      throw new Error("Erreur lors de la mise à jour de l'administrateur");
     }
   },
 
@@ -216,7 +225,7 @@ export const adminService = {
 
       if (error) throw error;
     } catch (error: any) {
-      throw new Error('Erreur lors de la suppression de l\'administrateur');
+      throw new Error("Erreur lors de la suppression de l'administrateur");
     }
   },
 
@@ -229,7 +238,7 @@ export const adminService = {
 
       if (error) throw error;
     } catch (error: any) {
-      throw new Error('Erreur lors de la réactivation de l\'administrateur');
+      throw new Error("Erreur lors de la réactivation de l'administrateur");
     }
   },
 
@@ -245,16 +254,35 @@ export const adminService = {
         revenueResult,
         monthlyRevenueResult,
         verificationsResult,
-        campaignsResult
+        campaignsResult,
       ] = await Promise.all([
         supabase.from('business_profiles').select('id', { count: 'exact' }),
-        supabase.from('business_profiles').select('id', { count: 'exact' }).in('profile_type', ['individual_owner', 'fleet_owner']),
-        supabase.from('business_profiles').select('id', { count: 'exact' }).eq('profile_type', 'advertiser'),
+        supabase
+          .from('business_profiles')
+          .select('id', { count: 'exact' })
+          .in('profile_type', ['individual_owner', 'fleet_owner']),
+        supabase
+          .from('business_profiles')
+          .select('id', { count: 'exact' })
+          .eq('profile_type', 'advertiser'),
         supabase.from('screens').select('id', { count: 'exact' }),
-        supabase.from('revenue').select('amount').then(r => ({ data: r.data?.reduce((sum, item) => sum + (item.amount || 0), 0) || 0 })),
-        supabase.from('revenue').select('amount').gte('created_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()).then(r => ({ data: r.data?.reduce((sum, item) => sum + (item.amount || 0), 0) || 0 })),
-        supabase.from('business_profiles').select('id', { count: 'exact' }).eq('verification_status', 'pending'),
-        supabase.from('campaigns').select('id', { count: 'exact' }).eq('status', 'active')
+        supabase
+          .from('revenue')
+          .select('amount')
+          .then((r) => ({ data: r.data?.reduce((sum, item) => sum + (item.amount || 0), 0) || 0 })),
+        supabase
+          .from('revenue')
+          .select('amount')
+          .gte(
+            'created_at',
+            new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString(),
+          )
+          .then((r) => ({ data: r.data?.reduce((sum, item) => sum + (item.amount || 0), 0) || 0 })),
+        supabase
+          .from('business_profiles')
+          .select('id', { count: 'exact' })
+          .eq('verification_status', 'pending'),
+        supabase.from('campaigns').select('id', { count: 'exact' }).eq('status', 'active'),
       ]);
 
       return {
@@ -285,9 +313,7 @@ export const adminService = {
   // Logs d'activité
   async logActivity(activity: Omit<AdminActivity, 'id' | 'created_at'>): Promise<void> {
     try {
-      await supabase
-        .from('admin_activities')
-        .insert(activity);
+      await supabase.from('admin_activities').insert(activity);
     } catch (error) {
       console.error('Error logging admin activity:', error);
     }
@@ -306,5 +332,5 @@ export const adminService = {
     } catch (error: any) {
       throw new Error('Erreur lors de la récupération des activités');
     }
-  }
+  },
 };

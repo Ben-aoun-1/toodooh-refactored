@@ -1,11 +1,21 @@
 import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
-import { Download, FileText, Loader2, Search, DollarSign, Calendar, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+  Download,
+  FileText,
+  Loader2,
+  Search,
+  DollarSign,
+  Calendar,
+  Eye,
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-react';
 import { useAuthStore } from '../stores/auth.store';
 import { generateInvoicePDF } from '../services/invoice-pdf.service';
 
 export default function MyInvoices() {
-  const user = useAuthStore(state => state.user);
+  const user = useAuthStore((state) => state.user);
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -18,8 +28,9 @@ export default function MyInvoices() {
       if (!user) return;
 
       try {
-        const { data, error } = await supabase
-          .rpc('get_user_invoices_with_monthly', { p_user_id: user.id });
+        const { data, error } = await supabase.rpc('get_user_invoices_with_monthly', {
+          p_user_id: user.id,
+        });
 
         if (error) {
           console.error('Error fetching invoices:', error);
@@ -52,8 +63,12 @@ export default function MyInvoices() {
         } else {
           const formattedData = (data || []).map((invoice: any) => ({
             ...invoice,
-            date_emission: invoice.date_emission ? new Date(invoice.date_emission).toISOString() : null,
-            date_echeance: invoice.date_echeance ? new Date(invoice.date_echeance).toISOString() : null,
+            date_emission: invoice.date_emission
+              ? new Date(invoice.date_emission).toISOString()
+              : null,
+            date_echeance: invoice.date_echeance
+              ? new Date(invoice.date_echeance).toISOString()
+              : null,
           }));
           setInvoices(formattedData);
         }
@@ -70,10 +85,11 @@ export default function MyInvoices() {
   const filtered = useMemo(() => {
     if (!search) return invoices;
     const q = search.toLowerCase();
-    return invoices.filter(f =>
-      f.numero?.toLowerCase().includes(q) ||
-      f.description?.toLowerCase().includes(q) ||
-      f.campaign_name?.toLowerCase().includes(q)
+    return invoices.filter(
+      (f) =>
+        f.numero?.toLowerCase().includes(q) ||
+        f.description?.toLowerCase().includes(q) ||
+        f.campaign_name?.toLowerCase().includes(q),
     );
   }, [invoices, search]);
 
@@ -83,22 +99,27 @@ export default function MyInvoices() {
     return filtered.slice(start, start + PAGE_SIZE);
   }, [filtered, currentPage]);
 
-  useEffect(() => { setCurrentPage(1); }, [search]);
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search]);
 
   const handleDownloadPDF = async (facture: any) => {
     if (!user) return;
     try {
-      await generateInvoicePDF({
-        id: facture.id,
-        numero: facture.numero,
-        montant: Number(facture.montant || 0),
-        date_emission: facture.date_emission || new Date(),
-        date_echeance: facture.date_echeance || null,
-        description: facture.description,
-        campaign_name: facture.campaign_name,
-        client_name: facture.client_name,
-        statut: facture.statut || 'payee',
-      }, user.id);
+      await generateInvoicePDF(
+        {
+          id: facture.id,
+          numero: facture.numero,
+          montant: Number(facture.montant || 0),
+          date_emission: facture.date_emission || new Date(),
+          date_echeance: facture.date_echeance || null,
+          description: facture.description,
+          campaign_name: facture.campaign_name,
+          client_name: facture.client_name,
+          statut: facture.statut || 'payee',
+        },
+        user.id,
+      );
     } catch (error) {
       console.error('Erreur lors de la génération du PDF:', error);
       alert('Erreur lors de la génération du PDF. Veuillez réessayer.');
@@ -107,11 +128,17 @@ export default function MyInvoices() {
 
   const formatDate = (d: string | null) => {
     if (!d) return 'N/A';
-    return new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    return new Date(d).toLocaleDateString('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
   };
 
   const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount) + ' TND';
+    new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
+      amount,
+    ) + ' TND';
 
   const getDesignation = (f: any) => {
     if (f.description) return f.description;
@@ -141,7 +168,7 @@ export default function MyInvoices() {
               type="text"
               placeholder="Rechercher.."
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={(e) => setSearch(e.target.value)}
               className="pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#76E6AB]/40 focus:border-[#76E6AB] transition-all w-52"
             />
           </div>
@@ -162,21 +189,32 @@ export default function MyInvoices() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-100">
-                  <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">Désignation</th>
                   <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">
-                    <span className="inline-flex items-center gap-1"><DollarSign className="h-3 w-3" /> Montant</span>
+                    Désignation
                   </th>
                   <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">
-                    <span className="inline-flex items-center gap-1"><Calendar className="h-3 w-3" /> Date</span>
+                    <span className="inline-flex items-center gap-1">
+                      <DollarSign className="h-3 w-3" /> Montant
+                    </span>
+                  </th>
+                  <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">
+                    <span className="inline-flex items-center gap-1">
+                      <Calendar className="h-3 w-3" /> Date
+                    </span>
                   </th>
                   <th className="px-5 py-3 text-right text-xs font-medium text-gray-500"></th>
                 </tr>
               </thead>
               <tbody>
                 {paginated.map((facture) => (
-                  <tr key={facture.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                  <tr
+                    key={facture.id}
+                    className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors"
+                  >
                     <td className="px-5 py-4">
-                      <p className="text-sm font-semibold text-gray-900">{getDesignation(facture)}</p>
+                      <p className="text-sm font-semibold text-gray-900">
+                        {getDesignation(facture)}
+                      </p>
                       <p className="text-xs text-gray-400 mt-0.5">{facture.numero}</p>
                     </td>
                     <td className="px-5 py-4 text-sm font-semibold text-gray-900">
@@ -214,17 +252,18 @@ export default function MyInvoices() {
         {!loading && filtered.length > PAGE_SIZE && (
           <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-between">
             <p className="text-xs text-gray-500">
-              {((currentPage - 1) * PAGE_SIZE) + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)} sur {filtered.length} factures
+              {(currentPage - 1) * PAGE_SIZE + 1}–
+              {Math.min(currentPage * PAGE_SIZE, filtered.length)} sur {filtered.length} factures
             </p>
             <div className="flex items-center gap-1">
               <button
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
                 className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                 <button
                   key={page}
                   onClick={() => setCurrentPage(page)}
@@ -238,7 +277,7 @@ export default function MyInvoices() {
                 </button>
               ))}
               <button
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                 disabled={currentPage === totalPages}
                 className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >

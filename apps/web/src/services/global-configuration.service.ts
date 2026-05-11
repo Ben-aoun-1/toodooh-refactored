@@ -1,15 +1,7 @@
 import { supabase } from '../lib/supabase';
-import {
-  type DoohConfigNumbers,
-  DEFAULT_DOOH_CONFIG_NUMBERS,
-} from './dooh-calculation.service';
+import { type DoohConfigNumbers, DEFAULT_DOOH_CONFIG_NUMBERS } from './dooh-calculation.service';
 
-export type GlobalConfigurationValueType =
-  | 'integer'
-  | 'numeric'
-  | 'boolean'
-  | 'json'
-  | 'text';
+export type GlobalConfigurationValueType = 'integer' | 'numeric' | 'boolean' | 'json' | 'text';
 
 export type GlobalConfigurationRow = {
   key: string;
@@ -37,14 +29,19 @@ export type GlobalConfigurationKey =
 
 const KNOWN_KEYS = new Set<string>(Object.values(GLOBAL_CONFIGURATION_KEYS));
 
-let parsedMapCache: { map: Record<string, string | number | boolean | unknown>; at: number } | null = null;
+let parsedMapCache: {
+  map: Record<string, string | number | boolean | unknown>;
+  at: number;
+} | null = null;
 const CACHE_MS = 60_000;
 
 export function invalidateGlobalConfigurationCache(): void {
   parsedMapCache = null;
 }
 
-function parseGlobalConfigurationValue(row: GlobalConfigurationRow): string | number | boolean | unknown {
+function parseGlobalConfigurationValue(
+  row: GlobalConfigurationRow,
+): string | number | boolean | unknown {
   switch (row.value_type) {
     case 'integer': {
       const n = Number.parseInt(row.value_text, 10);
@@ -86,31 +83,34 @@ function toRate01(v: unknown, fallback: number): number {
 
 /** Agrège la map parsée vers les nombres utilisés par le moteur DOOH (fallbacks seed). */
 export function mapParsedToDoohNumbers(
-  map: Record<string, string | number | boolean | unknown>
+  map: Record<string, string | number | boolean | unknown>,
 ): DoohConfigNumbers {
   const d = DEFAULT_DOOH_CONFIG_NUMBERS;
   return {
-    video_min_duration_seconds: Math.max(1, toInt(map.video_min_duration_seconds, d.video_min_duration_seconds)),
+    video_min_duration_seconds: Math.max(
+      1,
+      toInt(map.video_min_duration_seconds, d.video_min_duration_seconds),
+    ),
     video_max_duration_seconds: Math.max(
       1,
-      toInt(map.video_max_duration_seconds, d.video_max_duration_seconds)
+      toInt(map.video_max_duration_seconds, d.video_max_duration_seconds),
     ),
     video_default_duration_seconds: Math.max(
       1,
-      toInt(map.video_default_duration_seconds, d.video_default_duration_seconds)
+      toInt(map.video_default_duration_seconds, d.video_default_duration_seconds),
     ),
     max_spots_per_hour: Math.max(1, toInt(map.max_spots_per_hour, d.max_spots_per_hour)),
     max_billable_spot_rate_per_hour: toRate01(
       map.max_billable_spot_rate_per_hour,
-      d.max_billable_spot_rate_per_hour
+      d.max_billable_spot_rate_per_hour,
     ),
     dooh_occupation_reference_rph: toPositiveNumber(
       map.dooh_occupation_reference_rph,
-      d.dooh_occupation_reference_rph
+      d.dooh_occupation_reference_rph,
     ),
     standard_campaign_cpm_tnd: toPositiveNumber(
       map.standard_campaign_cpm_tnd,
-      d.standard_campaign_cpm_tnd
+      d.standard_campaign_cpm_tnd,
     ),
     event_campaign_cpm_tnd: toPositiveNumber(map.event_campaign_cpm_tnd, d.event_campaign_cpm_tnd),
   };
@@ -122,7 +122,12 @@ function normalizeBounds(config: DoohConfigNumbers): DoohConfigNumbers {
   let defS = config.video_default_duration_seconds;
   if (minS > maxS) [minS, maxS] = [maxS, minS];
   defS = Math.min(maxS, Math.max(minS, defS));
-  return { ...config, video_min_duration_seconds: minS, video_max_duration_seconds: maxS, video_default_duration_seconds: defS };
+  return {
+    ...config,
+    video_min_duration_seconds: minS,
+    video_max_duration_seconds: maxS,
+    video_default_duration_seconds: defS,
+  };
 }
 
 /**
@@ -144,7 +149,7 @@ export type ValidateValueResult = { ok: true; valueText: string } | { ok: false;
 export function validateValueForKey(
   key: string,
   valueText: string,
-  valueType: GlobalConfigurationValueType
+  valueType: GlobalConfigurationValueType,
 ): ValidateValueResult {
   const trimmed = valueText.trim();
   if (trimmed === '') {
@@ -199,10 +204,7 @@ export function validateValueForKey(
 
 export const globalConfigurationService = {
   async list(): Promise<GlobalConfigurationRow[]> {
-    const { data, error } = await supabase
-      .from('global_configuration')
-      .select('*')
-      .order('key');
+    const { data, error } = await supabase.from('global_configuration').select('*').order('key');
     if (error) throw new Error(error.message);
     return (data ?? []) as GlobalConfigurationRow[];
   },

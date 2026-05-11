@@ -38,7 +38,7 @@ const QUICK_AMOUNTS = [
 type TabFilter = 'all' | 'recharges' | 'expenses';
 
 export default function MyRecharges() {
-  const user = useAuthStore(state => state.user);
+  const user = useAuthStore((state) => state.user);
   const navigate = useNavigate();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,7 +49,7 @@ export default function MyRecharges() {
   const [newRecharge, setNewRecharge] = useState({
     amount: '',
     payment_method: 'card',
-    description: ''
+    description: '',
   });
   const [submitting, setSubmitting] = useState(false);
 
@@ -77,14 +77,19 @@ export default function MyRecharges() {
           .order('created_at', { ascending: false });
 
         if (rechargesData) {
-          rechargesData.forEach(r => {
+          rechargesData.forEach((r) => {
             merged.push({
               id: `r-${r.id}`,
               type: 'recharge',
               designation: 'Rechargement wallet',
               amount: parseFloat(r.amount) || 0,
               date: new Date(r.created_at),
-              paymentMethod: r.payment_method === 'card' ? 'Carte Bancaire' : r.payment_method === 'bank' ? 'Virement' : 'Espèces',
+              paymentMethod:
+                r.payment_method === 'card'
+                  ? 'Carte Bancaire'
+                  : r.payment_method === 'bank'
+                    ? 'Virement'
+                    : 'Espèces',
             });
           });
         }
@@ -97,7 +102,7 @@ export default function MyRecharges() {
           .order('created_at', { ascending: false });
 
         if (campaignsData) {
-          campaignsData.forEach(c => {
+          campaignsData.forEach((c) => {
             const budgetTTC = (parseFloat(c.budget) || 0) * 1.19;
             merged.push({
               id: `c-${c.id}`,
@@ -125,7 +130,7 @@ export default function MyRecharges() {
   const PAGE_SIZE = 8;
 
   const filteredTransactions = useMemo(() => {
-    return transactions.filter(t => {
+    return transactions.filter((t) => {
       if (activeTab === 'recharges' && t.type !== 'recharge') return false;
       if (activeTab === 'expenses' && t.type !== 'expense') return false;
       if (searchQuery) {
@@ -141,14 +146,20 @@ export default function MyRecharges() {
     return filteredTransactions.slice(start, start + PAGE_SIZE);
   }, [filteredTransactions, currentPage]);
 
-  useEffect(() => { setCurrentPage(1); }, [activeTab, searchQuery]);
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, searchQuery]);
 
   const getMethodLabel = (method: string) => {
     switch (method) {
-      case 'card': return 'Carte bancaire';
-      case 'bank': return 'Virement bancaire';
-      case 'cash': return 'Espèces';
-      default: return 'Autre';
+      case 'card':
+        return 'Carte bancaire';
+      case 'bank':
+        return 'Virement bancaire';
+      case 'cash':
+        return 'Espèces';
+      default:
+        return 'Autre';
     }
   };
 
@@ -159,8 +170,14 @@ export default function MyRecharges() {
 
   const handleSubmitRecharge = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user?.id) { toast.error('Vous devez être connecté'); return; }
-    if (!newRecharge.amount || parseFloat(newRecharge.amount) < 10) { toast.error('Le montant minimum est de 10 TND'); return; }
+    if (!user?.id) {
+      toast.error('Vous devez être connecté');
+      return;
+    }
+    if (!newRecharge.amount || parseFloat(newRecharge.amount) < 10) {
+      toast.error('Le montant minimum est de 10 TND');
+      return;
+    }
 
     try {
       setSubmitting(true);
@@ -171,12 +188,17 @@ export default function MyRecharges() {
           amount: parseFloat(newRecharge.amount),
           payment_method: newRecharge.payment_method,
           status: 'pending',
-          description: newRecharge.description || `Recharge ${getMethodLabel(newRecharge.payment_method)}`
+          description:
+            newRecharge.description || `Recharge ${getMethodLabel(newRecharge.payment_method)}`,
         })
         .select()
         .single();
 
-      if (error) { console.error('Error creating recharge:', error); toast.error('Erreur lors de la création de la recharge'); return; }
+      if (error) {
+        console.error('Error creating recharge:', error);
+        toast.error('Erreur lors de la création de la recharge');
+        return;
+      }
 
       toast.success('Recharge créée avec succès ! En attente de validation.');
       setNewRecharge({ amount: '', payment_method: 'card', description: '' });
@@ -193,14 +215,25 @@ export default function MyRecharges() {
     d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
   const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount) + ' TND';
+    new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
+      amount,
+    ) + ' TND';
 
   return (
     <div className="space-y-6">
       {/* ── Balance Card ── */}
-      <div className="rounded-2xl p-6 md:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 relative overflow-hidden" style={{ background: '#1A3C34' }}>
-        <div className="absolute -bottom-16 -left-16 w-64 h-64 rounded-full opacity-15" style={{ background: 'radial-gradient(circle, #76E6AB 0%, transparent 70%)' }} />
-        <div className="absolute -bottom-8 left-8 w-40 h-40 rounded-full opacity-10" style={{ background: 'radial-gradient(circle, #ffffff 0%, transparent 70%)' }} />
+      <div
+        className="rounded-2xl p-6 md:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 relative overflow-hidden"
+        style={{ background: '#1A3C34' }}
+      >
+        <div
+          className="absolute -bottom-16 -left-16 w-64 h-64 rounded-full opacity-15"
+          style={{ background: 'radial-gradient(circle, #76E6AB 0%, transparent 70%)' }}
+        />
+        <div
+          className="absolute -bottom-8 left-8 w-40 h-40 rounded-full opacity-10"
+          style={{ background: 'radial-gradient(circle, #ffffff 0%, transparent 70%)' }}
+        />
         <div className="relative z-10">
           <div className="flex items-center gap-2 mb-2">
             <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center">
@@ -237,7 +270,7 @@ export default function MyRecharges() {
           <p className="text-xs text-gray-500">Montants fréquemment utilisés</p>
         </div>
         <div className="flex flex-wrap gap-3 sm:ml-auto">
-          {QUICK_AMOUNTS.map(q => (
+          {QUICK_AMOUNTS.map((q) => (
             <button
               key={q.value}
               onClick={() => handleQuickRecharge(q.value)}
@@ -273,14 +306,12 @@ export default function MyRecharges() {
               />
             </div>
             <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
-              {(['all', 'recharges', 'expenses'] as TabFilter[]).map(tab => (
+              {(['all', 'recharges', 'expenses'] as TabFilter[]).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
                   className={`px-4 py-2 font-medium transition-colors ${
-                    activeTab === tab
-                      ? 'bg-gray-900 text-white'
-                      : 'text-gray-500 hover:bg-gray-50'
+                    activeTab === tab ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50'
                   }`}
                 >
                   {tab === 'all' ? 'Tous' : tab === 'recharges' ? 'Recharges' : 'Dépenses'}
@@ -305,35 +336,52 @@ export default function MyRecharges() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-100">
-                  <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">Désignation</th>
                   <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">
-                    <span className="inline-flex items-center gap-1"><DollarSign className="h-3 w-3" /> Montant</span>
+                    Désignation
                   </th>
                   <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">
-                    <span className="inline-flex items-center gap-1"><Calendar className="h-3 w-3" /> Date</span>
+                    <span className="inline-flex items-center gap-1">
+                      <DollarSign className="h-3 w-3" /> Montant
+                    </span>
                   </th>
-                  <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">Modes de paiement</th>
+                  <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">
+                    <span className="inline-flex items-center gap-1">
+                      <Calendar className="h-3 w-3" /> Date
+                    </span>
+                  </th>
+                  <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">
+                    Modes de paiement
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {paginatedTransactions.map(tx => (
-                  <tr key={tx.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                {paginatedTransactions.map((tx) => (
+                  <tr
+                    key={tx.id}
+                    className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors"
+                  >
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                          tx.type === 'recharge' ? 'bg-green-50' : 'bg-gray-100'
-                        }`}>
-                          {tx.type === 'recharge'
-                            ? <ArrowDownLeft className="h-4 w-4 text-green-600" />
-                            : <ArrowUpRight className="h-4 w-4 text-gray-500" />
-                          }
+                        <div
+                          className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                            tx.type === 'recharge' ? 'bg-green-50' : 'bg-gray-100'
+                          }`}
+                        >
+                          {tx.type === 'recharge' ? (
+                            <ArrowDownLeft className="h-4 w-4 text-green-600" />
+                          ) : (
+                            <ArrowUpRight className="h-4 w-4 text-gray-500" />
+                          )}
                         </div>
                         <span className="text-sm font-medium text-gray-900">{tx.designation}</span>
                       </div>
                     </td>
                     <td className="px-5 py-4">
-                      <span className={`text-sm font-semibold ${tx.type === 'recharge' ? 'text-green-600' : 'text-gray-900'}`}>
-                        {tx.type === 'recharge' ? '+' : '-'}{formatCurrency(tx.amount)}
+                      <span
+                        className={`text-sm font-semibold ${tx.type === 'recharge' ? 'text-green-600' : 'text-gray-900'}`}
+                      >
+                        {tx.type === 'recharge' ? '+' : '-'}
+                        {formatCurrency(tx.amount)}
                       </span>
                     </td>
                     <td className="px-5 py-4 text-sm text-gray-500">{formatDate(tx.date)}</td>
@@ -349,17 +397,19 @@ export default function MyRecharges() {
         {!loading && filteredTransactions.length > PAGE_SIZE && (
           <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-between">
             <p className="text-xs text-gray-500">
-              {((currentPage - 1) * PAGE_SIZE) + 1}–{Math.min(currentPage * PAGE_SIZE, filteredTransactions.length)} sur {filteredTransactions.length} transactions
+              {(currentPage - 1) * PAGE_SIZE + 1}–
+              {Math.min(currentPage * PAGE_SIZE, filteredTransactions.length)} sur{' '}
+              {filteredTransactions.length} transactions
             </p>
             <div className="flex items-center gap-1">
               <button
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
                 className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                 <button
                   key={page}
                   onClick={() => setCurrentPage(page)}
@@ -373,7 +423,7 @@ export default function MyRecharges() {
                 </button>
               ))}
               <button
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                 disabled={currentPage === totalPages}
                 className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
               >
@@ -393,14 +443,19 @@ export default function MyRecharges() {
                 <h3 className="text-xl font-bold text-gray-900">Nouvelle Recharge</h3>
                 <p className="text-sm text-gray-500">Rechargez votre compte</p>
               </div>
-              <button onClick={() => setShowNewRechargeModal(false)} className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
+              <button
+                onClick={() => setShowNewRechargeModal(false)}
+                className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+              >
                 <X className="h-5 w-5 text-gray-400" />
               </button>
             </div>
 
             <form onSubmit={handleSubmitRecharge} className="space-y-5">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Montant (TND) *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Montant (TND) *
+                </label>
                 <input
                   type="number"
                   value={newRecharge.amount}
@@ -415,10 +470,14 @@ export default function MyRecharges() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Méthode de paiement *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Méthode de paiement *
+                </label>
                 <select
                   value={newRecharge.payment_method}
-                  onChange={(e) => setNewRecharge({ ...newRecharge, payment_method: e.target.value })}
+                  onChange={(e) =>
+                    setNewRecharge({ ...newRecharge, payment_method: e.target.value })
+                  }
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB]/40 focus:border-[#76E6AB] transition-all"
                   required
                 >
@@ -429,7 +488,9 @@ export default function MyRecharges() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Description (optionnel)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Description (optionnel)
+                </label>
                 <textarea
                   value={newRecharge.description}
                   onChange={(e) => setNewRecharge({ ...newRecharge, description: e.target.value })}
@@ -445,7 +506,8 @@ export default function MyRecharges() {
                   <div>
                     <p className="text-sm text-yellow-800 font-medium">En attente de validation</p>
                     <p className="text-xs text-yellow-700 mt-1">
-                      Votre recharge sera validée par un administrateur avant d&apos;être créditée sur votre compte.
+                      Votre recharge sera validée par un administrateur avant d&apos;être créditée
+                      sur votre compte.
                     </p>
                   </div>
                 </div>
@@ -454,7 +516,10 @@ export default function MyRecharges() {
               <div className="flex gap-3">
                 <button
                   type="button"
-                  onClick={() => { setShowNewRechargeModal(false); setNewRecharge({ amount: '', payment_method: 'card', description: '' }); }}
+                  onClick={() => {
+                    setShowNewRechargeModal(false);
+                    setNewRecharge({ amount: '', payment_method: 'card', description: '' });
+                  }}
                   className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-all font-medium"
                   disabled={submitting}
                 >

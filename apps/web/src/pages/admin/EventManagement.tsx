@@ -3,7 +3,7 @@ import { useAdminStore } from '../../stores/admin.store';
 import { adminEventsService } from '../../services/admin-events.service';
 import { SpecialEvent, CreateEventDTO, EventStats } from '../../types/event';
 import AdminLayout from '../../components/admin/AdminLayout';
-import { 
+import {
   Calendar,
   Search,
   Filter,
@@ -18,7 +18,7 @@ import {
   Clock,
   CheckCircle,
   XCircle,
-  AlertCircle
+  AlertCircle,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../lib/supabase';
@@ -44,9 +44,9 @@ export default function EventManagement() {
     active_events: 0,
     upcoming_events: 0,
     past_events: 0,
-    featured_events: 0
+    featured_events: 0,
   });
-  
+
   const [formData, setFormData] = useState<CreateEventDTO>({
     name: '',
     description: '',
@@ -63,7 +63,7 @@ export default function EventManagement() {
     target_audience: '',
     image_url: '',
     pricing_multiplier: 1.0,
-    priority_level: 5
+    priority_level: 5,
   });
 
   // Charger les événements
@@ -94,18 +94,18 @@ export default function EventManagement() {
     }
   };
 
-  const filteredEvents = events.filter(event => {
-    const matchesSearch = 
+  const filteredEvents = events.filter((event) => {
+    const matchesSearch =
       event.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       event.city?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       event.location?.toLowerCase().includes(searchTerm.toLowerCase());
-    
+
     const matchesType = typeFilter === 'all' || event.event_type === typeFilter;
-    
+
     const now = new Date();
     const startDate = new Date(event.start_date);
     const endDate = new Date(event.end_date);
-    
+
     let matchesStatus = true;
     if (statusFilter === 'upcoming') {
       matchesStatus = startDate > now;
@@ -118,7 +118,7 @@ export default function EventManagement() {
     } else if (statusFilter === 'inactive') {
       matchesStatus = !event.is_active;
     }
-    
+
     return matchesSearch && matchesType && matchesStatus;
   });
 
@@ -135,31 +135,31 @@ export default function EventManagement() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!admin?.id) return;
-    
+
     try {
       // Validation côté client
       const startDate = new Date(formData.start_date);
       const endDate = new Date(formData.end_date);
-      
+
       if (endDate <= startDate) {
         toast.error('La date de fin doit être après la date de début');
         return;
       }
-      
+
       // Convertir les dates au format ISO avec timezone
       const eventData = {
         ...formData,
         start_date: startDate.toISOString(),
-        end_date: endDate.toISOString()
+        end_date: endDate.toISOString(),
       };
-      
-      console.log('📅 Creating event with dates:', { 
-        start: eventData.start_date, 
+
+      console.log('📅 Creating event with dates:', {
+        start: eventData.start_date,
         end: eventData.end_date,
         startObj: startDate,
-        endObj: endDate
+        endObj: endDate,
       });
-      
+
       const newEvent = await adminEventsService.createEvent(eventData, admin.id);
       if (newEvent) {
         setEvents([newEvent, ...events]);
@@ -177,20 +177,20 @@ export default function EventManagement() {
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedEvent) return;
-    
+
     try {
       // Convertir les dates au format ISO avec timezone
       const eventData = {
         ...formData,
         start_date: new Date(formData.start_date).toISOString(),
-        end_date: new Date(formData.end_date).toISOString()
+        end_date: new Date(formData.end_date).toISOString(),
       };
-      
+
       const success = await adminEventsService.updateEvent(selectedEvent.id, eventData);
       if (success) {
-        setEvents(events.map(evt => 
-          evt.id === selectedEvent.id ? { ...evt, ...eventData } : evt
-        ));
+        setEvents(
+          events.map((evt) => (evt.id === selectedEvent.id ? { ...evt, ...eventData } : evt)),
+        );
         toast.success('Événement modifié avec succès');
         setShowEditModal(false);
         setSelectedEvent(null);
@@ -203,11 +203,11 @@ export default function EventManagement() {
 
   const handleDelete = async () => {
     if (!selectedEvent) return;
-    
+
     try {
       const success = await adminEventsService.deleteEvent(selectedEvent.id);
       if (success) {
-        setEvents(events.filter(evt => evt.id !== selectedEvent.id));
+        setEvents(events.filter((evt) => evt.id !== selectedEvent.id));
         toast.success('Événement supprimé');
         setShowDeleteModal(false);
         setSelectedEvent(null);
@@ -222,9 +222,9 @@ export default function EventManagement() {
     try {
       const success = await adminEventsService.toggleEventStatus(eventId, isActive);
       if (success) {
-        setEvents(events.map(evt => 
-          evt.id === eventId ? { ...evt, is_active: isActive } : evt
-        ));
+        setEvents(
+          events.map((evt) => (evt.id === eventId ? { ...evt, is_active: isActive } : evt)),
+        );
         toast.success(isActive ? 'Événement activé' : 'Événement désactivé');
         loadStats();
       }
@@ -237,10 +237,12 @@ export default function EventManagement() {
     try {
       const success = await adminEventsService.toggleFeatured(eventId, isFeatured);
       if (success) {
-        setEvents(events.map(evt => 
-          evt.id === eventId ? { ...evt, is_featured: isFeatured } : evt
-        ));
-        toast.success(isFeatured ? 'Événement mis en avant' : 'Événement retiré de la mise en avant');
+        setEvents(
+          events.map((evt) => (evt.id === eventId ? { ...evt, is_featured: isFeatured } : evt)),
+        );
+        toast.success(
+          isFeatured ? 'Événement mis en avant' : 'Événement retiré de la mise en avant',
+        );
         loadStats();
       }
     } catch (error) {
@@ -266,7 +268,7 @@ export default function EventManagement() {
       image_url: event.image_url || '',
       target_audience: event.target_audience || '',
       pricing_multiplier: event.pricing_multiplier,
-      priority_level: event.priority_level
+      priority_level: event.priority_level,
     });
     setShowEditModal(true);
   };
@@ -288,7 +290,7 @@ export default function EventManagement() {
       target_audience: '',
       image_url: '',
       pricing_multiplier: 1.0,
-      priority_level: 5
+      priority_level: 5,
     });
   };
 
@@ -306,7 +308,9 @@ export default function EventManagement() {
     };
     const config = typeConfig[type] || typeConfig.autre;
     return (
-      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.color}`}>
+      <span
+        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.color}`}
+      >
         {config.text}
       </span>
     );
@@ -316,7 +320,7 @@ export default function EventManagement() {
     return new Date(dateString).toLocaleDateString('fr-FR', {
       year: 'numeric',
       month: 'long',
-      day: 'numeric'
+      day: 'numeric',
     });
   };
 
@@ -324,10 +328,12 @@ export default function EventManagement() {
     const now = new Date();
     const start = new Date(event.start_date);
     const end = new Date(event.end_date);
-    
-    if (!event.is_active) return { color: 'bg-gray-100 text-gray-800', icon: XCircle, text: 'Inactif' };
+
+    if (!event.is_active)
+      return { color: 'bg-gray-100 text-gray-800', icon: XCircle, text: 'Inactif' };
     if (start > now) return { color: 'bg-blue-100 text-blue-800', icon: Clock, text: 'À venir' };
-    if (end < now) return { color: 'bg-gray-100 text-gray-800', icon: CheckCircle, text: 'Terminé' };
+    if (end < now)
+      return { color: 'bg-gray-100 text-gray-800', icon: CheckCircle, text: 'Terminé' };
     return { color: 'bg-green-100 text-green-800', icon: CheckCircle, text: 'En cours' };
   };
 
@@ -412,14 +418,17 @@ export default function EventManagement() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
           <button
-            onClick={() => { resetForm(); setShowCreateModal(true); }}
+            onClick={() => {
+              resetForm();
+              setShowCreateModal(true);
+            }}
             className="inline-flex items-center px-4 py-2 bg-[#00B3A6] text-white rounded-lg hover:bg-[#00B3A6]/90 transition-colors"
           >
             <Plus className="h-5 w-5 mr-2" />
             Nouvel événement
           </button>
         </div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Recherche */}
           <div className="relative">
@@ -504,7 +513,7 @@ export default function EventManagement() {
               {paginatedEvents.map((event) => {
                 const status = getEventStatus(event);
                 const StatusIcon = status.icon;
-                
+
                 return (
                   <tr key={event.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4">
@@ -513,9 +522,7 @@ export default function EventManagement() {
                           <Star className="h-5 w-5 text-yellow-500 mr-2 fill-yellow-500" />
                         )}
                         <div>
-                          <div className="text-sm font-medium text-gray-900">
-                            {event.name}
-                          </div>
+                          <div className="text-sm font-medium text-gray-900">{event.name}</div>
                           {event.description && (
                             <div className="text-xs text-gray-500 truncate max-w-xs">
                               {event.description}
@@ -536,7 +543,9 @@ export default function EventManagement() {
                       <div className="text-xs text-gray-500">{event.location}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${status.color}`}>
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${status.color}`}
+                      >
                         <StatusIcon className="mr-1 h-3 w-3" />
                         {status.text}
                       </span>
@@ -547,7 +556,10 @@ export default function EventManagement() {
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex justify-end space-x-2">
                         <button
-                          onClick={() => { setSelectedEvent(event); setShowDetailsModal(true); }}
+                          onClick={() => {
+                            setSelectedEvent(event);
+                            setShowDetailsModal(true);
+                          }}
                           className="text-indigo-600 hover:text-indigo-900 p-2 rounded-md hover:bg-gray-100"
                           title="Voir détails"
                         >
@@ -563,12 +575,19 @@ export default function EventManagement() {
                         <button
                           onClick={() => handleToggleFeatured(event.id, !event.is_featured)}
                           className={`p-2 rounded-md ${event.is_featured ? 'text-yellow-600 hover:text-yellow-900 hover:bg-yellow-50' : 'text-gray-400 hover:text-yellow-600 hover:bg-yellow-50'}`}
-                          title={event.is_featured ? 'Retirer de la mise en avant' : 'Mettre en avant'}
+                          title={
+                            event.is_featured ? 'Retirer de la mise en avant' : 'Mettre en avant'
+                          }
                         >
-                          <Star className={`h-5 w-5 ${event.is_featured ? 'fill-yellow-500' : ''}`} />
+                          <Star
+                            className={`h-5 w-5 ${event.is_featured ? 'fill-yellow-500' : ''}`}
+                          />
                         </button>
                         <button
-                          onClick={() => { setSelectedEvent(event); setShowDeleteModal(true); }}
+                          onClick={() => {
+                            setSelectedEvent(event);
+                            setShowDeleteModal(true);
+                          }}
                           className="text-red-600 hover:text-red-900 p-2 rounded-md hover:bg-red-50"
                           title="Supprimer"
                         >
@@ -588,14 +607,14 @@ export default function EventManagement() {
           <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
             <div className="flex-1 flex justify-between sm:hidden">
               <button
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
                 disabled={currentPage === 1}
                 className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
               >
                 Précédent
               </button>
               <button
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
                 disabled={currentPage === totalPages}
                 className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
               >
@@ -606,14 +625,14 @@ export default function EventManagement() {
               <div>
                 <p className="text-sm text-gray-700">
                   Affichage de <span className="font-medium">{startIndex + 1}</span> à{' '}
-                  <span className="font-medium">{Math.min(endIndex, filteredEvents.length)}</span> sur{' '}
-                  <span className="font-medium">{filteredEvents.length}</span> résultats
+                  <span className="font-medium">{Math.min(endIndex, filteredEvents.length)}</span>{' '}
+                  sur <span className="font-medium">{filteredEvents.length}</span> résultats
                 </p>
               </div>
               <div>
                 <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
                   <button
-                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
                     disabled={currentPage === 1}
                     className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
                   >
@@ -633,7 +652,7 @@ export default function EventManagement() {
                     </button>
                   ))}
                   <button
-                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
                     disabled={currentPage === totalPages}
                     className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
                   >
@@ -653,7 +672,10 @@ export default function EventManagement() {
           formData={formData}
           setFormData={setFormData}
           onSubmit={handleCreate}
-          onClose={() => { setShowCreateModal(false); resetForm(); }}
+          onClose={() => {
+            setShowCreateModal(false);
+            resetForm();
+          }}
         />
       )}
 
@@ -664,7 +686,11 @@ export default function EventManagement() {
           formData={formData}
           setFormData={setFormData}
           onSubmit={handleUpdate}
-          onClose={() => { setShowEditModal(false); setSelectedEvent(null); resetForm(); }}
+          onClose={() => {
+            setShowEditModal(false);
+            setSelectedEvent(null);
+            resetForm();
+          }}
           isEdit
         />
       )}
@@ -674,7 +700,10 @@ export default function EventManagement() {
         <DeleteConfirmModal
           eventName={selectedEvent.name}
           onConfirm={handleDelete}
-          onCancel={() => { setShowDeleteModal(false); setSelectedEvent(null); }}
+          onCancel={() => {
+            setShowDeleteModal(false);
+            setSelectedEvent(null);
+          }}
         />
       )}
 
@@ -682,7 +711,10 @@ export default function EventManagement() {
       {showDetailsModal && selectedEvent && (
         <EventDetailsModal
           event={selectedEvent}
-          onClose={() => { setShowDetailsModal(false); setSelectedEvent(null); }}
+          onClose={() => {
+            setShowDetailsModal(false);
+            setSelectedEvent(null);
+          }}
         />
       )}
     </AdminLayout>
@@ -693,7 +725,7 @@ export default function EventManagement() {
 function EventImageUpload({
   imageUrl,
   onImageUrlChange,
-  disabled
+  disabled,
 }: {
   imageUrl: string;
   onImageUrlChange: (url: string) => void;
@@ -718,18 +750,16 @@ function EventImageUpload({
 
       if (uploadError) {
         console.error('Erreur upload:', uploadError);
-        toast.error(uploadError.message || 'Erreur lors de l\'upload.');
+        toast.error(uploadError.message || "Erreur lors de l'upload.");
         return;
       }
 
-      const { data: urlData } = supabase.storage
-        .from(EVENT_IMAGES_BUCKET)
-        .getPublicUrl(path);
+      const { data: urlData } = supabase.storage.from(EVENT_IMAGES_BUCKET).getPublicUrl(path);
 
       onImageUrlChange(urlData.publicUrl);
       toast.success('Image uploadée.');
     } catch (err: any) {
-      toast.error(err?.message || 'Erreur lors de l\'upload.');
+      toast.error(err?.message || "Erreur lors de l'upload.");
     } finally {
       setUploading(false);
       e.target.value = '';
@@ -752,7 +782,11 @@ function EventImageUpload({
         {uploading && <p className="text-xs text-gray-500">Upload en cours...</p>}
         {imageUrl && (
           <div className="mt-2 flex items-center gap-3">
-            <img src={imageUrl} alt="Aperçu" className="h-20 w-20 rounded-lg object-cover border border-gray-200" />
+            <img
+              src={imageUrl}
+              alt="Aperçu"
+              className="h-20 w-20 rounded-lg object-cover border border-gray-200"
+            />
             <button
               type="button"
               onClick={() => onImageUrlChange('')}
@@ -777,11 +811,21 @@ interface EventFormModalProps {
   isEdit?: boolean;
 }
 
-function EventFormModal({ title, formData, setFormData, onSubmit, onClose, isEdit }: EventFormModalProps) {
+function EventFormModal({
+  title,
+  formData,
+  setFormData,
+  onSubmit,
+  onClose,
+  isEdit,
+}: EventFormModalProps) {
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-        <div className="fixed inset-0 transition-opacity bg-gray-500 opacity-75" onClick={onClose}></div>
+        <div
+          className="fixed inset-0 transition-opacity bg-gray-500 opacity-75"
+          onClick={onClose}
+        ></div>
 
         <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-3xl sm:w-full">
           <form onSubmit={onSubmit}>
@@ -789,7 +833,7 @@ function EventFormModal({ title, formData, setFormData, onSubmit, onClose, isEdi
               <div className="mb-4">
                 <h3 className="text-lg leading-6 font-medium text-gray-900">{title}</h3>
               </div>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Nom */}
                 <div className="md:col-span-2">
@@ -833,7 +877,9 @@ function EventFormModal({ title, formData, setFormData, onSubmit, onClose, isEdi
                   <select
                     required
                     value={formData.event_type}
-                    onChange={(e) => setFormData({ ...formData, event_type: e.target.value as any })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, event_type: e.target.value as any })
+                    }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
                   >
                     <option value="concert">Concert</option>
@@ -850,9 +896,7 @@ function EventFormModal({ title, formData, setFormData, onSubmit, onClose, isEdi
 
                 {/* Catégorie */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Catégorie
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Catégorie</label>
                   <select
                     value={formData.category}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value as any })}
@@ -895,9 +939,7 @@ function EventFormModal({ title, formData, setFormData, onSubmit, onClose, isEdi
 
                 {/* Ville */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Ville *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Ville *</label>
                   <input
                     type="text"
                     required
@@ -909,9 +951,7 @@ function EventFormModal({ title, formData, setFormData, onSubmit, onClose, isEdi
 
                 {/* Lieu */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Lieu *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Lieu *</label>
                   <input
                     type="text"
                     required
@@ -943,7 +983,12 @@ function EventFormModal({ title, formData, setFormData, onSubmit, onClose, isEdi
                   <input
                     type="number"
                     value={formData.expected_attendance || ''}
-                    onChange={(e) => setFormData({ ...formData, expected_attendance: e.target.value ? parseInt(e.target.value) : undefined })}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        expected_attendance: e.target.value ? parseInt(e.target.value) : undefined,
+                      })
+                    }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
                     placeholder="Nombre de personnes"
                   />
@@ -959,7 +1004,9 @@ function EventFormModal({ title, formData, setFormData, onSubmit, onClose, isEdi
                     min="1"
                     max="10"
                     value={formData.priority_level}
-                    onChange={(e) => setFormData({ ...formData, priority_level: parseInt(e.target.value) })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, priority_level: parseInt(e.target.value) })
+                    }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
                   />
                 </div>
@@ -987,7 +1034,7 @@ function EventFormModal({ title, formData, setFormData, onSubmit, onClose, isEdi
                 </div>
               </div>
             </div>
-            
+
             <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2">
               <button
                 type="submit"
@@ -1021,7 +1068,10 @@ function DeleteConfirmModal({ eventName, onConfirm, onCancel }: DeleteConfirmMod
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-        <div className="fixed inset-0 transition-opacity bg-gray-500 opacity-75" onClick={onCancel}></div>
+        <div
+          className="fixed inset-0 transition-opacity bg-gray-500 opacity-75"
+          onClick={onCancel}
+        ></div>
 
         <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
           <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
@@ -1076,14 +1126,17 @@ function EventDetailsModal({ event, onClose }: EventDetailsModalProps) {
       month: 'long',
       day: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
     });
   };
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-        <div className="fixed inset-0 transition-opacity bg-gray-500 opacity-75" onClick={onClose}></div>
+        <div
+          className="fixed inset-0 transition-opacity bg-gray-500 opacity-75"
+          onClick={onClose}
+        ></div>
 
         <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
           <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
@@ -1094,26 +1147,51 @@ function EventDetailsModal({ event, onClose }: EventDetailsModalProps) {
               <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
                 <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4 flex items-center">
                   {event.name}
-                  {event.is_featured && <Star className="ml-2 h-5 w-5 text-yellow-500 fill-yellow-500" />}
+                  {event.is_featured && (
+                    <Star className="ml-2 h-5 w-5 text-yellow-500 fill-yellow-500" />
+                  )}
                 </h3>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="bg-gray-50 p-4 rounded-lg">
                     <h4 className="font-semibold text-gray-900 mb-2">Informations générales</h4>
                     <div className="space-y-2 text-sm">
-                      <div><span className="text-gray-600">Type:</span> <span className="font-medium">{event.event_type}</span></div>
-                      {event.description && <div><span className="text-gray-600">Description:</span> <p className="mt-1">{event.description}</p></div>}
-                      <div><span className="text-gray-600">Catégorie:</span> <span className="font-medium">{event.category}</span></div>
+                      <div>
+                        <span className="text-gray-600">Type:</span>{' '}
+                        <span className="font-medium">{event.event_type}</span>
+                      </div>
+                      {event.description && (
+                        <div>
+                          <span className="text-gray-600">Description:</span>{' '}
+                          <p className="mt-1">{event.description}</p>
+                        </div>
+                      )}
+                      <div>
+                        <span className="text-gray-600">Catégorie:</span>{' '}
+                        <span className="font-medium">{event.category}</span>
+                      </div>
                     </div>
                   </div>
 
                   <div className="bg-gray-50 p-4 rounded-lg">
                     <h4 className="font-semibold text-gray-900 mb-2">Dates et lieu</h4>
                     <div className="space-y-2 text-sm">
-                      <div><span className="text-gray-600">Début:</span> <span className="font-medium">{formatDate(event.start_date)}</span></div>
-                      <div><span className="text-gray-600">Fin:</span> <span className="font-medium">{formatDate(event.end_date)}</span></div>
-                      <div><span className="text-gray-600">Ville:</span> <span className="font-medium">{event.city}</span></div>
-                      <div><span className="text-gray-600">Lieu:</span> <span className="font-medium">{event.location}</span></div>
+                      <div>
+                        <span className="text-gray-600">Début:</span>{' '}
+                        <span className="font-medium">{formatDate(event.start_date)}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Fin:</span>{' '}
+                        <span className="font-medium">{formatDate(event.end_date)}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Ville:</span>{' '}
+                        <span className="font-medium">{event.city}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-600">Lieu:</span>{' '}
+                        <span className="font-medium">{event.location}</span>
+                      </div>
                     </div>
                   </div>
 
@@ -1121,8 +1199,18 @@ function EventDetailsModal({ event, onClose }: EventDetailsModalProps) {
                     <div className="bg-gray-50 p-4 rounded-lg">
                       <h4 className="font-semibold text-gray-900 mb-2">Audience</h4>
                       <div className="space-y-2 text-sm">
-                        <div><span className="text-gray-600">Attendus:</span> <span className="font-medium">{event.expected_attendance.toLocaleString('fr-FR')} personnes</span></div>
-                        {event.target_audience && <div><span className="text-gray-600">Cible:</span> <p className="mt-1">{event.target_audience}</p></div>}
+                        <div>
+                          <span className="text-gray-600">Attendus:</span>{' '}
+                          <span className="font-medium">
+                            {event.expected_attendance.toLocaleString('fr-FR')} personnes
+                          </span>
+                        </div>
+                        {event.target_audience && (
+                          <div>
+                            <span className="text-gray-600">Cible:</span>{' '}
+                            <p className="mt-1">{event.target_audience}</p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -1130,8 +1218,16 @@ function EventDetailsModal({ event, onClose }: EventDetailsModalProps) {
                   <div className="bg-gray-50 p-4 rounded-lg">
                     <h4 className="font-semibold text-gray-900 mb-2">Campagnes</h4>
                     <div className="space-y-2 text-sm">
-                      <div><span className="text-gray-600">Nombre:</span> <span className="font-medium">{event.campaigns_count || 0}</span></div>
-                      {event.campaign_names && <div><span className="text-gray-600">Noms:</span> <p className="mt-1">{event.campaign_names}</p></div>}
+                      <div>
+                        <span className="text-gray-600">Nombre:</span>{' '}
+                        <span className="font-medium">{event.campaigns_count || 0}</span>
+                      </div>
+                      {event.campaign_names && (
+                        <div>
+                          <span className="text-gray-600">Noms:</span>{' '}
+                          <p className="mt-1">{event.campaign_names}</p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

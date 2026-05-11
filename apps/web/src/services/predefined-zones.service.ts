@@ -20,7 +20,7 @@ export const predefinedZonesService = {
   async getAll(): Promise<PredefinedZone[]> {
     try {
       console.log('🔍 Récupération des zones prédéfinies...');
-      
+
       const { data, error } = await supabase
         .from('predefined_zones')
         .select('*')
@@ -33,14 +33,17 @@ export const predefinedZonesService = {
           message: error.message,
           details: error.details,
           hint: error.hint,
-          code: error.code
+          code: error.code,
         });
         throw error;
       }
 
       console.log('✅ Zones prédéfinies récupérées:', data?.length || 0);
       if (data && data.length > 0) {
-        console.log('📋 Liste des zones:', data.map(z => z.name));
+        console.log(
+          '📋 Liste des zones:',
+          data.map((z) => z.name),
+        );
       }
 
       return data || [];
@@ -97,10 +100,12 @@ export const predefinedZonesService = {
     try {
       const { data, error } = await supabase
         .from('predefined_zones')
-        .insert([{
-          ...zone,
-          is_active: zone.is_active !== undefined ? zone.is_active : true
-        }])
+        .insert([
+          {
+            ...zone,
+            is_active: zone.is_active !== undefined ? zone.is_active : true,
+          },
+        ])
         .select()
         .single();
 
@@ -112,18 +117,21 @@ export const predefinedZonesService = {
     }
   },
 
-  async update(id: string, updates: {
-    name?: string;
-    description?: string | null;
-    latitude?: number;
-    longitude?: number;
-    radius?: number;
-    is_active?: boolean;
-    image_url?: string | null;
-    is_hot?: boolean;
-    country?: string | null;
-    region?: string | null;
-  }): Promise<PredefinedZone> {
+  async update(
+    id: string,
+    updates: {
+      name?: string;
+      description?: string | null;
+      latitude?: number;
+      longitude?: number;
+      radius?: number;
+      is_active?: boolean;
+      image_url?: string | null;
+      is_hot?: boolean;
+      country?: string | null;
+      region?: string | null;
+    },
+  ): Promise<PredefinedZone> {
     try {
       const { data, error } = await supabase
         .from('predefined_zones')
@@ -142,10 +150,7 @@ export const predefinedZonesService = {
 
   async delete(id: string): Promise<void> {
     try {
-      const { error } = await supabase
-        .from('predefined_zones')
-        .delete()
-        .eq('id', id);
+      const { error } = await supabase.from('predefined_zones').delete().eq('id', id);
 
       if (error) throw error;
     } catch (error) {
@@ -179,9 +184,9 @@ export const predefinedZonesService = {
       .from('zone-images')
       .upload(path, file, { contentType: file.type, upsert: true });
     if (error) throw error;
-    const { data: { publicUrl } } = supabase.storage.from('zone-images').getPublicUrl(path);
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from('zone-images').getPublicUrl(path);
     return publicUrl;
   },
 };
-
-

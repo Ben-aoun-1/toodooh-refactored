@@ -4,12 +4,12 @@ import { useAuthStore } from '../stores/auth.store';
 import { authService } from '../services/auth.service';
 import { supabase } from '../lib/supabase';
 import type { BusinessProfile } from '../types/auth';
-import { 
-  Upload, 
-  CheckCircle, 
-  X, 
-  SkipForward, 
-  ArrowRight, 
+import {
+  Upload,
+  CheckCircle,
+  X,
+  SkipForward,
+  ArrowRight,
   ArrowLeft,
   User,
   Building2,
@@ -19,7 +19,7 @@ import {
   Settings,
   Sparkles,
   Star,
-  Zap
+  Zap,
 } from 'lucide-react';
 import AnimatedLogo from '../components/AnimatedLogo';
 
@@ -37,7 +37,7 @@ interface OnboardingStep {
 }
 
 export default function OnboardingModal({ onComplete, onClose: _onClose }: OnboardingModalProps) {
-  const user = useAuthStore(state => state.user);
+  const user = useAuthStore((state) => state.user);
   const [profile, setProfile] = useState<BusinessProfile | null>(null);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false); // ✅ État séparé pour la soumission
@@ -65,7 +65,7 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
   const handleBypass = async () => {
     // ✅ Tous les documents sont maintenant facultatifs, on peut fermer et terminer l'onboarding
     try {
-      console.log('✅ Finalisation de l\'onboarding...');
+      console.log("✅ Finalisation de l'onboarding...");
       await handleSubmit();
     } catch (error) {
       console.error('❌ Erreur lors de la finalisation:', error);
@@ -77,11 +77,11 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
   const handleRetry = async () => {
     setLoading(true);
     setError(null);
-      try {
-        const data = await authService.getBusinessProfile();
-        setProfile(data);
-        setRegUrl(data?.registration_doc_url || null);
-      } catch (error) {
+    try {
+      const data = await authService.getBusinessProfile();
+      setProfile(data);
+      setRegUrl(data?.registration_doc_url || null);
+    } catch (error) {
       console.error('Erreur lors du retry:', error);
       setError('Erreur lors du chargement du profil');
     } finally {
@@ -93,7 +93,7 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
     const fetchProfile = async () => {
       // Éviter les appels multiples
       if (loading || initialized || hasCheckedOnboardingRef.current || !user?.id) return;
-      
+
       // Vérifier d'abord le localStorage pour éviter les requêtes inutiles
       const onboardingCompletedLocal = localStorage.getItem('onboardingCompleted') === 'true';
       if (onboardingCompletedLocal) {
@@ -101,22 +101,22 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
         hasCheckedOnboardingRef.current = true;
         setInitialized(true);
         onCompleteRef.current();
-          return;
-        }
-        
+        return;
+      }
+
       try {
         setLoading(true);
         hasCheckedOnboardingRef.current = true;
-        
+
         // Utiliser directement Supabase pour contourner les RLS
         const { data: existingProfile, error: supabaseError } = await supabase
-              .from('business_profiles')
+          .from('business_profiles')
           .select('*')
           .eq('user_id', user.id)
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
-        
+
         if (existingProfile && !supabaseError) {
           // ⚠️ IMPORTANT: L'onboarding est terminé si onboarding_completed = true
           if (existingProfile.onboarding_completed === true) {
@@ -125,7 +125,7 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
             onCompleteRef.current();
             return;
           }
-          
+
           setProfile(existingProfile);
           setRegUrl(existingProfile.registration_doc_url || null);
           setCinUrl(existingProfile.cin_doc_url || null);
@@ -163,10 +163,10 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
         setInitialized(true);
       }
     };
-    
+
     // N'appeler fetchProfile que si on a un user et qu'on n'est pas déjà initialisé
     if (user?.id && !initialized) {
-    fetchProfile();
+      fetchProfile();
     }
   }, [user?.id, initialized]); // Retirer onComplete des dépendances
 
@@ -205,46 +205,48 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
       // Le chemin ne doit PAS inclure le nom du bucket (il est déjà dans .from('registres'))
       const filePath = `${user.id}_${Date.now()}.${ext}`;
       console.log('📂 Chemin du fichier:', filePath);
-      
-      const { error: uploadError } = await supabase.storage.from('registres').upload(filePath, file);
-      
+
+      const { error: uploadError } = await supabase.storage
+        .from('registres')
+        .upload(filePath, file);
+
       if (uploadError) {
         console.error('❌ Erreur upload:', uploadError);
         throw uploadError;
       }
-      
+
       console.log('✅ Fichier uploadé avec succès');
-      
+
       // Créer une URL signée (valide pendant 7 jours = 604800 secondes)
       // Pour un bucket privé, on utilise createSignedUrl au lieu de getPublicUrl
       const { data: signedData, error: signedError } = await supabase.storage
         .from('registres')
         .createSignedUrl(filePath, 604800); // 7 jours
-      
+
       if (signedError || !signedData) {
         console.error('❌ Erreur création URL signée:', signedError);
-        throw signedError || new Error('Impossible de créer l\'URL signée');
+        throw signedError || new Error("Impossible de créer l'URL signée");
       }
-      
+
       console.log('🔗 URL signée créée:', signedData.signedUrl);
-      
+
       // Mettre à jour le profil avec l'URL signée du registre
       const { error: updateError } = await supabase
         .from('business_profiles')
         .update({ registration_doc_url: signedData.signedUrl })
         .eq('user_id', user.id);
-      
+
       if (updateError) {
         console.error('❌ Erreur mise à jour profil:', updateError);
         throw updateError;
       }
-      
-      console.log('✅ Profil mis à jour avec l\'URL signée du registre');
-      
+
+      console.log("✅ Profil mis à jour avec l'URL signée du registre");
+
       setRegUrl(signedData.signedUrl);
       toast.success('✅ Registre de commerce ajouté avec succès !');
     } catch (error: any) {
-      console.error('❌ Erreur lors de l\'upload du registre:', error);
+      console.error("❌ Erreur lors de l'upload du registre:", error);
       toast.error(`❌ Erreur lors de l'upload: ${error.message || 'Erreur inconnue'}`);
     } finally {
       setUploading(false);
@@ -259,45 +261,47 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
       const ext = cinFile.name.split('.').pop();
       const filePath = `cin_${user.id}_${Date.now()}.${ext}`;
       console.log('📂 Chemin du fichier:', filePath);
-      
-      const { error: uploadError } = await supabase.storage.from('registres').upload(filePath, cinFile);
-      
+
+      const { error: uploadError } = await supabase.storage
+        .from('registres')
+        .upload(filePath, cinFile);
+
       if (uploadError) {
         console.error('❌ Erreur upload:', uploadError);
         throw uploadError;
       }
-      
+
       console.log('✅ Fichier uploadé avec succès');
-      
+
       // Créer une URL signée
       const { data: signedData, error: signedError } = await supabase.storage
         .from('registres')
         .createSignedUrl(filePath, 604800); // 7 jours
-      
+
       if (signedError || !signedData) {
         console.error('❌ Erreur création URL signée:', signedError);
-        throw signedError || new Error('Impossible de créer l\'URL signée');
+        throw signedError || new Error("Impossible de créer l'URL signée");
       }
-      
+
       console.log('🔗 URL signée créée:', signedData.signedUrl);
-      
+
       // Mettre à jour le profil avec l'URL signée du CIN
       const { error: updateError } = await supabase
         .from('business_profiles')
         .update({ cin_doc_url: signedData.signedUrl })
         .eq('user_id', user.id);
-      
+
       if (updateError) {
         console.error('❌ Erreur mise à jour profil:', updateError);
         throw updateError;
       }
-      
-      console.log('✅ Profil mis à jour avec l\'URL signée du CIN');
-      
+
+      console.log("✅ Profil mis à jour avec l'URL signée du CIN");
+
       setCinUrl(signedData.signedUrl);
       toast.success('✅ Document CIN ajouté avec succès !');
     } catch (error: any) {
-      console.error('❌ Erreur lors de l\'upload du CIN:', error);
+      console.error("❌ Erreur lors de l'upload du CIN:", error);
       toast.error(`❌ Erreur lors de l'upload: ${error.message || 'Erreur inconnue'}`);
     } finally {
       setUploadingCin(false);
@@ -306,10 +310,10 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
 
   const nextStep = () => {
     console.log('nextStep called, currentStep:', currentStep, 'totalSteps:', totalSteps);
-    
+
     // ✅ Tous les documents sont maintenant facultatifs ou peuvent être ajoutés plus tard
     // Aucune validation nécessaire à l'étape 3
-    
+
     if (currentStep < totalSteps) {
       console.log('Moving to next step:', currentStep + 1);
       setCurrentStep(currentStep + 1);
@@ -329,9 +333,9 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
 
   const skipStep = () => {
     console.log('skipStep called, currentStep:', currentStep);
-    
+
     // ✅ Tous les documents sont maintenant facultatifs, toutes les étapes peuvent être passées
-    
+
     nextStep();
   };
 
@@ -352,9 +356,9 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
       // Mettre à jour onboarding_completed dans la base de données
       const { error: updateError } = await supabase
         .from('business_profiles')
-        .update({ 
+        .update({
           onboarding_completed: true,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         })
         .eq('user_id', user.id);
 
@@ -367,21 +371,23 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
 
       // Marquer l'onboarding comme terminé dans le localStorage
       localStorage.setItem('onboardingCompleted', 'true');
-      
+
       console.log('✅ Onboarding completed, calling onComplete');
-      
+
       // ✅ Afficher le toast de succès
-      toast.success('✅ Inscription terminée avec succès ! Votre compte sera activé après validation par l\'administrateur.');
-      
+      toast.success(
+        "✅ Inscription terminée avec succès ! Votre compte sera activé après validation par l'administrateur.",
+      );
+
       // ✅ Attendre que le toast soit visible
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
       // ✅ Désactiver le submitting
       setSubmitting(false);
-      
+
       // ✅ Attendre un peu avant de fermer pour que l'utilisateur voie le changement
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
       // ✅ Fermer le modal en dernier
       onComplete();
     } catch (error) {
@@ -396,8 +402,8 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
   const steps: OnboardingStep[] = [
     {
       id: 1,
-      title: "Bienvenue sur Toodooh !",
-      subtitle: "Votre plateforme de publicité digitale",
+      title: 'Bienvenue sur Toodooh !',
+      subtitle: 'Votre plateforme de publicité digitale',
       icon: Sparkles,
       content: (
         <div className="text-center space-y-6">
@@ -405,10 +411,15 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
             <AnimatedLogo size={120} />
           </div>
           <h2 className="text-3xl font-bold text-gray-900 mb-4">
-            Bienvenue, {profile?.business_name || profile?.contact_name || user?.email?.split('@')[0] || 'Utilisateur'} ! 👋
+            Bienvenue,{' '}
+            {profile?.business_name ||
+              profile?.contact_name ||
+              user?.email?.split('@')[0] ||
+              'Utilisateur'}{' '}
+            ! 👋
           </h2>
           <p className="text-lg text-gray-600 mb-8 max-w-2xl mx-auto">
-            Nous sommes ravis de vous accueillir sur Toodooh, votre plateforme complète pour créer, 
+            Nous sommes ravis de vous accueillir sur Toodooh, votre plateforme complète pour créer,
             gérer et optimiser vos campagnes publicitaires digitales.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
@@ -417,7 +428,9 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
                 <Megaphone className="h-6 w-6 text-[#00B3A6]" />
               </div>
               <h3 className="font-semibold text-gray-900 mb-2">Campagnes Publicitaires</h3>
-              <p className="text-sm text-gray-600">Créez et gérez vos campagnes avec des outils puissants</p>
+              <p className="text-sm text-gray-600">
+                Créez et gérez vos campagnes avec des outils puissants
+              </p>
             </div>
             <div className="bg-white border border-gray-200 p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow">
               <div className="bg-blue-500 bg-opacity-10 w-12 h-12 rounded-lg flex items-center justify-center mx-auto mb-3">
@@ -435,18 +448,21 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
             </div>
           </div>
         </div>
-      )
+      ),
     },
     {
       id: 2,
-      title: "Votre Profil Entreprise",
-      subtitle: "Informations de base",
+      title: 'Votre Profil Entreprise',
+      subtitle: 'Informations de base',
       icon: Building2,
       content: (
         <div className="space-y-6">
           <div className="bg-gradient-to-r from-[#00B3A6] to-[#008C82] p-6 rounded-xl text-white shadow-sm">
             <h3 className="text-xl font-bold mb-2">Profil Temporaire</h3>
-            <p className="opacity-90">Votre profil a été créé avec des informations temporaires. Vous pourrez le compléter plus tard.</p>
+            <p className="opacity-90">
+              Votre profil a été créé avec des informations temporaires. Vous pourrez le compléter
+              plus tard.
+            </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
@@ -459,11 +475,15 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
               <div className="space-y-3">
                 <div>
                   <p className="text-sm text-gray-500">Nom & Prénom</p>
-                  <p className="font-medium text-gray-900">{profile?.contact_name || 'Non défini'}</p>
+                  <p className="font-medium text-gray-900">
+                    {profile?.contact_name || 'Non défini'}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Raison sociale</p>
-                  <p className="font-medium text-gray-900">{profile?.business_name || 'Non définie'}</p>
+                  <p className="font-medium text-gray-900">
+                    {profile?.business_name || 'Non définie'}
+                  </p>
                 </div>
               </div>
             </div>
@@ -477,11 +497,15 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
               <div className="space-y-3">
                 <div>
                   <p className="text-sm text-gray-500">Raison sociale</p>
-                  <p className="font-medium text-gray-900">{profile?.business_name || 'Non définie'}</p>
+                  <p className="font-medium text-gray-900">
+                    {profile?.business_name || 'Non définie'}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Type de profil</p>
-                  <p className="font-medium text-gray-900">{profile?.profile_type === 'advertiser' ? 'Annonceur' : profile?.profile_type}</p>
+                  <p className="font-medium text-gray-900">
+                    {profile?.profile_type === 'advertiser' ? 'Annonceur' : profile?.profile_type}
+                  </p>
                 </div>
               </div>
             </div>
@@ -491,52 +515,61 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
               <Star className="h-5 w-5 text-[#00B3A6] mr-3 mt-0.5" />
               <div>
                 <h4 className="font-semibold text-gray-900 mb-1">Prochaine étape</h4>
-                <p className="text-sm text-gray-700">Vous pourrez compléter votre profil et ajouter vos documents légaux depuis votre tableau de bord.</p>
+                <p className="text-sm text-gray-700">
+                  Vous pourrez compléter votre profil et ajouter vos documents légaux depuis votre
+                  tableau de bord.
+                </p>
               </div>
             </div>
           </div>
         </div>
-      )
+      ),
     },
     {
       id: 3,
-      title: "Documents Légaux",
-      subtitle: profile?.profile_type === 'individual_owner' 
-        ? "Document CIN (facultatif)" 
-        : profile?.profile_type === 'fleet_owner'
-          ? "Registre de commerce (facultatif)"
-          : "Registre de commerce (obligatoire)",
+      title: 'Documents Légaux',
+      subtitle:
+        profile?.profile_type === 'individual_owner'
+          ? 'Document CIN (facultatif)'
+          : profile?.profile_type === 'fleet_owner'
+            ? 'Registre de commerce (facultatif)'
+            : 'Registre de commerce (obligatoire)',
       icon: FileText,
       content: (
         <div className="space-y-6">
           <div className="text-center mb-8">
-            <div className={`w-16 h-16 bg-gradient-to-br rounded-full flex items-center justify-center mx-auto mb-4 ${
-              profile?.profile_type === 'individual_owner' 
-                ? 'from-blue-100 to-blue-200' 
-                : 'from-red-100 to-red-200'
-            }`}>
-              <FileText className={`h-8 w-8 ${
-                profile?.profile_type === 'individual_owner' 
-                  ? 'text-blue-600' 
-                  : 'text-red-600'
-              }`} />
+            <div
+              className={`w-16 h-16 bg-gradient-to-br rounded-full flex items-center justify-center mx-auto mb-4 ${
+                profile?.profile_type === 'individual_owner'
+                  ? 'from-blue-100 to-blue-200'
+                  : 'from-red-100 to-red-200'
+              }`}
+            >
+              <FileText
+                className={`h-8 w-8 ${
+                  profile?.profile_type === 'individual_owner' ? 'text-blue-600' : 'text-red-600'
+                }`}
+              />
             </div>
             <h3 className="text-xl font-bold text-gray-900 mb-2">Documents Légaux</h3>
             <p className="text-gray-600 max-w-2xl mx-auto">
               {profile?.profile_type === 'individual_owner' ? (
                 <>
-                  <span className="text-blue-600 font-semibold">ℹ️ Document facultatif :</span> En tant que propriétaire individuel, 
-                  vous pouvez fournir votre document CIN maintenant ou le cocher "Ajouter plus tard" pour l'ajouter depuis votre profil.
+                  <span className="text-blue-600 font-semibold">ℹ️ Document facultatif :</span> En
+                  tant que propriétaire individuel, vous pouvez fournir votre document CIN
+                  maintenant ou le cocher "Ajouter plus tard" pour l'ajouter depuis votre profil.
                 </>
               ) : profile?.profile_type === 'fleet_owner' ? (
                 <>
-                  <span className="text-blue-600 font-semibold">ℹ️ Document facultatif :</span> En tant que propriétaire de parc, 
-                  vous pouvez fournir votre registre de commerce maintenant ou cocher "Ajouter plus tard" pour l'ajouter depuis votre profil.
+                  <span className="text-blue-600 font-semibold">ℹ️ Document facultatif :</span> En
+                  tant que propriétaire de parc, vous pouvez fournir votre registre de commerce
+                  maintenant ou cocher "Ajouter plus tard" pour l'ajouter depuis votre profil.
                 </>
               ) : (
                 <>
-                  <span className="text-orange-600 font-semibold">⚠️ Document recommandé :</span> En tant qu'annonceur, 
-                  le registre de commerce est recommandé. Vous pouvez cocher "Ajouter plus tard" pour l'ajouter depuis votre profil.
+                  <span className="text-orange-600 font-semibold">⚠️ Document recommandé :</span> En
+                  tant qu'annonceur, le registre de commerce est recommandé. Vous pouvez cocher
+                  "Ajouter plus tard" pour l'ajouter depuis votre profil.
                 </>
               )}
             </p>
@@ -561,19 +594,21 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
           {!addLater && (
             <>
               {/* Pour les propriétaires individuels : upload CIN */}
-              {profile?.profile_type === 'individual_owner' && (
-                cinUrl ? (
+              {profile?.profile_type === 'individual_owner' &&
+                (cinUrl ? (
                   <div className="bg-green-50 border border-green-200 rounded-xl p-6">
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center">
                         <CheckCircle className="h-6 w-6 text-green-600 mr-3" />
-                        <h4 className="font-semibold text-green-900">Document CIN ajouté avec succès !</h4>
+                        <h4 className="font-semibold text-green-900">
+                          Document CIN ajouté avec succès !
+                        </h4>
                       </div>
                     </div>
-                    <a 
-                      href={cinUrl} 
-                      target="_blank" 
-                      rel="noopener noreferrer" 
+                    <a
+                      href={cinUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="text-green-700 underline hover:text-green-800 inline-flex items-center"
                     >
                       <FileText className="h-4 w-4 mr-2" />
@@ -584,16 +619,18 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
                   <div className="space-y-6">
                     <div className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl p-8 text-center">
                       <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                      <h4 className="font-semibold text-gray-900 mb-2">Ajouter votre document CIN</h4>
+                      <h4 className="font-semibold text-gray-900 mb-2">
+                        Ajouter votre document CIN
+                      </h4>
                       <p className="text-gray-600 mb-4">Formats acceptés : PDF, JPG, JPEG, PNG</p>
-                      <input 
-                        type="file" 
-                        accept=".pdf,.jpg,.jpeg,.png" 
-                        onChange={handleCinFileChange} 
+                      <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={handleCinFileChange}
                         className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-[#00B3A6] file:text-white hover:file:bg-[#008C82] cursor-pointer"
                       />
                     </div>
-                    
+
                     {cinFile && (
                       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
                         <div className="flex items-center justify-between">
@@ -601,7 +638,9 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
                             <FileText className="h-5 w-5 text-blue-600 mr-3" />
                             <div>
                               <p className="font-medium text-blue-900">{cinFile.name}</p>
-                              <p className="text-sm text-blue-700">{(cinFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                              <p className="text-sm text-blue-700">
+                                {(cinFile.size / 1024 / 1024).toFixed(2)} MB
+                              </p>
                             </div>
                           </div>
                           <button
@@ -615,129 +654,143 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
                       </div>
                     )}
                   </div>
-                )
-              )}
+                ))}
 
               {/* Pour les propriétaires de parc et annonceurs : upload RNE */}
-              {(profile?.profile_type === 'fleet_owner' || profile?.profile_type === 'advertiser') && (
-                regUrl ? (
-            <div className="bg-green-50 border border-green-200 rounded-xl p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center">
-                  <CheckCircle className="h-6 w-6 text-green-600 mr-3" />
-                  <h4 className="font-semibold text-green-900">Document ajouté avec succès !</h4>
-                </div>
-                <button
-                  onClick={async () => {
-                    if (!user) return;
-                    
-                    const confirmDelete = window.confirm(
-                      '⚠️ Êtes-vous sûr de vouloir supprimer ce document ?\n\n' +
-                      'Vous devrez uploader un nouveau registre de commerce pour terminer votre inscription.'
-                    );
-                    
-                    if (!confirmDelete) return;
-                    
-                    try {
-                      console.log('🗑️ Suppression du registre de commerce...');
-                      console.log('🔗 URL complète:', regUrl);
-                      
-                      // Extraire le nom du fichier de l'URL
-                      // L'URL est du type: https://.../storage/v1/object/public/registres/FILENAME.pdf
-                      // Ou: https://.../storage/v1/object/registres/FILENAME.pdf
-                      let fileName = '';
-                      
-                      if (regUrl.includes('/registres/')) {
-                        // Extraire tout ce qui est après '/registres/'
-                        const parts = regUrl.split('/registres/');
-                        if (parts.length > 1) {
-                          fileName = parts[1];
-                        }
-                      } else {
-                        // Fallback : prendre le dernier élément de l'URL
-                        fileName = regUrl.split('/').pop() || '';
-                      }
-                      
-                      console.log('📂 Nom du fichier extrait:', fileName);
-                      
-                      if (!fileName) {
-                        console.error('❌ Impossible d\'extraire le nom du fichier de l\'URL');
-                        throw new Error('Impossible d\'extraire le nom du fichier');
-                      }
-                      
-                      // Supprimer le fichier du storage
-                      console.log('🗑️ Tentative de suppression du fichier:', fileName);
-                      const { error: deleteError, data: deleteData } = await supabase.storage
-                        .from('registres')
-                        .remove([fileName]);
-                      
-                      console.log('📊 Résultat de la suppression:', { deleteError, deleteData });
-                      
-                      if (deleteError) {
-                        console.error('❌ Erreur lors de la suppression du fichier:', deleteError);
-                        console.error('   Code:', deleteError.message);
-                        // On continue quand même pour supprimer l'URL de la DB
-                      } else {
-                        console.log('✅ Fichier supprimé du storage avec succès');
-                      }
-                      
-                      // IMPORTANT : Toujours mettre à jour le profil (supprimer l'URL)
-                      // Même si le fichier n'existe pas dans le storage
-                      const { error: updateError } = await supabase
-                        .from('business_profiles')
-                        .update({ 
-                          registration_doc_url: null,
-                          onboarding_completed: false  // Réinitialiser aussi l'onboarding
-                        })
-                        .eq('user_id', user.id);
-                      
-                      if (updateError) {
-                        console.error('❌ Erreur mise à jour profil:', updateError);
-                        throw updateError;
-                      }
-                      
-                      console.log('✅ URL supprimée du profil');
-                      console.log('✅ onboarding_completed réinitialisé à false');
-                      
-                      setRegUrl(null);
-                      setFile(null);
-                      toast.success('✅ Document supprimé avec succès. Vous pouvez uploader un nouveau fichier.');
-                    } catch (error: any) {
-                      console.error('❌ Erreur lors de la suppression:', error);
-                      toast.error(`❌ Erreur lors de la suppression: ${error.message || 'Erreur inconnue'}`);
-                    }
-                  }}
-                  className="flex items-center px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors border border-red-300"
-                  title="Supprimer ce document"
-                >
-                  <X className="h-4 w-4 mr-1" />
-                  Supprimer
-                </button>
-              </div>
-              <a 
-                href={regUrl} 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className="text-green-700 underline hover:text-green-800 inline-flex items-center"
-              >
-                <FileText className="h-4 w-4 mr-2" />
-                Voir le registre de commerce
-              </a>
-            </div>
+              {(profile?.profile_type === 'fleet_owner' ||
+                profile?.profile_type === 'advertiser') &&
+                (regUrl ? (
+                  <div className="bg-green-50 border border-green-200 rounded-xl p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center">
+                        <CheckCircle className="h-6 w-6 text-green-600 mr-3" />
+                        <h4 className="font-semibold text-green-900">
+                          Document ajouté avec succès !
+                        </h4>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          if (!user) return;
+
+                          const confirmDelete = window.confirm(
+                            '⚠️ Êtes-vous sûr de vouloir supprimer ce document ?\n\n' +
+                              'Vous devrez uploader un nouveau registre de commerce pour terminer votre inscription.',
+                          );
+
+                          if (!confirmDelete) return;
+
+                          try {
+                            console.log('🗑️ Suppression du registre de commerce...');
+                            console.log('🔗 URL complète:', regUrl);
+
+                            // Extraire le nom du fichier de l'URL
+                            // L'URL est du type: https://.../storage/v1/object/public/registres/FILENAME.pdf
+                            // Ou: https://.../storage/v1/object/registres/FILENAME.pdf
+                            let fileName = '';
+
+                            if (regUrl.includes('/registres/')) {
+                              // Extraire tout ce qui est après '/registres/'
+                              const parts = regUrl.split('/registres/');
+                              if (parts.length > 1) {
+                                fileName = parts[1];
+                              }
+                            } else {
+                              // Fallback : prendre le dernier élément de l'URL
+                              fileName = regUrl.split('/').pop() || '';
+                            }
+
+                            console.log('📂 Nom du fichier extrait:', fileName);
+
+                            if (!fileName) {
+                              console.error("❌ Impossible d'extraire le nom du fichier de l'URL");
+                              throw new Error("Impossible d'extraire le nom du fichier");
+                            }
+
+                            // Supprimer le fichier du storage
+                            console.log('🗑️ Tentative de suppression du fichier:', fileName);
+                            const { error: deleteError, data: deleteData } = await supabase.storage
+                              .from('registres')
+                              .remove([fileName]);
+
+                            console.log('📊 Résultat de la suppression:', {
+                              deleteError,
+                              deleteData,
+                            });
+
+                            if (deleteError) {
+                              console.error(
+                                '❌ Erreur lors de la suppression du fichier:',
+                                deleteError,
+                              );
+                              console.error('   Code:', deleteError.message);
+                              // On continue quand même pour supprimer l'URL de la DB
+                            } else {
+                              console.log('✅ Fichier supprimé du storage avec succès');
+                            }
+
+                            // IMPORTANT : Toujours mettre à jour le profil (supprimer l'URL)
+                            // Même si le fichier n'existe pas dans le storage
+                            const { error: updateError } = await supabase
+                              .from('business_profiles')
+                              .update({
+                                registration_doc_url: null,
+                                onboarding_completed: false, // Réinitialiser aussi l'onboarding
+                              })
+                              .eq('user_id', user.id);
+
+                            if (updateError) {
+                              console.error('❌ Erreur mise à jour profil:', updateError);
+                              throw updateError;
+                            }
+
+                            console.log('✅ URL supprimée du profil');
+                            console.log('✅ onboarding_completed réinitialisé à false');
+
+                            setRegUrl(null);
+                            setFile(null);
+                            toast.success(
+                              '✅ Document supprimé avec succès. Vous pouvez uploader un nouveau fichier.',
+                            );
+                          } catch (error: any) {
+                            console.error('❌ Erreur lors de la suppression:', error);
+                            toast.error(
+                              `❌ Erreur lors de la suppression: ${error.message || 'Erreur inconnue'}`,
+                            );
+                          }
+                        }}
+                        className="flex items-center px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors border border-red-300"
+                        title="Supprimer ce document"
+                      >
+                        <X className="h-4 w-4 mr-1" />
+                        Supprimer
+                      </button>
+                    </div>
+                    <a
+                      href={regUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-green-700 underline hover:text-green-800 inline-flex items-center"
+                    >
+                      <FileText className="h-4 w-4 mr-2" />
+                      Voir le registre de commerce
+                    </a>
+                  </div>
                 ) : (
                   <div className="space-y-6">
                     <div className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl p-8 text-center">
                       <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                      <h4 className="font-semibold text-gray-900 mb-2">Ajouter votre registre de commerce</h4>
+                      <h4 className="font-semibold text-gray-900 mb-2">
+                        Ajouter votre registre de commerce
+                      </h4>
                       <p className="text-gray-600 mb-4">Formats acceptés : PDF, JPG, JPEG, PNG</p>
-                      <input 
-                        type="file" 
-                        accept=".pdf,.jpg,.jpeg,.png" 
-                        onChange={handleFileChange} 
+                      <input
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={handleFileChange}
                         className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-[#00B3A6] file:text-white hover:file:bg-[#008C82] cursor-pointer"
                       />
                     </div>
-                    
+
                     {file && (
                       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
                         <div className="flex items-center justify-between">
@@ -745,7 +798,9 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
                             <FileText className="h-5 w-5 text-blue-600 mr-3" />
                             <div>
                               <p className="font-medium text-blue-900">{file.name}</p>
-                              <p className="text-sm text-blue-700">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                              <p className="text-sm text-blue-700">
+                                {(file.size / 1024 / 1024).toFixed(2)} MB
+                              </p>
                             </div>
                           </div>
                           <button
@@ -759,54 +814,73 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
                       </div>
                     )}
                   </div>
-                )
-              )}
+                ))}
             </>
           )}
-          
+
           {/* Message d'information selon le statut */}
-          <div className={`border rounded-xl p-4 ${
-            (profile?.profile_type === 'individual_owner' && cinUrl) || 
-            ((profile?.profile_type === 'fleet_owner' || profile?.profile_type === 'advertiser') && regUrl) || 
-            addLater
-              ? 'bg-green-50 border-green-200' 
-              : 'bg-blue-50 border-blue-200'
-          }`}>
+          <div
+            className={`border rounded-xl p-4 ${
+              (profile?.profile_type === 'individual_owner' && cinUrl) ||
+              ((profile?.profile_type === 'fleet_owner' ||
+                profile?.profile_type === 'advertiser') &&
+                regUrl) ||
+              addLater
+                ? 'bg-green-50 border-green-200'
+                : 'bg-blue-50 border-blue-200'
+            }`}
+          >
             <div className="flex items-start">
-              <Zap className={`h-5 w-5 mr-3 mt-0.5 ${
-                (profile?.profile_type === 'individual_owner' && cinUrl) || 
-                ((profile?.profile_type === 'fleet_owner' || profile?.profile_type === 'advertiser') && regUrl) || 
-                addLater
-                  ? 'text-green-600' 
-                  : 'text-blue-600'
-              }`} />
-              <div>
-                <h4 className={`font-semibold mb-1 ${
-                  (profile?.profile_type === 'individual_owner' && cinUrl) || 
-                  ((profile?.profile_type === 'fleet_owner' || profile?.profile_type === 'advertiser') && regUrl) || 
+              <Zap
+                className={`h-5 w-5 mr-3 mt-0.5 ${
+                  (profile?.profile_type === 'individual_owner' && cinUrl) ||
+                  ((profile?.profile_type === 'fleet_owner' ||
+                    profile?.profile_type === 'advertiser') &&
+                    regUrl) ||
                   addLater
-                    ? 'text-green-900' 
-                    : 'text-blue-900'
-                }`}>
-                  {addLater 
+                    ? 'text-green-600'
+                    : 'text-blue-600'
+                }`}
+              />
+              <div>
+                <h4
+                  className={`font-semibold mb-1 ${
+                    (profile?.profile_type === 'individual_owner' && cinUrl) ||
+                    ((profile?.profile_type === 'fleet_owner' ||
+                      profile?.profile_type === 'advertiser') &&
+                      regUrl) ||
+                    addLater
+                      ? 'text-green-900'
+                      : 'text-blue-900'
+                  }`}
+                >
+                  {addLater
                     ? '✅ Vous ajouterez le document plus tard'
-                    : (profile?.profile_type === 'individual_owner' && cinUrl) || 
-                      ((profile?.profile_type === 'fleet_owner' || profile?.profile_type === 'advertiser') && regUrl)
-                      ? '✅ Document ajouté' 
+                    : (profile?.profile_type === 'individual_owner' && cinUrl) ||
+                        ((profile?.profile_type === 'fleet_owner' ||
+                          profile?.profile_type === 'advertiser') &&
+                          regUrl)
+                      ? '✅ Document ajouté'
                       : 'ℹ️ Document facultatif'}
                 </h4>
-                <p className={`text-sm ${
-                  (profile?.profile_type === 'individual_owner' && cinUrl) || 
-                  ((profile?.profile_type === 'fleet_owner' || profile?.profile_type === 'advertiser') && regUrl) || 
-                  addLater
-                    ? 'text-green-700' 
-                    : 'text-blue-700'
-                }`}>
-                  {addLater 
-                    ? 'Vous pourrez ajouter votre document depuis votre profil après avoir terminé l\'onboarding.'
-                    : (profile?.profile_type === 'individual_owner' && cinUrl)
+                <p
+                  className={`text-sm ${
+                    (profile?.profile_type === 'individual_owner' && cinUrl) ||
+                    ((profile?.profile_type === 'fleet_owner' ||
+                      profile?.profile_type === 'advertiser') &&
+                      regUrl) ||
+                    addLater
+                      ? 'text-green-700'
+                      : 'text-blue-700'
+                  }`}
+                >
+                  {addLater
+                    ? "Vous pourrez ajouter votre document depuis votre profil après avoir terminé l'onboarding."
+                    : profile?.profile_type === 'individual_owner' && cinUrl
                       ? 'Votre document CIN a été ajouté avec succès.'
-                      : ((profile?.profile_type === 'fleet_owner' || profile?.profile_type === 'advertiser') && regUrl)
+                      : (profile?.profile_type === 'fleet_owner' ||
+                            profile?.profile_type === 'advertiser') &&
+                          regUrl
                         ? 'Votre registre de commerce a été ajouté avec succès.'
                         : 'Vous pouvez uploader votre document maintenant ou cocher "Ajouter plus tard" pour continuer.'}
                 </p>
@@ -814,12 +888,12 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
             </div>
           </div>
         </div>
-      )
+      ),
     },
     {
       id: 4,
-      title: "Découvrez la Plateforme",
-      subtitle: "Fonctionnalités principales",
+      title: 'Découvrez la Plateforme',
+      subtitle: 'Fonctionnalités principales',
       icon: Megaphone,
       content: (
         <div className="space-y-8">
@@ -827,7 +901,7 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
             <h3 className="text-xl font-bold text-gray-900 mb-2">Fonctionnalités Principales</h3>
             <p className="text-gray-600">Découvrez les outils puissants à votre disposition</p>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white border border-gray-200 p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow">
               <div className="flex items-center mb-4">
@@ -845,7 +919,7 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
                 <li>• Personnalisation avancée</li>
               </ul>
             </div>
-            
+
             <div className="bg-white border border-gray-200 p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow">
               <div className="flex items-center mb-4">
                 <div className="w-12 h-12 bg-green-500 bg-opacity-10 rounded-lg flex items-center justify-center mr-4">
@@ -862,7 +936,7 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
                 <li>• Historique complet</li>
               </ul>
             </div>
-            
+
             <div className="bg-white border border-gray-200 p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow">
               <div className="flex items-center mb-4">
                 <div className="w-12 h-12 bg-purple-500 bg-opacity-10 rounded-lg flex items-center justify-center mr-4">
@@ -879,7 +953,7 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
                 <li>• Paramètres de compte</li>
               </ul>
             </div>
-            
+
             <div className="bg-white border border-gray-200 p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow">
               <div className="flex items-center mb-4">
                 <div className="w-12 h-12 bg-orange-500 bg-opacity-10 rounded-lg flex items-center justify-center mr-4">
@@ -898,28 +972,27 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
             </div>
           </div>
         </div>
-      )
+      ),
     },
     {
       id: 5,
       title: "C'est parti !",
-      subtitle: "Vous êtes prêt à commencer",
+      subtitle: 'Vous êtes prêt à commencer',
       icon: Star,
       content: (
         <div className="text-center space-y-8">
           <div className="w-24 h-24 bg-gradient-to-br from-[#00B3A6] to-[#008C82] rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
             <Star className="h-12 w-12 text-white" />
           </div>
-          
+
           <div>
-            <h2 className="text-3xl font-bold text-gray-900 mb-4">
-              Félicitations ! 🎉
-            </h2>
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">Félicitations ! 🎉</h2>
             <p className="text-lg text-gray-600 mb-8 max-w-2xl mx-auto">
-              Votre compte est maintenant configuré et vous êtes prêt à créer votre première campagne publicitaire sur Toodooh !
+              Votre compte est maintenant configuré et vous êtes prêt à créer votre première
+              campagne publicitaire sur Toodooh !
             </p>
           </div>
-          
+
           <div className="bg-gradient-to-r from-[#00B3A6] to-[#008C82] p-8 rounded-xl shadow-sm">
             <h3 className="text-xl font-bold mb-6 text-white">Prochaines étapes recommandées :</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -946,7 +1019,7 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
               </div>
             </div>
           </div>
-          
+
           <div className="bg-green-50 border border-green-200 rounded-xl p-6">
             <div className="flex items-center justify-center">
               <CheckCircle className="h-6 w-6 text-green-600 mr-3" />
@@ -956,15 +1029,15 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
             </div>
           </div>
         </div>
-      )
-    }
+      ),
+    },
   ];
 
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
         <div className="bg-white rounded-2xl p-8 relative">
-          <button 
+          <button
             onClick={() => {
               console.log('X button clicked');
               handleBypass();
@@ -985,7 +1058,7 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
     return (
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
         <div className="bg-white rounded-2xl p-8 text-center max-w-md w-full relative">
-          <button 
+          <button
             onClick={() => {
               console.log('X button clicked');
               handleBypass();
@@ -995,13 +1068,13 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
           >
             <X size={24} />
           </button>
-          
+
           <div className="mb-6">
             <X className="h-16 w-16 text-red-500 mx-auto mb-4" />
             <h3 className="text-xl font-bold text-gray-900 mb-2">Erreur de chargement</h3>
             <p className="text-gray-600 mb-6">{error}</p>
           </div>
-          
+
           <div className="space-y-3">
             <button
               onClick={() => {
@@ -1042,7 +1115,7 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
                 <p className="text-white text-opacity-90">{currentStepData.subtitle}</p>
               </div>
             </div>
-            <button 
+            <button
               onClick={() => {
                 console.log('X button clicked');
                 handleBypass();
@@ -1053,24 +1126,24 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
               <X size={24} />
             </button>
           </div>
-          
+
           {/* Barre de progression */}
           <div className="w-full bg-white bg-opacity-20 rounded-full h-2">
-            <div 
+            <div
               className="bg-white h-2 rounded-full transition-all duration-300 shadow-sm"
               style={{ width: `${(currentStep / totalSteps) * 100}%` }}
             ></div>
           </div>
           <div className="flex justify-between text-sm mt-2 text-white text-opacity-90">
-            <span>Étape {currentStep} sur {totalSteps}</span>
+            <span>
+              Étape {currentStep} sur {totalSteps}
+            </span>
             <span>{Math.round((currentStep / totalSteps) * 100)}%</span>
           </div>
         </div>
 
         {/* Contenu */}
-        <div className="flex-1 overflow-y-auto p-8">
-          {currentStepData.content}
-            </div>
+        <div className="flex-1 overflow-y-auto p-8">{currentStepData.content}</div>
 
         {/* Footer avec navigation */}
         <div className="border-t border-gray-200 p-6 bg-gray-50 flex-shrink-0 rounded-b-2xl">
@@ -1086,7 +1159,7 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
               <ArrowLeft className="h-4 w-4 mr-2" />
               Précédent
             </button>
-            
+
             <div className="flex items-center space-x-3">
               {/* Bouton "Passer" - Toujours visible à l'étape 3 car tout est facultatif ou peut être ajouté plus tard */}
               {currentStep < totalSteps && (
@@ -1100,7 +1173,7 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
                   Passer
                 </button>
               )}
-              
+
               {/* Bouton "Suivant/Terminer" - Toujours actif car documents sont facultatifs ou "Ajouter plus tard" */}
               <button
                 onClick={() => {
@@ -1116,9 +1189,25 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
               >
                 {submitting ? (
                   <>
-                    <svg className="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    <svg
+                      className="animate-spin h-5 w-5 mr-2"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
                     </svg>
                     En cours...
                   </>
@@ -1135,4 +1224,4 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
       </div>
     </div>
   );
-} 
+}

@@ -66,7 +66,7 @@ export {
  */
 export function normalizeLocationScheduleSlotsForEngine(
   locationIds: readonly string[],
-  locationScheduleSlots: ReadonlyMap<string, readonly AffluenceSlot[]>
+  locationScheduleSlots: ReadonlyMap<string, readonly AffluenceSlot[]>,
 ): Map<string, AffluenceSlot[]> {
   const out = new Map<string, AffluenceSlot[]>();
   for (const locId of locationIds) {
@@ -81,7 +81,7 @@ export function normalizeLocationScheduleSlotsForEngine(
         day_of_week: Number(s.day_of_week),
         hour: Number(s.hour),
         estimated_impressions: Math.max(0, Number(s.estimated_impressions) || 0),
-      }))
+      })),
     );
   }
   return out;
@@ -115,12 +115,12 @@ export type ComputeHourlyDoohGridByLocationResult = {
 };
 
 export function computeHourlyDoohGridByLocation(
-  input: ComputeHourlyDoohGridByLocationInput
+  input: ComputeHourlyDoohGridByLocationInput,
 ): ComputeHourlyDoohGridByLocationResult {
   void input.effectiveVideoDurationSeconds;
   const normalized = normalizeLocationScheduleSlotsForEngine(
     input.locationIds,
-    input.locationScheduleSlots
+    input.locationScheduleSlots,
   );
   const r = computeDoohLocationAffluenceCampaign({
     campaignStart: input.campaignStart,

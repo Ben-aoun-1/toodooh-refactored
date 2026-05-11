@@ -13,7 +13,11 @@ export type HourlyPlanSlotOutput = HourlyPlanSlotInput & {
   plannedImpressions: number;
 };
 
-function stableSlotKey(s: { locationId: string; diffusionDate: string; diffusionHour: number }): string {
+function stableSlotKey(s: {
+  locationId: string;
+  diffusionDate: string;
+  diffusionHour: number;
+}): string {
   return `${s.locationId}|${s.diffusionDate}|${String(s.diffusionHour).padStart(2, '0')}`;
 }
 
@@ -78,7 +82,10 @@ export function buildHybridAdjustedHourlyPlan(input: {
   // Phase 1: réduction proportionnelle des répétitions.
   const ratio = totalMax > 0 ? target / totalMax : 0;
   for (const s of withMeta) {
-    s.reps = Math.min(s.maxRepetitionsPerHour, Math.max(0, Math.floor(s.maxRepetitionsPerHour * ratio)));
+    s.reps = Math.min(
+      s.maxRepetitionsPerHour,
+      Math.max(0, Math.floor(s.maxRepetitionsPerHour * ratio)),
+    );
   }
 
   // Localités protégées (au moins 1 répétition quelque part si possible).
@@ -108,8 +115,7 @@ export function buildHybridAdjustedHourlyPlan(input: {
     }
   }
 
-  const totalFromReps = () =>
-    withMeta.reduce((sum, s) => sum + s.reps * s.perRep, 0);
+  const totalFromReps = () => withMeta.reduce((sum, s) => sum + s.reps * s.perRep, 0);
 
   let total = totalFromReps();
 
@@ -188,16 +194,14 @@ export async function replaceCampaignHourlyLocationPlan(
   options?: {
     /** Si fourni, ne supprime/réinsère que ces localités (mode owner-partiel). */
     scopeLocationIds?: readonly string[];
-  }
+  },
 ): Promise<void> {
   const scope = [...new Set((options?.scopeLocationIds ?? []).filter(Boolean))];
   const isScoped = scope.length > 0;
 
-  const scopedRows = isScoped
-    ? rows.filter((r) => scope.includes(r.locationId))
-    : [...rows];
+  const scopedRows = isScoped ? rows.filter((r) => scope.includes(r.locationId)) : [...rows];
   const rowsToPersist = scopedRows.filter(
-    (r) => r.plannedRepetitionsPerHour > 0 && r.plannedImpressions > 0
+    (r) => r.plannedRepetitionsPerHour > 0 && r.plannedImpressions > 0,
   );
 
   let delQuery = supabase
@@ -224,11 +228,9 @@ export async function replaceCampaignHourlyLocationPlan(
   const chunkSize = 1000;
   for (let i = 0; i < payload.length; i += chunkSize) {
     const chunk = payload.slice(i, i + chunkSize);
-    const { error } = await supabase
-      .from('campaign_hourly_location_plan')
-      .upsert(chunk, {
-        onConflict: 'campaign_id,location_id,diffusion_date,diffusion_hour',
-      });
+    const { error } = await supabase.from('campaign_hourly_location_plan').upsert(chunk, {
+      onConflict: 'campaign_id,location_id,diffusion_date,diffusion_hour',
+    });
     if (error) throw error;
   }
 }
@@ -247,7 +249,9 @@ export async function getOccupiedRepetitionsByLocationFromHourlyPlan(input: {
 
   const { data: rows, error } = await supabase
     .from('campaign_hourly_location_plan')
-    .select('campaign_id, location_id, diffusion_date, diffusion_hour, planned_repetitions_per_hour')
+    .select(
+      'campaign_id, location_id, diffusion_date, diffusion_hour, planned_repetitions_per_hour',
+    )
     .in('location_id', locationIds)
     .gte('diffusion_date', start)
     .lte('diffusion_date', end);
@@ -255,7 +259,7 @@ export async function getOccupiedRepetitionsByLocationFromHourlyPlan(input: {
   if (error) {
     console.warn(
       'getOccupiedRepetitionsByLocationFromHourlyPlan: lecture indisponible, occupation concurrente à 0.',
-      error
+      error,
     );
     return new Map<string, number>();
   }
@@ -280,7 +284,7 @@ export async function getOccupiedRepetitionsByLocationFromHourlyPlan(input: {
   if (cErr) {
     console.warn(
       'getOccupiedRepetitionsByLocationFromHourlyPlan: lecture statuts campagnes indisponible, occupation concurrente à 0.',
-      cErr
+      cErr,
     );
     return new Map<string, number>();
   }

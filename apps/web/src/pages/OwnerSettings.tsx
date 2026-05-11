@@ -38,14 +38,26 @@ const TABS: { id: TabId; label: string }[] = [
 ];
 
 const RESPONSABLE_SUB = [
-  { id: 'informations' as const, label: 'Informations sur le responsable', icon: <User className="h-5 w-5" /> },
+  {
+    id: 'informations' as const,
+    label: 'Informations sur le responsable',
+    icon: <User className="h-5 w-5" />,
+  },
 ];
 
 const ENTREPRISE_SUB: { id: EntrepriseSubId; label: string; icon: React.ReactNode }[] = [
-  { id: 'informations', label: "Informations sur l'entreprise", icon: <Building2 className="h-5 w-5" /> },
+  {
+    id: 'informations',
+    label: "Informations sur l'entreprise",
+    icon: <Building2 className="h-5 w-5" />,
+  },
   { id: 'adresse', label: "Adresse de l'entreprise", icon: <MapPin className="h-5 w-5" /> },
   { id: 'documents', label: 'Documents légaux', icon: <FileText className="h-5 w-5" /> },
-  { id: 'coordonnees-bancaires', label: 'Mes coordonnées bancaires', icon: <Wallet className="h-5 w-5" /> },
+  {
+    id: 'coordonnees-bancaires',
+    label: 'Mes coordonnées bancaires',
+    icon: <Wallet className="h-5 w-5" />,
+  },
 ];
 
 const NOTIFICATIONS_SUB = [
@@ -151,7 +163,12 @@ export default function OwnerSettings() {
     const tabParam = params.get('tab');
     const subParam = params.get('sub');
 
-    if (tabParam === 'responsable' || tabParam === 'entreprise' || tabParam === 'notifications' || tabParam === 'confidentialite') {
+    if (
+      tabParam === 'responsable' ||
+      tabParam === 'entreprise' ||
+      tabParam === 'notifications' ||
+      tabParam === 'confidentialite'
+    ) {
       setActiveTab(tabParam);
     }
     if (
@@ -246,7 +263,10 @@ export default function OwnerSettings() {
       return;
     }
     try {
-      const contact_name = [responsableForm.last_name, responsableForm.first_name].filter(Boolean).join(' ').trim();
+      const contact_name = [responsableForm.last_name, responsableForm.first_name]
+        .filter(Boolean)
+        .join(' ')
+        .trim();
       await authService.updateProfile({
         contact_name,
         contact_phone: responsableForm.contact_phone,
@@ -365,11 +385,15 @@ export default function OwnerSettings() {
       return;
     }
     try {
-      await authService.updatePasswordWithOld(passwordData.currentPassword, passwordData.newPassword);
+      await authService.updatePasswordWithOld(
+        passwordData.currentPassword,
+        passwordData.newPassword,
+      );
       toast.success('Mot de passe mis à jour');
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (err: unknown) {
-      const m = err instanceof Error ? err.message : 'Erreur lors de la mise à jour du mot de passe';
+      const m =
+        err instanceof Error ? err.message : 'Erreur lors de la mise à jour du mot de passe';
       toast.error(m);
     }
   };
@@ -424,7 +448,9 @@ export default function OwnerSettings() {
     try {
       const ext = logoFile.name.split('.').pop() || 'png';
       const filePath = `logo_${user.id}_${Date.now()}.${ext}`;
-      const { error: uploadError } = await supabase.storage.from('registres').upload(filePath, logoFile);
+      const { error: uploadError } = await supabase.storage
+        .from('registres')
+        .upload(filePath, logoFile);
       if (uploadError) throw uploadError;
       const { data: signed, error: signedError } = await supabase.storage
         .from('registres')
@@ -513,7 +539,10 @@ export default function OwnerSettings() {
           .eq('user_id', user.id);
         if (error) throw error;
       } else {
-        await authService.updateProfile({ registration_doc_url: null, registration_doc_path: null });
+        await authService.updateProfile({
+          registration_doc_url: null,
+          registration_doc_path: null,
+        });
       }
       setDocumentFile(null);
       toast.success('Document supprimé');
@@ -607,7 +636,9 @@ export default function OwnerSettings() {
         }
         const ext = bankDocFile.name.split('.').pop() || 'pdf';
         const filePath = `bank_${user.id}_${Date.now()}.${ext}`;
-        const { error: uploadError } = await supabase.storage.from('registres').upload(filePath, bankDocFile);
+        const { error: uploadError } = await supabase.storage
+          .from('registres')
+          .upload(filePath, bankDocFile);
         if (uploadError) throw uploadError;
         const { data: signedData, error: signedError } = await supabase.storage
           .from('registres')
@@ -642,7 +673,10 @@ export default function OwnerSettings() {
 
   const hasDocument =
     !!documentFile ||
-    (!!profile && (isIndividualOwner ? !!profile.cin_doc_url : !!(profile.registration_doc_path || profile.registration_doc_url)));
+    (!!profile &&
+      (isIndividualOwner
+        ? !!profile.cin_doc_url
+        : !!(profile.registration_doc_path || profile.registration_doc_url)));
   const hasBankDocument = !!bankDocFile || !!profile?.bank_doc_path || !!profile?.bank_doc_url;
 
   if (loading) {
@@ -675,7 +709,9 @@ export default function OwnerSettings() {
         <div className="flex-1 flex flex-col overflow-hidden">
           <header className="bg-white border-b border-gray-200 px-4 sm:px-8 py-4 shrink-0">
             <h1 className="text-xl font-bold text-gray-900">Paramètres</h1>
-            <p className="text-sm text-gray-500 mt-0.5">Gérez les informations de votre compte propriétaire</p>
+            <p className="text-sm text-gray-500 mt-0.5">
+              Gérez les informations de votre compte propriétaire
+            </p>
           </header>
           <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-6">
             <div className="max-w-6xl mx-auto">
@@ -828,7 +864,9 @@ export default function OwnerSettings() {
                           }`}
                         >
                           <span
-                            className={entrepriseSub === sub.id ? 'text-[#132B1B]' : 'text-gray-400'}
+                            className={
+                              entrepriseSub === sub.id ? 'text-[#132B1B]' : 'text-gray-400'
+                            }
                           >
                             {sub.icon}
                           </span>
@@ -842,12 +880,18 @@ export default function OwnerSettings() {
                     {entrepriseSub === 'informations' && (
                       <form onSubmit={handleSaveEntreprise} className="p-6 space-y-6">
                         <div>
-                          <p className="text-sm font-medium text-gray-700 mb-1">Téléchargez votre logo</p>
+                          <p className="text-sm font-medium text-gray-700 mb-1">
+                            Téléchargez votre logo
+                          </p>
                           <p className="text-xs text-gray-500 mb-3">Min 400×400px, PNG or JPEG</p>
                           <div className="flex items-start gap-4">
                             <div className="w-24 h-24 rounded-full border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden flex-shrink-0">
                               {logoPreview ? (
-                                <img src={logoPreview} alt="Logo" className="w-full h-full object-contain" />
+                                <img
+                                  src={logoPreview}
+                                  alt="Logo"
+                                  className="w-full h-full object-contain"
+                                />
                               ) : (
                                 <Building2 className="h-10 w-10 text-gray-300" />
                               )}
@@ -925,7 +969,10 @@ export default function OwnerSettings() {
                             <select
                               value={entrepriseForm.business_sector_id}
                               onChange={(e) =>
-                                setEntrepriseForm((p) => ({ ...p, business_sector_id: e.target.value }))
+                                setEntrepriseForm((p) => ({
+                                  ...p,
+                                  business_sector_id: e.target.value,
+                                }))
                               }
                               className={`${inputClass} appearance-none pr-10`}
                             >
@@ -944,7 +991,10 @@ export default function OwnerSettings() {
                             <select
                               value={entrepriseForm.number_of_screens}
                               onChange={(e) =>
-                                setEntrepriseForm((p) => ({ ...p, number_of_screens: e.target.value }))
+                                setEntrepriseForm((p) => ({
+                                  ...p,
+                                  number_of_screens: e.target.value,
+                                }))
                               }
                               className={`${inputClass} appearance-none pr-10`}
                             >
@@ -961,7 +1011,8 @@ export default function OwnerSettings() {
                         {isFleetOwner && (
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
-                              Nombre d&apos;établissements du parc <span className="text-red-500">*</span>
+                              Nombre d&apos;établissements du parc{' '}
+                              <span className="text-red-500">*</span>
                             </label>
                             <select
                               value={entrepriseForm.company_size}
@@ -1045,7 +1096,9 @@ export default function OwnerSettings() {
                                 type="text"
                                 list="owner-ville-list"
                                 value={adresseForm.city}
-                                onChange={(e) => setAdresseForm((p) => ({ ...p, city: e.target.value }))}
+                                onChange={(e) =>
+                                  setAdresseForm((p) => ({ ...p, city: e.target.value }))
+                                }
                                 className={`${inputClass} pr-10`}
                                 placeholder="Ex: Tunis"
                               />
@@ -1069,8 +1122,18 @@ export default function OwnerSettings() {
                                 ))}
                               </datalist>
                               <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
-                                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                <svg
+                                  className="h-5 w-5"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M19 9l-7 7-7-7"
+                                  />
                                 </svg>
                               </span>
                             </div>
@@ -1098,7 +1161,9 @@ export default function OwnerSettings() {
                           <input
                             type="text"
                             value={adresseForm.zone}
-                            onChange={(e) => setAdresseForm((p) => ({ ...p, zone: e.target.value }))}
+                            onChange={(e) =>
+                              setAdresseForm((p) => ({ ...p, zone: e.target.value }))
+                            }
                             className={inputClass}
                             placeholder="Zone géographique ou secteur"
                           />
@@ -1123,8 +1188,18 @@ export default function OwnerSettings() {
                               ))}
                             </select>
                             <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
-                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              <svg
+                                className="h-5 w-5"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M19 9l-7 7-7-7"
+                                />
                               </svg>
                             </span>
                           </div>
@@ -1164,14 +1239,18 @@ export default function OwnerSettings() {
                               ? 'Ajouter votre CIN ou pièce d’identité'
                               : 'Ajouter votre registre de commerce'}
                           </p>
-                          <p className="text-sm text-gray-500">Formats acceptés : PDF, JPG, JPEG, PNG (Max 5 MB)</p>
+                          <p className="text-sm text-gray-500">
+                            Formats acceptés : PDF, JPG, JPEG, PNG (Max 5 MB)
+                          </p>
                           <label className="px-4 py-2.5 rounded-xl text-sm font-medium text-gray-700 cursor-pointer hover:bg-gray-100 border border-gray-300 bg-white">
                             Parcourir les fichiers
                             <input
                               type="file"
                               accept=".pdf,.jpg,.jpeg,.png"
                               className="hidden"
-                              onChange={(e) => e.target.files?.[0] && setDocumentFile(e.target.files[0])}
+                              onChange={(e) =>
+                                e.target.files?.[0] && setDocumentFile(e.target.files[0])
+                              }
                             />
                           </label>
                         </div>
@@ -1191,7 +1270,9 @@ export default function OwnerSettings() {
                                   {documentFile ? documentFile.name : 'Document enregistré'}
                                 </p>
                                 <p className="text-xs text-gray-500">
-                                  {documentFile ? formatFileSize(documentFile.size) : 'Fichier validé'}
+                                  {documentFile
+                                    ? formatFileSize(documentFile.size)
+                                    : 'Fichier validé'}
                                 </p>
                               </div>
                               <div className="flex items-center gap-2 flex-shrink-0">
@@ -1257,7 +1338,9 @@ export default function OwnerSettings() {
                           <input
                             type="text"
                             value={bankForm.bank_rib}
-                            onChange={(e) => setBankForm((p) => ({ ...p, bank_rib: e.target.value }))}
+                            onChange={(e) =>
+                              setBankForm((p) => ({ ...p, bank_rib: e.target.value }))
+                            }
                             className={inputClass}
                             placeholder="RIB"
                           />
@@ -1269,7 +1352,9 @@ export default function OwnerSettings() {
                           <input
                             type="text"
                             value={bankForm.bank_iban}
-                            onChange={(e) => setBankForm((p) => ({ ...p, bank_iban: e.target.value }))}
+                            onChange={(e) =>
+                              setBankForm((p) => ({ ...p, bank_iban: e.target.value }))
+                            }
                             className={inputClass}
                             placeholder="IBAN"
                           />
@@ -1279,14 +1364,18 @@ export default function OwnerSettings() {
                           <p className="text-sm font-medium text-gray-800 text-center">
                             Ajouter le relevé d&apos;identité bancaire de votre établissement
                           </p>
-                          <p className="text-xs text-gray-500">Formats acceptés : PDF, JPG, JPEG, PNG (Max 5 MB)</p>
+                          <p className="text-xs text-gray-500">
+                            Formats acceptés : PDF, JPG, JPEG, PNG (Max 5 MB)
+                          </p>
                           <label className="px-4 py-2.5 rounded-xl text-sm font-medium text-gray-700 cursor-pointer hover:bg-gray-100 border border-gray-300 bg-white">
                             Parcourir les fichiers
                             <input
                               type="file"
                               accept=".pdf,.jpg,.jpeg,.png"
                               className="hidden"
-                              onChange={(e) => e.target.files?.[0] && setBankDocFile(e.target.files[0])}
+                              onChange={(e) =>
+                                e.target.files?.[0] && setBankDocFile(e.target.files[0])
+                              }
                             />
                           </label>
                         </div>
@@ -1306,7 +1395,9 @@ export default function OwnerSettings() {
                                   {bankDocFile ? bankDocFile.name : 'Document bancaire enregistré'}
                                 </p>
                                 <p className="text-xs text-gray-500">
-                                  {bankDocFile ? formatFileSize(bankDocFile.size) : 'Fichier validé'}
+                                  {bankDocFile
+                                    ? formatFileSize(bankDocFile.size)
+                                    : 'Fichier validé'}
                                 </p>
                               </div>
                               <div className="flex items-center gap-2 flex-shrink-0">
@@ -1400,7 +1491,9 @@ export default function OwnerSettings() {
                             />
                           </button>
                           <div>
-                            <p className="text-sm font-medium text-gray-900">Actualités et mises à jour</p>
+                            <p className="text-sm font-medium text-gray-900">
+                              Actualités et mises à jour
+                            </p>
                             <p className="text-xs text-gray-500 mt-0.5">
                               Restez informé(e) des dernières actualités, mises à jour et annonces.
                             </p>
@@ -1418,7 +1511,9 @@ export default function OwnerSettings() {
                               }))
                             }
                             className={`flex-shrink-0 w-11 h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[#97d6a2] ${
-                              notificationsForm.notify_reminders_events ? 'bg-[#97d6a2]' : 'bg-gray-200'
+                              notificationsForm.notify_reminders_events
+                                ? 'bg-[#97d6a2]'
+                                : 'bg-gray-200'
                             }`}
                           >
                             <span
@@ -1430,7 +1525,9 @@ export default function OwnerSettings() {
                             />
                           </button>
                           <div>
-                            <p className="text-sm font-medium text-gray-900">Rappels et événements</p>
+                            <p className="text-sm font-medium text-gray-900">
+                              Rappels et événements
+                            </p>
                             <p className="text-xs text-gray-500 mt-0.5">
                               Recevez des rappels pour diffuser vos campagnes et vos événements.
                             </p>
@@ -1448,7 +1545,9 @@ export default function OwnerSettings() {
                               }))
                             }
                             className={`flex-shrink-0 w-11 h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[#97d6a2] ${
-                              notificationsForm.notify_promotions_offers ? 'bg-[#97d6a2]' : 'bg-gray-200'
+                              notificationsForm.notify_promotions_offers
+                                ? 'bg-[#97d6a2]'
+                                : 'bg-gray-200'
                             }`}
                           >
                             <span
@@ -1460,9 +1559,12 @@ export default function OwnerSettings() {
                             />
                           </button>
                           <div>
-                            <p className="text-sm font-medium text-gray-900">Promotions et offres</p>
+                            <p className="text-sm font-medium text-gray-900">
+                              Promotions et offres
+                            </p>
                             <p className="text-xs text-gray-500 mt-0.5">
-                              Recevez des notifications concernant les promotions spéciales, les offres exclusives.
+                              Recevez des notifications concernant les promotions spéciales, les
+                              offres exclusives.
                             </p>
                           </div>
                         </div>
@@ -1554,7 +1656,11 @@ export default function OwnerSettings() {
                               onClick={() => setShowPassword((v) => !v)}
                               className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                             >
-                              {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                              {showPassword ? (
+                                <EyeOff className="h-5 w-5" />
+                              ) : (
+                                <Eye className="h-5 w-5" />
+                              )}
                             </button>
                           </div>
                         </div>
@@ -1574,7 +1680,8 @@ export default function OwnerSettings() {
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Confirmer le nouveau mot de passe <span className="text-red-500">*</span>
+                            Confirmer le nouveau mot de passe{' '}
+                            <span className="text-red-500">*</span>
                           </label>
                           <input
                             type={showPassword ? 'text' : 'password'}
@@ -1587,22 +1694,40 @@ export default function OwnerSettings() {
                           />
                         </div>
                         <div className="pt-2">
-                          <p className="text-xs font-medium text-gray-700 mb-2">Doit contenir au moins</p>
+                          <p className="text-xs font-medium text-gray-700 mb-2">
+                            Doit contenir au moins
+                          </p>
                           <ul className="space-y-1.5 text-sm text-gray-600">
                             <li className="flex items-center gap-2">
-                              <span className={passwordRequirements.uppercase ? 'text-[#97d6a2]' : 'text-gray-300'}>
+                              <span
+                                className={
+                                  passwordRequirements.uppercase
+                                    ? 'text-[#97d6a2]'
+                                    : 'text-gray-300'
+                                }
+                              >
                                 <Check className="h-4 w-4" strokeWidth={2.5} />
                               </span>
                               Au moins une majuscule
                             </li>
                             <li className="flex items-center gap-2">
-                              <span className={passwordRequirements.digit ? 'text-[#97d6a2]' : 'text-gray-300'}>
+                              <span
+                                className={
+                                  passwordRequirements.digit ? 'text-[#97d6a2]' : 'text-gray-300'
+                                }
+                              >
                                 <Check className="h-4 w-4" strokeWidth={2.5} />
                               </span>
                               Au moins un chiffre
                             </li>
                             <li className="flex items-center gap-2">
-                              <span className={passwordRequirements.minLength ? 'text-[#97d6a2]' : 'text-gray-300'}>
+                              <span
+                                className={
+                                  passwordRequirements.minLength
+                                    ? 'text-[#97d6a2]'
+                                    : 'text-gray-300'
+                                }
+                              >
                                 <Check className="h-4 w-4" strokeWidth={2.5} />
                               </span>
                               Minimum 8 caractères
@@ -1613,7 +1738,11 @@ export default function OwnerSettings() {
                           <button
                             type="button"
                             onClick={() =>
-                              setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' })
+                              setPasswordData({
+                                currentPassword: '',
+                                newPassword: '',
+                                confirmPassword: '',
+                              })
                             }
                             className="px-5 py-2.5 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50"
                           >
@@ -1636,16 +1765,19 @@ export default function OwnerSettings() {
                           <div className="flex-shrink-0 w-6 h-6 rounded-full bg-red-500 flex items-center justify-center">
                             <Info className="h-4 w-4 text-white" />
                           </div>
-                          <p className="text-sm font-medium text-red-800">Cette action est irréversible.</p>
+                          <p className="text-sm font-medium text-red-800">
+                            Cette action est irréversible.
+                          </p>
                         </div>
                         <div className="space-y-2">
                           <p className="text-sm text-gray-700">
-                            Toutes vos données, y compris votre profil, vos écrans et vos informations personnelles,
-                            seront définitivement supprimées ou désactivées.
+                            Toutes vos données, y compris votre profil, vos écrans et vos
+                            informations personnelles, seront définitivement supprimées ou
+                            désactivées.
                           </p>
                           <p className="text-sm text-gray-700">
-                            En saisissant votre mot de passe, vous confirmez avoir compris les conséquences de la
-                            suppression de votre compte.
+                            En saisissant votre mot de passe, vous confirmez avoir compris les
+                            conséquences de la suppression de votre compte.
                           </p>
                         </div>
                         <div>
@@ -1664,9 +1796,17 @@ export default function OwnerSettings() {
                               type="button"
                               onClick={() => setShowDeletePassword((v) => !v)}
                               className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
-                              aria-label={showDeletePassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                              aria-label={
+                                showDeletePassword
+                                  ? 'Masquer le mot de passe'
+                                  : 'Afficher le mot de passe'
+                              }
                             >
-                              {showDeletePassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                              {showDeletePassword ? (
+                                <EyeOff className="h-5 w-5" />
+                              ) : (
+                                <Eye className="h-5 w-5" />
+                              )}
                             </button>
                           </div>
                           <p className="text-xs text-gray-500 mt-1.5">

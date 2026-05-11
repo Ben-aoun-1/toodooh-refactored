@@ -169,7 +169,9 @@ export default function OwnerStatementDetailPage() {
                     <div>
                       <h2 className="text-sm font-bold text-gray-900 mb-3">Émetteur</h2>
                       <div className="text-sm text-gray-600 space-y-1">
-                        <p className="font-bold text-gray-800">{TOODOOH_STATEMENT_EMITTER.legalName}</p>
+                        <p className="font-bold text-gray-800">
+                          {TOODOOH_STATEMENT_EMITTER.legalName}
+                        </p>
                         <p>{TOODOOH_STATEMENT_EMITTER.addressLine1}</p>
                         <p>{TOODOOH_STATEMENT_EMITTER.cityPostal}</p>
                         <p>TVA: {TOODOOH_STATEMENT_EMITTER.tva}</p>
@@ -177,7 +179,9 @@ export default function OwnerStatementDetailPage() {
                       </div>
                     </div>
                     <div>
-                      <h2 className="text-sm font-bold text-gray-900 mb-3">{recipient.contactName}</h2>
+                      <h2 className="text-sm font-bold text-gray-900 mb-3">
+                        {recipient.contactName}
+                      </h2>
                       <div className="text-sm text-gray-600 space-y-1">
                         <p className="font-normal">{recipient.companyName}</p>
                         <p>{recipient.addressLine1}</p>
@@ -219,7 +223,9 @@ export default function OwnerStatementDetailPage() {
                   <div className="mt-8 flex flex-col items-end gap-2 text-sm">
                     <p className="text-gray-700">
                       Sous-total HT :{' '}
-                      <span className="tabular-nums font-medium">{formatMoney(detail.subtotalHT)} TND</span>
+                      <span className="tabular-nums font-medium">
+                        {formatMoney(detail.subtotalHT)} TND
+                      </span>
                     </p>
                     <div className="w-56 border-t border-gray-200 pt-2 mt-1">
                       <p className="text-base font-bold text-gray-900">

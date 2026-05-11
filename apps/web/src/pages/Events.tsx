@@ -59,16 +59,25 @@ const filterTabs = [
   { label: 'Autre', value: 'autre' },
 ];
 
-function EventCard({ event, isMyEvent = false, campaign }: { event: SpecialEvent; isMyEvent?: boolean; campaign?: CampaignForEdit }) {
+function EventCard({
+  event,
+  isMyEvent = false,
+  campaign,
+}: {
+  event: SpecialEvent;
+  isMyEvent?: boolean;
+  campaign?: CampaignForEdit;
+}) {
   const navigate = useNavigate();
   const typeStyle = typeConfig[event.event_type] || typeConfig.autre;
   const start = new Date(event.start_date);
   const end = new Date(event.end_date);
   const dateStr = start.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
   const timeStr = `${start.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} - ${end.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
-  const impressions = event.expected_attendance != null
-    ? `${event.expected_attendance.toLocaleString('fr-FR').replace(/\s/g, ' ')}`
-    : '184 500';
+  const impressions =
+    event.expected_attendance != null
+      ? `${event.expected_attendance.toLocaleString('fr-FR').replace(/\s/g, ' ')}`
+      : '184 500';
 
   const handleBoosterClick = () => {
     if (isMyEvent && campaign) {
@@ -92,24 +101,33 @@ function EventCard({ event, isMyEvent = false, campaign }: { event: SpecialEvent
       <div className="p-4 flex flex-col flex-1">
         <div className="flex items-start justify-between gap-2 mb-2">
           <h3 className="text-base font-bold text-gray-900 flex-1">{event.name}</h3>
-          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium flex-shrink-0 ${typeStyle.bg} ${typeStyle.text}`}>
+          <span
+            className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium flex-shrink-0 ${typeStyle.bg} ${typeStyle.text}`}
+          >
             {typeStyle.label}
           </span>
         </div>
         <div className="flex flex-wrap gap-1.5 mb-2">
-          <span className="inline-flex px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs">Restaurants</span>
-          <span className="inline-flex px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs">Salles de sport</span>
+          <span className="inline-flex px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs">
+            Restaurants
+          </span>
+          <span className="inline-flex px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs">
+            Salles de sport
+          </span>
         </div>
         <div className="flex items-center gap-1.5 text-sm text-gray-600 mb-1">
           <Calendar className="h-4 w-4 flex-shrink-0" />
-          <span>{dateStr} | {timeStr}</span>
+          <span>
+            {dateStr} | {timeStr}
+          </span>
         </div>
         <div className="flex items-center gap-1.5 text-sm text-gray-600 mb-2">
           <TrendingUp className="h-4 w-4 flex-shrink-0" />
           <span>~ {impressions} impressions</span>
         </div>
         <p className="text-xs text-gray-500 mb-4">
-          (En incluant automatiquement toutes les catégories de commerces susceptibles de diffuser l&apos;événement)
+          (En incluant automatiquement toutes les catégories de commerces susceptibles de diffuser
+          l&apos;événement)
         </p>
         <button
           type="button"
@@ -120,7 +138,13 @@ function EventCard({ event, isMyEvent = false, campaign }: { event: SpecialEvent
               : 'bg-gray-700 hover:bg-gray-800 text-white'
           }`}
         >
-          {isMyEvent ? <><Rocket className="h-4 w-4" /> Booster</> : 'Je me positionne'}
+          {isMyEvent ? (
+            <>
+              <Rocket className="h-4 w-4" /> Booster
+            </>
+          ) : (
+            'Je me positionne'
+          )}
         </button>
       </div>
     </div>
@@ -145,7 +169,7 @@ export default function Events() {
       try {
         const [events, links] = await Promise.all([
           eventsService.getMyEventCampaignsEvents(),
-          eventsService.getMyEventCampaignLinks()
+          eventsService.getMyEventCampaignLinks(),
         ]);
         if (cancelled) return;
         setMyEventCampaignsEvents(events);
@@ -186,7 +210,7 @@ export default function Events() {
             event_id: c.event_id ?? undefined,
             content_validation_status: c.content_validation_status,
             created_at: c.created_at,
-            user_id: c.user_id
+            user_id: c.user_id,
           };
           byId.set(c.id, camp);
         });
@@ -201,7 +225,9 @@ export default function Events() {
       }
     }
     load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [user?.id]);
 
   useEffect(() => {
@@ -213,14 +239,19 @@ export default function Events() {
       }
       setLoading(false);
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const filteredEvents = useMemo(() => {
     return allEvents.filter((ev) => {
       const matchType = !eventType || ev.event_type === eventType;
       const q = search.trim().toLowerCase();
-      const matchSearch = !q || ev.name?.toLowerCase().includes(q) || (ev.description && ev.description.toLowerCase().includes(q));
+      const matchSearch =
+        !q ||
+        ev.name?.toLowerCase().includes(q) ||
+        (ev.description && ev.description.toLowerCase().includes(q));
       return matchType && matchSearch;
     });
   }, [allEvents, eventType, search]);
@@ -247,7 +278,10 @@ export default function Events() {
           {loadingMyEvents ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="bg-white rounded-t-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col animate-pulse">
+                <div
+                  key={i}
+                  className="bg-white rounded-t-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col animate-pulse"
+                >
                   <div className="aspect-[16/10] bg-gray-200" />
                   <div className="p-4 space-y-2">
                     <div className="h-5 bg-gray-200 rounded w-3/4" />
@@ -257,7 +291,10 @@ export default function Events() {
               ))}
             </div>
           ) : myEventCampaignsEvents.length === 0 ? (
-            <p className="text-sm text-gray-500 py-4">Vous n&apos;avez pas encore lancé de campagne sur un événement. Cliquez sur &quot;Je me positionne&quot; sur un événement ci-dessous pour en créer une.</p>
+            <p className="text-sm text-gray-500 py-4">
+              Vous n&apos;avez pas encore lancé de campagne sur un événement. Cliquez sur &quot;Je
+              me positionne&quot; sur un événement ci-dessous pour en créer une.
+            </p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {myEventCampaignsEvents.map((event) => (
@@ -275,7 +312,9 @@ export default function Events() {
 
       <div className="rounded-xl bg-white shadow-sm overflow-hidden">
         <div className="pt-2 pb-1">
-          <h2 className="text-lg font-normal leading-6 text-gray-900">Les événements à venir et à ne pas manquer</h2>
+          <h2 className="text-lg font-normal leading-6 text-gray-900">
+            Les événements à venir et à ne pas manquer
+          </h2>
         </div>
 
         {/* Barre recherche à gauche + filtres à droite */}
@@ -315,24 +354,27 @@ export default function Events() {
 
         <div className="p-5">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {loading ? (
-              Array.from({ length: PAGE_SIZE }).map((_, i) => (
-                <div key={i} className="bg-white rounded-t-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col animate-pulse">
-                  <div className="aspect-[16/10] bg-gray-200" />
-                  <div className="p-4 space-y-2">
-                    <div className="h-5 bg-gray-200 rounded w-3/4" />
-                    <div className="h-4 bg-gray-100 rounded w-1/2" />
-                    <div className="h-4 bg-gray-100 rounded w-2/3" />
+            {loading
+              ? Array.from({ length: PAGE_SIZE }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="bg-white rounded-t-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col animate-pulse"
+                  >
+                    <div className="aspect-[16/10] bg-gray-200" />
+                    <div className="p-4 space-y-2">
+                      <div className="h-5 bg-gray-200 rounded w-3/4" />
+                      <div className="h-4 bg-gray-100 rounded w-1/2" />
+                      <div className="h-4 bg-gray-100 rounded w-2/3" />
+                    </div>
                   </div>
-                </div>
-              ))
-            ) : (
-              paginatedEvents.map((event) => <EventCard key={event.id} event={event} />)
-            )}
+                ))
+              : paginatedEvents.map((event) => <EventCard key={event.id} event={event} />)}
           </div>
 
           {!loading && filteredEvents.length === 0 && (
-            <p className="text-center text-gray-500 py-8">Aucun événement ne correspond à vos critères.</p>
+            <p className="text-center text-gray-500 py-8">
+              Aucun événement ne correspond à vos critères.
+            </p>
           )}
 
           {!loading && filteredEvents.length > 0 && totalPages > 1 && (

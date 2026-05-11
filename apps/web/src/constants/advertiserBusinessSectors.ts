@@ -50,7 +50,7 @@ const OWNER_SIGNUP_SECTOR_NAMES = new Set<string>([
   'Café gaming',
 ]);
 const OWNER_SIGNUP_SECTOR_NAMES_NORMALIZED = new Set<string>(
-  Array.from(OWNER_SIGNUP_SECTOR_NAMES).map(normalizeSectorName)
+  Array.from(OWNER_SIGNUP_SECTOR_NAMES).map(normalizeSectorName),
 );
 
 function isAdvertiserSectorByDisplayOrder(s: BusinessSector): boolean {
@@ -61,7 +61,9 @@ function isAdvertiserSectorByDisplayOrder(s: BusinessSector): boolean {
  * Secteurs affichés à l'inscription / profil annonceur-agence, dans l'ordre renvoyé par l'API
  * (colonne display_order en base).
  */
-export function filterAdvertiserAgencySectorsByDbOrder(sectors: BusinessSector[]): BusinessSector[] {
+export function filterAdvertiserAgencySectorsByDbOrder(
+  sectors: BusinessSector[],
+): BusinessSector[] {
   return sectors.filter((s) => isAdvertiserSectorByDisplayOrder(s));
 }
 
@@ -72,14 +74,16 @@ export function sectorsForAdvertiserAgencySignup(sectors: BusinessSector[]): Bus
   const strict = filterAdvertiserAgencySectorsByDbOrder(sectors);
   if (strict.length > 0) return strict;
 
-  const loose = sectors.filter((s) => !OWNER_SIGNUP_SECTOR_NAMES_NORMALIZED.has(normalizeSectorName(s.name)));
+  const loose = sectors.filter(
+    (s) => !OWNER_SIGNUP_SECTOR_NAMES_NORMALIZED.has(normalizeSectorName(s.name)),
+  );
   return loose;
 }
 
 /** Profil entreprise : même filtre + secteur actuel s'il n'est plus dans la liste (données historiques). */
 export function sectorsForAdvertiserProfile(
   sectorsFromApi: BusinessSector[],
-  selectedSectorId?: string | null
+  selectedSectorId?: string | null,
 ): BusinessSector[] {
   let base = filterAdvertiserAgencySectorsByDbOrder(sectorsFromApi);
   if (base.length === 0) {

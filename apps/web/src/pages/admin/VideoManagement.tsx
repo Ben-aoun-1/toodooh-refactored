@@ -4,18 +4,18 @@ import { useAdminStore } from '../../stores/admin.store';
 import { adminVideoService } from '../../services/admin-video.service';
 import { Video, VideoValidationStats } from '../../types/video';
 import AdminLayout from '../../components/admin/AdminLayout';
-import { 
-  Video as VideoIcon, 
-  Search, 
-  Filter, 
-  Eye, 
-  Check, 
-  X, 
+import {
+  Video as VideoIcon,
+  Search,
+  Filter,
+  Eye,
+  Check,
+  X,
   Clock,
   Play,
   Trash2,
   AlertCircle,
-  FileVideo
+  FileVideo,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -25,7 +25,9 @@ export default function VideoManagement() {
   const [videos, setVideos] = useState<Video[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>(
+    'all',
+  );
 
   // Détecter le filtre depuis l'URL
   useEffect(() => {
@@ -43,7 +45,7 @@ export default function VideoManagement() {
     total_videos: 0,
     pending_videos: 0,
     approved_videos: 0,
-    rejected_videos: 0
+    rejected_videos: 0,
   });
 
   // Charger les vidéos et statistiques
@@ -74,12 +76,12 @@ export default function VideoManagement() {
     }
   };
 
-  const filteredVideos = videos.filter(video => {
-    const matchesSearch = 
+  const filteredVideos = videos.filter((video) => {
+    const matchesSearch =
       video.filename.toLowerCase().includes(searchTerm.toLowerCase()) ||
       video.uploaded_by_business?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       video.uploaded_by_contact?.toLowerCase().includes(searchTerm.toLowerCase());
-    
+
     return matchesSearch;
   });
 
@@ -103,18 +105,18 @@ export default function VideoManagement() {
     try {
       console.log('Approving video:', videoId, 'by admin:', admin.id);
       const success = await adminVideoService.approveVideo(videoId, admin.id);
-      
+
       if (success) {
         toast.success('Vidéo approuvée avec succès');
         // Recharger les vidéos pour avoir les données à jour
         await loadVideos();
         await loadStats();
       } else {
-        toast.error('Erreur lors de l\'approbation de la vidéo');
+        toast.error("Erreur lors de l'approbation de la vidéo");
       }
     } catch (error: any) {
       console.error('Error approving video:', error);
-      toast.error(`Erreur: ${error.message || 'Impossible d\'approuver la vidéo'}`);
+      toast.error(`Erreur: ${error.message || "Impossible d'approuver la vidéo"}`);
     }
   };
 
@@ -127,7 +129,7 @@ export default function VideoManagement() {
     try {
       console.log('Rejecting video:', videoId, 'by admin:', admin.id);
       const success = await adminVideoService.rejectVideo(videoId, admin.id);
-      
+
       if (success) {
         toast.success('Vidéo rejetée avec succès');
         // Recharger les vidéos pour avoir les données à jour
@@ -151,7 +153,9 @@ export default function VideoManagement() {
     const config = statusConfig[status as keyof typeof statusConfig];
     const Icon = config.icon;
     return (
-      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.color}`}>
+      <span
+        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.color}`}
+      >
         <Icon className="mr-1 h-3 w-3" />
         {config.text}
       </span>
@@ -164,7 +168,7 @@ export default function VideoManagement() {
       month: 'long',
       day: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
     });
   };
 
@@ -299,9 +303,7 @@ export default function VideoManagement() {
                         <FileVideo className="h-5 w-5 text-white" />
                       </div>
                       <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">
-                          {video.filename}
-                        </div>
+                        <div className="text-sm font-medium text-gray-900">{video.filename}</div>
                         <div className="text-xs text-gray-500">
                           {formatFileSize(video.file_size)} • {formatDuration(video.duration)}
                         </div>
@@ -309,8 +311,12 @@ export default function VideoManagement() {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{video.uploaded_by_business || 'N/A'}</div>
-                    <div className="text-xs text-gray-500">{video.uploaded_by_contact || 'N/A'}</div>
+                    <div className="text-sm text-gray-900">
+                      {video.uploaded_by_business || 'N/A'}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {video.uploaded_by_contact || 'N/A'}
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     {getStatusBadge(video.validation_status)}
@@ -329,13 +335,16 @@ export default function VideoManagement() {
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex justify-end space-x-2">
                       <button
-                        onClick={() => { setSelectedVideo(video); setShowDetailsModal(true); }}
+                        onClick={() => {
+                          setSelectedVideo(video);
+                          setShowDetailsModal(true);
+                        }}
                         className="text-indigo-600 hover:text-indigo-900 p-2 rounded-md hover:bg-gray-100"
                         title="Voir les détails"
                       >
                         <Eye className="h-5 w-5" />
                       </button>
-                      
+
                       {/* Bouton Approuver - Toujours visible sauf si déjà approuvé */}
                       {video.validation_status !== 'approved' && (
                         <button
@@ -346,7 +355,7 @@ export default function VideoManagement() {
                           <Check className="h-5 w-5" />
                         </button>
                       )}
-                      
+
                       {/* Bouton Rejeter - Toujours visible sauf si déjà rejeté */}
                       {video.validation_status !== 'rejected' && (
                         <button
@@ -370,14 +379,14 @@ export default function VideoManagement() {
           <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
             <div className="flex-1 flex justify-between sm:hidden">
               <button
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
                 disabled={currentPage === 1}
                 className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Précédent
               </button>
               <button
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
                 disabled={currentPage === totalPages}
                 className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -388,14 +397,17 @@ export default function VideoManagement() {
               <div>
                 <p className="text-sm text-gray-700">
                   Affichage de <span className="font-medium">{startIndex + 1}</span> à{' '}
-                  <span className="font-medium">{Math.min(endIndex, filteredVideos.length)}</span> sur{' '}
-                  <span className="font-medium">{filteredVideos.length}</span> résultats
+                  <span className="font-medium">{Math.min(endIndex, filteredVideos.length)}</span>{' '}
+                  sur <span className="font-medium">{filteredVideos.length}</span> résultats
                 </p>
               </div>
               <div>
-                <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                <nav
+                  className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px"
+                  aria-label="Pagination"
+                >
                   <button
-                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                    onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
                     disabled={currentPage === 1}
                     className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
@@ -415,7 +427,7 @@ export default function VideoManagement() {
                     </button>
                   ))}
                   <button
-                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                    onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
                     disabled={currentPage === totalPages}
                     className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
@@ -446,19 +458,22 @@ export default function VideoManagement() {
                     <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
                       Détails de la vidéo
                     </h3>
-                    
+
                     {/* Lecteur vidéo */}
                     <div className="mb-6 bg-black rounded-lg overflow-hidden">
-                      <video 
-                        controls 
+                      <video
+                        controls
                         className="w-full max-h-96"
                         poster={selectedVideo.thumbnail_url}
                       >
-                        <source src={selectedVideo.url} type={selectedVideo.mime_type || 'video/mp4'} />
+                        <source
+                          src={selectedVideo.url}
+                          type={selectedVideo.mime_type || 'video/mp4'}
+                        />
                         Votre navigateur ne supporte pas la lecture de vidéos.
                       </video>
                     </div>
-                    
+
                     <div className="space-y-4">
                       <div>
                         <p className="text-sm font-medium text-gray-700">Nom du fichier:</p>
@@ -470,25 +485,35 @@ export default function VideoManagement() {
                       </div>
                       <div>
                         <p className="text-sm font-medium text-gray-700">Taille:</p>
-                        <p className="text-sm text-gray-900">{formatFileSize(selectedVideo.file_size)}</p>
+                        <p className="text-sm text-gray-900">
+                          {formatFileSize(selectedVideo.file_size)}
+                        </p>
                       </div>
                       <div>
                         <p className="text-sm font-medium text-gray-700">Durée:</p>
-                        <p className="text-sm text-gray-900">{formatDuration(selectedVideo.duration)}</p>
+                        <p className="text-sm text-gray-900">
+                          {formatDuration(selectedVideo.duration)}
+                        </p>
                       </div>
                       <div>
                         <p className="text-sm font-medium text-gray-700">Uploadée par:</p>
-                        <p className="text-sm text-gray-900">{selectedVideo.uploaded_by_business}</p>
+                        <p className="text-sm text-gray-900">
+                          {selectedVideo.uploaded_by_business}
+                        </p>
                         <p className="text-xs text-gray-500">{selectedVideo.uploaded_by_contact}</p>
                       </div>
                       <div>
                         <p className="text-sm font-medium text-gray-700">Nombre de campagnes:</p>
-                        <p className="text-sm text-gray-900">{selectedVideo.campaigns_count || 0}</p>
+                        <p className="text-sm text-gray-900">
+                          {selectedVideo.campaigns_count || 0}
+                        </p>
                       </div>
                       {selectedVideo.validated_at && (
                         <div>
                           <p className="text-sm font-medium text-gray-700">Validée le:</p>
-                          <p className="text-sm text-gray-900">{formatDate(selectedVideo.validated_at)}</p>
+                          <p className="text-sm text-gray-900">
+                            {formatDate(selectedVideo.validated_at)}
+                          </p>
                         </div>
                       )}
                     </div>

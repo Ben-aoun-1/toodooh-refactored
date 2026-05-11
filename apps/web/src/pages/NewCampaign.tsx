@@ -2,10 +2,14 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { MapContainer, TileLayer, Circle, useMapEvents, Marker, Popup } from 'react-leaflet';
 import { useNavigate, useLocation } from 'react-router-dom';
 import DatePicker from 'react-datepicker';
-import "react-datepicker/dist/react-datepicker.css";
-import "leaflet/dist/leaflet.css";
+import 'react-datepicker/dist/react-datepicker.css';
+import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { campaignScreensService, type CampaignScreen, type CampaignLocation } from '../services/campaign-screens.service';
+import {
+  campaignScreensService,
+  type CampaignScreen,
+  type CampaignLocation,
+} from '../services/campaign-screens.service';
 import {
   buildWizardLocationScheduleMap,
   computeNewCampaignDoohMaxImpressions,
@@ -27,12 +31,12 @@ import { useAuthStore } from '../stores/auth.store';
 import { useAdvertiserGlobalConfig } from '../hooks/useAdvertiserGlobalConfig';
 import type { BusinessSector } from '../types/auth';
 import type { SpecialEvent } from '../types/event';
-import { 
-  Upload, 
-  MapPin, 
-  Calendar, 
-  Film, 
-  Search, 
+import {
+  Upload,
+  MapPin,
+  Calendar,
+  Film,
+  Search,
   Plus,
   Target,
   Users,
@@ -53,7 +57,7 @@ import {
   Megaphone,
   LayoutList,
   ChevronRight,
-  Flame
+  Flame,
 } from 'lucide-react';
 
 import ariane1 from '../assets/ariane/1.png';
@@ -83,20 +87,20 @@ L.Icon.Default.mergeOptions({
 });
 
 const categoryMultipliers = {
-  "Publicité commerciale": 1.2,
-  "Événement culturel": 0.8,
-  "Promotion spéciale": 1.0,
-  "Annonce institutionnelle": 1.5
+  'Publicité commerciale': 1.2,
+  'Événement culturel': 0.8,
+  'Promotion spéciale': 1.0,
+  'Annonce institutionnelle': 1.5,
 };
 
 const containerStyle = {
   width: '100%',
-  height: '400px'
+  height: '400px',
 };
 
 const center = {
   lat: 36.8065,
-  lng: 10.1815 // Tunis center coordinates
+  lng: 10.1815, // Tunis center coordinates
 };
 
 // Composant pour gérer les événements de la carte
@@ -130,9 +134,8 @@ const TUNISIA_CITIES = [
   { name: 'Kébili', lat: 33.7042, lng: 8.9694 },
   { name: 'Tataouine', lat: 32.9297, lng: 10.4517 },
   { name: 'Médenine', lat: 33.3547, lng: 10.5053 },
-  { name: 'Zaghouan', lat: 36.4028, lng: 10.1428 }
+  { name: 'Zaghouan', lat: 36.4028, lng: 10.1428 },
 ];
-
 
 export default function NewCampaign() {
   const toLocalDateOnlyString = (date: Date): string => {
@@ -160,7 +163,7 @@ export default function NewCampaign() {
   const navigate = useNavigate();
   const location = useLocation();
   const { profileType, user } = useAuthStore();
-  
+
   // Détecter le mode édition
   const editMode = location.state?.editMode || false;
   const campaignToEdit = location.state?.campaign || null;
@@ -168,27 +171,28 @@ export default function NewCampaign() {
   const eventFromState = location.state?.event as SpecialEvent | undefined;
   const isEventCampaign = Boolean(
     (location.pathname === '/new-event-campaign' && eventFromState) ||
-    (editMode && campaignToEdit?.event_id)
+    (editMode && campaignToEdit?.event_id),
   );
 
   const { dooh, refresh: refreshGlobalDoohConfig } = useAdvertiserGlobalConfig();
   const cpmTnd = isEventCampaign ? dooh.event_campaign_cpm_tnd : dooh.standard_campaign_cpm_tnd;
-  
+
   // Vérifier si le champ client doit être affiché (uniquement pour agences et organisateurs)
-  const shouldShowClientField = profileType === 'advertising_agency' || profileType === 'event_organizer';
-  
+  const shouldShowClientField =
+    profileType === 'advertising_agency' || profileType === 'event_organizer';
+
   const [startDate, setStartDate] = useState<Date | null>(
     parseCampaignUiDate(campaignToEdit?.startDate ?? campaignToEdit?.start_date) ??
-      parseCampaignUiDate(eventFromState?.start_date)
+      parseCampaignUiDate(eventFromState?.start_date),
   );
   const [endDate, setEndDate] = useState<Date | null>(
     parseCampaignUiDate(campaignToEdit?.endDate ?? campaignToEdit?.end_date) ??
-      parseCampaignUiDate(eventFromState?.end_date)
+      parseCampaignUiDate(eventFromState?.end_date),
   );
   const [selectedLocation, setSelectedLocation] = useState(
     campaignToEdit?.location_lat && campaignToEdit?.location_lng
       ? { lat: campaignToEdit.location_lat, lng: campaignToEdit.location_lng }
-      : center
+      : center,
   );
   const [radius, setRadius] = useState(campaignToEdit?.location_radius || 1000);
   const [searchQuery, setSearchQuery] = useState('');
@@ -215,16 +219,16 @@ export default function NewCampaign() {
     categories: (campaignToEdit?.category ? [campaignToEdit.category] : []) as string[],
     budget: campaignToEdit?.budget?.toString() || '',
     nbImpressions: 1000,
-    nbEcrans: 1
+    nbEcrans: 1,
   });
   const [campaignCategories, setCampaignCategories] = useState<string[]>([]);
 
   // États pour la validation
-  const [errors, setErrors] = useState<{[key: string]: string}>({});
-  const [touched, setTouched] = useState<{[key: string]: boolean}>({});
-  const [dateErrors, setDateErrors] = useState<{[key: string]: string}>({});
-  const [dateTouched, setDateTouched] = useState<{[key: string]: boolean}>({});
-  
+  const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [touched, setTouched] = useState<{ [key: string]: boolean }>({});
+  const [dateErrors, setDateErrors] = useState<{ [key: string]: string }>({});
+  const [dateTouched, setDateTouched] = useState<{ [key: string]: boolean }>({});
+
   // États pour les écrans / localités (zone unique : localités dans le cercle)
   const [allScreens, setAllScreens] = useState<CampaignScreen[]>([]);
   const [locationsInZone, setLocationsInZone] = useState<CampaignLocation[]>([]);
@@ -252,7 +256,9 @@ export default function NewCampaign() {
   const [zoneFilterCountry, setZoneFilterCountry] = useState<string>('');
   const [zoneFilterRegion, setZoneFilterRegion] = useState<string>('');
   /** IDs d'écrans des localités sélectionnées (pour indisponibilités) */
-  const [screenIdsFromSelectedLocations, setScreenIdsFromSelectedLocations] = useState<string[]>([]);
+  const [screenIdsFromSelectedLocations, setScreenIdsFromSelectedLocations] = useState<string[]>(
+    [],
+  );
 
   // Ajout d'un état pour le budget slider (avec bornes min/max)
   const BUDGET_MIN = 0;
@@ -268,19 +274,23 @@ export default function NewCampaign() {
   const [doohEstimateLoading, setDoohEstimateLoading] = useState(false);
   const [doohEstimateError, setDoohEstimateError] = useState<string | null>(null);
   /** Rechargement affluence depuis l’API (évite les objets zone figés avant RLS / données). */
-  const [freshLocationsForEstimate, setFreshLocationsForEstimate] = useState<CampaignLocation[]>([]);
+  const [freshLocationsForEstimate, setFreshLocationsForEstimate] = useState<CampaignLocation[]>(
+    [],
+  );
 
   // Calcul dynamique des jours
-  const nbJours = startDate && endDate ? Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))) : 0;
+  const nbJours =
+    startDate && endDate
+      ? Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)))
+      : 0;
 
   // Condition pour activer l'estimation
   const canEstimate = geographicZones.length > 0 && nbJours > 0 && adjustedBudget > 0;
 
-
   // Mémoriser : un flatMap à chaque rendu créait une nouvelle référence → useMemo/useEffect en boucle + carte bloquée
   const allSelectedLocations = useMemo(
     () => geographicZones.flatMap((zone) => zone.locations || []),
-    [geographicZones]
+    [geographicZones],
   );
   const nbLocationsSelected = allSelectedLocations.length;
   const nbEcransSelected = allSelectedLocations.reduce((s, loc) => s + (loc.screen_count || 0), 0);
@@ -288,9 +298,11 @@ export default function NewCampaign() {
   const selectedParcScreenIds = useMemo(() => {
     if (diffusionType !== 'parc_tv' || selectedParcIds.length === 0) return null;
     const ids = new Set<string>();
-    availableParcs.filter((p) => selectedParcIds.includes(p.ownerId)).forEach((p) => {
-      p.screenIds.forEach((id) => ids.add(id));
-    });
+    availableParcs
+      .filter((p) => selectedParcIds.includes(p.ownerId))
+      .forEach((p) => {
+        p.screenIds.forEach((id) => ids.add(id));
+      });
     return ids;
   }, [diffusionType, selectedParcIds, availableParcs]);
 
@@ -304,7 +316,7 @@ export default function NewCampaign() {
 
   const effectiveScreenIdsKey = useMemo(
     () => [...effectiveScreenIds].sort().join(','),
-    [effectiveScreenIds]
+    [effectiveScreenIds],
   );
 
   const unavailabilityPeriodsKey = useMemo(
@@ -313,7 +325,7 @@ export default function NewCampaign() {
         .map((p) => `${p.screen_id}|${p.start_date}|${p.end_date}|${p.start_time}|${p.end_time}`)
         .sort()
         .join(';'),
-    [unavailabilityPeriods]
+    [unavailabilityPeriods],
   );
 
   const wizardLocationsAffluenceKey = useMemo(
@@ -329,12 +341,12 @@ export default function NewCampaign() {
         })
         .sort()
         .join('||'),
-    [allSelectedLocations]
+    [allSelectedLocations],
   );
 
   const selectedLocationIdsKey = useMemo(
     () => [...new Set(allSelectedLocations.map((l) => l.id))].sort().join(','),
-    [allSelectedLocations]
+    [allSelectedLocations],
   );
 
   const freshLocationsScheduleKey = useMemo(
@@ -350,24 +362,23 @@ export default function NewCampaign() {
         })
         .sort()
         .join('||'),
-    [freshLocationsForEstimate]
+    [freshLocationsForEstimate],
   );
 
   /** Localités sélectionnées (pivot métier du moteur de validation DOOH). */
   const estimateLocationIds = useMemo(
-    () =>
-      [
-        ...new Set(
-          (freshLocationsForEstimate.length > 0 ? freshLocationsForEstimate : allSelectedLocations)
-            .map((l) => l.id)
-            .filter(Boolean)
-        ),
-      ],
-    [freshLocationsForEstimate, allSelectedLocations]
+    () => [
+      ...new Set(
+        (freshLocationsForEstimate.length > 0 ? freshLocationsForEstimate : allSelectedLocations)
+          .map((l) => l.id)
+          .filter(Boolean),
+      ),
+    ],
+    [freshLocationsForEstimate, allSelectedLocations],
   );
   const estimateLocationIdsKey = useMemo(
     () => [...estimateLocationIds].sort().join(','),
-    [estimateLocationIds]
+    [estimateLocationIds],
   );
 
   const nbImpressions = doohMaxImpressions;
@@ -375,37 +386,41 @@ export default function NewCampaign() {
     effectiveScreenIds.length > 0 ? effectiveScreenIds.length : nbEcransSelected;
   const impressionsParEcran =
     displayScreenCount > 0 ? Math.round(nbImpressions / displayScreenCount) : 0;
-  
+
   // Calcul du prix total : (Nombre d'impressions / 1000) × CPM (potentiel max sur la sélection)
-  const prixTotal = nbImpressions > 0
-    ? Math.round((nbImpressions / 1000) * cpmTnd * 100) / 100
-    : 0;
+  const prixTotal = nbImpressions > 0 ? Math.round((nbImpressions / 1000) * cpmTnd * 100) / 100 : 0;
 
   // Calculs dynamiques des estimations
   const campaignEstimations = useMemo(() => {
     const baseReach = Math.round((radius / 1000) * 1500); // Base: 1500 personnes par km
     const baseCost = Math.round((radius / 1000) * 500); // Base: 500 TND par km
-    
+
     // Multiplicateur selon la catégorie
-    const categoryMultiplier = categoryMultipliers[(formData.categories[0] || formData.category) as keyof typeof categoryMultipliers] || 1;
-    
+    const categoryMultiplier =
+      categoryMultipliers[
+        (formData.categories[0] || formData.category) as keyof typeof categoryMultipliers
+      ] || 1;
+
     // Multiplicateur selon la durée
-    const durationDays = startDate && endDate ? 
-      Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) : 1;
+    const durationDays =
+      startDate && endDate
+        ? Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
+        : 1;
     const durationMultiplier = Math.min(durationDays / 7, 2); // Max 2x pour 2 semaines
-    
+
     // Multiplicateur selon le budget
-    const budgetMultiplier = formData.budget ? 
-      Math.min(parseFloat(formData.budget) / 1000, 3) : 1; // Max 3x pour 3000 TND
-    
-    const estimatedReach = Math.round(baseReach * categoryMultiplier * durationMultiplier * budgetMultiplier);
+    const budgetMultiplier = formData.budget ? Math.min(parseFloat(formData.budget) / 1000, 3) : 1; // Max 3x pour 3000 TND
+
+    const estimatedReach = Math.round(
+      baseReach * categoryMultiplier * durationMultiplier * budgetMultiplier,
+    );
     const estimatedCost = Math.round(baseCost * categoryMultiplier * durationMultiplier);
     const estimatedViews = Math.round(estimatedReach * 0.7); // 70% des personnes verront la pub
     const estimatedEngagement = Math.round(estimatedViews * 0.15); // 15% d'engagement
-    
+
     // Calcul de la zone couverte (approximation)
     const areaCovered = Math.PI * Math.pow(radius / 1000, 2);
-    
+
     return {
       reach: estimatedReach,
       cost: estimatedCost,
@@ -413,7 +428,7 @@ export default function NewCampaign() {
       engagement: estimatedEngagement,
       area: areaCovered,
       duration: durationDays,
-      efficiency: estimatedReach / estimatedCost // personnes par TND
+      efficiency: estimatedReach / estimatedCost, // personnes par TND
     };
   }, [radius, formData.categories, formData.budget, startDate, endDate]);
 
@@ -427,7 +442,7 @@ export default function NewCampaign() {
   const [uploadedVideoPath, setUploadedVideoPath] = useState<string>('');
   const [uploadedVideoId, setUploadedVideoId] = useState<string>('');
   const [draftCampaignId, setDraftCampaignId] = useState<string>(
-    editMode && campaignToEdit?.id ? campaignToEdit.id : ''
+    editMode && campaignToEdit?.id ? campaignToEdit.id : '',
   );
   const [myApprovedVideos, setMyApprovedVideos] = useState<any[]>([]);
   const [selectedExistingVideo, setSelectedExistingVideo] = useState<any>(null);
@@ -493,7 +508,7 @@ export default function NewCampaign() {
           ownEventId: ownEventId ? String(ownEventId) : null,
           excludeCampaignId: draftCampaignId || null,
           wizardLocationSlots: buildWizardLocationScheduleMap(
-            freshLocationsForEstimate.length > 0 ? freshLocationsForEstimate : allSelectedLocations
+            freshLocationsForEstimate.length > 0 ? freshLocationsForEstimate : allSelectedLocations,
           ),
         });
         if (!cancelled) setDoohMaxImpressions(n);
@@ -535,16 +550,16 @@ export default function NewCampaign() {
   const categoryMapping: { [key: string]: string } = {
     'Publicité commerciale': 'commercial',
     'Événement culturel': 'cultural',
-    'Promotion': 'promotional',
+    Promotion: 'promotional',
     'Promotion spéciale': 'promotional',
-    'Institutionnel': 'institutional',
-    'Annonce institutionnelle': 'institutional'
+    Institutionnel: 'institutional',
+    'Annonce institutionnelle': 'institutional',
   };
   const categoryReverseMapping: { [key: string]: string } = {
     commercial: 'Publicité commerciale',
     cultural: 'Événement culturel',
     promotional: 'Promotion spéciale',
-    institutional: 'Annonce institutionnelle'
+    institutional: 'Annonce institutionnelle',
   };
 
   useEffect(() => {
@@ -564,7 +579,7 @@ export default function NewCampaign() {
             return {
               ...prev,
               category: names[0],
-              categories: [names[0]]
+              categories: [names[0]],
             };
           });
         }
@@ -579,18 +594,26 @@ export default function NewCampaign() {
   // En mode édition, charger les catégories multiples depuis campaign_categories
   useEffect(() => {
     if (!editMode || !draftCampaignId) return;
-    campaignService.getCampaignCategories(draftCampaignId).then((enumCategories) => {
-      if (enumCategories.length > 0) {
-        const displayNames = enumCategories.map((c) => categoryReverseMapping[c] || c);
-        setFormData((prev) => ({ ...prev, category: displayNames[0] || prev.category, categories: displayNames }));
-      }
-    }).catch(() => {});
+    campaignService
+      .getCampaignCategories(draftCampaignId)
+      .then((enumCategories) => {
+        if (enumCategories.length > 0) {
+          const displayNames = enumCategories.map((c) => categoryReverseMapping[c] || c);
+          setFormData((prev) => ({
+            ...prev,
+            category: displayNames[0] || prev.category,
+            categories: displayNames,
+          }));
+        }
+      })
+      .catch(() => {});
   }, [editMode, draftCampaignId]);
 
   const categoryChoices = useMemo(() => {
-    const base = campaignCategories.length > 0
-      ? [...campaignCategories]
-      : Array.from(new Set(Object.values(categoryReverseMapping)));
+    const base =
+      campaignCategories.length > 0
+        ? [...campaignCategories]
+        : Array.from(new Set(Object.values(categoryReverseMapping)));
 
     for (const selected of formData.categories) {
       if (!base.includes(selected)) base.push(selected);
@@ -606,48 +629,56 @@ export default function NewCampaign() {
       console.log('📋 End date:', endDate);
       console.log('📋 Location:', selectedLocation);
       console.log('📋 Video ID:', videoId || uploadedVideoId);
-      
+
       // Validation des champs obligatoires
       if (!formData.campaignName || formData.campaignName.trim() === '') {
         throw new Error('Le nom de la campagne est obligatoire');
       }
-      
+
       if (diffusionType !== 'parc_tv' && !formData.categories?.length) {
         throw new Error('Sélectionnez au moins une catégorie');
       }
-      
+
       if (!startDate || !endDate) {
         throw new Error('Les dates de début et fin sont obligatoires');
       }
-      
-      const mappedCategories = diffusionType === 'parc_tv'
-        ? ['parc']
-        : formData.categories.map((c) => categoryMapping[c] || c);
+
+      const mappedCategories =
+        diffusionType === 'parc_tv'
+          ? ['parc']
+          : formData.categories.map((c) => categoryMapping[c] || c);
       const primaryCategory = mappedCategories[0] || 'parc';
       console.log('📋 Catégories mappées:', formData.categories, '→', mappedCategories);
-      
+
       // TOUJOURS créer en draft d'abord
       // La vérification du solde et de la vidéo se fera lors de "Créer maintenant"
       const campaignStatus = 'draft';
       console.log('🎬 Vidéo validée:', isVideoValidated, '→ Status initial:', campaignStatus);
-      
+
       // Récupérer les IDs des localités sélectionnées (une localité = une audience, pas de doublon écran)
-      const selectedLocationIds = geographicZones.flatMap(zone => (zone.locations || []).map(loc => loc.id));
+      const selectedLocationIds = geographicZones.flatMap((zone) =>
+        (zone.locations || []).map((loc) => loc.id),
+      );
       console.log('📍 Localités sélectionnées dans toutes les zones:', selectedLocationIds.length);
-      
+
       // Calculer la position centrale moyenne de toutes les zones
-      const avgLat = geographicZones.length > 0 
-        ? geographicZones.reduce((sum, zone) => sum + zone.location.lat, 0) / geographicZones.length 
-        : selectedLocation.lat;
-      const avgLng = geographicZones.length > 0 
-        ? geographicZones.reduce((sum, zone) => sum + zone.location.lng, 0) / geographicZones.length 
-        : selectedLocation.lng;
-      
+      const avgLat =
+        geographicZones.length > 0
+          ? geographicZones.reduce((sum, zone) => sum + zone.location.lat, 0) /
+            geographicZones.length
+          : selectedLocation.lat;
+      const avgLng =
+        geographicZones.length > 0
+          ? geographicZones.reduce((sum, zone) => sum + zone.location.lng, 0) /
+            geographicZones.length
+          : selectedLocation.lng;
+
       // Utiliser le rayon maximum de toutes les zones
-      const maxRadius = geographicZones.length > 0 
-        ? Math.max(...geographicZones.map(zone => zone.radius)) 
-        : radius;
-      
+      const maxRadius =
+        geographicZones.length > 0
+          ? Math.max(...geographicZones.map((zone) => zone.radius))
+          : radius;
+
       console.log('📍 Position centrale calculée:', avgLat, avgLng);
       console.log('📍 Rayon maximum:', maxRadius);
 
@@ -665,27 +696,30 @@ export default function NewCampaign() {
         categories: mappedCategories,
         budget: budgetToSave,
         video_id: videoId || uploadedVideoId,
-        campaignId: draftCampaignId
+        campaignId: draftCampaignId,
       });
 
-      const campaign = await campaignService.saveCampaignDraft({
-        name: formData.campaignName,
-        category: primaryCategory,
-        categories: mappedCategories,
-        start_date: toLocalDateOnlyString(startDate),
-        end_date: toLocalDateOnlyString(endDate),
-        budget: Number(budgetToSave) || 0,
-        views: Math.max(0, linkedImpSave),
-        status: campaignStatus,
-        video_id: videoId || uploadedVideoId || undefined,
-        event_id: isEventCampaign ? (eventFromState?.id ?? campaignToEdit?.event_id) : undefined,
-        location_lat: avgLat,
-        location_lng: avgLng,
-        location_radius: maxRadius,
-        location_ids: selectedLocationIds.length > 0 ? selectedLocationIds : undefined,
-        screen_ids: undefined
-      }, draftCampaignId || undefined);
-      
+      const campaign = await campaignService.saveCampaignDraft(
+        {
+          name: formData.campaignName,
+          category: primaryCategory,
+          categories: mappedCategories,
+          start_date: toLocalDateOnlyString(startDate),
+          end_date: toLocalDateOnlyString(endDate),
+          budget: Number(budgetToSave) || 0,
+          views: Math.max(0, linkedImpSave),
+          status: campaignStatus,
+          video_id: videoId || uploadedVideoId || undefined,
+          event_id: isEventCampaign ? (eventFromState?.id ?? campaignToEdit?.event_id) : undefined,
+          location_lat: avgLat,
+          location_lng: avgLng,
+          location_radius: maxRadius,
+          location_ids: selectedLocationIds.length > 0 ? selectedLocationIds : undefined,
+          screen_ids: undefined,
+        },
+        draftCampaignId || undefined,
+      );
+
       console.log('✅ Campagne sauvegardée:', campaign);
 
       if (!draftCampaignId) {
@@ -694,7 +728,7 @@ export default function NewCampaign() {
       } else {
         console.log('✅ Campagne mise à jour:', campaign.id);
       }
-      
+
       return campaign;
     } catch (error: any) {
       console.error('❌ Erreur lors de la sauvegarde:', error);
@@ -709,7 +743,9 @@ export default function NewCampaign() {
     try {
       const durationSeconds = await readVideoDurationFromFile(file);
       if (durationSeconds != null && durationSeconds > MAX_VIDEO_DURATION_SECONDS) {
-        toast.error('La vidéo ne doit pas dépasser 30 secondes. Veuillez choisir une vidéo plus courte.');
+        toast.error(
+          'La vidéo ne doit pas dépasser 30 secondes. Veuillez choisir une vidéo plus courte.',
+        );
         event.target.value = '';
         return;
       }
@@ -732,7 +768,7 @@ export default function NewCampaign() {
         result.path,
         file.name,
         file.size,
-        durationSeconds
+        durationSeconds,
       );
       setUploadedVideoId(videoEntry.id);
 
@@ -751,7 +787,7 @@ export default function NewCampaign() {
       toast.success('Vidéo uploadée avec succès !');
     } catch (error: any) {
       console.error('Erreur upload:', error);
-      toast.error(error.message || 'Erreur lors de l\'upload');
+      toast.error(error.message || "Erreur lors de l'upload");
       setSelectedVideo(null);
     } finally {
       setUploading(false);
@@ -790,7 +826,9 @@ export default function NewCampaign() {
         const d = await readVideoDurationFromUrl(video.url);
         if (d == null) return;
         if (d > MAX_VIDEO_DURATION_SECONDS) {
-          toast.error('La vidéo ne doit pas dépasser 30 secondes. Veuillez en sélectionner une autre.');
+          toast.error(
+            'La vidéo ne doit pas dépasser 30 secondes. Veuillez en sélectionner une autre.',
+          );
           setSelectedExistingVideo(null);
           setUploadedVideoId('');
           setUploadedVideoUrl('');
@@ -800,9 +838,7 @@ export default function NewCampaign() {
           await videoUploadService.updateVideoDurationSeconds(video.id, d);
           const patched = { ...video, duration_seconds: d };
           setSelectedExistingVideo(patched);
-          setMyApprovedVideos((prev) =>
-            prev.map((v) => (v.id === video.id ? patched : v))
-          );
+          setMyApprovedVideos((prev) => prev.map((v) => (v.id === video.id ? patched : v)));
         } catch {
           /* ignore */
         }
@@ -813,7 +849,7 @@ export default function NewCampaign() {
   // Fonctions de validation
   const validateField = (name: string, value: string) => {
     let error = '';
-    
+
     switch (name) {
       case 'campaignName':
         if (!value.trim()) {
@@ -852,16 +888,16 @@ export default function NewCampaign() {
         }
         break;
     }
-    
+
     return error;
   };
 
   const handleFieldChange = (name: string, value: string) => {
     setFormData({ ...formData, [name]: value });
-    
+
     // Marquer le champ comme touché
     setTouched({ ...touched, [name]: true });
-    
+
     // Valider le champ
     const error = validateField(name, value);
     setErrors({ ...errors, [name]: error });
@@ -872,7 +908,7 @@ export default function NewCampaign() {
       ...prev,
       categories: prev.categories.includes(category)
         ? prev.categories.filter((c) => c !== category)
-        : [...prev.categories, category]
+        : [...prev.categories, category],
     }));
     setTouched((t) => ({ ...t, categories: true }));
   };
@@ -892,8 +928,16 @@ export default function NewCampaign() {
     }
     const catErr = formData.categories.length === 0 ? 'Sélectionnez au moins une catégorie' : '';
     const clientErr = shouldShowClientField ? validateField('client', formData.client) : '';
-    setTouched((t) => ({ ...t, categories: true, ...(shouldShowClientField ? { client: true } : {}) }));
-    setErrors((e) => ({ ...e, categories: catErr, ...(shouldShowClientField ? { client: clientErr } : {}) }));
+    setTouched((t) => ({
+      ...t,
+      categories: true,
+      ...(shouldShowClientField ? { client: true } : {}),
+    }));
+    setErrors((e) => ({
+      ...e,
+      categories: catErr,
+      ...(shouldShowClientField ? { client: clientErr } : {}),
+    }));
     return !catErr && !clientErr;
   };
 
@@ -913,7 +957,10 @@ export default function NewCampaign() {
   };
 
   const canProceedToStep4 = () => {
-    return geographicZones.length > 0 && geographicZones.some(zone => (zone.locations || []).length > 0);
+    return (
+      geographicZones.length > 0 &&
+      geographicZones.some((zone) => (zone.locations || []).length > 0)
+    );
   };
 
   const canProceedToStep5 = () => {
@@ -925,7 +972,7 @@ export default function NewCampaign() {
     if (impressionsFromSelection <= 0 || adjustedBudget <= 0) return false;
     const impressionsForBudget = Math.min(
       Math.round((adjustedBudget / cpmTnd) * 1000),
-      impressionsFromSelection
+      impressionsFromSelection,
     );
     if (impressionsForBudget <= 0) return false;
 
@@ -941,14 +988,22 @@ export default function NewCampaign() {
 
   // Fonction pour calculer les heures d'indisponibilité par jour en moyenne (écrans des localités sélectionnées)
   const calculateUnavailableHoursPerDay = useMemo(() => {
-    if (!startDate || !endDate || effectiveScreenIds.length === 0 || unavailabilityPeriods.length === 0) {
+    if (
+      !startDate ||
+      !endDate ||
+      effectiveScreenIds.length === 0 ||
+      unavailabilityPeriods.length === 0
+    ) {
       return 0;
     }
-    const totalDays = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
+    const totalDays = Math.max(
+      1,
+      Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)),
+    );
     let totalUnavailableHours = 0;
     const screenIdSet = new Set(effectiveScreenIds);
     const periodsByScreen = new Map<string, UnavailabilityPeriod[]>();
-    unavailabilityPeriods.forEach(period => {
+    unavailabilityPeriods.forEach((period) => {
       if (screenIdSet.has(period.screen_id)) {
         if (!periodsByScreen.has(period.screen_id)) {
           periodsByScreen.set(period.screen_id, []);
@@ -977,7 +1032,7 @@ export default function NewCampaign() {
         let dayUnavailableHours = 0;
         const dayPeriods: Array<{ start: number; end: number }> = [];
 
-        periods.forEach(period => {
+        periods.forEach((period) => {
           const periodStart = new Date(`${period.start_date}T${period.start_time}`);
           const periodEnd = new Date(`${period.end_date}T${period.end_time}`);
 
@@ -1001,7 +1056,7 @@ export default function NewCampaign() {
 
           // Fusionner les périodes qui se chevauchent
           const merged: Array<{ start: number; end: number }> = [];
-          dayPeriods.forEach(period => {
+          dayPeriods.forEach((period) => {
             if (merged.length === 0) {
               merged.push({ ...period });
             } else {
@@ -1017,7 +1072,7 @@ export default function NewCampaign() {
           });
 
           // Calculer le total des heures d'indisponibilité pour ce jour
-          merged.forEach(period => {
+          merged.forEach((period) => {
             dayUnavailableHours += period.end - period.start;
           });
         }
@@ -1034,14 +1089,15 @@ export default function NewCampaign() {
   // Dériver les IDs d'écrans des localités sélectionnées (pour indisponibilités)
   useEffect(() => {
     const run = async () => {
-      const ids = allSelectedLocations.map(l => l.id);
+      const ids = allSelectedLocations.map((l) => l.id);
       if (ids.length === 0) {
         setScreenIdsFromSelectedLocations([]);
         return;
       }
       const screenIds = await campaignScreensService.getScreenIdsByLocationIds(ids);
       setScreenIdsFromSelectedLocations((prev) => {
-        if (prev.length === screenIds.length && prev.every((id, i) => id === screenIds[i])) return prev;
+        if (prev.length === screenIds.length && prev.every((id, i) => id === screenIds[i]))
+          return prev;
         return screenIds;
       });
     };
@@ -1067,7 +1123,7 @@ export default function NewCampaign() {
         }
         setUnavailabilityPeriods(allPeriods);
       } catch (error) {
-        console.error('Erreur chargement périodes d\'indisponibilité:', error);
+        console.error("Erreur chargement périodes d'indisponibilité:", error);
       }
     };
     loadUnavailabilityPeriods();
@@ -1081,18 +1137,16 @@ export default function NewCampaign() {
         totalDays: 0,
       };
     }
-    const totalDays = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
+    const totalDays = Math.max(
+      1,
+      Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)),
+    );
     const totalImpressions = Math.round(doohMaxImpressions);
     return {
       impressions: totalImpressions,
       totalDays,
     };
-  }, [
-    startDate,
-    endDate,
-    effectiveScreenIdsKey,
-    doohMaxImpressions,
-  ]);
+  }, [startDate, endDate, effectiveScreenIdsKey, doohMaxImpressions]);
 
   /** Impressions correspondant au budget curseur (plafonnées au max de la sélection) — source de vérité affichage validation */
   const impressionsForCurrentBudget = useMemo(() => {
@@ -1234,32 +1288,39 @@ export default function NewCampaign() {
   // Mettre à jour les impressions calculées quand le budget change
   useEffect(() => {
     const { impressions } = calculateBudgetAndImpressions;
-    
+
     // Calculer les impressions basées sur le budget ajusté selon la formule : (montant / CPM) * 1000
     if (adjustedBudget > 0) {
       // Formule correcte : (montant / CPM) * 1000 = impressions
       const calculatedImpressionsFromBudget = Math.round((adjustedBudget / cpmTnd) * 1000);
-      
+
       // Limiter aux impressions maximales possibles
       const maxImpressions = impressions > 0 ? impressions : Infinity;
       const finalImpressions = Math.min(calculatedImpressionsFromBudget, maxImpressions);
       setCalculatedImpressions(finalImpressions);
-      
+
       // Calculer le pourcentage pour l'affichage
       const defaultMaxAmount = impressions > 0 ? (impressions / 1000) * cpmTnd : adjustedBudget;
       const defaultMinAmount = BUDGET_MIN;
       const effectiveMin = customMinBudget !== null ? customMinBudget : defaultMinAmount;
       const effectiveMax = customMaxBudget !== null ? customMaxBudget : defaultMaxAmount;
-      
+
       // Calculer le pourcentage
-      const percentage = effectiveMax > effectiveMin 
-        ? ((adjustedBudget - effectiveMin) / (effectiveMax - effectiveMin)) * 100 
-        : 100;
+      const percentage =
+        effectiveMax > effectiveMin
+          ? ((adjustedBudget - effectiveMin) / (effectiveMax - effectiveMin)) * 100
+          : 100;
       setBudgetPercentage(Math.max(0, Math.min(100, percentage)));
     } else {
       setCalculatedImpressions(0);
     }
-  }, [adjustedBudget, calculateBudgetAndImpressions.impressions, customMinBudget, customMaxBudget, cpmTnd]);
+  }, [
+    adjustedBudget,
+    calculateBudgetAndImpressions.impressions,
+    customMinBudget,
+    customMaxBudget,
+    cpmTnd,
+  ]);
 
   // Recentrer le curseur uniquement quand la plage change (impressions / CPM / min-max perso), pas quand l'utilisateur déplace le slider
   useEffect(() => {
@@ -1268,7 +1329,7 @@ export default function NewCampaign() {
       const effectiveMax = customMaxBudget !== null ? customMaxBudget : defaultMaxAmount;
       const defaultMinAmount = BUDGET_MIN;
       const effectiveMin = customMinBudget !== null ? customMinBudget : defaultMinAmount;
-      
+
       // Par défaut : garder la valeur choisie si dans la plage, sinon borner.
       // Si la valeur est encore au minimum initial, prendre le max pour refléter le plan max.
       if (customMinBudget === null && customMaxBudget === null) {
@@ -1300,9 +1361,25 @@ export default function NewCampaign() {
     if (stepId === 1) return true; // L'étape 1 est toujours accessible
     if (stepId === 2) return canProceedToStep2();
     if (stepId === 3) return canProceedToStep2() && canLeaveStep2() && canProceedToStep3();
-    if (stepId === 4) return canProceedToStep2() && canLeaveStep2() && canProceedToStep3() && canProceedToStep4();
-    if (stepId === 5) return canProceedToStep2() && canLeaveStep2() && canProceedToStep3() && canProceedToStep4() && canProceedToStep5();
-    if (stepId === 6) return canProceedToStep2() && canLeaveStep2() && canProceedToStep3() && canProceedToStep4() && canProceedToStep5() && canProceedToStep6();
+    if (stepId === 4)
+      return canProceedToStep2() && canLeaveStep2() && canProceedToStep3() && canProceedToStep4();
+    if (stepId === 5)
+      return (
+        canProceedToStep2() &&
+        canLeaveStep2() &&
+        canProceedToStep3() &&
+        canProceedToStep4() &&
+        canProceedToStep5()
+      );
+    if (stepId === 6)
+      return (
+        canProceedToStep2() &&
+        canLeaveStep2() &&
+        canProceedToStep3() &&
+        canProceedToStep4() &&
+        canProceedToStep5() &&
+        canProceedToStep6()
+      );
     return false;
   };
 
@@ -1316,16 +1393,19 @@ export default function NewCampaign() {
   // Fonctions de validation pour les dates
   const validateDate = (dateType: 'start' | 'end', date: Date | null) => {
     let error = '';
-    
+
     if (!date) {
-      error = dateType === 'start' ? 'La date de début est obligatoire' : 'La date de fin est obligatoire';
+      error =
+        dateType === 'start'
+          ? 'La date de début est obligatoire'
+          : 'La date de fin est obligatoire';
     } else if (dateType === 'start' && endDate && date >= endDate) {
       error = 'La date de début doit être antérieure à la date de fin';
     } else if (dateType === 'end' && startDate && date <= startDate) {
       error = 'La date de fin doit être postérieure à la date de début';
     }
     // Note: La validation minDate est gérée directement par le DatePicker avec minDate={tomorrow} (J+2)
-    
+
     return error;
   };
 
@@ -1335,56 +1415,56 @@ export default function NewCampaign() {
       console.log('⚠️ Dates invalides pour la vérification des événements');
       return;
     }
-    
+
     try {
       console.log('🎉 Vérification des événements spéciaux...');
       console.log('📅 Période campagne:', {
         start: start.toISOString(),
-        end: end.toISOString()
+        end: end.toISOString(),
       });
-      
+
       // Récupérer tous les événements actifs
       const { data, error } = await supabase
         .from('special_events')
         .select('*')
         .eq('is_active', true);
-      
+
       if (error) {
         console.error('❌ Erreur lors de la récupération des événements:', error);
         console.error('Détails:', {
           message: error.message,
           details: error.details,
-          hint: error.hint
+          hint: error.hint,
         });
         return;
       }
-      
+
       console.log('📊 Événements actifs trouvés:', data?.length || 0);
-      
+
       if (!data || data.length === 0) {
         console.log('ℹ️ Aucun événement actif dans la base');
         return;
       }
-      
+
       // Filtrer les événements qui chevauchent la période de la campagne
-      const overlappingEvents = data.filter(event => {
+      const overlappingEvents = data.filter((event) => {
         const eventStart = new Date(event.start_date);
         const eventEnd = new Date(event.end_date);
         const campaignStart = start;
         const campaignEnd = end;
-        
+
         // Vérifier le chevauchement
         const hasOverlap = eventStart <= campaignEnd && eventEnd >= campaignStart;
-        
+
         console.log(`🔍 Event "${event.name}":`, {
           eventPeriod: `${eventStart.toLocaleDateString()} - ${eventEnd.toLocaleDateString()}`,
           campaignPeriod: `${campaignStart.toLocaleDateString()} - ${campaignEnd.toLocaleDateString()}`,
-          hasOverlap
+          hasOverlap,
         });
-        
+
         return hasOverlap;
       });
-      
+
       if (overlappingEvents.length > 0) {
         console.log(`✅ ${overlappingEvents.length} événement(s) détecté(s) durant cette période`);
         setDetectedEvents(overlappingEvents);
@@ -1443,46 +1523,49 @@ export default function NewCampaign() {
     });
   }, [recommendedEvents, startDate, endDate]);
 
-  const pushCampaignToSidebarCart = useCallback((campaignId: string) => {
-    try {
-      const raw = localStorage.getItem('campaign_cart_items');
-      const current = raw ? JSON.parse(raw) : [];
-      const safeCurrent = Array.isArray(current) ? current : [];
-      const amount = adjustedBudget > 0 ? adjustedBudget : prixTotal;
-      const periodLabel =
-        startDate && endDate
-          ? `${startDate.toLocaleDateString('fr-FR')} – ${endDate.toLocaleDateString('fr-FR')}`
-          : undefined;
-      const totalAreaKm2 = geographicZones.reduce(
-        (sum, z) => sum + Math.PI * Math.pow(z.radius / 1000, 2),
-        0
-      );
-      const zonesLabel =
-        geographicZones.length > 0
-          ? `${geographicZones.length} zone${geographicZones.length > 1 ? 's' : ''} · ${totalAreaKm2.toFixed(1)} km²`
-          : undefined;
-      const nextItem = {
-        id: campaignId,
-        name: formData.campaignName || eventFromState?.name || 'Nom de la campagne',
-        amount,
-        periodLabel,
-        zonesLabel,
-      };
-      const deduped = safeCurrent.filter((item: { id?: string }) => item?.id !== campaignId);
-      localStorage.setItem('campaign_cart_items', JSON.stringify([...deduped, nextItem]));
-      window.dispatchEvent(new CustomEvent('toodooh:cart-updated', { detail: { open: true } }));
-    } catch (error) {
-      console.error('Erreur mise à jour panier sidebar:', error);
-    }
-  }, [
-    adjustedBudget,
-    prixTotal,
-    formData.campaignName,
-    eventFromState?.name,
-    startDate,
-    endDate,
-    geographicZones,
-  ]);
+  const pushCampaignToSidebarCart = useCallback(
+    (campaignId: string) => {
+      try {
+        const raw = localStorage.getItem('campaign_cart_items');
+        const current = raw ? JSON.parse(raw) : [];
+        const safeCurrent = Array.isArray(current) ? current : [];
+        const amount = adjustedBudget > 0 ? adjustedBudget : prixTotal;
+        const periodLabel =
+          startDate && endDate
+            ? `${startDate.toLocaleDateString('fr-FR')} – ${endDate.toLocaleDateString('fr-FR')}`
+            : undefined;
+        const totalAreaKm2 = geographicZones.reduce(
+          (sum, z) => sum + Math.PI * Math.pow(z.radius / 1000, 2),
+          0,
+        );
+        const zonesLabel =
+          geographicZones.length > 0
+            ? `${geographicZones.length} zone${geographicZones.length > 1 ? 's' : ''} · ${totalAreaKm2.toFixed(1)} km²`
+            : undefined;
+        const nextItem = {
+          id: campaignId,
+          name: formData.campaignName || eventFromState?.name || 'Nom de la campagne',
+          amount,
+          periodLabel,
+          zonesLabel,
+        };
+        const deduped = safeCurrent.filter((item: { id?: string }) => item?.id !== campaignId);
+        localStorage.setItem('campaign_cart_items', JSON.stringify([...deduped, nextItem]));
+        window.dispatchEvent(new CustomEvent('toodooh:cart-updated', { detail: { open: true } }));
+      } catch (error) {
+        console.error('Erreur mise à jour panier sidebar:', error);
+      }
+    },
+    [
+      adjustedBudget,
+      prixTotal,
+      formData.campaignName,
+      eventFromState?.name,
+      startDate,
+      endDate,
+      geographicZones,
+    ],
+  );
 
   const handleDateChange = (dateType: 'start' | 'end', date: Date | null) => {
     if (dateType === 'start') {
@@ -1490,14 +1573,14 @@ export default function NewCampaign() {
     } else {
       setEndDate(date);
     }
-    
+
     // Marquer le champ comme touché
     setDateTouched({ ...dateTouched, [dateType]: true });
-    
+
     // Valider le champ
     const error = validateDate(dateType, date);
     setDateErrors({ ...dateErrors, [dateType]: error });
-    
+
     // Détection des événements spéciaux désactivée (popup masquée)
     // const newStartDate = dateType === 'start' ? date : startDate;
     // const newEndDate = dateType === 'end' ? date : endDate;
@@ -1516,20 +1599,20 @@ export default function NewCampaign() {
   };
 
   const validateStep2 = () => {
-    const newErrors: {[key: string]: string} = {};
-    const newTouched: {[key: string]: boolean} = {};
-    
+    const newErrors: { [key: string]: string } = {};
+    const newTouched: { [key: string]: boolean } = {};
+
     // Valider les dates
     newTouched.start = true;
     newTouched.end = true;
     newErrors.start = validateDate('start', startDate);
     newErrors.end = validateDate('end', endDate);
-    
+
     setDateTouched(newTouched);
     setDateErrors(newErrors);
-    
+
     // Vérifier s'il y a des erreurs
-    return !Object.values(newErrors).some(error => error !== '');
+    return !Object.values(newErrors).some((error) => error !== '');
   };
 
   const mapRef = useRef<any>(null);
@@ -1558,13 +1641,13 @@ export default function NewCampaign() {
             .select('*')
             .eq('id', campaignToEdit.video_id)
             .single();
-          
+
           if (videoData) {
             console.log('✅ Vidéo chargée:', videoData);
             setUploadedVideoId(videoData.id);
             setUploadedVideoUrl(videoData.url);
-            setMyApprovedVideos(prev => {
-              if (!prev.find(v => v.id === videoData.id)) {
+            setMyApprovedVideos((prev) => {
+              if (!prev.find((v) => v.id === videoData.id)) {
                 return [...prev, videoData];
               }
               return prev;
@@ -1577,7 +1660,7 @@ export default function NewCampaign() {
         }
       }
     };
-    
+
     loadExistingVideo();
   }, [editMode, campaignToEdit?.video_id]);
 
@@ -1594,46 +1677,66 @@ export default function NewCampaign() {
         const locationIds = campaignLocs.map((r: { location_id: string }) => r.location_id);
         const locations = await campaignScreensService.getLocationsByIds(locationIds);
         if (locations.length === 0) return;
-        const withCoords = locations.filter(loc => loc.coordinates && typeof loc.coordinates.lat === 'number' && typeof loc.coordinates.lng === 'number');
-        const latAvg = withCoords.length ? withCoords.reduce((s, l) => s + (l.coordinates!.lat), 0) / withCoords.length : 36.8;
-        const lngAvg = withCoords.length ? withCoords.reduce((s, l) => s + (l.coordinates!.lng), 0) / withCoords.length : 10.2;
+        const withCoords = locations.filter(
+          (loc) =>
+            loc.coordinates &&
+            typeof loc.coordinates.lat === 'number' &&
+            typeof loc.coordinates.lng === 'number',
+        );
+        const latAvg = withCoords.length
+          ? withCoords.reduce((s, l) => s + l.coordinates!.lat, 0) / withCoords.length
+          : 36.8;
+        const lngAvg = withCoords.length
+          ? withCoords.reduce((s, l) => s + l.coordinates!.lng, 0) / withCoords.length
+          : 10.2;
         const radiusM = withCoords.length
-          ? Math.max(1000, ...withCoords.map(l => {
-              const lat = l.coordinates!.lat;
-              const lng = l.coordinates!.lng;
-              const R = 6371000;
-              const dLat = ((lat - latAvg) * Math.PI) / 180;
-              const dLng = ((lng - lngAvg) * Math.PI) / 180;
-              const a = Math.sin(dLat / 2) ** 2 + Math.cos((latAvg * Math.PI) / 180) * Math.cos((lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
-              return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-            }))
+          ? Math.max(
+              1000,
+              ...withCoords.map((l) => {
+                const lat = l.coordinates!.lat;
+                const lng = l.coordinates!.lng;
+                const R = 6371000;
+                const dLat = ((lat - latAvg) * Math.PI) / 180;
+                const dLng = ((lng - lngAvg) * Math.PI) / 180;
+                const a =
+                  Math.sin(dLat / 2) ** 2 +
+                  Math.cos((latAvg * Math.PI) / 180) *
+                    Math.cos((lat * Math.PI) / 180) *
+                    Math.sin(dLng / 2) ** 2;
+                return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+              }),
+            )
           : 5000;
-        setGeographicZones([{
-          id: 'edit-restored',
-          name: 'Sélection existante',
-          location: { lat: latAvg, lng: lngAvg },
-          radius: Math.round(radiusM),
-          locations,
-        }]);
+        setGeographicZones([
+          {
+            id: 'edit-restored',
+            name: 'Sélection existante',
+            location: { lat: latAvg, lng: lngAvg },
+            radius: Math.round(radiusM),
+            locations,
+          },
+        ]);
       } catch (err) {
         console.error('Erreur chargement zones campagne:', err);
       }
     };
     loadCampaignZones();
   }, [editMode, campaignToEdit?.id]);
-  
+
   const loadMyApprovedVideos = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return;
-      
+
       const { data, error } = await supabase
         .from('videos')
         .select('*')
         .eq('uploaded_by', user.id)
         .eq('validation_status', 'approved')
         .order('created_at', { ascending: false });
-      
+
       if (error) throw error;
       setMyApprovedVideos(data || []);
       console.log('✅ Vidéos validées chargées:', data?.length || 0);
@@ -1641,7 +1744,7 @@ export default function NewCampaign() {
       console.error('Erreur chargement vidéos validées:', error);
     }
   };
-  
+
   // Charger tous les écrans de la base de données
   const loadAllScreens = async () => {
     setLoadingScreens(true);
@@ -1666,10 +1769,13 @@ export default function NewCampaign() {
         .select('id, owner_id')
         .eq('status', 'active');
 
-      if (!screens || screens.length === 0) { setAvailableParcs([]); return; }
+      if (!screens || screens.length === 0) {
+        setAvailableParcs([]);
+        return;
+      }
 
       const ownerScreenMap = new Map<string, string[]>();
-      screens.forEach(s => {
+      screens.forEach((s) => {
         const list = ownerScreenMap.get(s.owner_id) || [];
         list.push(s.id);
         ownerScreenMap.set(s.owner_id, list);
@@ -1681,16 +1787,18 @@ export default function NewCampaign() {
         .select('user_id, business_name, logo_url')
         .in('user_id', ownerIds);
 
-      const parcs: ParcTV[] = ownerIds.map(oid => {
-        const profile = owners?.find(o => o.user_id === oid);
-        return {
-          ownerId: oid,
-          name: profile?.business_name || 'Parc inconnu',
-          logo: profile?.logo_url || undefined,
-          screenCount: ownerScreenMap.get(oid)?.length || 0,
-          screenIds: ownerScreenMap.get(oid) || [],
-        };
-      }).filter(p => p.screenCount > 0);
+      const parcs: ParcTV[] = ownerIds
+        .map((oid) => {
+          const profile = owners?.find((o) => o.user_id === oid);
+          return {
+            ownerId: oid,
+            name: profile?.business_name || 'Parc inconnu',
+            logo: profile?.logo_url || undefined,
+            screenCount: ownerScreenMap.get(oid)?.length || 0,
+            screenIds: ownerScreenMap.get(oid) || [],
+          };
+        })
+        .filter((p) => p.screenCount > 0);
 
       setAvailableParcs(parcs);
     } catch (error) {
@@ -1705,15 +1813,16 @@ export default function NewCampaign() {
   }, [diffusionType]);
 
   const handleParcToggle = (ownerId: string) => {
-    setSelectedParcIds(prev =>
-      prev.includes(ownerId) ? prev.filter(id => id !== ownerId) : [...prev, ownerId]
+    setSelectedParcIds((prev) =>
+      prev.includes(ownerId) ? prev.filter((id) => id !== ownerId) : [...prev, ownerId],
     );
   };
 
   // Mettre à jour les localités dans la zone (cercle unique) quand centre ou rayon change
   useEffect(() => {
     if (selectedLocation && radius > 0) {
-      campaignScreensService.getLocationsInArea(selectedLocation.lat, selectedLocation.lng, radius / 1000)
+      campaignScreensService
+        .getLocationsInArea(selectedLocation.lat, selectedLocation.lng, radius / 1000)
         .then(setLocationsInZone)
         .catch(() => setLocationsInZone([]));
     } else {
@@ -1722,12 +1831,12 @@ export default function NewCampaign() {
   }, [selectedLocation, radius]);
 
   // ===== FONCTIONS DE GESTION DES ZONES MULTIPLES =====
-  
+
   // Obtenir les IDs des localités déjà utilisées dans d'autres zones
   const getUsedLocationIds = (excludeZoneId?: string): string[] => {
     return geographicZones
-      .filter(zone => zone.id !== excludeZoneId)
-      .flatMap(zone => (zone.locations || []).map(loc => loc.id));
+      .filter((zone) => zone.id !== excludeZoneId)
+      .flatMap((zone) => (zone.locations || []).map((loc) => loc.id));
   };
 
   // Toutes les localités pour la carte (affichées en permanence, indépendamment du cercle)
@@ -1741,7 +1850,10 @@ export default function NewCampaign() {
     const dLng = ((lng2 - lng1) * Math.PI) / 180;
     const a =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLng / 2) *
+        Math.sin(dLng / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   }, []);
@@ -1770,23 +1882,45 @@ export default function NewCampaign() {
 
   // Localités dans le cercle actuel (dérivé de allMapLocations), excluant celles déjà dans d'autres zones
   const tempZoneLocations = useMemo(() => {
-    if (!tempZoneLocation || tempZoneRadius <= 0 || !Array.isArray(filteredMapLocations) || filteredMapLocations.length === 0) return [];
+    if (
+      !tempZoneLocation ||
+      tempZoneRadius <= 0 ||
+      !Array.isArray(filteredMapLocations) ||
+      filteredMapLocations.length === 0
+    )
+      return [];
     const radiusKm = tempZoneRadius / 1000;
     const usedIds = getUsedLocationIds(editingZone?.id);
-    return filteredMapLocations.filter(loc => {
+    return filteredMapLocations.filter((loc) => {
       const c = loc?.coordinates;
-      if (!c || typeof c.lat !== 'number' || typeof c.lng !== 'number' || Number.isNaN(c.lat) || Number.isNaN(c.lng)) return false;
+      if (
+        !c ||
+        typeof c.lat !== 'number' ||
+        typeof c.lng !== 'number' ||
+        Number.isNaN(c.lat) ||
+        Number.isNaN(c.lng)
+      )
+        return false;
       const d = distanceKm(tempZoneLocation.lat, tempZoneLocation.lng, c.lat, c.lng);
       return d <= radiusKm && !usedIds.includes(loc.id);
     });
-  }, [filteredMapLocations, tempZoneLocation, tempZoneRadius, editingZone?.id, geographicZones, distanceKm]);
+  }, [
+    filteredMapLocations,
+    tempZoneLocation,
+    tempZoneRadius,
+    editingZone?.id,
+    geographicZones,
+    distanceKm,
+  ]);
 
-  const isZonesStep = ((currentStep === 4 && !isEventCampaign) || (currentStep === 1 && isEventCampaign));
+  const isZonesStep =
+    (currentStep === 4 && !isEventCampaign) || (currentStep === 1 && isEventCampaign);
   // Charger toutes les localités quand on est sur l’étape zones (carte dans la page) ou à l’ouverture de la modale
   useEffect(() => {
     if (!isZonesStep && !showZoneModal) return;
     setLoadingMapLocations(true);
-    campaignScreensService.getAllLocationsForMap()
+    campaignScreensService
+      .getAllLocationsForMap()
       .then(setAllMapLocations)
       .catch(() => setAllMapLocations([]))
       .finally(() => setLoadingMapLocations(false));
@@ -1818,41 +1952,49 @@ export default function NewCampaign() {
   };
 
   // Obtenir les localités dans le cercle d’une zone prédéfinie (pour cartes et visiteurs)
-  const getLocationsForPredefinedZone = useCallback((zone: PredefinedZone): CampaignLocation[] => {
-    if (!filteredMapLocations.length) return [];
-    const radiusKm = zone.radius / 1000;
-    const usedIds = getUsedLocationIds();
-    return filteredMapLocations.filter(loc => {
-      const c = loc?.coordinates;
-      if (!c || typeof c.lat !== 'number' || typeof c.lng !== 'number') return false;
-      const d = distanceKm(zone.latitude, zone.longitude, c.lat, c.lng);
-      return d <= radiusKm && !usedIds.includes(loc.id);
-    });
-  }, [filteredMapLocations, geographicZones, distanceKm]);
+  const getLocationsForPredefinedZone = useCallback(
+    (zone: PredefinedZone): CampaignLocation[] => {
+      if (!filteredMapLocations.length) return [];
+      const radiusKm = zone.radius / 1000;
+      const usedIds = getUsedLocationIds();
+      return filteredMapLocations.filter((loc) => {
+        const c = loc?.coordinates;
+        if (!c || typeof c.lat !== 'number' || typeof c.lng !== 'number') return false;
+        const d = distanceKm(zone.latitude, zone.longitude, c.lat, c.lng);
+        return d <= radiusKm && !usedIds.includes(loc.id);
+      });
+    },
+    [filteredMapLocations, geographicZones, distanceKm],
+  );
 
   // Visiteurs attendus pour l’affichage (toutes les localités dans le cercle, sans exclure les déjà sélectionnées)
-  const getEstimatedVisitorsForPredefinedZone = useCallback((zone: PredefinedZone): number => {
-    if (!filteredMapLocations.length) return 0;
-    const radiusKm = zone.radius / 1000;
-    const locs = filteredMapLocations.filter(loc => {
-      const c = loc?.coordinates;
-      if (!c || typeof c.lat !== 'number' || typeof c.lng !== 'number') return false;
-      return distanceKm(zone.latitude, zone.longitude, c.lat, c.lng) <= radiusKm;
-    });
-    return locs.reduce((sum, loc) => {
-      const s = loc.affluence_schedule;
-      if (!s?.length) return sum;
-      return sum + s.reduce((acc, x) => acc + Math.max(0, Number(x.estimated_impressions) || 0), 0);
-    }, 0);
-  }, [filteredMapLocations, distanceKm]);
+  const getEstimatedVisitorsForPredefinedZone = useCallback(
+    (zone: PredefinedZone): number => {
+      if (!filteredMapLocations.length) return 0;
+      const radiusKm = zone.radius / 1000;
+      const locs = filteredMapLocations.filter((loc) => {
+        const c = loc?.coordinates;
+        if (!c || typeof c.lat !== 'number' || typeof c.lng !== 'number') return false;
+        return distanceKm(zone.latitude, zone.longitude, c.lat, c.lng) <= radiusKm;
+      });
+      return locs.reduce((sum, loc) => {
+        const s = loc.affluence_schedule;
+        if (!s?.length) return sum;
+        return (
+          sum + s.reduce((acc, x) => acc + Math.max(0, Number(x.estimated_impressions) || 0), 0)
+        );
+      }, 0);
+    },
+    [filteredMapLocations, distanceKm],
+  );
 
   // Carte prédéfinie : sélection / désélection (toggle)
   const isPredefinedZoneSelected = (zone: PredefinedZone) =>
-    geographicZones.some(z => z.predefinedZoneId === zone.id);
+    geographicZones.some((z) => z.predefinedZoneId === zone.id);
 
   const handleTogglePredefinedZone = (zone: PredefinedZone) => {
     if (isPredefinedZoneSelected(zone)) {
-      setGeographicZones(prev => prev.filter(z => z.predefinedZoneId !== zone.id));
+      setGeographicZones((prev) => prev.filter((z) => z.predefinedZoneId !== zone.id));
       toast.success(`Zone "${zone.name}" retirée`);
       return;
     }
@@ -1865,7 +2007,7 @@ export default function NewCampaign() {
       locations: locs,
       predefinedZoneId: zone.id,
     };
-    setGeographicZones(prev => [...prev, newZone]);
+    setGeographicZones((prev) => [...prev, newZone]);
     toast.success(`Zone "${zone.name}" ajoutée`);
   };
 
@@ -1895,20 +2037,20 @@ export default function NewCampaign() {
     }
 
     const zoneName = tempZoneSearchQuery || `Zone ${geographicZones.length + 1}`;
-    
+
     if (editingZone) {
-      setGeographicZones(prev =>
-        prev.map(zone =>
+      setGeographicZones((prev) =>
+        prev.map((zone) =>
           zone.id === editingZone.id
             ? {
                 ...zone,
                 name: zoneName,
                 location: tempZoneLocation,
                 radius: tempZoneRadius,
-                locations: tempZoneLocations
+                locations: tempZoneLocations,
               }
-            : zone
-        )
+            : zone,
+        ),
       );
       toast.success('Zone modifiée avec succès');
     } else {
@@ -1917,9 +2059,9 @@ export default function NewCampaign() {
         name: zoneName,
         location: tempZoneLocation,
         radius: tempZoneRadius,
-        locations: tempZoneLocations
+        locations: tempZoneLocations,
       };
-      setGeographicZones(prev => [...prev, newZone]);
+      setGeographicZones((prev) => [...prev, newZone]);
       toast.success('Zone ajoutée avec succès');
     }
 
@@ -1929,7 +2071,7 @@ export default function NewCampaign() {
 
   // Supprimer une zone
   const handleDeleteZone = (zoneId: string) => {
-    setGeographicZones(prev => prev.filter(zone => zone.id !== zoneId));
+    setGeographicZones((prev) => prev.filter((zone) => zone.id !== zoneId));
     toast.success('Zone supprimée');
   };
 
@@ -1941,7 +2083,7 @@ export default function NewCampaign() {
           setSelectedLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
         },
         () => {},
-        { enableHighAccuracy: true }
+        { enableHighAccuracy: true },
       );
     }
   }, []);
@@ -1949,22 +2091,23 @@ export default function NewCampaign() {
   // Fonction de recherche améliorée pour la Tunisie
   const handleSearch = async () => {
     const query = searchQuery.trim().toLowerCase();
-    
+
     // Recherche dans les villes tunisiennes
-    const city = TUNISIA_CITIES.find(c => 
-      c.name.toLowerCase().includes(query) || 
-      query.includes(c.name.toLowerCase())
+    const city = TUNISIA_CITIES.find(
+      (c) => c.name.toLowerCase().includes(query) || query.includes(c.name.toLowerCase()),
     );
-    
+
     if (city) {
       setSelectedLocation({ lat: city.lat, lng: city.lng });
       if (mapRef.current) mapRef.current.setView([city.lat, city.lng], 13);
       return;
     }
-    
+
     // Sinon, géocodage Nominatim avec restriction à la Tunisie
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery + ', Tunisie')}&countrycodes=tn&limit=1`);
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery + ', Tunisie')}&countrycodes=tn&limit=1`,
+      );
       const data = await res.json();
       if (data && data.length > 0) {
         const { lat, lon } = data[0];
@@ -1979,8 +2122,8 @@ export default function NewCampaign() {
   // Suggestions de villes tunisiennes
   const getCitySuggestions = (query: string) => {
     if (!query.trim()) return [];
-    return TUNISIA_CITIES.filter(city => 
-      city.name.toLowerCase().includes(query.toLowerCase())
+    return TUNISIA_CITIES.filter((city) =>
+      city.name.toLowerCase().includes(query.toLowerCase()),
     ).slice(0, 5);
   };
 
@@ -1988,15 +2131,19 @@ export default function NewCampaign() {
     ? [
         { id: 1, title: 'Zones géographiques', icon: MapPin },
         { id: 2, title: 'Votre spot', icon: Film },
-        { id: 3, title: 'Validation', icon: CheckCircle }
+        { id: 3, title: 'Validation', icon: CheckCircle },
       ]
     : [
         { id: 1, title: 'Nom et type de campagne', icon: Megaphone },
-        { id: 2, title: diffusionType === 'parc_tv' ? 'Choix du parc' : 'Catégorie(s)', icon: LayoutList },
+        {
+          id: 2,
+          title: diffusionType === 'parc_tv' ? 'Choix du parc' : 'Catégorie(s)',
+          icon: LayoutList,
+        },
         { id: 3, title: 'Période', icon: Calendar },
         { id: 4, title: 'Zones géographiques', icon: MapPin },
         { id: 5, title: 'Votre spot', icon: Film },
-        { id: 6, title: 'Validation', icon: DollarSign }
+        { id: 6, title: 'Validation', icon: DollarSign },
       ];
 
   // Juste avant le rendu du composant
@@ -2008,80 +2155,101 @@ export default function NewCampaign() {
     <div className="w-full mx-auto space-y-8">
       {/* Header Section — masqué à l'étape panier */}
       {!showPostCartStep && (
-      <div className="bg-white rounded-xl p-8">
-        <div className="flex items-start justify-between gap-4 mb-8">
-          <div className="min-w-0">
-            <h1 className="text-xl font-semibold mb-0.5 text-gray-900">
-              {editMode ? `Modifier: ${campaignToEdit?.name}` : isEventCampaign ? `Campagne événement : ${eventFromState?.name}` : 'Lancer une campagne'}
-            </h1>
-            <p className="text-sm text-gray-600">
-              {editMode ? 'Modifiez les paramètres de votre campagne' : isEventCampaign ? 'Zones, spot et validation pour cet événement' : 'Créez et configurez votre campagne publicitaire'}
-            </p>
-            {editMode && (
-              <div className="mt-2 flex items-center space-x-2 text-sm text-gray-500">
-                <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full font-medium">
-                  Mode Édition
-                </span>
-                <span className={`px-2 py-1 rounded-full font-medium ${
-                  campaignToEdit?.status === 'draft' ? 'bg-gray-100 text-gray-800' :
-                  campaignToEdit?.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                  'bg-green-100 text-green-800'
-                }`}>
-                  {campaignToEdit?.status}
-                </span>
-              </div>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={() => navigate('/my-campaigns')}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors flex-shrink-0"
-          >
-            <X className="h-5 w-5" />
-            <span>Annuler</span>
-          </button>
-        </div>
-
-        {/* Progress Steps — étalés sur toute la largeur */}
-        <div className="w-full flex items-start">
-          {steps.map((step, index) => {
-            const isClickable = canNavigateToStep(step.id);
-            const isCurrentStep = currentStep === step.id;
-            const isCompleted = currentStep > step.id;
-
-            return (
-              <React.Fragment key={step.id}>
-                <div className="flex-1 flex flex-col items-center justify-center min-w-0">
-                  <div
-                    onClick={() => isClickable && handleStepClick(step.id)}
-                    className={`flex flex-col items-center transition-all w-full ${
-                      isClickable ? 'cursor-pointer hover:opacity-90' : 'cursor-default opacity-70'
+        <div className="bg-white rounded-xl p-8">
+          <div className="flex items-start justify-between gap-4 mb-8">
+            <div className="min-w-0">
+              <h1 className="text-xl font-semibold mb-0.5 text-gray-900">
+                {editMode
+                  ? `Modifier: ${campaignToEdit?.name}`
+                  : isEventCampaign
+                    ? `Campagne événement : ${eventFromState?.name}`
+                    : 'Lancer une campagne'}
+              </h1>
+              <p className="text-sm text-gray-600">
+                {editMode
+                  ? 'Modifiez les paramètres de votre campagne'
+                  : isEventCampaign
+                    ? 'Zones, spot et validation pour cet événement'
+                    : 'Créez et configurez votre campagne publicitaire'}
+              </p>
+              {editMode && (
+                <div className="mt-2 flex items-center space-x-2 text-sm text-gray-500">
+                  <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full font-medium">
+                    Mode Édition
+                  </span>
+                  <span
+                    className={`px-2 py-1 rounded-full font-medium ${
+                      campaignToEdit?.status === 'draft'
+                        ? 'bg-gray-100 text-gray-800'
+                        : campaignToEdit?.status === 'pending'
+                          ? 'bg-yellow-100 text-yellow-800'
+                          : 'bg-green-100 text-green-800'
                     }`}
                   >
-                    <div className="flex items-center justify-center flex-shrink-0 transition-all">
-                      <img
-                        src={isCompleted ? ARIANE_ICONS_DONE[step.id - 1] : ARIANE_ICONS[step.id - 1]}
-                        alt=""
-                        className="w-14 h-14 object-contain"
-                      />
-                    </div>
-                    <span
-                      className={`mt-2 text-center text-xs max-w-[100px] leading-tight ${
-                        isCurrentStep ? 'text-gray-900 font-semibold' : 'text-gray-500 font-normal'
+                    {campaignToEdit?.status}
+                  </span>
+                </div>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate('/my-campaigns')}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors flex-shrink-0"
+            >
+              <X className="h-5 w-5" />
+              <span>Annuler</span>
+            </button>
+          </div>
+
+          {/* Progress Steps — étalés sur toute la largeur */}
+          <div className="w-full flex items-start">
+            {steps.map((step, index) => {
+              const isClickable = canNavigateToStep(step.id);
+              const isCurrentStep = currentStep === step.id;
+              const isCompleted = currentStep > step.id;
+
+              return (
+                <React.Fragment key={step.id}>
+                  <div className="flex-1 flex flex-col items-center justify-center min-w-0">
+                    <div
+                      onClick={() => isClickable && handleStepClick(step.id)}
+                      className={`flex flex-col items-center transition-all w-full ${
+                        isClickable
+                          ? 'cursor-pointer hover:opacity-90'
+                          : 'cursor-default opacity-70'
                       }`}
                     >
-                      {step.title}
-                    </span>
+                      <div className="flex items-center justify-center flex-shrink-0 transition-all">
+                        <img
+                          src={
+                            isCompleted ? ARIANE_ICONS_DONE[step.id - 1] : ARIANE_ICONS[step.id - 1]
+                          }
+                          alt=""
+                          className="w-14 h-14 object-contain"
+                        />
+                      </div>
+                      <span
+                        className={`mt-2 text-center text-xs max-w-[100px] leading-tight ${
+                          isCurrentStep
+                            ? 'text-gray-900 font-semibold'
+                            : 'text-gray-500 font-normal'
+                        }`}
+                      >
+                        {step.title}
+                      </span>
+                    </div>
                   </div>
-                </div>
-                {index < steps.length - 1 && (
-                  <ChevronRight className="h-5 w-5 text-gray-300 flex-shrink-0 mt-5" aria-hidden />
-                )}
-              </React.Fragment>
-            );
-          })}
+                  {index < steps.length - 1 && (
+                    <ChevronRight
+                      className="h-5 w-5 text-gray-300 flex-shrink-0 mt-5"
+                      aria-hidden
+                    />
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </div>
         </div>
-      </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -2105,7 +2273,9 @@ export default function NewCampaign() {
                     onChange={(e) => handleFieldChange('campaignName', e.target.value)}
                     onBlur={() => setTouched({ ...touched, campaignName: true })}
                     className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent transition-all ${
-                      touched.campaignName && errors.campaignName ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                      touched.campaignName && errors.campaignName
+                        ? 'border-red-300 bg-red-50'
+                        : 'border-gray-300'
                     }`}
                     placeholder="Nom"
                   />
@@ -2146,7 +2316,9 @@ export default function NewCampaign() {
                         </div>
                         <div>
                           <span className="font-semibold text-gray-900">Réseau Toodooh</span>
-                          <p className="text-sm text-gray-600 mt-0.5">Écrans digitaux en extérieur (DOOH)</p>
+                          <p className="text-sm text-gray-600 mt-0.5">
+                            Écrans digitaux en extérieur (DOOH)
+                          </p>
                         </div>
                       </div>
                       <div className="border-t border-gray-200 my-3" />
@@ -2157,7 +2329,6 @@ export default function NewCampaign() {
                         <li>Ciblage géographique précis</li>
                       </ul>
                     </button>
-
                   </div>
                 </div>
               </div>
@@ -2183,7 +2354,7 @@ export default function NewCampaign() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {availableParcs.map(parc => {
+                    {availableParcs.map((parc) => {
                       const isSelected = selectedParcIds.includes(parc.ownerId);
                       return (
                         <button
@@ -2198,16 +2369,24 @@ export default function NewCampaign() {
                         >
                           <div className="w-12 h-12 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center flex-shrink-0 overflow-hidden">
                             {parc.logo ? (
-                              <img src={parc.logo} alt={parc.name} className="w-10 h-10 object-contain" />
+                              <img
+                                src={parc.logo}
+                                alt={parc.name}
+                                className="w-10 h-10 object-contain"
+                              />
                             ) : (
                               <Monitor className="h-6 w-6 text-gray-400" />
                             )}
                           </div>
                           <span className="text-sm font-medium text-gray-900">{parc.name}</span>
-                          <div className={`absolute top-3 right-3 w-5 h-5 rounded flex items-center justify-center flex-shrink-0 ${
-                            isSelected ? 'bg-[#76E6AB]' : 'border-2 border-gray-300 bg-white'
-                          }`}>
-                            {isSelected && <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />}
+                          <div
+                            className={`absolute top-3 right-3 w-5 h-5 rounded flex items-center justify-center flex-shrink-0 ${
+                              isSelected ? 'bg-[#76E6AB]' : 'border-2 border-gray-300 bg-white'
+                            }`}
+                          >
+                            {isSelected && (
+                              <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />
+                            )}
                           </div>
                         </button>
                       );
@@ -2251,7 +2430,9 @@ export default function NewCampaign() {
                               isSelected ? 'bg-[#00B3A6]' : 'border-2 border-gray-300 bg-white'
                             }`}
                           >
-                            {isSelected && <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />}
+                            {isSelected && (
+                              <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />
+                            )}
                           </div>
                           <span className="text-sm font-medium text-gray-900">{category}</span>
                         </button>
@@ -2270,7 +2451,8 @@ export default function NewCampaign() {
                         <Info className="h-3.5 w-3.5 text-white" />
                       </div>
                       <p className="text-sm text-gray-600">
-                        Vous avez sélectionné {formData.categories.length} catégorie(s). Plus votre ciblage est large, plus vous augmentez votre portée.
+                        Vous avez sélectionné {formData.categories.length} catégorie(s). Plus votre
+                        ciblage est large, plus vous augmentez votre portée.
                       </p>
                     </div>
                   )}
@@ -2286,7 +2468,9 @@ export default function NewCampaign() {
                       onChange={(e) => handleFieldChange('client', e.target.value)}
                       onBlur={() => setTouched({ ...touched, client: true })}
                       className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent transition-all ${
-                        touched.client && errors.client ? 'border-red-300 bg-red-50' : 'border-gray-300'
+                        touched.client && errors.client
+                          ? 'border-red-300 bg-red-50'
+                          : 'border-gray-300'
                       }`}
                       placeholder="Nom du client"
                     />
@@ -2316,7 +2500,7 @@ export default function NewCampaign() {
                   </div>
                 </div>
               </div>
-              
+
               <div className="p-6 space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
@@ -2332,8 +2516,8 @@ export default function NewCampaign() {
                       endDate={endDate}
                       minDate={today}
                       className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent transition-all ${
-                        dateTouched.start && dateErrors.start 
-                          ? 'border-red-300 bg-red-50' 
+                        dateTouched.start && dateErrors.start
+                          ? 'border-red-300 bg-red-50'
                           : 'border-gray-300'
                       }`}
                       placeholderText="Sélectionnez une date"
@@ -2359,8 +2543,8 @@ export default function NewCampaign() {
                       endDate={endDate}
                       minDate={startDate || today}
                       className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent transition-all ${
-                        dateTouched.end && dateErrors.end 
-                          ? 'border-red-300 bg-red-50' 
+                        dateTouched.end && dateErrors.end
+                          ? 'border-red-300 bg-red-50'
                           : 'border-gray-300'
                       }`}
                       placeholderText="Sélectionnez une date"
@@ -2382,11 +2566,11 @@ export default function NewCampaign() {
                       <span className="font-medium text-[#00263A]">Durée de la campagne</span>
                     </div>
                     <p className="text-[#00263A]">
-                      {campaignEstimations.duration} jour{campaignEstimations.duration > 1 ? 's' : ''}
+                      {campaignEstimations.duration} jour
+                      {campaignEstimations.duration > 1 ? 's' : ''}
                     </p>
                   </div>
                 )}
-
               </div>
             </div>
           )}
@@ -2412,9 +2596,13 @@ export default function NewCampaign() {
                       className="min-w-[240px] px-3 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent bg-white"
                     >
                       <option value="">Région</option>
-                      {[...new Set(predefinedZones.map(z => z.region).filter(Boolean))].map(r => (
-                        <option key={r!} value={r!}>{r}</option>
-                      ))}
+                      {[...new Set(predefinedZones.map((z) => z.region).filter(Boolean))].map(
+                        (r) => (
+                          <option key={r!} value={r!}>
+                            {r}
+                          </option>
+                        ),
+                      )}
                     </select>
                   </div>
                 </div>
@@ -2426,61 +2614,82 @@ export default function NewCampaign() {
                 <div className="w-full lg:w-[380px] flex-shrink-0 border-r border-gray-200 flex flex-col bg-gray-50/50">
                   <div className="p-4">
                     <div className="h-[384px] overflow-y-auto space-y-3">
-                    {loadingPredefinedZones ? (
-                      <div className="flex items-center justify-center py-12">
-                        <div className="animate-spin rounded-full h-8 w-8 border-2 border-[#00B3A6] border-t-transparent" />
-                      </div>
-                    ) : (() => {
-                      const filtered = predefinedZones.filter(z => {
-                        if (zoneFilterCountry && (z.country || '') !== zoneFilterCountry) return false;
-                        if (zoneFilterRegion && (z.region || '') !== zoneFilterRegion) return false;
-                        return true;
-                      });
-                      return filtered.length === 0 ? (
-                        <p className="text-sm text-gray-500 text-center py-8">Aucune zone prédéfinie</p>
+                      {loadingPredefinedZones ? (
+                        <div className="flex items-center justify-center py-12">
+                          <div className="animate-spin rounded-full h-8 w-8 border-2 border-[#00B3A6] border-t-transparent" />
+                        </div>
                       ) : (
-                        filtered.map((zone) => {
-                          const selected = isPredefinedZoneSelected(zone);
-                          const visitors = getEstimatedVisitorsForPredefinedZone(zone);
-                          return (
-                            <button
-                              key={zone.id}
-                              type="button"
-                              onClick={() => handleTogglePredefinedZone(zone)}
-                              className={`w-full text-left rounded-xl border-2 transition-all overflow-hidden ${
-                                selected
-                                  ? 'border-[#00B3A6] bg-[#00B3A6]/5 shadow-md'
-                                  : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
-                              }`}
-                            >
-                              <div className="relative h-20 bg-gray-200">
-                                <img
-                                  src={zone.image_url || `https://picsum.photos/seed/zone-${zone.id}/400/200`}
-                                  alt=""
-                                  className="w-full h-full object-cover"
-                                />
-                                <div className={`absolute top-3 left-3 w-6 h-6 rounded-md border-2 flex items-center justify-center ${selected ? 'bg-[#00B3A6] border-[#00B3A6]' : 'bg-white border-gray-300'}`}>
-                                  {selected && <Check className="w-4 h-4 text-white" strokeWidth={3} />}
-                                </div>
-                                {zone.is_hot && (
-                                  <span className="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-white border border-red-200 text-red-600 shadow-sm">
-                                    <Flame className="w-3 h-3" />
-                                    Hot right now
-                                  </span>
-                                )}
-                              </div>
-                              <div className="p-2">
-                                <p className="text-sm font-semibold text-gray-900 truncate">{zone.name}</p>
-                                <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-600">
-                                  <span className="flex items-center gap-1"><MapPin className="w-3 h-3 flex-shrink-0" />{(zone.radius / 1000).toFixed(0)} km</span>
-                                  <span className="flex items-center gap-1"><Users className="w-3 h-3 flex-shrink-0" />~ {visitors.toLocaleString('fr-FR')} visiteurs attendus</span>
-                                </div>
-                              </div>
-                            </button>
+                        (() => {
+                          const filtered = predefinedZones.filter((z) => {
+                            if (zoneFilterCountry && (z.country || '') !== zoneFilterCountry)
+                              return false;
+                            if (zoneFilterRegion && (z.region || '') !== zoneFilterRegion)
+                              return false;
+                            return true;
+                          });
+                          return filtered.length === 0 ? (
+                            <p className="text-sm text-gray-500 text-center py-8">
+                              Aucune zone prédéfinie
+                            </p>
+                          ) : (
+                            filtered.map((zone) => {
+                              const selected = isPredefinedZoneSelected(zone);
+                              const visitors = getEstimatedVisitorsForPredefinedZone(zone);
+                              return (
+                                <button
+                                  key={zone.id}
+                                  type="button"
+                                  onClick={() => handleTogglePredefinedZone(zone)}
+                                  className={`w-full text-left rounded-xl border-2 transition-all overflow-hidden ${
+                                    selected
+                                      ? 'border-[#00B3A6] bg-[#00B3A6]/5 shadow-md'
+                                      : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
+                                  }`}
+                                >
+                                  <div className="relative h-20 bg-gray-200">
+                                    <img
+                                      src={
+                                        zone.image_url ||
+                                        `https://picsum.photos/seed/zone-${zone.id}/400/200`
+                                      }
+                                      alt=""
+                                      className="w-full h-full object-cover"
+                                    />
+                                    <div
+                                      className={`absolute top-3 left-3 w-6 h-6 rounded-md border-2 flex items-center justify-center ${selected ? 'bg-[#00B3A6] border-[#00B3A6]' : 'bg-white border-gray-300'}`}
+                                    >
+                                      {selected && (
+                                        <Check className="w-4 h-4 text-white" strokeWidth={3} />
+                                      )}
+                                    </div>
+                                    {zone.is_hot && (
+                                      <span className="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-white border border-red-200 text-red-600 shadow-sm">
+                                        <Flame className="w-3 h-3" />
+                                        Hot right now
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="p-2">
+                                    <p className="text-sm font-semibold text-gray-900 truncate">
+                                      {zone.name}
+                                    </p>
+                                    <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-600">
+                                      <span className="flex items-center gap-1">
+                                        <MapPin className="w-3 h-3 flex-shrink-0" />
+                                        {(zone.radius / 1000).toFixed(0)} km
+                                      </span>
+                                      <span className="flex items-center gap-1">
+                                        <Users className="w-3 h-3 flex-shrink-0" />~{' '}
+                                        {visitors.toLocaleString('fr-FR')} visiteurs attendus
+                                      </span>
+                                    </div>
+                                  </div>
+                                </button>
+                              );
+                            })
                           );
-                        })
-                      );
-                    })()}
+                        })()
+                      )}
                     </div>
                   </div>
                 </div>
@@ -2494,7 +2703,11 @@ export default function NewCampaign() {
                   ) : (
                     <div className="h-[384px] rounded-xl overflow-hidden shadow-lg border border-gray-200">
                       <MapContainer
-                        center={geographicZones.length > 0 ? [geographicZones[0].location.lat, geographicZones[0].location.lng] : [36.83435, 10.21905]}
+                        center={
+                          geographicZones.length > 0
+                            ? [geographicZones[0].location.lat, geographicZones[0].location.lng]
+                            : [36.83435, 10.21905]
+                        }
                         zoom={geographicZones.length > 0 ? 12 : 11}
                         style={{ height: '100%', width: '100%' }}
                         className="rounded-lg"
@@ -2514,7 +2727,7 @@ export default function NewCampaign() {
                         />
                         {/* Cercles de rayon pour chaque zone sélectionnée */}
                         {geographicZones
-                          .filter(z => z.location?.lat != null && z.location?.lng != null)
+                          .filter((z) => z.location?.lat != null && z.location?.lng != null)
                           .map((zone) => (
                             <Circle
                               key={zone.id}
@@ -2530,13 +2743,14 @@ export default function NewCampaign() {
                           ))}
                         {/* Marqueur centre violet pour chaque zone */}
                         {geographicZones
-                          .filter(z => z.location?.lat != null && z.location?.lng != null)
+                          .filter((z) => z.location?.lat != null && z.location?.lng != null)
                           .map((zone) => (
                             <Marker
                               key={`marker-${zone.id}`}
                               position={[zone.location!.lat, zone.location!.lng]}
                               icon={L.icon({
-                                iconUrl: 'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-icon-2x-violet.png',
+                                iconUrl:
+                                  'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-icon-2x-violet.png',
                                 iconSize: [20, 32],
                                 iconAnchor: [10, 32],
                               })}
@@ -2545,9 +2759,18 @@ export default function NewCampaign() {
                         {/* Localités : vert = dans une zone sélectionnée, gris = hors zone */}
                         {(filteredMapLocations || []).map((loc) => {
                           const c = loc?.coordinates;
-                          if (!c || typeof c.lat !== 'number' || typeof c.lng !== 'number' || Number.isNaN(c.lat) || Number.isNaN(c.lng)) return null;
-                          const inZone = geographicZones.some(z =>
-                            distanceKm(z.location.lat, z.location.lng, c.lat, c.lng) <= z.radius / 1000
+                          if (
+                            !c ||
+                            typeof c.lat !== 'number' ||
+                            typeof c.lng !== 'number' ||
+                            Number.isNaN(c.lat) ||
+                            Number.isNaN(c.lng)
+                          )
+                            return null;
+                          const inZone = geographicZones.some(
+                            (z) =>
+                              distanceKm(z.location.lat, z.location.lng, c.lat, c.lng) <=
+                              z.radius / 1000,
                           );
                           const colorHex = inZone ? '#10b981' : '#6b7280';
                           return (
@@ -2571,8 +2794,13 @@ export default function NewCampaign() {
                               <Popup>
                                 <div className="text-xs">
                                   <strong>{loc.name}</strong>
-                                  <span className="text-gray-500 ml-1">({loc.screen_count ?? 0} écran{(loc.screen_count ?? 0) > 1 ? 's' : ''})</span>
-                                  {inZone && <span className="text-green-600 ml-2">✓ dans une zone</span>}
+                                  <span className="text-gray-500 ml-1">
+                                    ({loc.screen_count ?? 0} écran
+                                    {(loc.screen_count ?? 0) > 1 ? 's' : ''})
+                                  </span>
+                                  {inZone && (
+                                    <span className="text-green-600 ml-2">✓ dans une zone</span>
+                                  )}
                                   {!inZone && <span className="text-gray-500 ml-2">Hors zone</span>}
                                 </div>
                               </Popup>
@@ -2592,9 +2820,13 @@ export default function NewCampaign() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
                       <span className="text-sm font-medium text-gray-900">
-                        {geographicZones.length} zone{geographicZones.length > 1 ? 's' : ''} sélectionnée{geographicZones.length > 1 ? 's' : ''}
+                        {geographicZones.length} zone{geographicZones.length > 1 ? 's' : ''}{' '}
+                        sélectionnée{geographicZones.length > 1 ? 's' : ''}
                         {' · '}
-                        {geographicZones.reduce((sum, z) => sum + (Math.PI * Math.pow(z.radius / 1000, 2)), 0).toFixed(1)} km²
+                        {geographicZones
+                          .reduce((sum, z) => sum + Math.PI * Math.pow(z.radius / 1000, 2), 0)
+                          .toFixed(1)}{' '}
+                        km²
                       </span>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
@@ -2626,13 +2858,17 @@ export default function NewCampaign() {
             <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
               <div className="p-6 border-b border-gray-200">
                 <h2 className="text-xl font-bold text-gray-900">Contenu média</h2>
-                <p className="text-gray-500 mt-1">Sélectionnez ou uploadez votre spot publicitaire</p>
+                <p className="text-gray-500 mt-1">
+                  Sélectionnez ou uploadez votre spot publicitaire
+                </p>
               </div>
 
               <div className="p-6 space-y-6">
                 {/* Spot publicitaire — sélection existant */}
                 <div>
-                  <label className="block text-sm font-bold text-gray-900 mb-2">Spot publicitaire</label>
+                  <label className="block text-sm font-bold text-gray-900 mb-2">
+                    Spot publicitaire
+                  </label>
                   <select
                     value={selectedExistingVideo?.id ?? ''}
                     onChange={(e) => handleSelectExistingVideo(e.target.value)}
@@ -2640,7 +2876,9 @@ export default function NewCampaign() {
                   >
                     <option value="">Sélectionner un spot existant</option>
                     {(myApprovedVideos || []).map((video) => (
-                      <option key={video.id} value={video.id}>{video.filename}</option>
+                      <option key={video.id} value={video.id}>
+                        {video.filename}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -2653,7 +2891,10 @@ export default function NewCampaign() {
                     {uploadProgress && (
                       <div className="max-w-xs mx-auto mt-2">
                         <div className="w-full bg-gray-200 rounded-full h-1.5">
-                          <div className="bg-[#00B3A6] h-1.5 rounded-full transition-all" style={{ width: `${uploadProgress.progress}%` }} />
+                          <div
+                            className="bg-[#00B3A6] h-1.5 rounded-full transition-all"
+                            style={{ width: `${uploadProgress.progress}%` }}
+                          />
                         </div>
                         <p className="text-xs text-gray-500 mt-1">{uploadProgress.message}</p>
                       </div>
@@ -2666,13 +2907,22 @@ export default function NewCampaign() {
                         <div className="flex items-center gap-3">
                           <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
                           <div>
-                            <p className="font-semibold text-gray-900 text-sm">{selectedVideo.name}</p>
-                            <p className="text-xs text-gray-600">{(selectedVideo.size / 1024 / 1024).toFixed(2)} MB · Uploadée avec succès</p>
+                            <p className="font-semibold text-gray-900 text-sm">
+                              {selectedVideo.name}
+                            </p>
+                            <p className="text-xs text-gray-600">
+                              {(selectedVideo.size / 1024 / 1024).toFixed(2)} MB · Uploadée avec
+                              succès
+                            </p>
                           </div>
                         </div>
                         <button
                           type="button"
-                          onClick={() => { setSelectedVideo(null); setUploadedVideoUrl(''); setUploadedVideoId(''); }}
+                          onClick={() => {
+                            setSelectedVideo(null);
+                            setUploadedVideoUrl('');
+                            setUploadedVideoId('');
+                          }}
                           className="text-sm text-[#00B3A6] hover:underline font-medium"
                         >
                           Changer
@@ -2690,7 +2940,9 @@ export default function NewCampaign() {
                         <Upload className="w-6 h-6 text-[#00B3A6]" />
                       </div>
                       <p className="font-bold text-gray-900">Ou uploadez un nouveau spot</p>
-                      <p className="text-sm text-gray-500">Formats acceptés : MP4, MOV (max 100MB)</p>
+                      <p className="text-sm text-gray-500">
+                        Formats acceptés : MP4, MOV (max 100MB)
+                      </p>
                       <span className="inline-flex items-center px-4 py-2.5 mt-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50">
                         Parcourir les fichiers
                       </span>
@@ -2710,7 +2962,9 @@ export default function NewCampaign() {
                     <Info className="w-3.5 h-3.5 text-slate-600" />
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-gray-900 mb-2">Spécifications techniques</p>
+                    <p className="text-sm font-bold text-gray-900 mb-2">
+                      Spécifications techniques
+                    </p>
                     <ul className="text-sm text-gray-600 space-y-1">
                       <li>Format : 16:9 (1920×1080px minimum)</li>
                       <li>Durée : 30 secondes maximum</li>
@@ -2732,249 +2986,370 @@ export default function NewCampaign() {
           {/* Step 6: Validation unified — Récapitulatif + Ajuster impact */}
 
           {/* Step 6: Validation unified (étape 3 en mode campagne événement) */}
-          {((currentStep === 6 && !isEventCampaign) || (currentStep === 3 && isEventCampaign)) && !showPostCartStep && (
-            <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
-              <div className="p-6 border-b border-gray-200">
-                <h2 className="text-lg font-bold text-gray-900">Validation</h2>
-                <p className="text-sm text-gray-500">Vérifiez et confirmez votre campagne</p>
-              </div>
+          {((currentStep === 6 && !isEventCampaign) || (currentStep === 3 && isEventCampaign)) &&
+            !showPostCartStep && (
+              <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
+                <div className="p-6 border-b border-gray-200">
+                  <h2 className="text-lg font-bold text-gray-900">Validation</h2>
+                  <p className="text-sm text-gray-500">Vérifiez et confirmez votre campagne</p>
+                </div>
 
-              <div className="p-6">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                  {/* ── Left: Récapitulatif ── */}
-                  <div className="border border-gray-200 rounded-xl p-5 space-y-5">
-                    <h3 className="text-base font-bold text-gray-900">Récapitulatif</h3>
+                <div className="p-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {/* ── Left: Récapitulatif ── */}
+                    <div className="border border-gray-200 rounded-xl p-5 space-y-5">
+                      <h3 className="text-base font-bold text-gray-900">Récapitulatif</h3>
 
-                    <div>
-                      <p className="text-xs font-medium text-gray-500 mb-1">Nom de la campagne</p>
-                      <p className="text-sm font-semibold text-gray-900">{formData.campaignName || '—'}</p>
-                    </div>
-
-                    {!isEventCampaign && (
                       <div>
-                        <p className="text-xs font-medium text-gray-500 mb-2">Type de la campagne</p>
-                        <div className="flex gap-2">
-                          <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium ${diffusionType === 'toodooh' ? 'border-[#76E6AB] bg-[#76E6AB]/5 text-gray-900' : 'border-gray-200 text-gray-400'}`}>
-                            <Target className="h-3.5 w-3.5" /> Réseau Toodooh
-                          </span>
-                          <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium ${diffusionType === 'parc_tv' ? 'border-[#76E6AB] bg-[#76E6AB]/5 text-gray-900' : 'border-gray-200 text-gray-400'}`}>
-                            <Monitor className="h-3.5 w-3.5" /> Parc TV
-                          </span>
-                        </div>
+                        <p className="text-xs font-medium text-gray-500 mb-1">Nom de la campagne</p>
+                        <p className="text-sm font-semibold text-gray-900">
+                          {formData.campaignName || '—'}
+                        </p>
                       </div>
-                    )}
 
-                    <div>
-                      <p className="text-xs font-medium text-gray-500 mb-2">{diffusionType === 'parc_tv' ? 'Parc(s)' : 'Catégorie(s)'}</p>
-                      <div className="flex flex-wrap gap-2">
-                        {diffusionType === 'parc_tv' ? (
-                          selectedParcIds.length > 0 ? availableParcs.filter(p => selectedParcIds.includes(p.ownerId)).map(p => (
-                            <span key={p.ownerId} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[#76E6AB] bg-[#76E6AB]/5 text-xs font-medium text-gray-900">
-                              {p.logo && <img src={p.logo} alt="" className="w-5 h-5 object-contain" />}
-                              {p.name}
-                              <Check className="h-3 w-3 text-[#76E6AB]" />
+                      {!isEventCampaign && (
+                        <div>
+                          <p className="text-xs font-medium text-gray-500 mb-2">
+                            Type de la campagne
+                          </p>
+                          <div className="flex gap-2">
+                            <span
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium ${diffusionType === 'toodooh' ? 'border-[#76E6AB] bg-[#76E6AB]/5 text-gray-900' : 'border-gray-200 text-gray-400'}`}
+                            >
+                              <Target className="h-3.5 w-3.5" /> Réseau Toodooh
                             </span>
-                          )) : <span className="text-sm text-gray-400">—</span>
-                        ) : (
-                          (formData.categories?.length ?? 0) > 0 ? (formData.categories || []).map(c => (
-                            <span key={c} className="px-3 py-1 rounded-lg border border-gray-200 text-xs font-medium text-gray-700">{c}</span>
-                          )) : <span className="text-sm text-gray-400">{formData.category || '—'}</span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div>
-                      <p className="text-xs font-medium text-gray-500 mb-1">Période</p>
-                      <div className="flex flex-wrap items-center gap-4 text-sm text-gray-900">
-                        <span>Début: <strong>{startDate?.toLocaleDateString('fr-FR') || '—'}</strong></span>
-                        <span>Fin: <strong>{endDate?.toLocaleDateString('fr-FR') || '—'}</strong></span>
-                        <span>Durée: <strong>{nbJours > 0 ? `${nbJours} jour${nbJours > 1 ? 's' : ''}` : '—'}</strong></span>
-                      </div>
-                    </div>
-
-                    <div>
-                      <p className="text-xs font-medium text-gray-500 mb-1">Zones géographiques</p>
-                      <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm text-gray-900">
-                        <span>Nombre de zones : <strong>{geographicZones.length}</strong></span>
-                        <span>Zone couverte : <strong>{(() => {
-                          const totalArea = geographicZones.reduce((sum, z) => sum + Math.PI * Math.pow(z.radius / 1000, 2), 0);
-                          return totalArea.toFixed(1);
-                        })()} km²</strong></span>
-                        {calculateBudgetAndImpressions.impressions > 0 && (
-                          <span>Plan max (impressions) : <strong>{calculateBudgetAndImpressions.impressions.toLocaleString('fr-FR')}</strong></span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div>
-                      <p className="text-xs font-medium text-gray-500 mb-2">Spot</p>
-                      {(uploadedVideoUrl || selectedExistingVideo) ? (
-                        <div className="rounded-xl overflow-hidden border border-gray-200 bg-black aspect-video relative">
-                          <video
-                            src={uploadedVideoUrl || selectedExistingVideo?.url || ''}
-                            className="w-full h-full object-cover"
-                            controls
-                          />
-                          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3 flex items-end justify-between pointer-events-none">
-                            <span className="text-white text-xs font-medium">Spot publicitaire</span>
+                            <span
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium ${diffusionType === 'parc_tv' ? 'border-[#76E6AB] bg-[#76E6AB]/5 text-gray-900' : 'border-gray-200 text-gray-400'}`}
+                            >
+                              <Monitor className="h-3.5 w-3.5" /> Parc TV
+                            </span>
                           </div>
                         </div>
-                      ) : (
-                        <p className="text-sm text-gray-400">Aucune vidéo sélectionnée</p>
                       )}
-                    </div>
-                  </div>
 
-                  {/* ── Right: Ajuster votre impact ── Impressions totales (sélection) + Montant = impressions/1000*2,5 */}
-                  <div className="space-y-5">
-                    <div>
-                      <h3 className="text-base font-bold text-gray-900">Ajuster votre impact</h3>
-                      <p className="text-xs text-gray-500 mt-0.5">Déplacez le curseur pour ajuster votre budget et vos impressions estimées</p>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="border border-[#eef7f1] rounded-xl p-4" style={{ backgroundColor: '#f5fcf7' }}>
-                        <div className="mb-1">
-                          <div className="w-8 h-8 rounded-full bg-white/80 flex items-center justify-center mb-2">
-                            <DollarSign className="h-4 w-4 text-gray-400" />
-                          </div>
-                          <span className="block text-xs text-gray-500 font-medium">Montant estimé</span>
-                        </div>
-                        <p className="text-lg font-bold" style={{ color: '#355f43' }}>
-                          {calculateBudgetAndImpressions.impressions > 0
-                            ? adjustedBudget.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                            : '0,00'}{' '}
-                          TND
+                      <div>
+                        <p className="text-xs font-medium text-gray-500 mb-2">
+                          {diffusionType === 'parc_tv' ? 'Parc(s)' : 'Catégorie(s)'}
                         </p>
-                      </div>
-                      <div className="border border-[#e7e9fb] rounded-xl p-4" style={{ backgroundColor: '#f0f1fd' }}>
-                        <div className="mb-1">
-                          <div className="w-8 h-8 rounded-full bg-white/80 flex items-center justify-center mb-2">
-                            <TrendingUp className="h-4 w-4 text-gray-400" />
-                          </div>
-                          <span className="block text-xs text-gray-500 font-medium">Plan final (impressions)</span>
+                        <div className="flex flex-wrap gap-2">
+                          {diffusionType === 'parc_tv' ? (
+                            selectedParcIds.length > 0 ? (
+                              availableParcs
+                                .filter((p) => selectedParcIds.includes(p.ownerId))
+                                .map((p) => (
+                                  <span
+                                    key={p.ownerId}
+                                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[#76E6AB] bg-[#76E6AB]/5 text-xs font-medium text-gray-900"
+                                  >
+                                    {p.logo && (
+                                      <img src={p.logo} alt="" className="w-5 h-5 object-contain" />
+                                    )}
+                                    {p.name}
+                                    <Check className="h-3 w-3 text-[#76E6AB]" />
+                                  </span>
+                                ))
+                            ) : (
+                              <span className="text-sm text-gray-400">—</span>
+                            )
+                          ) : (formData.categories?.length ?? 0) > 0 ? (
+                            (formData.categories || []).map((c) => (
+                              <span
+                                key={c}
+                                className="px-3 py-1 rounded-lg border border-gray-200 text-xs font-medium text-gray-700"
+                              >
+                                {c}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-sm text-gray-400">
+                              {formData.category || '—'}
+                            </span>
+                          )}
                         </div>
-                        <p className="text-lg font-bold" style={{ color: '#3d438f' }}>
-                          {calculateBudgetAndImpressions.impressions > 0
-                            ? impressionsForCurrentBudget.toLocaleString('fr-FR')
-                            : '0'}
-                        </p>
                       </div>
-                    </div>
 
-                    {/* Budget slider — calcul selon sélection (zones + période), curseur pour ajuster budget et impressions */}
-                    <div className="border border-gray-200 rounded-xl p-5 space-y-4">
-                      {(() => {
-                        const impressionsFromSelection = calculateBudgetAndImpressions.impressions;
-                        const hasSelectionBasedEstimate = impressionsFromSelection > 0;
-                        const defaultMaxAmount = hasSelectionBasedEstimate
-                          ? (impressionsFromSelection / 1000) * cpmTnd
-                          : 0;
-                        const defaultMinAmount = hasSelectionBasedEstimate
-                          ? BUDGET_MIN
-                          : 0;
-                        const effectiveMin = customMinBudget !== null ? customMinBudget : defaultMinAmount;
-                        const effectiveMax = customMaxBudget !== null ? customMaxBudget : defaultMaxAmount;
-                        const safeMin = hasSelectionBasedEstimate ? Math.min(effectiveMin, effectiveMax - 1) : 0;
-                        const safeMax = hasSelectionBasedEstimate ? Math.max(effectiveMax, safeMin + 1) : 0;
-                        const rangeMin = safeMin;
-                        const rangeMax = safeMax;
-                        const currentAmount = hasSelectionBasedEstimate
-                          ? Math.max(rangeMin, Math.min(rangeMax, adjustedBudget))
-                          : 0;
-                        const percentage = rangeMax > rangeMin
-                          ? ((currentAmount - rangeMin) / (rangeMax - rangeMin)) * 100
-                          : 100;
-                        return (
-                          <>
-                            {!hasSelectionBasedEstimate && (
-                              <p className="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
-                                Aucune capacité estimée : ajoutez des zones avec des localités (ou des parcs TV) et des dates de campagne. Le plafond suit le moteur DOOH horaire
-                                (affluence × répétitions autorisées par créneau, selon la configuration globale et la durée du spot).
-                              </p>
-                            )}
-                            {doohEstimateLoading && hasSelectionBasedEstimate && (
-                              <p className="text-xs text-gray-500">Mise à jour de l&apos;estimation DOOH…</p>
-                            )}
-                            {doohEstimateError && (
-                              <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">{doohEstimateError}</p>
-                            )}
-                            <p className="text-center text-2xl font-bold text-gray-900">
-                              {currentAmount.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TND
-                            </p>
+                      <div>
+                        <p className="text-xs font-medium text-gray-500 mb-1">Période</p>
+                        <div className="flex flex-wrap items-center gap-4 text-sm text-gray-900">
+                          <span>
+                            Début: <strong>{startDate?.toLocaleDateString('fr-FR') || '—'}</strong>
+                          </span>
+                          <span>
+                            Fin: <strong>{endDate?.toLocaleDateString('fr-FR') || '—'}</strong>
+                          </span>
+                          <span>
+                            Durée:{' '}
+                            <strong>
+                              {nbJours > 0 ? `${nbJours} jour${nbJours > 1 ? 's' : ''}` : '—'}
+                            </strong>
+                          </span>
+                        </div>
+                      </div>
 
-                            <div className="flex items-center justify-between text-[11px] text-gray-500">
-                              <span>MIN: {rangeMin.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} TND</span>
-                              <span>MAX: {rangeMax.toLocaleString('fr-FR', { minimumFractionDigits: 2 })} TND</span>
-                            </div>
+                      <div>
+                        <p className="text-xs font-medium text-gray-500 mb-1">
+                          Zones géographiques
+                        </p>
+                        <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm text-gray-900">
+                          <span>
+                            Nombre de zones : <strong>{geographicZones.length}</strong>
+                          </span>
+                          <span>
+                            Zone couverte :{' '}
+                            <strong>
+                              {(() => {
+                                const totalArea = geographicZones.reduce(
+                                  (sum, z) => sum + Math.PI * Math.pow(z.radius / 1000, 2),
+                                  0,
+                                );
+                                return totalArea.toFixed(1);
+                              })()}{' '}
+                              km²
+                            </strong>
+                          </span>
+                          {calculateBudgetAndImpressions.impressions > 0 && (
+                            <span>
+                              Plan max (impressions) :{' '}
+                              <strong>
+                                {calculateBudgetAndImpressions.impressions.toLocaleString('fr-FR')}
+                              </strong>
+                            </span>
+                          )}
+                        </div>
+                      </div>
 
-                            <input
-                              type="range"
-                              min={rangeMin}
-                              max={rangeMax}
-                              step="any"
-                              value={currentAmount}
-                              onChange={(e) => {
-                                const v = Math.max(rangeMin, Math.min(rangeMax, Number(e.target.value)));
-                                setAdjustedBudget(v);
-                              }}
-                              onInput={(e) => {
-                                const v = Math.max(rangeMin, Math.min(rangeMax, Number((e.target as HTMLInputElement).value)));
-                                setAdjustedBudget(v);
-                              }}
-                              className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#76E6AB]"
-                              style={{ background: `linear-gradient(to right, #76E6AB 0%, #76E6AB ${percentage}%, #e5e7eb ${percentage}%, #e5e7eb 100%)` }}
+                      <div>
+                        <p className="text-xs font-medium text-gray-500 mb-2">Spot</p>
+                        {uploadedVideoUrl || selectedExistingVideo ? (
+                          <div className="rounded-xl overflow-hidden border border-gray-200 bg-black aspect-video relative">
+                            <video
+                              src={uploadedVideoUrl || selectedExistingVideo?.url || ''}
+                              className="w-full h-full object-cover"
+                              controls
                             />
-
-                            <div className="grid grid-cols-2 gap-3">
-                              <div>
-                                <label className="block text-xs text-gray-500 mb-1">Montant minimum (TND)</label>
-                                <input
-                                  type="number"
-                                  value={customMinBudget !== null ? customMinBudget : ''}
-                                  onChange={(e) => {
-                                    const val = e.target.value ? Number(e.target.value) : null;
-                                    setCustomMinBudget(val);
-                                    if (val !== null && adjustedBudget < val) setAdjustedBudget(val);
-                                  }}
-                                  placeholder={`Min: ${rangeMin.toFixed(2)} TND`}
-                                  min={0} step={50}
-                                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#76E6AB]/40 focus:border-[#76E6AB]"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-xs text-gray-500 mb-1">Montant maximum (TND)</label>
-                                <input
-                                  type="number"
-                                  value={customMaxBudget !== null ? customMaxBudget : ''}
-                                  onChange={(e) => {
-                                    const val = e.target.value ? Number(e.target.value) : null;
-                                    setCustomMaxBudget(val);
-                                    if (val !== null && adjustedBudget > val) setAdjustedBudget(val);
-                                  }}
-                                  placeholder={`Max: ${rangeMax.toFixed(2)} TND`}
-                                  min={0} step={50}
-                                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#76E6AB]/40 focus:border-[#76E6AB]"
-                                />
-                              </div>
+                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3 flex items-end justify-between pointer-events-none">
+                              <span className="text-white text-xs font-medium">
+                                Spot publicitaire
+                              </span>
                             </div>
-                          </>
-                        );
-                      })()}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-400">Aucune vidéo sélectionnée</p>
+                        )}
+                      </div>
                     </div>
 
-                    {/* Note */}
-                    <div className="flex gap-2.5 p-4 bg-gray-50 rounded-xl border border-gray-200">
-                      <Info className="h-4 w-4 text-gray-400 flex-shrink-0 mt-0.5" />
-                      <p className="text-xs text-gray-500 leading-relaxed">
-                        <strong className="text-gray-600">Note:</strong> Le curseur ajuste le plan final après le calcul du plan max. Le plan final (budget + impressions + répétitions horaires) devient la référence officielle soumise aux propriétaires et injectée en planification horaire.
-                      </p>
+                    {/* ── Right: Ajuster votre impact ── Impressions totales (sélection) + Montant = impressions/1000*2,5 */}
+                    <div className="space-y-5">
+                      <div>
+                        <h3 className="text-base font-bold text-gray-900">Ajuster votre impact</h3>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Déplacez le curseur pour ajuster votre budget et vos impressions estimées
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div
+                          className="border border-[#eef7f1] rounded-xl p-4"
+                          style={{ backgroundColor: '#f5fcf7' }}
+                        >
+                          <div className="mb-1">
+                            <div className="w-8 h-8 rounded-full bg-white/80 flex items-center justify-center mb-2">
+                              <DollarSign className="h-4 w-4 text-gray-400" />
+                            </div>
+                            <span className="block text-xs text-gray-500 font-medium">
+                              Montant estimé
+                            </span>
+                          </div>
+                          <p className="text-lg font-bold" style={{ color: '#355f43' }}>
+                            {calculateBudgetAndImpressions.impressions > 0
+                              ? adjustedBudget.toLocaleString('fr-FR', {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                })
+                              : '0,00'}{' '}
+                            TND
+                          </p>
+                        </div>
+                        <div
+                          className="border border-[#e7e9fb] rounded-xl p-4"
+                          style={{ backgroundColor: '#f0f1fd' }}
+                        >
+                          <div className="mb-1">
+                            <div className="w-8 h-8 rounded-full bg-white/80 flex items-center justify-center mb-2">
+                              <TrendingUp className="h-4 w-4 text-gray-400" />
+                            </div>
+                            <span className="block text-xs text-gray-500 font-medium">
+                              Plan final (impressions)
+                            </span>
+                          </div>
+                          <p className="text-lg font-bold" style={{ color: '#3d438f' }}>
+                            {calculateBudgetAndImpressions.impressions > 0
+                              ? impressionsForCurrentBudget.toLocaleString('fr-FR')
+                              : '0'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Budget slider — calcul selon sélection (zones + période), curseur pour ajuster budget et impressions */}
+                      <div className="border border-gray-200 rounded-xl p-5 space-y-4">
+                        {(() => {
+                          const impressionsFromSelection =
+                            calculateBudgetAndImpressions.impressions;
+                          const hasSelectionBasedEstimate = impressionsFromSelection > 0;
+                          const defaultMaxAmount = hasSelectionBasedEstimate
+                            ? (impressionsFromSelection / 1000) * cpmTnd
+                            : 0;
+                          const defaultMinAmount = hasSelectionBasedEstimate ? BUDGET_MIN : 0;
+                          const effectiveMin =
+                            customMinBudget !== null ? customMinBudget : defaultMinAmount;
+                          const effectiveMax =
+                            customMaxBudget !== null ? customMaxBudget : defaultMaxAmount;
+                          const safeMin = hasSelectionBasedEstimate
+                            ? Math.min(effectiveMin, effectiveMax - 1)
+                            : 0;
+                          const safeMax = hasSelectionBasedEstimate
+                            ? Math.max(effectiveMax, safeMin + 1)
+                            : 0;
+                          const rangeMin = safeMin;
+                          const rangeMax = safeMax;
+                          const currentAmount = hasSelectionBasedEstimate
+                            ? Math.max(rangeMin, Math.min(rangeMax, adjustedBudget))
+                            : 0;
+                          const percentage =
+                            rangeMax > rangeMin
+                              ? ((currentAmount - rangeMin) / (rangeMax - rangeMin)) * 100
+                              : 100;
+                          return (
+                            <>
+                              {!hasSelectionBasedEstimate && (
+                                <p className="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                                  Aucune capacité estimée : ajoutez des zones avec des localités (ou
+                                  des parcs TV) et des dates de campagne. Le plafond suit le moteur
+                                  DOOH horaire (affluence × répétitions autorisées par créneau,
+                                  selon la configuration globale et la durée du spot).
+                                </p>
+                              )}
+                              {doohEstimateLoading && hasSelectionBasedEstimate && (
+                                <p className="text-xs text-gray-500">
+                                  Mise à jour de l&apos;estimation DOOH…
+                                </p>
+                              )}
+                              {doohEstimateError && (
+                                <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                                  {doohEstimateError}
+                                </p>
+                              )}
+                              <p className="text-center text-2xl font-bold text-gray-900">
+                                {currentAmount.toLocaleString('fr-FR', {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                })}{' '}
+                                TND
+                              </p>
+
+                              <div className="flex items-center justify-between text-[11px] text-gray-500">
+                                <span>
+                                  MIN:{' '}
+                                  {rangeMin.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}{' '}
+                                  TND
+                                </span>
+                                <span>
+                                  MAX:{' '}
+                                  {rangeMax.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}{' '}
+                                  TND
+                                </span>
+                              </div>
+
+                              <input
+                                type="range"
+                                min={rangeMin}
+                                max={rangeMax}
+                                step="any"
+                                value={currentAmount}
+                                onChange={(e) => {
+                                  const v = Math.max(
+                                    rangeMin,
+                                    Math.min(rangeMax, Number(e.target.value)),
+                                  );
+                                  setAdjustedBudget(v);
+                                }}
+                                onInput={(e) => {
+                                  const v = Math.max(
+                                    rangeMin,
+                                    Math.min(
+                                      rangeMax,
+                                      Number((e.target as HTMLInputElement).value),
+                                    ),
+                                  );
+                                  setAdjustedBudget(v);
+                                }}
+                                className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#76E6AB]"
+                                style={{
+                                  background: `linear-gradient(to right, #76E6AB 0%, #76E6AB ${percentage}%, #e5e7eb ${percentage}%, #e5e7eb 100%)`,
+                                }}
+                              />
+
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="block text-xs text-gray-500 mb-1">
+                                    Montant minimum (TND)
+                                  </label>
+                                  <input
+                                    type="number"
+                                    value={customMinBudget !== null ? customMinBudget : ''}
+                                    onChange={(e) => {
+                                      const val = e.target.value ? Number(e.target.value) : null;
+                                      setCustomMinBudget(val);
+                                      if (val !== null && adjustedBudget < val)
+                                        setAdjustedBudget(val);
+                                    }}
+                                    placeholder={`Min: ${rangeMin.toFixed(2)} TND`}
+                                    min={0}
+                                    step={50}
+                                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#76E6AB]/40 focus:border-[#76E6AB]"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs text-gray-500 mb-1">
+                                    Montant maximum (TND)
+                                  </label>
+                                  <input
+                                    type="number"
+                                    value={customMaxBudget !== null ? customMaxBudget : ''}
+                                    onChange={(e) => {
+                                      const val = e.target.value ? Number(e.target.value) : null;
+                                      setCustomMaxBudget(val);
+                                      if (val !== null && adjustedBudget > val)
+                                        setAdjustedBudget(val);
+                                    }}
+                                    placeholder={`Max: ${rangeMax.toFixed(2)} TND`}
+                                    min={0}
+                                    step={50}
+                                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#76E6AB]/40 focus:border-[#76E6AB]"
+                                  />
+                                </div>
+                              </div>
+                            </>
+                          );
+                        })()}
+                      </div>
+
+                      {/* Note */}
+                      <div className="flex gap-2.5 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                        <Info className="h-4 w-4 text-gray-400 flex-shrink-0 mt-0.5" />
+                        <p className="text-xs text-gray-500 leading-relaxed">
+                          <strong className="text-gray-600">Note:</strong> Le curseur ajuste le plan
+                          final après le calcul du plan max. Le plan final (budget + impressions +
+                          répétitions horaires) devient la référence officielle soumise aux
+                          propriétaires et injectée en planification horaire.
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
           {showPostCartStep && (
             <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
@@ -2990,7 +3365,8 @@ export default function NewCampaign() {
 
                 <div className="mt-7">
                   <h3 className="text-lg font-semibold text-center text-gray-900 mb-6 leading-snug">
-                    Augmentez votre impact en diffusant votre spot lors d'evenements prevus dans la meme periode
+                    Augmentez votre impact en diffusant votre spot lors d'evenements prevus dans la
+                    meme periode
                   </h3>
 
                   {loadingRecommendedEvents ? (
@@ -3000,31 +3376,61 @@ export default function NewCampaign() {
                   ) : recommendedEventsInPeriod.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       {recommendedEventsInPeriod.map((event) => {
-                        const typeConfig: Record<string, { bg: string; text: string; label: string }> = {
+                        const typeConfig: Record<
+                          string,
+                          { bg: string; text: string; label: string }
+                        > = {
                           sport: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Sport' },
                           ramadan: { bg: 'bg-amber-100', text: 'text-amber-900', label: 'Ramadan' },
-                          culture: { bg: 'bg-purple-100', text: 'text-purple-800', label: 'Culture' },
-                          concert: { bg: 'bg-purple-100', text: 'text-purple-800', label: 'Concert' },
+                          culture: {
+                            bg: 'bg-purple-100',
+                            text: 'text-purple-800',
+                            label: 'Culture',
+                          },
+                          concert: {
+                            bg: 'bg-purple-100',
+                            text: 'text-purple-800',
+                            label: 'Concert',
+                          },
                           festival: { bg: 'bg-pink-100', text: 'text-pink-800', label: 'Festival' },
-                          conference: { bg: 'bg-indigo-100', text: 'text-indigo-800', label: 'Conference' },
-                          exposition: { bg: 'bg-green-100', text: 'text-green-800', label: 'Exposition' },
+                          conference: {
+                            bg: 'bg-indigo-100',
+                            text: 'text-indigo-800',
+                            label: 'Conference',
+                          },
+                          exposition: {
+                            bg: 'bg-green-100',
+                            text: 'text-green-800',
+                            label: 'Exposition',
+                          },
                           salon: { bg: 'bg-orange-100', text: 'text-orange-800', label: 'Salon' },
                           autre: { bg: 'bg-gray-100', text: 'text-gray-800', label: 'Autre' },
                         };
                         const typeStyle = typeConfig[event.event_type] || typeConfig.autre;
                         const start = new Date(event.start_date);
                         const end = new Date(event.end_date);
-                        const dateStr = start.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+                        const dateStr = start.toLocaleDateString('fr-FR', {
+                          day: 'numeric',
+                          month: 'short',
+                        });
                         const timeStr = `${start.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} - ${end.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
-                        const impressions = event.expected_attendance != null
-                          ? event.expected_attendance.toLocaleString('fr-FR')
-                          : '184 500';
+                        const impressions =
+                          event.expected_attendance != null
+                            ? event.expected_attendance.toLocaleString('fr-FR')
+                            : '184 500';
 
                         return (
-                          <div key={event.id} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
+                          <div
+                            key={event.id}
+                            className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden flex flex-col"
+                          >
                             <div className="aspect-[16/10] bg-gray-200 overflow-hidden">
                               {event.image_url ? (
-                                <img src={event.image_url} alt={event.name} className="w-full h-full object-cover" />
+                                <img
+                                  src={event.image_url}
+                                  alt={event.name}
+                                  className="w-full h-full object-cover"
+                                />
                               ) : (
                                 <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
                                   <Megaphone className="h-12 w-12 text-gray-400" />
@@ -3033,29 +3439,42 @@ export default function NewCampaign() {
                             </div>
                             <div className="p-4 flex flex-col flex-1">
                               <div className="flex items-start justify-between gap-2 mb-2">
-                                <h4 className="text-base font-bold text-gray-900 flex-1">{event.name}</h4>
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium flex-shrink-0 ${typeStyle.bg} ${typeStyle.text}`}>
+                                <h4 className="text-base font-bold text-gray-900 flex-1">
+                                  {event.name}
+                                </h4>
+                                <span
+                                  className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium flex-shrink-0 ${typeStyle.bg} ${typeStyle.text}`}
+                                >
                                   {typeStyle.label}
                                 </span>
                               </div>
                               <div className="flex flex-wrap gap-1.5 mb-2">
-                                <span className="inline-flex px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs">Restaurants</span>
-                                <span className="inline-flex px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs">Salles de sport</span>
+                                <span className="inline-flex px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs">
+                                  Restaurants
+                                </span>
+                                <span className="inline-flex px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs">
+                                  Salles de sport
+                                </span>
                               </div>
                               <div className="flex items-center gap-1.5 text-sm text-gray-600 mb-1">
                                 <Calendar className="h-4 w-4 flex-shrink-0" />
-                                <span>{dateStr} | {timeStr}</span>
+                                <span>
+                                  {dateStr} | {timeStr}
+                                </span>
                               </div>
                               <div className="flex items-center gap-1.5 text-sm text-gray-600 mb-2">
                                 <TrendingUp className="h-4 w-4 flex-shrink-0" />
                                 <span>~ {impressions} impressions</span>
                               </div>
                               <p className="text-xs text-gray-500 mb-4">
-                                (En incluant automatiquement toutes les categories de commerces qui diffusent pendant l'evenement)
+                                (En incluant automatiquement toutes les categories de commerces qui
+                                diffusent pendant l'evenement)
                               </p>
                               <button
                                 type="button"
-                                onClick={() => navigate('/new-event-campaign', { state: { event } })}
+                                onClick={() =>
+                                  navigate('/new-event-campaign', { state: { event } })
+                                }
                                 className="mt-auto w-full py-2.5 rounded-xl bg-[#1f1f1f] hover:bg-black text-white text-sm font-medium transition-colors"
                               >
                                 Je me positionne
@@ -3094,166 +3513,223 @@ export default function NewCampaign() {
           )}
 
           {/* Navigation Buttons — type="button" pour éviter toute soumission de formulaire et rechargement */}
-          {!showPostCartStep && <div className="flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => setCurrentStep(Math.max(1, currentStep - 1))}
-              disabled={currentStep === 1}
-              className="flex items-center gap-2 px-5 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm font-medium"
-            >
-              <ArrowRight className="h-4 w-4 rotate-180" />
-              Retour
-            </button>
+          {!showPostCartStep && (
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setCurrentStep(Math.max(1, currentStep - 1))}
+                disabled={currentStep === 1}
+                className="flex items-center gap-2 px-5 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm font-medium"
+              >
+                <ArrowRight className="h-4 w-4 rotate-180" />
+                Retour
+              </button>
 
-            {/* Step 6 / final step: Enregistrer + Ajouter au panier */}
-            {((currentStep === 6 && !isEventCampaign) || (currentStep === 3 && isEventCampaign)) && (
-              <div className="flex flex-col items-end gap-2">
-                {(!canProceedToStep6() || adjustedBudget <= 0 || impressionsForCurrentBudget <= 0) && (
-                  <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                    La campagne doit être supérieure à 0 dinar et à 0 impression pour pouvoir être validée.
-                  </p>
-                )}
-                <div className="flex items-center gap-3">
-                {/* Enregistrer (brouillon) */}
+              {/* Step 6 / final step: Enregistrer + Ajouter au panier */}
+              {((currentStep === 6 && !isEventCampaign) ||
+                (currentStep === 3 && isEventCampaign)) && (
+                <div className="flex flex-col items-end gap-2">
+                  {(!canProceedToStep6() ||
+                    adjustedBudget <= 0 ||
+                    impressionsForCurrentBudget <= 0) && (
+                    <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                      La campagne doit être supérieure à 0 dinar et à 0 impression pour pouvoir être
+                      validée.
+                    </p>
+                  )}
+                  <div className="flex items-center gap-3">
+                    {/* Enregistrer (brouillon) */}
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          if (!draftCampaignId) {
+                            const videoId = uploadedVideoId || selectedExistingVideo?.id;
+                            if (!videoId) {
+                              toast.error("Veuillez sélectionner ou uploader une vidéo d'abord");
+                              return;
+                            }
+                            await saveCampaignDraft(videoId, false);
+                          } else {
+                            await supabase
+                              .from('campaigns')
+                              .update({ status: 'draft' })
+                              .eq('id', draftCampaignId);
+                          }
+                          toast.success('Campagne sauvegardée en brouillon');
+                          navigate('/my-campaigns?status=draft');
+                        } catch (error: any) {
+                          toast.error(error.message || 'Erreur lors de la sauvegarde');
+                        }
+                      }}
+                      className="px-5 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-all text-sm font-medium"
+                    >
+                      Enregistrer
+                    </button>
+
+                    {/* Ajouter au panier */}
+                    <button
+                      type="button"
+                      disabled={
+                        addingToCart ||
+                        !canProceedToStep6() ||
+                        adjustedBudget <= 0 ||
+                        impressionsForCurrentBudget <= 0
+                      }
+                      onClick={async () => {
+                        if (addingToCart) return;
+                        if (
+                          !canProceedToStep6() ||
+                          adjustedBudget <= 0 ||
+                          impressionsForCurrentBudget <= 0
+                        ) {
+                          toast.error(
+                            'La campagne doit être supérieure à 0 dinar et à 0 impression.',
+                          );
+                          return;
+                        }
+                        setAddingToCart(true);
+                        try {
+                          let campaignId = draftCampaignId;
+                          if (!campaignId) {
+                            const videoId = uploadedVideoId || selectedExistingVideo?.id;
+                            if (!videoId) {
+                              toast.error("Veuillez sélectionner ou uploader une vidéo d'abord");
+                              return;
+                            }
+                            const campaign = await saveCampaignDraft(videoId, false);
+                            campaignId = campaign.id;
+                          }
+
+                          const balanceCheck =
+                            await balanceService.checkCampaignBalance(campaignId);
+                          if (balanceCheck && !balanceCheck.has_sufficient_balance) {
+                            await supabase
+                              .from('campaigns')
+                              .update({ status: 'draft' })
+                              .eq('id', campaignId);
+                            toast.error('Solde insuffisant pour activer la campagne', {
+                              duration: 5000,
+                            });
+                            toast(
+                              (t) => (
+                                <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+                                  <p className="font-bold text-yellow-800 mb-2">
+                                    Votre campagne est sauvegardée en brouillon
+                                  </p>
+                                  <div className="text-xs text-yellow-600 space-y-1">
+                                    <p>
+                                      Solde disponible:{' '}
+                                      <strong>
+                                        {balanceService.formatAmount(
+                                          balanceCheck.available_balance,
+                                        )}
+                                      </strong>
+                                    </p>
+                                    <p>
+                                      Coût campagne:{' '}
+                                      <strong>
+                                        {balanceService.formatAmount(balanceCheck.campaign_cost)}
+                                      </strong>
+                                    </p>
+                                  </div>
+                                </div>
+                              ),
+                              { duration: 6000 },
+                            );
+                            setTimeout(() => navigate('/my-recharges'), 3000);
+                            return;
+                          }
+
+                          // Tant que l'utilisateur n'a pas validé depuis le panier,
+                          // la campagne reste en brouillon.
+                          await supabase
+                            .from('campaigns')
+                            .update({ status: 'draft', content_validation_status: 'pending' })
+                            .eq('id', campaignId);
+
+                          if (isEventCampaign && eventFromState?.id) {
+                            await supabase.rpc('link_campaign_to_event', {
+                              p_campaign_id: campaignId,
+                              p_event_id: eventFromState.id,
+                            });
+                          }
+
+                          pushCampaignToSidebarCart(campaignId);
+                          await loadRecommendedEventsForSelectedPeriod();
+                          setShowPostCartStep(true);
+                          toast.success(
+                            "Campagne ajoutee au panier. Activez-la depuis le panier pour qu'elle soit diffusée.",
+                          );
+                        } catch (error: any) {
+                          toast.error(error.message || 'Erreur lors de la finalisation');
+                        } finally {
+                          setAddingToCart(false);
+                        }
+                      }}
+                      className="flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm text-white shadow-lg transition-all hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
+                      style={{ background: '#76E6AB' }}
+                    >
+                      <span>{addingToCart ? 'Ajout en cours...' : 'Ajouter au panier'}</span>
+                      <ArrowRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {(isEventCampaign ? currentStep < 3 : currentStep < 6) && (
                 <button
                   type="button"
-                  onClick={async () => {
-                    try {
-                      if (!draftCampaignId) {
-                        const videoId = uploadedVideoId || selectedExistingVideo?.id;
-                        if (!videoId) { toast.error('Veuillez sélectionner ou uploader une vidéo d\'abord'); return; }
-                        await saveCampaignDraft(videoId, false);
-                      } else {
-                        await supabase.from('campaigns').update({ status: 'draft' }).eq('id', draftCampaignId);
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (isEventCampaign) {
+                      if (currentStep === 1 && canProceedToStep4()) setCurrentStep(2);
+                      else if (currentStep === 2 && canProceedToStep5()) setCurrentStep(3);
+                    } else {
+                      if (currentStep === 1) {
+                        if (validateStep1()) setCurrentStep(2);
+                      } else if (currentStep === 2) {
+                        if (validateStep2Category()) setCurrentStep(3);
+                      } else if (currentStep === 3) {
+                        if (validateStep2()) setCurrentStep(4);
+                      } else if (currentStep === 4) {
+                        if (canProceedToStep4()) setCurrentStep(5);
+                      } else if (currentStep === 5) {
+                        if (canProceedToStep5()) setCurrentStep(6);
                       }
-                      toast.success('Campagne sauvegardée en brouillon');
-                      navigate('/my-campaigns?status=draft');
-                    } catch (error: any) {
-                      toast.error(error.message || 'Erreur lors de la sauvegarde');
                     }
                   }}
-                  className="px-5 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-all text-sm font-medium"
+                  disabled={
+                    isEventCampaign
+                      ? (currentStep === 1 && !canProceedToStep4()) ||
+                        (currentStep === 2 && !canProceedToStep5())
+                      : (currentStep === 1 && !canProceedToStep2()) ||
+                        (currentStep === 2 && !canLeaveStep2()) ||
+                        (currentStep === 3 && !canProceedToStep3()) ||
+                        (currentStep === 4 && !canProceedToStep4()) ||
+                        (currentStep === 5 && !canProceedToStep5())
+                  }
+                  className={`px-6 py-3 rounded-xl font-semibold transition-all flex items-center space-x-2 shadow-lg ${
+                    isEventCampaign
+                      ? (currentStep === 1 && !canProceedToStep4()) ||
+                        (currentStep === 2 && !canProceedToStep5())
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : 'bg-gradient-to-r from-[#00B3A6] to-[#00D4C4] text-white hover:from-[#00A396] hover:to-[#00C4B4]'
+                      : (currentStep === 1 && !canProceedToStep2()) ||
+                          (currentStep === 2 && !canLeaveStep2()) ||
+                          (currentStep === 3 && !canProceedToStep3()) ||
+                          (currentStep === 4 && !canProceedToStep4()) ||
+                          (currentStep === 5 && !canProceedToStep5())
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : 'bg-gradient-to-r from-[#00B3A6] to-[#00D4C4] text-white hover:from-[#00A396] hover:to-[#00C4B4]'
+                  }`}
                 >
-                  Enregistrer
-                </button>
-
-                {/* Ajouter au panier */}
-                <button
-                  type="button"
-                  disabled={addingToCart || !canProceedToStep6() || adjustedBudget <= 0 || impressionsForCurrentBudget <= 0}
-                  onClick={async () => {
-                    if (addingToCart) return;
-                    if (!canProceedToStep6() || adjustedBudget <= 0 || impressionsForCurrentBudget <= 0) {
-                      toast.error('La campagne doit être supérieure à 0 dinar et à 0 impression.');
-                      return;
-                    }
-                    setAddingToCart(true);
-                    try {
-                      let campaignId = draftCampaignId;
-                      if (!campaignId) {
-                        const videoId = uploadedVideoId || selectedExistingVideo?.id;
-                        if (!videoId) { toast.error('Veuillez sélectionner ou uploader une vidéo d\'abord'); return; }
-                        const campaign = await saveCampaignDraft(videoId, false);
-                        campaignId = campaign.id;
-                      }
-
-                      const balanceCheck = await balanceService.checkCampaignBalance(campaignId);
-                      if (balanceCheck && !balanceCheck.has_sufficient_balance) {
-                        await supabase.from('campaigns').update({ status: 'draft' }).eq('id', campaignId);
-                        toast.error('Solde insuffisant pour activer la campagne', { duration: 5000 });
-                        toast((t) => (
-                          <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
-                            <p className="font-bold text-yellow-800 mb-2">Votre campagne est sauvegardée en brouillon</p>
-                            <div className="text-xs text-yellow-600 space-y-1">
-                              <p>Solde disponible: <strong>{balanceService.formatAmount(balanceCheck.available_balance)}</strong></p>
-                              <p>Coût campagne: <strong>{balanceService.formatAmount(balanceCheck.campaign_cost)}</strong></p>
-                            </div>
-                          </div>
-                        ), { duration: 6000 });
-                        setTimeout(() => navigate('/my-recharges'), 3000);
-                        return;
-                      }
-
-                      // Tant que l'utilisateur n'a pas validé depuis le panier,
-                      // la campagne reste en brouillon.
-                      await supabase
-                        .from('campaigns')
-                        .update({ status: 'draft', content_validation_status: 'pending' })
-                        .eq('id', campaignId);
-
-                      if (isEventCampaign && eventFromState?.id) {
-                        await supabase.rpc('link_campaign_to_event', { p_campaign_id: campaignId, p_event_id: eventFromState.id });
-                      }
-
-                      pushCampaignToSidebarCart(campaignId);
-                      await loadRecommendedEventsForSelectedPeriod();
-                      setShowPostCartStep(true);
-                      toast.success('Campagne ajoutee au panier. Activez-la depuis le panier pour qu\'elle soit diffusée.');
-                    } catch (error: any) {
-                      toast.error(error.message || 'Erreur lors de la finalisation');
-                    } finally {
-                      setAddingToCart(false);
-                    }
-                  }}
-                  className="flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm text-white shadow-lg transition-all hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
-                  style={{ background: '#76E6AB' }}
-                >
-                  <span>{addingToCart ? 'Ajout en cours...' : 'Ajouter au panier'}</span>
+                  <span>Suivant</span>
                   <ArrowRight className="h-4 w-4" />
                 </button>
-                </div>
-              </div>
-            )}
-            
-            {(isEventCampaign ? currentStep < 3 : currentStep < 6) && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                if (isEventCampaign) {
-                  if (currentStep === 1 && canProceedToStep4()) setCurrentStep(2);
-                  else if (currentStep === 2 && canProceedToStep5()) setCurrentStep(3);
-                } else {
-                  if (currentStep === 1) {
-                    if (validateStep1()) setCurrentStep(2);
-                  } else if (currentStep === 2) {
-                    if (validateStep2Category()) setCurrentStep(3);
-                  } else if (currentStep === 3) {
-                    if (validateStep2()) setCurrentStep(4);
-                  } else if (currentStep === 4) {
-                    if (canProceedToStep4()) setCurrentStep(5);
-                  } else if (currentStep === 5) {
-                    if (canProceedToStep5()) setCurrentStep(6);
-                  }
-                }
-              }}
-              disabled={isEventCampaign
-                ? ((currentStep === 1 && !canProceedToStep4()) || (currentStep === 2 && !canProceedToStep5()))
-                : ((currentStep === 1 && !canProceedToStep2()) ||
-                    (currentStep === 2 && !canLeaveStep2()) ||
-                    (currentStep === 3 && !canProceedToStep3()) ||
-                    (currentStep === 4 && !canProceedToStep4()) ||
-                    (currentStep === 5 && !canProceedToStep5()))
-              }
-              className={`px-6 py-3 rounded-xl font-semibold transition-all flex items-center space-x-2 shadow-lg ${
-                isEventCampaign
-                  ? ((currentStep === 1 && !canProceedToStep4()) || (currentStep === 2 && !canProceedToStep5()))
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-[#00B3A6] to-[#00D4C4] text-white hover:from-[#00A396] hover:to-[#00C4B4]'
-                  : (currentStep === 1 && !canProceedToStep2()) ||
-                    (currentStep === 2 && !canLeaveStep2()) ||
-                    (currentStep === 3 && !canProceedToStep3()) ||
-                    (currentStep === 4 && !canProceedToStep4()) ||
-                    (currentStep === 5 && !canProceedToStep5())
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-[#00B3A6] to-[#00D4C4] text-white hover:from-[#00A396] hover:to-[#00C4B4]'
-              }`}
-            >
-              <span>Suivant</span>
-              <ArrowRight className="h-4 w-4" />
-            </button>
-            )}
-          </div>}
+              )}
+            </div>
+          )}
         </div>
 
         {/* Sidebar with Dynamic Stats */}
@@ -3277,12 +3753,11 @@ export default function NewCampaign() {
                   <span className="text-sm text-gray-600">Nombre d'impressions</span>
                 </div>
                 <span className="font-bold text-[#00263A]">
-                  {currentStep >= 5 && calculatedImpressions > 0 
+                  {currentStep >= 5 && calculatedImpressions > 0
                     ? calculatedImpressions.toLocaleString('fr-FR')
-                    : canEstimate 
-                      ? nbImpressions.toLocaleString('fr-FR') 
-                      : 0
-                  }
+                    : canEstimate
+                      ? nbImpressions.toLocaleString('fr-FR')
+                      : 0}
                 </span>
               </div>
 
@@ -3301,21 +3776,30 @@ export default function NewCampaign() {
                   </div>
                   <span className="font-bold text-[#00B3A6] text-lg">
                     {currentStep >= 5 && adjustedBudget > 0
-                      ? adjustedBudget.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                      : canEstimate 
-                        ? prixTotal.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                        : '0.00'
-                    } TND
+                      ? adjustedBudget.toLocaleString('fr-FR', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })
+                      : canEstimate
+                        ? prixTotal.toLocaleString('fr-FR', {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })
+                        : '0.00'}{' '}
+                    TND
                   </span>
                 </div>
-                {(currentStep >= 5 && calculatedImpressions > 0) ? (
+                {currentStep >= 5 && calculatedImpressions > 0 ? (
                   <p className="text-xs text-gray-500 text-right">
                     ({(calculatedImpressions / 1000).toFixed(1)}k impressions)
                   </p>
-                ) : canEstimate && nbImpressions > 0 && (
-                  <p className="text-xs text-gray-500 text-right">
-                    ({(nbImpressions / 1000).toFixed(1)}k impressions × {cpmTnd} TND)
-                  </p>
+                ) : (
+                  canEstimate &&
+                  nbImpressions > 0 && (
+                    <p className="text-xs text-gray-500 text-right">
+                      ({(nbImpressions / 1000).toFixed(1)}k impressions × {cpmTnd} TND)
+                    </p>
+                  )
                 )}
               </div>
               <div className="flex items-center justify-between p-3 bg-gradient-to-r from-purple-50 to-purple-100 rounded-xl border border-purple-200">
@@ -3326,11 +3810,9 @@ export default function NewCampaign() {
                 <span className="font-bold text-purple-600">{cpmTnd.toFixed(2)} TND</span>
               </div>
             </div>
-            
           </div>
-
+        </div>
       </div>
-    </div>
 
       {/* Modal Zone Géographique (Full Screen) */}
       {showZoneModal && (
@@ -3355,7 +3837,6 @@ export default function NewCampaign() {
           <div className="flex-1 overflow-hidden flex">
             {/* Colonne gauche - Contrôles */}
             <div className="w-96 bg-gray-50 border-r border-gray-200 overflow-y-auto p-6 space-y-4">
-              
               {/* Barre de recherche */}
               <div className="bg-white rounded-xl p-4 shadow-lg border border-gray-200">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -3370,14 +3851,17 @@ export default function NewCampaign() {
                       value={tempZoneSearchQuery}
                       onChange={(e) => setTempZoneSearchQuery(e.target.value)}
                       onKeyPress={(e) => {
-                        if (e.key === 'Enter' && getCitySuggestions(tempZoneSearchQuery).length > 0) {
+                        if (
+                          e.key === 'Enter' &&
+                          getCitySuggestions(tempZoneSearchQuery).length > 0
+                        ) {
                           const city = getCitySuggestions(tempZoneSearchQuery)[0];
                           setTempZoneSearchQuery(city.name);
                           setTempZoneLocation({ lat: city.lat, lng: city.lng });
                         }
                       }}
                     />
-                    <button 
+                    <button
                       onClick={() => {
                         const suggestions = getCitySuggestions(tempZoneSearchQuery);
                         if (suggestions.length > 0) {
@@ -3391,7 +3875,7 @@ export default function NewCampaign() {
                       <Search className="h-4 w-4" />
                     </button>
                   </div>
-                  
+
                   {/* Suggestions de villes */}
                   {tempZoneSearchQuery && getCitySuggestions(tempZoneSearchQuery).length > 0 && (
                     <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-10 max-h-60 overflow-y-auto">
@@ -3448,15 +3932,28 @@ export default function NewCampaign() {
                   <div className="space-y-2">
                     <div className="p-2 bg-green-50 border border-green-200 rounded-lg">
                       <p className="text-xs font-semibold text-green-700">
-                        ✓ {tempZoneLocations.length} localité{tempZoneLocations.length > 1 ? 's' : ''} ({tempZoneLocations.reduce((s, l) => s + (l.screen_count || 0), 0)} écran{tempZoneLocations.reduce((s, l) => s + (l.screen_count || 0), 0) !== 1 ? 's' : ''})
+                        ✓ {tempZoneLocations.length} localité
+                        {tempZoneLocations.length > 1 ? 's' : ''} (
+                        {tempZoneLocations.reduce((s, l) => s + (l.screen_count || 0), 0)} écran
+                        {tempZoneLocations.reduce((s, l) => s + (l.screen_count || 0), 0) !== 1
+                          ? 's'
+                          : ''}
+                        )
                       </p>
                     </div>
                     <div className="max-h-96 overflow-y-auto space-y-2 bg-gray-50 border border-gray-200 rounded-lg p-2">
                       {tempZoneLocations.map((loc) => (
-                        <div key={loc.id} className="p-2 bg-white rounded-lg hover:bg-gray-50 transition-colors shadow-sm">
+                        <div
+                          key={loc.id}
+                          className="p-2 bg-white rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
+                        >
                           <p className="text-xs font-medium text-gray-900 truncate">{loc.name}</p>
-                          {loc.address && <p className="text-xs text-gray-500 truncate">{loc.address}</p>}
-                          <p className="text-xs text-blue-600 mt-1">📺 {loc.screen_count ?? 0} écran{(loc.screen_count ?? 0) > 1 ? 's' : ''}</p>
+                          {loc.address && (
+                            <p className="text-xs text-gray-500 truncate">{loc.address}</p>
+                          )}
+                          <p className="text-xs text-blue-600 mt-1">
+                            📺 {loc.screen_count ?? 0} écran{(loc.screen_count ?? 0) > 1 ? 's' : ''}
+                          </p>
                         </div>
                       ))}
                     </div>
@@ -3468,7 +3965,9 @@ export default function NewCampaign() {
                     </p>
                     {getUsedLocationIds().length > 0 && (
                       <p className="text-xs text-yellow-600 mt-1">
-                        {getUsedLocationIds().length} localité{getUsedLocationIds().length > 1 ? 's' : ''} déjà utilisée{getUsedLocationIds().length > 1 ? 's' : ''} ailleurs.
+                        {getUsedLocationIds().length} localité
+                        {getUsedLocationIds().length > 1 ? 's' : ''} déjà utilisée
+                        {getUsedLocationIds().length > 1 ? 's' : ''} ailleurs.
                       </p>
                     )}
                   </div>
@@ -3520,14 +4019,16 @@ export default function NewCampaign() {
                   </div>
                 )}
               </div>
-
             </div>
 
             {/* Colonne droite - Carte (plus grande) */}
             <div className="flex-1 bg-white p-6">
               <div className="h-full rounded-xl overflow-hidden shadow-lg border border-gray-200">
                 <MapContainer
-                  center={[(tempZoneLocation?.lat ?? center.lat), (tempZoneLocation?.lng ?? center.lng)]}
+                  center={[
+                    tempZoneLocation?.lat ?? center.lat,
+                    tempZoneLocation?.lng ?? center.lng,
+                  ]}
                   zoom={13}
                   style={{ height: '100%', width: '100%' }}
                   className="rounded-lg"
@@ -3548,7 +4049,12 @@ export default function NewCampaign() {
                   <MapEvents onLocationSelect={(lat, lng) => setTempZoneLocation({ lat, lng })} />
                   {/* Cercles des zones déjà sélectionnées (grisées) */}
                   {geographicZones
-                    .filter(zone => (!editingZone || zone.id !== editingZone.id) && zone.location?.lat != null && zone.location?.lng != null)
+                    .filter(
+                      (zone) =>
+                        (!editingZone || zone.id !== editingZone.id) &&
+                        zone.location?.lat != null &&
+                        zone.location?.lng != null,
+                    )
                     .map((zone) => (
                       <Circle
                         key={zone.id}
@@ -3565,7 +4071,10 @@ export default function NewCampaign() {
                     ))}
                   {/* Cercle de zone en cours de sélection */}
                   <Circle
-                    center={[(tempZoneLocation?.lat ?? center.lat), (tempZoneLocation?.lng ?? center.lng)]}
+                    center={[
+                      tempZoneLocation?.lat ?? center.lat,
+                      tempZoneLocation?.lng ?? center.lng,
+                    ]}
                     radius={tempZoneRadius ?? 1000}
                     pathOptions={{
                       fillColor: '#00B3A6',
@@ -3575,10 +4084,14 @@ export default function NewCampaign() {
                     }}
                   />
                   {/* Marqueur du centre (simple, sans popup) */}
-                  <Marker 
-                    position={[(tempZoneLocation?.lat ?? center.lat), (tempZoneLocation?.lng ?? center.lng)]}
+                  <Marker
+                    position={[
+                      tempZoneLocation?.lat ?? center.lat,
+                      tempZoneLocation?.lng ?? center.lng,
+                    ]}
                     icon={L.icon({
-                      iconUrl: 'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-icon-2x-violet.png',
+                      iconUrl:
+                        'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-icon-2x-violet.png',
                       iconSize: [20, 32],
                       iconAnchor: [10, 32],
                     })}
@@ -3586,12 +4099,28 @@ export default function NewCampaign() {
                   {/* Marqueurs : toutes les localités (vert = dans le cercle, rouge = déjà dans une autre zone, gris = hors cercle) */}
                   {(allMapLocations || []).map((loc) => {
                     const c = loc?.coordinates;
-                    if (!c || typeof c.lat !== 'number' || typeof c.lng !== 'number' || Number.isNaN(c.lat) || Number.isNaN(c.lng)) return null;
+                    if (
+                      !c ||
+                      typeof c.lat !== 'number' ||
+                      typeof c.lng !== 'number' ||
+                      Number.isNaN(c.lat) ||
+                      Number.isNaN(c.lng)
+                    )
+                      return null;
                     const radiusKm = (tempZoneRadius || 0) / 1000;
-                    const inCircle = tempZoneLocation && radiusKm > 0 && distanceKm(tempZoneLocation.lat, tempZoneLocation.lng, c.lat, c.lng) <= radiusKm;
+                    const inCircle =
+                      tempZoneLocation &&
+                      radiusKm > 0 &&
+                      distanceKm(tempZoneLocation.lat, tempZoneLocation.lng, c.lat, c.lng) <=
+                        radiusKm;
                     const usedElsewhere = getUsedLocationIds(editingZone?.id).includes(loc.id);
                     const iconColor = inCircle ? (usedElsewhere ? 'red' : 'green') : 'gray';
-                    const colorHex = iconColor === 'green' ? '#10b981' : iconColor === 'red' ? '#ef4444' : '#6b7280';
+                    const colorHex =
+                      iconColor === 'green'
+                        ? '#10b981'
+                        : iconColor === 'red'
+                          ? '#ef4444'
+                          : '#6b7280';
                     return (
                       <Marker
                         key={loc.id}
@@ -3613,9 +4142,16 @@ export default function NewCampaign() {
                         <Popup>
                           <div className="text-xs">
                             <strong>{loc.name}</strong>
-                            <span className="text-gray-500 ml-1">({loc.screen_count ?? 0} écran{(loc.screen_count ?? 0) > 1 ? 's' : ''})</span>
-                            {inCircle && !usedElsewhere && <span className="text-green-600 ml-2">✓ dans la zone</span>}
-                            {inCircle && usedElsewhere && <span className="text-red-600 ml-2">✗ déjà dans une autre zone</span>}
+                            <span className="text-gray-500 ml-1">
+                              ({loc.screen_count ?? 0} écran{(loc.screen_count ?? 0) > 1 ? 's' : ''}
+                              )
+                            </span>
+                            {inCircle && !usedElsewhere && (
+                              <span className="text-green-600 ml-2">✓ dans la zone</span>
+                            )}
+                            {inCircle && usedElsewhere && (
+                              <span className="text-red-600 ml-2">✗ déjà dans une autre zone</span>
+                            )}
                             {!inCircle && <span className="text-gray-500 ml-2">Hors zone</span>}
                           </div>
                         </Popup>
@@ -3655,7 +4191,7 @@ export default function NewCampaign() {
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
             {/* Overlay */}
-            <div 
+            <div
               className="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75"
               onClick={() => setShowEventsModal(false)}
             ></div>
@@ -3695,9 +4231,15 @@ export default function NewCampaign() {
                     <div className="text-sm text-blue-900">
                       <p className="font-semibold mb-1">🎯 Opportunité exceptionnelle !</p>
                       <p>
-                        Nous avons détecté <strong>{detectedEvents.length} événement{detectedEvents.length > 1 ? 's' : ''} spécial{detectedEvents.length > 1 ? 'aux' : ''}</strong> durant 
-                        la période de votre campagne. Associer votre annonce à {detectedEvents.length > 1 ? 'ces événements' : 'cet événement'} vous 
-                        permettra de bénéficier d'une <strong>audience plus large</strong> et d'une <strong>meilleure visibilité</strong>.
+                        Nous avons détecté{' '}
+                        <strong>
+                          {detectedEvents.length} événement{detectedEvents.length > 1 ? 's' : ''}{' '}
+                          spécial{detectedEvents.length > 1 ? 'aux' : ''}
+                        </strong>{' '}
+                        durant la période de votre campagne. Associer votre annonce à{' '}
+                        {detectedEvents.length > 1 ? 'ces événements' : 'cet événement'} vous
+                        permettra de bénéficier d'une <strong>audience plus large</strong> et d'une{' '}
+                        <strong>meilleure visibilité</strong>.
                       </p>
                     </div>
                   </div>
@@ -3714,24 +4256,24 @@ export default function NewCampaign() {
                           : 'border-gray-200 hover:border-[#00B3A6]/50'
                       }`}
                       onClick={() => {
-                        setSelectedEvents(prev =>
+                        setSelectedEvents((prev) =>
                           prev.includes(event.id)
-                            ? prev.filter(id => id !== event.id)
-                            : [...prev, event.id]
+                            ? prev.filter((id) => id !== event.id)
+                            : [...prev, event.id],
                         );
                       }}
                     >
                       <div className="flex items-start space-x-3">
-                        <div className={`p-2 rounded-lg ${
-                          selectedEvents.includes(event.id)
-                            ? 'bg-[#00B3A6]'
-                            : 'bg-gray-100'
-                        }`}>
-                          <Calendar className={`h-5 w-5 ${
-                            selectedEvents.includes(event.id)
-                              ? 'text-white'
-                              : 'text-gray-600'
-                          }`} />
+                        <div
+                          className={`p-2 rounded-lg ${
+                            selectedEvents.includes(event.id) ? 'bg-[#00B3A6]' : 'bg-gray-100'
+                          }`}
+                        >
+                          <Calendar
+                            className={`h-5 w-5 ${
+                              selectedEvents.includes(event.id) ? 'text-white' : 'text-gray-600'
+                            }`}
+                          />
                         </div>
                         <div className="flex-1">
                           <div className="flex items-start justify-between">
@@ -3752,7 +4294,8 @@ export default function NewCampaign() {
                               📍 {event.location} • {event.city}
                             </span>
                             <span className="flex items-center">
-                              📅 {new Date(event.start_date).toLocaleDateString('fr-FR')} - {new Date(event.end_date).toLocaleDateString('fr-FR')}
+                              📅 {new Date(event.start_date).toLocaleDateString('fr-FR')} -{' '}
+                              {new Date(event.end_date).toLocaleDateString('fr-FR')}
                             </span>
                             {event.expected_attendance && (
                               <span className="flex items-center">
@@ -3777,7 +4320,8 @@ export default function NewCampaign() {
                 <div className="text-sm text-gray-600">
                   {selectedEvents.length > 0 ? (
                     <span className="font-semibold text-[#00B3A6]">
-                      {selectedEvents.length} événement{selectedEvents.length > 1 ? 's' : ''} sélectionné{selectedEvents.length > 1 ? 's' : ''}
+                      {selectedEvents.length} événement{selectedEvents.length > 1 ? 's' : ''}{' '}
+                      sélectionné{selectedEvents.length > 1 ? 's' : ''}
                     </span>
                   ) : (
                     <span>Sélectionnez les événements qui vous intéressent</span>
@@ -3797,12 +4341,16 @@ export default function NewCampaign() {
                     onClick={() => {
                       setShowEventsModal(false);
                       if (selectedEvents.length > 0) {
-                        toast.success(`${selectedEvents.length} événement${selectedEvents.length > 1 ? 's' : ''} sélectionné${selectedEvents.length > 1 ? 's' : ''} !`);
+                        toast.success(
+                          `${selectedEvents.length} événement${selectedEvents.length > 1 ? 's' : ''} sélectionné${selectedEvents.length > 1 ? 's' : ''} !`,
+                        );
                       }
                     }}
                     className="px-4 py-2 bg-gradient-to-r from-[#00B3A6] to-[#00D4C4] text-white rounded-lg hover:shadow-lg transition-all font-medium"
                   >
-                    {selectedEvents.length > 0 ? 'Confirmer la sélection' : 'Continuer sans événements'}
+                    {selectedEvents.length > 0
+                      ? 'Confirmer la sélection'
+                      : 'Continuer sans événements'}
                   </button>
                 </div>
               </div>

@@ -27,20 +27,20 @@ export const screensApi = {
     try {
       const [screens, statistics] = await Promise.all([
         screensService.getScreens(),
-        screensService.getGlobalStatistics()
+        screensService.getGlobalStatistics(),
       ]);
 
       return {
         success: true,
         data: {
           screens,
-          statistics
-        }
+          statistics,
+        },
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Erreur inconnue'
+        error: error instanceof Error ? error.message : 'Erreur inconnue',
       };
     }
   },
@@ -53,13 +53,13 @@ export const screensApi = {
         screensService.getScreenConfiguration(id),
         screensService.getScreenStatistics(id, 30),
         screensService.getScreenAlerts(id),
-        screensService.getUnavailabilityPeriods(id)
+        screensService.getUnavailabilityPeriods(id),
       ]);
 
       if (!screen) {
         return {
           success: false,
-          error: 'Écran non trouvé'
+          error: 'Écran non trouvé',
         };
       }
 
@@ -70,13 +70,13 @@ export const screensApi = {
           configuration,
           statistics,
           alerts,
-          unavailabilityPeriods
-        }
+          unavailabilityPeriods,
+        },
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Erreur inconnue'
+        error: error instanceof Error ? error.message : 'Erreur inconnue',
       };
     }
   },
@@ -85,21 +85,21 @@ export const screensApi = {
   async createScreen(screenData: any): Promise<ApiResponse<any>> {
     try {
       const screen = await screensService.createScreen(screenData);
-      
+
       // Créer un log d'activité
       await screensService.createActivityLog(screen.id, 'screen_created', {
         name: screen.name,
-        location: screen.location
+        location: screen.location,
       });
 
       return {
         success: true,
-        data: screen
+        data: screen,
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Erreur inconnue'
+        error: error instanceof Error ? error.message : 'Erreur inconnue',
       };
     }
   },
@@ -108,18 +108,18 @@ export const screensApi = {
   async updateScreen(id: string, updateData: any): Promise<ApiResponse<any>> {
     try {
       const screen = await screensService.updateScreen(id, updateData);
-      
+
       // Créer un log d'activité
       await screensService.createActivityLog(id, 'screen_updated', updateData);
 
       return {
         success: true,
-        data: screen
+        data: screen,
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Erreur inconnue'
+        error: error instanceof Error ? error.message : 'Erreur inconnue',
       };
     }
   },
@@ -128,14 +128,14 @@ export const screensApi = {
   async deleteScreen(id: string): Promise<ApiResponse<void>> {
     try {
       await screensService.deleteScreen(id);
-      
+
       return {
-        success: true
+        success: true,
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Erreur inconnue'
+        error: error instanceof Error ? error.message : 'Erreur inconnue',
       };
     }
   },
@@ -144,21 +144,21 @@ export const screensApi = {
   async updateScreenStatus(id: string, status: string, reason?: string): Promise<ApiResponse<any>> {
     try {
       const screen = await screensService.updateScreen(id, { status });
-      
+
       // Créer un log d'activité
       await screensService.createActivityLog(id, 'status_changed', {
         new_status: status,
-        reason
+        reason,
       });
 
       return {
         success: true,
-        data: screen
+        data: screen,
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Erreur inconnue'
+        error: error instanceof Error ? error.message : 'Erreur inconnue',
       };
     }
   },
@@ -167,15 +167,15 @@ export const screensApi = {
   async getScreenConfiguration(id: string): Promise<ApiResponse<any>> {
     try {
       const configuration = await screensService.getScreenConfiguration(id);
-      
+
       return {
         success: true,
-        data: configuration
+        data: configuration,
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Erreur inconnue'
+        error: error instanceof Error ? error.message : 'Erreur inconnue',
       };
     }
   },
@@ -184,18 +184,18 @@ export const screensApi = {
   async updateScreenConfiguration(id: string, configData: any): Promise<ApiResponse<any>> {
     try {
       const configuration = await screensService.updateScreenConfiguration(id, configData);
-      
+
       // Créer un log d'activité
       await screensService.createActivityLog(id, 'configuration_updated', configData);
 
       return {
         success: true,
-        data: configuration
+        data: configuration,
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Erreur inconnue'
+        error: error instanceof Error ? error.message : 'Erreur inconnue',
       };
     }
   },
@@ -204,15 +204,15 @@ export const screensApi = {
   async getUnavailabilityPeriods(screenId?: string): Promise<ApiResponse<any[]>> {
     try {
       const periods = await screensService.getUnavailabilityPeriods(screenId);
-      
+
       return {
         success: true,
-        data: periods
+        data: periods,
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Erreur inconnue'
+        error: error instanceof Error ? error.message : 'Erreur inconnue',
       };
     }
   },
@@ -221,22 +221,26 @@ export const screensApi = {
   async createUnavailabilityPeriod(unavailabilityData: any): Promise<ApiResponse<any>> {
     try {
       const period = await screensService.createUnavailabilityPeriod(unavailabilityData);
-      
+
       // Créer un log d'activité
-      await screensService.createActivityLog(unavailabilityData.screen_id, 'unavailability_scheduled', {
-        start_date: unavailabilityData.start_date,
-        end_date: unavailabilityData.end_date,
-        reason: unavailabilityData.reason
-      });
+      await screensService.createActivityLog(
+        unavailabilityData.screen_id,
+        'unavailability_scheduled',
+        {
+          start_date: unavailabilityData.start_date,
+          end_date: unavailabilityData.end_date,
+          reason: unavailabilityData.reason,
+        },
+      );
 
       return {
         success: true,
-        data: period
+        data: period,
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Erreur inconnue'
+        error: error instanceof Error ? error.message : 'Erreur inconnue',
       };
     }
   },
@@ -245,14 +249,14 @@ export const screensApi = {
   async deleteUnavailabilityPeriod(id: string): Promise<ApiResponse<void>> {
     try {
       await screensService.deleteUnavailabilityPeriod(id);
-      
+
       return {
-        success: true
+        success: true,
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Erreur inconnue'
+        error: error instanceof Error ? error.message : 'Erreur inconnue',
       };
     }
   },
@@ -261,15 +265,15 @@ export const screensApi = {
   async getScreenStatistics(id: string, days: number = 30): Promise<ApiResponse<any[]>> {
     try {
       const statistics = await screensService.getScreenStatistics(id, days);
-      
+
       return {
         success: true,
-        data: statistics
+        data: statistics,
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Erreur inconnue'
+        error: error instanceof Error ? error.message : 'Erreur inconnue',
       };
     }
   },
@@ -278,15 +282,15 @@ export const screensApi = {
   async getScreenAlerts(screenId?: string, resolved?: boolean): Promise<ApiResponse<any[]>> {
     try {
       const alerts = await screensService.getScreenAlerts(screenId, resolved);
-      
+
       return {
         success: true,
-        data: alerts
+        data: alerts,
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Erreur inconnue'
+        error: error instanceof Error ? error.message : 'Erreur inconnue',
       };
     }
   },
@@ -295,15 +299,15 @@ export const screensApi = {
   async resolveAlert(id: string): Promise<ApiResponse<any>> {
     try {
       const alert = await screensService.resolveAlert(id);
-      
+
       return {
         success: true,
-        data: alert
+        data: alert,
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Erreur inconnue'
+        error: error instanceof Error ? error.message : 'Erreur inconnue',
       };
     }
   },
@@ -312,15 +316,15 @@ export const screensApi = {
   async getScreenActivityLogs(id: string, limit: number = 50): Promise<ApiResponse<any[]>> {
     try {
       const logs = await screensService.getScreenActivityLogs(id, limit);
-      
+
       return {
         success: true,
-        data: logs
+        data: logs,
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Erreur inconnue'
+        error: error instanceof Error ? error.message : 'Erreur inconnue',
       };
     }
   },
@@ -329,14 +333,14 @@ export const screensApi = {
   async checkUnavailabilityStatus(): Promise<ApiResponse<void>> {
     try {
       await screensService.checkUnavailabilityStatus();
-      
+
       return {
-        success: true
+        success: true,
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Erreur inconnue'
+        error: error instanceof Error ? error.message : 'Erreur inconnue',
       };
     }
   },
@@ -345,16 +349,16 @@ export const screensApi = {
   async getGlobalStatistics(): Promise<ApiResponse<any>> {
     try {
       const statistics = await screensService.getGlobalStatistics();
-      
+
       return {
         success: true,
-        data: statistics
+        data: statistics,
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Erreur inconnue'
+        error: error instanceof Error ? error.message : 'Erreur inconnue',
       };
     }
-  }
-}; 
+  },
+};

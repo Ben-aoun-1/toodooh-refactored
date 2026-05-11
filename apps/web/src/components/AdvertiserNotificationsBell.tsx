@@ -46,8 +46,14 @@ export default function AdvertiserNotificationsBell({ userId, emphasized = false
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
   const notificationScope = 'advertiser' as const;
 
-  const unreadCount = useMemo(() => items.filter((item) => !readIds.has(item.id)).length, [items, readIds]);
-  const visibleItems = useMemo(() => items.filter((item) => !readIds.has(item.id)), [items, readIds]);
+  const unreadCount = useMemo(
+    () => items.filter((item) => !readIds.has(item.id)).length,
+    [items, readIds],
+  );
+  const visibleItems = useMemo(
+    () => items.filter((item) => !readIds.has(item.id)),
+    [items, readIds],
+  );
 
   useEffect(() => {
     const onClickOutside = (e: MouseEvent) => {
@@ -80,9 +86,11 @@ export default function AdvertiserNotificationsBell({ userId, emphasized = false
           .eq('scope', notificationScope),
         supabase
           .from('user_notifications')
-          .select('id, recipient_user_id, scope, external_key, kind, title, action_path, action_label, created_at, is_active')
+          .select(
+            'id, recipient_user_id, scope, external_key, kind, title, action_path, action_label, created_at, is_active',
+          )
           .order('created_at', { ascending: false })
-          .limit(50)
+          .limit(50),
       ]);
       const profile = profileRes.data;
       const campaigns = campaignsRes.data;
@@ -95,11 +103,14 @@ export default function AdvertiserNotificationsBell({ userId, emphasized = false
       console.log('🔔 Advertiser notifications loaded:', {
         userId,
         persistedCount: persistedNotifications.length,
-        readsCount: (reads || []).length
+        readsCount: (reads || []).length,
       });
 
       if (campaignsRes.error) {
-        console.error('Erreur chargement campagnes pour notifications annonceur:', campaignsRes.error);
+        console.error(
+          'Erreur chargement campagnes pour notifications annonceur:',
+          campaignsRes.error,
+        );
       }
       if (notificationsRes.error) {
         console.error('Erreur chargement user_notifications annonceur:', notificationsRes.error);
@@ -108,13 +119,13 @@ export default function AdvertiserNotificationsBell({ userId, emphasized = false
         console.error('Erreur chargement user_notification_reads annonceur:', readsRes.error);
       }
 
-      const campaignRows = campaignsRes.error ? [] : (campaigns || []);
+      const campaignRows = campaignsRes.error ? [] : campaigns || [];
       const videoIds = Array.from(
         new Set(
           campaignRows
             .map((campaign: any) => campaign.video_id)
-            .filter((value: any): value is string => typeof value === 'string' && value.length > 0)
-        )
+            .filter((value: any): value is string => typeof value === 'string' && value.length > 0),
+        ),
       );
 
       const approvedVideoMap = new Map<string, Date>();
@@ -146,7 +157,7 @@ export default function AdvertiserNotificationsBell({ userId, emphasized = false
           title: n?.title || 'Notification',
           timestamp: toDate(n?.created_at) || new Date(),
           actionLabel: n?.action_label || 'Voir',
-          action: () => navigate(n?.action_path || '/my-campaigns')
+          action: () => navigate(n?.action_path || '/my-campaigns'),
         });
       });
 
@@ -158,7 +169,7 @@ export default function AdvertiserNotificationsBell({ userId, emphasized = false
           title: 'Votre compte a ete approuve par l administrateur.',
           timestamp: profileTimestamp,
           actionLabel: 'Ouvrir les parametres',
-          action: () => navigate('/profile')
+          action: () => navigate('/profile'),
         });
       }
 
@@ -170,12 +181,13 @@ export default function AdvertiserNotificationsBell({ userId, emphasized = false
         // Cas nominal: active + validation approuvée.
         // Fallback robuste: active + vidéo attachée (pour éviter un "trou" si champ validation incomplet).
         const isActivationNotificationCandidate =
-          isActiveCampaign &&
-          (byCampaignStatus || byVideoStatus || Boolean(campaign?.video_id));
+          isActiveCampaign && (byCampaignStatus || byVideoStatus || Boolean(campaign?.video_id));
         if (!isActivationNotificationCandidate) return;
 
         const when =
-          (typeof campaign?.video_id === 'string' ? approvedVideoMap.get(campaign.video_id) : null) ||
+          (typeof campaign?.video_id === 'string'
+            ? approvedVideoMap.get(campaign.video_id)
+            : null) ||
           toDate(campaign?.updated_at) ||
           new Date();
 
@@ -187,7 +199,7 @@ export default function AdvertiserNotificationsBell({ userId, emphasized = false
           title: `Video validee et campagne active : ${campaign?.name || 'Campagne'}`,
           timestamp: when,
           actionLabel: 'Voir mes campagnes',
-          action: () => navigate('/my-campaigns')
+          action: () => navigate('/my-campaigns'),
         });
       });
 
@@ -231,18 +243,16 @@ export default function AdvertiserNotificationsBell({ userId, emphasized = false
   const markRead = async (id: string) => {
     if (!userId) return;
     setReadIds((prev) => new Set(prev).add(id));
-    const { error } = await supabase
-      .from('user_notification_reads')
-      .upsert(
-        {
-          user_id: userId,
-          scope: notificationScope,
-          notification_id: id,
-          read_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        },
-        { onConflict: 'user_id,scope,notification_id' }
-      );
+    const { error } = await supabase.from('user_notification_reads').upsert(
+      {
+        user_id: userId,
+        scope: notificationScope,
+        notification_id: id,
+        read_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id,scope,notification_id' },
+    );
     if (error) {
       console.error('Erreur marquage notification lue (annonceur):', error);
     }
@@ -257,7 +267,7 @@ export default function AdvertiserNotificationsBell({ userId, emphasized = false
       scope: notificationScope,
       notification_id: id,
       read_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
     }));
     const { error } = await supabase
       .from('user_notification_reads')
@@ -282,14 +292,20 @@ export default function AdvertiserNotificationsBell({ userId, emphasized = false
         aria-label="Notifications"
       >
         <Bell className="h-5 w-5" />
-        {unreadCount > 0 ? <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500" /> : null}
+        {unreadCount > 0 ? (
+          <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500" />
+        ) : null}
       </button>
 
       {open ? (
         <div className="absolute right-0 mt-2 w-[560px] max-w-[calc(100vw-24px)] rounded-2xl border border-gray-200 bg-white shadow-xl z-[90] overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
             <h3 className="text-xl leading-none font-semibold text-[#171717]">Notifications</h3>
-            <button type="button" onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-600">
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="text-gray-400 hover:text-gray-600"
+            >
               <X className="h-5 w-5" />
             </button>
           </div>
@@ -311,11 +327,17 @@ export default function AdvertiserNotificationsBell({ userId, emphasized = false
                         ) : (
                           <Video className="h-4 w-4" />
                         )}
-                        {!isRead ? <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-red-500" /> : null}
+                        {!isRead ? (
+                          <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-red-500" />
+                        ) : null}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-base leading-tight font-medium text-[#171717]">{item.title}</p>
-                        <p className="text-sm leading-tight text-[#5C5C5C] mt-0.5">{relativeTime(item.timestamp)}</p>
+                        <p className="text-base leading-tight font-medium text-[#171717]">
+                          {item.title}
+                        </p>
+                        <p className="text-sm leading-tight text-[#5C5C5C] mt-0.5">
+                          {relativeTime(item.timestamp)}
+                        </p>
                         <div className="mt-3 flex items-center gap-2">
                           {!isRead ? (
                             <button

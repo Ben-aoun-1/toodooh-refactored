@@ -37,7 +37,12 @@ export interface AdminScreen {
   };
 }
 
-export type AdminLocationStatus = 'active' | 'inactive' | 'maintenance' | 'unavailable' | 'no_screens';
+export type AdminLocationStatus =
+  | 'active'
+  | 'inactive'
+  | 'maintenance'
+  | 'unavailable'
+  | 'no_screens';
 
 export interface AdminLocation {
   id: string;
@@ -214,7 +219,7 @@ export const adminScreensService = {
       status?: AdminLocationStatus;
       owner_id?: string;
       search?: string;
-    } = {}
+    } = {},
   ): Promise<{ locations: AdminLocation[]; total: number; totalPages: number }> {
     try {
       let query = supabase
@@ -239,20 +244,24 @@ export const adminScreensService = {
       const locationIds = locations.map((l) => l.id);
       const ownerIds = [...new Set(locations.map((l) => l.owner_id))];
 
-      const [{ data: ownersData, error: ownersError }, { data: screensData, error: screensError }] = await Promise.all([
-        ownerIds.length
-          ? supabase.from('business_profiles').select('user_id, business_name').in('user_id', ownerIds)
-          : Promise.resolve({ data: [], error: null }),
-        locationIds.length
-          ? supabase
-              .from('screens')
-              .select(
-                'id, name, location_id, owner_id, location, screen_type, status, is_online, monthly_revenue, total_revenue, created_at, updated_at'
-              )
-              .in('location_id', locationIds)
-              .order('created_at', { ascending: false })
-          : Promise.resolve({ data: [], error: null }),
-      ]);
+      const [{ data: ownersData, error: ownersError }, { data: screensData, error: screensError }] =
+        await Promise.all([
+          ownerIds.length
+            ? supabase
+                .from('business_profiles')
+                .select('user_id, business_name')
+                .in('user_id', ownerIds)
+            : Promise.resolve({ data: [], error: null }),
+          locationIds.length
+            ? supabase
+                .from('screens')
+                .select(
+                  'id, name, location_id, owner_id, location, screen_type, status, is_online, monthly_revenue, total_revenue, created_at, updated_at',
+                )
+                .in('location_id', locationIds)
+                .order('created_at', { ascending: false })
+            : Promise.resolve({ data: [], error: null }),
+        ]);
 
       if (ownersError) throw ownersError;
       if (screensError) throw screensError;
@@ -288,7 +297,10 @@ export const adminScreensService = {
           status: computeLocationStatus(locationScreens),
           screens_count: locationScreens.length,
           online_screens_count: locationScreens.filter((s) => s.is_online).length,
-          monthly_revenue: locationScreens.reduce((sum, s) => sum + (Number(s.monthly_revenue) || 0), 0),
+          monthly_revenue: locationScreens.reduce(
+            (sum, s) => sum + (Number(s.monthly_revenue) || 0),
+            0,
+          ),
           created_at: location.created_at,
           updated_at: location.updated_at,
           screens: locationScreens,
@@ -320,15 +332,13 @@ export const adminScreensService = {
       is_online?: boolean;
       search?: string;
       owner_id?: string;
-    } = {}
+    } = {},
   ): Promise<{ screens: AdminScreen[]; total: number; totalPages: number }> {
     try {
       console.log('🔍 getScreens called with filters:', filters);
-      
-      let query = supabase
-        .from('screens')
-        .select('*', { count: 'exact' });
-      
+
+      let query = supabase.from('screens').select('*', { count: 'exact' });
+
       console.log('📊 Query created for screens table');
 
       // Appliquer les filtres
@@ -363,27 +373,29 @@ export const adminScreensService = {
         console.error('Error details:', JSON.stringify(error, null, 2));
         throw error;
       }
-      
+
       console.log('✅ Screens fetched successfully:', data?.length || 0, 'screens');
 
       // Récupérer les noms des propriétaires
-      const ownerIds = [...new Set((data || []).map(s => s.owner_id))];
+      const ownerIds = [...new Set((data || []).map((s) => s.owner_id))];
       const { data: owners } = await supabase
         .from('business_profiles')
         .select('user_id, business_name')
         .in('user_id', ownerIds);
 
-      const ownerMap = new Map(owners?.map(o => [o.user_id, o.business_name]) || []);
+      const ownerMap = new Map(owners?.map((o) => [o.user_id, o.business_name]) || []);
 
       // Transformer les données
-      const screens: AdminScreen[] = (data || []).map(screen => ({
+      const screens: AdminScreen[] = (data || []).map((screen) => ({
         ...screen,
-        coordinates: screen.coordinates ? {
-          lat: screen.coordinates.x,
-          lng: screen.coordinates.y
-        } : { lat: 0, lng: 0 },
+        coordinates: screen.coordinates
+          ? {
+              lat: screen.coordinates.x,
+              lng: screen.coordinates.y,
+            }
+          : { lat: 0, lng: 0 },
         owner_name: ownerMap.get(screen.owner_id) || 'N/A',
-        owner_business_name: ownerMap.get(screen.owner_id) || 'N/A'
+        owner_business_name: ownerMap.get(screen.owner_id) || 'N/A',
       }));
 
       const totalPages = Math.ceil((count || 0) / limit);
@@ -391,7 +403,7 @@ export const adminScreensService = {
       return {
         screens,
         total: count || 0,
-        totalPages
+        totalPages,
       };
     } catch (error) {
       console.error('Erreur lors de la récupération des écrans:', error);
@@ -409,7 +421,7 @@ export const adminScreensService = {
         .single();
 
       if (error) {
-        console.error('Erreur lors de la récupération de l\'écran:', error);
+        console.error("Erreur lors de la récupération de l'écran:", error);
         return null;
       }
 
@@ -422,15 +434,17 @@ export const adminScreensService = {
 
       return {
         ...data,
-        coordinates: data.coordinates ? {
-          lat: data.coordinates.x,
-          lng: data.coordinates.y
-        } : { lat: 0, lng: 0 },
+        coordinates: data.coordinates
+          ? {
+              lat: data.coordinates.x,
+              lng: data.coordinates.y,
+            }
+          : { lat: 0, lng: 0 },
         owner_name: owner?.business_name || 'N/A',
-        owner_business_name: owner?.business_name || 'N/A'
+        owner_business_name: owner?.business_name || 'N/A',
       };
     } catch (error) {
-      console.error('Erreur lors de la récupération de l\'écran:', error);
+      console.error("Erreur lors de la récupération de l'écran:", error);
       return null;
     }
   },
@@ -439,7 +453,9 @@ export const adminScreensService = {
   async createScreen(screenData: CreateScreenData): Promise<AdminScreen | null> {
     try {
       const coordinatesPoint =
-        screenData.coordinates && screenData.coordinates.lng != null && screenData.coordinates.lat != null
+        screenData.coordinates &&
+        screenData.coordinates.lng != null &&
+        screenData.coordinates.lat != null
           ? `POINT(${screenData.coordinates.lng} ${screenData.coordinates.lat})`
           : null;
 
@@ -460,18 +476,20 @@ export const adminScreensService = {
           is_online: screenData.is_online !== undefined ? screenData.is_online : true,
           installation_date: screenData.installation_date,
           warranty_expiry_date: screenData.warranty_expiry_date,
-          monthly_revenue: screenData.monthly_revenue || 0
+          monthly_revenue: screenData.monthly_revenue || 0,
         })
         .select('*')
         .single();
 
       if (error) {
-        console.error('Erreur lors de la création de l\'écran:', error);
+        console.error("Erreur lors de la création de l'écran:", error);
         throw error;
       }
 
       if (!data.location_id) {
-        throw new Error('Écran créé sans location_id. Vérifiez la migration SQL de liaison auto location_id.');
+        throw new Error(
+          'Écran créé sans location_id. Vérifiez la migration SQL de liaison auto location_id.',
+        );
       }
 
       // Récupérer le nom du propriétaire
@@ -483,15 +501,17 @@ export const adminScreensService = {
 
       return {
         ...data,
-        coordinates: data.coordinates ? {
-          lat: data.coordinates.x,
-          lng: data.coordinates.y
-        } : { lat: 0, lng: 0 },
+        coordinates: data.coordinates
+          ? {
+              lat: data.coordinates.x,
+              lng: data.coordinates.y,
+            }
+          : { lat: 0, lng: 0 },
         owner_name: owner?.business_name || 'N/A',
-        owner_business_name: owner?.business_name || 'N/A'
+        owner_business_name: owner?.business_name || 'N/A',
       };
     } catch (error) {
-      console.error('Erreur lors de la création de l\'écran:', error);
+      console.error("Erreur lors de la création de l'écran:", error);
       throw error;
     }
   },
@@ -500,7 +520,7 @@ export const adminScreensService = {
   async updateScreen(screenId: string, updateData: UpdateScreenData): Promise<AdminScreen | null> {
     try {
       const updateFields: any = { ...updateData };
-      
+
       if (updateData.coordinates) {
         updateFields.coordinates = `POINT(${updateData.coordinates.lng} ${updateData.coordinates.lat})`;
       }
@@ -513,7 +533,7 @@ export const adminScreensService = {
         .single();
 
       if (error) {
-        console.error('Erreur lors de la mise à jour de l\'écran:', error);
+        console.error("Erreur lors de la mise à jour de l'écran:", error);
         throw error;
       }
 
@@ -526,15 +546,17 @@ export const adminScreensService = {
 
       return {
         ...data,
-        coordinates: data.coordinates ? {
-          lat: data.coordinates.x,
-          lng: data.coordinates.y
-        } : { lat: 0, lng: 0 },
+        coordinates: data.coordinates
+          ? {
+              lat: data.coordinates.x,
+              lng: data.coordinates.y,
+            }
+          : { lat: 0, lng: 0 },
         owner_name: owner?.business_name || 'N/A',
-        owner_business_name: owner?.business_name || 'N/A'
+        owner_business_name: owner?.business_name || 'N/A',
       };
     } catch (error) {
-      console.error('Erreur lors de la mise à jour de l\'écran:', error);
+      console.error("Erreur lors de la mise à jour de l'écran:", error);
       throw error;
     }
   },
@@ -542,19 +564,16 @@ export const adminScreensService = {
   // Supprimer un écran
   async deleteScreen(screenId: string): Promise<boolean> {
     try {
-      const { error } = await supabase
-        .from('screens')
-        .delete()
-        .eq('id', screenId);
+      const { error } = await supabase.from('screens').delete().eq('id', screenId);
 
       if (error) {
-        console.error('Erreur lors de la suppression de l\'écran:', error);
+        console.error("Erreur lors de la suppression de l'écran:", error);
         throw error;
       }
 
       return true;
     } catch (error) {
-      console.error('Erreur lors de la suppression de l\'écran:', error);
+      console.error("Erreur lors de la suppression de l'écran:", error);
       throw error;
     }
   },
@@ -563,7 +582,7 @@ export const adminScreensService = {
   async getScreenAffluenceData(
     screenId: string,
     page: number = 1,
-    limit: number = 20
+    limit: number = 20,
   ): Promise<{ data: ScreenAffluenceData[]; total: number; totalPages: number }> {
     try {
       const from = (page - 1) * limit;
@@ -577,7 +596,7 @@ export const adminScreensService = {
         .range(from, to);
 
       if (error) {
-        console.error('Erreur lors de la récupération des données d\'affluence:', error);
+        console.error("Erreur lors de la récupération des données d'affluence:", error);
         throw error;
       }
 
@@ -586,16 +605,18 @@ export const adminScreensService = {
       return {
         data: data || [],
         total: count || 0,
-        totalPages
+        totalPages,
       };
     } catch (error) {
-      console.error('Erreur lors de la récupération des données d\'affluence:', error);
+      console.error("Erreur lors de la récupération des données d'affluence:", error);
       throw error;
     }
   },
 
   // Créer des données d'affluence
-  async createAffluenceData(affluenceData: CreateAffluenceData): Promise<ScreenAffluenceData | null> {
+  async createAffluenceData(
+    affluenceData: CreateAffluenceData,
+  ): Promise<ScreenAffluenceData | null> {
     try {
       const { data, error } = await supabase
         .from('screen_affluence_data')
@@ -619,19 +640,19 @@ export const adminScreensService = {
           global_id: affluenceData.global_id,
           dwell_time: affluenceData.dwell_time,
           timestamp: new Date().toISOString(),
-          last_heartbeat_time: new Date().toISOString()
+          last_heartbeat_time: new Date().toISOString(),
         })
         .select()
         .single();
 
       if (error) {
-        console.error('Erreur lors de la création des données d\'affluence:', error);
+        console.error("Erreur lors de la création des données d'affluence:", error);
         throw error;
       }
 
       return data;
     } catch (error) {
-      console.error('Erreur lors de la création des données d\'affluence:', error);
+      console.error("Erreur lors de la création des données d'affluence:", error);
       throw error;
     }
   },
@@ -639,7 +660,7 @@ export const adminScreensService = {
   // Mettre à jour des données d'affluence
   async updateAffluenceData(
     affluenceId: string,
-    updateData: UpdateAffluenceData
+    updateData: UpdateAffluenceData,
   ): Promise<ScreenAffluenceData | null> {
     try {
       const { data, error } = await supabase
@@ -650,13 +671,13 @@ export const adminScreensService = {
         .single();
 
       if (error) {
-        console.error('Erreur lors de la mise à jour des données d\'affluence:', error);
+        console.error("Erreur lors de la mise à jour des données d'affluence:", error);
         throw error;
       }
 
       return data;
     } catch (error) {
-      console.error('Erreur lors de la mise à jour des données d\'affluence:', error);
+      console.error("Erreur lors de la mise à jour des données d'affluence:", error);
       throw error;
     }
   },
@@ -664,19 +685,16 @@ export const adminScreensService = {
   // Supprimer des données d'affluence
   async deleteAffluenceData(affluenceId: string): Promise<boolean> {
     try {
-      const { error } = await supabase
-        .from('screen_affluence_data')
-        .delete()
-        .eq('id', affluenceId);
+      const { error } = await supabase.from('screen_affluence_data').delete().eq('id', affluenceId);
 
       if (error) {
-        console.error('Erreur lors de la suppression des données d\'affluence:', error);
+        console.error("Erreur lors de la suppression des données d'affluence:", error);
         throw error;
       }
 
       return true;
     } catch (error) {
-      console.error('Erreur lors de la suppression des données d\'affluence:', error);
+      console.error("Erreur lors de la suppression des données d'affluence:", error);
       throw error;
     }
   },
@@ -695,24 +713,25 @@ export const adminScreensService = {
 
       const stats: ScreenStats = {
         total_screens: screens?.length || 0,
-        active_screens: screens?.filter(s => s.status === 'active').length || 0,
-        online_screens: screens?.filter(s => s.is_online).length || 0,
-        maintenance_screens: screens?.filter(s => s.status === 'maintenance').length || 0,
+        active_screens: screens?.filter((s) => s.status === 'active').length || 0,
+        online_screens: screens?.filter((s) => s.is_online).length || 0,
+        maintenance_screens: screens?.filter((s) => s.status === 'maintenance').length || 0,
         total_revenue: screens?.reduce((sum, s) => sum + (s.total_revenue || 0), 0) || 0,
-        avg_monthly_revenue: screens?.length ? 
-          screens.reduce((sum, s) => sum + (s.monthly_revenue || 0), 0) / screens.length : 0,
+        avg_monthly_revenue: screens?.length
+          ? screens.reduce((sum, s) => sum + (s.monthly_revenue || 0), 0) / screens.length
+          : 0,
         screens_by_type: {
-          led: screens?.filter(s => s.screen_type === 'led').length || 0,
-          lcd: screens?.filter(s => s.screen_type === 'lcd').length || 0,
-          projector: screens?.filter(s => s.screen_type === 'projector').length || 0,
-          other: screens?.filter(s => s.screen_type === 'other').length || 0
+          led: screens?.filter((s) => s.screen_type === 'led').length || 0,
+          lcd: screens?.filter((s) => s.screen_type === 'lcd').length || 0,
+          projector: screens?.filter((s) => s.screen_type === 'projector').length || 0,
+          other: screens?.filter((s) => s.screen_type === 'other').length || 0,
         },
         screens_by_status: {
-          active: screens?.filter(s => s.status === 'active').length || 0,
-          inactive: screens?.filter(s => s.status === 'inactive').length || 0,
-          maintenance: screens?.filter(s => s.status === 'maintenance').length || 0,
-          unavailable: screens?.filter(s => s.status === 'unavailable').length || 0
-        }
+          active: screens?.filter((s) => s.status === 'active').length || 0,
+          inactive: screens?.filter((s) => s.status === 'inactive').length || 0,
+          maintenance: screens?.filter((s) => s.status === 'maintenance').length || 0,
+          unavailable: screens?.filter((s) => s.status === 'unavailable').length || 0,
+        },
       };
 
       return stats;
@@ -759,5 +778,5 @@ export const adminScreensService = {
       console.error('Erreur lors de la récupération des propriétaires:', error);
       throw error;
     }
-  }
+  },
 };

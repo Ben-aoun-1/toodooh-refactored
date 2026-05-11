@@ -1,13 +1,5 @@
 import React, { useState } from 'react';
-import { 
-  Gift, 
-  Star, 
-  X, 
-  ShoppingCart, 
-  CheckCircle,
-  AlertTriangle,
-  Info
-} from 'lucide-react';
+import { Gift, Star, X, ShoppingCart, CheckCircle, AlertTriangle, Info } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 interface GiftItem {
@@ -28,7 +20,7 @@ const giftItems: GiftItem[] = [
     pointsRequired: 500,
     image: '🛒',
     category: 'vouchers',
-    available: true
+    available: true,
   },
   {
     id: '2',
@@ -37,16 +29,16 @@ const giftItems: GiftItem[] = [
     pointsRequired: 800,
     image: '🎧',
     category: 'electronics',
-    available: true
+    available: true,
   },
   {
     id: '3',
     name: 'Montre connectée',
-    description: 'Montre intelligente avec suivi d\'activité',
+    description: "Montre intelligente avec suivi d'activité",
     pointsRequired: 1200,
     image: '⌚',
     category: 'electronics',
-    available: true
+    available: true,
   },
   {
     id: '4',
@@ -55,7 +47,7 @@ const giftItems: GiftItem[] = [
     pointsRequired: 750,
     image: '🍽️',
     category: 'vouchers',
-    available: true
+    available: true,
   },
   {
     id: '5',
@@ -64,17 +56,17 @@ const giftItems: GiftItem[] = [
     pointsRequired: 600,
     image: '🔋',
     category: 'gadgets',
-    available: true
+    available: true,
   },
   {
     id: '6',
     name: 'Expérience spa',
-    description: 'Séance de spa d\'une heure',
+    description: "Séance de spa d'une heure",
     pointsRequired: 1000,
     image: '💆',
     category: 'experiences',
-    available: false
-  }
+    available: false,
+  },
 ];
 
 interface GiftCatalogProps {
@@ -93,12 +85,13 @@ export default function GiftCatalog({ isOpen, onClose, userPoints }: GiftCatalog
     { id: 'electronics', name: 'Électronique', icon: '📱' },
     { id: 'vouchers', name: 'Cartes cadeaux', icon: '💳' },
     { id: 'experiences', name: 'Expériences', icon: '🌟' },
-    { id: 'gadgets', name: 'Gadgets', icon: '⚡' }
+    { id: 'gadgets', name: 'Gadgets', icon: '⚡' },
   ];
 
-  const filteredGifts = selectedCategory === 'all' 
-    ? giftItems 
-    : giftItems.filter(gift => gift.category === selectedCategory);
+  const filteredGifts =
+    selectedCategory === 'all'
+      ? giftItems
+      : giftItems.filter((gift) => gift.category === selectedCategory);
 
   const handleExchange = async (gift: GiftItem) => {
     if (userPoints < gift.pointsRequired) {
@@ -107,12 +100,14 @@ export default function GiftCatalog({ isOpen, onClose, userPoints }: GiftCatalog
     }
 
     setIsExchanging(true);
-    
+
     // Simuler l'échange
     setTimeout(() => {
       setIsExchanging(false);
       setSelectedGift(null);
-      toast.success(`Félicitations ! Vous avez échangé "${gift.name}" contre ${gift.pointsRequired} points.`);
+      toast.success(
+        `Félicitations ! Vous avez échangé "${gift.name}" contre ${gift.pointsRequired} points.`,
+      );
     }, 2000);
   };
 
@@ -172,7 +167,7 @@ export default function GiftCatalog({ isOpen, onClose, userPoints }: GiftCatalog
                   <h3 className="text-2xl font-bold text-gray-900 mb-2">{selectedGift.name}</h3>
                   <p className="text-gray-600">{selectedGift.description}</p>
                 </div>
-                
+
                 <div className="space-y-4">
                   <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                     <span className="text-gray-700">Points requis :</span>
@@ -181,7 +176,7 @@ export default function GiftCatalog({ isOpen, onClose, userPoints }: GiftCatalog
                       <span className="font-bold text-gray-900">{selectedGift.pointsRequired}</span>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                     <span className="text-gray-700">Vos points :</span>
                     <div className="flex items-center space-x-2">
@@ -189,14 +184,16 @@ export default function GiftCatalog({ isOpen, onClose, userPoints }: GiftCatalog
                       <span className="font-bold text-gray-900">{userPoints}</span>
                     </div>
                   </div>
-                  
+
                   {!selectedGift.available && (
                     <div className="flex items-center space-x-2 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
                       <AlertTriangle className="h-5 w-5 text-yellow-600" />
-                      <span className="text-yellow-800">Ce cadeau n'est pas disponible pour le moment</span>
+                      <span className="text-yellow-800">
+                        Ce cadeau n'est pas disponible pour le moment
+                      </span>
                     </div>
                   )}
-                  
+
                   <div className="flex space-x-3">
                     <button
                       onClick={() => setSelectedGift(null)}
@@ -206,7 +203,11 @@ export default function GiftCatalog({ isOpen, onClose, userPoints }: GiftCatalog
                     </button>
                     <button
                       onClick={() => handleExchange(selectedGift)}
-                      disabled={!selectedGift.available || userPoints < selectedGift.pointsRequired || isExchanging}
+                      disabled={
+                        !selectedGift.available ||
+                        userPoints < selectedGift.pointsRequired ||
+                        isExchanging
+                      }
                       className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center space-x-2"
                     >
                       {isExchanging ? (
@@ -240,26 +241,26 @@ export default function GiftCatalog({ isOpen, onClose, userPoints }: GiftCatalog
                     <div className="text-4xl mb-4">{gift.image}</div>
                     <h3 className="text-lg font-semibold text-gray-900 mb-2">{gift.name}</h3>
                     <p className="text-sm text-gray-600 mb-4">{gift.description}</p>
-                    
+
                     <div className="flex items-center justify-center space-x-2 mb-4">
                       <Star className="h-4 w-4 text-purple-600" />
                       <span className="font-bold text-gray-900">{gift.pointsRequired} points</span>
                     </div>
-                    
+
                     {!gift.available && (
                       <div className="flex items-center justify-center space-x-1 text-yellow-600 text-sm">
                         <Info className="h-4 w-4" />
                         <span>Non disponible</span>
                       </div>
                     )}
-                    
+
                     {gift.available && userPoints >= gift.pointsRequired && (
                       <div className="flex items-center justify-center space-x-1 text-green-600 text-sm">
                         <CheckCircle className="h-4 w-4" />
                         <span>Disponible</span>
                       </div>
                     )}
-                    
+
                     {gift.available && userPoints < gift.pointsRequired && (
                       <div className="flex items-center justify-center space-x-1 text-red-600 text-sm">
                         <AlertTriangle className="h-4 w-4" />
@@ -275,4 +276,4 @@ export default function GiftCatalog({ isOpen, onClose, userPoints }: GiftCatalog
       </div>
     </div>
   );
-} 
+}

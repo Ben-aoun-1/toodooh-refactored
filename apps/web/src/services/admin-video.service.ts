@@ -6,17 +6,17 @@ export const adminVideoService = {
   async getVideos(statusFilter?: 'pending' | 'approved' | 'rejected' | 'all'): Promise<Video[]> {
     try {
       console.log('🔍 Fetching videos for admin validation...');
-      
+
       let query = supabase
         .from('admin_videos_view')
         .select('*')
         .gt('campaigns_count', 0) // Seulement les vidéos utilisées dans au moins 1 campagne
         .order('created_at', { ascending: false });
-      
+
       if (statusFilter && statusFilter !== 'all') {
         query = query.eq('validation_status', statusFilter);
       }
-      
+
       const { data, error } = await query;
 
       if (error) {
@@ -44,13 +44,17 @@ export const adminVideoService = {
       const eligibleVideoIds = new Set(
         (nonDraftLinks || [])
           .map((r: any) => r.video_id)
-          .filter((id: any): id is string => typeof id === 'string' && id.length > 0)
+          .filter((id: any): id is string => typeof id === 'string' && id.length > 0),
       );
 
       const filteredVideos = videos.filter((v: any) => eligibleVideoIds.has(v.id));
 
-      console.log('✅ Videos fetched successfully:', filteredVideos.length, 'videos (hors brouillons)');
-      
+      console.log(
+        '✅ Videos fetched successfully:',
+        filteredVideos.length,
+        'videos (hors brouillons)',
+      );
+
       return filteredVideos;
     } catch (error) {
       console.error('❌ Exception in getVideos:', error);
@@ -62,7 +66,7 @@ export const adminVideoService = {
   async getVideoDetails(videoId: string): Promise<Video & { campaigns: CampaignUsingVideo[] }> {
     try {
       console.log('🔍 Fetching video details:', videoId);
-      
+
       // Récupérer la vidéo
       const { data: videoData, error: videoError } = await supabase
         .from('admin_videos_view')
@@ -76,8 +80,10 @@ export const adminVideoService = {
       }
 
       // Récupérer les campagnes utilisant cette vidéo
-      const { data: campaignsData, error: campaignsError } = await supabase
-        .rpc('get_campaigns_using_video', { video_uuid: videoId });
+      const { data: campaignsData, error: campaignsError } = await supabase.rpc(
+        'get_campaigns_using_video',
+        { video_uuid: videoId },
+      );
 
       if (campaignsError) {
         console.error('⚠️ Warning fetching campaigns:', campaignsError);
@@ -86,7 +92,7 @@ export const adminVideoService = {
 
       return {
         ...videoData,
-        campaigns: campaignsData || []
+        campaigns: campaignsData || [],
       };
     } catch (error) {
       console.error('❌ Exception in getVideoDetails:', error);
@@ -98,17 +104,17 @@ export const adminVideoService = {
   async approveVideo(videoId: string, adminId: string, notes?: string): Promise<boolean> {
     try {
       console.log('🔄 Approving video:', videoId, 'by admin:', adminId);
-      
+
       const updateData: any = {
         validation_status: 'approved',
         validated_by: adminId,
-        validated_at: new Date().toISOString()
+        validated_at: new Date().toISOString(),
       };
-      
+
       if (notes) {
         updateData.validation_notes = notes;
       }
-      
+
       const { data, error } = await supabase
         .from('videos')
         .update(updateData)
@@ -121,24 +127,28 @@ export const adminVideoService = {
       }
 
       console.log('✅ Video approved successfully:', data);
-      
+
       // Activer automatiquement les campagnes en attente qui utilisent cette vidéo
       // et injecter les informations de publication par heure.
       // On récupère d'abord les campagnes via RPC (source fiable du mapping vidéo -> campagnes).
-      const { data: campaignLinks, error: campaignLinksError } = await supabase
-        .rpc('get_campaigns_using_video', { video_uuid: videoId });
+      const { data: campaignLinks, error: campaignLinksError } = await supabase.rpc(
+        'get_campaigns_using_video',
+        { video_uuid: videoId },
+      );
 
       if (campaignLinksError) {
         console.error('❌ Error fetching campaigns using video (RPC):', campaignLinksError);
-        throw new Error(campaignLinksError.message || 'Impossible de récupérer les campagnes liées à la vidéo');
+        throw new Error(
+          campaignLinksError.message || 'Impossible de récupérer les campagnes liées à la vidéo',
+        );
       }
 
       const linkedCampaignIds = Array.from(
         new Set(
           (campaignLinks || [])
             .map((row: any) => row?.id || row?.campaign_id)
-            .filter((id: any): id is string => typeof id === 'string' && id.length > 0)
-        )
+            .filter((id: any): id is string => typeof id === 'string' && id.length > 0),
+        ),
       );
 
       // Fallback robuste: si la RPC ne remonte rien, on retombe sur campaigns.video_id.
@@ -155,43 +165,46 @@ export const adminVideoService = {
             new Set(
               (fallbackCampaignRows || [])
                 .map((row: any) => row?.id)
-                .filter((id: any): id is string => typeof id === 'string' && id.length > 0)
-            )
+                .filter((id: any): id is string => typeof id === 'string' && id.length > 0),
+            ),
           );
         }
       }
 
-      const { data: campaigns, error: campaignsError } = effectiveCampaignIds.length > 0
-        ? await supabase
-            .from('campaigns')
-            .select('id, name, user_id, status, content_validation_status')
-            .in('id', effectiveCampaignIds)
-            .in('status', ['pending'])
-        : { data: [], error: null as any };
-      
+      const { data: campaigns, error: campaignsError } =
+        effectiveCampaignIds.length > 0
+          ? await supabase
+              .from('campaigns')
+              .select('id, name, user_id, status, content_validation_status')
+              .in('id', effectiveCampaignIds)
+              .in('status', ['pending'])
+          : { data: [], error: null as any };
+
       if (campaignsError) {
         console.error('❌ Error loading linked pending campaigns:', campaignsError);
-        throw new Error(campaignsError.message || 'Impossible de charger les campagnes liées à la vidéo');
+        throw new Error(
+          campaignsError.message || 'Impossible de charger les campagnes liées à la vidéo',
+        );
       }
 
       if (campaigns && campaigns.length > 0) {
         console.log(`🔄 Activation de ${campaigns.length} campagne(s) utilisant cette vidéo...`);
-        
+
         // Importer le service de campagne pour utiliser injectCampaignPublicationSchedule
         const { campaignService } = await import('./campaign.service');
-        
+
         for (const campaign of campaigns) {
           // Vérifier le solde avant d'activer
           const { balanceService } = await import('./balance.service');
           const balanceCheck = await balanceService.checkCampaignBalance(campaign.id);
-          
+
           if (balanceCheck && balanceCheck.has_sufficient_balance) {
             // Activer la campagne
             const { error: activateError } = await supabase
               .from('campaigns')
-              .update({ 
+              .update({
                 status: 'active',
-                content_validation_status: 'approved'
+                content_validation_status: 'approved',
               })
               .eq('id', campaign.id);
 
@@ -215,14 +228,14 @@ export const adminVideoService = {
                   entity_type: 'campaign',
                   entity_id: campaign.id,
                   external_key: `video-approved-active-${campaign.id}`,
-                  created_by: adminId
+                  created_by: adminId,
                 },
-                { onConflict: 'external_key' }
+                { onConflict: 'external_key' },
               );
             if (advertiserNotificationError) {
               console.error(
                 `❌ Insert notification annonceur impossible (${campaign.id}):`,
-                advertiserNotificationError
+                advertiserNotificationError,
               );
             }
 
@@ -233,9 +246,14 @@ export const adminVideoService = {
               .select('screen_id')
               .eq('campaign_id', campaign.id);
             if (campaignScreensError) {
-              console.error(`❌ Lecture campaign_screens impossible (${campaign.id}):`, campaignScreensError);
+              console.error(
+                `❌ Lecture campaign_screens impossible (${campaign.id}):`,
+                campaignScreensError,
+              );
             } else {
-              const screenIds = (campaignScreens || []).map((r: any) => r.screen_id).filter(Boolean);
+              const screenIds = (campaignScreens || [])
+                .map((r: any) => r.screen_id)
+                .filter(Boolean);
               if (screenIds.length > 0) {
                 const { data: screensOwners, error: screensOwnersError } = await supabase
                   .from('screens')
@@ -243,30 +261,42 @@ export const adminVideoService = {
                   .in('id', screenIds);
 
                 if (screensOwnersError) {
-                  console.error(`❌ Lecture owners écrans impossible (${campaign.id}):`, screensOwnersError);
+                  console.error(
+                    `❌ Lecture owners écrans impossible (${campaign.id}):`,
+                    screensOwnersError,
+                  );
                 } else {
                   const ownerIds = Array.from(
                     new Set(
                       (screensOwners || [])
                         .map((r: any) => r.owner_id)
-                        .filter((ownerId: any): ownerId is string => typeof ownerId === 'string' && ownerId.length > 0)
-                    )
+                        .filter(
+                          (ownerId: any): ownerId is string =>
+                            typeof ownerId === 'string' && ownerId.length > 0,
+                        ),
+                    ),
                   );
 
                   if (ownerIds.length > 0) {
-                    const { data: existingApprovals, error: existingApprovalsError } = await supabase
-                      .from('campaign_owner_approvals')
-                      .select('owner_id')
-                      .eq('campaign_id', campaign.id)
-                      .in('owner_id', ownerIds);
+                    const { data: existingApprovals, error: existingApprovalsError } =
+                      await supabase
+                        .from('campaign_owner_approvals')
+                        .select('owner_id')
+                        .eq('campaign_id', campaign.id)
+                        .in('owner_id', ownerIds);
 
                     if (existingApprovalsError) {
-                      console.error(`❌ Lecture approvals existantes impossible (${campaign.id}):`, existingApprovalsError);
+                      console.error(
+                        `❌ Lecture approvals existantes impossible (${campaign.id}):`,
+                        existingApprovalsError,
+                      );
                     } else {
                       const existingOwnerIds = new Set(
                         (existingApprovals || [])
                           .map((r: any) => r.owner_id)
-                          .filter((id: any): id is string => typeof id === 'string' && id.length > 0)
+                          .filter(
+                            (id: any): id is string => typeof id === 'string' && id.length > 0,
+                          ),
                       );
                       const pendingRows = ownerIds
                         .filter((ownerId) => !existingOwnerIds.has(ownerId))
@@ -274,7 +304,7 @@ export const adminVideoService = {
                           campaign_id: campaign.id,
                           owner_id: ownerId,
                           screen_ids: [],
-                          status: 'pending'
+                          status: 'pending',
                         }));
 
                       if (pendingRows.length > 0) {
@@ -283,7 +313,10 @@ export const adminVideoService = {
                           .insert(pendingRows);
 
                         if (ownerApprovalsError) {
-                          console.error(`❌ Insert approvals owners impossible (${campaign.id}):`, ownerApprovalsError);
+                          console.error(
+                            `❌ Insert approvals owners impossible (${campaign.id}):`,
+                            ownerApprovalsError,
+                          );
                         } else {
                           const ownerNotifications = pendingRows.map((row) => ({
                             recipient_user_id: row.owner_id,
@@ -295,7 +328,7 @@ export const adminVideoService = {
                             entity_type: 'campaign',
                             entity_id: campaign.id,
                             external_key: `owner-pending-${campaign.id}-${row.owner_id}`,
-                            created_by: adminId
+                            created_by: adminId,
                           }));
                           const { error: ownerNotificationsError } = await supabase
                             .from('user_notifications')
@@ -303,7 +336,7 @@ export const adminVideoService = {
                           if (ownerNotificationsError) {
                             console.error(
                               `❌ Insert notifications owners impossible (${campaign.id}):`,
-                              ownerNotificationsError
+                              ownerNotificationsError,
                             );
                           }
                         }
@@ -313,11 +346,13 @@ export const adminVideoService = {
                 }
               }
             }
-            
+
             // Injecter les informations de publication par heure
             await campaignService.injectCampaignPublicationSchedule(campaign.id);
-            
-            console.log(`✅ Campagne ${campaign.id} (${campaign.name || 'Sans nom'}) activée automatiquement`);
+
+            console.log(
+              `✅ Campagne ${campaign.id} (${campaign.name || 'Sans nom'}) activée automatiquement`,
+            );
           } else {
             console.log(`⚠️ Campagne ${campaign.id} non activée: solde insuffisant`);
           }
@@ -334,7 +369,10 @@ export const adminVideoService = {
           .eq('status', 'active');
 
         if (activeCampaignsError) {
-          console.error('❌ Error reading active campaigns for advertiser notifications:', activeCampaignsError);
+          console.error(
+            '❌ Error reading active campaigns for advertiser notifications:',
+            activeCampaignsError,
+          );
         } else if ((activeCampaigns || []).length > 0) {
           const advertiserNotifications = (activeCampaigns || []).map((campaign: any) => ({
             recipient_user_id: campaign.user_id,
@@ -346,7 +384,7 @@ export const adminVideoService = {
             entity_type: 'campaign',
             entity_id: campaign.id,
             external_key: `video-approved-active-${campaign.id}`,
-            created_by: adminId
+            created_by: adminId,
           }));
 
           const { error: advertiserNotificationsError } = await supabase
@@ -354,11 +392,14 @@ export const adminVideoService = {
             .upsert(advertiserNotifications, { onConflict: 'external_key' });
 
           if (advertiserNotificationsError) {
-            console.error('❌ Insert/upsert advertiser notifications failed:', advertiserNotificationsError);
+            console.error(
+              '❌ Insert/upsert advertiser notifications failed:',
+              advertiserNotificationsError,
+            );
           }
         }
       }
-      
+
       return true;
     } catch (error: any) {
       console.error('❌ Error in approveVideo:', error);
@@ -370,17 +411,17 @@ export const adminVideoService = {
   async rejectVideo(videoId: string, adminId: string, notes?: string): Promise<boolean> {
     try {
       console.log('🔄 Rejecting video:', videoId, 'by admin:', adminId);
-      
+
       const updateData: any = {
         validation_status: 'rejected',
         validated_by: adminId,
-        validated_at: new Date().toISOString()
+        validated_at: new Date().toISOString(),
       };
-      
+
       if (notes) {
         updateData.validation_notes = notes;
       }
-      
+
       const { data, error } = await supabase
         .from('videos')
         .update(updateData)
@@ -404,11 +445,8 @@ export const adminVideoService = {
   async deleteVideo(videoId: string): Promise<boolean> {
     try {
       console.log('🗑️ Deleting video:', videoId);
-      
-      const { error } = await supabase
-        .from('videos')
-        .delete()
-        .eq('id', videoId);
+
+      const { error } = await supabase.from('videos').delete().eq('id', videoId);
 
       if (error) {
         console.error('❌ Error deleting video:', error);
@@ -427,9 +465,8 @@ export const adminVideoService = {
   async getValidationStats(): Promise<VideoValidationStats> {
     try {
       console.log('🔍 Fetching validation stats...');
-      
-      const { data, error } = await supabase
-        .rpc('get_video_validation_stats');
+
+      const { data, error } = await supabase.rpc('get_video_validation_stats');
 
       if (error) {
         console.error('❌ Error fetching stats:', error);
@@ -437,25 +474,27 @@ export const adminVideoService = {
           total_videos: 0,
           pending_videos: 0,
           approved_videos: 0,
-          rejected_videos: 0
+          rejected_videos: 0,
         };
       }
 
       console.log('✅ Stats fetched successfully:', data);
-      
-      return data[0] || {
-        total_videos: 0,
-        pending_videos: 0,
-        approved_videos: 0,
-        rejected_videos: 0
-      };
+
+      return (
+        data[0] || {
+          total_videos: 0,
+          pending_videos: 0,
+          approved_videos: 0,
+          rejected_videos: 0,
+        }
+      );
     } catch (error) {
       console.error('❌ Exception in getValidationStats:', error);
       return {
         total_videos: 0,
         pending_videos: 0,
         approved_videos: 0,
-        rejected_videos: 0
+        rejected_videos: 0,
       };
     }
   },
@@ -464,12 +503,12 @@ export const adminVideoService = {
   async updateValidationNotes(videoId: string, notes: string): Promise<boolean> {
     try {
       console.log('🔄 Updating validation notes for video:', videoId);
-      
+
       const { error } = await supabase
         .from('videos')
         .update({
           validation_notes: notes,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         })
         .eq('id', videoId);
 
@@ -490,11 +529,12 @@ export const adminVideoService = {
   async getCampaignsUsingVideo(videoId: string): Promise<CampaignUsingVideo[]> {
     try {
       console.log('🔍 Fetching campaigns using video:', videoId);
-      
+
       // Utiliser rpc si disponible, sinon requête directe
       try {
-        const { data, error } = await supabase
-          .rpc('get_campaigns_using_video', { video_uuid: videoId });
+        const { data, error } = await supabase.rpc('get_campaigns_using_video', {
+          video_uuid: videoId,
+        });
 
         if (!error && data) {
           console.log('✅ Found', data.length, 'campaigns using this video (via RPC)');
@@ -507,12 +547,14 @@ export const adminVideoService = {
       // Fallback: requête directe
       const { data, error } = await supabase
         .from('campaigns')
-        .select(`
+        .select(
+          `
           id,
           name,
           status,
           user_id
-        `)
+        `,
+        )
         .eq('video_id', videoId);
 
       if (error) {
@@ -521,16 +563,16 @@ export const adminVideoService = {
       }
 
       console.log('✅ Found', data?.length || 0, 'campaigns using this video');
-      
-      return (data || []).map(c => ({
+
+      return (data || []).map((c) => ({
         campaign_id: c.id,
         campaign_name: c.name,
         campaign_status: c.status,
-        advertiser_name: 'N/A' // À enrichir si besoin
+        advertiser_name: 'N/A', // À enrichir si besoin
       }));
     } catch (error) {
       console.error('❌ Exception in getCampaignsUsingVideo:', error);
       return [];
     }
-  }
+  },
 };

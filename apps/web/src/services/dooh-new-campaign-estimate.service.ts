@@ -34,7 +34,11 @@ export type WizardUnavailabilityRow = {
 /** Données déjà chargées côté wizard (carte campagne), si la lecture DB est vide (ex. avant déploiement RLS). */
 export type WizardLocationAffluenceInput = {
   id: string;
-  affluence_schedule?: readonly { day_of_week: number; hour: number; estimated_impressions: number }[];
+  affluence_schedule?: readonly {
+    day_of_week: number;
+    hour: number;
+    estimated_impressions: number;
+  }[];
 };
 
 function toDateStr(d: Date): string {
@@ -46,7 +50,7 @@ function toDateStr(d: Date): string {
 
 /** Construit une grille 7×24 à partir des créneaux wizard (`affluence_schedule` uniquement). */
 export function buildWizardLocationScheduleMap(
-  locations: readonly WizardLocationAffluenceInput[]
+  locations: readonly WizardLocationAffluenceInput[],
 ): Map<string, AffluenceSlot[]> {
   const m = new Map<string, AffluenceSlot[]>();
   for (const loc of locations) {
@@ -58,7 +62,7 @@ export function buildWizardLocationScheduleMap(
           day_of_week: Number(s.day_of_week),
           hour: Number(s.hour),
           estimated_impressions: Math.max(0, Number(s.estimated_impressions) || 0),
-        }))
+        })),
       );
     }
   }
@@ -68,7 +72,7 @@ export function buildWizardLocationScheduleMap(
 /** Grille initiale depuis le wizard (carte / getLocationsByIds), avant lecture DB. */
 function applyWizardLocationAffluence(
   slotsMap: Map<string, AffluenceSlot[]>,
-  wizard: Map<string, AffluenceSlot[]> | undefined
+  wizard: Map<string, AffluenceSlot[]> | undefined,
 ): void {
   if (!wizard?.size) return;
   for (const [locId, wSlots] of wizard) {
@@ -85,7 +89,7 @@ function applyDbLocationScheduleRows(
     day_of_week: number;
     hour: number;
     estimated_impressions: number | null;
-  }[]
+  }[],
 ): void {
   const byLoc = new Map<string, AffluenceSlot[]>();
   for (const r of rows) {
@@ -101,7 +105,11 @@ function applyDbLocationScheduleRows(
   }
 }
 
-function slotOccupationKey(locationId: string, diffusionDate: string, diffusionHour: number): string {
+function slotOccupationKey(
+  locationId: string,
+  diffusionDate: string,
+  diffusionHour: number,
+): string {
   return `${locationId}|${diffusionDate}|${diffusionHour}`;
 }
 
@@ -119,7 +127,9 @@ async function getOccupiedRepetitionsByLocationSlotFromHourlyPlan(input: {
 
   const { data: rows, error } = await supabase
     .from('campaign_hourly_location_plan')
-    .select('campaign_id, location_id, diffusion_date, diffusion_hour, planned_repetitions_per_hour')
+    .select(
+      'campaign_id, location_id, diffusion_date, diffusion_hour, planned_repetitions_per_hour',
+    )
     .in('location_id', locationIds)
     .gte('diffusion_date', start)
     .lte('diffusion_date', end);
@@ -127,7 +137,7 @@ async function getOccupiedRepetitionsByLocationSlotFromHourlyPlan(input: {
   if (error) {
     console.warn(
       'getOccupiedRepetitionsByLocationSlotFromHourlyPlan: lecture indisponible, occupation concurrente à 0.',
-      error
+      error,
     );
     return new Map<string, number>();
   }
@@ -152,7 +162,7 @@ async function getOccupiedRepetitionsByLocationSlotFromHourlyPlan(input: {
   if (campaignsError) {
     console.warn(
       'getOccupiedRepetitionsByLocationSlotFromHourlyPlan: lecture statuts campagnes indisponible, occupation concurrente à 0.',
-      campaignsError
+      campaignsError,
     );
     return new Map<string, number>();
   }
@@ -211,7 +221,7 @@ export async function computeNewCampaignDoohMaxImpressions(input: {
   if (scheduleWizardResult.error) {
     console.warn(
       'computeNewCampaignDoohMaxImpressions: location_affluence_schedule (localités wizard)',
-      scheduleWizardResult.error.message
+      scheduleWizardResult.error.message,
     );
   }
 
@@ -242,7 +252,7 @@ export async function computeNewCampaignDoohMaxImpressions(input: {
       console.info(
         'computeNewCampaignDoohMaxImpressions: aucune ligne location_affluence_schedule pour ces localités. ' +
           'Ce n’est pas causé par l’appel `screens` : soit pas de données pour ces location_id, soit RLS/GRANT SELECT ' +
-          '(appliquer migrations 20260404230000 / 20260404290000 sur le projet), soit les id ne correspondent pas à la table.'
+          '(appliquer migrations 20260404230000 / 20260404290000 sur le projet), soit les id ne correspondent pas à la table.',
       );
     }
   }
@@ -262,7 +272,7 @@ export async function computeNewCampaignDoohMaxImpressions(input: {
 
   const effectiveVideoSeconds = effectiveVideoSecondsForDoohEstimate(
     videoDurationSeconds,
-    input.config
+    input.config,
   );
 
   // Modèle localité: indisponibilités par écran non appliquées ici.
@@ -277,7 +287,7 @@ export async function computeNewCampaignDoohMaxImpressions(input: {
   if (specialEventsError) {
     console.warn(
       'computeNewCampaignDoohMaxImpressions: special_events',
-      specialEventsError.message
+      specialEventsError.message,
     );
   }
 
@@ -315,7 +325,7 @@ export async function computeNewCampaignDoohMaxImpressions(input: {
   } catch (e) {
     console.warn(
       'computeNewCampaignDoohMaxImpressions: lecture occupation depuis campaign_hourly_location_plan impossible.',
-      e
+      e,
     );
     occupiedRepetitionsBySlot = new Map<string, number>();
   }
@@ -336,7 +346,7 @@ export async function computeNewCampaignDoohMaxImpressions(input: {
   const repetitionsPerHourVideo = computeRepetitionsPerHourVideo(effectiveVideoSeconds);
   const billableSpotsPerHour = Math.max(
     0,
-    input.config.max_spots_per_hour * input.config.max_billable_spot_rate_per_hour
+    input.config.max_spots_per_hour * input.config.max_billable_spot_rate_per_hour,
   );
   let totalRawImpressions = 0;
   for (const row of slotRows) {
@@ -349,7 +359,10 @@ export async function computeNewCampaignDoohMaxImpressions(input: {
 
   const total = Math.round(totalRawImpressions);
   if (total < 1 && evaluationLocationIds.length > 0) {
-    const slotRows = evaluationLocationIds.reduce((s, id) => s + (locationScheduleSlots.get(id)?.length ?? 0), 0);
+    const slotRows = evaluationLocationIds.reduce(
+      (s, id) => s + (locationScheduleSlots.get(id)?.length ?? 0),
+      0,
+    );
     const occVals = [...occupiedRepetitionsBySlot.values()];
     const occMax = occVals.length > 0 ? Math.max(...occVals) : 0;
     console.warn('computeNewCampaignDoohMaxImpressions: total=0', {
@@ -357,7 +370,8 @@ export async function computeNewCampaignDoohMaxImpressions(input: {
       location_affluence_schedule_rows: slotRows,
       specialEventsInCampaignRange: activeEvents.length,
       specialEventsAppliedToGrid: specialEventsForGrid.length,
-      eventBlackoutSkippedForStandardCampaign: specialEventsForGrid.length === 0 && activeEvents.length > 0,
+      eventBlackoutSkippedForStandardCampaign:
+        specialEventsForGrid.length === 0 && activeEvents.length > 0,
       maxOccupiedRph: occMax,
       effectiveVideoSeconds,
       repetitionsPerHourVideo,

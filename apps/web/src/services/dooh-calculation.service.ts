@@ -26,17 +26,17 @@ export const DEFAULT_DOOH_CONFIG_NUMBERS: DoohConfigNumbers = {
   event_campaign_cpm_tnd: 2.5,
 };
 
-export type EffectiveDurationResult =
-  | { ok: true; seconds: number }
-  | { ok: false; reason: string };
+export type EffectiveDurationResult = { ok: true; seconds: number } | { ok: false; reason: string };
 
 /** Durée effective = réelle si fournie, sinon défaut ; bloque si hors [min, max]. */
 export function resolveEffectiveVideoDuration(
   actualDurationSeconds: number | null | undefined,
-  config: DoohConfigNumbers
+  config: DoohConfigNumbers,
 ): EffectiveDurationResult {
   const raw =
-    actualDurationSeconds != null && Number.isFinite(actualDurationSeconds) && actualDurationSeconds > 0
+    actualDurationSeconds != null &&
+    Number.isFinite(actualDurationSeconds) &&
+    actualDurationSeconds > 0
       ? actualDurationSeconds
       : config.video_default_duration_seconds;
   const minV = config.video_min_duration_seconds;
@@ -56,12 +56,14 @@ export function resolveEffectiveVideoDuration(
  */
 export function effectiveVideoSecondsForDoohEstimate(
   actualDurationSeconds: number | null | undefined,
-  config: DoohConfigNumbers
+  config: DoohConfigNumbers,
 ): number {
   const resolved = resolveEffectiveVideoDuration(actualDurationSeconds, config);
   if (resolved.ok) return resolved.seconds;
   const raw =
-    actualDurationSeconds != null && Number.isFinite(actualDurationSeconds) && actualDurationSeconds > 0
+    actualDurationSeconds != null &&
+    Number.isFinite(actualDurationSeconds) &&
+    actualDurationSeconds > 0
       ? actualDurationSeconds
       : config.video_default_duration_seconds;
   if (raw > config.video_max_duration_seconds) {
@@ -102,11 +104,15 @@ export type DoohSlotMetrics = {
 export function computeDoohSlotMetrics(
   config: DoohConfigNumbers,
   effectiveVideoDurationSeconds: number,
-  slot: DoohSlotInput
+  slot: DoohSlotInput,
 ): DoohSlotMetrics {
   const repetitions_per_hour_video = computeRepetitionsPerHourVideo(effectiveVideoDurationSeconds);
-  const billable_spots_per_hour = config.max_spots_per_hour * config.max_billable_spot_rate_per_hour;
-  const remaining_spots_per_hour = Math.max(0, billable_spots_per_hour - slot.occupied_by_other_campaigns);
+  const billable_spots_per_hour =
+    config.max_spots_per_hour * config.max_billable_spot_rate_per_hour;
+  const remaining_spots_per_hour = Math.max(
+    0,
+    billable_spots_per_hour - slot.occupied_by_other_campaigns,
+  );
 
   if (slot.event_overlap || slot.unavailable) {
     return {
@@ -118,7 +124,10 @@ export function computeDoohSlotMetrics(
     };
   }
 
-  const allowed_repetitions_per_hour = Math.min(repetitions_per_hour_video, remaining_spots_per_hour);
+  const allowed_repetitions_per_hour = Math.min(
+    repetitions_per_hour_video,
+    remaining_spots_per_hour,
+  );
   const impressions_tranche = allowed_repetitions_per_hour * Math.max(0, slot.affluence_horaire);
 
   return {
@@ -139,7 +148,7 @@ export function sumImpressionsTranches(metrics: readonly DoohSlotMetrics[]): num
 export function computeCampaignCostTnd(
   totalImpressions: number,
   isEventCampaign: boolean,
-  config: DoohConfigNumbers
+  config: DoohConfigNumbers,
 ): number {
   const cpm = isEventCampaign ? config.event_campaign_cpm_tnd : config.standard_campaign_cpm_tnd;
   if (!Number.isFinite(totalImpressions) || totalImpressions <= 0) return 0;

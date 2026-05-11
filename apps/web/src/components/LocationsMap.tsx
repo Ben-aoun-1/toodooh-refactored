@@ -21,7 +21,7 @@ const createStatusIcon = (status: string) => {
     active: '#10B981',
     inactive: '#EF4444',
     maintenance: '#F59E0B',
-    unavailable: '#6B7280'
+    unavailable: '#6B7280',
   };
 
   return L.divIcon({
@@ -47,7 +47,7 @@ const createStatusIcon = (status: string) => {
       </div>
     `,
     iconSize: [20, 20],
-    iconAnchor: [10, 10]
+    iconAnchor: [10, 10],
   });
 };
 
@@ -63,28 +63,31 @@ export default function LocationsMap({ screens, onScreenClick }: LocationsMapPro
   const defaultCenter: [number, number] = [36.8065, 10.1815];
 
   // Grouper les écrans par emplacement
-  const locations = screens.reduce((acc, screen) => {
-    const location = screen.location;
-    if (!acc[location]) {
-      acc[location] = [];
-    }
-    acc[location].push(screen);
-    return acc;
-  }, {} as Record<string, Screen[]>);
+  const locations = screens.reduce(
+    (acc, screen) => {
+      const location = screen.location;
+      if (!acc[location]) {
+        acc[location] = [];
+      }
+      acc[location].push(screen);
+      return acc;
+    },
+    {} as Record<string, Screen[]>,
+  );
 
   // Générer des coordonnées pour chaque emplacement
   const getLocationCoordinates = (location: string, index: number): [number, number] => {
     // En production, ces coordonnées viendraient de la base de données
     const baseLat = 36.8065 + (Math.random() - 0.5) * 0.1;
     const baseLng = 10.1815 + (Math.random() - 0.5) * 0.1;
-    return [baseLat + (index * 0.001), baseLng + (index * 0.001)];
+    return [baseLat + index * 0.001, baseLng + index * 0.001];
   };
 
   // Ajuster la vue de la carte pour inclure tous les marqueurs
   useEffect(() => {
     if (mapRef.current && screens.length > 0) {
       const bounds = L.latLngBounds(defaultCenter);
-      
+
       Object.entries(locations).forEach(([location, locationScreens], locationIndex) => {
         locationScreens.forEach((screen, screenIndex) => {
           const coords = getLocationCoordinates(location, screenIndex);
@@ -157,11 +160,11 @@ export default function LocationsMap({ screens, onScreenClick }: LocationsMapPro
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           maxZoom={19}
         />
-        
+
         {Object.entries(locations).map(([location, locationScreens], locationIndex) => {
           return locationScreens.map((screen, screenIndex) => {
             const coords = getLocationCoordinates(location, screenIndex);
-            
+
             return (
               <Marker
                 key={screen.id}
@@ -174,7 +177,7 @@ export default function LocationsMap({ screens, onScreenClick }: LocationsMapPro
                   },
                   mouseout: (e: any) => {
                     e.target.closePopup();
-                  }
+                  },
                 }}
               >
                 <Popup autoOpen={false}>
@@ -190,40 +193,49 @@ export default function LocationsMap({ screens, onScreenClick }: LocationsMapPro
                         <p className="text-gray-600 text-sm">{location}</p>
                       </div>
                     </div>
-                    
+
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-gray-600 text-sm">Statut:</span>
-                        <span className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(screen.status)}`}>
+                        <span
+                          className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(screen.status)}`}
+                        >
                           <span className="mr-1">{getStatusIcon(screen.status)}</span>
                           {getStatusText(screen.status)}
                         </span>
                       </div>
-                      
+
                       <div className="flex items-center justify-between">
                         <span className="text-gray-600 text-sm">Revenus mensuels:</span>
                         <span className="font-semibold text-green-600">
-                          {screen.monthly_revenue.toLocaleString('fr-TN', { style: 'currency', currency: 'TND' })}
+                          {screen.monthly_revenue.toLocaleString('fr-TN', {
+                            style: 'currency',
+                            currency: 'TND',
+                          })}
                         </span>
                       </div>
-                      
+
                       <div className="flex items-center justify-between">
                         <span className="text-gray-600 text-sm">Revenus totaux:</span>
                         <span className="font-semibold text-blue-600">
-                          {screen.total_revenue.toLocaleString('fr-TN', { style: 'currency', currency: 'TND' })}
+                          {screen.total_revenue.toLocaleString('fr-TN', {
+                            style: 'currency',
+                            currency: 'TND',
+                          })}
                         </span>
                       </div>
-                      
+
                       <div className="flex items-center justify-between">
                         <span className="text-gray-600 text-sm">Points fidélité:</span>
                         <span className="font-semibold text-purple-600">
                           {screen.loyalty_points}
                         </span>
                       </div>
-                      
+
                       <div className="pt-2 border-t border-gray-200">
                         <p className="text-gray-500 text-xs">
-                          Dernière mise à jour: {new Date(screen.updated_at).toLocaleString('fr-FR')}
+                          Dernière mise à jour:{' '}
+                          {new Date(screen.updated_at).toLocaleString('fr-FR')}
                         </p>
                       </div>
                     </div>
@@ -234,7 +246,7 @@ export default function LocationsMap({ screens, onScreenClick }: LocationsMapPro
           });
         })}
       </MapContainer>
-      
+
       {/* Légende */}
       <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur-sm rounded-lg p-4 shadow-lg border border-white/20">
         <h4 className="font-semibold text-gray-900 mb-2">Légende</h4>
@@ -259,4 +271,4 @@ export default function LocationsMap({ screens, onScreenClick }: LocationsMapPro
       </div>
     </div>
   );
-} 
+}

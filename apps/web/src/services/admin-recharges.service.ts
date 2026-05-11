@@ -42,7 +42,7 @@ class AdminRechargesService {
       search?: string;
     },
     page: number = 1,
-    perPage: number = 20
+    perPage: number = 20,
   ): Promise<{ data: AdminRecharge[]; total: number }> {
     try {
       console.log('📋 Récupération des recharges...', { filters, page, perPage });
@@ -102,15 +102,15 @@ class AdminRechargesService {
             business_name: profile?.business_name || 'N/A',
             user_name: profile?.contact_name || 'N/A',
             user_email: profile?.email || 'N/A',
-            validator_name: validatorName
+            validator_name: validatorName,
           } as AdminRecharge;
-        })
+        }),
       );
 
       console.log('✅ Recharges récupérées:', enrichedRecharges.length);
       return {
         data: enrichedRecharges,
-        total: count || 0
+        total: count || 0,
       };
     } catch (error) {
       console.error('❌ Erreur récupération recharges:', error);
@@ -123,22 +123,24 @@ class AdminRechargesService {
    */
   async getRechargeStats(): Promise<RechargeStats> {
     try {
-      const { data, error } = await supabase
-        .from('recharges')
-        .select('status, amount');
+      const { data, error } = await supabase.from('recharges').select('status, amount');
 
       if (error) throw error;
 
       const stats: RechargeStats = {
         total_recharges: data?.length || 0,
-        pending_count: data?.filter(r => r.status === 'pending').length || 0,
-        completed_count: data?.filter(r => r.status === 'completed').length || 0,
-        failed_count: data?.filter(r => r.status === 'failed').length || 0,
+        pending_count: data?.filter((r) => r.status === 'pending').length || 0,
+        completed_count: data?.filter((r) => r.status === 'completed').length || 0,
+        failed_count: data?.filter((r) => r.status === 'failed').length || 0,
         total_amount: data?.reduce((sum, r) => sum + parseFloat(r.amount.toString()), 0) || 0,
-        pending_amount: data?.filter(r => r.status === 'pending')
-          .reduce((sum, r) => sum + parseFloat(r.amount.toString()), 0) || 0,
-        completed_amount: data?.filter(r => r.status === 'completed')
-          .reduce((sum, r) => sum + parseFloat(r.amount.toString()), 0) || 0
+        pending_amount:
+          data
+            ?.filter((r) => r.status === 'pending')
+            .reduce((sum, r) => sum + parseFloat(r.amount.toString()), 0) || 0,
+        completed_amount:
+          data
+            ?.filter((r) => r.status === 'completed')
+            .reduce((sum, r) => sum + parseFloat(r.amount.toString()), 0) || 0,
       };
 
       return stats;
@@ -151,7 +153,7 @@ class AdminRechargesService {
         failed_count: 0,
         total_amount: 0,
         pending_amount: 0,
-        completed_amount: 0
+        completed_amount: 0,
       };
     }
   }
@@ -159,11 +161,7 @@ class AdminRechargesService {
   /**
    * Valider une recharge (approuver)
    */
-  async approveRecharge(
-    rechargeId: string,
-    adminId: string,
-    notes?: string
-  ): Promise<void> {
+  async approveRecharge(rechargeId: string, adminId: string, notes?: string): Promise<void> {
     try {
       console.log('✅ Validation de la recharge:', rechargeId);
 
@@ -173,8 +171,8 @@ class AdminRechargesService {
           status: 'completed',
           validated_by: adminId,
           validated_at: new Date().toISOString(),
-          validation_notes: notes || 'Recharge validée par l\'administrateur',
-          updated_at: new Date().toISOString()
+          validation_notes: notes || "Recharge validée par l'administrateur",
+          updated_at: new Date().toISOString(),
         })
         .eq('id', rechargeId);
 
@@ -190,11 +188,7 @@ class AdminRechargesService {
   /**
    * Rejeter une recharge
    */
-  async rejectRecharge(
-    rechargeId: string,
-    adminId: string,
-    reason: string
-  ): Promise<void> {
+  async rejectRecharge(rechargeId: string, adminId: string, reason: string): Promise<void> {
     try {
       console.log('❌ Rejet de la recharge:', rechargeId);
 
@@ -205,7 +199,7 @@ class AdminRechargesService {
           validated_by: adminId,
           validated_at: new Date().toISOString(),
           validation_notes: reason,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         })
         .eq('id', rechargeId);
 
@@ -221,11 +215,7 @@ class AdminRechargesService {
   /**
    * Annuler une recharge
    */
-  async cancelRecharge(
-    rechargeId: string,
-    adminId: string,
-    reason: string
-  ): Promise<void> {
+  async cancelRecharge(rechargeId: string, adminId: string, reason: string): Promise<void> {
     try {
       console.log('🚫 Annulation de la recharge:', rechargeId);
 
@@ -236,7 +226,7 @@ class AdminRechargesService {
           validated_by: adminId,
           validated_at: new Date().toISOString(),
           validation_notes: reason,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         })
         .eq('id', rechargeId);
 
@@ -255,7 +245,7 @@ class AdminRechargesService {
   async getUserBalance(userId: string): Promise<number> {
     try {
       const { data, error } = await supabase.rpc('get_user_balance', {
-        p_user_id: userId
+        p_user_id: userId,
       });
 
       if (error) throw error;
@@ -275,54 +265,9 @@ class AdminRechargesService {
       style: 'currency',
       currency: 'TND',
       minimumFractionDigits: 2,
-      maximumFractionDigits: 2
+      maximumFractionDigits: 2,
     }).format(amount);
   }
 }
 
 export const adminRechargesService = new AdminRechargesService();
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

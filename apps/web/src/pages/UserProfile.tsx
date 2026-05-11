@@ -21,7 +21,10 @@ import { authService } from '../services/auth.service';
 import { useAuthStore } from '../stores/auth.store';
 import { supabase } from '../lib/supabase';
 import type { BusinessProfile, BusinessSector, Governorate } from '../types/auth';
-import { AGENCY_BUSINESS_SECTOR_NAME, sectorsForAdvertiserProfile } from '../constants/advertiserBusinessSectors';
+import {
+  AGENCY_BUSINESS_SECTOR_NAME,
+  sectorsForAdvertiserProfile,
+} from '../constants/advertiserBusinessSectors';
 
 type TabId = 'responsable' | 'entreprise' | 'notifications' | 'confidentialite';
 type EntrepriseSubId = 'informations' | 'adresse' | 'documents';
@@ -34,11 +37,19 @@ const TABS: { id: TabId; label: string }[] = [
 ];
 
 const RESPONSABLE_SUB = [
-  { id: 'informations' as const, label: 'Informations sur le responsable', icon: <User className="h-5 w-5" /> },
+  {
+    id: 'informations' as const,
+    label: 'Informations sur le responsable',
+    icon: <User className="h-5 w-5" />,
+  },
 ];
 
 const ENTREPRISE_SUB: { id: EntrepriseSubId; label: string; icon: React.ReactNode }[] = [
-  { id: 'informations', label: "Informations sur l'entreprise", icon: <Building2 className="h-5 w-5" /> },
+  {
+    id: 'informations',
+    label: "Informations sur l'entreprise",
+    icon: <Building2 className="h-5 w-5" />,
+  },
   { id: 'adresse', label: "Adresse de l'entreprise", icon: <MapPin className="h-5 w-5" /> },
   { id: 'documents', label: 'Documents légaux', icon: <FileText className="h-5 w-5" /> },
 ];
@@ -116,7 +127,12 @@ export default function UserProfile() {
     const tabParam = params.get('tab');
     const subParam = params.get('sub');
 
-    if (tabParam === 'responsable' || tabParam === 'entreprise' || tabParam === 'notifications' || tabParam === 'confidentialite') {
+    if (
+      tabParam === 'responsable' ||
+      tabParam === 'entreprise' ||
+      tabParam === 'notifications' ||
+      tabParam === 'confidentialite'
+    ) {
       setActiveTab(tabParam);
     }
 
@@ -188,9 +204,13 @@ export default function UserProfile() {
 
   useEffect(() => {
     if (!isAgencyProfile) return;
-    const agencySector = sectors.find((s) => s.name.trim().toLowerCase() === AGENCY_BUSINESS_SECTOR_NAME.toLowerCase());
+    const agencySector = sectors.find(
+      (s) => s.name.trim().toLowerCase() === AGENCY_BUSINESS_SECTOR_NAME.toLowerCase(),
+    );
     if (!agencySector) return;
-    setEntrepriseForm((p) => (p.business_sector_id ? p : { ...p, business_sector_id: agencySector.id }));
+    setEntrepriseForm((p) =>
+      p.business_sector_id ? p : { ...p, business_sector_id: agencySector.id },
+    );
   }, [isAgencyProfile, sectors]);
 
   const handleSaveResponsable = async (e: React.FormEvent) => {
@@ -200,7 +220,10 @@ export default function UserProfile() {
       return;
     }
     try {
-      const contact_name = [responsableForm.last_name, responsableForm.first_name].filter(Boolean).join(' ').trim() || responsableForm.last_name || responsableForm.first_name;
+      const contact_name =
+        [responsableForm.last_name, responsableForm.first_name].filter(Boolean).join(' ').trim() ||
+        responsableForm.last_name ||
+        responsableForm.first_name;
       await authService.updateProfile({
         contact_name,
         contact_phone: responsableForm.contact_phone,
@@ -216,7 +239,7 @@ export default function UserProfile() {
   const handleSaveEntreprise = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!entrepriseForm.business_name.trim() || !entrepriseForm.tax_number.trim()) {
-      toast.error('Nom de l\'entreprise et matricule fiscal sont obligatoires');
+      toast.error("Nom de l'entreprise et matricule fiscal sont obligatoires");
       return;
     }
     try {
@@ -235,7 +258,12 @@ export default function UserProfile() {
 
   const handleSaveAdresse = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!adresseForm.street_address.trim() || !adresseForm.city.trim() || !adresseForm.postal_code.trim() || !adresseForm.governorate_id) {
+    if (
+      !adresseForm.street_address.trim() ||
+      !adresseForm.city.trim() ||
+      !adresseForm.postal_code.trim() ||
+      !adresseForm.governorate_id
+    ) {
       toast.error('Adresse, ville, code postal et gouvernorat sont obligatoires');
       return;
     }
@@ -273,7 +301,8 @@ export default function UserProfile() {
     digit: /\d/.test(passwordData.newPassword),
     minLength: passwordData.newPassword.length >= 8,
   };
-  const passwordValid = passwordRequirements.uppercase && passwordRequirements.digit && passwordRequirements.minLength;
+  const passwordValid =
+    passwordRequirements.uppercase && passwordRequirements.digit && passwordRequirements.minLength;
 
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -286,7 +315,10 @@ export default function UserProfile() {
       return;
     }
     try {
-      await authService.updatePasswordWithOld(passwordData.currentPassword, passwordData.newPassword);
+      await authService.updatePasswordWithOld(
+        passwordData.currentPassword,
+        passwordData.newPassword,
+      );
       toast.success('Mot de passe mis à jour');
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (err: any) {
@@ -343,7 +375,9 @@ export default function UserProfile() {
     try {
       const ext = logoFile.name.split('.').pop() || 'png';
       const filePath = `logo_${user.id}_${Date.now()}.${ext}`;
-      const { error: uploadError } = await supabase.storage.from('registres').upload(filePath, logoFile);
+      const { error: uploadError } = await supabase.storage
+        .from('registres')
+        .upload(filePath, logoFile);
       if (uploadError) throw uploadError;
       const { data: signed, error: signedError } = await supabase.storage
         .from('registres')
@@ -428,7 +462,7 @@ export default function UserProfile() {
         if (error || !signed?.signedUrl) throw error;
         window.open(signed.signedUrl, '_blank', 'noopener,noreferrer');
       } catch (err: any) {
-        toast.error(err?.message || 'Impossible d\'ouvrir le document');
+        toast.error(err?.message || "Impossible d'ouvrir le document");
       }
       return;
     }
@@ -446,11 +480,7 @@ export default function UserProfile() {
   }
 
   if (!profile) {
-    return (
-      <div className="max-w-4xl mx-auto p-8 text-center text-gray-600">
-        Profil non trouvé
-      </div>
-    );
+    return <div className="max-w-4xl mx-auto p-8 text-center text-gray-600">Profil non trouvé</div>;
   }
 
   return (
@@ -480,7 +510,9 @@ export default function UserProfile() {
         <div className="flex gap-6 flex-col lg:flex-row lg:items-stretch">
           {/* Sidebar Paramètres du profil — même design que Entreprise / Notifications */}
           <aside className="lg:w-72 flex-shrink-0 bg-white rounded-xl border border-gray-200 p-4 lg:min-h-0">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Paramètres du profil</p>
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">
+              Paramètres du profil
+            </p>
             <nav className="space-y-1">
               {RESPONSABLE_SUB.map((sub) => (
                 <div
@@ -498,37 +530,51 @@ export default function UserProfile() {
             <form onSubmit={handleSaveResponsable} className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nom <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Nom <span className="text-red-500">*</span>
+                  </label>
                   <input
                     type="text"
                     value={responsableForm.last_name}
-                    onChange={(e) => setResponsableForm((p) => ({ ...p, last_name: e.target.value }))}
+                    onChange={(e) =>
+                      setResponsableForm((p) => ({ ...p, last_name: e.target.value }))
+                    }
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB]"
                     placeholder="Nom"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Prénom <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Prénom <span className="text-red-500">*</span>
+                  </label>
                   <input
                     type="text"
                     value={responsableForm.first_name}
-                    onChange={(e) => setResponsableForm((p) => ({ ...p, first_name: e.target.value }))}
+                    onChange={(e) =>
+                      setResponsableForm((p) => ({ ...p, first_name: e.target.value }))
+                    }
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB]"
                     placeholder="Prénom"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Fonction <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Fonction <span className="text-red-500">*</span>
+                  </label>
                   <input
                     type="text"
                     value={responsableForm.fonction}
-                    onChange={(e) => setResponsableForm((p) => ({ ...p, fonction: e.target.value }))}
+                    onChange={(e) =>
+                      setResponsableForm((p) => ({ ...p, fonction: e.target.value }))
+                    }
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB]"
                     placeholder="Ex: UI UX Designer"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email professionnel <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Email professionnel <span className="text-red-500">*</span>
+                  </label>
                   <input
                     type="email"
                     readOnly
@@ -538,23 +584,34 @@ export default function UserProfile() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Téléphone <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Téléphone <span className="text-red-500">*</span>
+                  </label>
                   <input
                     type="tel"
                     value={responsableForm.contact_phone}
-                    onChange={(e) => setResponsableForm((p) => ({ ...p, contact_phone: e.target.value }))}
+                    onChange={(e) =>
+                      setResponsableForm((p) => ({ ...p, contact_phone: e.target.value }))
+                    }
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB]"
                     placeholder="+216 52 44 1144"
                   />
                 </div>
               </div>
               <div className="flex gap-3 pt-6 justify-end">
-                    <button type="button" className="px-5 py-2.5 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50">
-                      Annuler
-                    </button>
-                    <button type="submit" className="px-5 py-2.5 rounded-xl font-medium text-black hover:opacity-90" style={{ background: '#97d6a2' }}>
-                      Enregistrer
-                    </button>
+                <button
+                  type="button"
+                  className="px-5 py-2.5 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl font-medium text-black hover:opacity-90"
+                  style={{ background: '#97d6a2' }}
+                >
+                  Enregistrer
+                </button>
               </div>
             </form>
           </div>
@@ -565,7 +622,9 @@ export default function UserProfile() {
         <div className="flex gap-6 flex-col lg:flex-row lg:items-stretch">
           {/* Sidebar paramètres entreprise — même design que Responsable / Notifications */}
           <aside className="lg:w-72 flex-shrink-0 bg-white rounded-xl border border-gray-200 p-4 lg:min-h-0">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Paramètres de l&apos;entreprise</p>
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">
+              Paramètres de l&apos;entreprise
+            </p>
             <nav className="space-y-1">
               {ENTREPRISE_SUB.map((sub) => (
                 <button
@@ -578,7 +637,9 @@ export default function UserProfile() {
                       : 'text-gray-600 hover:bg-gray-100'
                   }`}
                 >
-                  <span className={entrepriseSub === sub.id ? 'text-[#132B1B]' : 'text-gray-400'}>{sub.icon}</span>
+                  <span className={entrepriseSub === sub.id ? 'text-[#132B1B]' : 'text-gray-400'}>
+                    {sub.icon}
+                  </span>
                   {sub.label}
                 </button>
               ))}
@@ -596,7 +657,11 @@ export default function UserProfile() {
                     <div className="flex items-start gap-4">
                       <div className="w-24 h-24 rounded-full border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden flex-shrink-0">
                         {logoPreview ? (
-                          <img src={logoPreview} alt="Logo" className="w-full h-full object-contain" />
+                          <img
+                            src={logoPreview}
+                            alt="Logo"
+                            className="w-full h-full object-contain"
+                          />
                         ) : (
                           <Building2 className="h-10 w-10 text-gray-300" />
                         )}
@@ -605,9 +670,18 @@ export default function UserProfile() {
                         <div className="flex gap-2">
                           <label className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-600 cursor-pointer hover:bg-gray-50">
                             Changer
-                            <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={handleLogoChange} />
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg,image/webp"
+                              className="hidden"
+                              onChange={handleLogoChange}
+                            />
                           </label>
-                          <button type="button" onClick={handleLogoRemove} className="px-3 py-2 border border-red-500 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 bg-white">
+                          <button
+                            type="button"
+                            onClick={handleLogoRemove}
+                            className="px-3 py-2 border border-red-500 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 bg-white"
+                          >
                             Supprimer
                           </button>
                         </div>
@@ -628,21 +702,29 @@ export default function UserProfile() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Nom de l&apos;entreprise <span className="text-red-500">*</span></label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Nom de l&apos;entreprise <span className="text-red-500">*</span>
+                      </label>
                       <input
                         type="text"
                         value={entrepriseForm.business_name}
-                        onChange={(e) => setEntrepriseForm((p) => ({ ...p, business_name: e.target.value }))}
+                        onChange={(e) =>
+                          setEntrepriseForm((p) => ({ ...p, business_name: e.target.value }))
+                        }
                         className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB]"
                         placeholder="Raison sociale"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Matricule fiscal <span className="text-red-500">*</span></label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Matricule fiscal <span className="text-red-500">*</span>
+                      </label>
                       <input
                         type="text"
                         value={entrepriseForm.tax_number}
-                        onChange={(e) => setEntrepriseForm((p) => ({ ...p, tax_number: e.target.value }))}
+                        onChange={(e) =>
+                          setEntrepriseForm((p) => ({ ...p, tax_number: e.target.value }))
+                        }
                         className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB]"
                         placeholder="Matricule fiscal"
                       />
@@ -651,7 +733,9 @@ export default function UserProfile() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Secteur d&apos;activité <span className="text-red-500">*</span></label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Secteur d&apos;activité <span className="text-red-500">*</span>
+                      </label>
                       {isAgencyProfile ? (
                         <input
                           type="text"
@@ -662,21 +746,32 @@ export default function UserProfile() {
                       ) : (
                         <select
                           value={entrepriseForm.business_sector_id}
-                          onChange={(e) => setEntrepriseForm((p) => ({ ...p, business_sector_id: e.target.value }))}
+                          onChange={(e) =>
+                            setEntrepriseForm((p) => ({ ...p, business_sector_id: e.target.value }))
+                          }
                           className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB] bg-white"
                         >
                           <option value="">Sélectionner</option>
-                          {sectorsForAdvertiserProfile(sectors, entrepriseForm.business_sector_id).map((s) => (
-                            <option key={s.id} value={s.id}>{s.name}</option>
+                          {sectorsForAdvertiserProfile(
+                            sectors,
+                            entrepriseForm.business_sector_id,
+                          ).map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.name}
+                            </option>
                           ))}
                         </select>
                       )}
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Taille de l&apos;entreprise <span className="text-red-500">*</span></label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Taille de l&apos;entreprise <span className="text-red-500">*</span>
+                      </label>
                       <select
                         value={entrepriseForm.company_size}
-                        onChange={(e) => setEntrepriseForm((p) => ({ ...p, company_size: e.target.value }))}
+                        onChange={(e) =>
+                          setEntrepriseForm((p) => ({ ...p, company_size: e.target.value }))
+                        }
                         className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB] bg-white"
                       >
                         <option value="">Sélectionner</option>
@@ -690,10 +785,17 @@ export default function UserProfile() {
                   </div>
 
                   <div className="flex gap-3 pt-2">
-                    <button type="button" className="px-5 py-2.5 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50">
+                    <button
+                      type="button"
+                      className="px-5 py-2.5 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50"
+                    >
                       Annuler
                     </button>
-                    <button type="submit" className="px-5 py-2.5 rounded-xl font-medium text-black hover:opacity-90" style={{ background: '#97d6a2' }}>
+                    <button
+                      type="submit"
+                      className="px-5 py-2.5 rounded-xl font-medium text-black hover:opacity-90"
+                      style={{ background: '#97d6a2' }}
+                    >
                       Enregistrer
                     </button>
                   </div>
@@ -704,18 +806,24 @@ export default function UserProfile() {
             {entrepriseSub === 'adresse' && (
               <form onSubmit={handleSaveAdresse} className="p-6 space-y-4 max-w-2xl">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Adresse <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Adresse <span className="text-red-500">*</span>
+                  </label>
                   <input
                     type="text"
                     value={adresseForm.street_address}
-                    onChange={(e) => setAdresseForm((p) => ({ ...p, street_address: e.target.value }))}
+                    onChange={(e) =>
+                      setAdresseForm((p) => ({ ...p, street_address: e.target.value }))
+                    }
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB]"
                     placeholder="Ex: Barista's Ain Zaghouen"
                   />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Ville <span className="text-red-500">*</span></label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Ville <span className="text-red-500">*</span>
+                    </label>
                     <div className="relative">
                       <input
                         type="text"
@@ -726,21 +834,51 @@ export default function UserProfile() {
                         placeholder="Ex: Tunis"
                       />
                       <datalist id="ville-list">
-                        {['Tunis', 'Sfax', 'Sousse', 'Nabeul', 'Bizerte', 'Gabès', 'Ariana', 'Ben Arous', 'Manouba', 'Médenine', 'Monastir', 'Kairouan', 'Zaghouan'].map((c) => (
+                        {[
+                          'Tunis',
+                          'Sfax',
+                          'Sousse',
+                          'Nabeul',
+                          'Bizerte',
+                          'Gabès',
+                          'Ariana',
+                          'Ben Arous',
+                          'Manouba',
+                          'Médenine',
+                          'Monastir',
+                          'Kairouan',
+                          'Zaghouan',
+                        ].map((c) => (
                           <option key={c} value={c} />
                         ))}
                       </datalist>
                       <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
-                        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                        <svg
+                          className="h-5 w-5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M19 9l-7 7-7-7"
+                          />
+                        </svg>
                       </span>
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Code postal <span className="text-red-500">*</span></label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Code postal <span className="text-red-500">*</span>
+                    </label>
                     <input
                       type="text"
                       value={adresseForm.postal_code}
-                      onChange={(e) => setAdresseForm((p) => ({ ...p, postal_code: e.target.value }))}
+                      onChange={(e) =>
+                        setAdresseForm((p) => ({ ...p, postal_code: e.target.value }))
+                      }
                       className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB]"
                       placeholder="Ex: 2045"
                       maxLength={10}
@@ -748,28 +886,53 @@ export default function UserProfile() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Gouvernorat <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Gouvernorat <span className="text-red-500">*</span>
+                  </label>
                   <div className="relative">
                     <select
                       value={adresseForm.governorate_id}
-                      onChange={(e) => setAdresseForm((p) => ({ ...p, governorate_id: e.target.value }))}
+                      onChange={(e) =>
+                        setAdresseForm((p) => ({ ...p, governorate_id: e.target.value }))
+                      }
                       className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB] bg-white appearance-none pr-10"
                     >
                       <option value="">Sélectionner</option>
                       {governorates.map((g) => (
-                        <option key={g.id} value={g.id}>{g.name}</option>
+                        <option key={g.id} value={g.id}>
+                          {g.name}
+                        </option>
                       ))}
                     </select>
                     <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
-                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                      <svg
+                        className="h-5 w-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M19 9l-7 7-7-7"
+                        />
+                      </svg>
                     </span>
                   </div>
                 </div>
                 <div className="flex gap-3 pt-4 justify-end">
-                  <button type="button" className="px-5 py-2.5 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50">
+                  <button
+                    type="button"
+                    className="px-5 py-2.5 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50"
+                  >
                     Annuler
                   </button>
-                  <button type="submit" className="px-5 py-2.5 rounded-xl font-medium text-black hover:opacity-90" style={{ background: '#97d6a2' }}>
+                  <button
+                    type="submit"
+                    className="px-5 py-2.5 rounded-xl font-medium text-black hover:opacity-90"
+                    style={{ background: '#97d6a2' }}
+                  >
                     Enregistrer
                   </button>
                 </div>
@@ -778,14 +941,16 @@ export default function UserProfile() {
 
             {entrepriseSub === 'documents' && (
               <div className="p-6 space-y-6">
-                <div
-                  className="border-2 border-dashed border-gray-300 rounded-xl p-8 flex flex-col items-center justify-center min-h-[200px] gap-3 bg-gray-50/50"
-                >
+                <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 flex flex-col items-center justify-center min-h-[200px] gap-3 bg-gray-50/50">
                   <div className="rounded-full p-3" style={{ background: '#E6F7ED' }}>
                     <Upload className="h-8 w-8" style={{ color: '#22c55e' }} />
                   </div>
-                  <p className="text-base font-semibold text-gray-900">Ajouter votre registre de commerce</p>
-                  <p className="text-sm text-gray-500">Formats acceptés : PDF, JPG, JPEG, PNG (Max 5 MB)</p>
+                  <p className="text-base font-semibold text-gray-900">
+                    Ajouter votre registre de commerce
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    Formats acceptés : PDF, JPG, JPEG, PNG (Max 5 MB)
+                  </p>
                   <label className="px-4 py-2.5 rounded-xl text-sm font-medium text-gray-700 cursor-pointer hover:bg-gray-100 border border-gray-300 bg-white">
                     Parcourir les fichiers
                     <input
@@ -797,7 +962,9 @@ export default function UserProfile() {
                   </label>
                 </div>
 
-                {(profile.registration_doc_path || profile.registration_doc_url || documentFile) && (
+                {(profile.registration_doc_path ||
+                  profile.registration_doc_url ||
+                  documentFile) && (
                   <div className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
                     <button
                       type="button"
@@ -862,7 +1029,9 @@ export default function UserProfile() {
         <div className="flex gap-6 flex-col lg:flex-row lg:items-stretch">
           {/* Sidebar paramètres notifications — même design que Responsable / Entreprise */}
           <aside className="lg:w-72 flex-shrink-0 bg-white rounded-xl border border-gray-200 p-4 lg:min-h-0">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Paramètres de notifications</p>
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">
+              Paramètres de notifications
+            </p>
             <nav className="space-y-1">
               {NOTIFICATIONS_SUB.map((sub) => (
                 <div
@@ -884,14 +1053,21 @@ export default function UserProfile() {
                     type="button"
                     role="switch"
                     aria-checked={notificationsForm.notify_news_updates}
-                    onClick={() => setNotificationsForm((p) => ({ ...p, notify_news_updates: !p.notify_news_updates }))}
+                    onClick={() =>
+                      setNotificationsForm((p) => ({
+                        ...p,
+                        notify_news_updates: !p.notify_news_updates,
+                      }))
+                    }
                     className={`flex-shrink-0 w-11 h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[#97d6a2] ${
                       notificationsForm.notify_news_updates ? 'bg-[#97d6a2]' : 'bg-gray-200'
                     }`}
                   >
                     <span
                       className={`block w-5 h-5 mt-0.5 rounded-full bg-white shadow transition-transform ${
-                        notificationsForm.notify_news_updates ? 'translate-x-5 ml-0.5' : 'translate-x-0.5'
+                        notificationsForm.notify_news_updates
+                          ? 'translate-x-5 ml-0.5'
+                          : 'translate-x-0.5'
                       }`}
                     />
                   </button>
@@ -908,14 +1084,21 @@ export default function UserProfile() {
                     type="button"
                     role="switch"
                     aria-checked={notificationsForm.notify_reminders_events}
-                    onClick={() => setNotificationsForm((p) => ({ ...p, notify_reminders_events: !p.notify_reminders_events }))}
+                    onClick={() =>
+                      setNotificationsForm((p) => ({
+                        ...p,
+                        notify_reminders_events: !p.notify_reminders_events,
+                      }))
+                    }
                     className={`flex-shrink-0 w-11 h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[#97d6a2] ${
                       notificationsForm.notify_reminders_events ? 'bg-[#97d6a2]' : 'bg-gray-200'
                     }`}
                   >
                     <span
                       className={`block w-5 h-5 mt-0.5 rounded-full bg-white shadow transition-transform ${
-                        notificationsForm.notify_reminders_events ? 'translate-x-5 ml-0.5' : 'translate-x-0.5'
+                        notificationsForm.notify_reminders_events
+                          ? 'translate-x-5 ml-0.5'
+                          : 'translate-x-0.5'
                       }`}
                     />
                   </button>
@@ -932,21 +1115,29 @@ export default function UserProfile() {
                     type="button"
                     role="switch"
                     aria-checked={notificationsForm.notify_promotions_offers}
-                    onClick={() => setNotificationsForm((p) => ({ ...p, notify_promotions_offers: !p.notify_promotions_offers }))}
+                    onClick={() =>
+                      setNotificationsForm((p) => ({
+                        ...p,
+                        notify_promotions_offers: !p.notify_promotions_offers,
+                      }))
+                    }
                     className={`flex-shrink-0 w-11 h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[#97d6a2] ${
                       notificationsForm.notify_promotions_offers ? 'bg-[#97d6a2]' : 'bg-gray-200'
                     }`}
                   >
                     <span
                       className={`block w-5 h-5 mt-0.5 rounded-full bg-white shadow transition-transform ${
-                        notificationsForm.notify_promotions_offers ? 'translate-x-5 ml-0.5' : 'translate-x-0.5'
+                        notificationsForm.notify_promotions_offers
+                          ? 'translate-x-5 ml-0.5'
+                          : 'translate-x-0.5'
                       }`}
                     />
                   </button>
                   <div>
                     <p className="text-sm font-medium text-gray-900">Promotions et offres</p>
                     <p className="text-xs text-gray-500 mt-0.5">
-                      Recevez des notifications concernant les promotions spéciales, les réductions et les offres exclusives.
+                      Recevez des notifications concernant les promotions spéciales, les réductions
+                      et les offres exclusives.
                     </p>
                   </div>
                 </div>
@@ -954,16 +1145,23 @@ export default function UserProfile() {
               <div className="flex gap-3 pt-8 justify-end">
                 <button
                   type="button"
-                  onClick={() => profile && setNotificationsForm({
-                    notify_news_updates: profile.notify_news_updates ?? false,
-                    notify_reminders_events: profile.notify_reminders_events ?? true,
-                    notify_promotions_offers: profile.notify_promotions_offers ?? false,
-                  })}
+                  onClick={() =>
+                    profile &&
+                    setNotificationsForm({
+                      notify_news_updates: profile.notify_news_updates ?? false,
+                      notify_reminders_events: profile.notify_reminders_events ?? true,
+                      notify_promotions_offers: profile.notify_promotions_offers ?? false,
+                    })
+                  }
                   className="px-5 py-2.5 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50"
                 >
                   Annuler
                 </button>
-                <button type="submit" className="px-5 py-2.5 rounded-xl font-medium text-black hover:opacity-90" style={{ background: '#97d6a2' }}>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl font-medium text-black hover:opacity-90"
+                  style={{ background: '#97d6a2' }}
+                >
                   Enregistrer
                 </button>
               </div>
@@ -976,7 +1174,9 @@ export default function UserProfile() {
         <div className="flex gap-6 flex-col lg:flex-row lg:items-stretch">
           {/* Sidebar Paramètres de sécurité — même design que les autres onglets */}
           <aside className="lg:w-72 flex-shrink-0 bg-white rounded-xl border border-gray-200 p-4 lg:min-h-0">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Paramètres de sécurité</p>
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">
+              Paramètres de sécurité
+            </p>
             <nav className="space-y-1">
               {CONFIDENTIALITE_SUB.map((sub) => (
                 <button
@@ -991,7 +1191,17 @@ export default function UserProfile() {
                       : 'text-gray-600 hover:bg-gray-100'
                   }`}
                 >
-                  <span className={confidentialiteSub === sub.id ? (sub.id === 'delete' ? 'text-red-600' : 'text-[#132B1B]') : 'text-gray-400'}>{sub.icon}</span>
+                  <span
+                    className={
+                      confidentialiteSub === sub.id
+                        ? sub.id === 'delete'
+                          ? 'text-red-600'
+                          : 'text-[#132B1B]'
+                        : 'text-gray-400'
+                    }
+                  >
+                    {sub.icon}
+                  </span>
                   {sub.label}
                 </button>
               ))}
@@ -1002,12 +1212,16 @@ export default function UserProfile() {
             {confidentialiteSub === 'password' && (
               <form onSubmit={handleUpdatePassword} className="p-6 max-w-xl space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Mot de passe actuel <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Mot de passe actuel <span className="text-red-500">*</span>
+                  </label>
                   <div className="relative">
                     <input
                       type={showPassword ? 'text' : 'password'}
                       value={passwordData.currentPassword}
-                      onChange={(e) => setPasswordData((p) => ({ ...p, currentPassword: e.target.value }))}
+                      onChange={(e) =>
+                        setPasswordData((p) => ({ ...p, currentPassword: e.target.value }))
+                      }
                       className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB] pr-10"
                       placeholder="Mot de passe actuel"
                     />
@@ -1021,21 +1235,29 @@ export default function UserProfile() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nouveau mot de passe <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Nouveau mot de passe <span className="text-red-500">*</span>
+                  </label>
                   <input
                     type={showPassword ? 'text' : 'password'}
                     value={passwordData.newPassword}
-                    onChange={(e) => setPasswordData((p) => ({ ...p, newPassword: e.target.value }))}
+                    onChange={(e) =>
+                      setPasswordData((p) => ({ ...p, newPassword: e.target.value }))
+                    }
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB]"
                     placeholder="Nouveau mot de passe"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Confirmer le nouveau mot de passe <span className="text-red-500">*</span></label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Confirmer le nouveau mot de passe <span className="text-red-500">*</span>
+                  </label>
                   <input
                     type={showPassword ? 'text' : 'password'}
                     value={passwordData.confirmPassword}
-                    onChange={(e) => setPasswordData((p) => ({ ...p, confirmPassword: e.target.value }))}
+                    onChange={(e) =>
+                      setPasswordData((p) => ({ ...p, confirmPassword: e.target.value }))
+                    }
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB]"
                     placeholder="Confirmer le nouveau mot de passe"
                   />
@@ -1044,19 +1266,29 @@ export default function UserProfile() {
                   <p className="text-xs font-medium text-gray-700 mb-2">Doit contenir au moins</p>
                   <ul className="space-y-1.5 text-sm text-gray-600">
                     <li className="flex items-center gap-2">
-                      <span className={passwordRequirements.uppercase ? 'text-[#97d6a2]' : 'text-gray-300'}>
+                      <span
+                        className={
+                          passwordRequirements.uppercase ? 'text-[#97d6a2]' : 'text-gray-300'
+                        }
+                      >
                         <Check className="h-4 w-4" strokeWidth={2.5} />
                       </span>
                       Au moins une majuscule
                     </li>
                     <li className="flex items-center gap-2">
-                      <span className={passwordRequirements.digit ? 'text-[#97d6a2]' : 'text-gray-300'}>
+                      <span
+                        className={passwordRequirements.digit ? 'text-[#97d6a2]' : 'text-gray-300'}
+                      >
                         <Check className="h-4 w-4" strokeWidth={2.5} />
                       </span>
                       Au moins un chiffre
                     </li>
                     <li className="flex items-center gap-2">
-                      <span className={passwordRequirements.minLength ? 'text-[#97d6a2]' : 'text-gray-300'}>
+                      <span
+                        className={
+                          passwordRequirements.minLength ? 'text-[#97d6a2]' : 'text-gray-300'
+                        }
+                      >
                         <Check className="h-4 w-4" strokeWidth={2.5} />
                       </span>
                       Minimum 8 caractères
@@ -1064,10 +1296,17 @@ export default function UserProfile() {
                   </ul>
                 </div>
                 <div className="flex gap-3 pt-4 justify-end">
-                  <button type="button" className="px-5 py-2.5 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50">
+                  <button
+                    type="button"
+                    className="px-5 py-2.5 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50"
+                  >
                     Annuler
                   </button>
-                  <button type="submit" className="px-5 py-2.5 rounded-xl font-medium text-black hover:opacity-90" style={{ background: '#97d6a2' }}>
+                  <button
+                    type="submit"
+                    className="px-5 py-2.5 rounded-xl font-medium text-black hover:opacity-90"
+                    style={{ background: '#97d6a2' }}
+                  >
                     Enregistrer
                   </button>
                 </div>
@@ -1084,14 +1323,18 @@ export default function UserProfile() {
                 </div>
                 <div className="space-y-2">
                   <p className="text-sm text-gray-700">
-                    Toutes vos données, y compris votre profil, vos publications et vos informations personnelles, seront définitivement supprimées.
+                    Toutes vos données, y compris votre profil, vos publications et vos informations
+                    personnelles, seront définitivement supprimées.
                   </p>
                   <p className="text-sm text-gray-700">
-                    En saisissant votre mot de passe, vous confirmez avoir compris et accepté les conséquences de la suppression de votre compte.
+                    En saisissant votre mot de passe, vous confirmez avoir compris et accepté les
+                    conséquences de la suppression de votre compte.
                   </p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-900 mb-1.5">Confirmer la suppression *</label>
+                  <label className="block text-sm font-medium text-gray-900 mb-1.5">
+                    Confirmer la suppression *
+                  </label>
                   <div className="relative">
                     <input
                       type={showDeletePassword ? 'text' : 'password'}
@@ -1104,9 +1347,15 @@ export default function UserProfile() {
                       type="button"
                       onClick={() => setShowDeletePassword((v) => !v)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
-                      aria-label={showDeletePassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+                      aria-label={
+                        showDeletePassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'
+                      }
                     >
-                      {showDeletePassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                      {showDeletePassword ? (
+                        <EyeOff className="h-5 w-5" />
+                      ) : (
+                        <Eye className="h-5 w-5" />
+                      )}
                     </button>
                   </div>
                   <div className="flex items-start gap-2 mt-1.5">
@@ -1114,7 +1363,8 @@ export default function UserProfile() {
                       <Info className="h-2.5 w-2.5 text-white" />
                     </div>
                     <p className="text-xs text-gray-500">
-                      Veuillez saisir votre mot de passe pour procéder à la suppression de votre compte.
+                      Veuillez saisir votre mot de passe pour procéder à la suppression de votre
+                      compte.
                     </p>
                   </div>
                 </div>
