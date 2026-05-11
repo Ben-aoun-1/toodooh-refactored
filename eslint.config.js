@@ -1,6 +1,7 @@
 // @ts-check
 import js from '@eslint/js';
 import prettier from 'eslint-config-prettier';
+import { createTypeScriptImportResolver } from 'eslint-import-resolver-typescript';
 import { flatConfigs as importXConfigs } from 'eslint-plugin-import-x';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
 import reactHooks from 'eslint-plugin-react-hooks';
@@ -14,9 +15,6 @@ export default tseslint.config(
 
   js.configs.recommended,
   ...tseslint.configs.recommended,
-  // NOTE: import-x's TypeScript resolver config is intentionally omitted until a real
-  // package with its own tsconfig lands (e.g. apps/web). Add `importXConfigs.typescript`
-  // — with `eslint-import-resolver-typescript` — at that point.
   importXConfigs.recommended,
   jsxA11y.flatConfigs.recommended,
 
@@ -50,10 +48,18 @@ export default tseslint.config(
     },
   },
 
-  // React Hooks rules — scoped to the web app only; backend packages don't need them.
+  // React Hooks rules + TypeScript-aware import resolution — scoped to the web app only;
+  // backend packages don't need React rules and will get their own tsconfig later.
   {
     files: ['apps/web/**/*.{ts,tsx}'],
     plugins: { 'react-hooks': reactHooks },
+    settings: {
+      'import-x/resolver-next': [
+        createTypeScriptImportResolver({
+          project: 'apps/web/tsconfig.app.json',
+        }),
+      ],
+    },
     rules: {
       ...reactHooks.configs.recommended.rules,
     },

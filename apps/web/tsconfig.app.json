@@ -1,0 +1,44 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    /* --- Original options preserved from the imported frontend --- */
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    /* Linting */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+
+    /* --- TEMPORARILY softened ---
+     * tsconfig.base.json sets these to `true`. Tightening them across apps/web is
+     * deferred to the "tsconfig tightening" cleanup phase, which must run AFTER the
+     * structural refactor (mega-file decomposition, folder restructure) — running a
+     * `verbatimModuleSyntax` / `noUncheckedIndexedAccess` codemod on the current file
+     * shapes would be wasted work, since those imports get re-split when files move.
+     * DO NOT remove these overrides until that phase is scheduled.
+     */
+    "verbatimModuleSyntax": false,
+    "noUncheckedIndexedAccess": false,
+    "noPropertyAccessFromIndexSignature": false
+
+    /* Inherited from base and KEPT ON (worth catching now):
+     *   - strict family (strictNullChecks, noImplicitAny, …) — already effective above
+     *   - noImplicitOverride
+     *   - forceConsistentCasingInFileNames
+     */
+  },
+  "include": ["src"]
+}
