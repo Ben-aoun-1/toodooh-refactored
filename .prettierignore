@@ -8,3 +8,6 @@ pnpm-lock.yaml
 
 # Hand-maintained spec document — keep authored formatting
 CLAUDE.md
+
+# Verbatim historical context — keep as imported, don't reformat
+docs/handoff/
