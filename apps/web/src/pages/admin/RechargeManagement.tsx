@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
-export function RechargeManagement() {
+export default function RechargeManagement() {
   const { admin } = useAdminStore();
   const [recharges, setRecharges] = useState<AdminRecharge[]>([]);
   const [stats, setStats] = useState<RechargeStats | null>(null);

@@ -42,7 +42,7 @@ import CampaignMonitoring from './pages/admin/CampaignMonitoring';
 import CreateAdmin from './pages/admin/CreateAdmin';
 import AdminManagement from './pages/admin/AdminManagement';
 import ScreenManagement from './pages/admin/ScreenManagement';
-import { RechargeManagement } from './pages/admin/RechargeManagement';
+import RechargeManagement from './pages/admin/RechargeManagement';
 import GeographicZonesManagement from './pages/admin/GeographicZonesManagement';
 import AdminGlobalConfiguration from './pages/admin/AdminGlobalConfiguration';
 import AdminRoute from './components/admin/AdminRoute';
