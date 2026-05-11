@@ -1,5 +1,3 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   Eye,
   EyeOff,
@@ -16,7 +14,27 @@ import {
   MoreVertical,
   Trash2,
 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
+
+import inscriptionImg from '../../assets/inscription.png';
+import adresseStepIcon from '../../assets/inscrit/adressex.png';
+import agenceIcon from '../../assets/inscrit/agence.png';
+import agenceIconS from '../../assets/inscrit/agences.png';
+import annonceurIcon from '../../assets/inscrit/annonceur.png';
+import annonceurIconS from '../../assets/inscrit/annonceurs.png';
+import responsableStepIcon from '../../assets/inscrit/connexion.png';
+import documentStepIcon from '../../assets/inscrit/documentx.png';
+import entrepriseStepIcon from '../../assets/inscrit/entreprisex.png';
+import individuelIcon from '../../assets/inscrit/individuel.png';
+import individuelIconS from '../../assets/inscrit/individuels.png';
+import parcIcon from '../../assets/inscrit/parc.png';
+import parcIconS from '../../assets/inscrit/parcs.png';
+import {
+  AGENCY_BUSINESS_SECTOR_NAME,
+  sectorsForAdvertiserAgencySignup,
+} from '../../constants/advertiserBusinessSectors';
 import { authService } from '../../services/auth.service';
 import type {
   BusinessSector,
@@ -26,24 +44,6 @@ import type {
   FleetEstablishmentInput,
   CompanySizeOption,
 } from '../../types/auth';
-import {
-  AGENCY_BUSINESS_SECTOR_NAME,
-  sectorsForAdvertiserAgencySignup,
-} from '../../constants/advertiserBusinessSectors';
-import inscriptionImg from '../../assets/inscription.png';
-import responsableStepIcon from '../../assets/inscrit/connexion.png';
-import entrepriseStepIcon from '../../assets/inscrit/entreprisex.png';
-import adresseStepIcon from '../../assets/inscrit/adressex.png';
-import documentStepIcon from '../../assets/inscrit/documentx.png';
-
-import annonceurIcon from '../../assets/inscrit/annonceur.png';
-import annonceurIconS from '../../assets/inscrit/annonceurs.png';
-import agenceIcon from '../../assets/inscrit/agence.png';
-import agenceIconS from '../../assets/inscrit/agences.png';
-import individuelIcon from '../../assets/inscrit/individuel.png';
-import individuelIconS from '../../assets/inscrit/individuels.png';
-import parcIcon from '../../assets/inscrit/parc.png';
-import parcIconS from '../../assets/inscrit/parcs.png';
 
 type ProfileType = 'advertiser' | 'agency' | 'individual_owner' | 'fleet_owner';
 

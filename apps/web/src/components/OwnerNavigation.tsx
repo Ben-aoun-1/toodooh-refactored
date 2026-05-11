@@ -1,5 +1,3 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Monitor,
   BarChart3,
@@ -23,15 +21,18 @@ import {
   CheckCircle,
   Megaphone,
 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
-import { useAuthStore } from '../stores/auth.store';
-import { authService } from '../services/auth.service';
-import type { BusinessProfile } from '../types/auth';
+import { useNavigate, useLocation } from 'react-router-dom';
+
+import deconnexionIcon from '../assets/deconnexion.png';
 import logoImage from '../assets/logo.png';
-import logoCompany from '../assets/sidebar/logo.png';
-import dashboardIcon from '../assets/sidebar/dashboard.png';
-import dashboardIconActive from '../assets/sidebar/dashboards.png';
+import paramIcon from '../assets/param.png';
+import paramIconActive from '../assets/params.png';
 import campagneIcon from '../assets/sidebar/campagnes.png';
+import dashboardIcon from '../assets/sidebar/dashboard.png';
+import logoCompany from '../assets/sidebar/logo.png';
+import dashboardIconActive from '../assets/sidebar/dashboards.png';
 import campagneIconActive from '../assets/sidebar/campagness.png';
 import performanceIcon from '../assets/sidebar/performance.png';
 import performanceIconActive from '../assets/sidebar/performances.png';
@@ -39,11 +40,11 @@ import financeIcon from '../assets/sidebar/portefeuille.png';
 import financeIconActive from '../assets/sidebar/portefeuilles.png';
 import parcTvIcon from '../assets/sidebar/ecrans.png';
 import parcTvIconActive from '../assets/sidebar/ecranss.png';
-import paramIcon from '../assets/param.png';
-import paramIconActive from '../assets/params.png';
 import supportIcon from '../assets/support.png';
 import supportIconActive from '../assets/supports.png';
-import deconnexionIcon from '../assets/deconnexion.png';
+import { authService } from '../services/auth.service';
+import { useAuthStore } from '../stores/auth.store';
+import type { BusinessProfile } from '../types/auth';
 
 const APPOINTMENT_OBJECTIVES_FALLBACK = [
   'Renseignements',

@@ -1,4 +1,3 @@
-import { useState, useEffect, useMemo } from 'react';
 import {
   Wallet,
   Plus,
@@ -13,11 +12,13 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-import { useAuthStore } from '../stores/auth.store';
+import { useState, useEffect, useMemo } from 'react';
 import { toast } from 'react-hot-toast';
-import { balanceService } from '../services/balance.service';
 import { useNavigate } from 'react-router-dom';
+
+import { supabase } from '../lib/supabase';
+import { balanceService } from '../services/balance.service';
+import { useAuthStore } from '../stores/auth.store';
 
 interface Transaction {
   id: string;

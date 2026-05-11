@@ -1,7 +1,8 @@
-import { create } from 'zustand';
 import { User } from '@supabase/supabase-js';
-import { authService } from '../services/auth.service';
+import { create } from 'zustand';
+
 import { supabase } from '../lib/supabase';
+import { authService } from '../services/auth.service';
 
 interface AuthState {
   user: User | null;

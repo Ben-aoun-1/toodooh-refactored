@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAdminStore } from '../../stores/admin.store';
-import { toast } from 'react-hot-toast';
-import AnimatedLogo from '../../components/AnimatedLogo';
 import { Eye, EyeOff, Shield, ArrowLeft } from 'lucide-react';
+import React, { useState } from 'react';
+import { toast } from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
+
+import AnimatedLogo from '../../components/AnimatedLogo';
+import { useAdminStore } from '../../stores/admin.store';
 
 export default function AdminLogin() {
   const navigate = useNavigate();

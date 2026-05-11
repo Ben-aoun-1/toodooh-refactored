@@ -1,5 +1,3 @@
-import { useEffect, useState, useMemo } from 'react';
-import { supabase } from '../lib/supabase';
 import {
   Download,
   FileText,
@@ -11,8 +9,11 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import { useAuthStore } from '../stores/auth.store';
+import { useEffect, useState, useMemo } from 'react';
+
+import { supabase } from '../lib/supabase';
 import { generateInvoicePDF } from '../services/invoice-pdf.service';
+import { useAuthStore } from '../stores/auth.store';
 
 export default function MyInvoices() {
   const user = useAuthStore((state) => state.user);

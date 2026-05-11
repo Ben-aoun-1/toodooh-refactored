@@ -1,5 +1,3 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   User,
   Building2,
@@ -16,11 +14,14 @@ import {
   FileText,
   X,
 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
-import { useAuthStore } from '../stores/auth.store';
-import { authService } from '../services/auth.service';
+import { useNavigate } from 'react-router-dom';
+
 import OwnerNavigation from '../components/OwnerNavigation';
 import { supabase } from '../lib/supabase';
+import { authService } from '../services/auth.service';
+import { useAuthStore } from '../stores/auth.store';
 import type { BusinessSector, Governorate, BusinessProfile } from '../types/auth';
 
 const steps = [

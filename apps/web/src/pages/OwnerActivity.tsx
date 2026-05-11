@@ -1,4 +1,5 @@
 import React from 'react';
+
 import OwnerNavigation from '../components/OwnerNavigation';
 export default function OwnerActivity() {
   return (

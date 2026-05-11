@@ -1,8 +1,3 @@
-import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
-import { useAdminStore } from '../../stores/admin.store';
-import { adminUserService, AdminUser } from '../../services/admin-user.service';
-import AdminLayout from '../../components/admin/AdminLayout';
 import {
   Users,
   Search,
@@ -25,8 +20,14 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
+import { useLocation } from 'react-router-dom';
+
+import AdminLayout from '../../components/admin/AdminLayout';
 import { supabase } from '../../lib/supabase';
+import { adminUserService, AdminUser } from '../../services/admin-user.service';
+import { useAdminStore } from '../../stores/admin.store';
 
 // Utiliser AdminUser du service
 

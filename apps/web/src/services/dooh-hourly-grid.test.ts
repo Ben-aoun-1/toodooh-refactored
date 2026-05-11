@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+
+import { DEFAULT_DOOH_CONFIG_NUMBERS } from './dooh-calculation.service';
 import {
   buildLocationWeeklyAffluenceLookup,
   computeCampaignDayCount,
@@ -13,7 +15,6 @@ import {
   parseLocalCampaignCalendarDay,
   doohNumbersToLocationEngineConfig,
 } from './dooh-hourly-grid';
-import { DEFAULT_DOOH_CONFIG_NUMBERS } from './dooh-calculation.service';
 
 describe('jsGetDayToDbDayOfWeek', () => {
   it('mappe getDay() JS vers day_of_week BD (1=lun..7=dim)', () => {

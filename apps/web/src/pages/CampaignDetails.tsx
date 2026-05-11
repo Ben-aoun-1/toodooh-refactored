@@ -1,5 +1,3 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   Calendar,
@@ -15,8 +13,12 @@ import {
   User,
   Building,
 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
+import { useParams, useNavigate } from 'react-router-dom';
+
+import { supabase } from '../lib/supabase';
+
 
 interface Campaign {
   id: string;

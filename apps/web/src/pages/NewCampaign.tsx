@@ -1,30 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { MapContainer, TileLayer, Circle, useMapEvents, Marker, Popup } from 'react-leaflet';
-import { useNavigate, useLocation } from 'react-router-dom';
-import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import {
-  campaignScreensService,
-  type CampaignScreen,
-  type CampaignLocation,
-} from '../services/campaign-screens.service';
-import {
-  buildWizardLocationScheduleMap,
-  computeNewCampaignDoohMaxImpressions,
-} from '../services/dooh-new-campaign-estimate.service';
-import {
-  videoUploadService,
-  readVideoDurationFromFile,
-  readVideoDurationFromUrl,
-  type UploadProgress,
-} from '../services/video-upload.service';
-import { campaignService } from '../services/campaign.service';
-import { balanceService } from '../services/balance.service';
-import { authService } from '../services/auth.service';
-import { predefinedZonesService, type PredefinedZone } from '../services/predefined-zones.service';
-import { screensService, type UnavailabilityPeriod } from '../services/screens.service';
+
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
 import { useAuthStore } from '../stores/auth.store';
@@ -59,21 +38,42 @@ import {
   ChevronRight,
   Flame,
 } from 'lucide-react';
+import DatePicker from 'react-datepicker';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 import ariane1 from '../assets/ariane/1.png';
-import ariane2 from '../assets/ariane/2.png';
-import ariane3 from '../assets/ariane/3.png';
 import ariane4 from '../assets/ariane/4.png';
 import ariane5 from '../assets/ariane/5.png';
 import ariane6 from '../assets/ariane/6.png';
 import ariane1s from '../assets/ariane/1s.png';
+import ariane2 from '../assets/ariane/2.png';
 import ariane2s from '../assets/ariane/2s.png';
+import ariane3 from '../assets/ariane/3.png';
 import ariane3s from '../assets/ariane/3s.png';
 import ariane4s from '../assets/ariane/4s.png';
 import ariane5s from '../assets/ariane/5s.png';
 import ariane6s from '../assets/ariane/6s.png';
-
 import panierPng from '../assets/panier.png';
+import { authService } from '../services/auth.service';
+import { balanceService } from '../services/balance.service';
+import {
+  campaignScreensService,
+  type CampaignScreen,
+  type CampaignLocation,
+} from '../services/campaign-screens.service';
+import { campaignService } from '../services/campaign.service';
+import {
+  buildWizardLocationScheduleMap,
+  computeNewCampaignDoohMaxImpressions,
+} from '../services/dooh-new-campaign-estimate.service';
+import { predefinedZonesService, type PredefinedZone } from '../services/predefined-zones.service';
+import { screensService, type UnavailabilityPeriod } from '../services/screens.service';
+import {
+  videoUploadService,
+  readVideoDurationFromFile,
+  readVideoDurationFromUrl,
+  type UploadProgress,
+} from '../services/video-upload.service';
 
 const ARIANE_ICONS = [ariane1, ariane2, ariane3, ariane4, ariane5, ariane6] as const;
 const ARIANE_ICONS_DONE = [ariane1s, ariane2s, ariane3s, ariane4s, ariane5s, ariane6s] as const;
@@ -683,7 +683,7 @@ export default function NewCampaign() {
       console.log('📍 Rayon maximum:', maxRadius);
 
       // Calculer le budget à utiliser : utiliser adjustedBudget si disponible, sinon calculer à partir des impressions
-      let budgetToSave = adjustedBudget;
+      const budgetToSave = adjustedBudget;
       const maxImpSave = calculateBudgetAndImpressions.impressions;
       const linkedImpSave =
         maxImpSave > 0 && adjustedBudget > 0

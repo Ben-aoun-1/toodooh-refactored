@@ -1,10 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Circle, useMapEvents, Marker } from 'react-leaflet';
-import {
-  predefinedZonesService,
-  type PredefinedZone,
-} from '../../services/predefined-zones.service';
-import AdminLayout from '../../components/admin/AdminLayout';
+import L from 'leaflet';
 import {
   MapPin,
   Plus,
@@ -18,8 +12,15 @@ import {
   Upload,
   Flame,
 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
-import L from 'leaflet';
+import { MapContainer, TileLayer, Circle, useMapEvents, Marker } from 'react-leaflet';
+
+import AdminLayout from '../../components/admin/AdminLayout';
+import {
+  predefinedZonesService,
+  type PredefinedZone,
+} from '../../services/predefined-zones.service';
 import 'leaflet/dist/leaflet.css';
 
 // Fix pour les icônes Leaflet

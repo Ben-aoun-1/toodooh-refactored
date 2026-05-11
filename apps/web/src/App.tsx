@@ -1,6 +1,7 @@
 import React, { lazy, Suspense, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+
 import { useAuthStore } from './stores/auth.store';
 import { useAdminStore } from './stores/admin.store';
 import './utils/clearAuthCache'; // Utilitaire de debug

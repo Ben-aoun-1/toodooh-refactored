@@ -1,5 +1,3 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Eye,
   Edit2,
@@ -24,14 +22,17 @@ import {
   Monitor,
   Trash2,
 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
 import DatePicker from 'react-datepicker';
-import 'react-datepicker/dist/react-datepicker.css';
-import { supabase } from '../lib/supabase';
-import { useAuthStore } from '../stores/auth.store';
 import { toast } from 'react-hot-toast';
+import { useNavigate, useLocation } from 'react-router-dom';
+
+import 'react-datepicker/dist/react-datepicker.css';
+import campagneIcon from '../assets/sidebar/campagnes.png';
+import { supabase } from '../lib/supabase';
 import { balanceService } from '../services/balance.service';
 import { campaignService } from '../services/campaign.service';
-import campagneIcon from '../assets/sidebar/campagnes.png';
+import { useAuthStore } from '../stores/auth.store';
 
 const isMissingCampaignCategoriesTable = (error: any) =>
   error?.code === 'PGRST205' && String(error?.message || '').includes('campaign_categories');

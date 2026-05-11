@@ -1,4 +1,3 @@
-import React from 'react';
 import {
   motion,
   useAnimation,
@@ -8,6 +7,7 @@ import {
   animate,
   easeInOut,
 } from 'framer-motion';
+import React from 'react';
 
 // Logo SVG inspiré du logo en haut à gauche de l'image fournie
 // Les crochets sont animés (ouverture/fermeture)

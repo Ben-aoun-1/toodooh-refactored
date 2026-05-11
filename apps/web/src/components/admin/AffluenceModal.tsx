@@ -1,8 +1,9 @@
+import { X, Edit, Save, Calendar } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
+import { toast } from 'react-hot-toast';
+
 import { supabase } from '../../lib/supabase';
 import type { AdminLocation } from '../../services/admin-screens.service';
-import { X, Edit, Save, Calendar } from 'lucide-react';
-import { toast } from 'react-hot-toast';
 
 type LocationAffluenceRow = {
   location_id: string;

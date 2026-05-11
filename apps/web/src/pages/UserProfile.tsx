@@ -1,4 +1,3 @@
-import React, { useState, useEffect } from 'react';
 import {
   Eye,
   EyeOff,
@@ -15,16 +14,18 @@ import {
   Check,
   Info,
 } from 'lucide-react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
-import { authService } from '../services/auth.service';
-import { useAuthStore } from '../stores/auth.store';
-import { supabase } from '../lib/supabase';
-import type { BusinessProfile, BusinessSector, Governorate } from '../types/auth';
+import { useNavigate, useLocation } from 'react-router-dom';
+
 import {
   AGENCY_BUSINESS_SECTOR_NAME,
   sectorsForAdvertiserProfile,
 } from '../constants/advertiserBusinessSectors';
+import { supabase } from '../lib/supabase';
+import { authService } from '../services/auth.service';
+import { useAuthStore } from '../stores/auth.store';
+import type { BusinessProfile, BusinessSector, Governorate } from '../types/auth';
 
 type TabId = 'responsable' | 'entreprise' | 'notifications' | 'confidentialite';
 type EntrepriseSubId = 'informations' | 'adresse' | 'documents';

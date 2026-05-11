@@ -1,5 +1,11 @@
 import { supabase } from '../lib/supabase';
-import { getDoohConfigNumbers } from './global-configuration.service';
+
+import {
+  buildHybridAdjustedHourlyPlan,
+  getOccupiedRepetitionsByLocationFromHourlyPlan,
+  replaceCampaignHourlyLocationPlan,
+  type HourlyPlanSlotInput,
+} from './campaign-hourly-location-plan.service';
 import {
   computeRepetitionsPerHourVideo,
   resolveEffectiveVideoDuration,
@@ -19,12 +25,7 @@ import {
   type UnavailabilityPeriod,
   type SpecialEventWindow,
 } from './dooh-hourly-grid';
-import {
-  buildHybridAdjustedHourlyPlan,
-  getOccupiedRepetitionsByLocationFromHourlyPlan,
-  replaceCampaignHourlyLocationPlan,
-  type HourlyPlanSlotInput,
-} from './campaign-hourly-location-plan.service';
+import { getDoohConfigNumbers } from './global-configuration.service';
 
 export interface CreateCampaignData {
   name: string;

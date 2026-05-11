@@ -1,3 +1,14 @@
+import {
+  ArrowDown,
+  ArrowUp,
+  Calendar,
+  Clock3,
+  Eye,
+  MapPin,
+  Monitor,
+  Users,
+  Wallet,
+} from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -11,22 +22,13 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import {
-  ArrowDown,
-  ArrowUp,
-  Calendar,
-  Clock3,
-  Eye,
-  MapPin,
-  Monitor,
-  Users,
-  Wallet,
-} from 'lucide-react';
+
+import performanceIntroIcon from '../assets/performance/1.png';
 import OwnerNavigation from '../components/OwnerNavigation';
 import OwnerNotificationsBell from '../components/OwnerNotificationsBell';
-import { useAuthStore } from '../stores/auth.store';
 import { supabase } from '../lib/supabase';
 import { performanceService } from '../services/performance.service';
+import { useAuthStore } from '../stores/auth.store';
 import type {
   PerformanceCategoryPoint,
   PerformanceDataset,
@@ -35,7 +37,6 @@ import type {
   PerformancePeriodPreset,
   PerformanceTrendPoint,
 } from '../types/performance';
-import performanceIntroIcon from '../assets/performance/1.png';
 
 const presetButtons: { key: PerformancePeriodPreset; label: string }[] = [
   { key: 'month', label: 'Ce mois' },

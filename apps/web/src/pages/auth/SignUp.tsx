@@ -1,18 +1,18 @@
+import { ChevronRight } from 'lucide-react';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
-import logoFull from '../../assets/logo.png';
-import SignUpForm from '../../components/auth/SignUpForm';
 
-import profilIcon from '../../assets/inscrit/profil.png';
-import responsableIcon from '../../assets/inscrit/responsable.png';
-import responsableIconS from '../../assets/inscrit/responsables.png';
-import entrepriseIcon from '../../assets/inscrit/entreprise.png';
-import entrepriseIconS from '../../assets/inscrit/entreprises.png';
 import adresseIcon from '../../assets/inscrit/adresse.png';
 import adresseIconS from '../../assets/inscrit/adresses.png';
 import documentIcon from '../../assets/inscrit/document.png';
 import documentIconS from '../../assets/inscrit/documents.png';
+import entrepriseIcon from '../../assets/inscrit/entreprise.png';
+import entrepriseIconS from '../../assets/inscrit/entreprises.png';
+import profilIcon from '../../assets/inscrit/profil.png';
+import responsableIcon from '../../assets/inscrit/responsable.png';
+import responsableIconS from '../../assets/inscrit/responsables.png';
+import logoFull from '../../assets/logo.png';
+import SignUpForm from '../../components/auth/SignUpForm';
 
 const stepsDefault = [
   { id: 1, title: 'Profil', icon: profilIcon, iconSelected: profilIcon },

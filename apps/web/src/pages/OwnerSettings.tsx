@@ -3,7 +3,6 @@
  * contenu et champs adaptés aux propriétaires (local / parc).
  * Ne pas modifier UserProfile.tsx : ce fichier est autonome.
  */
-import React, { useState, useEffect, useMemo } from 'react';
 import {
   Eye,
   EyeOff,
@@ -19,13 +18,15 @@ import {
   Check,
   Info,
 } from 'lucide-react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
 import { toast } from 'react-hot-toast';
+import { useLocation, useNavigate } from 'react-router-dom';
+
+import OwnerNavigation from '../components/OwnerNavigation';
+import { supabase } from '../lib/supabase';
 import { authService } from '../services/auth.service';
 import { useAuthStore } from '../stores/auth.store';
-import { supabase } from '../lib/supabase';
 import type { BusinessProfile, BusinessSector, Governorate } from '../types/auth';
-import OwnerNavigation from '../components/OwnerNavigation';
 
 type TabId = 'responsable' | 'entreprise' | 'notifications' | 'confidentialite';
 type EntrepriseSubId = 'informations' | 'adresse' | 'documents' | 'coordonnees-bancaires';

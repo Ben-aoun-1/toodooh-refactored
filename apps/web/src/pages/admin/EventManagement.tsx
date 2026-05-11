@@ -1,8 +1,3 @@
-import React, { useState, useEffect } from 'react';
-import { useAdminStore } from '../../stores/admin.store';
-import { adminEventsService } from '../../services/admin-events.service';
-import { SpecialEvent, CreateEventDTO, EventStats } from '../../types/event';
-import AdminLayout from '../../components/admin/AdminLayout';
 import {
   Calendar,
   Search,
@@ -20,8 +15,16 @@ import {
   XCircle,
   AlertCircle,
 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
+
+import AdminLayout from '../../components/admin/AdminLayout';
 import { supabase } from '../../lib/supabase';
+import { adminEventsService } from '../../services/admin-events.service';
+import { useAdminStore } from '../../stores/admin.store';
+import { SpecialEvent, CreateEventDTO, EventStats } from '../../types/event';
+
+
 
 const EVENT_IMAGES_BUCKET = 'event-images';
 

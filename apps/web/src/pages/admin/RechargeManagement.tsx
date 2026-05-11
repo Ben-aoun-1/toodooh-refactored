@@ -1,12 +1,3 @@
-import React, { useState, useEffect } from 'react';
-import AdminLayout from '../../components/admin/AdminLayout';
-import {
-  adminRechargesService,
-  type AdminRecharge,
-  type RechargeStats,
-} from '../../services/admin-recharges.service';
-import { useAdminStore } from '../../stores/admin.store';
-import { supabase } from '../../lib/supabase';
 import {
   DollarSign,
   CheckCircle,
@@ -22,7 +13,17 @@ import {
   Filter,
   Plus,
 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
+
+import AdminLayout from '../../components/admin/AdminLayout';
+import { supabase } from '../../lib/supabase';
+import {
+  adminRechargesService,
+  type AdminRecharge,
+  type RechargeStats,
+} from '../../services/admin-recharges.service';
+import { useAdminStore } from '../../stores/admin.store';
 
 export default function RechargeManagement() {
   const { admin } = useAdminStore();

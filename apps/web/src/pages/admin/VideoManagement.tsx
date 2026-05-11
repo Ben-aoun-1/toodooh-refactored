@@ -1,9 +1,3 @@
-import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
-import { useAdminStore } from '../../stores/admin.store';
-import { adminVideoService } from '../../services/admin-video.service';
-import { Video, VideoValidationStats } from '../../types/video';
-import AdminLayout from '../../components/admin/AdminLayout';
 import {
   Video as VideoIcon,
   Search,
@@ -17,7 +11,14 @@ import {
   AlertCircle,
   FileVideo,
 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
+import { useLocation } from 'react-router-dom';
+
+import AdminLayout from '../../components/admin/AdminLayout';
+import { adminVideoService } from '../../services/admin-video.service';
+import { useAdminStore } from '../../stores/admin.store';
+import { Video, VideoValidationStats } from '../../types/video';
 
 export default function VideoManagement() {
   const { admin } = useAdminStore();

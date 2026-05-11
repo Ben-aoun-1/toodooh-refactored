@@ -1,7 +1,8 @@
-import React from 'react';
-import { useAdminStore } from '../../stores/admin.store';
-import AdminLayout from '../../components/admin/AdminLayout';
 import { Users, BarChart3, FileText } from 'lucide-react';
+import React from 'react';
+
+import AdminLayout from '../../components/admin/AdminLayout';
+import { useAdminStore } from '../../stores/admin.store';
 
 export default function AdminDashboardSimple() {
   const { admin } = useAdminStore();

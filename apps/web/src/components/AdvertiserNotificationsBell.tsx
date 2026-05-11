@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bell, CheckCircle2, Settings, Video, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+
 import { supabase } from '../lib/supabase';
 
 type AdvertiserNotificationKind = 'account_approved' | 'video_approved';

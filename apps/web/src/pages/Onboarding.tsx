@@ -1,9 +1,3 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { toast } from 'react-hot-toast';
-import { useAuthStore } from '../stores/auth.store';
-import { authService } from '../services/auth.service';
-import { supabase } from '../lib/supabase';
-import type { BusinessProfile } from '../types/auth';
 import {
   Upload,
   CheckCircle,
@@ -21,7 +15,14 @@ import {
   Star,
   Zap,
 } from 'lucide-react';
+import React, { useEffect, useState, useRef } from 'react';
+import { toast } from 'react-hot-toast';
+
 import AnimatedLogo from '../components/AnimatedLogo';
+import { supabase } from '../lib/supabase';
+import { authService } from '../services/auth.service';
+import { useAuthStore } from '../stores/auth.store';
+import type { BusinessProfile } from '../types/auth';
 
 interface OnboardingModalProps {
   onComplete: () => void;

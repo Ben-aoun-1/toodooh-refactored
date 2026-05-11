@@ -9,6 +9,7 @@
  * du fetch `screens` pour les ids wizard), pas « à cause » du retour des écrans.
  */
 import { supabase } from '../lib/supabase';
+
 import type { DoohConfigNumbers } from './dooh-calculation.service';
 import {
   computeRepetitionsPerHourVideo,
@@ -240,8 +241,8 @@ export async function computeNewCampaignDoohMaxImpressions(input: {
 
   applyWizardLocationAffluence(locationScheduleSlots, input.wizardLocationSlots);
 
-  let locScheduleRows: ScheduleRow[] = [...(scheduleWizardResult.data ?? [])];
-  let affluenceScheduleFetchError = !!scheduleWizardResult.error;
+  const locScheduleRows: ScheduleRow[] = [...(scheduleWizardResult.data ?? [])];
+  const affluenceScheduleFetchError = !!scheduleWizardResult.error;
   if (locScheduleRows.length > 0) {
     applyDbLocationScheduleRows(locationScheduleSlots, locScheduleRows);
   } else if (evaluationLocationIds.length > 0 && !affluenceScheduleFetchError) {

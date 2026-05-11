@@ -1,4 +1,3 @@
-import React, { useState, useEffect, useRef, useCallback, Component } from 'react';
 import {
   Calendar,
   Megaphone,
@@ -32,6 +31,7 @@ import {
   Check,
   Trash2,
 } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback, Component } from 'react';
 
 /** Affiche l'erreur à l'écran pour déboguer la page blanche */
 class ContentErrorBoundary extends Component<
@@ -62,22 +62,31 @@ class ContentErrorBoundary extends Component<
     return this.props.children;
   }
 }
-import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import { useAuthStore } from '../stores/auth.store';
+import Joyride, { CallBackProps, STATUS, Step } from 'react-joyride';
+import { useNavigate, useLocation } from 'react-router-dom';
+
+import deconnexionIcon from '../assets/deconnexion.png';
+import headerAgendaIcon from '../assets/header/agenda.png';
+import headerCampagnesIcon from '../assets/header/campagnes.png';
+import headerParcsIcon from '../assets/header/ecrans.png';
+import headerFinanceIcon from '../assets/header/finance.png';
+import logoImage from '../assets/logo.png';
+import AnimatedLogo from '../components/AnimatedLogo';
 import { authService } from '../services/auth.service';
+import { useAuthStore } from '../stores/auth.store';
 import { balanceService } from '../services/balance.service';
 import { campaignService } from '../services/campaign.service';
-import NewCampaign from './NewCampaign';
-import MyCampaigns from './MyCampaigns';
-import Parcs from './Parcs';
+
 import Events from './Events';
+import MyCampaigns from './MyCampaigns';
+import NewCampaign from './NewCampaign';
+import Parcs from './Parcs';
 import Perfor from './Perfor';
 import CartPage from './CartPage';
 import UserProfile from './UserProfile';
 import MyRecharges from './MyRecharges';
-import AnimatedLogo from '../components/AnimatedLogo';
-import logoImage from '../assets/logo.png';
+
 import logoCompany from '../assets/sidebar/logo.png';
 import dashboardIcon from '../assets/sidebar/dashboard.png';
 import dashboardIconActive from '../assets/sidebar/dashboards.png';
@@ -85,10 +94,6 @@ import campagneIcon from '../assets/sidebar/campagnes.png';
 import campagneIconActive from '../assets/sidebar/campagness.png';
 import parcsIcon from '../assets/sidebar/ecrans.png';
 import parcsIconActive from '../assets/sidebar/ecranss.png';
-import headerCampagnesIcon from '../assets/header/campagnes.png';
-import headerParcsIcon from '../assets/header/ecrans.png';
-import headerAgendaIcon from '../assets/header/agenda.png';
-import headerFinanceIcon from '../assets/header/finance.png';
 import headerPerformanceIcon from '../assets/header/performance.png';
 import headerParamsIcon from '../assets/header/params.png';
 import agendaIcon from '../assets/sidebar/agenda.png';
@@ -101,7 +106,6 @@ import paramIcon from '../assets/param.png';
 import paramIconActive from '../assets/params.png';
 import supportIcon from '../assets/support.png';
 import supportIconActive from '../assets/supports.png';
-import deconnexionIcon from '../assets/deconnexion.png';
 import smart3Icon from '../assets/smart3.png';
 import statIcon1 from '../assets/stats/1.png';
 import statIcon2 from '../assets/stats/2.png';
@@ -109,11 +113,15 @@ import statIcon3 from '../assets/stats/3.png';
 import statIcon4 from '../assets/stats/4.png';
 import statIcon5 from '../assets/stats/5.png';
 import matchImg from '../assets/match.png';
-import Joyride, { CallBackProps, STATUS, Step } from 'react-joyride';
+
+
 import OnboardingModal from './Onboarding';
+
 import { supabase } from '../lib/supabase';
+
 import MyInvoices from './MyInvoices';
 import MyClients from './MyClients';
+
 import { eventsService } from '../services/events.service';
 import type { SpecialEvent } from '../types/event';
 import AdvertiserNotificationsBell from '../components/AdvertiserNotificationsBell';

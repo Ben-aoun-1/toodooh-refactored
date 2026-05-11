@@ -1,9 +1,3 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAdminStore } from '../../stores/admin.store';
-import { adminService } from '../../services/admin.service';
-import { AdminProfile } from '../../types/admin';
-import AdminLayout from '../../components/admin/AdminLayout';
 import {
   Shield,
   User,
@@ -16,7 +10,14 @@ import {
   CheckCircle,
   AlertCircle,
 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
+
+import AdminLayout from '../../components/admin/AdminLayout';
+import { adminService } from '../../services/admin.service';
+import { useAdminStore } from '../../stores/admin.store';
+import { AdminProfile } from '../../types/admin';
 
 export default function AdminManagement() {
   const { admin } = useAdminStore();

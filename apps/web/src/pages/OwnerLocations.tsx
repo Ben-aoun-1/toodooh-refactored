@@ -1,5 +1,3 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   MapPin,
   Monitor,
@@ -22,11 +20,14 @@ import {
   CheckCircle,
   XCircle,
 } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'react-hot-toast';
-import { useAuthStore } from '../stores/auth.store';
-import OwnerNavigation from '../components/OwnerNavigation';
+import { useNavigate } from 'react-router-dom';
+
 import LocationsMap from '../components/LocationsMap';
+import OwnerNavigation from '../components/OwnerNavigation';
 import { screensService, Screen } from '../services/screens.service';
+import { useAuthStore } from '../stores/auth.store';
 
 interface LocationStats {
   totalLocations: number;

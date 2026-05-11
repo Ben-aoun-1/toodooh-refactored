@@ -1,5 +1,3 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   CheckCircle,
   XCircle,
@@ -10,13 +8,16 @@ import {
   Search,
   ShieldCheck,
 } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
-import { useAuthStore } from '../stores/auth.store';
+import { useNavigate } from 'react-router-dom';
+
+import OwnerNavigation from '../components/OwnerNavigation';
 import {
   campaignOwnerApprovalService,
   PendingCampaign,
 } from '../services/campaign-owner-approval.service';
-import OwnerNavigation from '../components/OwnerNavigation';
+import { useAuthStore } from '../stores/auth.store';
 
 export default function OwnerCampaignApprovals() {
   const navigate = useNavigate();

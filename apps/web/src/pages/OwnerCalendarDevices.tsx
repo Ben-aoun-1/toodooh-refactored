@@ -1,11 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
 import { Calendar, ChevronLeft, ChevronRight, Megaphone, Users, X } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
+
 import OwnerNavigation from '../components/OwnerNavigation';
 import OwnerNotificationsBell from '../components/OwnerNotificationsBell';
-import { useAuthStore } from '../stores/auth.store';
 import { screensService, Screen, UnavailabilityPeriod } from '../services/screens.service';
-import { toast } from 'react-hot-toast';
+import { useAuthStore } from '../stores/auth.store';
 
 type EstablishmentStatus = 'active' | 'inactive' | 'maintenance' | 'unavailable';
 

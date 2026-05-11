@@ -1,16 +1,17 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, Download, Printer } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
-import { useAuthStore } from '../stores/auth.store';
+import { useNavigate, useParams } from 'react-router-dom';
+
+import logoImage from '../assets/logo.png';
 import OwnerNavigation from '../components/OwnerNavigation';
+import { TOODOOH_STATEMENT_EMITTER, OWNER_STATEMENT_FOOTER } from '../constants/ownerStatement';
 import { getOwnerStatementDetail } from '../data/ownerStatementDetails';
-import type { OwnerStatementDetail, StatementRecipientDisplay } from '../types/ownerStatement';
-import { buildStatementRecipient } from '../utils/statementRecipient';
 import { authService } from '../services/auth.service';
 import { exportService } from '../services/export.service';
-import { TOODOOH_STATEMENT_EMITTER, OWNER_STATEMENT_FOOTER } from '../constants/ownerStatement';
-import logoImage from '../assets/logo.png';
+import { useAuthStore } from '../stores/auth.store';
+import type { OwnerStatementDetail, StatementRecipientDisplay } from '../types/ownerStatement';
+import { buildStatementRecipient } from '../utils/statementRecipient';
 
 export default function OwnerStatementDetailPage() {
   const { statementId } = useParams<{ statementId: string }>();

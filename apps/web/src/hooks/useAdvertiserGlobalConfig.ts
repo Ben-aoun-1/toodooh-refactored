@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+
 import {
   type DoohConfigNumbers,
   DEFAULT_DOOH_CONFIG_NUMBERS,

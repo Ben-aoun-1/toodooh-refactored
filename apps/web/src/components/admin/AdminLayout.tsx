@@ -1,6 +1,3 @@
-import React, { useState } from 'react';
-import { useAdminStore } from '../../stores/admin.store';
-import { useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   Users,
@@ -21,6 +18,10 @@ import {
   MapPin,
   Sliders,
 } from 'lucide-react';
+import React, { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+
+import { useAdminStore } from '../../stores/admin.store';
 
 interface AdminLayoutProps {
   children: React.ReactNode;

@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAdminStore } from '../../stores/admin.store';
-import { adminService } from '../../services/admin.service';
-import AdminLayout from '../../components/admin/AdminLayout';
 import { UserPlus, Shield, User, Mail, Lock, AlertCircle, CheckCircle } from 'lucide-react';
+import React, { useState } from 'react';
 import { toast } from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
+
+import AdminLayout from '../../components/admin/AdminLayout';
+import { adminService } from '../../services/admin.service';
+import { useAdminStore } from '../../stores/admin.store';
 
 interface AdminFormData {
   email: string;

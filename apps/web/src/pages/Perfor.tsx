@@ -1,3 +1,4 @@
+import { Clock3, Eye, Users, Monitor, Wallet, MapPin, ArrowDown, ArrowUp } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   AreaChart,
@@ -10,9 +11,9 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { Clock3, Eye, Users, Monitor, Wallet, MapPin, ArrowDown, ArrowUp } from 'lucide-react';
-import { performanceService } from '../services/performance.service';
+
 import performanceIntroIcon from '../assets/performance/1.png';
+import { performanceService } from '../services/performance.service';
 import type {
   PerformanceDataset,
   PerformanceFilters,

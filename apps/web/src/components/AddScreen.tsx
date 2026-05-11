@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
 import { Plus, X, Save, MapPin, Monitor, AlertTriangle, Info, Upload } from 'lucide-react';
+import React, { useState } from 'react';
 import { toast } from 'react-hot-toast';
+
 import { screensService, CreateScreenData } from '../services/screens.service';
 
 interface AddScreenProps {

@@ -1,3 +1,4 @@
+import { TrendingUp, TrendingDown, DollarSign, Monitor, MapPin } from 'lucide-react';
 import React from 'react';
 import {
   LineChart,
@@ -16,7 +17,6 @@ import {
   AreaChart,
   Area,
 } from 'recharts';
-import { TrendingUp, TrendingDown, DollarSign, Monitor, MapPin } from 'lucide-react';
 
 interface MonthlyComparison {
   month: string;

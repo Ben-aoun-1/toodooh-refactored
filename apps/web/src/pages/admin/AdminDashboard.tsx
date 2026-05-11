@@ -1,15 +1,3 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAdminStore } from '../../stores/admin.store';
-import { platformStatsService } from '../../services/platform-stats.service';
-import {
-  PlatformGlobalStats,
-  PlatformRevenueStats,
-  ScreensOccupancyStats,
-  CampaignsPerformance,
-  TopPerformingScreen,
-} from '../../types/platform-stats';
-import AdminLayout from '../../components/admin/AdminLayout';
 import {
   Users,
   Monitor,
@@ -25,6 +13,19 @@ import {
   Star,
   BarChart3,
 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+
+import AdminLayout from '../../components/admin/AdminLayout';
+import { platformStatsService } from '../../services/platform-stats.service';
+import { useAdminStore } from '../../stores/admin.store';
+import {
+  PlatformGlobalStats,
+  PlatformRevenueStats,
+  ScreensOccupancyStats,
+  CampaignsPerformance,
+  TopPerformingScreen,
+} from '../../types/platform-stats';
 
 export default function AdminDashboard() {
   const { admin } = useAdminStore();

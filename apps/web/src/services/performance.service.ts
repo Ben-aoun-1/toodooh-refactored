@@ -392,7 +392,7 @@ export const performanceService = {
     const campaignIds = allCampaigns.map((c) => c.id);
 
     let campaignScreens: CampaignScreenRow[] = [];
-    let activeScreenIdsByCampaign = new Map<string, Set<string>>();
+    const activeScreenIdsByCampaign = new Map<string, Set<string>>();
     let campaignLocations: CampaignLocationRow[] = [];
     let locations: LocationRow[] = [];
     let ownerBusinessSectors: OwnerBusinessSectorRow[] = [];

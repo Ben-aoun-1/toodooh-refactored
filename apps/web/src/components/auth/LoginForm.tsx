@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
-import { useAuthStore } from '../../stores/auth.store';
+import React, { useState } from 'react';
 import { toast } from 'react-hot-toast';
+import { useNavigate, Link } from 'react-router-dom';
+
+import { useAuthStore } from '../../stores/auth.store';
+
 
 export default function LoginForm() {
   const navigate = useNavigate();

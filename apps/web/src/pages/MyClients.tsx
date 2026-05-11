@@ -1,5 +1,3 @@
-import React, { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
 import {
   Users,
   Loader2,
@@ -15,8 +13,12 @@ import {
   X,
   Save,
 } from 'lucide-react';
-import { useAuthStore } from '../stores/auth.store';
+import React, { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
+
+import { supabase } from '../lib/supabase';
+import { useAuthStore } from '../stores/auth.store';
+
 
 function getMonth(dateStr: string) {
   return new Date(dateStr).getMonth() + 1;

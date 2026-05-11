@@ -1,16 +1,3 @@
-import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
-import { useAdminStore } from '../../stores/admin.store';
-import { adminCampaignMonitoringService } from '../../services/admin-campaign-monitoring.service';
-import { supabase } from '../../lib/supabase';
-import {
-  CampaignMonitoringData,
-  CampaignGlobalStats,
-  CampaignByCategory,
-  CampaignLocation,
-  CampaignImpressionProgress,
-} from '../../types/campaign-monitoring';
-import AdminLayout from '../../components/admin/AdminLayout';
 import {
   Play,
   Pause,
@@ -33,7 +20,21 @@ import {
   AlertCircle,
   StopCircle,
 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
+import { useLocation } from 'react-router-dom';
+
+import AdminLayout from '../../components/admin/AdminLayout';
+import { supabase } from '../../lib/supabase';
+import { adminCampaignMonitoringService } from '../../services/admin-campaign-monitoring.service';
+import { useAdminStore } from '../../stores/admin.store';
+import {
+  CampaignMonitoringData,
+  CampaignGlobalStats,
+  CampaignByCategory,
+  CampaignLocation,
+  CampaignImpressionProgress,
+} from '../../types/campaign-monitoring';
 
 export default function CampaignMonitoring() {
   const { admin } = useAdminStore();

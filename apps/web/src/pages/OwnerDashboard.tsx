@@ -1,5 +1,3 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   Plus,
   AlertTriangle,
@@ -31,19 +29,22 @@ import {
   Building2,
   Wallet,
 } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { toast } from 'react-hot-toast';
-import { authService } from '../services/auth.service';
-import { useAuthStore } from '../stores/auth.store';
-import { screensService, Screen } from '../services/screens.service';
-import { revenueService, RevenueStats } from '../services/revenue.service';
-import { campaignService } from '../services/campaign.service';
-import { campaignOwnerApprovalService } from '../services/campaign-owner-approval.service';
-import { balanceService } from '../services/balance.service';
-import { supabase } from '../lib/supabase';
+import { useNavigate } from 'react-router-dom';
+
+import AddScreen from '../components/AddScreen';
+import GiftCatalog from '../components/GiftCatalog';
 import OwnerNavigation from '../components/OwnerNavigation';
 import OwnerNotificationsBell from '../components/OwnerNotificationsBell';
-import GiftCatalog from '../components/GiftCatalog';
-import AddScreen from '../components/AddScreen';
+import { supabase } from '../lib/supabase';
+import { authService } from '../services/auth.service';
+import { balanceService } from '../services/balance.service';
+import { campaignOwnerApprovalService } from '../services/campaign-owner-approval.service';
+import { campaignService } from '../services/campaign.service';
+import { revenueService, RevenueStats } from '../services/revenue.service';
+import { screensService, Screen } from '../services/screens.service';
+import { useAuthStore } from '../stores/auth.store';
 
 interface Alert {
   id: string;

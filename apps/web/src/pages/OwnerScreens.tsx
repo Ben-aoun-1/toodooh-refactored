@@ -1,5 +1,3 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   Monitor,
   MapPin,
@@ -36,18 +34,21 @@ import {
   Info,
   Bell,
 } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { toast } from 'react-hot-toast';
-import { useAuthStore } from '../stores/auth.store';
+import { useNavigate } from 'react-router-dom';
+
+import AddScreen from '../components/AddScreen';
 import OwnerNavigation from '../components/OwnerNavigation';
 import ScreenCalendar from '../components/ScreenCalendar';
+import { supabase } from '../lib/supabase';
 import {
   screensService,
   Screen,
   UnavailabilityPeriod,
   ScreenAlert,
 } from '../services/screens.service';
-import { supabase } from '../lib/supabase';
-import AddScreen from '../components/AddScreen';
+import { useAuthStore } from '../stores/auth.store';
 
 interface RevenueStats {
   totalRevenue: number;

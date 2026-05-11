@@ -1,4 +1,3 @@
-import React, { useState } from 'react';
 import {
   BarChart3,
   X,
@@ -9,6 +8,7 @@ import {
   Monitor,
   Filter,
 } from 'lucide-react';
+import React, { useState } from 'react';
 
 interface RevenueData {
   screenId: string;

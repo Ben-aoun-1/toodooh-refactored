@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+
 import { type DoohConfigNumbers, DEFAULT_DOOH_CONFIG_NUMBERS } from './dooh-calculation.service';
 
 export type GlobalConfigurationValueType = 'integer' | 'numeric' | 'boolean' | 'json' | 'text';

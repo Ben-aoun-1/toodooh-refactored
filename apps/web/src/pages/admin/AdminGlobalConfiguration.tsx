@@ -1,4 +1,7 @@
+import { Loader2, Save } from 'lucide-react';
 import React, { useCallback, useEffect, useState } from 'react';
+import { toast } from 'react-hot-toast';
+
 import AdminLayout from '../../components/admin/AdminLayout';
 import {
   globalConfigurationService,
@@ -6,8 +9,6 @@ import {
   type GlobalConfigurationValueType,
   validateValueForKey,
 } from '../../services/global-configuration.service';
-import { toast } from 'react-hot-toast';
-import { Loader2, Save } from 'lucide-react';
 
 function inputTypeForRow(row: GlobalConfigurationRow): 'number' | 'text' {
   return row.value_type === 'integer' || row.value_type === 'numeric' ? 'number' : 'text';

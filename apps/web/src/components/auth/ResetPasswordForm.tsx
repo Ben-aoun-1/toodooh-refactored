@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Mail } from 'lucide-react';
+import React, { useState } from 'react';
 import { toast } from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
+
 import { authService } from '../../services/auth.service';
 
 export default function ResetPasswordForm() {

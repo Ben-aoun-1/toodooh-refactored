@@ -1,10 +1,11 @@
+import { Calendar, TrendingUp, ChevronLeft, ChevronRight, Search, Rocket } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, TrendingUp, ChevronLeft, ChevronRight, Search, Rocket } from 'lucide-react';
+
 import matchImg from '../assets/match.png';
 import { supabase } from '../lib/supabase';
-import { useAuthStore } from '../stores/auth.store';
 import { eventsService } from '../services/events.service';
+import { useAuthStore } from '../stores/auth.store';
 import type { SpecialEvent } from '../types/event';
 
 /** Forme campagne attendue par la page d’édition (comme MyCampaigns). */

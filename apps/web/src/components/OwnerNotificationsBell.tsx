@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Bell, CalendarDays, FileText, Settings, X } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+
 import { supabase } from '../lib/supabase';
 import { campaignOwnerApprovalService } from '../services/campaign-owner-approval.service';
 
