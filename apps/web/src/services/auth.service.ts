@@ -1,3 +1,4 @@
+import { getAppUrl } from '../lib/app-url';
 import { supabase } from '../lib/supabase';
 import { SignUpData, BusinessProfile, BusinessSector, Governorate, SignUpResult, CompanySizeOption, SupportObjectiveOption } from '../types/auth';
 
@@ -451,7 +452,7 @@ export const authService = {
       email: data.email,
       password: data.password,
       options: {
-        emailRedirectTo: 'https://itstrategix.tn/login'
+        emailRedirectTo: getAppUrl('/login')
       }
     });
 
@@ -740,7 +741,7 @@ export const authService = {
 
   async resetPassword(email: string) {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `https://itstrategix.tn/update-password`,
+      redirectTo: getAppUrl('/update-password'),
     });
     if (error) throw new Error(mapAuthError(error));
   },
