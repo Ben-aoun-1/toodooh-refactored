@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { Video, VideoValidationStats, CampaignUsingVideo, ValidateVideoData } from '../types/video';
+import { Video, VideoValidationStats, CampaignUsingVideo } from '../types/video';
 
 export const adminVideoService = {
   // Récupérer toutes les vidéos pour validation (seulement celles utilisées dans des campagnes)

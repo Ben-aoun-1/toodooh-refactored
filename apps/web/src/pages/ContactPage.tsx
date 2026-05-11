@@ -7,8 +7,6 @@ import {
   Send,
   RefreshCw,
   Bell,
-  User,
-  LogOut,
   CheckCircle,
   AlertCircle,
 } from 'lucide-react';

@@ -7,9 +7,6 @@ import {
   Trash2,
   Plus,
   Star,
-  MapPin,
-  Users,
-  TrendingUp,
   Clock,
   CheckCircle,
   XCircle,
@@ -23,8 +20,6 @@ import { supabase } from '../../lib/supabase';
 import { adminEventsService } from '../../services/admin-events.service';
 import { useAdminStore } from '../../stores/admin.store';
 import { SpecialEvent, CreateEventDTO, EventStats } from '../../types/event';
-
-
 
 const EVENT_IMAGES_BUCKET = 'event-images';
 

@@ -1,24 +1,12 @@
 import {
-  Monitor,
   BarChart3,
-  Settings,
-  LogOut,
   Menu,
   X,
   Home,
   DollarSign,
-  Activity,
   Calendar,
-  Users,
-  User,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
-  HelpCircle,
-  Gift,
-  MessageCircle,
-  UserCircle,
-  CheckCircle,
   Megaphone,
 } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
@@ -30,16 +18,16 @@ import logoImage from '../assets/logo.png';
 import paramIcon from '../assets/param.png';
 import paramIconActive from '../assets/params.png';
 import campagneIcon from '../assets/sidebar/campagnes.png';
-import dashboardIcon from '../assets/sidebar/dashboard.png';
-import logoCompany from '../assets/sidebar/logo.png';
-import dashboardIconActive from '../assets/sidebar/dashboards.png';
 import campagneIconActive from '../assets/sidebar/campagness.png';
+import dashboardIcon from '../assets/sidebar/dashboard.png';
+import dashboardIconActive from '../assets/sidebar/dashboards.png';
+import parcTvIcon from '../assets/sidebar/ecrans.png';
+import parcTvIconActive from '../assets/sidebar/ecranss.png';
+import logoCompany from '../assets/sidebar/logo.png';
 import performanceIcon from '../assets/sidebar/performance.png';
 import performanceIconActive from '../assets/sidebar/performances.png';
 import financeIcon from '../assets/sidebar/portefeuille.png';
 import financeIconActive from '../assets/sidebar/portefeuilles.png';
-import parcTvIcon from '../assets/sidebar/ecrans.png';
-import parcTvIconActive from '../assets/sidebar/ecranss.png';
 import supportIcon from '../assets/support.png';
 import supportIconActive from '../assets/supports.png';
 import { authService } from '../services/auth.service';

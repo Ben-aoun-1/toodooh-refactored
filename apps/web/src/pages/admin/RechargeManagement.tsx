@@ -3,7 +3,6 @@ import {
   CheckCircle,
   XCircle,
   Clock,
-  Ban,
   Search,
   Eye,
   CreditCard,

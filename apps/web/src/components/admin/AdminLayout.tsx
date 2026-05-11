@@ -3,8 +3,6 @@ import {
   Users,
   Shield,
   UserPlus,
-  BarChart3,
-  FileText,
   LogOut,
   Menu,
   X,

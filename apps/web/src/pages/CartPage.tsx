@@ -21,7 +21,6 @@ import { eventsService } from '../services/events.service';
 import { useAuthStore } from '../stores/auth.store';
 import type { SpecialEvent } from '../types/event';
 
-
 interface CartItemSidebar {
   id: string;
   name: string;

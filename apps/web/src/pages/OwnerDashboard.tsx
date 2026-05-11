@@ -2,7 +2,6 @@ import {
   Plus,
   AlertTriangle,
   CheckCircle,
-  Clock,
   XCircle,
   DollarSign,
   Monitor,
@@ -11,23 +10,13 @@ import {
   CalendarX,
   BarChart3,
   TrendingUp,
-  Users,
-  MapPin,
-  Activity,
   Bell,
   Settings,
-  LogOut,
-  ChevronRight,
   Star,
-  Award,
-  Zap,
-  Info,
-  RefreshCw,
   LayoutGrid,
   Megaphone,
   Eye,
   Building2,
-  Wallet,
 } from 'lucide-react';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { toast } from 'react-hot-toast';
@@ -37,11 +26,8 @@ import AddScreen from '../components/AddScreen';
 import GiftCatalog from '../components/GiftCatalog';
 import OwnerNavigation from '../components/OwnerNavigation';
 import OwnerNotificationsBell from '../components/OwnerNotificationsBell';
-import { supabase } from '../lib/supabase';
 import { authService } from '../services/auth.service';
-import { balanceService } from '../services/balance.service';
 import { campaignOwnerApprovalService } from '../services/campaign-owner-approval.service';
-import { campaignService } from '../services/campaign.service';
 import { revenueService, RevenueStats } from '../services/revenue.service';
 import { screensService, Screen } from '../services/screens.service';
 import { useAuthStore } from '../stores/auth.store';

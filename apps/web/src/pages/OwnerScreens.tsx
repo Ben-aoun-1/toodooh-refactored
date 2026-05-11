@@ -1,40 +1,21 @@
 import {
   Monitor,
   MapPin,
-  BarChart3,
-  Settings,
-  LogOut,
-  Menu,
   X,
-  Home,
-  DollarSign,
-  Activity,
   Calendar,
-  Users,
-  User,
-  ChevronDown,
-  HelpCircle,
   AlertTriangle,
   CheckCircle,
   XCircle,
-  Clock,
   Eye,
   Wrench,
   Power,
-  TrendingUp,
-  FileText,
   Plus,
   Search,
-  Filter,
   MoreVertical,
-  Play,
-  Pause,
-  Trash2,
-  Edit,
   Info,
   Bell,
 } from 'lucide-react';
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
@@ -42,12 +23,7 @@ import AddScreen from '../components/AddScreen';
 import OwnerNavigation from '../components/OwnerNavigation';
 import ScreenCalendar from '../components/ScreenCalendar';
 import { supabase } from '../lib/supabase';
-import {
-  screensService,
-  Screen,
-  UnavailabilityPeriod,
-  ScreenAlert,
-} from '../services/screens.service';
+import { screensService, Screen, UnavailabilityPeriod } from '../services/screens.service';
 import { useAuthStore } from '../stores/auth.store';
 
 interface RevenueStats {

@@ -1,4 +1,4 @@
-import { Trash2, ShoppingBag, ArrowRight, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { Trash2, ShoppingBag, ArrowRight, CheckCircle, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';

@@ -1,7 +1,6 @@
 import {
   Shield,
   User,
-  Mail,
   Calendar,
   Search,
   UserPlus,

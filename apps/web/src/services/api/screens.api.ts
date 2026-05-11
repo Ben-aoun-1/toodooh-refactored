@@ -1,4 +1,3 @@
-import { supabase } from '../../lib/supabase';
 import { screensService } from '../screens.service';
 
 // Types pour les réponses API

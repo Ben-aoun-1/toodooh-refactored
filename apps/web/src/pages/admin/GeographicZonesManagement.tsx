@@ -12,7 +12,7 @@ import {
   Upload,
   Flame,
 } from 'lucide-react';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { MapContainer, TileLayer, Circle, useMapEvents, Marker } from 'react-leaflet';
 

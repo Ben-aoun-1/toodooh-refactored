@@ -1,7 +1,5 @@
 import { supabase } from '../lib/supabase';
 
-import { Screen } from './screens.service';
-
 export interface RevenueData {
   id: string;
   screen_id: string;

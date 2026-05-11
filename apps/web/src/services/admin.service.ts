@@ -1,11 +1,5 @@
 import { supabase } from '../lib/supabase';
-import {
-  AdminProfile,
-  AdminLoginData,
-  AdminSignUpData,
-  AdminDashboardStats,
-  AdminActivity,
-} from '../types/admin';
+import { AdminProfile, AdminSignUpData, AdminDashboardStats, AdminActivity } from '../types/admin';
 
 // Fonction pour mapper les erreurs admin
 const mapAdminError = (error: any): string => {

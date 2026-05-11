@@ -1,13 +1,4 @@
-import {
-  BarChart3,
-  X,
-  DollarSign,
-  TrendingUp,
-  TrendingDown,
-  Calendar,
-  Monitor,
-  Filter,
-} from 'lucide-react';
+import { BarChart3, X, TrendingUp, TrendingDown, Calendar, Monitor } from 'lucide-react';
 import React, { useState } from 'react';
 
 interface RevenueData {

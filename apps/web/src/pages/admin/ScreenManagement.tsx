@@ -7,7 +7,6 @@ import AffluenceModal from '../../components/admin/AffluenceModal';
 import { adminScreensService } from '../../services/admin-screens.service';
 import type { AdminLocation, AdminLocationStatus } from '../../services/admin-screens.service';
 
-
 export default function ScreenManagement() {
   const [locations, setLocations] = useState<AdminLocation[]>([]);
   const [loading, setLoading] = useState(true);

@@ -9,7 +9,6 @@ import type { OwnerStatementDetail, StatementRecipientDisplay } from '../types/o
 
 import { RevenueData, ScreenRevenue, MonthlyComparison } from './revenue.service';
 
-
 function loadImageAsBase64(src: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();

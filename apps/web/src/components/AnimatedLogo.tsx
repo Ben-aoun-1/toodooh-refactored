@@ -1,12 +1,4 @@
-import {
-  motion,
-  useAnimation,
-  useCycle,
-  useMotionValue,
-  useTransform,
-  animate,
-  easeInOut,
-} from 'framer-motion';
+import { motion, easeInOut } from 'framer-motion';
 import React from 'react';
 
 // Logo SVG inspiré du logo en haut à gauche de l'image fournie

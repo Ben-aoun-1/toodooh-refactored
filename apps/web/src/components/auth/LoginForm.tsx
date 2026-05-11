@@ -5,7 +5,6 @@ import { useNavigate, Link } from 'react-router-dom';
 
 import { useAuthStore } from '../../stores/auth.store';
 
-
 export default function LoginForm() {
   const navigate = useNavigate();
   const login = useAuthStore((state) => state.login);

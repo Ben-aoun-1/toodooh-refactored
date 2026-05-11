@@ -1,19 +1,4 @@
-import {
-  Eye,
-  EyeOff,
-  Mail,
-  Lock,
-  Phone,
-  Upload,
-  FileText,
-  X,
-  CheckCircle,
-  User,
-  Building2,
-  MapPin,
-  MoreVertical,
-  Trash2,
-} from 'lucide-react';
+import { Upload, FileText, X, Building2, MapPin, MoreVertical, Trash2 } from 'lucide-react';
 import React, { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
@@ -26,7 +11,6 @@ import annonceurIcon from '../../assets/inscrit/annonceur.png';
 import annonceurIconS from '../../assets/inscrit/annonceurs.png';
 import responsableStepIcon from '../../assets/inscrit/connexion.png';
 import documentStepIcon from '../../assets/inscrit/documentx.png';
-import entrepriseStepIcon from '../../assets/inscrit/entreprisex.png';
 import individuelIcon from '../../assets/inscrit/individuel.png';
 import individuelIconS from '../../assets/inscrit/individuels.png';
 import parcIcon from '../../assets/inscrit/parc.png';
@@ -40,7 +24,6 @@ import type {
   BusinessSector,
   Governorate,
   SignUpData,
-  SignUpResult,
   FleetEstablishmentInput,
   CompanySizeOption,
 } from '../../types/auth';

@@ -1,4 +1,4 @@
-import { Calendar, X, Save, Monitor, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Calendar, X, Save, AlertTriangle } from 'lucide-react';
 import React, { useState } from 'react';
 import { toast } from 'react-hot-toast';
 

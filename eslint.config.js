@@ -5,6 +5,7 @@ import { createTypeScriptImportResolver } from 'eslint-import-resolver-typescrip
 import { flatConfigs as importXConfigs } from 'eslint-plugin-import-x';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
 import reactHooks from 'eslint-plugin-react-hooks';
+import unusedImports from 'eslint-plugin-unused-imports';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
@@ -52,7 +53,7 @@ export default tseslint.config(
   // backend packages don't need React rules and will get their own tsconfig later.
   {
     files: ['apps/web/**/*.{ts,tsx}'],
-    plugins: { 'react-hooks': reactHooks },
+    plugins: { 'react-hooks': reactHooks, 'unused-imports': unusedImports },
     settings: {
       'import-x/resolver-next': [
         createTypeScriptImportResolver({
@@ -62,6 +63,10 @@ export default tseslint.config(
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      // Autofixable: `eslint --fix` (incl. the pre-commit hook) strips unused imports.
+      // Unused *local variables/params* remain flagged by @typescript-eslint/no-unused-vars
+      // (not autofixable) for a later manual pass.
+      'unused-imports/no-unused-imports': 'error',
     },
   },
 

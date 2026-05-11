@@ -1,16 +1,4 @@
-import {
-  Video as VideoIcon,
-  Search,
-  Filter,
-  Eye,
-  Check,
-  X,
-  Clock,
-  Play,
-  Trash2,
-  AlertCircle,
-  FileVideo,
-} from 'lucide-react';
+import { Video as VideoIcon, Search, Filter, Eye, Check, X, Clock, FileVideo } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { useLocation } from 'react-router-dom';

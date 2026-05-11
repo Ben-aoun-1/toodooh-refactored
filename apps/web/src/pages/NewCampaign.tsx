@@ -3,20 +3,12 @@ import { MapContainer, TileLayer, Circle, useMapEvents, Marker, Popup } from 're
 import 'react-datepicker/dist/react-datepicker.css';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-
-import { supabase } from '../lib/supabase';
-import { toast } from 'react-hot-toast';
-import { useAuthStore } from '../stores/auth.store';
-import { useAdvertiserGlobalConfig } from '../hooks/useAdvertiserGlobalConfig';
-import type { BusinessSector } from '../types/auth';
-import type { SpecialEvent } from '../types/event';
 import {
   Upload,
   MapPin,
   Calendar,
   Film,
   Search,
-  Plus,
   Target,
   Users,
   DollarSign,
@@ -28,32 +20,33 @@ import {
   AlertCircle,
   Info,
   Monitor,
-  Trash2,
   Sparkles,
   X,
   PartyPopper,
-  Edit,
   Megaphone,
   LayoutList,
   ChevronRight,
   Flame,
 } from 'lucide-react';
 import DatePicker from 'react-datepicker';
+import { toast } from 'react-hot-toast';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 import ariane1 from '../assets/ariane/1.png';
-import ariane4 from '../assets/ariane/4.png';
-import ariane5 from '../assets/ariane/5.png';
-import ariane6 from '../assets/ariane/6.png';
 import ariane1s from '../assets/ariane/1s.png';
 import ariane2 from '../assets/ariane/2.png';
 import ariane2s from '../assets/ariane/2s.png';
 import ariane3 from '../assets/ariane/3.png';
 import ariane3s from '../assets/ariane/3s.png';
+import ariane4 from '../assets/ariane/4.png';
 import ariane4s from '../assets/ariane/4s.png';
+import ariane5 from '../assets/ariane/5.png';
 import ariane5s from '../assets/ariane/5s.png';
+import ariane6 from '../assets/ariane/6.png';
 import ariane6s from '../assets/ariane/6s.png';
 import panierPng from '../assets/panier.png';
+import { useAdvertiserGlobalConfig } from '../hooks/useAdvertiserGlobalConfig';
+import { supabase } from '../lib/supabase';
 import { authService } from '../services/auth.service';
 import { balanceService } from '../services/balance.service';
 import {
@@ -74,6 +67,9 @@ import {
   readVideoDurationFromUrl,
   type UploadProgress,
 } from '../services/video-upload.service';
+import { useAuthStore } from '../stores/auth.store';
+import type { BusinessSector } from '../types/auth';
+import type { SpecialEvent } from '../types/event';
 
 const ARIANE_ICONS = [ariane1, ariane2, ariane3, ariane4, ariane5, ariane6] as const;
 const ARIANE_ICONS_DONE = [ariane1s, ariane2s, ariane3s, ariane4s, ariane5s, ariane6s] as const;

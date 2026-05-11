@@ -2,8 +2,6 @@ import {
   User,
   Building2,
   MapPin,
-  Phone,
-  Mail,
   Lock,
   CheckCircle,
   Save,

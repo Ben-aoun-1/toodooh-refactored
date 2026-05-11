@@ -1,7 +1,6 @@
 import {
   Users,
   Search,
-  Filter,
   Eye,
   Check,
   X,
@@ -9,16 +8,13 @@ import {
   UserCheck,
   UserX,
   Mail,
-  Phone,
   MapPin,
-  Calendar,
   Shield,
   Building,
   User,
   FileText,
   AlertCircle,
   Trash2,
-  Upload,
 } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';

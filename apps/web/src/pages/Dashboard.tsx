@@ -4,20 +4,13 @@ import {
   Wallet,
   FileText,
   Users,
-  MessageCircle,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Menu as MenuIcon,
   X,
   PlusCircle,
   Edit,
   ArrowRight,
-  LogOut,
-  LayoutDashboard,
   TrendingUp,
-  HelpCircle,
-  Info,
   ShoppingBag,
   PanelLeft,
   LayoutGrid,
@@ -71,39 +64,37 @@ import headerAgendaIcon from '../assets/header/agenda.png';
 import headerCampagnesIcon from '../assets/header/campagnes.png';
 import headerParcsIcon from '../assets/header/ecrans.png';
 import headerFinanceIcon from '../assets/header/finance.png';
+import headerParamsIcon from '../assets/header/params.png';
+import headerPerformanceIcon from '../assets/header/performance.png';
 import logoImage from '../assets/logo.png';
-import AnimatedLogo from '../components/AnimatedLogo';
+import matchImg from '../assets/match.png';
+import paramIcon from '../assets/param.png';
+import paramIconActive from '../assets/params.png';
+import agendaIcon from '../assets/sidebar/agenda.png';
+import campagneIcon from '../assets/sidebar/campagnes.png';
+import dashboardIcon from '../assets/sidebar/dashboard.png';
+import logoCompany from '../assets/sidebar/logo.png';
 import { authService } from '../services/auth.service';
-import { useAuthStore } from '../stores/auth.store';
 import { balanceService } from '../services/balance.service';
+import { useAuthStore } from '../stores/auth.store';
 import { campaignService } from '../services/campaign.service';
 
+import CartPage from './CartPage';
 import Events from './Events';
 import MyCampaigns from './MyCampaigns';
 import NewCampaign from './NewCampaign';
 import Parcs from './Parcs';
 import Perfor from './Perfor';
-import CartPage from './CartPage';
 import UserProfile from './UserProfile';
 import MyRecharges from './MyRecharges';
 
-import logoCompany from '../assets/sidebar/logo.png';
-import dashboardIcon from '../assets/sidebar/dashboard.png';
 import dashboardIconActive from '../assets/sidebar/dashboards.png';
-import campagneIcon from '../assets/sidebar/campagnes.png';
 import campagneIconActive from '../assets/sidebar/campagness.png';
-import parcsIcon from '../assets/sidebar/ecrans.png';
-import parcsIconActive from '../assets/sidebar/ecranss.png';
-import headerPerformanceIcon from '../assets/header/performance.png';
-import headerParamsIcon from '../assets/header/params.png';
-import agendaIcon from '../assets/sidebar/agenda.png';
 import agendaIconActive from '../assets/sidebar/agendas.png';
 import performanceIcon from '../assets/sidebar/performance.png';
 import performanceIconActive from '../assets/sidebar/performances.png';
 import financeIcon from '../assets/sidebar/portefeuille.png';
 import financeIconActive from '../assets/sidebar/portefeuilles.png';
-import paramIcon from '../assets/param.png';
-import paramIconActive from '../assets/params.png';
 import supportIcon from '../assets/support.png';
 import supportIconActive from '../assets/supports.png';
 import smart3Icon from '../assets/smart3.png';
@@ -112,8 +103,6 @@ import statIcon2 from '../assets/stats/2.png';
 import statIcon3 from '../assets/stats/3.png';
 import statIcon4 from '../assets/stats/4.png';
 import statIcon5 from '../assets/stats/5.png';
-import matchImg from '../assets/match.png';
-
 
 import OnboardingModal from './Onboarding';
 

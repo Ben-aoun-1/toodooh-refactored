@@ -1,12 +1,10 @@
 import {
   Calendar,
-  Clock,
   X,
   Check,
   AlertTriangle,
   ChevronLeft,
   ChevronRight,
-  Monitor,
   MapPin,
   CalendarX,
 } from 'lucide-react';
