@@ -12,7 +12,7 @@ This is a pnpm monorepo. Packages live under:
 - `packages/shared/` — TypeScript types shared between apps (created as needed)
 - `infra/` — Docker Compose, nginx config, SQL migrations (created as needed)
 
-**Source code never lives at repo root.** Permitted root-level files and directories are limited to monorepo tooling and documentation: `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `tsconfig.base.json`, `eslint.config.js`, `.prettierrc`, `.prettierignore`, `.gitignore`, `.git-blame-ignore-revs`, `.npmrc`, `.nvmrc`, `README.md`, `CLAUDE.md`, the `.github/` directory (CI), and the `.husky/` directory (git hooks). Adding any other file at root requires explicit user approval.
+**Source code never lives at repo root.** Permitted root-level files and directories are limited to monorepo tooling and documentation: `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `tsconfig.base.json`, `eslint.config.js`, `.prettierrc`, `.prettierignore`, `.gitignore`, `.git-blame-ignore-revs`, `.npmrc`, `.nvmrc`, `README.md`, `CLAUDE.md`, the `.github/` directory (CI), the `.husky/` directory (git hooks), and the `docs/` directory (project docs, e.g. `docs/audit.md`). Adding any other file at root requires explicit user approval.
 
 ## Non-negotiable rules
 
