@@ -37,21 +37,6 @@ import { toast } from 'react-hot-toast';
 
 export default function CampaignMonitoring() {
   const { admin } = useAdminStore();
-  
-  // Vérifier que l'utilisateur est super admin ou admin
-  if (!admin || (admin.role !== 'superadmin' && admin.role !== 'admin')) {
-    return (
-      <AdminLayout title="Monitoring des Campagnes" subtitle="Accès réservé aux administrateurs">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-          <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Accès Refusé</h3>
-          <p className="text-gray-600 mb-6">
-            Cette page est réservée aux Super Administrateurs et Administrateurs.
-          </p>
-        </div>
-      </AdminLayout>
-    );
-  }
   const location = useLocation();
   const [campaigns, setCampaigns] = useState<CampaignMonitoringData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -92,8 +77,8 @@ export default function CampaignMonitoring() {
   }, [location.search]);
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (admin) loadData();
+  }, [admin]);
 
   const loadData = async () => {
     try {
@@ -140,6 +125,24 @@ export default function CampaignMonitoring() {
   useEffect(() => {
     setCurrentPage(1);
   }, [statusFilter, categoryFilter, searchTerm]);
+
+  // Vérifier que l'utilisateur est super admin ou admin.
+  // NB: ce garde est volontairement placé APRÈS tous les Hooks pour respecter
+  // l'invariant d'ordre des Hooks de React (un early return au-dessus des Hooks
+  // change leur nombre d'un rendu à l'autre quand `admin` s'hydrate de façon async).
+  if (!admin || (admin.role !== 'superadmin' && admin.role !== 'admin')) {
+    return (
+      <AdminLayout title="Monitoring des Campagnes" subtitle="Accès réservé aux administrateurs">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
+          <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Accès Refusé</h3>
+          <p className="text-gray-600 mb-6">
+            Cette page est réservée aux Super Administrateurs et Administrateurs.
+          </p>
+        </div>
+      </AdminLayout>
+    );
+  }
 
   const handleViewDetails = async (campaign: CampaignMonitoringData) => {
     setSelectedCampaign(campaign);
