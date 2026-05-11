@@ -1,51 +1,47 @@
-import React, { useEffect } from 'react';
+import React, { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useAuthStore } from './stores/auth.store';
 import { useAdminStore } from './stores/admin.store';
 import './utils/clearAuthCache'; // Utilitaire de debug
-import Dashboard from './pages/Dashboard';
-import OwnerDashboard from './pages/OwnerDashboard';
-import NewCampaign from './pages/NewCampaign';
-import MyCampaigns from './pages/MyCampaigns';
-import CampaignDetails from './pages/CampaignDetails';
-import MyInvoices from './pages/MyInvoices';
-import MyClients from './pages/MyClients';
-import MyRecharges from './pages/MyRecharges';
-import Login from './pages/auth/Login';
-import SignUp from './pages/auth/SignUp';
-import ResetPassword from './pages/auth/ResetPassword';
-import UpdatePassword from './pages/auth/UpdatePassword';
-import OwnerScreens from './pages/OwnerScreens';
-import OwnerLocations from './pages/OwnerLocations';
-import OwnerRevenue from './pages/OwnerRevenue';
-import OwnerCampaigns from './pages/OwnerCampaigns';
-import OwnerPerformance from './pages/OwnerPerformance';
-import OwnerCalendarDevices from './pages/OwnerCalendarDevices';
-import OwnerStatementsPage from './pages/OwnerStatementsPage';
-import OwnerStatementDetailPage from './pages/OwnerStatementDetailPage';
-import OwnerActivity from './pages/OwnerActivity';
-import OwnerMaintenance from './pages/OwnerMaintenance';
-import OwnerSettings from './pages/OwnerSettings';
-import OwnerCampaignApprovals from './pages/OwnerCampaignApprovals';
-import GiftCatalogPage from './pages/GiftCatalogPage';
-import ContactPage from './pages/ContactPage';
-import MyAccount from './pages/MyAccount';
-import UserProfile from './pages/UserProfile';
-import AdminLogin from './pages/admin/AdminLogin';
-import AdminDashboard from './pages/admin/AdminDashboard';
-import AdminDashboardSimple from './pages/admin/AdminDashboardSimple';
-import UserManagement from './pages/admin/UserManagement';
-import VideoManagement from './pages/admin/VideoManagement';
-import EventManagement from './pages/admin/EventManagement';
-import CampaignMonitoring from './pages/admin/CampaignMonitoring';
-import CreateAdmin from './pages/admin/CreateAdmin';
-import AdminManagement from './pages/admin/AdminManagement';
-import ScreenManagement from './pages/admin/ScreenManagement';
-import RechargeManagement from './pages/admin/RechargeManagement';
-import GeographicZonesManagement from './pages/admin/GeographicZonesManagement';
-import AdminGlobalConfiguration from './pages/admin/AdminGlobalConfiguration';
 import AdminRoute from './components/admin/AdminRoute';
+import PageLoadingFallback from './components/PageLoadingFallback';
+
+// Toutes les pages sont chargées à la demande (code-splitting par route).
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const OwnerDashboard = lazy(() => import('./pages/OwnerDashboard'));
+const CampaignDetails = lazy(() => import('./pages/CampaignDetails'));
+const Login = lazy(() => import('./pages/auth/Login'));
+const SignUp = lazy(() => import('./pages/auth/SignUp'));
+const ResetPassword = lazy(() => import('./pages/auth/ResetPassword'));
+const UpdatePassword = lazy(() => import('./pages/auth/UpdatePassword'));
+const OwnerScreens = lazy(() => import('./pages/OwnerScreens'));
+const OwnerLocations = lazy(() => import('./pages/OwnerLocations'));
+const OwnerRevenue = lazy(() => import('./pages/OwnerRevenue'));
+const OwnerCampaigns = lazy(() => import('./pages/OwnerCampaigns'));
+const OwnerPerformance = lazy(() => import('./pages/OwnerPerformance'));
+const OwnerCalendarDevices = lazy(() => import('./pages/OwnerCalendarDevices'));
+const OwnerStatementsPage = lazy(() => import('./pages/OwnerStatementsPage'));
+const OwnerStatementDetailPage = lazy(() => import('./pages/OwnerStatementDetailPage'));
+const OwnerActivity = lazy(() => import('./pages/OwnerActivity'));
+const OwnerMaintenance = lazy(() => import('./pages/OwnerMaintenance'));
+const OwnerSettings = lazy(() => import('./pages/OwnerSettings'));
+const OwnerCampaignApprovals = lazy(() => import('./pages/OwnerCampaignApprovals'));
+const GiftCatalogPage = lazy(() => import('./pages/GiftCatalogPage'));
+const ContactPage = lazy(() => import('./pages/ContactPage'));
+const MyAccount = lazy(() => import('./pages/MyAccount'));
+const AdminLogin = lazy(() => import('./pages/admin/AdminLogin'));
+const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
+const UserManagement = lazy(() => import('./pages/admin/UserManagement'));
+const VideoManagement = lazy(() => import('./pages/admin/VideoManagement'));
+const EventManagement = lazy(() => import('./pages/admin/EventManagement'));
+const CampaignMonitoring = lazy(() => import('./pages/admin/CampaignMonitoring'));
+const CreateAdmin = lazy(() => import('./pages/admin/CreateAdmin'));
+const AdminManagement = lazy(() => import('./pages/admin/AdminManagement'));
+const ScreenManagement = lazy(() => import('./pages/admin/ScreenManagement'));
+const RechargeManagement = lazy(() => import('./pages/admin/RechargeManagement'));
+const GeographicZonesManagement = lazy(() => import('./pages/admin/GeographicZonesManagement'));
+const AdminGlobalConfiguration = lazy(() => import('./pages/admin/AdminGlobalConfiguration'));
 
 function AdvertiserRoute({ children }: { children: React.ReactNode }) {
   const { user, initialized, profileType, needsApproval } = useAuthStore();
@@ -148,6 +144,7 @@ export default function App() {
   return (
     <>
       <Router>
+        <Suspense fallback={<PageLoadingFallback />}>
         <Routes>
           {/* Route racine */}
           <Route path="/" element={<Navigate to="/login" replace />} />
@@ -384,6 +381,7 @@ export default function App() {
           {/* Redirection par défaut */}
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
+        </Suspense>
       </Router>
       <Toaster position="top-right" />
     </>
