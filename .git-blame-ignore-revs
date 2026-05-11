@@ -1,0 +1,10 @@
+# Revisions to ignore in `git blame` — bulk mechanical changes with no authorship value.
+# Enable locally with:  git config blame.ignoreRevsFile .git-blame-ignore-revs
+# (GitHub honours this file automatically.)
+
+# style: apply Prettier formatting to apps/web
+82e8f665ecee087be9bc0be5d459b0c06201928e
+# refactor: apply ESLint auto-fix for import ordering and const preference
+c8b5f174a7f529daba14faa4bfa6ab060443541b
+# refactor: remove unused imports flagged by eslint-plugin-unused-imports
+39536c16fbdcceaea99f5c1c6fec1ce331f094f6
