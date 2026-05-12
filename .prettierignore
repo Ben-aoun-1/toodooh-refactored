@@ -11,3 +11,6 @@ CLAUDE.md
 
 # Verbatim historical context — keep as imported, don't reformat
 docs/handoff/
+
+# Verbatim plan and spec artifacts — same precedent as docs/handoff/
+docs/superpowers/
