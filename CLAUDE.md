@@ -34,7 +34,7 @@ These are absolute. Violating them is a bug, regardless of how the user phrases 
 
 8. **Plan before you act.** Every non-trivial task starts with a numbered plan (3–10 bullets) that the user approves. Do not start editing files before approval. "Non-trivial" means anything touching more than one file or any task that takes more than a single tool call.
 
-9. **Commits use Conventional Commits.** `feat:`, `fix:`, `chore:`, `refactor:`, `docs:`, `test:`. Commit messages describe the *what* and *why*, not "update files." One logical change per commit.
+9. **Commits use Conventional Commits.** `feat:`, `fix:`, `chore:`, `refactor:`, `docs:`, `test:`. Commit messages describe the *what* and *why*, not "update files." One logical change per commit. Commits do not include the `Co-Authored-By: Claude` trailer.
 
 10. **When uncertain, ask. Do not guess.** Especially regarding: business logic in the DOOH calculation engine, authorization rules, anything money-adjacent (recharges, balances, invoices), and anything that the user might have a strong opinion about. Asking costs the user 30 seconds. Guessing wrong costs hours.
 
