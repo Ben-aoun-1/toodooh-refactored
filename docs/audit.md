@@ -19,6 +19,14 @@ existing frontend (now at `apps/web`) so the backend-migration and auth-rewrite 
 base. **Out of scope this phase:** backend, replacing Supabase, UI redesign, the TV/APK side, and
 infra/hosting.
 
+**Companion reference docs (the triad).** `docs/user-flows.md` describes how each user type
+(advertiser / screenhost / admin) flows through the app **today** — current behavior, route → page
+mapping, where the code surprises you. `docs/figma-vs-code.md` maps the current frontend against the
+**Figma design** — which screens exist on each side, structural divergences (e.g. one Figma hub split
+across several code routes), designed-but-not-built and built-but-not-designed gaps, open questions
+for the CEO/CTO. This audit tracks **technical debt and the code-cleanup backlog**. The three are
+complementary and orthogonal — none subsumes the others; each should cross-reference the other two.
+
 ---
 
 ## 2. Snapshot
@@ -78,7 +86,16 @@ to render them for its 12 routes: `CartPage.tsx`, `MyCampaigns.tsx`, `MyInvoices
 `MyRecharges.tsx`, `UserProfile.tsx`, `Events.tsx`, `Onboarding.tsx` (plus `NewCampaign.tsx`). Untangled
 in Step 5 when `Dashboard.tsx` is decomposed, not here.
 
-→ **Step 2a · #1** (the two deletions) · **Step 5 · #3** (everything else above)
+**Design-vs-code structural splits** (surfaced by `docs/figma-vs-code.md`) — the code splits a single
+Figma surface into multiple routes in three places: "Mes Finances" (one Figma hub) → `/my-recharges` +
+`/my-invoices`; "Mes Revenus" (one Figma frame, with the statement document) → `/owner-revenue` +
+`/owner-statements` + `/owner-statements/:id`; "Mes campagnes" (one Figma campaigns surface) →
+`/owner-campaigns` + `/owner-campaign-approvals`. None of these splits is necessarily wrong, but each is
+a consolidation decision to confirm when the page structure is reworked — Step 5 (`/owner-campaigns` vs
+`/owner-campaign-approvals` overlaps the perf/profile-duplication questions above) and Step 6 (folder/route
+restructure).
+
+→ **Step 2a · #1** (the two deletions) · **Step 5 · #3** (everything else above) · **Step 6 · #4** (route consolidation)
 
 ### Duplicate / wrapper services
 
