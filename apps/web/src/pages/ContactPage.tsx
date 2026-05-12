@@ -27,7 +27,7 @@ interface ContactForm {
 
 export default function ContactPage() {
   const navigate = useNavigate();
-  const { user, profileType } = useAuthStore();
+  const { user, profileType, contactName } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [formData, setFormData] = useState<ContactForm>({
@@ -51,7 +51,7 @@ export default function ContactPage() {
       // Pré-remplir le formulaire avec les données utilisateur
       setFormData((prev) => ({
         ...prev,
-        name: localStorage.getItem('user_raison_social') || user.email || '',
+        name: contactName || user.email || '',
         email: user.email || '',
       }));
 
