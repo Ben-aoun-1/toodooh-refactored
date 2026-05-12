@@ -1,30 +1,13 @@
 /**
  * Moteur de calcul DOOH (fonctions pures, testables).
  * Les montants CPM sont en TND ; les durées en secondes.
+ *
+ * Config type + defaults moved to `../lib/dooh/config`; re-exported here for back-compat.
  */
 
-export type DoohConfigNumbers = {
-  video_min_duration_seconds: number;
-  video_max_duration_seconds: number;
-  video_default_duration_seconds: number;
-  max_spots_per_hour: number;
-  max_billable_spot_rate_per_hour: number;
-  /** Référence RPH pour le taux d’occupation par localité (voir `dooh-location-affluence-engine`). */
-  dooh_occupation_reference_rph: number;
-  standard_campaign_cpm_tnd: number;
-  event_campaign_cpm_tnd: number;
-};
+import { DEFAULT_DOOH_CONFIG_NUMBERS, type DoohConfigNumbers } from '../lib/dooh/config';
 
-export const DEFAULT_DOOH_CONFIG_NUMBERS: DoohConfigNumbers = {
-  video_min_duration_seconds: 1,
-  video_max_duration_seconds: 30,
-  video_default_duration_seconds: 15,
-  max_spots_per_hour: 10,
-  max_billable_spot_rate_per_hour: 0.3,
-  dooh_occupation_reference_rph: 10,
-  standard_campaign_cpm_tnd: 2.5,
-  event_campaign_cpm_tnd: 2.5,
-};
+export { DEFAULT_DOOH_CONFIG_NUMBERS, type DoohConfigNumbers };
 
 export type EffectiveDurationResult = { ok: true; seconds: number } | { ok: false; reason: string };
 
