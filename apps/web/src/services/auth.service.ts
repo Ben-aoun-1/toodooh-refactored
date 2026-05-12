@@ -274,60 +274,9 @@ export const authService = {
       password,
     });
     if (error) throw new Error(mapAuthError(error));
-
-    // Après connexion réussie, récupérer les informations utilisateur
-    if (data.user) {
-      console.log('🔐 Connexion réussie, récupération des infos utilisateur...');
-
-      try {
-        // Récupération depuis business_profiles
-        console.log('🔍 Récupération du profil utilisateur depuis business_profiles...');
-        const { data: userData, error: userError } = await supabase
-          .from('business_profiles')
-          .select('contact_name, profile_type')
-          .eq('user_id', data.user.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (userError) {
-          console.error('❌ Erreur lors de la récupération business_profiles:', userError);
-          console.error("❌ Détails de l'erreur:", {
-            code: userError.code,
-            message: userError.message,
-            details: userError.details,
-            hint: userError.hint,
-          });
-
-          // Ne pas forcer un profile_type par défaut ici :
-          // le store déterminera un état restreint si le profil est indisponible.
-          localStorage.removeItem('user_profile_type');
-          localStorage.removeItem('user_raison_social');
-        } else {
-          console.log('✅ Infos utilisateur trouvées dans business_profiles:', {
-            contact_name: userData.contact_name,
-            profile_type: userData.profile_type,
-          });
-
-          // Stocker le profile_type dans localStorage
-          if (userData.profile_type) {
-            localStorage.setItem('user_profile_type', userData.profile_type);
-            localStorage.setItem('user_raison_social', userData.contact_name || '');
-            console.log('📝 Profile type stocké dans localStorage:', userData.profile_type);
-            console.log('📝 Nom stocké dans localStorage:', userData.contact_name);
-          } else {
-            console.warn('⚠️ Aucun profile_type trouvé dans les données utilisateur');
-            localStorage.removeItem('user_profile_type');
-            localStorage.removeItem('user_raison_social');
-          }
-        }
-      } catch (profileError) {
-        console.error('❌ Erreur lors de la récupération des infos utilisateur:', profileError);
-        localStorage.removeItem('user_profile_type');
-        localStorage.removeItem('user_raison_social');
-      }
-    }
-
+    // Le store (auth.store.ts) appelle fetchProfileType après login pour
+    // charger le profil et alimenter l'état persisté — plus de fetch ni de
+    // localStorage ici.
     return data;
   },
 
@@ -744,7 +693,6 @@ export const authService = {
         console.error('Details:', (profileError as any).details);
         console.error('Hint:', (profileError as any).hint);
       }
-      localStorage.removeItem('pending_signup_data');
       const pErr = profileError as any;
       if (
         pErr?.code === '22P02' &&
@@ -765,7 +713,6 @@ export const authService = {
     }
 
     console.log('User and profile created successfully');
-    localStorage.removeItem('pending_signup_data'); // Nettoyer si succès (legacy)
 
     // Vérification finale anti-profil manquant
     await this.ensureBusinessProfileExists(authData.user.id, data.email);
