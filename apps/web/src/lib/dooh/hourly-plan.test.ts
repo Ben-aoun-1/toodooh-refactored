@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  buildHybridAdjustedHourlyPlan,
-  type HourlyPlanSlotInput,
-} from './campaign-hourly-location-plan.service';
+import { buildHybridAdjustedHourlyPlan, type HourlyPlanSlotInput } from './hourly-plan';
 
 function sampleSlots(): HourlyPlanSlotInput[] {
   return [

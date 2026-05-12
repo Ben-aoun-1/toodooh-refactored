@@ -1,10 +1,9 @@
+import { buildHybridAdjustedHourlyPlan, type HourlyPlanSlotInput } from '../lib/dooh/hourly-plan';
 import { supabase } from '../lib/supabase';
 
 import {
-  buildHybridAdjustedHourlyPlan,
   getOccupiedRepetitionsByLocationFromHourlyPlan,
   replaceCampaignHourlyLocationPlan,
-  type HourlyPlanSlotInput,
 } from './campaign-hourly-location-plan.service';
 import {
   computeRepetitionsPerHourVideo,
