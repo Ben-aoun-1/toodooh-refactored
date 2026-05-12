@@ -82,18 +82,43 @@ in Step 5 when `Dashboard.tsx` is decomposed, not here.
 
 ### Duplicate / wrapper services
 
-Three things to disambiguate:
+**Deleted in Step 2b** (zero imports, zero string references anywhere in `src/` — genuinely dead):
 
-- `services/campaign.service.ts` (1127 lines) vs `services/campaigns.service.ts` — singular/plural pair.
-- `services/screens.service.ts` vs `services/api/screens.api.ts` — the `.api.ts`-wrapping-a-`.service.ts`
-  anti-pattern; `services/api/` contains only that one file.
-- Admin services cluster — `admin.service.ts` plus the `admin-*.service.ts` files
-  (`admin-campaign-monitoring`, `admin-events`, `admin-recharges`, `admin-screens`, `admin-user`,
-  `admin-video`) have overlapping methods that need consolidation. The Phase-1 backend's admin API
-  surface depends on disambiguating these.
+- `services/campaigns.service.ts` (153 lines) — an early, abandoned generic-CRUD draft of a campaign
+  service (`create`/`getAll`/`update`/…) with its own interface set; the codebase uses the
+  domain-method `campaignService` in `services/campaign.service.ts` instead. Nothing imported the
+  plural one.
+- `services/api/screens.api.ts` (363 lines) and the now-empty `services/api/` directory — a thin
+  wrapper that re-exposed `screensService` (from `services/screens.service.ts`) behind an
+  `ApiResponse<T>` envelope, with no callers; every consumer imports `screensService` directly.
 
-Note `events.service.ts` vs `admin-events.service.ts` is a legit user/admin split, not a duplicate.
-→ **Step 2b · #14**
+**Campaign-services family** (not a dedup — folder placement only): with `campaigns.service.ts` gone,
+"the campaign service" is still a ~5-file cluster — `campaign.service.ts` (1127 lines, canonical; used
+by `NewCampaign`/`MyCampaigns`/`CartPage`/`Dashboard`), `campaign-screens.service.ts`,
+`campaign-owner-approval.service.ts`, `campaign-hourly-location-plan.service.ts`,
+`dooh-new-campaign-estimate.service.ts`. These are domain-specific, not duplicates; their grouping is a
+Step 5/Step 6 concern (the campaign-creation ones surface their home during the `NewCampaign`
+decomposition; the folder restructure puts them under `features/campaigns/`).
+
+**Admin-services cluster — not a duplicate; observation moved to Step 6.** Step 2b discovery found the
+cluster already cleanly factored: 7 files — `admin.service.ts` (admin auth + admin CRUD + dashboard
+stats) plus `admin-campaign-monitoring`, `admin-events`, `admin-recharges`, `admin-screens`,
+`admin-user`, `admin-video` (`.service.ts`) — with **no cross-imports** and **no method-name
+collisions**; each `admin-*.service.ts` is imported by exactly one admin page. The handoff's
+"consolidate into an admin module" meant _folder placement_, not merge logic — Step 6 moves them under
+`features/admin/`; there is nothing to dedup. (Step 6 should also confirm the
+`admin-screens.service.ts` ↔ `screens.service.ts` boundary: they share names like
+`getScreens`/`createScreen` but operate on admin vs owner views — looks like a legit split, same
+pattern as events.)
+
+**Legit split — confirmed.** `events.service.ts` (advertiser, read-only: `getAllEvents`,
+`getFeaturedEvents`, `getMyEventCampaignLinks`, `getMyEventCampaignsEvents`) vs
+`admin-events.service.ts` (admin, full CRUD + `linkEventToCampaign`/`toggleFeatured`/`getStats`/…).
+Step 2b discovery confirmed they're genuinely separate — only the read `getFeaturedEvents` is shared by
+name. Both stay; Step 6 places `events.service.ts` under `features/campaigns/`, `admin-events.service.ts`
+under `features/admin/`.
+
+→ **Step 2b · #14** (deletions) · **Step 6 · #4** (admin-cluster and campaign-services cluster folder placement)
 
 ### DOOH calculation engine coupled to Supabase
 
@@ -204,7 +229,7 @@ Each step gets its own brainstorm → spec → plan → execute cycle.
 | --- | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ------ |
 | 1   | Cleanup audit & roadmap (this doc)                                  | `docs/audit.md`, GitHub issues/milestone                                                                                                                                                        | doc committed; issues created                                                                                                                                                                                        | —     | ☑      |
 | 2a  | Resolve duplicate pages and delete orphans                          | `pages/MyCart.tsx`, `pages/admin/AdminDashboardSimple.tsx` (deletions)                                                                                                                          | the two genuinely-dead files deleted (zero refs); typecheck/lint/test/build not regressed; the rest of §3's duplicate-page list is Dashboard-coupled → resolved in Step 5                                            | #1    | ☑      |
-| 2b  | Resolve duplicate services                                          | `services/*`, `services/api/`, importers                                                                                                                                                        | one implementation per service concept (`campaign(s).service`, `screens.service`/`screens.api`, the `admin-*.service` cluster); Phase-1 API surface unambiguous; typecheck/lint not regressed; build OK              | #14   | ☐      |
+| 2b  | Resolve duplicate services                                          | `services/campaigns.service.ts`, `services/api/screens.api.ts`, `services/api/` (deletions)                                                                                                     | the two dead service files deleted (zero refs); `services/api/` dir removed; typecheck/lint/test/build not regressed; admin-cluster consolidation moved to Step 6 notes                                              | #14   | ☑      |
 | 3   | Consolidate the auth-state layer                                    | `services/auth.service.ts` (session logic out), `stores/auth.store.ts`, the 8 `localStorage` files, `App.tsx` (drop `clearAuthCache` import)                                                    | single auth-state layer; no raw `localStorage` outside Zustand `persist`; debug import gone                                                                                                                          | #2    | ☐      |
 | 4   | Decouple DOOH calculation services from Supabase                    | `services/dooh-calculation.service.ts`, `services/dooh-hourly-grid.ts`, `services/campaign-hourly-location-plan.service.ts`, `services/dooh-location-affluence-engine.ts`; new pure-math module | failing `campaign-hourly-location-plan.service.test.ts` passes; pure functions live in a Supabase-independent module; persistence wrappers stay in service files but become thin; surfaced business rules documented | #12   | ☐      |
 | 5   | Decompose `Dashboard.tsx` / `NewCampaign.tsx`                       | `pages/Dashboard.tsx`, `pages/NewCampaign.tsx`, `App.tsx` routes                                                                                                                                | each route renders its own page; largest chunk materially smaller; no regressions                                                                                                                                    | #3    | ☐      |
