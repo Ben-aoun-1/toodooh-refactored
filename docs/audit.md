@@ -52,12 +52,33 @@ _As of commit `c971e90` (post-mechanical-cleanup pass)._
 
 ### Duplicate pages
 
-Four "keep one, drop the other" pairs: `MyCart`/`CartPage`, `Perfor`/`OwnerPerformance`,
-`Parcs`/`OwnerLocations`, `admin/AdminDashboard`/`admin/AdminDashboardSimple`. Several page
-files are also orphaned (referenced by no `<Route>`, or only inside `Dashboard`):
-`MyCart.tsx`, `CartPage.tsx`, `Perfor.tsx`, `Parcs.tsx`, `MyCampaigns.tsx`, `MyInvoices.tsx`,
-`MyClients.tsx`, `MyRecharges.tsx`, `UserProfile.tsx` (and `NewCampaign.tsx`, handled by Step 5).
-→ **Step 2a · #1**
+**Deleted in Step 2a** (zero imports, zero string references anywhere in `src/` — genuinely dead):
+
+- `pages/MyCart.tsx` (261 lines) — the live cart page is `pages/CartPage.tsx` (used by `Dashboard.tsx`);
+  `MyCart.tsx` is an unreferenced earlier copy.
+- `pages/admin/AdminDashboardSimple.tsx` (73 lines) — the live admin dashboard is
+  `pages/admin/AdminDashboard.tsx` (the `/admin-dashboard` route); `AdminDashboardSimple.tsx` is an
+  unreferenced stub.
+
+**Open questions deferred to Step 5** (can't be resolved until `Dashboard.tsx` is decomposed — see
+"God-component `Dashboard.tsx`"):
+
+- `Perfor.tsx` (576 lines, advertiser-side perf page, imported only by `Dashboard.tsx`) and
+  `OwnerPerformance.tsx` (929 lines, owner-side perf page, live `/owner-performance` route) — both are
+  recharts perf dashboards; Step 5 must determine whether `Perfor` is a fork of `OwnerPerformance` to
+  unify, or a legitimately separate advertiser page.
+- `Parcs.tsx` (106 lines, hardcoded Carrefour mock data; the file comment says it duplicates a
+  `Dashboard` widget; imported only by `Dashboard.tsx`) and `OwnerLocations.tsx` (458 lines, live
+  `/owner-locations` route) — Step 5 must determine whether `Parcs` is dead demo code to delete, or a
+  placeholder for advertiser-side location functionality that should be reimplemented (likely by reusing
+  `OwnerLocations` components).
+
+**Dashboard-coupled page files** — imported only by `Dashboard.tsx`, which switches on `useLocation()`
+to render them for its 12 routes: `CartPage.tsx`, `MyCampaigns.tsx`, `MyInvoices.tsx`, `MyClients.tsx`,
+`MyRecharges.tsx`, `UserProfile.tsx`, `Events.tsx`, `Onboarding.tsx` (plus `NewCampaign.tsx`). Untangled
+in Step 5 when `Dashboard.tsx` is decomposed, not here.
+
+→ **Step 2a · #1** (the two deletions) · **Step 5 · #3** (everything else above)
 
 ### Duplicate / wrapper services
 
@@ -182,7 +203,7 @@ Each step gets its own brainstorm → spec → plan → execute cycle.
 | #   | Step                                                                | Touches (roughly)                                                                                                                                                                               | Done when                                                                                                                                                                                                            | Issue | Status |
 | --- | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ------ |
 | 1   | Cleanup audit & roadmap (this doc)                                  | `docs/audit.md`, GitHub issues/milestone                                                                                                                                                        | doc committed; issues created                                                                                                                                                                                        | —     | ☑      |
-| 2a  | Resolve duplicate pages and delete orphans                          | `pages/*`, importers (`App.tsx`)                                                                                                                                                                | one winner chosen per duplicate page pair (not silent); confirmed-orphan page files deleted; imports rewired; build OK                                                                                               | #1    | ☐      |
+| 2a  | Resolve duplicate pages and delete orphans                          | `pages/MyCart.tsx`, `pages/admin/AdminDashboardSimple.tsx` (deletions)                                                                                                                          | the two genuinely-dead files deleted (zero refs); typecheck/lint/test/build not regressed; the rest of §3's duplicate-page list is Dashboard-coupled → resolved in Step 5                                            | #1    | ☑      |
 | 2b  | Resolve duplicate services                                          | `services/*`, `services/api/`, importers                                                                                                                                                        | one implementation per service concept (`campaign(s).service`, `screens.service`/`screens.api`, the `admin-*.service` cluster); Phase-1 API surface unambiguous; typecheck/lint not regressed; build OK              | #14   | ☐      |
 | 3   | Consolidate the auth-state layer                                    | `services/auth.service.ts` (session logic out), `stores/auth.store.ts`, the 8 `localStorage` files, `App.tsx` (drop `clearAuthCache` import)                                                    | single auth-state layer; no raw `localStorage` outside Zustand `persist`; debug import gone                                                                                                                          | #2    | ☐      |
 | 4   | Decouple DOOH calculation services from Supabase                    | `services/dooh-calculation.service.ts`, `services/dooh-hourly-grid.ts`, `services/campaign-hourly-location-plan.service.ts`, `services/dooh-location-affluence-engine.ts`; new pure-math module | failing `campaign-hourly-location-plan.service.test.ts` passes; pure functions live in a Supabase-independent module; persistence wrappers stay in service files but become thin; surfaced business rules documented | #12   | ☐      |
