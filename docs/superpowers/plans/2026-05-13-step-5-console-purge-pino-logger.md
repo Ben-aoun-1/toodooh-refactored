@@ -27,7 +27,7 @@
 
 ## Post-approval clarifications (authoritative — these win over any stale code block below)
 
-1. **Logger API surface is locked.** Standard pino: `log.{debug,info,warn,error}(msg, ctx?)`. Error objects go in the second argument's `err` field — `logger.error('failed to load user', { err })`, **not** folded into the message string. Module-scoped logging uses child loggers: `const log = logger.child({ module: 'auth.service' })` at the top of each file that imports the logger. The exported root logger is named `logger`; consumers either use it directly (one-off scripts) or create a child. This shape is what Commit 4's ~250 sites get rewritten against.
+1. **Logger API surface is locked.** Standard pino call shape: **context object first, message string second** — `log.error({ err, userId }, 'failed to load user')`. (Corrected during Commit 1: pino does NOT accept `log.error('msg', { ctx })` — the second positional arg after a string is a printf format substitution, and typings reject the object form. Context-free messages are fine: `log.info('hello')`.) Module-scoped logging uses child loggers: `const log = logger.child({ module: 'auth.service' })` at the top of each file that imports the logger. The exported root logger is named `logger`; consumers either use it directly (one-off scripts) or create a child. This shape is what Commit 4's ~250 sites get rewritten against.
 2. **Bundle ceiling for Commit 1: 8 KB target, 10 KB hard halt.** Measure the gzipped delta of the **main `index-*.js` chunk** between the baseline (128.61 kB gzip) and post-Commit-1 build. If delta > 10 KB → **halt**, swap pino for `loglevel` (`pnpm remove pino && pnpm add loglevel`), update `CLAUDE.md` to note the override (one sentence under the existing "Logging: pino…" rule). The bundle metric is the actual main-chunk gzip line, not `pino`-the-package's bundled size — pino has transitive deps that may or may not tree-shake.
 3. **Cat 2a + Cat 2b are mechanically detectable and verified clean.** Re-run on current `main`:
    - `grep -rn -A1 "console\.error" apps/web/src --include="*.ts" --include="*.tsx" --exclude-dir=__tests__ --exclude-dir=scripts | grep -B1 -E "^[^-].*-[[:space:]]*throw" | grep -c "throw"` → **126**
@@ -616,26 +616,27 @@ is left for Commit 4, which promotes them to logger.error.
 
 ## Task 4.3: Replace `console.error` calls with `log.error`
 
-- [ ] **Step 1: per file, per call**, transform:
+- [ ] **Step 1: per file, per call**, transform (pino call shape: context object first, message second):
   ```ts
   console.error('failed to load X:', err);
   ```
   →
   ```ts
-  log.error('failed to load X', { err });
+  log.error({ err }, 'failed to load X');
   ```
 
   Rules:
   - Drop emoji prefixes (`❌`, `🔴`, etc.) from the message — they were dev-time visual markers; structured logs don't need them.
-  - Move `Error` objects from second positional argument to `{ err }` in a context object.
-  - Move identifier arguments (`userId`, `campaignId`, etc.) into the context object: `console.error('msg:', userId)` → `log.error('msg', { userId })`.
-  - Where the original was a multi-argument log like `console.error('A', x, 'B', y)`, fold into a single message + context: `log.error('A B', { x, y })`.
+  - Move `Error` objects from second positional argument to `{ err }` in a context object passed as the **first** argument; message string follows.
+  - Move identifier arguments (`userId`, `campaignId`, etc.) into the context object: `console.error('msg:', userId)` → `log.error({ userId }, 'msg')`.
+  - Where the original was a multi-argument log like `console.error('A', x, 'B', y)`, fold into a single message + context: `log.error({ x, y }, 'A B')`.
   - When the original message ends with a colon (`'foo:'`), drop the colon — pino renders context separately, the colon is leftover from string concatenation.
+  - Context-free messages stay simple: `console.error('something happened')` → `log.error('something happened')` (no context obj needed).
 
 - [ ] **Step 2: edge cases:**
-  - `console.error(error)` (single Error arg, no message) → `log.error('error', { err: error })`. The bare Error case loses semantic info; flag in the commit body and prompt-writer review.
-  - `console.error(JSON.stringify(err, null, 2))` — pino serialises errors natively, so this becomes `log.error('error details', { err })`. Drop the manual JSON.
-  - `componentDidCatch(error, info)` in error boundaries — `log.error('react error boundary', { err: error, componentStack: info.componentStack })`.
+  - `console.error(error)` (single Error arg, no message) → `log.error({ err: error }, 'error')`. The bare Error case loses semantic info; flag in the commit body and prompt-writer review.
+  - `console.error(JSON.stringify(err, null, 2))` — pino serialises errors natively, so this becomes `log.error({ err }, 'error details')`. Drop the manual JSON.
+  - `componentDidCatch(error, info)` in error boundaries — `log.error({ err: error, componentStack: info.componentStack }, 'react error boundary')`.
 
 ## Task 4.4: Replace `console.warn` calls with `log.warn`
 

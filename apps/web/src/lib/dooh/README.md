@@ -19,44 +19,44 @@ Conceptual write-up: `docs/handoff/pricing-model-v3.md`.
 
 ## Function ↔ simulator mapping
 
-| `v3-model.ts`                  | Simulator routine             | Returns                                                                                       |
-| ------------------------------ | ----------------------------- | --------------------------------------------------------------------------------------------- |
-| `clampSpotSeconds`             | `clampS(s)`                   | `s` clamped to `[1, 30]`                                                                      |
-| `credibilityThreshold`         | `getT(s)`                     | `0.5` (≤10s), `0.65` (≤20s), `0.8` (>20s)                                                     |
-| `repetitionRate`               | `getR(s) = min((3600/s)·T, F/s)` | `{ rate, limitedBy: 'frequency' \| 'credibility' }`                                        |
-| `screenhostPerformanceScore`   | `calcSPS(sh)`                 | weighted sum × 100, range `[0, 100]`                                                          |
-| `spsColorBand`                 | `spsColor(sps)`               | `'green'` (≥75), `'yellow'` (≥50), `'red'`                                                    |
-| `computeStandardCampaign`      | `recalcNormale()`             | per-screenhost `Hi`, `Ii`, SPS-ranked accepting list, refused cascade, `I_max`, `C_max`       |
-| `splitRevenue`                 | `rep-amounts-*`               | `{ screenhost, toodooh, agentSh, agentSc }` summing to the input                              |
-| `applyBudget`                  | budget slider                 | clamps to `[0, C_max]`, distributes screenhost pool by impression share                       |
-| `computeEventCampaign`         | `recalcEvenement()`           | event window, `CPM_evt`, eligible accepting list, separate `refused` / `ineligible`, `I_evt_max`, `C_evt_max` |
-| `applyEventBudget`             | event budget slider           | same shape as `applyBudget`, priced at `CPM_evt`                                              |
-| `combineCart`                  | combined view                 | event windowHours feeds standard's `evtSlots`; totals across both portions                    |
+| `v3-model.ts`                | Simulator routine                | Returns                                                                                                       |
+| ---------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `clampSpotSeconds`           | `clampS(s)`                      | `s` clamped to `[1, 30]`                                                                                      |
+| `credibilityThreshold`       | `getT(s)`                        | `0.5` (≤10s), `0.65` (≤20s), `0.8` (>20s)                                                                     |
+| `repetitionRate`             | `getR(s) = min((3600/s)·T, F/s)` | `{ rate, limitedBy: 'frequency' \| 'credibility' }`                                                           |
+| `screenhostPerformanceScore` | `calcSPS(sh)`                    | weighted sum × 100, range `[0, 100]`                                                                          |
+| `spsColorBand`               | `spsColor(sps)`                  | `'green'` (≥75), `'yellow'` (≥50), `'red'`                                                                    |
+| `computeStandardCampaign`    | `recalcNormale()`                | per-screenhost `Hi`, `Ii`, SPS-ranked accepting list, refused cascade, `I_max`, `C_max`                       |
+| `splitRevenue`               | `rep-amounts-*`                  | `{ screenhost, toodooh, agentSh, agentSc }` summing to the input                                              |
+| `applyBudget`                | budget slider                    | clamps to `[0, C_max]`, distributes screenhost pool by impression share                                       |
+| `computeEventCampaign`       | `recalcEvenement()`              | event window, `CPM_evt`, eligible accepting list, separate `refused` / `ineligible`, `I_evt_max`, `C_evt_max` |
+| `applyEventBudget`           | event budget slider              | same shape as `applyBudget`, priced at `CPM_evt`                                                              |
+| `combineCart`                | combined view                    | event windowHours feeds standard's `evtSlots`; totals across both portions                                    |
 
 ## Vocabulary
 
-| Symbol     | Meaning                                            | Source field                                |
-| ---------- | -------------------------------------------------- | ------------------------------------------- |
-| `s`        | Spot length, seconds                               | `contentSeconds` (arg)                      |
-| `N`        | Campaign day count                                 | `daysCount` (arg)                           |
-| `R`        | Billable repetitions per hour                      | `repetitionRate(s).rate`                    |
-| `T(s)`     | Credibility threshold for `s`                      | `credibilityThreshold(s)`                   |
-| `F`        | Frequency-cap, seconds-per-hour ceiling on repeats | `config.frequencyCapSecondsPerHour` (300)   |
-| `Ei`       | Operating hours per day                            | `screenhost.operatingHoursPerDay`           |
-| `Ai`       | Regular affluence, people/hour                     | `screenhost.affluencePerHour`               |
-| `A_max`    | Historical maximum affluence (events only)         | `screenhost.historicalMaxAffluence`         |
-| `Oi`       | Sold spot slots in the campaign period             | `screenhost.soldSlotsInPeriod`              |
-| `evtSlots` | Hours of event blackout per screenhost             | `eventSlotsBlockedHours` (arg) / event window |
-| `Hi`       | Net availability hours                             | `max(0, Ei·N − Oi − evtSlots)`              |
-| `Ii`       | Per-screenhost impressions, standard               | `Ai · Hi · R`                               |
-| `Ii_evt`   | Per-screenhost impressions, event                  | `A_max · windowHours · R`                   |
-| `I_max`    | Max impressions, standard (Σ Ii over accepting)    | `result.maxImpressions`                     |
-| `I_evt_max`| Max impressions, event                             | `result.maxImpressions`                     |
-| `C_max`    | Max budget envelope, TND                           | `CPM · I_max / 1000`                        |
-| `C_evt_max`| Max event budget envelope, TND                     | `CPM_evt · I_evt_max / 1000`                |
-| `CPM`      | Cost per 1000 impressions, TND                     | `config.cpmTnd` (15)                        |
-| `CPM_evt`  | Event CPM                                          | `CPM · cpmEventCoefficient` (30)            |
-| `SPS`      | Screenhost performance score, `[0, 100]`           | `screenhostPerformanceScore(sh)`            |
+| Symbol      | Meaning                                            | Source field                                  |
+| ----------- | -------------------------------------------------- | --------------------------------------------- |
+| `s`         | Spot length, seconds                               | `contentSeconds` (arg)                        |
+| `N`         | Campaign day count                                 | `daysCount` (arg)                             |
+| `R`         | Billable repetitions per hour                      | `repetitionRate(s).rate`                      |
+| `T(s)`      | Credibility threshold for `s`                      | `credibilityThreshold(s)`                     |
+| `F`         | Frequency-cap, seconds-per-hour ceiling on repeats | `config.frequencyCapSecondsPerHour` (300)     |
+| `Ei`        | Operating hours per day                            | `screenhost.operatingHoursPerDay`             |
+| `Ai`        | Regular affluence, people/hour                     | `screenhost.affluencePerHour`                 |
+| `A_max`     | Historical maximum affluence (events only)         | `screenhost.historicalMaxAffluence`           |
+| `Oi`        | Sold spot slots in the campaign period             | `screenhost.soldSlotsInPeriod`                |
+| `evtSlots`  | Hours of event blackout per screenhost             | `eventSlotsBlockedHours` (arg) / event window |
+| `Hi`        | Net availability hours                             | `max(0, Ei·N − Oi − evtSlots)`                |
+| `Ii`        | Per-screenhost impressions, standard               | `Ai · Hi · R`                                 |
+| `Ii_evt`    | Per-screenhost impressions, event                  | `A_max · windowHours · R`                     |
+| `I_max`     | Max impressions, standard (Σ Ii over accepting)    | `result.maxImpressions`                       |
+| `I_evt_max` | Max impressions, event                             | `result.maxImpressions`                       |
+| `C_max`     | Max budget envelope, TND                           | `CPM · I_max / 1000`                          |
+| `C_evt_max` | Max event budget envelope, TND                     | `CPM_evt · I_evt_max / 1000`                  |
+| `CPM`       | Cost per 1000 impressions, TND                     | `config.cpmTnd` (15)                          |
+| `CPM_evt`   | Event CPM                                          | `CPM · cpmEventCoefficient` (30)              |
+| `SPS`       | Screenhost performance score, `[0, 100]`           | `screenhostPerformanceScore(sh)`              |
 
 ## Assumptions
 
@@ -82,18 +82,28 @@ Conceptual write-up: `docs/handoff/pricing-model-v3.md`.
 - **Tie-breaker for division-by-zero.** `C_max = 0` (no accepting screenhosts, or all `Hi = 0`)
   yields `fillRate = 0` and an empty `perScreenhost[]` — `applyBudget` does not divide.
 
+## Logging stance
+
+`lib/dooh/*` never uses `console.*` or `logger.*` itself. Errors propagate via thrown `Error`
+(the only path is unreachable-by-design — every input is validated by the caller before reaching
+the math; the math itself has no failure modes besides "input out of range" which surfaces as a
+clamped or zero result, not a throw). Structured logging happens at the caller — services that
+wire these functions into the app log at _their_ boundary, not from inside the math. When this
+module moves to `apps/api/` in Phase 1, that pattern is unchanged: the math is pure, the caller
+logs.
+
 ## Demo screenhosts (test fixtures)
 
 The four demo screenhosts in `v3-model.test.ts` mirror the simulator's `script` block (around
 lines 1128–1137 in `Toodooh_Simulateur_Pricing_v3.html`). They exist solely so the test suite
 can reproduce the simulator's published outputs:
 
-| `id`  | Name              | `Ei` | `Ai` | `A_max` | `eventEligible` | SPS    | Band   |
-| ----- | ----------------- | ---- | ---- | ------- | --------------- | ------ | ------ |
-| `sh1` | Café El Bey       | 8    | 55   | 90      | ✓               | 91.15  | green  |
-| `sh2` | Lounge Arts       | 6    | 40   | 75      | ✓               | 79.75  | green  |
-| `sh3` | Salle SportPlus   | 7    | 35   | 60      | ✗               | 66.75  | yellow |
-| `sh4` | Bar Le Zinc       | 5    | 30   | 80      | ✓               | 53.00  | yellow |
+| `id`  | Name            | `Ei` | `Ai` | `A_max` | `eventEligible` | SPS   | Band   |
+| ----- | --------------- | ---- | ---- | ------- | --------------- | ----- | ------ |
+| `sh1` | Café El Bey     | 8    | 55   | 90      | ✓               | 91.15 | green  |
+| `sh2` | Lounge Arts     | 6    | 40   | 75      | ✓               | 79.75 | green  |
+| `sh3` | Salle SportPlus | 7    | 35   | 60      | ✗               | 66.75 | yellow |
+| `sh4` | Bar Le Zinc     | 5    | 30   | 80      | ✓               | 53.00 | yellow |
 
 Anchor numbers the test suite locks in (with `s = 10`, default config):
 
