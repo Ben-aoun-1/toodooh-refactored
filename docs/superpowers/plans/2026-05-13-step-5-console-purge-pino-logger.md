@@ -62,15 +62,15 @@
 
 ## Verification gates summary (per-commit target numbers)
 
-| Commit | typecheck (errors) | lint problems  | of which `no-console`     | test files | build chunks | main gzip                                          |
-| ------ | ------------------ | -------------- | ------------------------- | ---------- | ------------ | -------------------------------------------------- |
-| 0      | 179 (unchanged)    | 1618           | 901                       | 5          | 110          | 128.61 kB                                          |
-| 1      | 179                | 1618           | 901                       | **6**      | 110 (actual) | **128.61 kB (byte-identical — pino tree-shaken)**  |
-| 2      | 179                | **≤ 1171**     | **≤ 454**                 | 6          | 110          | shrinks slightly (string literals removed)         |
-| 3      | 179                | **≤ 977**      | **≤ 260**                 | 6          | 110          | shrinks slightly (more string literals removed)    |
+| Commit | typecheck (errors)              | lint problems  | of which `no-console`     | test files | build chunks | main gzip                                          |
+| ------ | ------------------------------- | -------------- | ------------------------- | ---------- | ------------ | -------------------------------------------------- |
+| 0      | 179 (unchanged)                 | 1618           | 901                       | 5          | 110          | 128.61 kB                                          |
+| 1      | 179                             | 1618           | 901                       | **6**      | 110 (actual) | **128.61 kB (byte-identical — pino tree-shaken)**  |
+| 2      | **198** (179 + 19 TS6133 unmask, deferred to Step 6) | **≤ 1171**     | **≤ 454**                 | 6          | 110          | shrinks slightly (string literals removed)         |
+| 3      | 198                             | **≤ 977**      | **≤ 260**                 | 6          | 110          | shrinks slightly (more string literals removed)    |
 | —      | (recapture baseline between Commit 3 and Commit 4 — record gzip + chunks as the new anchor) ||||||
-| 4      | 179                | **= 717**      | **= 0**                   | 6          | post-3 ± 1   | **≤ post-Commit-3 + 8 kB target / + 10 kB halt**   |
-| 5      | 179                | **= 717**      | **= 0** (rule re-enabled) | 6          | post-3 ± 1   | unchanged from Commit 4 (no source touched)        |
+| 4      | 198                             | **= 717**      | **= 0**                   | 6          | post-3 ± 1   | **≤ post-Commit-3 + 8 kB target / + 10 kB halt**   |
+| 5      | 198                             | **= 717**      | **= 0** (rule re-enabled) | 6          | post-3 ± 1   | unchanged from Commit 4 (no source touched)        |
 
 The "≤" entries are upper bounds; actual numbers may be lower if I undercounted Cat 1 in the inventory. The Commit 4 row is `= 0` because every remaining `console.*` must be promoted or its presence is a bug. **The Commit-1 row in this table differs from the original plan estimate** — pino is fully tree-shaken until Commit 4 introduces consumers, so the bundle ceiling check moves to Commit 4 (anchored on the post-Commit-3 baseline that gets recaptured live).
 
@@ -481,7 +481,7 @@ Same procedure as PF.3, replacing `throw` with `toast\.`. Halt threshold > 3/10.
 
 **Verification gate (Commit 2):**
 
-- [ ] `pnpm typecheck` → 179 errors.
+- [ ] `pnpm typecheck` → **198** errors (179 baseline + 19 TS6133 "declared but never read" newly surfaced — variables whose only consumer was a deleted `console.log`). The +19 are pre-existing dead code that the console noise was hiding; deferred to Step 6 (typing pass), not fixed opportunistically here. Documented in the commit body.
 - [ ] `pnpm lint` → ≤ 1171 problems; `no-console` count ≤ 454.
 - [ ] `pnpm test` → 6 files / 68 tests.
 - [ ] `pnpm build` → 110 or 111 chunks; gzip ±200 B.
@@ -553,7 +553,7 @@ This is the highest-risk commit because Cat 2b deletion removes the dev-time err
 
 **Verification gate (Commit 3):**
 
-- [ ] `pnpm typecheck` → 179 errors.
+- [ ] `pnpm typecheck` → **198** errors (unchanged from Commit 2; Commit 3 deletes only `console.error` statements where the error was already signalled by a `throw` or `toast` on the next line — no new unused-var unmasks expected, but a small +N is possible if the deleted `console.error` was the only reference to a caught-error variable).
 - [ ] `pnpm lint` → ≤ 977 problems; `no-console` count ≤ 260.
 - [ ] `pnpm test` → 6 files / 68 tests.
 - [ ] `pnpm build` → 110/111 chunks; gzip ±200 B.
@@ -756,7 +756,7 @@ ESLint rule re-enable for project-wide enforcement is Commit 5.
 
 - Modify: `docs/audit.md`
 
-- [ ] **Step 1: §2 Snapshot row** — update the `pnpm lint` row to reflect the post-Step-5 numbers. Was something like `~1618 problems (1591 errors, 27 warnings)`; new value is **717 problems** (1591 − 901 errors removed + warnings unchanged = 690 errors + 27 warnings = 717).
+- [ ] **Step 1: §2 Snapshot row** — update the `pnpm lint` row to reflect the post-Step-5 numbers. Was something like `~1618 problems (1591 errors, 27 warnings)`; new value is **717 problems** (1591 − 901 errors removed + warnings unchanged = 690 errors + 27 warnings = 717). Also update the `pnpm typecheck` row from `179 errors` to `198 errors` and note that the +19 are TS6133 unmasks from Step 5's Commit 2 deferred to Step 6.
 - [ ] **Step 2: §3 `console.*` subsection** (lines ~220-224) — rewrite to past tense:
   ```
   ### `console.*`
@@ -768,6 +768,21 @@ ESLint rule re-enable for project-wide enforcement is Commit 5.
   → **Step 5 · #7** ☑
   ```
 - [ ] **Step 3: §3 "Debug cruft" subsection** (lines ~265-270) — update the post-Step-3 paragraph to also note that the emoji `console.log`s in `auth.service.ts` / `auth.store.ts` are gone (Step 5). Update the footer to `→ **Step 5 · #7** ☑`.
+- [ ] **Step 3.5: §3 add a note under "`as any` / `@ts-ignore`" (or as a new subsection adjacent) — Step 6 scope expansion from Step-5 unmasks:**
+  ```
+  ### TS6133 unused-variable unmasks (from Step 5)
+
+  Step 5's Commit 2 (Cat 1 console.log/info bulk delete) surfaced 19 TS6133
+  "declared but never read" errors — variables whose only consumer was a
+  deleted console.log (e.g. `const newScreen = await screensService.createScreen(...)`
+  where `newScreen` was only logged). The +19 are pre-existing dead code that
+  the console noise was hiding, not Step-5 regressions. Now in Step 6's worklist.
+  Each requires per-case review rather than blanket deletion: some may be
+  service-call return values whose call still has a needed side effect even
+  if the binding is unused (e.g. `const result = await someService.doSideEffect()`
+  — drop `const result =`, keep the `await`). Don't auto-fix; read each.
+  → **Step 6 · #8**
+  ```
 - [ ] **Step 4: §4 Already resolved** — add a Step 5 row at the bottom describing what landed:
   ```
   ### Step 5 — Frontend logger + console.* purge
@@ -775,6 +790,8 @@ ESLint rule re-enable for project-wide enforcement is Commit 5.
   Pino logger module landed at `apps/web/src/lib/logger.ts` with dev/prod/test
   config. 901 `console.*` calls removed/promoted across ~60 files. `no-console`
   ESLint rule re-enabled as an error. → Issue #7.
+  Side effect: typecheck rose from 179 → 198 (19 TS6133 unused-variable unmasks
+  surfaced by removing console.log consumers); deferred to Step 6.
   ```
 - [ ] **Step 5: §5 Roadmap row 5** — mark `Status` as `☑`, leave the rest.
 
@@ -794,7 +811,7 @@ ESLint rule re-enable for project-wide enforcement is Commit 5.
 
 **Verification gate (Commit 5):**
 
-- [ ] `pnpm typecheck` → 179 errors (unchanged — no source code edits in this commit, only `eslint.config.js` + docs).
+- [ ] `pnpm typecheck` → **198** errors (unchanged from Commit 4 — no source code edits in this commit, only `eslint.config.js` + docs). The +19 over the pre-Step-5 baseline are the TS6133 unmasks from Commit 2 (deferred to Step 6); Step 5 ends at 198, Step 6 reduces it.
 - [ ] `pnpm lint` → **717** problems (= 1618 baseline − 901 no-console), no `no-console` reports.
 - [ ] `pnpm test` → 6 files / 68 tests.
 - [ ] `pnpm --filter @toodooh/web build` → 110/111 chunks; gzip unchanged from Commit 4 (no source touched).
