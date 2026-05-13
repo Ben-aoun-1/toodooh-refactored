@@ -3,7 +3,9 @@ import { describe, it, expect } from 'vitest';
 import {
   DEFAULT_DOOH_CONFIG_V3,
   applyBudget,
+  applyEventBudget,
   clampSpotSeconds,
+  computeEventCampaign,
   computeStandardCampaign,
   credibilityThreshold,
   repetitionRate,
@@ -299,5 +301,65 @@ describe('applyBudget (simulator slider + per-screenhost revenue)', () => {
     expect(b.targetBudgetTnd).toBe(0);
     expect(b.fillRate).toBe(0);
     expect(b.perScreenhost).toEqual([]);
+  });
+});
+
+describe('computeEventCampaign (simulator recalcEvenement)', () => {
+  // S=10 → R=30 ; duration 2.5h ; CPM_evt = 15·2 = 30 ; window = 1 + 2.5 + 1 = 4.5h.
+  it('matches the simulator demo (Champions League finale, 2.5h)', () => {
+    const r = computeEventCampaign(demoScreenhosts(), 10, 2.5, CFG);
+    expect(r.repetitionRate).toBeCloseTo(30, 6);
+    expect(r.windowHours).toBeCloseTo(4.5, 6);
+    expect(r.eventCpmTnd).toBeCloseTo(30, 6);
+    // Eligible & !refused: sh1, sh2, sh4 (sh3 not eventEligible → ineligible), SPS-ordered.
+    expect(r.accepting.map((e) => e.id)).toEqual(['sh1', 'sh2', 'sh4']);
+    expect(r.accepting.map((e) => e.rank)).toEqual([1, 2, 3]);
+    expect(r.ineligible.map((x) => x.id)).toEqual(['sh3']);
+    expect(r.refused).toEqual([]);
+    const byId = Object.fromEntries(r.accepting.map((e) => [e.id, e]));
+    // Ii_evt = A_max·window·R
+    expect(byId.sh1.impressions).toBeCloseTo(90 * 4.5 * 30, 6); // 12150
+    expect(byId.sh2.impressions).toBeCloseTo(75 * 4.5 * 30, 6); // 10125
+    expect(byId.sh4.impressions).toBeCloseTo(80 * 4.5 * 30, 6); // 10800
+    expect(r.maxImpressions).toBeCloseTo(12_150 + 10_125 + 10_800, 6); // 33075
+    expect(r.maxBudgetTnd).toBeCloseTo((30 * 33_075) / 1000, 6); // 992.25
+    expect(r.accepting.reduce((s, e) => s + e.impressionShare, 0)).toBeCloseTo(1, 6);
+  });
+
+  it('event eligibility: an eventEligible=false screenhost goes in ineligible[] and drops from I_evt_max', () => {
+    const all = computeEventCampaign(demoScreenhosts(), 10, 2.5, CFG);
+    const shs = demoScreenhosts();
+    shs[0].eventEligible = false; // Café El Bey — Ii_evt would have been 12150
+    const r = computeEventCampaign(shs, 10, 2.5, CFG);
+    expect(r.ineligible.map((x) => x.id).sort()).toEqual(['sh1', 'sh3']);
+    expect(r.accepting.map((e) => e.id)).toEqual(['sh2', 'sh4']);
+    expect(r.maxImpressions).toBeCloseTo(all.maxImpressions - 12_150, 6); // 33075 - 12150 = 20925
+  });
+
+  it('a refused screenhost is excluded even if event-eligible (separate from ineligible)', () => {
+    const shs = demoScreenhosts();
+    shs[1].refused = true; // Lounge Arts — eventEligible but refused
+    const r = computeEventCampaign(shs, 10, 2.5, CFG);
+    expect(r.refused.map((x) => x.id)).toEqual(['sh2']);
+    expect(r.ineligible.map((x) => x.id)).toEqual(['sh3']);
+    expect(r.accepting.map((e) => e.id)).toEqual(['sh1', 'sh4']);
+  });
+});
+
+describe('applyEventBudget', () => {
+  const evt = () => computeEventCampaign(demoScreenhosts(), 10, 2.5, CFG);
+  it('uses CPM_evt for purchased impressions; 50% pool sums across eligible screenhosts', () => {
+    const b = applyEventBudget(evt(), 500, CFG);
+    expect(b.targetBudgetTnd).toBeCloseTo(500, 6);
+    expect(b.purchasedImpressions).toBeCloseTo((500 * 1000) / 30, 6);
+    expect(b.fillRate).toBeCloseTo(500 / 992.25, 6);
+    expect(b.split.screenhost).toBeCloseTo(250, 6);
+    expect(b.perScreenhost.reduce((s, p) => s + p.revenueTnd, 0)).toBeCloseTo(250, 6);
+    expect(b.perScreenhost.map((p) => p.id)).toEqual(['sh1', 'sh2', 'sh4']);
+  });
+  it('over-budget clamps to C_evt_max (fillRate = 1)', () => {
+    const b = applyEventBudget(evt(), 999_999, CFG);
+    expect(b.targetBudgetTnd).toBeCloseTo(992.25, 6);
+    expect(b.fillRate).toBeCloseTo(1, 6);
   });
 });

@@ -336,3 +336,108 @@ export function applyBudget(
     config,
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Event campaign — simulator `recalcEvenement()`
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type EventScreenhostAllocation = {
+  id: string;
+  name?: string;
+  sps: number;
+  /** 1-based rank by SPS descending. */
+  rank: number;
+  /** Hi_evt — event window in hours (same for all). */
+  windowHours: number;
+  /** Ii_evt = A_max·Hi_evt·R (uses historicalMaxAffluence, not regular affluence). */
+  impressions: number;
+  /** Ii_evt / I_evt_max (0 when I_evt_max = 0). */
+  impressionShare: number;
+};
+
+export type EventCampaignResult = {
+  /** R — repetitions per hour for this content length. */
+  repetitionRate: number;
+  /** Hi_evt = paddingBefore + duration + paddingAfter (padding = config.eventWindowPaddingHours, each side). */
+  windowHours: number;
+  /** CPM_evt = CPM × config.cpmEventCoefficient. */
+  eventCpmTnd: number;
+  /** Eligible (eventEligible && !refused) screenhosts, sorted by SPS descending. */
+  accepting: readonly EventScreenhostAllocation[];
+  /** Refused screenhosts (0 revenue). */
+  refused: readonly ExcludedScreenhost[];
+  /** Not event-eligible screenhosts (0 revenue; distinct from refused). */
+  ineligible: readonly ExcludedScreenhost[];
+  /** I_evt_max = Σ Ii_evt over accepting screenhosts. */
+  maxImpressions: number;
+  /** C_evt_max = CPM_evt·I_evt_max/1000. */
+  maxBudgetTnd: number;
+};
+
+/**
+ * Simulator `recalcEvenement()`: event window = padding + duration + padding; only
+ * `eventEligible && !refused` screenhosts participate; impressions use A_max (not regular
+ * affluence); priced at CPM × `config.cpmEventCoefficient`.
+ */
+export function computeEventCampaign(
+  screenhosts: readonly ScreenhostInput[],
+  contentSeconds: number,
+  eventDurationHours: number,
+  config: DoohConfigV3,
+): EventCampaignResult {
+  const R = repetitionRate(contentSeconds, config).rate;
+  const windowHours =
+    config.eventWindowPaddingHours +
+    Math.max(0, eventDurationHours) +
+    config.eventWindowPaddingHours;
+  const eventCpmTnd = config.cpmTnd * config.cpmEventCoefficient;
+
+  const refused: ExcludedScreenhost[] = screenhosts
+    .filter((s) => s.refused)
+    .map((s) => ({ id: s.id, name: s.name, sps: screenhostPerformanceScore(s, config) }));
+  const ineligible: ExcludedScreenhost[] = screenhosts
+    .filter((s) => !s.refused && !s.eventEligible)
+    .map((s) => ({ id: s.id, name: s.name, sps: screenhostPerformanceScore(s, config) }));
+
+  const acceptingRaw = screenhosts
+    .filter((s) => !s.refused && s.eventEligible)
+    .map((s) => {
+      const sps = screenhostPerformanceScore(s, config);
+      const Ii = Math.max(0, s.historicalMaxAffluence) * windowHours * R;
+      return { id: s.id, name: s.name, sps, windowHours, impressions: Ii };
+    })
+    .sort((a, b) => b.sps - a.sps || a.id.localeCompare(b.id));
+
+  const maxImpressions = acceptingRaw.reduce((acc, s) => acc + s.impressions, 0);
+  const accepting: EventScreenhostAllocation[] = acceptingRaw.map((s, i) => ({
+    ...s,
+    rank: i + 1,
+    impressionShare: maxImpressions > 0 ? s.impressions / maxImpressions : 0,
+  }));
+
+  return {
+    repetitionRate: R,
+    windowHours,
+    eventCpmTnd,
+    accepting,
+    refused,
+    ineligible,
+    maxImpressions,
+    maxBudgetTnd: (eventCpmTnd * maxImpressions) / 1000,
+  };
+}
+
+/** Given an event-campaign result and a requested budget, clamp to C_evt_max and distribute. */
+export function applyEventBudget(
+  result: EventCampaignResult,
+  targetBudgetTnd: number,
+  config: DoohConfigV3,
+): BudgetAllocation {
+  return allocateBudget(
+    result.eventCpmTnd,
+    result.maxBudgetTnd,
+    result.accepting,
+    targetBudgetTnd,
+    config,
+  );
+}
