@@ -66,16 +66,9 @@ export const useAuthStore = create<AuthState>()(
       // Helper pour charger le profile_type
       const fetchProfileType = async (userId: string, forceRefresh = false) => {
         try {
-          console.log(
-            '🔄 fetchProfileType called for user:',
-            userId,
-            'forceRefresh:',
-            forceRefresh,
-          );
 
           // Vérifier si c'est un admin (lire directement le store admin)
           if (useAdminStore.getState().admin?.id) {
-            console.log('✅ Admin détecté, skip fetchProfileType');
             return {
               profileType: null,
               contactName: null,
@@ -99,7 +92,6 @@ export const useAuthStore = create<AuthState>()(
           // on peut utiliser le cache même si l'onboarding n'est pas marqué terminé.
           // La validation admin et l'onboarding sont deux choses distinctes.
           if (!forceRefresh && cachedProfileType && isCachedApproved) {
-            console.log('✅ Utilisation du cache (compte approuvé/verified)');
             return {
               profileType: cachedProfileType,
               contactName: cachedContactName,
@@ -116,7 +108,6 @@ export const useAuthStore = create<AuthState>()(
             cachedProfileType &&
             cachedValidationStatus
           ) {
-            console.log('✅ Utilisation du cache pour éviter la requête');
             return {
               profileType: cachedProfileType,
               contactName: cachedContactName,
@@ -129,7 +120,6 @@ export const useAuthStore = create<AuthState>()(
 
           // Sinon, récupérer depuis business_profiles
           try {
-            console.log('📊 Fetching from business_profiles for user:', userId);
 
             // Timeout plus tolérant (30s) car en arrière-plan les navigateurs throttlent les timers/fetchs.
             // Si l'onglet est inactif, une requête peut légitimement dépasser 10s. Mieux vaut attendre
@@ -177,7 +167,6 @@ export const useAuthStore = create<AuthState>()(
             if (error) {
               console.error('❌ Error fetching user info:', error);
               if (error.code === 'PGRST116') {
-                console.log('⚠️ Table business_profiles not found');
               }
               // Erreur transitoire/réseau/RLS: on conserve l'état connu si possible
               return getPreservedStateOnError(cachedProfileType);
@@ -186,7 +175,6 @@ export const useAuthStore = create<AuthState>()(
             // Pas de données = pas de profil en base. Ici on ne doit PAS préserver un ancien
             // état "approved": c'est un état avéré par la DB, donc on retourne bien pending.
             if (!data) {
-              console.log('⚠️ No business profile found for user');
               return {
                 profileType: cachedProfileType || null,
                 contactName: cachedContactName,
@@ -197,7 +185,6 @@ export const useAuthStore = create<AuthState>()(
             }
 
             if (data.is_active === false) {
-              console.log('⚠️ Compte désactivé, déconnexion');
               await authService.logout();
               return {
                 profileType: cachedProfileType || null,
@@ -209,11 +196,6 @@ export const useAuthStore = create<AuthState>()(
             }
 
             // IMPORTANT: Logger les données récupérées pour débogage
-            console.log('✅ Données utilisateur récupérées:', {
-              profile_type: data.profile_type,
-              business_name: data.business_name,
-              verification_status: data.verification_status,
-            });
 
             // Permettre la connexion même si pending, mais marquer needsApproval
             // Vérifier uniquement verification_status (status n'existe pas dans business_profiles)
@@ -221,9 +203,6 @@ export const useAuthStore = create<AuthState>()(
               data.verification_status !== 'verified' && data.verification_status !== 'approved';
 
             if (isPending) {
-              console.log('⚠️ Utilisateur en attente de validation');
-              console.log('   - verification_status:', data.verification_status);
-              console.log('   → needsApproval: TRUE');
 
               // Retourner le profileType mais indiquer qu'ils ont besoin d'approbation
               return {
@@ -236,7 +215,6 @@ export const useAuthStore = create<AuthState>()(
             }
 
             // Utilisateur approuvé
-            console.log('✅ Utilisateur validé et approuvé - Accès complet autorisé');
 
             const profileType = data?.profile_type || null;
             const contactName = data?.contact_name || null;
@@ -283,7 +261,6 @@ export const useAuthStore = create<AuthState>()(
 
         // Ne pas s'initialiser si on est sur une route admin
         if (window.location.pathname.startsWith('/admin')) {
-          console.log('On admin route, skipping auth listener initialization');
           set({
             user: null,
             profileType: null,
@@ -310,12 +287,10 @@ export const useAuthStore = create<AuthState>()(
             lastProcessedEvent.userId === userId &&
             now - lastProcessedEvent.timestamp < DEBOUNCE_MS
           ) {
-            console.log('⏭️ Événement auth dédupliqué, ignoré:', event, userId);
             return;
           }
 
           lastProcessedEvent = { event, userId, timestamp: now };
-          console.log('Auth state change:', event, userId);
 
           const user = session?.user || null;
 
@@ -323,10 +298,6 @@ export const useAuthStore = create<AuthState>()(
           // On ne recharge PAS le profil (sinon risque de rétrograder l'utilisateur
           // sur erreur/timeout réseau). On met simplement à jour la référence user.
           if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
-            console.log(
-              '⏭️ Événement sans impact sur needsApproval, skip fetchProfileType:',
-              event,
-            );
             if (user) {
               set({ user });
             }
@@ -341,7 +312,6 @@ export const useAuthStore = create<AuthState>()(
             event !== 'SIGNED_OUT' &&
             event !== 'INITIAL_SESSION'
           ) {
-            console.log('⏭️ userId inchangé, skip fetchProfileType pour événement:', event);
             if (user) {
               set({ user });
             }
@@ -359,9 +329,7 @@ export const useAuthStore = create<AuthState>()(
 
           if (user) {
             try {
-              console.log('🔄 Auth listener: Fetching profile type for user:', user.id);
               const result = await fetchProfileType(user.id);
-              console.log('✅ Auth listener: fetchProfileType returned:', result);
 
               profileType = result.profileType;
               contactName = result.contactName ?? null;
@@ -370,12 +338,6 @@ export const useAuthStore = create<AuthState>()(
               needsApproval = result.needsApproval || false;
               validationStatus = result.validationStatus;
 
-              console.log('✅ Auth listener: Variables assigned:', {
-                profileType,
-                shouldOnboard,
-                needsApproval,
-                validationStatus,
-              });
             } catch (error) {
               console.error('❌ Auth listener error:', error);
               // En cas d'erreur inattendue, conserver l'état actuel du store plutôt
@@ -390,13 +352,6 @@ export const useAuthStore = create<AuthState>()(
             }
           }
 
-          console.log('✅ Auth listener: About to set state:', {
-            user: !!user,
-            profileType,
-            shouldOnboard,
-            needsApproval,
-            validationStatus,
-          });
           set({
             user,
             profileType,
@@ -406,7 +361,6 @@ export const useAuthStore = create<AuthState>()(
             needsApproval: needsApproval || false,
             validationStatus,
           });
-          console.log('✅ Auth listener: State set successfully!');
         });
 
         authSubscription = subscription;
@@ -492,11 +446,6 @@ export const useAuthStore = create<AuthState>()(
               validationStatus,
               loading: false,
             });
-            console.log('✅ Auth initialized:', {
-              hasUser: !!user,
-              profileType,
-              initialized: true,
-            });
           } catch (error) {
             console.error('Error initializing auth:', error);
             // Toujours initialiser pour éviter le blocage
@@ -528,7 +477,6 @@ export const useAuthStore = create<AuthState>()(
 
             if (user) {
               // Toujours appeler fetchProfileType pour obtenir le statut à jour depuis la DB
-              console.log('🔄 Appel de fetchProfileType pour obtenir le statut de validation...');
               const {
                 profileType: pt,
                 contactName: cn,
@@ -542,14 +490,8 @@ export const useAuthStore = create<AuthState>()(
               shouldOnboard = !oc;
               needsApproval = na || false;
               validationStatus = vs;
-              console.log('✅ Statut récupéré:', {
-                profileType: pt,
-                needsApproval: na,
-                validationStatus: vs,
-              });
             }
 
-            console.log('🔍 Store mis à jour avec profileType:', profileType);
             set({
               user,
               loading: false,
@@ -605,7 +547,6 @@ export const useAuthStore = create<AuthState>()(
 
           set({ loading: true });
           try {
-            console.log('🔄 Refreshing user status...');
 
             // Forcer le refresh depuis la DB (forceRefresh court-circuite les portes du cache)
             const {
@@ -626,11 +567,6 @@ export const useAuthStore = create<AuthState>()(
               loading: false,
             });
 
-            console.log('✅ User status refreshed:', {
-              profileType,
-              needsApproval,
-              validationStatus,
-            });
           } catch (error) {
             console.error('❌ Error refreshing user status:', error);
             set({ loading: false });

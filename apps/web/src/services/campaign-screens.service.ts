@@ -53,7 +53,6 @@ export const campaignScreensService = {
   // Récupérer tous les écrans actifs pour les campagnes
   async getAllScreens(): Promise<CampaignScreen[]> {
     try {
-      console.log('🔍 Chargement de tous les écrans actifs...');
       const { data, error } = await supabase
         .from('screens')
         .select(
@@ -67,7 +66,6 @@ export const campaignScreensService = {
         return [];
       }
 
-      console.log('📊 Écrans récupérés:', data?.length || 0);
 
       // Récupérer les noms des propriétaires
       const ownerIds = [...new Set((data || []).map((s) => s.owner_id))];
@@ -83,7 +81,6 @@ export const campaignScreensService = {
         (data || []).map(async (screen, index) => {
           const affluenceData = await this.getScreenAffluenceData(screen.id);
           if (index < 3) {
-            console.log(`📊 Écran ${index + 1}:`, screen.name, '- Affluence:', affluenceData);
           }
 
           // Extraire les coordonnées (format POINT PostgreSQL)
@@ -98,14 +95,12 @@ export const campaignScreensService = {
                     lng: parseFloat(match[1]),
                     lat: parseFloat(match[2]),
                   };
-                  console.log('✅ Coordonnées parsées:', screen.name, coordinates);
                 }
               } else if (screen.coordinates.x !== undefined && screen.coordinates.y !== undefined) {
                 coordinates = {
                   lng: screen.coordinates.x,
                   lat: screen.coordinates.y,
                 };
-                console.log('✅ Coordonnées objet:', screen.name, coordinates);
               }
             } catch (e) {
               console.error('❌ Erreur parsing coordinates:', e, screen.coordinates);
@@ -132,8 +127,6 @@ export const campaignScreensService = {
         }),
       );
 
-      console.log('✅ Écrans avec affluence:', screensWithAffluence.length);
-      console.log('📍 Exemple coordonnées:', screensWithAffluence[0]?.coordinates);
 
       return screensWithAffluence;
     } catch (error) {
@@ -168,12 +161,6 @@ export const campaignScreensService = {
         };
       }
 
-      console.log(
-        '✅ Config trouvée pour écran:',
-        screenId,
-        '- Impressions/h:',
-        configData.estimated_impressions_per_hour,
-      );
 
       // Pour les annonceurs, on utilise uniquement la config (pas besoin de screen_affluence_data)
       return {
@@ -199,7 +186,6 @@ export const campaignScreensService = {
   // Récupérer les écrans dans une zone géographique
   async getScreensInArea(lat: number, lng: number, radiusKm: number): Promise<CampaignScreen[]> {
     try {
-      console.log('🔍 getScreensInArea - Centre:', lat, lng, 'Rayon:', radiusKm, 'km');
 
       // Récupérer tous les écrans actifs
       const { data, error } = await supabase
@@ -215,7 +201,6 @@ export const campaignScreensService = {
         return [];
       }
 
-      console.log('📊 Total écrans actifs pour filtrage:', data?.length || 0);
 
       // Récupérer les noms des propriétaires
       const ownerIds = [...new Set((data || []).map((s) => s.owner_id))];
@@ -276,7 +261,6 @@ export const campaignScreensService = {
         }
       }
 
-      console.log('✅ Écrans filtrés dans la zone:', screensInZone.length);
 
       return screensInZone;
     } catch (error) {

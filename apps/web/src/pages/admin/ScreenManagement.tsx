@@ -33,7 +33,6 @@ export default function ScreenManagement() {
   const loadOwners = async () => {
     try {
       const ownersData = await adminScreensService.getOwners();
-      console.log('✅ Propriétaires chargés:', ownersData.length);
       setOwners(ownersData.map((o) => ({ id: o.user_id, name: o.business_name })));
     } catch (error) {
       console.error('Error loading owners:', error);

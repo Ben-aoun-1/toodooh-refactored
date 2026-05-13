@@ -16,12 +16,6 @@ const mapAuthError = (error: any): string => {
     error?.message || error?.error_description || "Une erreur inattendue s'est produite";
 
   // Log de débogage pour identifier l'erreur complète
-  console.log('🔍 Erreur détectée:', {
-    message: errorMessage,
-    code: error?.code,
-    details: error?.details,
-    hint: error?.hint,
-  });
 
   // Erreurs d'inscription
   if (errorMessage.includes('User already registered')) {
@@ -197,7 +191,6 @@ async function insertFleetEstablishmentsAfterSignup(
   if (error) {
     console.error('⚠️ Insertion localités (parc) après inscription:', error);
   } else {
-    console.log('✅ Localités parc créées:', rows.length);
   }
 }
 
@@ -391,10 +384,6 @@ export const authService = {
     // 1. VÉRIFIER SI L'EMAIL / TÉLÉPHONE EXISTENT DÉJÀ
     const normalizedEmail = (data.email || '').trim().toLowerCase();
     const normalizedPhone = (data.contact_phone || '').replace(/\s+/g, '').trim();
-    console.log('🔍 Vérification unicité email/téléphone:', {
-      email: normalizedEmail,
-      contact_phone: normalizedPhone,
-    });
 
     const { emailExists } = await this.checkSignupConflicts(normalizedEmail, normalizedPhone);
 
@@ -431,7 +420,6 @@ export const authService = {
     }
 
     // 2. Créer l'utilisateur auth
-    console.log('📝 Création du compte Auth...');
     const { data: authData, error: signUpError } = await supabase.auth.signUp({
       email: data.email,
       password: data.password,
@@ -458,12 +446,8 @@ export const authService = {
       );
     }
 
-    console.log('✅ Utilisateur créé dans Auth:', authData.user.id);
-    console.log('📧 Email:', authData.user.email);
-    console.log('🆔 Identities:', authData.user.identities?.length);
 
     // 3. Attendre un court instant pour que l'utilisateur soit synchronisé dans la base de données
-    console.log("⏳ Attente de synchronisation de l'utilisateur...");
     await new Promise((resolve) => setTimeout(resolve, 1000)); // Attendre 1 seconde
 
     // 4. Créer le profil business
@@ -476,14 +460,9 @@ export const authService = {
     ) {
       // Générer un matricule temporaire unique basé sur l'ID utilisateur et timestamp
       taxNumber = `TEMP-${authData.user.id.substring(0, 8)}-${Date.now()}`;
-      console.log(
-        "ℹ️ Matricule fiscal non fourni, génération d'un matricule temporaire:",
-        taxNumber,
-      );
     }
 
     const profileType = requestedProfileType;
-    console.log('📋 signUp: création du profil avec profile_type:', profileType);
 
     const signupData = {
       user_id: authData.user.id,
@@ -514,7 +493,6 @@ export const authService = {
       is_admin: false,
     };
 
-    console.log('📝 Tentative de création du profil business:', signupData);
 
     // 5. Essayer de créer le profil avec plusieurs stratégies
     let profileCreated = false;
@@ -529,7 +507,6 @@ export const authService = {
     const uploadDocument = async () => {
       if (data.registration_doc) {
         try {
-          console.log("📤 Upload du document fourni lors de l'inscription...");
           const ext = data.registration_doc.name.split('.').pop();
 
           // Déterminer le type de document et le nom du fichier
@@ -537,7 +514,6 @@ export const authService = {
           const filePrefix = isIndividualOwner ? 'cin' : 'rne';
           const filePath = `${filePrefix}_${authData.user.id}_${Date.now()}.${ext}`;
 
-          console.log(`📂 Upload fichier ${filePrefix}:`, filePath);
 
           // Upload vers le bucket registres
           const { error: uploadError } = await supabase.storage
@@ -549,7 +525,6 @@ export const authService = {
             return;
           }
 
-          console.log('✅ Document uploadé avec succès');
 
           // Créer une URL signée
           const { data: signedData, error: signedError } = await supabase.storage
@@ -563,7 +538,6 @@ export const authService = {
 
           // Mettre à jour le profil avec l'URL du document
           const updateField = isIndividualOwner ? 'cin_doc_url' : 'registration_doc_url';
-          console.log(`💾 Sauvegarde URL dans le champ: ${updateField}`);
 
           const { error: updateError } = await supabase
             .from('business_profiles')
@@ -573,13 +547,11 @@ export const authService = {
           if (updateError) {
             console.error('⚠️ Erreur sauvegarde URL (non bloquante):', updateError);
           } else {
-            console.log(`✅ URL du document ${filePrefix} sauvegardée dans le profil`);
           }
         } catch (fileError) {
           console.error("⚠️ Erreur lors de l'upload du document (non bloquante):", fileError);
         }
       } else {
-        console.log("ℹ️ Aucun document fourni lors de l'inscription");
       }
     };
 
@@ -639,15 +611,8 @@ export const authService = {
 
     // Vérifier le résultat de l'insertion
     if (!directInsertError) {
-      console.log('✅ Profil créé avec succès via insertion directe');
       profileCreated = true;
     } else {
-      console.log('❌ Échec insertion directe:', {
-        message: directInsertError.message,
-        code: directInsertError.code,
-        details: directInsertError.details,
-        hint: directInsertError.hint,
-      });
       profileError = directInsertError;
 
       // Stratégie 2: Utiliser la fonction RPC create_business_profile avec
@@ -673,13 +638,10 @@ export const authService = {
           p_is_admin: signupData.is_admin,
         });
         if (!rpcError) {
-          console.log('✅ Profil créé avec succès via RPC');
           profileCreated = true;
         } else {
-          console.log('❌ Échec RPC:', rpcError);
         }
       } catch (rpcError) {
-        console.log('RPC non disponible, tentative suivante...');
       }
     }
 
@@ -712,7 +674,6 @@ export const authService = {
       );
     }
 
-    console.log('User and profile created successfully');
 
     // Vérification finale anti-profil manquant
     await this.ensureBusinessProfileExists(authData.user.id, data.email);
@@ -742,8 +703,6 @@ export const authService = {
   },
 
   async updatePassword(password: string) {
-    console.log('🔐 Tentative de mise à jour du mot de passe...');
-    console.log('🔍 Longueur du mot de passe:', password.length);
 
     // Vérifier les critères de base
     if (password.length < 6) {
@@ -765,13 +724,10 @@ export const authService = {
       throw new Error(mapAuthError(error));
     }
 
-    console.log('✅ Mot de passe mis à jour avec succès');
     return data;
   },
 
   async updateBusinessProfile(updateData: Partial<BusinessProfile>) {
-    console.log('🔍 Mise à jour du profil business...');
-    console.log('Données à mettre à jour:', updateData);
 
     const {
       data: { user },
@@ -781,7 +737,6 @@ export const authService = {
       throw new Error('Utilisateur non connecté');
     }
 
-    console.log('👤 Utilisateur connecté:', user.id);
 
     const { data, error } = await supabase
       .from('business_profiles')
@@ -800,7 +755,6 @@ export const authService = {
       throw new Error(`Erreur lors de la mise à jour du profil: ${error.message}`);
     }
 
-    console.log('✅ Profil mis à jour avec succès:', data);
     return data;
   },
 
@@ -834,8 +788,6 @@ export const authService = {
     const user = await this.getCurrentUser();
     if (!user) throw new Error('Utilisateur non connecté');
 
-    console.log('Getting business profile for user:', user.id);
-    console.log('User email:', user.email);
 
     try {
       // 1. Essayer de récupérer le profil normalement
@@ -848,12 +800,10 @@ export const authService = {
         .maybeSingle();
 
       if (error) {
-        console.log('Erreur lors de la récupération du profil:', error);
         if (error.code === 'PGRST116') return null;
         return null;
       }
 
-      console.log('✅ Profil trouvé:', profile);
       return profile;
     } catch (error) {
       console.error('Error in getBusinessProfile:', error);

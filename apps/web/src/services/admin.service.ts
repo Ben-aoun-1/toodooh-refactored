@@ -25,7 +25,6 @@ export const adminService = {
   // Authentification
   async login(email: string, password: string): Promise<AdminProfile> {
     try {
-      console.log('Attempting admin login for:', email);
 
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -42,7 +41,6 @@ export const adminService = {
         throw new Error('Aucun utilisateur trouvé');
       }
 
-      console.log('Auth successful, checking admin profile for user:', data.user.id);
 
       // Vérifier si l'utilisateur est un admin
       const { data: adminProfile, error: profileError } = await supabase
@@ -61,7 +59,6 @@ export const adminService = {
         throw new Error("Accès refusé. Ce compte n'est pas autorisé.");
       }
 
-      console.log('Admin profile found:', adminProfile);
 
       // Mettre à jour la dernière connexion
       await supabase
@@ -91,11 +88,9 @@ export const adminService = {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) {
-        console.log('No user found in getCurrentAdmin');
         return null;
       }
 
-      console.log('Getting admin profile for user:', user.id);
 
       const { data: adminProfile, error } = await supabase
         .from('admin_profiles')
@@ -110,11 +105,9 @@ export const adminService = {
       }
 
       if (!adminProfile) {
-        console.log('No admin profile found for user:', user.id);
         return null;
       }
 
-      console.log('Admin profile found:', adminProfile);
       return adminProfile;
     } catch (error) {
       console.error('Error getting current admin:', error);
@@ -125,7 +118,6 @@ export const adminService = {
   // Gestion des admins
   async createAdmin(adminData: AdminSignUpData, createdBy: string): Promise<AdminProfile> {
     try {
-      console.log('Creating admin user:', adminData.email);
 
       // Créer l'utilisateur auth avec signUp
       const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -149,7 +141,6 @@ export const adminService = {
         throw new Error('Failed to create user');
       }
 
-      console.log('User created:', authData.user.id);
 
       // Créer le profil admin
       const { data: adminProfile, error: profileError } = await supabase
@@ -172,7 +163,6 @@ export const adminService = {
         throw profileError;
       }
 
-      console.log('Admin profile created:', adminProfile);
       return adminProfile;
     } catch (error: any) {
       console.error('Create admin error:', error);

@@ -66,7 +66,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
   const handleBypass = async () => {
     // ✅ Tous les documents sont maintenant facultatifs, on peut fermer et terminer l'onboarding
     try {
-      console.log("✅ Finalisation de l'onboarding...");
       await handleSubmit();
     } catch (error) {
       console.error('❌ Erreur lors de la finalisation:', error);
@@ -98,7 +97,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
       // Vérifier d'abord le localStorage pour éviter les requêtes inutiles
       const onboardingCompletedLocal = localStorage.getItem('onboardingCompleted') === 'true';
       if (onboardingCompletedLocal) {
-        console.log('✅ Onboarding déjà terminé (localStorage), fermeture du modal');
         hasCheckedOnboardingRef.current = true;
         setInitialized(true);
         onCompleteRef.current();
@@ -121,7 +119,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
         if (existingProfile && !supabaseError) {
           // ⚠️ IMPORTANT: L'onboarding est terminé si onboarding_completed = true
           if (existingProfile.onboarding_completed === true) {
-            console.log('✅ Onboarding déjà terminé (DB), fermeture du modal');
             localStorage.setItem('onboardingCompleted', 'true');
             onCompleteRef.current();
             return;
@@ -201,11 +198,9 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
     if (!file || !user) return;
     setUploading(true);
     try {
-      console.log('📤 Upload du registre de commerce...');
       const ext = file.name.split('.').pop();
       // Le chemin ne doit PAS inclure le nom du bucket (il est déjà dans .from('registres'))
       const filePath = `${user.id}_${Date.now()}.${ext}`;
-      console.log('📂 Chemin du fichier:', filePath);
 
       const { error: uploadError } = await supabase.storage
         .from('registres')
@@ -216,7 +211,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
         throw uploadError;
       }
 
-      console.log('✅ Fichier uploadé avec succès');
 
       // Créer une URL signée (valide pendant 7 jours = 604800 secondes)
       // Pour un bucket privé, on utilise createSignedUrl au lieu de getPublicUrl
@@ -229,7 +223,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
         throw signedError || new Error("Impossible de créer l'URL signée");
       }
 
-      console.log('🔗 URL signée créée:', signedData.signedUrl);
 
       // Mettre à jour le profil avec l'URL signée du registre
       const { error: updateError } = await supabase
@@ -242,7 +235,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
         throw updateError;
       }
 
-      console.log("✅ Profil mis à jour avec l'URL signée du registre");
 
       setRegUrl(signedData.signedUrl);
       toast.success('✅ Registre de commerce ajouté avec succès !');
@@ -258,10 +250,8 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
     if (!cinFile || !user) return;
     setUploadingCin(true);
     try {
-      console.log('📤 Upload du document CIN...');
       const ext = cinFile.name.split('.').pop();
       const filePath = `cin_${user.id}_${Date.now()}.${ext}`;
-      console.log('📂 Chemin du fichier:', filePath);
 
       const { error: uploadError } = await supabase.storage
         .from('registres')
@@ -272,7 +262,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
         throw uploadError;
       }
 
-      console.log('✅ Fichier uploadé avec succès');
 
       // Créer une URL signée
       const { data: signedData, error: signedError } = await supabase.storage
@@ -284,7 +273,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
         throw signedError || new Error("Impossible de créer l'URL signée");
       }
 
-      console.log('🔗 URL signée créée:', signedData.signedUrl);
 
       // Mettre à jour le profil avec l'URL signée du CIN
       const { error: updateError } = await supabase
@@ -297,7 +285,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
         throw updateError;
       }
 
-      console.log("✅ Profil mis à jour avec l'URL signée du CIN");
 
       setCinUrl(signedData.signedUrl);
       toast.success('✅ Document CIN ajouté avec succès !');
@@ -310,30 +297,24 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
   };
 
   const nextStep = () => {
-    console.log('nextStep called, currentStep:', currentStep, 'totalSteps:', totalSteps);
 
     // ✅ Tous les documents sont maintenant facultatifs ou peuvent être ajoutés plus tard
     // Aucune validation nécessaire à l'étape 3
 
     if (currentStep < totalSteps) {
-      console.log('Moving to next step:', currentStep + 1);
       setCurrentStep(currentStep + 1);
     } else {
-      console.log('Last step reached, calling handleSubmit');
       handleSubmit(); // Appeler handleSubmit au lieu de handleBypass
     }
   };
 
   const prevStep = () => {
-    console.log('prevStep called, currentStep:', currentStep);
     if (currentStep > 1) {
-      console.log('Moving to previous step:', currentStep - 1);
       setCurrentStep(currentStep - 1);
     }
   };
 
   const skipStep = () => {
-    console.log('skipStep called, currentStep:', currentStep);
 
     // ✅ Tous les documents sont maintenant facultatifs, toutes les étapes peuvent être passées
 
@@ -351,8 +332,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
 
     try {
       setSubmitting(true); // ✅ Utiliser submitting au lieu de loading
-      console.log('✅ Submitting onboarding with profile:', profile);
-      console.log('✅ Registre de commerce URL:', regUrl);
 
       // Mettre à jour onboarding_completed dans la base de données
       const { error: updateError } = await supabase
@@ -368,12 +347,10 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
         throw updateError;
       }
 
-      console.log('✅ Onboarding marqué comme terminé dans la base de données');
 
       // Marquer l'onboarding comme terminé dans le localStorage
       localStorage.setItem('onboardingCompleted', 'true');
 
-      console.log('✅ Onboarding completed, calling onComplete');
 
       // ✅ Afficher le toast de succès
       toast.success(
@@ -681,8 +658,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
                           if (!confirmDelete) return;
 
                           try {
-                            console.log('🗑️ Suppression du registre de commerce...');
-                            console.log('🔗 URL complète:', regUrl);
 
                             // Extraire le nom du fichier de l'URL
                             // L'URL est du type: https://.../storage/v1/object/public/registres/FILENAME.pdf
@@ -700,7 +675,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
                               fileName = regUrl.split('/').pop() || '';
                             }
 
-                            console.log('📂 Nom du fichier extrait:', fileName);
 
                             if (!fileName) {
                               console.error("❌ Impossible d'extraire le nom du fichier de l'URL");
@@ -708,15 +682,10 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
                             }
 
                             // Supprimer le fichier du storage
-                            console.log('🗑️ Tentative de suppression du fichier:', fileName);
                             const { error: deleteError, data: deleteData } = await supabase.storage
                               .from('registres')
                               .remove([fileName]);
 
-                            console.log('📊 Résultat de la suppression:', {
-                              deleteError,
-                              deleteData,
-                            });
 
                             if (deleteError) {
                               console.error(
@@ -726,7 +695,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
                               console.error('   Code:', deleteError.message);
                               // On continue quand même pour supprimer l'URL de la DB
                             } else {
-                              console.log('✅ Fichier supprimé du storage avec succès');
                             }
 
                             // IMPORTANT : Toujours mettre à jour le profil (supprimer l'URL)
@@ -744,8 +712,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
                               throw updateError;
                             }
 
-                            console.log('✅ URL supprimée du profil');
-                            console.log('✅ onboarding_completed réinitialisé à false');
 
                             setRegUrl(null);
                             setFile(null);
@@ -1040,7 +1006,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
         <div className="bg-white rounded-2xl p-8 relative">
           <button
             onClick={() => {
-              console.log('X button clicked');
               handleBypass();
             }}
             className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors bg-white rounded-full p-2 shadow-lg hover:shadow-xl z-10"
@@ -1061,7 +1026,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
         <div className="bg-white rounded-2xl p-8 text-center max-w-md w-full relative">
           <button
             onClick={() => {
-              console.log('X button clicked');
               handleBypass();
             }}
             className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors bg-white rounded-full p-2 shadow-lg hover:shadow-xl"
@@ -1079,7 +1043,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
           <div className="space-y-3">
             <button
               onClick={() => {
-                console.log('Skip onboarding button clicked');
                 handleBypass();
               }}
               className="w-full px-6 py-3 bg-[#00B3A6] text-white rounded-lg font-semibold hover:bg-[#008C82] transition-all flex items-center justify-center gap-2 shadow-sm"
@@ -1118,7 +1081,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
             </div>
             <button
               onClick={() => {
-                console.log('X button clicked');
                 handleBypass();
               }}
               className="text-white text-opacity-80 hover:text-opacity-100 transition-all p-2 hover:bg-white hover:bg-opacity-10 rounded-lg"
@@ -1151,7 +1113,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
           <div className="flex items-center justify-between">
             <button
               onClick={() => {
-                console.log('Previous button clicked');
                 prevStep();
               }}
               disabled={currentStep === 1}
@@ -1166,7 +1127,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
               {currentStep < totalSteps && (
                 <button
                   onClick={() => {
-                    console.log('Skip button clicked');
                     skipStep();
                   }}
                   className="px-6 py-3 bg-white border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-all"
@@ -1178,7 +1138,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
               {/* Bouton "Suivant/Terminer" - Toujours actif car documents sont facultatifs ou "Ajouter plus tard" */}
               <button
                 onClick={() => {
-                  console.log('Next button clicked');
                   nextStep();
                 }}
                 disabled={submitting}

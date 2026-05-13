@@ -334,11 +334,6 @@ export function computeDoohLocationAffluenceCampaign(
         dows_en_base: [...dows].sort((a, b) => a - b),
       };
     }
-    console.log('[DOOH affluence] debug — grilles avant boucle calendaire', {
-      localites: input.locationIds,
-      grilleParLoc,
-      regle_mapping: 'jsGetDayToDbDayOfWeek: jsDay===0?7:jsDay (BD 1=lun..7=dim)',
-    });
   }
 
   for (let dayIndex = 0; dayIndex < dayCount; dayIndex++) {
@@ -354,15 +349,6 @@ export function computeDoohLocationAffluenceCampaign(
     if (slotsPositifsCeJour > 0) daysWithPositiveRawSlots += 1;
 
     if (debug) {
-      console.log('[DOOH affluence] jour campagne', {
-        date: formatLocalCalendarDate(calendarDay),
-        dayIndex,
-        dayCount,
-        jsDay,
-        mappedDay,
-        day_of_week_bd_attendu: mappedDay,
-        slots_grille_avec_estimated_impressions_positif: slotsPositifsCeJour,
-      });
     }
 
     const dow = mappedDay;

@@ -114,7 +114,6 @@ export const videoUploadService = {
       const fileName = `${timestamp}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
       const filePath = `campaign-videos/${user.id}_${fileName}`;
 
-      console.log('📤 Upload de la vidéo:', filePath);
 
       // Upload le fichier dans le bucket 'media'
       const { data, error } = await supabase.storage.from('media').upload(filePath, file, {
@@ -147,7 +146,6 @@ export const videoUploadService = {
         };
       }
 
-      console.log('✅ Vidéo uploadée avec URL signée:', signedUrlData.signedUrl);
 
       return {
         url: signedUrlData.signedUrl,

@@ -45,8 +45,6 @@ export default function ContactPage() {
         return;
       }
 
-      console.log('BYPASS: Accès autorisé pour tous les types de profil');
-      console.log('Type de profil actuel:', profileType);
 
       // Pré-remplir le formulaire avec les données utilisateur
       setFormData((prev) => ({

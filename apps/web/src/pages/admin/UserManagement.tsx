@@ -214,7 +214,6 @@ export default function UserManagement() {
     setBulkActionLoading(true);
     try {
       const userIds = Array.from(selectedUsers);
-      console.log(`🗑️ Début de la suppression de ${userIds.length} utilisateur(s)`);
 
       let successCount = 0;
       let errorCount = 0;
@@ -222,13 +221,11 @@ export default function UserManagement() {
       // Supprimer chaque utilisateur individuellement avec la fonction complète
       for (let i = 0; i < userIds.length; i++) {
         const userId = userIds[i];
-        console.log(`🗑️ Suppression de l'utilisateur ${i + 1}/${userIds.length}: ${userId}`);
 
         try {
           const success = await adminUserService.deleteUser(userId);
           if (success) {
             successCount++;
-            console.log(`✅ Utilisateur ${i + 1}/${userIds.length} supprimé avec succès`);
           } else {
             errorCount++;
             console.error(`❌ Échec de la suppression de l'utilisateur ${i + 1}/${userIds.length}`);
@@ -239,7 +236,6 @@ export default function UserManagement() {
         }
       }
 
-      console.log(`🏁 Suppression terminée: ${successCount} succès, ${errorCount} échecs`);
 
       if (successCount > 0) {
         toast.success(`✅ ${successCount} utilisateur(s) supprimé(s) avec succès`);
@@ -261,11 +257,9 @@ export default function UserManagement() {
   // Charger les utilisateurs
   const loadUsers = async () => {
     try {
-      console.log('🔄 Starting to load users in UserManagement...');
       setLoading(true);
 
       const usersData = await adminUserService.getUsers();
-      console.log('✅ Users loaded in UserManagement:', usersData);
 
       setUsers(usersData);
     } catch (error: any) {
@@ -273,7 +267,6 @@ export default function UserManagement() {
       console.error('❌ Error details:', error.message);
       toast.error(`Erreur lors du chargement des utilisateurs: ${error.message}`);
     } finally {
-      console.log('🏁 Finished loading users in UserManagement');
       setLoading(false);
     }
   };
@@ -385,7 +378,6 @@ export default function UserManagement() {
 
     setUploadingDocument(true);
     try {
-      console.log("📤 Upload du document par l'admin...");
       const ext = documentFile.name.split('.').pop();
 
       // Déterminer le type de document selon le profil
@@ -393,7 +385,6 @@ export default function UserManagement() {
       const filePrefix = isIndividualOwner ? 'cin' : 'rne';
       const filePath = `${filePrefix}_${authUserId}_admin_${Date.now()}.${ext}`;
 
-      console.log(`📂 Upload fichier ${filePrefix}:`, filePath);
 
       // Upload vers le bucket registres
       const { error: uploadError } = await supabase.storage
@@ -405,7 +396,6 @@ export default function UserManagement() {
         throw uploadError;
       }
 
-      console.log('✅ Document uploadé avec succès');
 
       // Créer une URL signée
       const { data: signedData, error: signedError } = await supabase.storage
@@ -430,7 +420,6 @@ export default function UserManagement() {
         throw updateError;
       }
 
-      console.log('✅ Document sauvegardé dans le profil');
 
       // Recharger les utilisateurs pour rafraîchir l'affichage
       const usersData = await adminUserService.getUsers();

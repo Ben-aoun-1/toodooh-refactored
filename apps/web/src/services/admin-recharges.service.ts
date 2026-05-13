@@ -45,7 +45,6 @@ class AdminRechargesService {
     perPage: number = 20,
   ): Promise<{ data: AdminRecharge[]; total: number }> {
     try {
-      console.log('📋 Récupération des recharges...', { filters, page, perPage });
 
       let query = supabase
         .from('recharges')
@@ -107,7 +106,6 @@ class AdminRechargesService {
         }),
       );
 
-      console.log('✅ Recharges récupérées:', enrichedRecharges.length);
       return {
         data: enrichedRecharges,
         total: count || 0,
@@ -163,7 +161,6 @@ class AdminRechargesService {
    */
   async approveRecharge(rechargeId: string, adminId: string, notes?: string): Promise<void> {
     try {
-      console.log('✅ Validation de la recharge:', rechargeId);
 
       const { error } = await supabase
         .from('recharges')
@@ -178,7 +175,6 @@ class AdminRechargesService {
 
       if (error) throw error;
 
-      console.log('✅ Recharge validée avec succès');
     } catch (error) {
       console.error('❌ Erreur validation recharge:', error);
       throw error;
@@ -190,7 +186,6 @@ class AdminRechargesService {
    */
   async rejectRecharge(rechargeId: string, adminId: string, reason: string): Promise<void> {
     try {
-      console.log('❌ Rejet de la recharge:', rechargeId);
 
       const { error } = await supabase
         .from('recharges')
@@ -205,7 +200,6 @@ class AdminRechargesService {
 
       if (error) throw error;
 
-      console.log('✅ Recharge rejetée avec succès');
     } catch (error) {
       console.error('❌ Erreur rejet recharge:', error);
       throw error;
@@ -217,7 +211,6 @@ class AdminRechargesService {
    */
   async cancelRecharge(rechargeId: string, adminId: string, reason: string): Promise<void> {
     try {
-      console.log('🚫 Annulation de la recharge:', rechargeId);
 
       const { error } = await supabase
         .from('recharges')
@@ -232,7 +225,6 @@ class AdminRechargesService {
 
       if (error) throw error;
 
-      console.log('✅ Recharge annulée avec succès');
     } catch (error) {
       console.error('❌ Erreur annulation recharge:', error);
       throw error;

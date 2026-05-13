@@ -81,7 +81,6 @@ export default function RechargeManagement() {
 
   const loadData = async () => {
     try {
-      console.log('🔄 Chargement des données recharges...');
       setLoading(true);
 
       // Charger les recharges
@@ -94,13 +93,11 @@ export default function RechargeManagement() {
         itemsPerPage,
       );
 
-      console.log('✅ Recharges chargées:', data.length, 'Total:', total);
       setRecharges(data);
       setTotalRecharges(total);
 
       // Charger les stats
       const statsData = await adminRechargesService.getRechargeStats();
-      console.log('✅ Stats chargées:', statsData);
       setStats(statsData);
     } catch (error: any) {
       console.error('❌ Erreur chargement données:', error);

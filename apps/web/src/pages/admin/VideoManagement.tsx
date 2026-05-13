@@ -92,7 +92,6 @@ export default function VideoManagement() {
     }
 
     try {
-      console.log('Approving video:', videoId, 'by admin:', admin.id);
       const success = await adminVideoService.approveVideo(videoId, admin.id);
 
       if (success) {
@@ -116,7 +115,6 @@ export default function VideoManagement() {
     }
 
     try {
-      console.log('Rejecting video:', videoId, 'by admin:', admin.id);
       const success = await adminVideoService.rejectVideo(videoId, admin.id);
 
       if (success) {

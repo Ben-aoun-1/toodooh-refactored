@@ -619,12 +619,6 @@ export default function NewCampaign() {
 
   const saveCampaignDraft = async (videoId?: string, isVideoValidated: boolean = false) => {
     try {
-      console.log('💾 Sauvegarde de la campagne...');
-      console.log('📋 Form data:', formData);
-      console.log('📋 Start date:', startDate);
-      console.log('📋 End date:', endDate);
-      console.log('📋 Location:', selectedLocation);
-      console.log('📋 Video ID:', videoId || uploadedVideoId);
 
       // Validation des champs obligatoires
       if (!formData.campaignName || formData.campaignName.trim() === '') {
@@ -644,18 +638,15 @@ export default function NewCampaign() {
           ? ['parc']
           : formData.categories.map((c) => categoryMapping[c] || c);
       const primaryCategory = mappedCategories[0] || 'parc';
-      console.log('📋 Catégories mappées:', formData.categories, '→', mappedCategories);
 
       // TOUJOURS créer en draft d'abord
       // La vérification du solde et de la vidéo se fera lors de "Créer maintenant"
       const campaignStatus = 'draft';
-      console.log('🎬 Vidéo validée:', isVideoValidated, '→ Status initial:', campaignStatus);
 
       // Récupérer les IDs des localités sélectionnées (une localité = une audience, pas de doublon écran)
       const selectedLocationIds = geographicZones.flatMap((zone) =>
         (zone.locations || []).map((loc) => loc.id),
       );
-      console.log('📍 Localités sélectionnées dans toutes les zones:', selectedLocationIds.length);
 
       // Calculer la position centrale moyenne de toutes les zones
       const avgLat =
@@ -675,8 +666,6 @@ export default function NewCampaign() {
           ? Math.max(...geographicZones.map((zone) => zone.radius))
           : radius;
 
-      console.log('📍 Position centrale calculée:', avgLat, avgLng);
-      console.log('📍 Rayon maximum:', maxRadius);
 
       // Calculer le budget à utiliser : utiliser adjustedBudget si disponible, sinon calculer à partir des impressions
       const budgetToSave = adjustedBudget;
@@ -685,15 +674,6 @@ export default function NewCampaign() {
         maxImpSave > 0 && adjustedBudget > 0
           ? Math.min(Math.round((adjustedBudget / cpmTnd) * 1000), maxImpSave)
           : 0;
-      console.log('🔄 Mode édition:', editMode);
-      console.log('🆔 ID de la campagne à modifier:', draftCampaignId);
-      console.log('📝 Données à sauvegarder:', {
-        name: formData.campaignName,
-        categories: mappedCategories,
-        budget: budgetToSave,
-        video_id: videoId || uploadedVideoId,
-        campaignId: draftCampaignId,
-      });
 
       const campaign = await campaignService.saveCampaignDraft(
         {
@@ -716,13 +696,10 @@ export default function NewCampaign() {
         draftCampaignId || undefined,
       );
 
-      console.log('✅ Campagne sauvegardée:', campaign);
 
       if (!draftCampaignId) {
         setDraftCampaignId(campaign.id);
-        console.log('✅ Campagne créée avec ID:', campaign.id, 'Status:', campaignStatus);
       } else {
-        console.log('✅ Campagne mise à jour:', campaign.id);
       }
 
       return campaign;
@@ -1408,16 +1385,10 @@ export default function NewCampaign() {
   // Fonction pour vérifier les événements spéciaux durant la période
   const checkSpecialEvents = async (start: Date | null, end: Date | null) => {
     if (!start || !end) {
-      console.log('⚠️ Dates invalides pour la vérification des événements');
       return;
     }
 
     try {
-      console.log('🎉 Vérification des événements spéciaux...');
-      console.log('📅 Période campagne:', {
-        start: start.toISOString(),
-        end: end.toISOString(),
-      });
 
       // Récupérer tous les événements actifs
       const { data, error } = await supabase
@@ -1435,10 +1406,8 @@ export default function NewCampaign() {
         return;
       }
 
-      console.log('📊 Événements actifs trouvés:', data?.length || 0);
 
       if (!data || data.length === 0) {
-        console.log('ℹ️ Aucun événement actif dans la base');
         return;
       }
 
@@ -1452,21 +1421,14 @@ export default function NewCampaign() {
         // Vérifier le chevauchement
         const hasOverlap = eventStart <= campaignEnd && eventEnd >= campaignStart;
 
-        console.log(`🔍 Event "${event.name}":`, {
-          eventPeriod: `${eventStart.toLocaleDateString()} - ${eventEnd.toLocaleDateString()}`,
-          campaignPeriod: `${campaignStart.toLocaleDateString()} - ${campaignEnd.toLocaleDateString()}`,
-          hasOverlap,
-        });
 
         return hasOverlap;
       });
 
       if (overlappingEvents.length > 0) {
-        console.log(`✅ ${overlappingEvents.length} événement(s) détecté(s) durant cette période`);
         setDetectedEvents(overlappingEvents);
         setShowEventsModal(true);
       } else {
-        console.log('ℹ️ Aucun événement ne chevauche la période de la campagne');
         setDetectedEvents([]);
       }
     } catch (error) {
@@ -1631,7 +1593,6 @@ export default function NewCampaign() {
     const loadExistingVideo = async () => {
       if (editMode && campaignToEdit?.video_id) {
         try {
-          console.log('📹 Chargement de la vidéo existante:', campaignToEdit.video_id);
           const { data: videoData } = await supabase
             .from('videos')
             .select('*')
@@ -1639,7 +1600,6 @@ export default function NewCampaign() {
             .single();
 
           if (videoData) {
-            console.log('✅ Vidéo chargée:', videoData);
             setUploadedVideoId(videoData.id);
             setUploadedVideoUrl(videoData.url);
             setMyApprovedVideos((prev) => {
@@ -1735,7 +1695,6 @@ export default function NewCampaign() {
 
       if (error) throw error;
       setMyApprovedVideos(data || []);
-      console.log('✅ Vidéos validées chargées:', data?.length || 0);
     } catch (error) {
       console.error('Erreur chargement vidéos validées:', error);
     }
@@ -1746,8 +1705,6 @@ export default function NewCampaign() {
     setLoadingScreens(true);
     try {
       const screens = await campaignScreensService.getAllScreens();
-      console.log('✅ Écrans chargés:', screens.length);
-      console.log('📍 Premier écran:', screens[0]);
       setAllScreens(screens);
     } catch (error) {
       console.error('Erreur lors du chargement des écrans:', error);

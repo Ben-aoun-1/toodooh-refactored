@@ -346,14 +346,6 @@ export default function Dashboard() {
 
   // Debug logs
   useEffect(() => {
-    console.log('🔍 Dashboard - État utilisateur:', {
-      needsApproval,
-      validationStatus,
-      isDisabled,
-      onboardingCompleted,
-      profileType,
-      user: user?.email,
-    });
   }, [needsApproval, validationStatus, isDisabled, onboardingCompleted, profileType, user]);
 
   const [runTour, setRunTour] = useState(false);
@@ -365,24 +357,20 @@ export default function Dashboard() {
 
   // Debug pour showOnboarding (désactivé pour réduire les logs)
   // useEffect(() => {
-  //   console.log('🔔 showOnboarding changé:', showOnboarding);
+  //   ;
   // }, [showOnboarding]);
 
   // Fonction helper pour ouvrir le modal d'onboarding
   const openOnboardingModal = () => {
     if (DISABLE_ONBOARDING_POPUPS) return;
-    console.log("📂 Ouverture du modal d'onboarding");
 
     // Nettoyer le localStorage pour éviter les conflits
     const oldValue = localStorage.getItem('onboardingCompleted');
     if (oldValue === 'true') {
-      console.log('⚠️ localStorage indique onboarding terminé (peut être obsolète)');
-      console.log('🧹 Nettoyage du localStorage');
       localStorage.removeItem('onboardingCompleted');
     }
 
     setShowOnboarding(true);
-    console.log('✅ Modal ouvert');
   };
   const [stats, setStats] = useState({
     activeCampaigns: 0,
@@ -424,7 +412,6 @@ export default function Dashboard() {
     if (user) {
       const userProfileType = localStorage.getItem('user_profile_type');
       if (userProfileType === 'individual_owner' || userProfileType === 'fleet_owner') {
-        console.log('Redirection vers le dashboard propriétaire');
         navigate('/owner-dashboard');
       }
     }
@@ -514,22 +501,9 @@ export default function Dashboard() {
 
           if (balanceInfo) {
             balance = balanceInfo.available_balance;
-            console.log('💰 DÉTAILS DU SOLDE:');
-            console.log(
-              '  - Total rechargé:',
-              balanceService.formatAmount(balanceInfo.total_recharged),
-            );
-            console.log('  - Total dépensé:', balanceService.formatAmount(balanceInfo.total_spent));
-            console.log(
-              '  - Solde disponible:',
-              balanceService.formatAmount(balanceInfo.available_balance),
-            );
-            console.log('  - Campagnes draft:', balanceInfo.draft_campaigns_count);
-            console.log('  - Campagnes actives:', balanceInfo.active_campaigns_count);
           } else {
             // Fallback
             balance = await balanceService.getUserBalance(user.id);
-            console.log('💰 Solde disponible (fallback):', balance, 'TND');
           }
         } catch (error) {
           console.error('❌ Erreur récupération solde:', error);
@@ -663,12 +637,7 @@ export default function Dashboard() {
     const fetchProfile = async () => {
       if (user) {
         try {
-          console.log('Fetching profile for user:', user.id);
           const data = await authService.getBusinessProfile();
-          console.log('Profile fetched:', data);
-          console.log('Contact name:', data?.contact_name);
-          console.log('Business name:', data?.business_name);
-          console.log('Profile type:', data?.profile_type);
           setProfile(data);
 
           // Mettre à jour le localStorage avec le nom et prénom
@@ -775,26 +744,21 @@ export default function Dashboard() {
   const balance = user ? '2,500 TND' : null;
 
   const handleLogout = async () => {
-    console.log('🔴 Bouton déconnexion cliqué (Annonceur)');
     try {
-      console.log('🔄 Nettoyage du localStorage...');
 
       // Nettoyer le localStorage
       localStorage.removeItem('onboardingCompleted');
       localStorage.removeItem('justOnboarded');
       localStorage.removeItem('user_profile_type');
 
-      console.log('🔄 Appel de logout()...');
       await logout();
 
-      console.log('✅ Déconnexion réussie, redirection vers /login');
       navigate('/login');
       toast.success('Déconnexion réussie');
     } catch (error: any) {
       console.error('❌ Erreur lors de la déconnexion:', error);
       toast.error(error?.message || "Une erreur inattendue s'est produite");
       // En cas d'erreur, forcer la redirection
-      console.log('🔄 Redirection forcée vers /login');
       navigate('/login');
     }
   };
@@ -867,7 +831,6 @@ export default function Dashboard() {
     if (onboardingCheckRef.current) return; // Éviter les appels multiples
     onboardingCheckRef.current = true;
 
-    console.log('Onboarding completed');
     setShowOnboarding(false);
 
     // Marquer l'onboarding comme terminé dans localStorage d'abord
@@ -885,11 +848,9 @@ export default function Dashboard() {
           console.error('Erreur lors de la mise à jour onboarding_completed:', error);
           onboardingCheckRef.current = false; // Réessayer en cas d'erreur
         } else {
-          console.log('Onboarding marked as completed in database');
 
           // Recharger l'état onboarding_completed
           setOnboardingCompleted(true);
-          console.log('✅ État onboardingCompleted mis à jour dans le Dashboard');
         }
       } catch (error) {
         console.error("Erreur lors de la completion de l'onboarding:", error);
@@ -899,7 +860,6 @@ export default function Dashboard() {
   }, [user?.id]);
 
   const handleOnboardingClose = async () => {
-    console.log('Onboarding closed');
     setShowOnboarding(false);
 
     // Marquer l'onboarding comme terminé dans localStorage d'abord
@@ -916,7 +876,6 @@ export default function Dashboard() {
         if (error) {
           console.error('Erreur lors de la mise à jour onboarding_completed:', error);
         } else {
-          console.log('Onboarding marked as completed in database');
         }
       } catch (error) {
         console.error("Erreur lors de la fermeture de l'onboarding:", error);

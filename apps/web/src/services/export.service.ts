@@ -38,7 +38,6 @@ class ExportService {
     period: string,
   ) {
     try {
-      console.log('📄 Génération du PDF...');
 
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.getWidth();
@@ -137,7 +136,6 @@ class ExportService {
       const fileName = `toodooh_revenus_${type}_${period}_${new Date().toISOString().split('T')[0]}.pdf`;
       doc.save(fileName);
 
-      console.log('✅ PDF généré avec succès');
       return fileName;
     } catch (error) {
       console.error('❌ Erreur lors de la génération du PDF:', error);
@@ -152,7 +150,6 @@ class ExportService {
     period: string,
   ) {
     try {
-      console.log('📊 Génération du fichier Excel...');
 
       let worksheetData: any[] = [];
       let headers: string[] = [];
@@ -252,7 +249,6 @@ class ExportService {
       const fileName = `toodooh_revenus_${type}_${period}_${new Date().toISOString().split('T')[0]}.xlsx`;
       saveAs(blob, fileName);
 
-      console.log('✅ Fichier Excel généré avec succès');
       return fileName;
     } catch (error) {
       console.error('❌ Erreur lors de la génération du fichier Excel:', error);
@@ -268,7 +264,6 @@ class ExportService {
     period: string,
   ) {
     try {
-      console.log('📦 Export de toutes les données...');
 
       // Créer un workbook avec plusieurs feuilles
       const workbook = XLSX.utils.book_new();
@@ -351,7 +346,6 @@ class ExportService {
       const fileName = `toodooh_revenus_complet_${period}_${new Date().toISOString().split('T')[0]}.xlsx`;
       saveAs(blob, fileName);
 
-      console.log('✅ Export complet généré avec succès');
       return fileName;
     } catch (error) {
       console.error("❌ Erreur lors de l'export complet:", error);

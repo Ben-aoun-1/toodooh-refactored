@@ -12,17 +12,14 @@ export const platformStatsService = {
   // Récupérer les statistiques globales
   async getGlobalStats(): Promise<PlatformGlobalStats | null> {
     try {
-      console.log('🔍 Fetching platform global stats...');
 
       // Essayer d'abord avec RPC
       try {
         const { data, error } = await supabase.rpc('get_platform_global_stats');
         if (!error && data) {
-          console.log('✅ Global stats fetched via RPC');
           return data[0];
         }
       } catch (rpcError) {
-        console.log('⚠️ RPC not available, using direct queries');
       }
 
       // Fallback: Requêtes directes
@@ -73,7 +70,6 @@ export const platformStatsService = {
         upcoming_events: eventsData?.filter((e) => new Date(e.start_date) > new Date()).length || 0,
       };
 
-      console.log('✅ Global stats computed from direct queries:', stats);
       return stats;
     } catch (error) {
       console.error('❌ Exception in getGlobalStats:', error);
@@ -84,17 +80,14 @@ export const platformStatsService = {
   // Récupérer les statistiques de revenus
   async getRevenueStats(): Promise<PlatformRevenueStats | null> {
     try {
-      console.log('🔍 Fetching platform revenue stats...');
 
       // Essayer avec RPC
       try {
         const { data, error } = await supabase.rpc('get_platform_revenue_stats');
         if (!error && data) {
-          console.log('✅ Revenue stats fetched via RPC');
           return data[0];
         }
       } catch (rpcError) {
-        console.log('⚠️ RPC not available, using direct queries');
       }
 
       // Fallback: Requêtes directes
@@ -121,7 +114,6 @@ export const platformStatsService = {
         total_campaigns_budget: totalBudget,
       };
 
-      console.log('✅ Revenue stats computed:', stats);
       return stats;
     } catch (error) {
       console.error('❌ Exception in getRevenueStats:', error);
@@ -132,17 +124,14 @@ export const platformStatsService = {
   // Récupérer le taux d'occupation des écrans
   async getOccupancyStats(): Promise<ScreensOccupancyStats | null> {
     try {
-      console.log('🔍 Fetching screens occupancy stats...');
 
       // Essayer avec RPC
       try {
         const { data, error } = await supabase.rpc('get_screens_occupancy_rate');
         if (!error && data) {
-          console.log('✅ Occupancy stats fetched via RPC');
           return data[0];
         }
       } catch (rpcError) {
-        console.log('⚠️ RPC not available, using direct queries');
       }
 
       // Fallback: Requêtes directes
@@ -161,7 +150,6 @@ export const platformStatsService = {
         average_uptime: 100, // TODO: Calculer depuis screen_statistics
       };
 
-      console.log('✅ Occupancy stats computed:', stats);
       return stats;
     } catch (error) {
       console.error('❌ Exception in getOccupancyStats:', error);
@@ -172,17 +160,14 @@ export const platformStatsService = {
   // Récupérer les performances des campagnes
   async getCampaignsPerformance(): Promise<CampaignsPerformance | null> {
     try {
-      console.log('🔍 Fetching campaigns performance...');
 
       // Essayer avec RPC
       try {
         const { data, error } = await supabase.rpc('get_campaigns_performance');
         if (!error && data) {
-          console.log('✅ Campaigns performance fetched via RPC');
           return data[0];
         }
       } catch (rpcError) {
-        console.log('⚠️ RPC not available, using direct queries');
       }
 
       // Fallback: Requêtes directes
@@ -215,7 +200,6 @@ export const platformStatsService = {
         campaigns_by_status: campaignsByStatus,
       };
 
-      console.log('✅ Campaigns performance computed:', stats);
       return stats;
     } catch (error) {
       console.error('❌ Exception in getCampaignsPerformance:', error);
@@ -226,7 +210,6 @@ export const platformStatsService = {
   // Récupérer les écrans les plus performants
   async getTopScreens(limit: number = 5): Promise<TopPerformingScreen[]> {
     try {
-      console.log('🔍 Fetching top performing screens...');
 
       // Essayer avec RPC
       try {
@@ -234,11 +217,9 @@ export const platformStatsService = {
           limit_count: limit,
         });
         if (!error && data) {
-          console.log('✅ Top screens fetched via RPC');
           return data;
         }
       } catch (rpcError) {
-        console.log('⚠️ RPC not available, using direct queries');
       }
 
       // Fallback: Requêtes directes avec jointure
@@ -278,7 +259,6 @@ export const platformStatsService = {
         owner_business_name: ownerMap.get(s.owner_id) || 'N/A',
       }));
 
-      console.log('✅ Top screens computed:', topScreens.length);
       return topScreens;
     } catch (error) {
       console.error('❌ Exception in getTopScreens:', error);
@@ -289,7 +269,6 @@ export const platformStatsService = {
   // Récupérer l'activité récente
   async getRecentActivity(limit: number = 10): Promise<RecentActivity[]> {
     try {
-      console.log('🔍 Fetching recent activity...');
 
       const { data, error } = await supabase.rpc('get_recent_platform_activity', {
         limit_count: limit,
@@ -300,7 +279,6 @@ export const platformStatsService = {
         return [];
       }
 
-      console.log('✅ Recent activity fetched successfully');
       return data || [];
     } catch (error) {
       console.error('❌ Exception in getRecentActivity:', error);

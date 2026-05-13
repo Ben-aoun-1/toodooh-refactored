@@ -5,7 +5,6 @@ export const adminVideoService = {
   // Récupérer toutes les vidéos pour validation (seulement celles utilisées dans des campagnes)
   async getVideos(statusFilter?: 'pending' | 'approved' | 'rejected' | 'all'): Promise<Video[]> {
     try {
-      console.log('🔍 Fetching videos for admin validation...');
 
       let query = supabase
         .from('admin_videos_view')
@@ -49,11 +48,6 @@ export const adminVideoService = {
 
       const filteredVideos = videos.filter((v: any) => eligibleVideoIds.has(v.id));
 
-      console.log(
-        '✅ Videos fetched successfully:',
-        filteredVideos.length,
-        'videos (hors brouillons)',
-      );
 
       return filteredVideos;
     } catch (error) {
@@ -65,7 +59,6 @@ export const adminVideoService = {
   // Récupérer les détails d'une vidéo avec les campagnes associées
   async getVideoDetails(videoId: string): Promise<Video & { campaigns: CampaignUsingVideo[] }> {
     try {
-      console.log('🔍 Fetching video details:', videoId);
 
       // Récupérer la vidéo
       const { data: videoData, error: videoError } = await supabase
@@ -103,7 +96,6 @@ export const adminVideoService = {
   // Valider une vidéo (approuver)
   async approveVideo(videoId: string, adminId: string, notes?: string): Promise<boolean> {
     try {
-      console.log('🔄 Approving video:', videoId, 'by admin:', adminId);
 
       const updateData: any = {
         validation_status: 'approved',
@@ -126,7 +118,6 @@ export const adminVideoService = {
         throw new Error(error.message);
       }
 
-      console.log('✅ Video approved successfully:', data);
 
       // Activer automatiquement les campagnes en attente qui utilisent cette vidéo
       // et injecter les informations de publication par heure.
@@ -188,7 +179,6 @@ export const adminVideoService = {
       }
 
       if (campaigns && campaigns.length > 0) {
-        console.log(`🔄 Activation de ${campaigns.length} campagne(s) utilisant cette vidéo...`);
 
         // Importer le service de campagne pour utiliser injectCampaignPublicationSchedule
         const { campaignService } = await import('./campaign.service');
@@ -350,11 +340,7 @@ export const adminVideoService = {
             // Injecter les informations de publication par heure
             await campaignService.injectCampaignPublicationSchedule(campaign.id);
 
-            console.log(
-              `✅ Campagne ${campaign.id} (${campaign.name || 'Sans nom'}) activée automatiquement`,
-            );
           } else {
-            console.log(`⚠️ Campagne ${campaign.id} non activée: solde insuffisant`);
           }
         }
       }
@@ -410,7 +396,6 @@ export const adminVideoService = {
   // Rejeter une vidéo
   async rejectVideo(videoId: string, adminId: string, notes?: string): Promise<boolean> {
     try {
-      console.log('🔄 Rejecting video:', videoId, 'by admin:', adminId);
 
       const updateData: any = {
         validation_status: 'rejected',
@@ -433,7 +418,6 @@ export const adminVideoService = {
         throw new Error(error.message);
       }
 
-      console.log('✅ Video rejected successfully:', data);
       return true;
     } catch (error: any) {
       console.error('❌ Error in rejectVideo:', error);
@@ -444,7 +428,6 @@ export const adminVideoService = {
   // Supprimer une vidéo (supprime aussi les liaisons avec les campagnes)
   async deleteVideo(videoId: string): Promise<boolean> {
     try {
-      console.log('🗑️ Deleting video:', videoId);
 
       const { error } = await supabase.from('videos').delete().eq('id', videoId);
 
@@ -453,7 +436,6 @@ export const adminVideoService = {
         return false;
       }
 
-      console.log('✅ Video deleted successfully');
       return true;
     } catch (error) {
       console.error('❌ Error in deleteVideo:', error);
@@ -464,7 +446,6 @@ export const adminVideoService = {
   // Récupérer les statistiques de validation
   async getValidationStats(): Promise<VideoValidationStats> {
     try {
-      console.log('🔍 Fetching validation stats...');
 
       const { data, error } = await supabase.rpc('get_video_validation_stats');
 
@@ -478,7 +459,6 @@ export const adminVideoService = {
         };
       }
 
-      console.log('✅ Stats fetched successfully:', data);
 
       return (
         data[0] || {
@@ -502,7 +482,6 @@ export const adminVideoService = {
   // Mettre à jour les notes de validation sans changer le statut
   async updateValidationNotes(videoId: string, notes: string): Promise<boolean> {
     try {
-      console.log('🔄 Updating validation notes for video:', videoId);
 
       const { error } = await supabase
         .from('videos')
@@ -517,7 +496,6 @@ export const adminVideoService = {
         return false;
       }
 
-      console.log('✅ Notes updated successfully');
       return true;
     } catch (error) {
       console.error('❌ Error in updateValidationNotes:', error);
@@ -528,7 +506,6 @@ export const adminVideoService = {
   // Récupérer les campagnes affectées par une vidéo
   async getCampaignsUsingVideo(videoId: string): Promise<CampaignUsingVideo[]> {
     try {
-      console.log('🔍 Fetching campaigns using video:', videoId);
 
       // Utiliser rpc si disponible, sinon requête directe
       try {
@@ -537,11 +514,9 @@ export const adminVideoService = {
         });
 
         if (!error && data) {
-          console.log('✅ Found', data.length, 'campaigns using this video (via RPC)');
           return data;
         }
       } catch (rpcError) {
-        console.log('⚠️ RPC not available, using direct query');
       }
 
       // Fallback: requête directe
@@ -562,7 +537,6 @@ export const adminVideoService = {
         return [];
       }
 
-      console.log('✅ Found', data?.length || 0, 'campaigns using this video');
 
       return (data || []).map((c) => ({
         campaign_id: c.id,

@@ -251,16 +251,6 @@ export default function ScreenCalendar({
     validationErrors.length === 0;
 
   // Debug pour voir l'état de validation
-  console.log('🔍 Debug validation:', {
-    selectedScreens: selectedScreens.length,
-    startDate,
-    endDate,
-    startTime,
-    endTime,
-    reason: reason.trim(),
-    validationErrors: validationErrors.length,
-    isFormValid,
-  });
 
   const handleSubmit = async () => {
     if (selectedScreens.length === 0) {
@@ -279,18 +269,6 @@ export default function ScreenCalendar({
     }
 
     try {
-      console.log(
-        "📅 Création de périodes d'indisponibilité pour",
-        selectedScreens.length,
-        'écran(s)',
-      );
-      console.log('📅 Données validées:', {
-        startDate,
-        endDate,
-        startTime,
-        endTime,
-        reason,
-      });
 
       // Créer une période d'indisponibilité pour chaque écran sélectionné
       const createdPeriods = [];
@@ -298,7 +276,6 @@ export default function ScreenCalendar({
       for (const screenId of selectedScreens) {
         const screen = screens.find((s) => s.id === screenId);
         if (screen) {
-          console.log("🔄 Création de la période pour l'écran:", screen.name);
 
           // Créer la période en base de données
           const newPeriod = await screensService.createUnavailabilityPeriod({
@@ -310,7 +287,6 @@ export default function ScreenCalendar({
             reason,
           });
 
-          console.log('✅ Période créée en base de données:', newPeriod);
 
           // Ajouter à l'état local
           setUnavailabilityPeriods((prev) => [...prev, newPeriod]);

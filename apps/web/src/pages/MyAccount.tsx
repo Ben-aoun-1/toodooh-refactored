@@ -78,8 +78,6 @@ export default function MyAccount() {
         return;
       }
 
-      console.log('BYPASS: Accès autorisé pour tous les types de profil');
-      console.log('Type de profil actuel:', profileType);
 
       setLoading(false);
       await loadProfileData();
@@ -92,8 +90,6 @@ export default function MyAccount() {
   const loadProfileData = async () => {
     try {
       const profileData = await authService.getBusinessProfile();
-      console.log('📋 Données du profil chargées:', profileData);
-      console.log("🏢 Type d'entreprise actuel:", profileData?.business_type);
       setProfile(profileData);
 
       // Pré-remplir le formulaire avec les données existantes
@@ -174,7 +170,6 @@ export default function MyAccount() {
 
     setUploadingDocument(true);
     try {
-      console.log('📤 Upload du document...');
       const ext = documentFile.name.split('.').pop();
 
       // Déterminer le type de document selon le profil
@@ -182,7 +177,6 @@ export default function MyAccount() {
       const filePrefix = isIndividualOwner ? 'cin' : 'rne';
       const filePath = `${filePrefix}_${user.id}_${Date.now()}.${ext}`;
 
-      console.log(`📂 Upload fichier ${filePrefix}:`, filePath);
 
       // Upload vers le bucket registres
       const { error: uploadError } = await supabase.storage
@@ -194,7 +188,6 @@ export default function MyAccount() {
         throw uploadError;
       }
 
-      console.log('✅ Document uploadé avec succès');
 
       // Créer une URL signée
       const { data: signedData, error: signedError } = await supabase.storage
@@ -219,7 +212,6 @@ export default function MyAccount() {
         throw updateError;
       }
 
-      console.log('✅ Document sauvegardé dans le profil');
 
       // Recharger le profil
       await loadProfileData();
@@ -245,7 +237,6 @@ export default function MyAccount() {
     setSaving(true);
 
     try {
-      console.log('🔄 Début de la mise à jour du profil...');
 
       // Mettre à jour le profil
       const updateData = {
@@ -262,19 +253,13 @@ export default function MyAccount() {
         registration_doc_url: formData.registrationDocUrl,
       };
 
-      console.log('📝 Données à mettre à jour:', updateData);
       await authService.updateBusinessProfile(updateData);
-      console.log('✅ Profil mis à jour avec succès');
 
       // Mettre à jour le mot de passe si fourni
       if (formData.password) {
-        console.log('🔐 Mise à jour du mot de passe...');
-        console.log('🔍 Longueur du mot de passe:', formData.password.length);
-        console.log('🔍 Mot de passe valide:', formData.password.length >= 6);
 
         try {
           await authService.updatePassword(formData.password);
-          console.log('✅ Mot de passe mis à jour avec succès');
         } catch (passwordError) {
           console.error('❌ Erreur lors de la mise à jour du mot de passe:', passwordError);
           throw new Error(

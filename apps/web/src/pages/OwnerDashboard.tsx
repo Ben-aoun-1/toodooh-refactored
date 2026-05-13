@@ -86,7 +86,6 @@ export default function OwnerDashboard() {
   // ✅ OPTIMISATION : Mémoriser la fonction loadDashboardData avec useCallback
   const loadDashboardData = useCallback(async () => {
     try {
-      console.log('=== CHARGEMENT DES DONNÉES DU DASHBOARD ===');
       setLoading(true);
 
       // Charger le profil utilisateur
@@ -104,12 +103,10 @@ export default function OwnerDashboard() {
 
       // Charger les écrans depuis la base de données
       const screensData = await screensService.getScreens();
-      console.log('Écrans chargés:', screensData);
       setScreens(screensData);
 
       // Charger les statistiques de revenus complètes
       const revenueStats = await revenueService.getRevenueStats();
-      console.log('Statistiques de revenus:', revenueStats);
 
       // Utiliser directement les statistiques du service
       setStats(revenueStats);
@@ -206,7 +203,6 @@ export default function OwnerDashboard() {
         setOwnerNotifications([]);
       }
 
-      console.log('✅ Données du dashboard chargées avec succès');
       hasLoadedData.current = true; // ✅ Marquer comme chargé
     } catch (error) {
       console.error('❌ Erreur lors du chargement des données:', error);
@@ -227,8 +223,6 @@ export default function OwnerDashboard() {
   // ✅ OPTIMISATION : useEffect séparé pour le chargement initial des données
   useEffect(() => {
     if (user && !hasLoadedData.current) {
-      console.log('BYPASS: Accès autorisé pour tous les types de profil');
-      console.log('Type de profil actuel:', profileType);
       loadDashboardData();
     }
   }, [user, profileType, loadDashboardData]);

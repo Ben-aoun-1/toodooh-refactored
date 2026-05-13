@@ -125,8 +125,6 @@ export default function GiftCatalogPage() {
         return;
       }
 
-      console.log('BYPASS: Accès autorisé pour tous les types de profil');
-      console.log('Type de profil actuel:', profileType);
 
       setLoading(false);
     };

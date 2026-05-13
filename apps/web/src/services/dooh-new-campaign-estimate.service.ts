@@ -250,11 +250,6 @@ export async function computeNewCampaignDoohMaxImpressions(input: {
       input.wizardLocationSlots &&
       [...input.wizardLocationSlots.values()].some((slots) => slots.length > 0);
     if (!wizardFilled) {
-      console.info(
-        'computeNewCampaignDoohMaxImpressions: aucune ligne location_affluence_schedule pour ces localités. ' +
-          'Ce n’est pas causé par l’appel `screens` : soit pas de données pour ces location_id, soit RLS/GRANT SELECT ' +
-          '(appliquer migrations 20260404230000 / 20260404290000 sur le projet), soit les id ne correspondent pas à la table.',
-      );
     }
   }
 

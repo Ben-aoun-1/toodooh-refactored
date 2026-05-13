@@ -33,7 +33,6 @@ export const adminUserService = {
   // Récupérer tous les utilisateurs
   async getUsers(): Promise<AdminUser[]> {
     try {
-      console.log('🔍 Fetching users from business_profiles...');
 
       // Récupérer les données de business_profiles (en excluant les admins)
       const { data, error } = await supabase
@@ -48,11 +47,6 @@ export const adminUserService = {
       }
 
       // Debug: Logger les données récupérées pour vérifier la colonne formule
-      console.log('🔍 Admin service - Données récupérées:', data?.slice(0, 2));
-      console.log(
-        '🔍 Admin service - Colonnes disponibles:',
-        data?.[0] ? Object.keys(data[0]) : 'Aucune donnée',
-      );
 
       // Filtrer les utilisateurs qui sont aussi des admins
       const userIds = (data || []).map((u) => u.user_id);
@@ -66,9 +60,6 @@ export const adminUserService = {
       // Filtrer les admins de la liste
       const filteredData = (data || []).filter((u) => !adminUserIds.has(u.user_id));
 
-      console.log('✅ Users fetched successfully:', data?.length || 0, 'users');
-      console.log('🔒 Admins filtered:', adminUserIds.size, 'admins excluded');
-      console.log('📊 Final count:', filteredData.length, 'business users');
 
       // Transformer les données pour correspondre à l'interface AdminUser
       const transformedUsers: AdminUser[] = filteredData.map((user) => ({
@@ -169,7 +160,6 @@ export const adminUserService = {
   // Approuver un utilisateur
   async approveUser(userId: string, adminId?: string, notes?: string): Promise<boolean> {
     try {
-      console.log('🔄 Approving user:', userId, 'by admin:', adminId);
 
       const updateData: any = {
         status: 'approved',
@@ -197,8 +187,6 @@ export const adminUserService = {
         return false;
       }
 
-      console.log('✅ User approved successfully');
-      console.log('✅ Status updated: status = approved, verification_status = approved');
       return true;
     } catch (error) {
       console.error('❌ Error in approveUser:', error);
@@ -209,7 +197,6 @@ export const adminUserService = {
   // Rejeter un utilisateur
   async rejectUser(userId: string, adminId?: string, notes?: string): Promise<boolean> {
     try {
-      console.log('🔄 Rejecting user:', userId, 'by admin:', adminId);
 
       const updateData: any = {
         status: 'rejected',
@@ -236,8 +223,6 @@ export const adminUserService = {
         return false;
       }
 
-      console.log('✅ User rejected successfully');
-      console.log('✅ Status updated: status = rejected, verification_status = rejected');
       return true;
     } catch (error) {
       console.error('❌ Error in rejectUser:', error);
@@ -297,7 +282,6 @@ export const adminUserService = {
   // Supprimer complètement un utilisateur
   async deleteUser(userId: string): Promise<boolean> {
     try {
-      console.log('🗑️ Starting complete user deletion for:', userId);
 
       // 1. Récupérer le user_id depuis business_profiles
       const { data: businessProfile, error: profileError } = await supabase
@@ -312,7 +296,6 @@ export const adminUserService = {
       }
 
       const authUserId = businessProfile.user_id;
-      console.log('🔍 Found auth user_id:', authUserId);
 
       // 2. Supprimer de toutes les tables liées (dans l'ordre pour respecter les contraintes de clés étrangères)
 
@@ -323,7 +306,6 @@ export const adminUserService = {
         .eq('advertiser_id', authUserId);
 
       if (campaignsError) {
-        console.log('⚠️ Warning deleting campaigns:', campaignsError);
       }
 
       // Supprimer les écrans
@@ -333,7 +315,6 @@ export const adminUserService = {
         .eq('owner_id', authUserId);
 
       if (screensError) {
-        console.log('⚠️ Warning deleting screens:', screensError);
       }
 
       // Supprimer les emplacements
@@ -343,7 +324,6 @@ export const adminUserService = {
         .eq('owner_id', authUserId);
 
       if (locationsError) {
-        console.log('⚠️ Warning deleting locations:', locationsError);
       }
 
       // Supprimer les clients
@@ -353,7 +333,6 @@ export const adminUserService = {
         .eq('advertiser_id', authUserId);
 
       if (clientsError) {
-        console.log('⚠️ Warning deleting clients:', clientsError);
       }
 
       // Supprimer les recharges (si la table existe)
@@ -364,7 +343,6 @@ export const adminUserService = {
           .eq('user_id', authUserId);
 
         if (rechargesError && !rechargesError.message.includes('Could not find')) {
-          console.log('⚠️ Warning deleting recharges:', rechargesError);
         }
       } catch (e) {
         // Table n'existe pas, continuer
@@ -374,7 +352,6 @@ export const adminUserService = {
       // Supprimer les factures quand la table sera créée
 
       // Supprimer le profil business
-      console.log('🗑️ Attempting to delete business_profile with id:', userId);
       const { data: deletedProfile, error: businessError } = await supabase
         .from('business_profiles')
         .delete()
@@ -387,7 +364,6 @@ export const adminUserService = {
         return false;
       }
 
-      console.log('✅ Business profile deleted:', deletedProfile);
 
       // Vérifier que le profil a bien été supprimé
       const { data: checkProfile, error: checkError } = await supabase
@@ -401,16 +377,11 @@ export const adminUserService = {
         return false;
       }
 
-      console.log("✅ Vérification : Le profil n'existe plus dans la base");
 
       // 3. Note : L'utilisateur d'authentification n'est pas supprimé car cela nécessite
       // des permissions service_role qui ne sont pas disponibles côté client.
       // L'utilisateur auth restera mais n'aura plus de profil business associé.
-      console.log(
-        'ℹ️ Business profile and related data deleted. Auth user remains but cannot access the system.',
-      );
 
-      console.log('✅ User deletion completed successfully');
       return true;
     } catch (error) {
       console.error('❌ Error in deleteUser:', error);

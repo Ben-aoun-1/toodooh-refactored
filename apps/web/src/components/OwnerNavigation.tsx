@@ -178,28 +178,19 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
   }, []);
 
   const handleLogout = async () => {
-    console.log('🔴 Bouton déconnexion cliqué (OwnerNavigation)');
-    console.log('🔍 Profil actuel:', profileType);
-    console.log('🔍 Utilisateur actuel:', user?.id);
 
     try {
-      console.log('🔄 Appel de logout() du store...');
       await logout();
-      console.log('✅ logout() du store terminé');
 
-      console.log('🔄 Redirection vers /login...');
       navigate('/login');
-      console.log('✅ Redirection effectuée');
 
       toast.success('Déconnexion réussie');
-      console.log('✅ Toast affiché');
     } catch (error) {
       console.error('❌ Erreur lors de la déconnexion:', error);
       console.error("❌ Détails de l'erreur:", JSON.stringify(error, null, 2));
       toast.error('Erreur lors de la déconnexion');
 
       // En cas d'erreur, forcer la redirection
-      console.log('🔄 Redirection forcée vers /login...');
       navigate('/login');
     }
   };

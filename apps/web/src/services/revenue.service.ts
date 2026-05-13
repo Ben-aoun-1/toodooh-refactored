@@ -48,14 +48,12 @@ class RevenueService {
     period: 'monthly' | 'quarterly' | 'yearly' = 'monthly',
   ): Promise<ScreenRevenue[]> {
     try {
-      console.log('📊 Récupération des revenus par écran...');
 
       // Récupérer l'utilisateur connecté
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) {
-        console.log('❌ Aucun utilisateur connecté');
         return [];
       }
 
@@ -105,7 +103,6 @@ class RevenueService {
         };
       });
 
-      console.log('✅ Revenus par écran récupérés:', screenRevenues.length);
       return screenRevenues;
     } catch (error) {
       console.error('❌ Erreur lors de la récupération des revenus par écran:', error);
@@ -116,14 +113,12 @@ class RevenueService {
   // Récupérer les revenus par période
   async getRevenueByPeriod(period: 'monthly' | 'quarterly' | 'yearly'): Promise<RevenueData[]> {
     try {
-      console.log(`📊 Récupération des revenus par période: ${period}`);
 
       // Récupérer l'utilisateur connecté
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) {
-        console.log('❌ Aucun utilisateur connecté');
         return [];
       }
 
@@ -207,7 +202,6 @@ class RevenueService {
         }
       }
 
-      console.log('✅ Revenus par période récupérés:', revenueData.length);
       return revenueData;
     } catch (error) {
       console.error('❌ Erreur lors de la récupération des revenus par période:', error);
@@ -218,14 +212,12 @@ class RevenueService {
   // Récupérer les statistiques globales
   async getRevenueStats(): Promise<RevenueStats> {
     try {
-      console.log('📊 Récupération des statistiques de revenus...');
 
       // Récupérer l'utilisateur connecté
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) {
-        console.log('❌ Aucun utilisateur connecté');
         return {
           totalRevenue: 0,
           monthlyRevenue: 0,
@@ -295,7 +287,6 @@ class RevenueService {
         loyaltyPoints,
       };
 
-      console.log('✅ Statistiques de revenus récupérées');
       return stats;
     } catch (error) {
       console.error('❌ Erreur lors de la récupération des statistiques:', error);
@@ -306,14 +297,12 @@ class RevenueService {
   // Récupérer les comparaisons mensuelles pour les graphiques
   async getMonthlyComparison(): Promise<MonthlyComparison[]> {
     try {
-      console.log('📊 Récupération des comparaisons mensuelles...');
 
       // Récupérer l'utilisateur connecté
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) {
-        console.log('❌ Aucun utilisateur connecté');
         return [];
       }
 
@@ -366,7 +355,6 @@ class RevenueService {
         });
       }
 
-      console.log('✅ Comparaisons mensuelles récupérées');
       return comparisons;
     } catch (error) {
       console.error('❌ Erreur lors de la récupération des comparaisons mensuelles:', error);

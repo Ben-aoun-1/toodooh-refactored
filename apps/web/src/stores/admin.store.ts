@@ -25,16 +25,12 @@ export const useAdminStore = create<AdminState>()(
 
       initialize: async () => {
         try {
-          console.log('🔄 Admin store: Starting initialization...');
           set({ loading: true });
 
           // Vérifier la session actuelle d'abord
-          console.log('🔄 Admin store: Getting current admin...');
           const admin = await adminService.getCurrentAdmin();
-          console.log('✅ Admin store: Current admin:', admin);
 
           set({ admin, initialized: true, loading: false });
-          console.log('✅ Admin store: Initialization complete');
         } catch (error) {
           console.error('❌ Admin store: Error initializing:', error);
           set({ admin: null, initialized: true, loading: false });

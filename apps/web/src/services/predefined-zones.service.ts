@@ -19,7 +19,6 @@ export interface PredefinedZone {
 export const predefinedZonesService = {
   async getAll(): Promise<PredefinedZone[]> {
     try {
-      console.log('🔍 Récupération des zones prédéfinies...');
 
       const { data, error } = await supabase
         .from('predefined_zones')
@@ -38,12 +37,7 @@ export const predefinedZonesService = {
         throw error;
       }
 
-      console.log('✅ Zones prédéfinies récupérées:', data?.length || 0);
       if (data && data.length > 0) {
-        console.log(
-          '📋 Liste des zones:',
-          data.map((z) => z.name),
-        );
       }
 
       return data || [];

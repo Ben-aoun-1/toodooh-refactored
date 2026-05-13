@@ -211,13 +211,6 @@ export const campaignService = {
               screen_id: screenId,
             }));
             await supabase.from('campaign_screens').insert(screenInserts);
-            console.log(
-              '✅',
-              campaignData.location_ids.length,
-              'localité(s),',
-              screenIds.length,
-              'écran(s) ajoutés',
-            );
           }
         }
       } else if (campaignResult && campaignData.screen_ids && campaignData.screen_ids.length > 0) {
@@ -230,7 +223,7 @@ export const campaignService = {
           .from('campaign_screens')
           .insert(screenInserts);
         if (screensError) console.error('Erreur ajout écrans:', screensError);
-        else console.log('✅ Écrans ajoutés avec succès');
+        else ;
       }
 
       // Synchroniser les catégories multiples (campaign_categories)
@@ -392,20 +385,10 @@ export const campaignService = {
       screenIds = Array.from(approvedScreenIds);
 
       if (screenIds.length === 0) {
-        console.log(
-          `ℹ️ Aucun propriétaire approuvé pour la campagne ${campaignId}: nettoyage du plan horaire (0 ligne active).`,
-        );
         await replaceCampaignHourlyLocationPlan(campaignId, []);
         return;
       }
 
-      console.log(
-        `✅ ${screenIds.length} écran(s) approuvé(s) pour la campagne ${campaignId}:`,
-        screenIds,
-      );
-      console.log(
-        '[DOOH] Un tableau « planning par créneau » (localité / jour / heure) sera affiché après calcul des répétitions.',
-      );
 
       // Récupérer les écrans avec leur location_id pour grouper par localité
       const { data: screensWithData, error: screensAffluenceError } = await supabase
@@ -753,13 +736,6 @@ export const campaignService = {
         }
 
         // Log pour debug
-        console.log(`📊 Écran ${screen.id}:`, {
-          impressions_per_hour: screen.impressions_per_hour,
-          impressionsPerHourForScreen: impressionsPerHourForScreen,
-          impressionsPerRepetition: impressionsPerRepetition,
-          repetitionFactor: repetitionFactor,
-          repetitionsPerHour: repetitionsPerHour,
-        });
 
         return {
           screen_id: screen.id,
@@ -896,12 +872,6 @@ export const campaignService = {
         await replaceCampaignHourlyLocationPlan(campaignId, finalHourlyPlan, {
           scopeLocationIds: scopedLocationIds,
         });
-        console.log(
-          `✅ campaign_hourly_location_plan mis à jour pour ${campaignId}: ${finalHourlyPlan.length} ligne(s)` +
-            (scopedLocationIds?.length
-              ? ` (scope localités owner: ${scopedLocationIds.length})`
-              : ''),
-        );
       } catch (planWriteError) {
         console.error(
           `❌ Échec écriture campaign_hourly_location_plan pour ${campaignId}`,
@@ -920,14 +890,7 @@ export const campaignService = {
           impressions_a_generer: s.plannedImpressions,
         }));
 
-      console.log(
-        `📊 Total ${screensWithData.length} écran(s) — injection planning (moteur créneaux date×heure)`,
-      );
       const nPlanning = planningTableParCreneau.length;
-      console.log(
-        `%c📋 Planning par créneau : ${nPlanning} ligne(s) (localité × jour × heure, répétitions/heure, impressions allouées)`,
-        'font-weight:bold',
-      );
       if (nPlanning === 0) {
         const effPos = slotDetailRows.filter((s) => s.effectiveAffluence > 0).length;
         console.warn(
@@ -948,12 +911,6 @@ export const campaignService = {
             (r) =>
               `  ${r.localite_id} | ${r.jour} | h ${String(r.heure).padStart(2, '0')} | rph ${r.repetitions_par_heure} | imp ${r.impressions_a_generer}`,
           );
-        console.log(
-          `📋 Même planning en texte (${Math.min(maxLines, nPlanning)} / ${nPlanning}) :\n${lines.join('\n')}` +
-            (nPlanning > maxLines
-              ? `\n  … +${nPlanning - maxLines} lignes (voir aussi console.table ci-dessus)`
-              : ''),
-        );
       }
 
       // Calculer le total des répétitions par heure (pour vérification)
@@ -961,23 +918,11 @@ export const campaignService = {
         return sum + schedule.repetitions_per_hour;
       }, 0);
 
-      console.log(
-        `📊 Total de ${screenSchedules.length} écran(s) à mettre à jour avec ${totalRepetitionsPerHour} répétitions/heure au total`,
-      );
 
       // Mettre à jour chaque écran dans campaign_screens avec ses informations de répétition
       // Utiliser upsert pour créer ou mettre à jour
-      console.log(
-        `🔄 Début de la mise à jour de ${screenSchedules.length} écran(s) dans campaign_screens`,
-      );
 
       for (const schedule of screenSchedules) {
-        console.log(`📝 Mise à jour écran ${schedule.screen_id}:`, {
-          repetitions_per_hour: schedule.repetitions_per_hour,
-          impressions_per_hour: schedule.impressions_per_hour,
-          impressions_allocated_per_hour: schedule.impressions_allocated_per_hour,
-          capacity_ratio: schedule.capacity_ratio,
-        });
 
         // Utiliser update d'abord, et si aucune ligne n'est affectée, utiliser insert
         // Cela évite les problèmes avec les contraintes UNIQUE
@@ -1028,13 +973,9 @@ export const campaignService = {
           console.error('Details:', screenUpdateError.details);
           console.error('Hint:', screenUpdateError.hint);
         } else {
-          console.log(`✅ Écran ${schedule.screen_id} mis à jour avec succès:`, updateData);
-          console.log(`   - ${schedule.repetitions_per_hour} répétitions/heure`);
-          console.log(`   - ${schedule.impressions_per_hour} impressions/heure`);
         }
       }
 
-      console.log(`✅ Mise à jour terminée pour ${screenSchedules.length} écran(s)`);
 
       const aggregateImpressionsPerHour =
         totalSlotHours > 0 ? finalImpressions / totalSlotHours : 0;
@@ -1078,7 +1019,6 @@ export const campaignService = {
       if (updateError) {
         throw updateError;
       } else {
-        console.log('✅ Planning de publication injecté avec succès:', publicationSchedule);
       }
     } catch (error) {
       console.error("❌ Erreur lors de l'injection du planning de publication:", error);
@@ -1094,9 +1034,6 @@ export const campaignService = {
     },
   ): Promise<void> {
     try {
-      console.log(
-        `🔄 Recalcul des répétitions pour la campagne ${campaignId} après validation propriétaire`,
-      );
 
       // Réinjecter le planning avec les nouveaux écrans approuvés
       await this.injectCampaignPublicationSchedule(campaignId, {
@@ -1117,7 +1054,6 @@ export const campaignService = {
       if (error) {
         console.error('❌ Erreur lors de la mise à jour des campagnes expirées:', error);
       } else {
-        console.log('✅ Campagnes expirées vérifiées et mises à jour');
       }
     } catch (error) {
       console.error('❌ Erreur lors de la vérification des campagnes expirées:', error);

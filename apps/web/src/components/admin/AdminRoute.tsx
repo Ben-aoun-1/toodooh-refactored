@@ -12,9 +12,7 @@ export default function AdminRoute({ children, requiredRoles = [] }: AdminRouteP
   const { admin, initialized, initialize, loading } = useAdminStore();
 
   useEffect(() => {
-    console.log('AdminRoute: useEffect triggered', { initialized, loading, admin: !!admin });
     if (!initialized && !loading) {
-      console.log('AdminRoute: Calling initialize...');
       initialize();
     }
   }, [initialized, loading, initialize]);

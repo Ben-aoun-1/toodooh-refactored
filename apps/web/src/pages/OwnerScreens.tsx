@@ -57,36 +57,17 @@ export default function OwnerScreens() {
   // ✅ OPTIMISATION : Mémoriser loadScreensData avec useCallback
   const loadScreensData = useCallback(async () => {
     try {
-      console.log('=== CHARGEMENT DES ÉCRANS ===');
-      console.log('Utilisateur connecté:', user);
-      console.log('Type de profil:', profileType);
 
       const [screensData, unavailabilityData] = await Promise.all([
         screensService.getScreens(),
         screensService.getUnavailabilityPeriods(),
       ]);
 
-      console.log('Écrans chargés:', screensData);
-      console.log("Nombre d'écrans:", screensData?.length || 0);
-      console.log("Périodes d'indisponibilité chargées:", unavailabilityData);
-      console.log('Nombre de périodes:', unavailabilityData?.length || 0);
 
       if (screensData && screensData.length > 0) {
-        console.log('Détails des écrans:');
         screensData.forEach((screen, index) => {
-          console.log(`Écran ${index + 1}:`, {
-            id: screen.id,
-            name: screen.name,
-            owner_id: screen.owner_id,
-            status: screen.status,
-            location: screen.location,
-          });
         });
       } else {
-        console.log('⚠️ AUCUN ÉCRAN TROUVÉ - Vérifiez:');
-        console.log('1. La base de données contient-elle des écrans ?');
-        console.log("2. Les politiques RLS permettent-elles l'accès ?");
-        console.log("3. L'utilisateur est-il bien authentifié ?");
       }
 
       setScreens(screensData);
@@ -128,8 +109,6 @@ export default function OwnerScreens() {
   // ✅ OPTIMISATION : useEffect séparé pour le chargement initial
   useEffect(() => {
     if (user && !hasLoadedData.current) {
-      console.log('BYPASS: Accès autorisé pour tous les types de profil');
-      console.log('Type de profil actuel:', profileType);
       loadScreensData();
     }
   }, [user, profileType, loadScreensData]);
@@ -264,14 +243,12 @@ export default function OwnerScreens() {
 
   const handleStatusChange = async (screenId: string, newStatus: string, reason?: string) => {
     try {
-      console.log("🔄 Mise à jour du statut de l'écran:", { screenId, newStatus, reason });
 
       // Appeler le service pour mettre à jour en base de données
       const updatedScreen = await screensService.updateScreen(screenId, {
         status: newStatus as any,
       });
 
-      console.log('✅ Écran mis à jour en base de données:', updatedScreen);
 
       // Mettre à jour l'état local
       setScreens((prev) =>
@@ -296,7 +273,6 @@ export default function OwnerScreens() {
 
   const handleUnavailabilityAdded = async (period: UnavailabilityPeriod) => {
     try {
-      console.log("📅 Période d'indisponibilité ajoutée:", period);
 
       setUnavailabilityPeriods((prev) => [...prev, period]);
 
@@ -306,14 +282,12 @@ export default function OwnerScreens() {
       const periodEnd = new Date(`${period.end_date}T${period.end_time}`);
 
       if (now >= periodStart && now <= periodEnd) {
-        console.log('🔄 Mise à jour du statut de l\'écran vers "unavailable"');
 
         // Mettre à jour en base de données
         const updatedScreen = await screensService.updateScreen(period.screen_id, {
           status: 'unavailable',
         });
 
-        console.log('✅ Écran mis à jour en base de données:', updatedScreen);
 
         // Mettre à jour l'état local
         setScreens((prev) =>
@@ -336,12 +310,10 @@ export default function OwnerScreens() {
 
   const removeUnavailabilityPeriod = async (periodId: string) => {
     try {
-      console.log("🗑️ Suppression de la période d'indisponibilité:", periodId);
 
       // Supprimer en base de données
       await screensService.deleteUnavailabilityPeriod(periodId);
 
-      console.log('✅ Période supprimée de la base de données');
 
       // Mettre à jour l'état local
       setUnavailabilityPeriods((prev) => prev.filter((p) => p.id !== periodId));
@@ -356,11 +328,9 @@ export default function OwnerScreens() {
   // Fonction pour mettre à jour le statut d'un écran en base de données
   const updateScreenStatusInDatabase = async (screenId: string, newStatus: string) => {
     try {
-      console.log('🔄 Mise à jour du statut en base de données:', { screenId, newStatus });
       const updatedScreen = await screensService.updateScreen(screenId, {
         status: newStatus as any,
       });
-      console.log('✅ Statut mis à jour en base de données:', updatedScreen);
       return true;
     } catch (error) {
       console.error('❌ Erreur lors de la mise à jour du statut:', error);

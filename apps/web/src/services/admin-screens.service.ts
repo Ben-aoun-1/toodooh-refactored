@@ -335,11 +335,9 @@ export const adminScreensService = {
     } = {},
   ): Promise<{ screens: AdminScreen[]; total: number; totalPages: number }> {
     try {
-      console.log('🔍 getScreens called with filters:', filters);
 
       let query = supabase.from('screens').select('*', { count: 'exact' });
 
-      console.log('📊 Query created for screens table');
 
       // Appliquer les filtres
       if (filters.status) {
@@ -374,7 +372,6 @@ export const adminScreensService = {
         throw error;
       }
 
-      console.log('✅ Screens fetched successfully:', data?.length || 0, 'screens');
 
       // Récupérer les noms des propriétaires
       const ownerIds = [...new Set((data || []).map((s) => s.owner_id))];

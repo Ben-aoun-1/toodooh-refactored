@@ -101,11 +101,6 @@ export default function AdvertiserNotificationsBell({ userId, emphasized = false
         const activeOk = n?.is_active !== false;
         return scopeOk && activeOk;
       });
-      console.log('🔔 Advertiser notifications loaded:', {
-        userId,
-        persistedCount: persistedNotifications.length,
-        readsCount: (reads || []).length,
-      });
 
       if (campaignsRes.error) {
         console.error(

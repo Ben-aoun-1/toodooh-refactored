@@ -23,7 +23,6 @@ class BalanceService {
    */
   async getUserBalance(userId: string): Promise<number> {
     try {
-      console.log('💰 Récupération du solde pour:', userId);
 
       const { data, error } = await supabase.rpc('get_user_balance', {
         p_user_id: userId,
@@ -35,7 +34,6 @@ class BalanceService {
         return await this.calculateBalanceManually(userId);
       }
 
-      console.log('✅ Solde récupéré:', data, 'TND');
       return data || 0;
     } catch (error) {
       console.error('Erreur lors de la récupération du solde:', error);
@@ -114,7 +112,6 @@ class BalanceService {
    */
   async checkCampaignBalance(campaignId: string): Promise<CampaignBalanceCheck | null> {
     try {
-      console.log('🔍 Vérification du solde pour la campagne:', campaignId);
 
       const { data, error } = await supabase.rpc('check_campaign_balance', {
         p_campaign_id: campaignId,
@@ -141,7 +138,6 @@ class BalanceService {
         message: data?.message || '',
       };
 
-      console.log('📊 Résultat vérification (HT:', budgetHT, 'TTC:', budgetTTC, '):', adjustedData);
       return adjustedData;
     } catch (error) {
       console.error('Erreur lors de la vérification du solde:', error);

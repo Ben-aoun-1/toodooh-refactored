@@ -15,7 +15,6 @@ class AdminCampaignMonitoringService {
    */
   async getGlobalStats(): Promise<CampaignGlobalStats> {
     try {
-      console.log('📊 Fetching campaign global stats...');
 
       // Essayer avec RPC d'abord
       const { data, error } = await supabase.rpc('get_campaigns_global_stats');
@@ -50,7 +49,6 @@ class AdminCampaignMonitoringService {
         return stats;
       }
 
-      console.log('✅ Campaign global stats fetched:', data);
       return data as CampaignGlobalStats;
     } catch (error) {
       console.error('❌ Error fetching campaign global stats:', error);
@@ -63,7 +61,6 @@ class AdminCampaignMonitoringService {
    */
   async getCampaignsWithScreens(): Promise<CampaignMonitoringData[]> {
     try {
-      console.log('📋 Fetching campaigns (light) for monitoring...');
 
       // Priorité à la vue (plus légère que la RPC complète)
       const { data: viewData, error: viewError } = await supabase
@@ -189,7 +186,6 @@ class AdminCampaignMonitoringService {
    */
   async getCampaignsByStatus(status: string): Promise<CampaignMonitoringData[]> {
     try {
-      console.log(`📋 Fetching campaigns with status: ${status}`);
 
       const { data, error } = await supabase.rpc('get_campaigns_by_status', { p_status: status });
 
@@ -219,7 +215,6 @@ class AdminCampaignMonitoringService {
    */
   async getCampaignsByCategory(): Promise<CampaignByCategory[]> {
     try {
-      console.log('📊 Fetching campaigns by category...');
 
       const { data, error } = await supabase.rpc('get_campaigns_by_category');
 
@@ -262,7 +257,6 @@ class AdminCampaignMonitoringService {
    */
   async getTopAdvertisers(limit: number = 10): Promise<TopAdvertiser[]> {
     try {
-      console.log('👑 Fetching top advertisers...');
 
       const { data, error } = await supabase.rpc('get_top_advertisers', { limit_count: limit });
 
@@ -283,7 +277,6 @@ class AdminCampaignMonitoringService {
    */
   async getMostUsedScreens(limit: number = 10): Promise<MostUsedScreen[]> {
     try {
-      console.log('📺 Fetching most used screens...');
 
       const { data, error } = await supabase.rpc('get_most_used_screens', { limit_count: limit });
 
@@ -304,7 +297,6 @@ class AdminCampaignMonitoringService {
    */
   async getCampaignDetails(campaignId: string): Promise<CampaignMonitoringData | null> {
     try {
-      console.log(`🔍 Fetching campaign details for: ${campaignId}`);
 
       const campaigns = await this.getCampaignsWithScreens();
       const campaign = campaigns.find((c) => c.campaign_id === campaignId);
@@ -321,7 +313,6 @@ class AdminCampaignMonitoringService {
    */
   async getCampaignLocations(campaignId: string): Promise<CampaignLocation[]> {
     try {
-      console.log(`📍 Fetching locations for campaign: ${campaignId}`);
 
       // Source principale: campagne -> localités
       const { data: campaignLocations, error: campaignLocationsError } = await supabase
@@ -402,7 +393,6 @@ class AdminCampaignMonitoringService {
         };
       });
 
-      console.log(`✅ Found ${locations.length} locations for campaign`);
       return locations;
     } catch (error) {
       console.error('❌ Error fetching campaign locations:', error);

@@ -47,11 +47,9 @@ export default function OwnerLocations() {
   // ✅ OPTIMISATION : Mémoriser loadScreensData avec useCallback
   const loadScreensData = useCallback(async () => {
     try {
-      console.log('=== CHARGEMENT DES ÉCRANS POUR LA CARTE ===');
       setLoading(true);
 
       const screensData = await screensService.getScreens();
-      console.log('Écrans chargés pour la carte:', screensData);
 
       setScreens(screensData);
       setLoading(false);
@@ -73,8 +71,6 @@ export default function OwnerLocations() {
   // ✅ OPTIMISATION : useEffect séparé pour le chargement initial
   useEffect(() => {
     if (user && !hasLoadedData.current) {
-      console.log('BYPASS: Accès autorisé pour tous les types de profil');
-      console.log('Type de profil actuel:', profileType);
       loadScreensData();
     }
   }, [user, profileType, loadScreensData]);
@@ -156,7 +152,6 @@ export default function OwnerLocations() {
   };
 
   const handleScreenClick = (screen: Screen) => {
-    console.log('Écran cliqué:', screen);
     toast.success(`Écran sélectionné: ${screen.name}`);
     // Ici vous pouvez ajouter la logique pour afficher les détails de l'écran
   };

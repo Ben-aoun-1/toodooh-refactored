@@ -151,12 +151,6 @@ export default function EventManagement() {
         end_date: endDate.toISOString(),
       };
 
-      console.log('📅 Creating event with dates:', {
-        start: eventData.start_date,
-        end: eventData.end_date,
-        startObj: startDate,
-        endObj: endDate,
-      });
 
       const newEvent = await adminEventsService.createEvent(eventData, admin.id);
       if (newEvent) {

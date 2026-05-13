@@ -150,12 +150,9 @@ class ScreensService {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) {
-        console.log('❌ Aucun utilisateur connecté');
         return [];
       }
 
-      console.log('✅ Utilisateur connecté:', user.id);
-      console.log('🔍 Récupération des écrans du propriétaire...');
 
       // Récupérer UNIQUEMENT les écrans du propriétaire connecté
       const { data, error } = await supabase
@@ -175,24 +172,11 @@ class ScreensService {
         throw error;
       }
 
-      console.log('✅ Requête Supabase réussie');
-      console.log('📊 Écrans du propriétaire récupérés:', data);
-      console.log("📈 Nombre d'écrans du propriétaire:", data?.length || 0);
 
       if (data && data.length > 0) {
-        console.log('📋 Détails des écrans du propriétaire:');
         data.forEach((screen, index) => {
-          console.log(`  Écran ${index + 1}:`, {
-            id: screen.id,
-            name: screen.name,
-            owner_id: screen.owner_id,
-            status: screen.status,
-            location: screen.location,
-            created_at: screen.created_at,
-          });
         });
       } else {
-        console.log('⚠️ Aucun écran trouvé pour ce propriétaire');
       }
 
       return data || [];
@@ -223,7 +207,6 @@ class ScreensService {
       } = await supabase.auth.getUser();
       if (!user) throw new Error('Utilisateur non connecté');
 
-      console.log("🔄 Création d'écran avec les données:", screenData);
 
       let coordinatesPoint: string | null = null;
       if (screenData.coordinates) {
@@ -256,7 +239,6 @@ class ScreensService {
         insertData.coordinates = coordinatesPoint;
       }
 
-      console.log("📝 Données d'insertion:", insertData);
 
       const { data, error } = await supabase.from('screens').insert(insertData).select().single();
 
@@ -277,7 +259,6 @@ class ScreensService {
         );
       }
 
-      console.log('✅ Écran créé avec succès:', data);
       return data;
     } catch (error) {
       console.error("❌ Erreur lors de la création de l'écran:", error);

@@ -284,8 +284,6 @@ export default function MyCampaigns() {
             user_id: c.user_id,
           })) || [];
 
-        console.log('✅ Campaigns loaded:', transformedCampaigns.length);
-        console.log('Campaigns data:', transformedCampaigns);
 
         setCampaigns(transformedCampaigns);
 
@@ -295,12 +293,6 @@ export default function MyCampaigns() {
         const totalViews = transformedCampaigns.reduce((sum, c) => sum + c.views, 0);
         const totalBudget = transformedCampaigns.reduce((sum, c) => sum + c.budget, 0);
 
-        console.log('Stats calculated:', {
-          totalCampaigns,
-          activeCampaigns,
-          totalViews,
-          totalBudget,
-        });
 
         setStats({
           totalCampaigns,
@@ -395,7 +387,6 @@ export default function MyCampaigns() {
 
   // Fonction pour consulter une campagne
   const handleViewCampaign = async (campaign: any) => {
-    console.log('📋 Consultation de la campagne:', campaign);
     setSelectedCampaign(campaign);
 
     // Charger la vidéo si elle existe
@@ -420,7 +411,6 @@ export default function MyCampaigns() {
 
   // Fonction pour modifier une campagne
   const handleEditCampaign = (campaign: any) => {
-    console.log('✏️ Modification de la campagne:', campaign);
 
     // Vérifier si la campagne peut être modifiée
     if (campaign.status === 'active') {
