@@ -62,18 +62,17 @@
 
 ## Verification gates summary (per-commit target numbers)
 
-| Commit | typecheck (errors) | lint problems  | of which `no-console`     | test files | build chunks | main gzip          |
-| ------ | ------------------ | -------------- | ------------------------- | ---------- | ------------ | ------------------ |
-| 0      | 179 (unchanged)    | 1618           | 901                       | 5          | 110          | 128.61 kB          |
-| 1      | 179                | 1618           | 901                       | **6**      | **111\***    | **≤ 138.61 kB**    |
-| 2      | 179                | **≤ 1171**     | **≤ 454**                 | 6          | 111          | 128.61 kB ± 200 B  |
-| 3      | 179                | **≤ 977**      | **≤ 260**                 | 6          | 111          | 128.61 kB ± 200 B  |
-| 4      | 179                | **= 717**      | **= 0**                   | 6          | 111          | 128.61 kB ± 200 B  |
-| 5      | 179                | **= 717**      | **= 0** (rule re-enabled) | 6          | 111          | 128.61 kB ± 200 B  |
+| Commit | typecheck (errors) | lint problems  | of which `no-console`     | test files | build chunks | main gzip                                          |
+| ------ | ------------------ | -------------- | ------------------------- | ---------- | ------------ | -------------------------------------------------- |
+| 0      | 179 (unchanged)    | 1618           | 901                       | 5          | 110          | 128.61 kB                                          |
+| 1      | 179                | 1618           | 901                       | **6**      | 110 (actual) | **128.61 kB (byte-identical — pino tree-shaken)**  |
+| 2      | 179                | **≤ 1171**     | **≤ 454**                 | 6          | 110          | shrinks slightly (string literals removed)         |
+| 3      | 179                | **≤ 977**      | **≤ 260**                 | 6          | 110          | shrinks slightly (more string literals removed)    |
+| —      | (recapture baseline between Commit 3 and Commit 4 — record gzip + chunks as the new anchor) ||||||
+| 4      | 179                | **= 717**      | **= 0**                   | 6          | post-3 ± 1   | **≤ post-Commit-3 + 8 kB target / + 10 kB halt**   |
+| 5      | 179                | **= 717**      | **= 0** (rule re-enabled) | 6          | post-3 ± 1   | unchanged from Commit 4 (no source touched)        |
 
-\* Chunk count increases by exactly 1 in Commit 1 because pino likely emits a standalone vendor chunk. If it stays at 110 (pino bundled into `index`) or jumps to 112+ (extra transports leaked), halt and investigate.
-
-The "≤" entries are upper bounds; actual numbers may be lower if I undercounted Cat 1 in the inventory. The Commit 4 row is `= 0` because every remaining `console.*` must be promoted or its presence is a bug.
+The "≤" entries are upper bounds; actual numbers may be lower if I undercounted Cat 1 in the inventory. The Commit 4 row is `= 0` because every remaining `console.*` must be promoted or its presence is a bug. **The Commit-1 row in this table differs from the original plan estimate** — pino is fully tree-shaken until Commit 4 introduces consumers, so the bundle ceiling check moves to Commit 4 (anchored on the post-Commit-3 baseline that gets recaptured live).
 
 ---
 
@@ -216,11 +215,12 @@ reference in §3 and §6 updated to the new mapping.
  * Module-scoped usage (preferred):
  *
  *   const log = logger.child({ module: 'auth.service' });
- *   log.error('failed to load profile', { err, userId });
+ *   log.error({ err, userId }, 'failed to load profile');
  *
- * Error objects go in the second argument (the context object) under `err`, not
- * folded into the message string — pino's serialisers extract `err.message` /
- * `err.stack` automatically.
+ * Pino call shape: **context object first, message string second**. Error objects go
+ * in the context object's `err` field (not folded into the message); pino's serialisers
+ * extract `err.message` / `err.stack` automatically. A bare `log.info('hello')` is fine
+ * for context-free messages.
  *
  * This file is the ONLY place `console.*` is permitted in production source
  * (via pino's browser shim, indirectly). Lint exempts this path explicitly.
@@ -580,6 +580,26 @@ is left for Commit 4, which promotes them to logger.error.
 
 ---
 
+# POST-COMMIT-3 BASELINE RECAPTURE (no commit, runs between Commit 3 and Commit 4)
+
+## Task BR.1: Capture fresh baseline numbers after Commit 3 lands
+
+The deletes in Commits 2 and 3 shrink the bundle slightly (dead code removed, even though the `console.*` calls were short, their string literals counted). Commit 4 adds ~60 `import { logger } from '@/lib/logger'` statements plus ~250 `log.*` calls; we want to measure the **logger's actual import overhead**, not net-of-deletes. So the bundle ceiling check in Commit 4 compares against the **post-Commit-3** numbers, not the pre-Step-5 baseline.
+
+- [ ] **Step 1:** run all four gate commands fresh:
+  ```bash
+  pnpm typecheck && pnpm lint && pnpm test && pnpm --filter @toodooh/web build
+  ```
+- [ ] **Step 2:** record the post-Commit-3 numbers (especially the `dist/assets/index-*.js … gzip: NN kB` line and the chunk count from `ls apps/web/dist/assets/*.js | wc -l`). Paste them back in the pause-for-approval report.
+- [ ] **Step 3:** the post-Commit-3 main-gzip becomes the new soft/hard halt anchor for Commit 4:
+  - **Soft target:** Commit-4 main gzip ≤ post-Commit-3 + **8 kB**.
+  - **Hard halt:** Commit-4 main gzip ≤ post-Commit-3 + **10 kB**.
+  - If exceeded → halt, swap pino for loglevel (per Commit 1's Task 1.5 halt protocol), update `CLAUDE.md` to note the override.
+
+No commit fires here; this is a measurement-and-pause step. Commit 4 fires AFTER the user approves these numbers as the new anchor.
+
+---
+
 # COMMIT 4 — Promote Category 2c + 3 (`console.error` + `console.warn` → `logger.*`)
 
 ## Task 4.1: Enumerate remaining `console.error` and `console.warn`
@@ -666,14 +686,17 @@ Same transformation rules as Task 4.3, but the call name is `log.warn`. There ar
 
 - [ ] **Step 1:** `pnpm typecheck` → 179 errors (unchanged; the imports + child-logger declarations are type-safe; only file-level imports + line-level call rewrites changed).
 - [ ] **Step 2:** `pnpm test` → 6 files / 68 tests pass.
-- [ ] **Step 3:** `pnpm --filter @toodooh/web build` → 110 or 111 chunks; main gzip within ±300 B of post-Commit-3 (small drift expected because ~60 new imports of `@/lib/logger` may add a few bytes; pino itself is already bundled from Commit 1, so the marginal cost is the new top-level child-logger calls).
+- [ ] **Step 3:** `pnpm --filter @toodooh/web build` → chunk count = post-Commit-3 ± 1 (Commit 4 introduces ~60 new `import { logger } from '@/lib/logger'` statements; this may either pull pino into the `index` chunk for the first time OR emit a new vendor chunk, depending on Vite's heuristics). Main gzip vs **post-Commit-3 anchor** (NOT vs pre-Step-5 baseline):
+  - Soft target: ≤ post-Commit-3 + **8 kB**.
+  - Hard halt: ≤ post-Commit-3 + **10 kB**.
+  - If hard halt exceeded → halt, swap pino for loglevel per Task 1.5.
 
 **Verification gate (Commit 4):**
 
 - [ ] `pnpm typecheck` → 179 errors.
 - [ ] `pnpm lint` → expect **717** problems (= 1618 − 901); `no-console` count = **0**.
 - [ ] `pnpm test` → 6 files / 68 tests.
-- [ ] `pnpm build` → 110/111 chunks; gzip ±300 B.
+- [ ] `pnpm build` → chunk count = post-Commit-3 ± 1; main gzip ≤ post-Commit-3 + 8 kB target / ≤ + 10 kB hard halt.
 - [ ] Spot-check in dev: trigger an error path, observe `log.error` output in browser console (pino's browser shim writes to `console.error`, so it shows up there as expected — but routed through pino, structured with the `module` binding visible).
 
 **Commit:**
