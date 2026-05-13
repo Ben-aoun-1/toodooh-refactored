@@ -56,7 +56,7 @@ _As of commit `c971e90` (post-mechanical-cleanup pass)._
 `/my-recharges`, `/my-invoices`, `/my-clients`, `/my-cart`) and switches internally on
 `useLocation()`. It transitively bundles `pages/NewCampaign.tsx` (4359 lines), producing the
 ~622 kB `Dashboard` chunk. The other 14 files over 1000 lines are listed in the Snapshot.
-→ **Step 5 · #3**
+→ **Step 7 · #3**
 
 ### Duplicate pages
 
@@ -68,34 +68,34 @@ _As of commit `c971e90` (post-mechanical-cleanup pass)._
   `pages/admin/AdminDashboard.tsx` (the `/admin-dashboard` route); `AdminDashboardSimple.tsx` is an
   unreferenced stub.
 
-**Open questions deferred to Step 5** (can't be resolved until `Dashboard.tsx` is decomposed — see
+**Open questions deferred to Step 7** (can't be resolved until `Dashboard.tsx` is decomposed — see
 "God-component `Dashboard.tsx`"):
 
 - `Perfor.tsx` (576 lines, advertiser-side perf page, imported only by `Dashboard.tsx`) and
   `OwnerPerformance.tsx` (929 lines, owner-side perf page, live `/owner-performance` route) — both are
-  recharts perf dashboards; Step 5 must determine whether `Perfor` is a fork of `OwnerPerformance` to
+  recharts perf dashboards; Step 7 must determine whether `Perfor` is a fork of `OwnerPerformance` to
   unify, or a legitimately separate advertiser page.
 - `Parcs.tsx` (106 lines, hardcoded Carrefour mock data; the file comment says it duplicates a
   `Dashboard` widget; imported only by `Dashboard.tsx`) and `OwnerLocations.tsx` (458 lines, live
-  `/owner-locations` route) — Step 5 must determine whether `Parcs` is dead demo code to delete, or a
+  `/owner-locations` route) — Step 7 must determine whether `Parcs` is dead demo code to delete, or a
   placeholder for advertiser-side location functionality that should be reimplemented (likely by reusing
   `OwnerLocations` components).
 
 **Dashboard-coupled page files** — imported only by `Dashboard.tsx`, which switches on `useLocation()`
 to render them for its 12 routes: `CartPage.tsx`, `MyCampaigns.tsx`, `MyInvoices.tsx`, `MyClients.tsx`,
 `MyRecharges.tsx`, `UserProfile.tsx`, `Events.tsx`, `Onboarding.tsx` (plus `NewCampaign.tsx`). Untangled
-in Step 5 when `Dashboard.tsx` is decomposed, not here.
+in Step 7 when `Dashboard.tsx` is decomposed, not here.
 
 **Design-vs-code structural splits** (surfaced by `docs/figma-vs-code.md`) — the code splits a single
 Figma surface into multiple routes in three places: "Mes Finances" (one Figma hub) → `/my-recharges` +
 `/my-invoices`; "Mes Revenus" (one Figma frame, with the statement document) → `/owner-revenue` +
 `/owner-statements` + `/owner-statements/:id`; "Mes campagnes" (one Figma campaigns surface) →
 `/owner-campaigns` + `/owner-campaign-approvals`. None of these splits is necessarily wrong, but each is
-a consolidation decision to confirm when the page structure is reworked — Step 5 (`/owner-campaigns` vs
-`/owner-campaign-approvals` overlaps the perf/profile-duplication questions above) and Step 6 (folder/route
+a consolidation decision to confirm when the page structure is reworked — Step 7 (`/owner-campaigns` vs
+`/owner-campaign-approvals` overlaps the perf/profile-duplication questions above) and Step 8 (folder/route
 restructure).
 
-→ **Step 2a · #1** (the two deletions) · **Step 5 · #3** (everything else above) · **Step 6 · #4** (route consolidation)
+→ **Step 2a · #1** (the two deletions) · **Step 7 · #3** (everything else above) · **Step 8 · #4** (route consolidation)
 
 ### Duplicate / wrapper services
 
@@ -114,16 +114,16 @@ restructure).
 by `NewCampaign`/`MyCampaigns`/`CartPage`/`Dashboard`), `campaign-screens.service.ts`,
 `campaign-owner-approval.service.ts`, `campaign-hourly-location-plan.service.ts`,
 `dooh-new-campaign-estimate.service.ts`. These are domain-specific, not duplicates; their grouping is a
-Step 5/Step 6 concern (the campaign-creation ones surface their home during the `NewCampaign`
+Step 7/Step 8 concern (the campaign-creation ones surface their home during the `NewCampaign`
 decomposition; the folder restructure puts them under `features/campaigns/`).
 
-**Admin-services cluster — not a duplicate; observation moved to Step 6.** Step 2b discovery found the
+**Admin-services cluster — not a duplicate; observation moved to Step 8.** Step 2b discovery found the
 cluster already cleanly factored: 7 files — `admin.service.ts` (admin auth + admin CRUD + dashboard
 stats) plus `admin-campaign-monitoring`, `admin-events`, `admin-recharges`, `admin-screens`,
 `admin-user`, `admin-video` (`.service.ts`) — with **no cross-imports** and **no method-name
 collisions**; each `admin-*.service.ts` is imported by exactly one admin page. The handoff's
-"consolidate into an admin module" meant _folder placement_, not merge logic — Step 6 moves them under
-`features/admin/`; there is nothing to dedup. (Step 6 should also confirm the
+"consolidate into an admin module" meant _folder placement_, not merge logic — Step 8 moves them under
+`features/admin/`; there is nothing to dedup. (Step 8 should also confirm the
 `admin-screens.service.ts` ↔ `screens.service.ts` boundary: they share names like
 `getScreens`/`createScreen` but operate on admin vs owner views — looks like a legit split, same
 pattern as events.)
@@ -132,10 +132,10 @@ pattern as events.)
 `getFeaturedEvents`, `getMyEventCampaignLinks`, `getMyEventCampaignsEvents`) vs
 `admin-events.service.ts` (admin, full CRUD + `linkEventToCampaign`/`toggleFeatured`/`getStats`/…).
 Step 2b discovery confirmed they're genuinely separate — only the read `getFeaturedEvents` is shared by
-name. Both stay; Step 6 places `events.service.ts` under `features/campaigns/`, `admin-events.service.ts`
+name. Both stay; Step 8 places `events.service.ts` under `features/campaigns/`, `admin-events.service.ts`
 under `features/admin/`.
 
-→ **Step 2b · #14** (deletions) · **Step 6 · #4** (admin-cluster and campaign-services cluster folder placement)
+→ **Step 2b · #14** (deletions) · **Step 8 · #4** (admin-cluster and campaign-services cluster folder placement)
 
 ### DOOH calculation engine coupled to Supabase
 
@@ -177,7 +177,7 @@ Two latent issues in the _legacy_ engine, surfaced during Step 4 and left for Ph
   wizard's impressions ceiling and the published `campaign_hourly_location_plan` can disagree.
 - **`NewCampaign.tsx` carries a parallel, fictional pricing path** (`reach × 0.7`, `engagement ×
 0.15`, `efficiency = reach/cost` — `NewCampaign.tsx:410-427`) separate from the DOOH engine.
-  Phase 1 / Step 5 cleanup — it should not survive.
+  Phase 1 / Step 7 cleanup — it should not survive.
 
 → **Step 4 · #12** (4a + 4b done this phase; 4c = Phase 1)
 
@@ -203,9 +203,9 @@ env; shipped on the regression gates + diff review.)_
 `login` / `logout` / `refreshUserStatus` / the `onAuthStateChange` listener / `fetchProfileType`).
 The real fix was the `persist` middleware + de-`localStorage`-ing the service. `auth.service.ts`
 remains a Supabase-auth wrapper + `business_profiles` / signup CRUD + the ~165-line `mapAuthError`;
-an eventual `auth.service.ts` / `business-profile.service.ts` split is a Step 6 concern.
+an eventual `auth.service.ts` / `business-profile.service.ts` split is a Step 8 concern.
 
-**Deferred to Step 5** (Dashboard-coupled — these read/write the same auth-cache keys, but the
+**Deferred to Step 7** (Dashboard-coupled — these read/write the same auth-cache keys, but the
 refactor has to happen as part of decomposing those files): the `localStorage` call sites in
 `Dashboard.tsx` (~16 — `onboardingCompleted`, `user_profile_type`, `user_raison_social`,
 `justOnboarded`, `campaign_cart_items`) and `Onboarding.tsx` (3 — `onboardingCompleted`).
@@ -213,20 +213,20 @@ refactor has to happen as part of decomposing those files): the `localStorage` c
 **Parallel anti-pattern:** a Zustand store exists (`stores/cart.store.ts`), but the cart state is
 also hand-rolled in `localStorage` (`campaign_cart_items` in `CartPage.tsx` / `Dashboard.tsx` /
 `NewCampaign.tsx`, all Dashboard-coupled) — the same shape `auth.store.ts` had before Step 3.
-Deferred to Step 5 with the rest.
+Deferred to Step 7 with the rest.
 
-→ **Step 3 · #2** (done) · **Step 5 · #3** (the `Dashboard` / `Onboarding` `localStorage` sites + the `cart.store.ts` parallel)
+→ **Step 3 · #2** (done) · **Step 7 · #3** (the `Dashboard` / `Onboarding` `localStorage` sites + the `cart.store.ts` parallel)
 
 ### `console.*`
 
 938 `console.*` calls (917 lint-flagged as `no-console`; the rest are under `src/scripts/`, which
 the ESLint config exempts). No frontend logger exists. Includes leftover `console.log('🔍 …')`
-debug lines. → **Step 9 · #7**
+debug lines. → **Step 5 · #7**
 
 ### `as any` / `@ts-ignore`
 
 44 `as any` occurrences; 0 `@ts-ignore` / `@ts-expect-error`. The full list is produced during the
-typing pass, not fixed opportunistically. → **Step 10 · #8**
+typing pass, not fixed opportunistically. → **Step 6 · #8**
 
 ### `localStorage` outside Zustand `persist`
 
@@ -235,12 +235,12 @@ Step 3 moved the auth/profile cache (`user_profile_type` / `user_raison_social` 
 hand-rolled `localStorage` from `auth.store.ts` / `auth.service.ts` / `ContactPage.tsx`. The remaining
 direct `localStorage` use is in `Dashboard.tsx` / `Onboarding.tsx` / `NewCampaign.tsx` / `CartPage.tsx`
 (the auth-cache subset + the `campaign_cart_items` cart subset) — Dashboard-coupled; both are
-addressed when those files are decomposed. See "Auth-state layering" above. → **Step 5 · #3**
+addressed when those files are decomposed. See "Auth-state layering" above. → **Step 7 · #3**
 
 ### `window.location.reload()`
 
 2 calls, both in `pages/MyAccount.tsx` (the `if (shouldLeave) reload(); else reload();` block).
-→ **Step 7 · #5**
+→ **Step 9 · #5**
 
 ### Hardcoded `#00B3A6`
 
@@ -255,25 +255,25 @@ addressed when those files are decomposed. See "Auth-state layering" above. → 
 ### Flat folder structure
 
 `src/` is flat `pages/` + `components/` + `services/` + `stores/`, not the feature-based
-`src/features/<domain>/` the architecture conventions call for. → **Step 6 · #4**
+`src/features/<domain>/` the architecture conventions call for. → **Step 8 · #4**
 
 ### No server-state layer
 
 TanStack Query is not used; data fetching is hand-rolled (call a service in a component, `setState`).
-Conventions want React Query for server state and Zustand for client state, no mixing. → **Step 8 · #6**
+Conventions want React Query for server state and Zustand for client state, no mixing. → **Step 10 · #6**
 
 ### Debug cruft
 
 `utils/clearAuthCache.ts` (and its `App.tsx` side-effect import) was deleted in Step 3 — see
 "Auth-state layering" above / §4. What remains: the scattered emoji `console.log`s (🔄 ✅ ⚠️ ❌ 📊 …),
 heaviest in `services/auth.service.ts` (~70) and `stores/auth.store.ts` (~45) — cleaned in the
-console-purge pass. → **Step 9 · #7**
+console-purge pass. → **Step 5 · #7**
 
 ### `tsconfig` softening
 
 `apps/web/tsconfig.app.json` extends `tsconfig.base.json` but re-disables `verbatimModuleSyntax`,
 `noUncheckedIndexedAccess`, `noPropertyAccessFromIndexSignature` (with a tracking comment) — to be
-re-enabled after the structural refactor. → **Step 10 · #8**
+re-enabled after the structural refactor. → **Step 6 · #8**
 
 ### Duplicate devDependencies
 
@@ -302,23 +302,26 @@ OVH hosting snapshot belong to the later infra phase, not here.
 ## 5. Roadmap
 
 Ordering principle: **decisions & deletions first** (shrink the surface) → **isolate the real IP**
-(the DOOH engine) → **structure** (so later mechanical passes run once on the final shape) →
-**mechanical sweeps last** (console / typing / a11y / styling / tsconfig) → **tidy-up at the end**.
-Each step gets its own brainstorm → spec → plan → execute cycle.
+(the DOOH engine) → **bulk mechanical sweeps next** (console-purge, typing pass — done before
+decomposition so they run once on the current shape, not twice on the decomposed shape) →
+**structural decomposition + restructure** (Dashboard/NewCampaign decomp, then features/<domain>/
+folder layout) → **remaining mechanical passes** (jsx-a11y, brand token, tsconfig re-tighten) →
+**tidy-up at the end** (CI green, devDeps hoist). Each step gets its own brainstorm → spec →
+plan → execute cycle.
 
 | #   | Step                                                                                                                                                           | Touches (roughly)                                                                                                                                                                               | Done when                                                                                                                                                                                                                                                                                                                                                                                    | Issue | Status |
 | --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- | ------ |
 | 1   | Cleanup audit & roadmap (this doc)                                                                                                                             | `docs/audit.md`, GitHub issues/milestone                                                                                                                                                        | doc committed; issues created                                                                                                                                                                                                                                                                                                                                                                | —     | ☑      |
-| 2a  | Resolve duplicate pages and delete orphans                                                                                                                     | `pages/MyCart.tsx`, `pages/admin/AdminDashboardSimple.tsx` (deletions)                                                                                                                          | the two genuinely-dead files deleted (zero refs); typecheck/lint/test/build not regressed; the rest of §3's duplicate-page list is Dashboard-coupled → resolved in Step 5                                                                                                                                                                                                                    | #1    | ☑      |
-| 2b  | Resolve duplicate services                                                                                                                                     | `services/campaigns.service.ts`, `services/api/screens.api.ts`, `services/api/` (deletions)                                                                                                     | the two dead service files deleted (zero refs); `services/api/` dir removed; typecheck/lint/test/build not regressed; admin-cluster consolidation moved to Step 6 notes                                                                                                                                                                                                                      | #14   | ☑      |
-| 3   | Consolidate the auth-state layer                                                                                                                               | `stores/auth.store.ts` (persist + de-localStorage), `services/auth.service.ts` (stateless), `App.tsx` (drop `clearAuthCache` import), `pages/ContactPage.tsx`, delete `utils/clearAuthCache.ts` | `auth.store.ts` uses `persist`; no `localStorage` in `auth.store.ts`/`auth.service.ts`; `clearAuthCache.ts` deleted; `onAuthStateChange` subscription captured; `ContactPage` on the store; `Dashboard`+`Onboarding`+cart `localStorage` deferred to Step 5; typecheck/lint/test/build not regressed                                                                                         | #2    | ☑      |
+| 2a  | Resolve duplicate pages and delete orphans                                                                                                                     | `pages/MyCart.tsx`, `pages/admin/AdminDashboardSimple.tsx` (deletions)                                                                                                                          | the two genuinely-dead files deleted (zero refs); typecheck/lint/test/build not regressed; the rest of §3's duplicate-page list is Dashboard-coupled → resolved in Step 7                                                                                                                                                                                                                    | #1    | ☑      |
+| 2b  | Resolve duplicate services                                                                                                                                     | `services/campaigns.service.ts`, `services/api/screens.api.ts`, `services/api/` (deletions)                                                                                                     | the two dead service files deleted (zero refs); `services/api/` dir removed; typecheck/lint/test/build not regressed; admin-cluster consolidation moved to Step 8 notes                                                                                                                                                                                                                      | #14   | ☑      |
+| 3   | Consolidate the auth-state layer                                                                                                                               | `stores/auth.store.ts` (persist + de-localStorage), `services/auth.service.ts` (stateless), `App.tsx` (drop `clearAuthCache` import), `pages/ContactPage.tsx`, delete `utils/clearAuthCache.ts` | `auth.store.ts` uses `persist`; no `localStorage` in `auth.store.ts`/`auth.service.ts`; `clearAuthCache.ts` deleted; `onAuthStateChange` subscription captured; `ContactPage` on the store; `Dashboard`+`Onboarding`+cart `localStorage` deferred to Step 7; typecheck/lint/test/build not regressed                                                                                         | #2    | ☑      |
 | 4   | Decouple DOOH engine's pure math from Supabase (4a) + write the v3.0 pricing model as a tested, unwired pure module (4b). Wiring + schema + UI = Phase 1 (4c). | `apps/web/src/lib/dooh/{config,dates,hourly-plan,v3-model}.ts` + `README.md`; `docs/handoff/pricing-model-v3.md`, `Toodooh_Simulateur_Pricing_v3.html`, `v3-data-requirements.md`               | `pnpm test` exits 0 (previously-failing `campaign-hourly-location-plan` test passes from `lib/dooh/hourly-plan.test.ts`); `lib/dooh/v3-model.ts` implements the v3.0 model and its tests match the simulator's numeric examples; `lib/dooh/README.md` documents the model + function↔simulator mapping; v3.0 is unwired (build output unchanged); 4c (wiring/schema/UI) tracked for Phase 1. | #12   | ☑      |
-| 5   | Decompose `Dashboard.tsx` / `NewCampaign.tsx`                                                                                                                  | `pages/Dashboard.tsx`, `pages/NewCampaign.tsx`, `App.tsx` routes                                                                                                                                | each route renders its own page; largest chunk materially smaller; no regressions                                                                                                                                                                                                                                                                                                            | #3    | ☐      |
-| 6   | Restructure `src/` into `src/features/<domain>/`                                                                                                               | almost all of `src/`                                                                                                                                                                            | feature-based layout per conventions; imports updated; build OK                                                                                                                                                                                                                                                                                                                              | #4    | ☐      |
-| 7   | Replace `window.location.reload()` in `MyAccount.tsx`                                                                                                          | `pages/MyAccount.tsx`                                                                                                                                                                           | 0 `window.location.reload()` calls                                                                                                                                                                                                                                                                                                                                                           | #5    | ☐      |
-| 8   | Introduce React Query for server state                                                                                                                         | new query layer; (post-decomposition) pages                                                                                                                                                     | server data via React Query; Zustand limited to client state                                                                                                                                                                                                                                                                                                                                 | #6    | ☐      |
-| 9   | Frontend logger + `console.*` purge                                                                                                                            | new logger; ~917 call sites; ESLint config                                                                                                                                                      | 0 `no-console` errors                                                                                                                                                                                                                                                                                                                                                                        | #7    | ☐      |
-| 10  | Typing pass: fix `as any`, reduce tsc baseline, re-tighten tsconfig                                                                                            | many files; `tsconfig.app.json`                                                                                                                                                                 | typecheck 0 (or documented residue); 0 `as any`; tsconfig un-softened                                                                                                                                                                                                                                                                                                                        | #8    | ☐      |
+| 5   | Frontend logger + `console.*` purge                                                                                                                            | new logger; ~917 call sites; ESLint config                                                                                                                                                      | 0 `no-console` errors                                                                                                                                                                                                                                                                                                                                                                        | #7    | ☐      |
+| 6   | Typing pass: fix `as any`, reduce tsc baseline, re-tighten tsconfig                                                                                            | many files; `tsconfig.app.json`                                                                                                                                                                 | typecheck 0 (or documented residue); 0 `as any`; tsconfig un-softened                                                                                                                                                                                                                                                                                                                        | #8    | ☐      |
+| 7   | Decompose `Dashboard.tsx` / `NewCampaign.tsx`                                                                                                                  | `pages/Dashboard.tsx`, `pages/NewCampaign.tsx`, `App.tsx` routes                                                                                                                                | each route renders its own page; largest chunk materially smaller; no regressions                                                                                                                                                                                                                                                                                                            | #3    | ☐      |
+| 8   | Restructure `src/` into `src/features/<domain>/`                                                                                                               | almost all of `src/`                                                                                                                                                                            | feature-based layout per conventions; imports updated; build OK                                                                                                                                                                                                                                                                                                                              | #4    | ☐      |
+| 9   | Replace `window.location.reload()` in `MyAccount.tsx`                                                                                                          | `pages/MyAccount.tsx`                                                                                                                                                                           | 0 `window.location.reload()` calls                                                                                                                                                                                                                                                                                                                                                           | #5    | ☐      |
+| 10  | Introduce React Query for server state                                                                                                                         | new query layer; (post-decomposition) pages                                                                                                                                                     | server data via React Query; Zustand limited to client state                                                                                                                                                                                                                                                                                                                                 | #6    | ☐      |
 | 11  | `jsx-a11y` + `exhaustive-deps` cleanup                                                                                                                         | many `.tsx` files                                                                                                                                                                               | 0 `jsx-a11y/*` errors; 0 `exhaustive-deps` warnings                                                                                                                                                                                                                                                                                                                                          | #9    | ☐      |
 | 12  | Tailwind `brand` token: replace hardcoded `#00B3A6`                                                                                                            | `tailwind.config.js`; 449 call sites                                                                                                                                                            | 0 hardcoded `#00B3A6`; `brand` token in use                                                                                                                                                                                                                                                                                                                                                  | #10   | ☐      |
 | 13  | Get CI green                                                                                                                                                   | `.github/workflows/ci.yml`                                                                                                                                                                      | CI green on `main`; no `--no-verify` needed for normal commits                                                                                                                                                                                                                                                                                                                               | #11   | ☐      |
