@@ -175,3 +175,164 @@ export type ScreenhostInput = ScreenhostCriteria & {
   /** eligibleEvt — participates in events. */
   eventEligible: boolean;
 };
+
+/** A screenhost dropped from a campaign (refused, or — for events — not event-eligible): 0 revenue. */
+export type ExcludedScreenhost = { id: string; name?: string; sps: number };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Standard campaign — simulator `recalcNormale()`
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type StandardScreenhostAllocation = {
+  id: string;
+  name?: string;
+  sps: number;
+  /** 1-based rank by SPS descending (cascade priority order). */
+  rank: number;
+  /** Hi = max(0, Ei·N − Oi − evtSlots). */
+  netAvailabilityHours: number;
+  /** Ii = Ai·Hi·R. */
+  impressions: number;
+  /** Ii / I_max (0 when I_max = 0). */
+  impressionShare: number;
+};
+
+export type StandardCampaignResult = {
+  /** R — repetitions per hour for this content length. */
+  repetitionRate: number;
+  /** Accepting screenhosts, sorted by SPS descending. */
+  accepting: readonly StandardScreenhostAllocation[];
+  /** Refused screenhosts (0 revenue, excluded from I_max). */
+  refused: readonly ExcludedScreenhost[];
+  /** I_max = Σ Ii over accepting screenhosts. */
+  maxImpressions: number;
+  /** C_max = CPM·I_max/1000. */
+  maxBudgetTnd: number;
+};
+
+/**
+ * Simulator `recalcNormale()`: per-screenhost net availability, impressions, the I_max / C_max
+ * envelope, and the SPS-ranked accepting list with refused screenhosts cascaded out.
+ *
+ * `eventSlotsBlockedHours` is the Hi formula's `evtSlots` term — 0 for a standard campaign run on
+ * its own; pass the window of a co-selected event to model the simulator's evtSlots blackout.
+ */
+export function computeStandardCampaign(
+  screenhosts: readonly ScreenhostInput[],
+  contentSeconds: number,
+  daysCount: number,
+  config: DoohConfigV3,
+  eventSlotsBlockedHours = 0,
+): StandardCampaignResult {
+  const R = repetitionRate(contentSeconds, config).rate;
+  const N = Math.max(0, daysCount);
+  const evtSlots = Math.max(0, eventSlotsBlockedHours);
+
+  const refused: ExcludedScreenhost[] = screenhosts
+    .filter((s) => s.refused)
+    .map((s) => ({ id: s.id, name: s.name, sps: screenhostPerformanceScore(s, config) }));
+
+  const acceptingRaw = screenhosts
+    .filter((s) => !s.refused)
+    .map((s) => {
+      const sps = screenhostPerformanceScore(s, config);
+      const Hi = Math.max(0, s.operatingHoursPerDay * N - s.soldSlotsInPeriod - evtSlots);
+      const Ii = Math.max(0, s.affluencePerHour) * Hi * R;
+      return { id: s.id, name: s.name, sps, netAvailabilityHours: Hi, impressions: Ii };
+    })
+    .sort((a, b) => b.sps - a.sps || a.id.localeCompare(b.id));
+
+  const maxImpressions = acceptingRaw.reduce((acc, s) => acc + s.impressions, 0);
+  const accepting: StandardScreenhostAllocation[] = acceptingRaw.map((s, i) => ({
+    ...s,
+    rank: i + 1,
+    impressionShare: maxImpressions > 0 ? s.impressions / maxImpressions : 0,
+  }));
+
+  return {
+    repetitionRate: R,
+    accepting,
+    refused,
+    maxImpressions,
+    maxBudgetTnd: (config.cpmTnd * maxImpressions) / 1000,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Revenue split — 50/44/3/3 — simulator `rep-amounts-*`
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type RevenueSplit = {
+  /** Amount, TND, going to the screenhost pool (then distributed by impression share). */
+  screenhost: number;
+  toodooh: number;
+  agentSh: number;
+  agentSc: number;
+};
+
+/** Split an amount across the four parties using `config.revenueSplit`. Negative amounts → 0. */
+export function splitRevenue(amountTnd: number, config: DoohConfigV3): RevenueSplit {
+  const a = Math.max(0, amountTnd);
+  const r = config.revenueSplit;
+  return {
+    screenhost: a * r.screenhost,
+    toodooh: a * r.toodooh,
+    agentSh: a * r.agentSh,
+    agentSc: a * r.agentSc,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Budget application — simulator slider + per-screenhost revenue
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type BudgetAllocation = {
+  /** C_cible — requested budget clamped to [0, C_max]. */
+  targetBudgetTnd: number;
+  /** I_cible = C_cible·1000/CPM (the CPM is the standard CPM here, CPM_evt for `applyEventBudget`). */
+  purchasedImpressions: number;
+  /** taux_fill = C_cible / C_max (0 when C_max = 0). */
+  fillRate: number;
+  /** Split of C_cible. */
+  split: RevenueSplit;
+  /** Per accepting screenhost: revenue (= screenhost pool × share) and `share` (= impression share). */
+  perScreenhost: readonly { id: string; name?: string; revenueTnd: number; share: number }[];
+};
+
+function allocateBudget(
+  cpmTnd: number,
+  maxBudgetTnd: number,
+  accepting: readonly { id: string; name?: string; impressionShare: number }[],
+  requestedBudgetTnd: number,
+  config: DoohConfigV3,
+): BudgetAllocation {
+  const cCible = Math.min(Math.max(0, requestedBudgetTnd), maxBudgetTnd);
+  const split = splitRevenue(cCible, config);
+  return {
+    targetBudgetTnd: cCible,
+    purchasedImpressions: cpmTnd > 0 ? (cCible * 1000) / cpmTnd : 0,
+    fillRate: maxBudgetTnd > 0 ? cCible / maxBudgetTnd : 0,
+    split,
+    perScreenhost: accepting.map((s) => ({
+      id: s.id,
+      name: s.name,
+      share: s.impressionShare,
+      revenueTnd: split.screenhost * s.impressionShare,
+    })),
+  };
+}
+
+/** Given a standard-campaign result and a requested budget, clamp to C_max and distribute. */
+export function applyBudget(
+  result: StandardCampaignResult,
+  targetBudgetTnd: number,
+  config: DoohConfigV3,
+): BudgetAllocation {
+  return allocateBudget(
+    config.cpmTnd,
+    result.maxBudgetTnd,
+    result.accepting,
+    targetBudgetTnd,
+    config,
+  );
+}

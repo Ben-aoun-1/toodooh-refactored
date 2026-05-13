@@ -2,10 +2,13 @@ import { describe, it, expect } from 'vitest';
 
 import {
   DEFAULT_DOOH_CONFIG_V3,
+  applyBudget,
   clampSpotSeconds,
+  computeStandardCampaign,
   credibilityThreshold,
   repetitionRate,
   screenhostPerformanceScore,
+  splitRevenue,
   spsColorBand,
   type ScreenhostInput,
 } from './v3-model';
@@ -184,5 +187,117 @@ describe('spsColorBand', () => {
     expect(spsColorBand(66.75, CFG)).toBe('yellow');
     expect(spsColorBand(50, CFG)).toBe('yellow');
     expect(spsColorBand(49.99, CFG)).toBe('red');
+  });
+});
+
+describe('computeStandardCampaign (simulator recalcNormale)', () => {
+  // S=10 → R=30 ; N=25 ; CPM=15 ; no co-selected event.
+  it('matches the simulator demo (S=10, N=25)', () => {
+    const r = computeStandardCampaign(demoScreenhosts(), 10, 25, CFG);
+    expect(r.repetitionRate).toBeCloseTo(30, 6);
+    const byId = Object.fromEntries(r.accepting.map((a) => [a.id, a]));
+    // Hi = Ei·N − Oi − evtSlots : sh1 200, sh2 150, sh3 175, sh4 125
+    expect(byId.sh1.netAvailabilityHours).toBe(200);
+    expect(byId.sh2.netAvailabilityHours).toBe(150);
+    expect(byId.sh3.netAvailabilityHours).toBe(175);
+    expect(byId.sh4.netAvailabilityHours).toBe(125);
+    // Ii = Ai·Hi·R : sh1 330000, sh2 180000, sh3 183750, sh4 112500
+    expect(byId.sh1.impressions).toBeCloseTo(330_000, 6);
+    expect(byId.sh2.impressions).toBeCloseTo(180_000, 6);
+    expect(byId.sh3.impressions).toBeCloseTo(183_750, 6);
+    expect(byId.sh4.impressions).toBeCloseTo(112_500, 6);
+    expect(r.maxImpressions).toBeCloseTo(806_250, 6);
+    expect(r.maxBudgetTnd).toBeCloseTo(12_093.75, 6);
+    // SPS-descending ranking
+    expect(r.accepting.map((a) => a.id)).toEqual(['sh1', 'sh2', 'sh3', 'sh4']);
+    expect(r.accepting.map((a) => a.rank)).toEqual([1, 2, 3, 4]);
+    expect(r.refused).toEqual([]);
+    expect(r.accepting.reduce((s, a) => s + a.impressionShare, 0)).toBeCloseTo(1, 6);
+  });
+
+  it('cascade: a refused screenhost gets 0 and is excluded from I_max; others renormalize', () => {
+    const shs = demoScreenhosts();
+    shs[3].refused = true; // Bar Le Zinc — Ii would have been 112500
+    const r = computeStandardCampaign(shs, 10, 25, CFG);
+    expect(r.maxImpressions).toBeCloseTo(806_250 - 112_500, 6); // 693750
+    expect(r.accepting.map((a) => a.id)).toEqual(['sh1', 'sh2', 'sh3']);
+    expect(r.refused.map((x) => x.id)).toEqual(['sh4']);
+    expect(r.accepting.reduce((s, a) => s + a.impressionShare, 0)).toBeCloseTo(1, 6);
+    // After renormalisation the screenhost pool is fully distributed across the remaining 3.
+    const b = applyBudget(r, 10_000, CFG);
+    expect(b.perScreenhost.reduce((s, p) => s + p.revenueTnd, 0)).toBeCloseTo(b.split.screenhost, 6);
+  });
+
+  it('event slots reduce Hi for every accepting screenhost', () => {
+    const r = computeStandardCampaign(demoScreenhosts(), 10, 25, CFG, 4.5);
+    const byId = Object.fromEntries(r.accepting.map((a) => [a.id, a]));
+    expect(byId.sh1.netAvailabilityHours).toBeCloseTo(200 - 4.5, 6); // 195.5
+    expect(byId.sh4.netAvailabilityHours).toBeCloseTo(125 - 4.5, 6); // 120.5
+  });
+
+  it('Hi never goes negative', () => {
+    const shs = demoScreenhosts();
+    shs[0].soldSlotsInPeriod = 999_999;
+    const r = computeStandardCampaign(shs, 10, 25, CFG);
+    const sh1 = r.accepting.find((a) => a.id === 'sh1')!;
+    expect(sh1.netAvailabilityHours).toBe(0);
+    expect(sh1.impressions).toBe(0);
+  });
+});
+
+describe('splitRevenue (simulator rep-amounts, 50/44/3/3)', () => {
+  it('splits an amount across the four parties and sums back to the amount', () => {
+    const s = splitRevenue(1000, CFG);
+    expect(s.screenhost).toBeCloseTo(500, 6);
+    expect(s.toodooh).toBeCloseTo(440, 6);
+    expect(s.agentSh).toBeCloseTo(30, 6);
+    expect(s.agentSc).toBeCloseTo(30, 6);
+    expect(s.screenhost + s.toodooh + s.agentSh + s.agentSc).toBeCloseTo(1000, 6);
+  });
+  it('clamps negatives to 0', () => {
+    expect(splitRevenue(-100, CFG).screenhost).toBe(0);
+  });
+});
+
+describe('applyBudget (simulator slider + per-screenhost revenue)', () => {
+  const std = () => computeStandardCampaign(demoScreenhosts(), 10, 25, CFG);
+
+  it('budget = C_max → fillRate = 1, C_cible = C_max', () => {
+    const b = applyBudget(std(), 12_093.75, CFG);
+    expect(b.targetBudgetTnd).toBeCloseTo(12_093.75, 6);
+    expect(b.fillRate).toBeCloseTo(1, 6);
+  });
+  it('budget = C_max / 2 → fillRate = 0.5', () => {
+    const b = applyBudget(std(), 12_093.75 / 2, CFG);
+    expect(b.targetBudgetTnd).toBeCloseTo(12_093.75 / 2, 6);
+    expect(b.fillRate).toBeCloseTo(0.5, 6);
+  });
+  it('budget > C_max → clamped to C_max, fillRate = 1', () => {
+    const b = applyBudget(std(), 999_999, CFG);
+    expect(b.targetBudgetTnd).toBeCloseTo(12_093.75, 6);
+    expect(b.fillRate).toBeCloseTo(1, 6);
+  });
+  it('budget = 0 → fillRate = 0, all per-screenhost revenue = 0', () => {
+    const b = applyBudget(std(), 0, CFG);
+    expect(b.targetBudgetTnd).toBe(0);
+    expect(b.fillRate).toBe(0);
+    expect(b.perScreenhost.every((p) => p.revenueTnd === 0)).toBe(true);
+  });
+  it('per-screenhost revenue = screenhost pool × impression share, summing to the pool', () => {
+    const b = applyBudget(std(), 6000, CFG);
+    expect(b.purchasedImpressions).toBeCloseTo(400_000, 6); // 6000·1000/15
+    expect(b.split.screenhost).toBeCloseTo(3000, 6);
+    const byId = Object.fromEntries(b.perScreenhost.map((p) => [p.id, p.revenueTnd]));
+    expect(byId.sh1).toBeCloseTo(3000 * (330_000 / 806_250), 6);
+    expect(byId.sh4).toBeCloseTo(3000 * (112_500 / 806_250), 6);
+    expect(b.perScreenhost.reduce((s, p) => s + p.revenueTnd, 0)).toBeCloseTo(3000, 6);
+    expect(b.perScreenhost.map((p) => p.id)).toEqual(['sh1', 'sh2', 'sh3', 'sh4']);
+  });
+  it('C_max = 0 ⇒ fillRate 0, no division by zero, empty per-screenhost', () => {
+    const empty = computeStandardCampaign([], 10, 25, CFG);
+    const b = applyBudget(empty, 1000, CFG);
+    expect(b.targetBudgetTnd).toBe(0);
+    expect(b.fillRate).toBe(0);
+    expect(b.perScreenhost).toEqual([]);
   });
 });
