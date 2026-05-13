@@ -1,3 +1,4 @@
+import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import {
   CampaignMonitoringData,
@@ -8,10 +9,8 @@ import {
   CampaignLocation,
   CampaignImpressionProgress,
 } from '../types/campaign-monitoring';
-import { logger } from '../lib/logger';
 
 const log = logger.child({ module: 'admin-campaign-monitoring.service' });
-
 
 class AdminCampaignMonitoringService {
   /**
@@ -19,12 +18,14 @@ class AdminCampaignMonitoringService {
    */
   async getGlobalStats(): Promise<CampaignGlobalStats> {
     try {
-
       // Essayer avec RPC d'abord
       const { data, error } = await supabase.rpc('get_campaigns_global_stats');
 
       if (error) {
-        log.warn({ message: error.message }, '⚠️ RPC get_campaigns_global_stats failed, using fallback');
+        log.warn(
+          { message: error.message },
+          '⚠️ RPC get_campaigns_global_stats failed, using fallback',
+        );
 
         // Fallback: requête directe
         const { data: campaigns, error: fallbackError } = await supabase
@@ -64,7 +65,6 @@ class AdminCampaignMonitoringService {
    */
   async getCampaignsWithScreens(): Promise<CampaignMonitoringData[]> {
     try {
-
       // Priorité à la vue (plus légère que la RPC complète)
       const { data: viewData, error: viewError } = await supabase
         .from('admin_campaigns_monitoring')
@@ -188,7 +188,6 @@ class AdminCampaignMonitoringService {
    */
   async getCampaignsByStatus(status: string): Promise<CampaignMonitoringData[]> {
     try {
-
       const { data, error } = await supabase.rpc('get_campaigns_by_status', { p_status: status });
 
       if (error) {
@@ -216,7 +215,6 @@ class AdminCampaignMonitoringService {
    */
   async getCampaignsByCategory(): Promise<CampaignByCategory[]> {
     try {
-
       const { data, error } = await supabase.rpc('get_campaigns_by_category');
 
       if (error) {
@@ -257,7 +255,6 @@ class AdminCampaignMonitoringService {
    */
   async getTopAdvertisers(limit: number = 10): Promise<TopAdvertiser[]> {
     try {
-
       const { data, error } = await supabase.rpc('get_top_advertisers', { limit_count: limit });
 
       if (error) {
@@ -276,7 +273,6 @@ class AdminCampaignMonitoringService {
    */
   async getMostUsedScreens(limit: number = 10): Promise<MostUsedScreen[]> {
     try {
-
       const { data, error } = await supabase.rpc('get_most_used_screens', { limit_count: limit });
 
       if (error) {
@@ -295,7 +291,6 @@ class AdminCampaignMonitoringService {
    */
   async getCampaignDetails(campaignId: string): Promise<CampaignMonitoringData | null> {
     try {
-
       const campaigns = await this.getCampaignsWithScreens();
       const campaign = campaigns.find((c) => c.campaign_id === campaignId);
 
@@ -310,7 +305,6 @@ class AdminCampaignMonitoringService {
    */
   async getCampaignLocations(campaignId: string): Promise<CampaignLocation[]> {
     try {
-
       // Source principale: campagne -> localités
       const { data: campaignLocations, error: campaignLocationsError } = await supabase
         .from('campaign_locations')

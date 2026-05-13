@@ -1,8 +1,7 @@
-import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
+import { supabase } from '../lib/supabase';
 
 const log = logger.child({ module: 'predefined-zones.service' });
-
 
 export interface PredefinedZone {
   id: string;
@@ -23,7 +22,6 @@ export interface PredefinedZone {
 export const predefinedZonesService = {
   async getAll(): Promise<PredefinedZone[]> {
     try {
-
       const { data, error } = await supabase
         .from('predefined_zones')
         .select('*')
@@ -32,10 +30,10 @@ export const predefinedZonesService = {
 
       if (error) {
         log.error({ error }, '❌ Erreur lors de la récupération des zones prédéfinies');
-        log.error({ message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code, }, 'Détails');
+        log.error(
+          { message: error.message, details: error.details, hint: error.hint, code: error.code },
+          'Détails',
+        );
         throw error;
       }
 

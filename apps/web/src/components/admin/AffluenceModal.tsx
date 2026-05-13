@@ -2,12 +2,11 @@ import { X, Edit, Save, Calendar } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 
+import { logger } from '../../lib/logger';
 import { supabase } from '../../lib/supabase';
 import type { AdminLocation } from '../../services/admin-screens.service';
-import { logger } from '../../lib/logger';
 
 const log = logger.child({ module: 'AffluenceModal' });
-
 
 type LocationAffluenceRow = {
   location_id: string;

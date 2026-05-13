@@ -22,13 +22,12 @@ import { useNavigate } from 'react-router-dom';
 import AddScreen from '../components/AddScreen';
 import OwnerNavigation from '../components/OwnerNavigation';
 import ScreenCalendar from '../components/ScreenCalendar';
+import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { screensService, Screen, UnavailabilityPeriod } from '../services/screens.service';
 import { useAuthStore } from '../stores/auth.store';
-import { logger } from '../lib/logger';
 
 const log = logger.child({ module: 'OwnerScreens' });
-
 
 interface RevenueStats {
   totalRevenue: number;
@@ -61,16 +60,13 @@ export default function OwnerScreens() {
   // ✅ OPTIMISATION : Mémoriser loadScreensData avec useCallback
   const loadScreensData = useCallback(async () => {
     try {
-
       const [screensData, unavailabilityData] = await Promise.all([
         screensService.getScreens(),
         screensService.getUnavailabilityPeriods(),
       ]);
 
-
       if (screensData && screensData.length > 0) {
-        screensData.forEach((screen, index) => {
-        });
+        screensData.forEach((screen, index) => {});
       } else {
       }
 
@@ -242,12 +238,10 @@ export default function OwnerScreens() {
 
   const handleStatusChange = async (screenId: string, newStatus: string, reason?: string) => {
     try {
-
       // Appeler le service pour mettre à jour en base de données
       const updatedScreen = await screensService.updateScreen(screenId, {
         status: newStatus as any,
       });
-
 
       // Mettre à jour l'état local
       setScreens((prev) =>
@@ -271,7 +265,6 @@ export default function OwnerScreens() {
 
   const handleUnavailabilityAdded = async (period: UnavailabilityPeriod) => {
     try {
-
       setUnavailabilityPeriods((prev) => [...prev, period]);
 
       // Mettre à jour le statut de l'écran si la période est en cours
@@ -280,12 +273,10 @@ export default function OwnerScreens() {
       const periodEnd = new Date(`${period.end_date}T${period.end_time}`);
 
       if (now >= periodStart && now <= periodEnd) {
-
         // Mettre à jour en base de données
         const updatedScreen = await screensService.updateScreen(period.screen_id, {
           status: 'unavailable',
         });
-
 
         // Mettre à jour l'état local
         setScreens((prev) =>
@@ -307,10 +298,8 @@ export default function OwnerScreens() {
 
   const removeUnavailabilityPeriod = async (periodId: string) => {
     try {
-
       // Supprimer en base de données
       await screensService.deleteUnavailabilityPeriod(periodId);
-
 
       // Mettre à jour l'état local
       setUnavailabilityPeriods((prev) => prev.filter((p) => p.id !== periodId));

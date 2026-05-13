@@ -1,15 +1,13 @@
+import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { SpecialEvent, CreateEventDTO, EventStats } from '../types/event';
-import { logger } from '../lib/logger';
 
 const log = logger.child({ module: 'admin-events.service' });
-
 
 export const adminEventsService = {
   // Récupérer tous les événements
   async getEvents(): Promise<SpecialEvent[]> {
     try {
-
       const { data, error } = await supabase
         .from('admin_events_view')
         .select('*')
@@ -18,7 +16,6 @@ export const adminEventsService = {
       if (error) {
         throw new Error(`Erreur Supabase: ${error.message}`);
       }
-
 
       return data || [];
     } catch (error) {
@@ -29,7 +26,6 @@ export const adminEventsService = {
   // Créer un nouvel événement
   async createEvent(eventData: CreateEventDTO, adminId: string): Promise<SpecialEvent | null> {
     try {
-
       const { data, error } = await supabase
         .from('special_events')
         .insert([
@@ -54,7 +50,6 @@ export const adminEventsService = {
   // Mettre à jour un événement
   async updateEvent(eventId: string, eventData: Partial<CreateEventDTO>): Promise<boolean> {
     try {
-
       const { error } = await supabase.from('special_events').update(eventData).eq('id', eventId);
 
       if (error) {
@@ -72,7 +67,6 @@ export const adminEventsService = {
   // Supprimer un événement
   async deleteEvent(eventId: string): Promise<boolean> {
     try {
-
       const { error } = await supabase.from('special_events').delete().eq('id', eventId);
 
       if (error) {
@@ -90,7 +84,6 @@ export const adminEventsService = {
   // Activer/Désactiver un événement
   async toggleEventStatus(eventId: string, isActive: boolean): Promise<boolean> {
     try {
-
       const { error } = await supabase
         .from('special_events')
         .update({ is_active: isActive })
@@ -111,7 +104,6 @@ export const adminEventsService = {
   // Mettre en avant un événement
   async toggleFeatured(eventId: string, isFeatured: boolean): Promise<boolean> {
     try {
-
       const { error } = await supabase
         .from('special_events')
         .update({ is_featured: isFeatured })
@@ -155,7 +147,6 @@ export const adminEventsService = {
   // Récupérer les statistiques
   async getStats(): Promise<EventStats> {
     try {
-
       const { data, error } = await supabase.rpc('get_events_stats');
 
       if (error) {
@@ -197,7 +188,6 @@ export const adminEventsService = {
     adminId: string,
   ): Promise<boolean> {
     try {
-
       const { error } = await supabase.from('event_campaigns').insert([
         {
           event_id: eventId,
@@ -221,7 +211,6 @@ export const adminEventsService = {
   // Délier un événement d'une campagne
   async unlinkEventFromCampaign(eventId: string, campaignId: string): Promise<boolean> {
     try {
-
       const { error } = await supabase
         .from('event_campaigns')
         .delete()

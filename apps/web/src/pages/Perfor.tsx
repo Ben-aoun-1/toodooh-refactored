@@ -13,6 +13,7 @@ import {
 } from 'recharts';
 
 import performanceIntroIcon from '../assets/performance/1.png';
+import { logger } from '../lib/logger';
 import { performanceService } from '../services/performance.service';
 import type {
   PerformanceDataset,
@@ -20,10 +21,8 @@ import type {
   PerformanceKpis,
   PerformancePeriodPreset,
 } from '../types/performance';
-import { logger } from '../lib/logger';
 
 const log = logger.child({ module: 'Perfor' });
-
 
 const presetButtons: { key: PerformancePeriodPreset; label: string }[] = [
   { key: 'month', label: 'Ce mois' },
@@ -137,7 +136,7 @@ export default function Perfor() {
       setDataset(data);
       setFilters(data.filters);
     } catch (e) {
-      log.error({ err: e }, 'error');
+      log.error({ err: e }, 'failed to load advertiser performance dataset');
       setError('Impossible de charger les performances pour le moment.');
     } finally {
       setLoading(false);

@@ -1,8 +1,7 @@
-import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
+import { supabase } from '../lib/supabase';
 
 const log = logger.child({ module: 'admin-screens.service' });
-
 
 export interface AdminScreen {
   id: string;
@@ -338,9 +337,7 @@ export const adminScreensService = {
     } = {},
   ): Promise<{ screens: AdminScreen[]; total: number; totalPages: number }> {
     try {
-
       let query = supabase.from('screens').select('*', { count: 'exact' });
-
 
       // Appliquer les filtres
       if (filters.status) {
@@ -372,7 +369,6 @@ export const adminScreensService = {
       if (error) {
         throw error;
       }
-
 
       // Récupérer les noms des propriétaires
       const ownerIds = [...new Set((data || []).map((s) => s.owner_id))];

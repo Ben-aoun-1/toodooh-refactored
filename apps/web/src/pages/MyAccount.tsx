@@ -17,14 +17,13 @@ import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 import OwnerNavigation from '../components/OwnerNavigation';
+import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { authService } from '../services/auth.service';
 import { useAuthStore } from '../stores/auth.store';
 import type { BusinessSector, Governorate, BusinessProfile } from '../types/auth';
-import { logger } from '../lib/logger';
 
 const log = logger.child({ module: 'MyAccount' });
-
 
 const steps = [
   { id: 1, title: 'Profil', icon: User },
@@ -81,7 +80,6 @@ export default function MyAccount() {
         navigate('/login');
         return;
       }
-
 
       setLoading(false);
       await loadProfileData();
@@ -180,7 +178,6 @@ export default function MyAccount() {
       const filePrefix = isIndividualOwner ? 'cin' : 'rne';
       const filePath = `${filePrefix}_${user.id}_${Date.now()}.${ext}`;
 
-
       // Upload vers le bucket registres
       const { error: uploadError } = await supabase.storage
         .from('registres')
@@ -189,7 +186,6 @@ export default function MyAccount() {
       if (uploadError) {
         throw uploadError;
       }
-
 
       // Créer une URL signée
       const { data: signedData, error: signedError } = await supabase.storage
@@ -211,7 +207,6 @@ export default function MyAccount() {
       if (updateError) {
         throw updateError;
       }
-
 
       // Recharger le profil
       await loadProfileData();
@@ -236,7 +231,6 @@ export default function MyAccount() {
     setSaving(true);
 
     try {
-
       // Mettre à jour le profil
       const updateData = {
         business_name: formData.businessName,
@@ -256,7 +250,6 @@ export default function MyAccount() {
 
       // Mettre à jour le mot de passe si fourni
       if (formData.password) {
-
         try {
           await authService.updatePassword(formData.password);
         } catch (passwordError) {
@@ -281,8 +274,13 @@ export default function MyAccount() {
       }
     } catch (error) {
       log.error({ error }, '❌ Erreur lors de la mise à jour');
-      log.error({ message: error instanceof Error ? error.message : 'Erreur inconnue',
-        stack: error instanceof Error ? error.stack : undefined, }, "Détails de l'erreur");
+      log.error(
+        {
+          message: error instanceof Error ? error.message : 'Erreur inconnue',
+          stack: error instanceof Error ? error.stack : undefined,
+        },
+        "Détails de l'erreur",
+      );
       toast.error(
         `Erreur lors de la mise à jour du profil: ${error instanceof Error ? error.message : 'Erreur inconnue'}`,
       );

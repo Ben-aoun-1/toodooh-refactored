@@ -1,9 +1,8 @@
+import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import type { LocationAffluenceSlot } from '../types/location';
-import { logger } from '../lib/logger';
 
 const log = logger.child({ module: 'campaign-screens.service' });
-
 
 /** Localité pour la carte et le ciblage campagne (une entrée par localité, pas par écran) */
 export interface CampaignLocation {
@@ -70,7 +69,6 @@ export const campaignScreensService = {
         return [];
       }
 
-
       // Récupérer les noms des propriétaires
       const ownerIds = [...new Set((data || []).map((s) => s.owner_id))];
       const { data: owners } = await supabase
@@ -112,7 +110,10 @@ export const campaignScreensService = {
           }
 
           if (!coordinates) {
-            log.warn({ name: screen.name, coordinates: screen.coordinates }, '⚠️ Écran sans coordonnées');
+            log.warn(
+              { name: screen.name, coordinates: screen.coordinates },
+              '⚠️ Écran sans coordonnées',
+            );
           }
 
           return {
@@ -130,7 +131,6 @@ export const campaignScreensService = {
           };
         }),
       );
-
 
       return screensWithAffluence;
     } catch (error) {
@@ -165,7 +165,6 @@ export const campaignScreensService = {
         };
       }
 
-
       // Pour les annonceurs, on utilise uniquement la config (pas besoin de screen_affluence_data)
       return {
         avg_passby: configData.avg_passby_per_hour || 0,
@@ -190,7 +189,6 @@ export const campaignScreensService = {
   // Récupérer les écrans dans une zone géographique
   async getScreensInArea(lat: number, lng: number, radiusKm: number): Promise<CampaignScreen[]> {
     try {
-
       // Récupérer tous les écrans actifs
       const { data, error } = await supabase
         .from('screens')
@@ -204,7 +202,6 @@ export const campaignScreensService = {
         log.error({ error }, 'Erreur lors de la récupération des écrans dans la zone');
         return [];
       }
-
 
       // Récupérer les noms des propriétaires
       const ownerIds = [...new Set((data || []).map((s) => s.owner_id))];
@@ -264,7 +261,6 @@ export const campaignScreensService = {
           }
         }
       }
-
 
       return screensInZone;
     } catch (error) {

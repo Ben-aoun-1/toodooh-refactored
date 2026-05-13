@@ -25,6 +25,7 @@ import { toast } from 'react-hot-toast';
 import { useLocation } from 'react-router-dom';
 
 import AdminLayout from '../../components/admin/AdminLayout';
+import { logger } from '../../lib/logger';
 import { supabase } from '../../lib/supabase';
 import { adminCampaignMonitoringService } from '../../services/admin-campaign-monitoring.service';
 import { useAdminStore } from '../../stores/admin.store';
@@ -35,10 +36,8 @@ import {
   CampaignLocation,
   CampaignImpressionProgress,
 } from '../../types/campaign-monitoring';
-import { logger } from '../../lib/logger';
 
 const log = logger.child({ module: 'CampaignMonitoring' });
-
 
 export default function CampaignMonitoring() {
   const { admin } = useAdminStore();

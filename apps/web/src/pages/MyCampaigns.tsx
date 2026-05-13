@@ -24,14 +24,13 @@ import { useNavigate, useLocation } from 'react-router-dom';
 
 import 'react-datepicker/dist/react-datepicker.css';
 import campagneIcon from '../assets/sidebar/campagnes.png';
+import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { balanceService } from '../services/balance.service';
 import { campaignService } from '../services/campaign.service';
 import { useAuthStore } from '../stores/auth.store';
-import { logger } from '../lib/logger';
 
 const log = logger.child({ module: 'MyCampaigns' });
-
 
 const isMissingCampaignCategoriesTable = (error: any) =>
   error?.code === 'PGRST205' && String(error?.message || '').includes('campaign_categories');
@@ -287,7 +286,6 @@ export default function MyCampaigns() {
             user_id: c.user_id,
           })) || [];
 
-
         setCampaigns(transformedCampaigns);
 
         // Calculer les statistiques
@@ -295,7 +293,6 @@ export default function MyCampaigns() {
         const activeCampaigns = transformedCampaigns.filter((c) => c.status === 'active').length;
         const totalViews = transformedCampaigns.reduce((sum, c) => sum + c.views, 0);
         const totalBudget = transformedCampaigns.reduce((sum, c) => sum + c.budget, 0);
-
 
         setStats({
           totalCampaigns,
@@ -413,7 +410,6 @@ export default function MyCampaigns() {
 
   // Fonction pour modifier une campagne
   const handleEditCampaign = (campaign: any) => {
-
     // Vérifier si la campagne peut être modifiée
     if (campaign.status === 'active') {
       toast.error('Impossible de modifier une campagne active', {

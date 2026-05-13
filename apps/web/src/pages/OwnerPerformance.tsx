@@ -26,6 +26,7 @@ import {
 import performanceIntroIcon from '../assets/performance/1.png';
 import OwnerNavigation from '../components/OwnerNavigation';
 import OwnerNotificationsBell from '../components/OwnerNotificationsBell';
+import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { performanceService } from '../services/performance.service';
 import { useAuthStore } from '../stores/auth.store';
@@ -37,10 +38,8 @@ import type {
   PerformancePeriodPreset,
   PerformanceTrendPoint,
 } from '../types/performance';
-import { logger } from '../lib/logger';
 
 const log = logger.child({ module: 'OwnerPerformance' });
-
 
 const presetButtons: { key: PerformancePeriodPreset; label: string }[] = [
   { key: 'month', label: 'Ce mois' },
@@ -203,7 +202,7 @@ export default function OwnerPerformance() {
       setDataset(data);
       setFilters(data.filters);
     } catch (e) {
-      log.error({ err: e }, 'error');
+      log.error({ err: e }, 'failed to load owner performance dataset');
       setError('Impossible de charger les performances pour le moment.');
     } finally {
       setLoading(false);

@@ -1,8 +1,7 @@
-import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
+import { supabase } from '../lib/supabase';
 
 const log = logger.child({ module: 'admin-recharges.service' });
-
 
 export interface AdminRecharge {
   id: string;
@@ -49,7 +48,6 @@ class AdminRechargesService {
     perPage: number = 20,
   ): Promise<{ data: AdminRecharge[]; total: number }> {
     try {
-
       let query = supabase
         .from('recharges')
         .select('*', { count: 'exact' })
@@ -164,7 +162,6 @@ class AdminRechargesService {
    */
   async approveRecharge(rechargeId: string, adminId: string, notes?: string): Promise<void> {
     try {
-
       const { error } = await supabase
         .from('recharges')
         .update({
@@ -177,7 +174,6 @@ class AdminRechargesService {
         .eq('id', rechargeId);
 
       if (error) throw error;
-
     } catch (error) {
       throw error;
     }
@@ -188,7 +184,6 @@ class AdminRechargesService {
    */
   async rejectRecharge(rechargeId: string, adminId: string, reason: string): Promise<void> {
     try {
-
       const { error } = await supabase
         .from('recharges')
         .update({
@@ -201,7 +196,6 @@ class AdminRechargesService {
         .eq('id', rechargeId);
 
       if (error) throw error;
-
     } catch (error) {
       throw error;
     }
@@ -212,7 +206,6 @@ class AdminRechargesService {
    */
   async cancelRecharge(rechargeId: string, adminId: string, reason: string): Promise<void> {
     try {
-
       const { error } = await supabase
         .from('recharges')
         .update({
@@ -225,7 +218,6 @@ class AdminRechargesService {
         .eq('id', rechargeId);
 
       if (error) throw error;
-
     } catch (error) {
       throw error;
     }

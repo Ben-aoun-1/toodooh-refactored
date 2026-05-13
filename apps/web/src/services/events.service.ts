@@ -1,9 +1,8 @@
+import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import type { SpecialEvent } from '../types/event';
-import { logger } from '../lib/logger';
 
 const log = logger.child({ module: 'events.service' });
-
 
 /**
  * Service pour les annonceurs : récupérer les événements mis en avant (dashboard).
@@ -50,7 +49,10 @@ export const eventsService = {
     try {
       const { data, error } = await supabase.rpc('get_my_event_campaigns_events');
       if (error) {
-        log.error({ message: error.message, error }, '[Mes événements] RPC get_my_event_campaigns_events a échoué');
+        log.error(
+          { message: error.message, error },
+          '[Mes événements] RPC get_my_event_campaigns_events a échoué',
+        );
         return [];
       }
       const list = (data || []) as SpecialEvent[];
@@ -66,7 +68,10 @@ export const eventsService = {
     try {
       const { data, error } = await supabase.rpc('get_my_event_campaign_links');
       if (error) {
-        log.error({ message: error.message, error }, '[Mes événements] RPC get_my_event_campaign_links a échoué');
+        log.error(
+          { message: error.message, error },
+          '[Mes événements] RPC get_my_event_campaign_links a échoué',
+        );
         return [];
       }
       return (data || []).map((r: { event_id: string; campaign_id: string }) => ({

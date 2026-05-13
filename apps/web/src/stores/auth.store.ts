@@ -2,14 +2,13 @@ import { User } from '@supabase/supabase-js';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { authService } from '../services/auth.service';
 
 import { useAdminStore } from './admin.store';
-import { logger } from '../lib/logger';
 
 const log = logger.child({ module: 'auth.store' });
-
 
 interface AuthState {
   user: User | null;
@@ -53,7 +52,9 @@ export const useAuthStore = create<AuthState>()(
           };
         }
 
-        log.warn('⚠️ Erreur/timeout fetchProfileType — aucun état approuvé connu, fallback pending');
+        log.warn(
+          '⚠️ Erreur/timeout fetchProfileType — aucun état approuvé connu, fallback pending',
+        );
         return {
           profileType: knownProfileType,
           contactName: storeState.contactName ?? null,
@@ -66,7 +67,6 @@ export const useAuthStore = create<AuthState>()(
       // Helper pour charger le profile_type
       const fetchProfileType = async (userId: string, forceRefresh = false) => {
         try {
-
           // Vérifier si c'est un admin (lire directement le store admin)
           if (useAdminStore.getState().admin?.id) {
             return {
@@ -120,7 +120,6 @@ export const useAuthStore = create<AuthState>()(
 
           // Sinon, récupérer depuis business_profiles
           try {
-
             // Timeout plus tolérant (30s) car en arrière-plan les navigateurs throttlent les timers/fetchs.
             // Si l'onglet est inactif, une requête peut légitimement dépasser 10s. Mieux vaut attendre
             // une vraie réponse que de rétrograder l'utilisateur par erreur.
@@ -154,7 +153,9 @@ export const useAuthStore = create<AuthState>()(
             } catch (timeoutError: any) {
               clearTimeout(timeoutId);
               if (timeoutError?.message?.includes('Timeout')) {
-                log.error("⏱️ Timeout lors de la requête business_profiles — conservation de l'état connu");
+                log.error(
+                  "⏱️ Timeout lors de la requête business_profiles — conservation de l'état connu",
+                );
                 return getPreservedStateOnError(cachedProfileType);
               }
               throw timeoutError;
@@ -201,7 +202,6 @@ export const useAuthStore = create<AuthState>()(
               data.verification_status !== 'verified' && data.verification_status !== 'approved';
 
             if (isPending) {
-
               // Retourner le profileType mais indiquer qu'ils ont besoin d'approbation
               return {
                 profileType: data.profile_type,
@@ -335,7 +335,6 @@ export const useAuthStore = create<AuthState>()(
               shouldOnboard = !result.onboardingCompleted;
               needsApproval = result.needsApproval || false;
               validationStatus = result.validationStatus;
-
             } catch (error) {
               log.error({ error }, '❌ Auth listener error');
               // En cas d'erreur inattendue, conserver l'état actuel du store plutôt
@@ -424,7 +423,9 @@ export const useAuthStore = create<AuthState>()(
                 log.error({ profileError }, 'Error fetching profile type');
                 // Si timeout, continuer avec des valeurs par défaut
                 if (profileError?.message?.includes('Timeout')) {
-                  log.warn("⏱️ Timeout lors de l'initialisation, utilisation de valeurs par défaut");
+                  log.warn(
+                    "⏱️ Timeout lors de l'initialisation, utilisation de valeurs par défaut",
+                  );
                 }
                 // Continuer sans profileType si il y a une erreur
               }
@@ -543,7 +544,6 @@ export const useAuthStore = create<AuthState>()(
 
           set({ loading: true });
           try {
-
             // Forcer le refresh depuis la DB (forceRefresh court-circuite les portes du cache)
             const {
               profileType,
@@ -562,7 +562,6 @@ export const useAuthStore = create<AuthState>()(
               validationStatus,
               loading: false,
             });
-
           } catch (error) {
             log.error({ error }, '❌ Error refreshing user status');
             set({ loading: false });

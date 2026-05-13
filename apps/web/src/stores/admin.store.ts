@@ -1,12 +1,11 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+import { logger } from '../lib/logger';
 import { adminService } from '../services/admin.service';
 import { AdminProfile } from '../types/admin';
-import { logger } from '../lib/logger';
 
 const log = logger.child({ module: 'admin.store' });
-
 
 interface AdminState {
   admin: AdminProfile | null;

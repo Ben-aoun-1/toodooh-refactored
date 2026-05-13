@@ -1,9 +1,8 @@
+import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { AdminProfile, AdminSignUpData, AdminDashboardStats, AdminActivity } from '../types/admin';
-import { logger } from '../lib/logger';
 
 const log = logger.child({ module: 'admin.service' });
-
 
 // Fonction pour mapper les erreurs admin
 const mapAdminError = (error: any): string => {
@@ -29,7 +28,6 @@ export const adminService = {
   // Authentification
   async login(email: string, password: string): Promise<AdminProfile> {
     try {
-
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -42,7 +40,6 @@ export const adminService = {
       if (!data.user) {
         throw new Error('Aucun utilisateur trouvé');
       }
-
 
       // Vérifier si l'utilisateur est un admin
       const { data: adminProfile, error: profileError } = await supabase
@@ -59,7 +56,6 @@ export const adminService = {
       if (!adminProfile) {
         throw new Error("Accès refusé. Ce compte n'est pas autorisé.");
       }
-
 
       // Mettre à jour la dernière connexion
       await supabase
@@ -91,7 +87,6 @@ export const adminService = {
         return null;
       }
 
-
       const { data: adminProfile, error } = await supabase
         .from('admin_profiles')
         .select('*')
@@ -118,7 +113,6 @@ export const adminService = {
   // Gestion des admins
   async createAdmin(adminData: AdminSignUpData, createdBy: string): Promise<AdminProfile> {
     try {
-
       // Créer l'utilisateur auth avec signUp
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: adminData.email,
@@ -139,7 +133,6 @@ export const adminService = {
       if (!authData.user) {
         throw new Error('Failed to create user');
       }
-
 
       // Créer le profil admin
       const { data: adminProfile, error: profileError } = await supabase

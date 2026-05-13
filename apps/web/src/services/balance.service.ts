@@ -1,8 +1,7 @@
-import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
+import { supabase } from '../lib/supabase';
 
 const log = logger.child({ module: 'balance.service' });
-
 
 export interface BalanceInfo {
   available_balance: number;
@@ -27,7 +26,6 @@ class BalanceService {
    */
   async getUserBalance(userId: string): Promise<number> {
     try {
-
       const { data, error } = await supabase.rpc('get_user_balance', {
         p_user_id: userId,
       });
@@ -116,7 +114,6 @@ class BalanceService {
    */
   async checkCampaignBalance(campaignId: string): Promise<CampaignBalanceCheck | null> {
     try {
-
       const { data, error } = await supabase.rpc('check_campaign_balance', {
         p_campaign_id: campaignId,
       });

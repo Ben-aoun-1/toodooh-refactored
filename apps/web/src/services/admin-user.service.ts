@@ -1,8 +1,7 @@
-import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
+import { supabase } from '../lib/supabase';
 
 const log = logger.child({ module: 'admin-user.service' });
-
 
 export interface AdminUser {
   id: string;
@@ -37,7 +36,6 @@ export const adminUserService = {
   // Récupérer tous les utilisateurs
   async getUsers(): Promise<AdminUser[]> {
     try {
-
       // Récupérer les données de business_profiles (en excluant les admins)
       const { data, error } = await supabase
         .from('business_profiles')
@@ -61,7 +59,6 @@ export const adminUserService = {
 
       // Filtrer les admins de la liste
       const filteredData = (data || []).filter((u) => !adminUserIds.has(u.user_id));
-
 
       // Transformer les données pour correspondre à l'interface AdminUser
       const transformedUsers: AdminUser[] = filteredData.map((user) => ({
@@ -161,7 +158,6 @@ export const adminUserService = {
   // Approuver un utilisateur
   async approveUser(userId: string, adminId?: string, notes?: string): Promise<boolean> {
     try {
-
       const updateData: any = {
         status: 'approved',
         verification_status: 'approved', // ✅ IMPORTANT : Mettre à jour verification_status aussi
@@ -198,7 +194,6 @@ export const adminUserService = {
   // Rejeter un utilisateur
   async rejectUser(userId: string, adminId?: string, notes?: string): Promise<boolean> {
     try {
-
       const updateData: any = {
         status: 'rejected',
         verification_status: 'rejected', // ✅ IMPORTANT : Mettre à jour verification_status aussi
@@ -283,7 +278,6 @@ export const adminUserService = {
   // Supprimer complètement un utilisateur
   async deleteUser(userId: string): Promise<boolean> {
     try {
-
       // 1. Récupérer le user_id depuis business_profiles
       const { data: businessProfile, error: profileError } = await supabase
         .from('business_profiles')
@@ -365,7 +359,6 @@ export const adminUserService = {
         return false;
       }
 
-
       // Vérifier que le profil a bien été supprimé
       const { data: checkProfile, error: checkError } = await supabase
         .from('business_profiles')
@@ -377,7 +370,6 @@ export const adminUserService = {
         log.error({ checkProfile }, '❌ ERREUR : Le profil existe toujours après suppression !');
         return false;
       }
-
 
       // 3. Note : L'utilisateur d'authentification n'est pas supprimé car cela nécessite
       // des permissions service_role qui ne sont pas disponibles côté client.

@@ -46,6 +46,7 @@ import ariane6 from '../assets/ariane/6.png';
 import ariane6s from '../assets/ariane/6s.png';
 import panierPng from '../assets/panier.png';
 import { useAdvertiserGlobalConfig } from '../hooks/useAdvertiserGlobalConfig';
+import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { authService } from '../services/auth.service';
 import { balanceService } from '../services/balance.service';
@@ -70,10 +71,8 @@ import {
 import { useAuthStore } from '../stores/auth.store';
 import type { BusinessSector } from '../types/auth';
 import type { SpecialEvent } from '../types/event';
-import { logger } from '../lib/logger';
 
 const log = logger.child({ module: 'NewCampaign' });
-
 
 const ARIANE_ICONS = [ariane1, ariane2, ariane3, ariane4, ariane5, ariane6] as const;
 const ARIANE_ICONS_DONE = [ariane1s, ariane2s, ariane3s, ariane4s, ariane5s, ariane6s] as const;
@@ -623,7 +622,6 @@ export default function NewCampaign() {
 
   const saveCampaignDraft = async (videoId?: string, isVideoValidated: boolean = false) => {
     try {
-
       // Validation des champs obligatoires
       if (!formData.campaignName || formData.campaignName.trim() === '') {
         throw new Error('Le nom de la campagne est obligatoire');
@@ -670,7 +668,6 @@ export default function NewCampaign() {
           ? Math.max(...geographicZones.map((zone) => zone.radius))
           : radius;
 
-
       // Calculer le budget à utiliser : utiliser adjustedBudget si disponible, sinon calculer à partir des impressions
       const budgetToSave = adjustedBudget;
       const maxImpSave = calculateBudgetAndImpressions.impressions;
@@ -699,7 +696,6 @@ export default function NewCampaign() {
         },
         draftCampaignId || undefined,
       );
-
 
       if (!draftCampaignId) {
         setDraftCampaignId(campaign.id);
@@ -1391,7 +1387,6 @@ export default function NewCampaign() {
     }
 
     try {
-
       // Récupérer tous les événements actifs
       const { data, error } = await supabase
         .from('special_events')
@@ -1400,12 +1395,9 @@ export default function NewCampaign() {
 
       if (error) {
         log.error({ error }, '❌ Erreur lors de la récupération des événements');
-        log.error({ message: error.message,
-          details: error.details,
-          hint: error.hint, }, 'Détails');
+        log.error({ message: error.message, details: error.details, hint: error.hint }, 'Détails');
         return;
       }
-
 
       if (!data || data.length === 0) {
         return;
@@ -1420,7 +1412,6 @@ export default function NewCampaign() {
 
         // Vérifier le chevauchement
         const hasOverlap = eventStart <= campaignEnd && eventEnd >= campaignStart;
-
 
         return hasOverlap;
       });

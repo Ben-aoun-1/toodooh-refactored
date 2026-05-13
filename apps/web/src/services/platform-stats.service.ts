@@ -1,3 +1,4 @@
+import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import {
   PlatformGlobalStats,
@@ -7,24 +8,20 @@ import {
   TopPerformingScreen,
   RecentActivity,
 } from '../types/platform-stats';
-import { logger } from '../lib/logger';
 
 const log = logger.child({ module: 'platform-stats.service' });
-
 
 export const platformStatsService = {
   // Récupérer les statistiques globales
   async getGlobalStats(): Promise<PlatformGlobalStats | null> {
     try {
-
       // Essayer d'abord avec RPC
       try {
         const { data, error } = await supabase.rpc('get_platform_global_stats');
         if (!error && data) {
           return data[0];
         }
-      } catch (rpcError) {
-      }
+      } catch (rpcError) {}
 
       // Fallback: Requêtes directes
       const [users, screens, campaigns, videos, events] = await Promise.all([
@@ -84,15 +81,13 @@ export const platformStatsService = {
   // Récupérer les statistiques de revenus
   async getRevenueStats(): Promise<PlatformRevenueStats | null> {
     try {
-
       // Essayer avec RPC
       try {
         const { data, error } = await supabase.rpc('get_platform_revenue_stats');
         if (!error && data) {
           return data[0];
         }
-      } catch (rpcError) {
-      }
+      } catch (rpcError) {}
 
       // Fallback: Requêtes directes
       const { data: screensData } = await supabase
@@ -128,15 +123,13 @@ export const platformStatsService = {
   // Récupérer le taux d'occupation des écrans
   async getOccupancyStats(): Promise<ScreensOccupancyStats | null> {
     try {
-
       // Essayer avec RPC
       try {
         const { data, error } = await supabase.rpc('get_screens_occupancy_rate');
         if (!error && data) {
           return data[0];
         }
-      } catch (rpcError) {
-      }
+      } catch (rpcError) {}
 
       // Fallback: Requêtes directes
       const { data: screensData } = await supabase.from('screens').select('status, is_online');
@@ -164,15 +157,13 @@ export const platformStatsService = {
   // Récupérer les performances des campagnes
   async getCampaignsPerformance(): Promise<CampaignsPerformance | null> {
     try {
-
       // Essayer avec RPC
       try {
         const { data, error } = await supabase.rpc('get_campaigns_performance');
         if (!error && data) {
           return data[0];
         }
-      } catch (rpcError) {
-      }
+      } catch (rpcError) {}
 
       // Fallback: Requêtes directes
       const { data: campaignsData } = await supabase
@@ -214,7 +205,6 @@ export const platformStatsService = {
   // Récupérer les écrans les plus performants
   async getTopScreens(limit: number = 5): Promise<TopPerformingScreen[]> {
     try {
-
       // Essayer avec RPC
       try {
         const { data, error } = await supabase.rpc('get_top_performing_screens', {
@@ -223,8 +213,7 @@ export const platformStatsService = {
         if (!error && data) {
           return data;
         }
-      } catch (rpcError) {
-      }
+      } catch (rpcError) {}
 
       // Fallback: Requêtes directes avec jointure
       const { data: screensData } = await supabase
@@ -273,7 +262,6 @@ export const platformStatsService = {
   // Récupérer l'activité récente
   async getRecentActivity(limit: number = 10): Promise<RecentActivity[]> {
     try {
-
       const { data, error } = await supabase.rpc('get_recent_platform_activity', {
         limit_count: limit,
       });

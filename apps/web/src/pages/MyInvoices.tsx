@@ -11,13 +11,12 @@ import {
 } from 'lucide-react';
 import { useEffect, useState, useMemo } from 'react';
 
+import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { generateInvoicePDF } from '../services/invoice-pdf.service';
 import { useAuthStore } from '../stores/auth.store';
-import { logger } from '../lib/logger';
 
 const log = logger.child({ module: 'MyInvoices' });
-
 
 export default function MyInvoices() {
   const user = useAuthStore((state) => state.user);

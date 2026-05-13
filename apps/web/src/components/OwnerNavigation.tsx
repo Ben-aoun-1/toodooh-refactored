@@ -30,13 +30,12 @@ import financeIcon from '../assets/sidebar/portefeuille.png';
 import financeIconActive from '../assets/sidebar/portefeuilles.png';
 import supportIcon from '../assets/support.png';
 import supportIconActive from '../assets/supports.png';
+import { logger } from '../lib/logger';
 import { authService } from '../services/auth.service';
 import { useAuthStore } from '../stores/auth.store';
 import type { BusinessProfile } from '../types/auth';
-import { logger } from '../lib/logger';
 
 const log = logger.child({ module: 'OwnerNavigation' });
-
 
 const APPOINTMENT_OBJECTIVES_FALLBACK = [
   'Renseignements',
@@ -182,7 +181,6 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
   }, []);
 
   const handleLogout = async () => {
-
     try {
       await logout();
 

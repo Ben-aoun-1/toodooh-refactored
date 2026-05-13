@@ -2,11 +2,10 @@ import { Bell, CheckCircle2, Settings, Video, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
+import { supabase } from '../lib/supabase';
 
 const log = logger.child({ module: 'AdvertiserNotificationsBell' });
-
 
 type AdvertiserNotificationKind = 'account_approved' | 'video_approved';
 
@@ -107,10 +106,16 @@ export default function AdvertiserNotificationsBell({ userId, emphasized = false
       });
 
       if (campaignsRes.error) {
-        log.error({ error: campaignsRes.error }, 'Erreur chargement campagnes pour notifications annonceur');
+        log.error(
+          { error: campaignsRes.error },
+          'Erreur chargement campagnes pour notifications annonceur',
+        );
       }
       if (notificationsRes.error) {
-        log.error({ error: notificationsRes.error }, 'Erreur chargement user_notifications annonceur');
+        log.error(
+          { error: notificationsRes.error },
+          'Erreur chargement user_notifications annonceur',
+        );
       }
       if (readsRes.error) {
         log.error({ error: readsRes.error }, 'Erreur chargement user_notification_reads annonceur');

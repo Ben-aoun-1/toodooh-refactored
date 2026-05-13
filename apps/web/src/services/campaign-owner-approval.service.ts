@@ -1,8 +1,7 @@
-import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
+import { supabase } from '../lib/supabase';
 
 const log = logger.child({ module: 'campaign-owner-approval.service' });
-
 
 export interface CampaignOwnerApproval {
   id: string;

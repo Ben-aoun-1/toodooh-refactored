@@ -71,18 +71,9 @@ import matchImg from '../assets/match.png';
 import paramIcon from '../assets/param.png';
 import paramIconActive from '../assets/params.png';
 import agendaIcon from '../assets/sidebar/agenda.png';
+import agendaIconActive from '../assets/sidebar/agendas.png';
 import campagneIcon from '../assets/sidebar/campagnes.png';
-import dashboardIcon from '../assets/sidebar/dashboard.png';
-import logoCompany from '../assets/sidebar/logo.png';
-import { authService } from '../services/auth.service';
-import { balanceService } from '../services/balance.service';
-import { useAuthStore } from '../stores/auth.store';
-import { campaignService } from '../services/campaign.service';
 
-import CartPage from './CartPage';
-import Events from './Events';
-import MyCampaigns from './MyCampaigns';
-import NewCampaign from './NewCampaign';
 import Parcs from './Parcs';
 import Perfor from './Perfor';
 import UserProfile from './UserProfile';
@@ -90,23 +81,22 @@ import MyRecharges from './MyRecharges';
 
 import dashboardIconActive from '../assets/sidebar/dashboards.png';
 import campagneIconActive from '../assets/sidebar/campagness.png';
-import agendaIconActive from '../assets/sidebar/agendas.png';
+import dashboardIcon from '../assets/sidebar/dashboard.png';
+import logoCompany from '../assets/sidebar/logo.png';
 import performanceIcon from '../assets/sidebar/performance.png';
 import performanceIconActive from '../assets/sidebar/performances.png';
 import financeIcon from '../assets/sidebar/portefeuille.png';
 import financeIconActive from '../assets/sidebar/portefeuilles.png';
-import supportIcon from '../assets/support.png';
-import supportIconActive from '../assets/supports.png';
 import smart3Icon from '../assets/smart3.png';
 import statIcon1 from '../assets/stats/1.png';
 import statIcon2 from '../assets/stats/2.png';
 import statIcon3 from '../assets/stats/3.png';
 import statIcon4 from '../assets/stats/4.png';
 import statIcon5 from '../assets/stats/5.png';
+import supportIcon from '../assets/support.png';
+import supportIconActive from '../assets/supports.png';
 
-import OnboardingModal from './Onboarding';
 
-import { supabase } from '../lib/supabase';
 
 import MyInvoices from './MyInvoices';
 import MyClients from './MyClients';
@@ -115,9 +105,17 @@ import { eventsService } from '../services/events.service';
 import type { SpecialEvent } from '../types/event';
 import AdvertiserNotificationsBell from '../components/AdvertiserNotificationsBell';
 import { logger } from '../lib/logger';
+import { supabase } from '../lib/supabase';
+import { authService } from '../services/auth.service';
+import { balanceService } from '../services/balance.service';
+import { useAuthStore } from '../stores/auth.store';
+import CartPage from './CartPage';
+import Events from './Events';
+import MyCampaigns from './MyCampaigns';
+import NewCampaign from './NewCampaign';
+import OnboardingModal from './Onboarding';
 
 const log = logger.child({ module: 'Dashboard' });
-
 
 const APPOINTMENT_OBJECTIVES_FALLBACK = [
   'Renseignements',
@@ -349,8 +347,14 @@ export default function Dashboard() {
   }, [user?.id]); // Utiliser user?.id au lieu de user pour éviter les re-renders
 
   // Debug logs
-  useEffect(() => {
-  }, [needsApproval, validationStatus, isDisabled, onboardingCompleted, profileType, user]);
+  useEffect(() => {}, [
+    needsApproval,
+    validationStatus,
+    isDisabled,
+    onboardingCompleted,
+    profileType,
+    user,
+  ]);
 
   const [runTour, setRunTour] = useState(false);
   const [tourStepIndex, setTourStepIndex] = useState(0);
@@ -749,7 +753,6 @@ export default function Dashboard() {
 
   const handleLogout = async () => {
     try {
-
       // Nettoyer le localStorage
       localStorage.removeItem('onboardingCompleted');
       localStorage.removeItem('justOnboarded');
@@ -851,7 +854,6 @@ export default function Dashboard() {
           log.error({ error }, 'Erreur lors de la mise à jour onboarding_completed');
           onboardingCheckRef.current = false; // Réessayer en cas d'erreur
         } else {
-
           // Recharger l'état onboarding_completed
           setOnboardingCompleted(true);
         }

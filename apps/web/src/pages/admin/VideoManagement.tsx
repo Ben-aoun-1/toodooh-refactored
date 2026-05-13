@@ -4,13 +4,12 @@ import { toast } from 'react-hot-toast';
 import { useLocation } from 'react-router-dom';
 
 import AdminLayout from '../../components/admin/AdminLayout';
+import { logger } from '../../lib/logger';
 import { adminVideoService } from '../../services/admin-video.service';
 import { useAdminStore } from '../../stores/admin.store';
 import { Video, VideoValidationStats } from '../../types/video';
-import { logger } from '../../lib/logger';
 
 const log = logger.child({ module: 'VideoManagement' });
-
 
 export default function VideoManagement() {
   const { admin } = useAdminStore();

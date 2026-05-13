@@ -2,12 +2,11 @@ import { Bell, CalendarDays, FileText, Settings, X } from 'lucide-react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { campaignOwnerApprovalService } from '../services/campaign-owner-approval.service';
-import { logger } from '../lib/logger';
 
 const log = logger.child({ module: 'OwnerNotificationsBell' });
-
 
 type OwnerNotificationKind =
   | 'campaign_validated_reminder'

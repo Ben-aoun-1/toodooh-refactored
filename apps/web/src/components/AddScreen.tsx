@@ -2,11 +2,10 @@ import { Plus, X, Save, Info } from 'lucide-react';
 import React, { useState } from 'react';
 import { toast } from 'react-hot-toast';
 
-import { screensService, CreateScreenData } from '../services/screens.service';
 import { logger } from '../lib/logger';
+import { screensService, CreateScreenData } from '../services/screens.service';
 
 const log = logger.child({ module: 'AddScreen' });
-
 
 interface AddScreenProps {
   isOpen: boolean;

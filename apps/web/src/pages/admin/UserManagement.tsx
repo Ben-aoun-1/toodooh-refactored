@@ -21,13 +21,12 @@ import { toast } from 'react-hot-toast';
 import { useLocation } from 'react-router-dom';
 
 import AdminLayout from '../../components/admin/AdminLayout';
+import { logger } from '../../lib/logger';
 import { supabase } from '../../lib/supabase';
 import { adminUserService, AdminUser } from '../../services/admin-user.service';
 import { useAdminStore } from '../../stores/admin.store';
-import { logger } from '../../lib/logger';
 
 const log = logger.child({ module: 'UserManagement' });
-
 
 // Utiliser AdminUser du service
 
@@ -238,7 +237,6 @@ export default function UserManagement() {
         }
       }
 
-
       if (successCount > 0) {
         toast.success(`✅ ${successCount} utilisateur(s) supprimé(s) avec succès`);
       }
@@ -384,7 +382,6 @@ export default function UserManagement() {
       const filePrefix = isIndividualOwner ? 'cin' : 'rne';
       const filePath = `${filePrefix}_${authUserId}_admin_${Date.now()}.${ext}`;
 
-
       // Upload vers le bucket registres
       const { error: uploadError } = await supabase.storage
         .from('registres')
@@ -393,7 +390,6 @@ export default function UserManagement() {
       if (uploadError) {
         throw uploadError;
       }
-
 
       // Créer une URL signée
       const { data: signedData, error: signedError } = await supabase.storage
@@ -415,7 +411,6 @@ export default function UserManagement() {
       if (updateError) {
         throw updateError;
       }
-
 
       // Recharger les utilisateurs pour rafraîchir l'affichage
       const usersData = await adminUserService.getUsers();

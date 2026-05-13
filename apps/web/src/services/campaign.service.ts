@@ -1,4 +1,5 @@
 import { buildHybridAdjustedHourlyPlan, type HourlyPlanSlotInput } from '../lib/dooh/hourly-plan';
+import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 
 import {
@@ -25,10 +26,8 @@ import {
   type SpecialEventWindow,
 } from './dooh-hourly-grid';
 import { getDoohConfigNumbers } from './global-configuration.service';
-import { logger } from '../lib/logger';
 
 const log = logger.child({ module: 'campaign.service' });
-
 
 export interface CreateCampaignData {
   name: string;
@@ -89,7 +88,10 @@ async function getOccupiedRepetitionsByLocationSlotFromHourlyPlan(input: {
     .lte('diffusion_date', end);
 
   if (error) {
-    log.warn({ error }, 'getOccupiedRepetitionsByLocationSlotFromHourlyPlan: lecture indisponible, occupation concurrente à 0.');
+    log.warn(
+      { error },
+      'getOccupiedRepetitionsByLocationSlotFromHourlyPlan: lecture indisponible, occupation concurrente à 0.',
+    );
     return new Map<string, number>();
   }
 
@@ -111,7 +113,10 @@ async function getOccupiedRepetitionsByLocationSlotFromHourlyPlan(input: {
     .in('id', campaignIds)
     .in('status', ['active', 'pending']);
   if (campaignsError) {
-    log.warn({ campaignsError }, 'getOccupiedRepetitionsByLocationSlotFromHourlyPlan: lecture statuts campagnes indisponible, occupation concurrente à 0.');
+    log.warn(
+      { campaignsError },
+      'getOccupiedRepetitionsByLocationSlotFromHourlyPlan: lecture statuts campagnes indisponible, occupation concurrente à 0.',
+    );
     return new Map<string, number>();
   }
 
@@ -221,7 +226,7 @@ export const campaignService = {
           .from('campaign_screens')
           .insert(screenInserts);
         if (screensError) log.error({ screensError }, 'Erreur ajout écrans');
-        else ;
+        else;
       }
 
       // Synchroniser les catégories multiples (campaign_categories)
@@ -385,7 +390,6 @@ export const campaignService = {
         return;
       }
 
-
       // Récupérer les écrans avec leur location_id pour grouper par localité
       const { data: screensWithData, error: screensAffluenceError } = await supabase
         .from('screens')
@@ -505,7 +509,10 @@ export const campaignService = {
         .eq('is_active', true);
 
       if (specialEventsError) {
-        log.warn({ message: specialEventsError.message }, '⚠️ Lecture special_events impossible (RLS ?). Chevauchements événement ignorés pour la grille horaire');
+        log.warn(
+          { message: specialEventsError.message },
+          '⚠️ Lecture special_events impossible (RLS ?). Chevauchements événement ignorés pour la grille horaire',
+        );
       }
 
       const activeEvents: SpecialEventWindow[] = (specialEventsRows || [])
@@ -529,7 +536,10 @@ export const campaignService = {
           excludeCampaignId: campaignId,
         });
       } catch (e) {
-        log.warn({ e }, 'injectCampaignPublicationSchedule: lecture occupation depuis campaign_hourly_location_plan impossible, fallback campaign_screens.');
+        log.warn(
+          { e },
+          'injectCampaignPublicationSchedule: lecture occupation depuis campaign_hourly_location_plan impossible, fallback campaign_screens.',
+        );
         const { data: otherCsRows } = await supabase
           .from('campaign_screens')
           .select('campaign_id, screen_id, repetitions_per_hour')
@@ -719,7 +729,9 @@ export const campaignService = {
 
         // Si l'écran a une capacité d'impression, on doit avoir au moins 1 répétition
         if (screen.impressions_per_hour > 0 && repetitionsPerHour === 0) {
-          log.warn(`⚠️ Répétitions à 0 pour écran ${screen.id} avec capacité ${screen.impressions_per_hour}, forcer à 1`);
+          log.warn(
+            `⚠️ Répétitions à 0 pour écran ${screen.id} avec capacité ${screen.impressions_per_hour}, forcer à 1`,
+          );
           repetitionsPerHour = 1;
         }
 
@@ -746,7 +758,10 @@ export const campaignService = {
           excludeCampaignId: campaignId,
         });
       } catch (e) {
-        log.warn({ e }, 'injectCampaignPublicationSchedule: lecture occupation par créneau indisponible, occupation concurrente à 0.');
+        log.warn(
+          { e },
+          'injectCampaignPublicationSchedule: lecture occupation par créneau indisponible, occupation concurrente à 0.',
+        );
         occupiedRepetitionsBySlot = new Map<string, number>();
       }
 
@@ -858,7 +873,10 @@ export const campaignService = {
           scopeLocationIds: scopedLocationIds,
         });
       } catch (planWriteError) {
-        log.error({ planWriteError }, `❌ Échec écriture campaign_hourly_location_plan pour ${campaignId}`);
+        log.error(
+          { planWriteError },
+          `❌ Échec écriture campaign_hourly_location_plan pour ${campaignId}`,
+        );
         throw planWriteError;
       }
 
@@ -875,10 +893,15 @@ export const campaignService = {
       const nPlanning = planningTableParCreneau.length;
       if (nPlanning === 0) {
         const effPos = slotDetailRows.filter((s) => s.effectiveAffluence > 0).length;
-        log.warn({ creneaux_parcourus: slotDetailRows.length,
+        log.warn(
+          {
+            creneaux_parcourus: slotDetailRows.length,
             creneaux_affluence_effective_strictement_positive: effPos,
             localites: orderedLocationIds.length,
-            hourlyScale, }, '📋 Aucune ligne à afficher : tous les créneaux ont 0 impression facturable (événement, indispo, occupation, ou pas d’affluence sur ce (jour, heure)).');
+            hourlyScale,
+          },
+          '📋 Aucune ligne à afficher : tous les créneaux ont 0 impression facturable (événement, indispo, occupation, ou pas d’affluence sur ce (jour, heure)).',
+        );
       } else {
         const maxLines = 40;
         const lines = planningTableParCreneau
@@ -894,12 +917,10 @@ export const campaignService = {
         return sum + schedule.repetitions_per_hour;
       }, 0);
 
-
       // Mettre à jour chaque écran dans campaign_screens avec ses informations de répétition
       // Utiliser upsert pour créer ou mettre à jour
 
       for (const schedule of screenSchedules) {
-
         // Utiliser update d'abord, et si aucune ligne n'est affectée, utiliser insert
         // Cela évite les problèmes avec les contraintes UNIQUE
         const { data: existingScreen, error: checkError } = await supabase
@@ -933,12 +954,17 @@ export const campaignService = {
         } else {
           // L'écran n'existe pas, mais normalement il devrait exister
           // Si ce n'est pas le cas, on ne met pas à jour
-          log.warn(`⚠️ L'écran ${schedule.screen_id} n'existe pas dans campaign_screens pour la campagne ${campaignId}`);
+          log.warn(
+            `⚠️ L'écran ${schedule.screen_id} n'existe pas dans campaign_screens pour la campagne ${campaignId}`,
+          );
           continue;
         }
 
         if (screenUpdateError) {
-          log.error({ screenUpdateError }, `❌ Erreur lors de la mise à jour de l'écran ${schedule.screen_id}`);
+          log.error(
+            { screenUpdateError },
+            `❌ Erreur lors de la mise à jour de l'écran ${schedule.screen_id}`,
+          );
           log.error({ code: screenUpdateError.code }, 'Code');
           log.error({ message: screenUpdateError.message }, 'Message');
           log.error({ details: screenUpdateError.details }, 'Details');
@@ -946,7 +972,6 @@ export const campaignService = {
         } else {
         }
       }
-
 
       const aggregateImpressionsPerHour =
         totalSlotHours > 0 ? finalImpressions / totalSlotHours : 0;
@@ -1004,7 +1029,6 @@ export const campaignService = {
     },
   ): Promise<void> {
     try {
-
       // Réinjecter le planning avec les nouveaux écrans approuvés
       await this.injectCampaignPublicationSchedule(campaignId, {
         actorOwnerId: options?.actorOwnerId,

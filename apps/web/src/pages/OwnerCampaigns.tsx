@@ -21,14 +21,13 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 import OwnerNavigation from '../components/OwnerNavigation';
 import OwnerNotificationsBell from '../components/OwnerNotificationsBell';
+import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { campaignOwnerApprovalService } from '../services/campaign-owner-approval.service';
 import { getDoohConfigNumbers } from '../services/global-configuration.service';
 import { useAuthStore } from '../stores/auth.store';
-import { logger } from '../lib/logger';
 
 const log = logger.child({ module: 'OwnerCampaigns' });
-
 
 type OwnerCampaignStatusFilter =
   | 'all'
@@ -342,7 +341,10 @@ export default function OwnerCampaigns() {
               .select('business_name, logo_url')
               .in('business_name', advertiserClientNames);
           if (advertiserProfilesByNameError) {
-            log.warn({ advertiserProfilesByNameError }, 'OwnerCampaigns logo query by business_name failed');
+            log.warn(
+              { advertiserProfilesByNameError },
+              'OwnerCampaigns logo query by business_name failed',
+            );
           }
           (advertiserProfilesByName || []).forEach(
             (profile: { business_name?: string | null; logo_url?: string | null }) => {

@@ -19,14 +19,13 @@ import React, { useEffect, useState, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 
 import AnimatedLogo from '../components/AnimatedLogo';
+import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { authService } from '../services/auth.service';
 import { useAuthStore } from '../stores/auth.store';
 import type { BusinessProfile } from '../types/auth';
-import { logger } from '../lib/logger';
 
 const log = logger.child({ module: 'Onboarding' });
-
 
 interface OnboardingModalProps {
   onComplete: () => void;
@@ -213,7 +212,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
         throw uploadError;
       }
 
-
       // Créer une URL signée (valide pendant 7 jours = 604800 secondes)
       // Pour un bucket privé, on utilise createSignedUrl au lieu de getPublicUrl
       const { data: signedData, error: signedError } = await supabase.storage
@@ -224,7 +222,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
         throw signedError || new Error("Impossible de créer l'URL signée");
       }
 
-
       // Mettre à jour le profil avec l'URL signée du registre
       const { error: updateError } = await supabase
         .from('business_profiles')
@@ -234,7 +231,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
       if (updateError) {
         throw updateError;
       }
-
 
       setRegUrl(signedData.signedUrl);
       toast.success('✅ Registre de commerce ajouté avec succès !');
@@ -260,7 +256,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
         throw uploadError;
       }
 
-
       // Créer une URL signée
       const { data: signedData, error: signedError } = await supabase.storage
         .from('registres')
@@ -269,7 +264,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
       if (signedError || !signedData) {
         throw signedError || new Error("Impossible de créer l'URL signée");
       }
-
 
       // Mettre à jour le profil avec l'URL signée du CIN
       const { error: updateError } = await supabase
@@ -281,7 +275,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
         throw updateError;
       }
 
-
       setCinUrl(signedData.signedUrl);
       toast.success('✅ Document CIN ajouté avec succès !');
     } catch (error: any) {
@@ -292,7 +285,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
   };
 
   const nextStep = () => {
-
     // ✅ Tous les documents sont maintenant facultatifs ou peuvent être ajoutés plus tard
     // Aucune validation nécessaire à l'étape 3
 
@@ -310,7 +302,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
   };
 
   const skipStep = () => {
-
     // ✅ Tous les documents sont maintenant facultatifs, toutes les étapes peuvent être passées
 
     nextStep();
@@ -341,10 +332,8 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
         throw updateError;
       }
 
-
       // Marquer l'onboarding comme terminé dans le localStorage
       localStorage.setItem('onboardingCompleted', 'true');
-
 
       // ✅ Afficher le toast de succès
       toast.success(
@@ -651,7 +640,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
                           if (!confirmDelete) return;
 
                           try {
-
                             // Extraire le nom du fichier de l'URL
                             // L'URL est du type: https://.../storage/v1/object/public/registres/FILENAME.pdf
                             // Ou: https://.../storage/v1/object/registres/FILENAME.pdf
@@ -668,7 +656,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
                               fileName = regUrl.split('/').pop() || '';
                             }
 
-
                             if (!fileName) {
                               throw new Error("Impossible d'extraire le nom du fichier");
                             }
@@ -678,9 +665,11 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
                               .from('registres')
                               .remove([fileName]);
 
-
                             if (deleteError) {
-                              log.error({ deleteError }, '❌ Erreur lors de la suppression du fichier');
+                              log.error(
+                                { deleteError },
+                                '❌ Erreur lors de la suppression du fichier',
+                              );
                               log.error({ message: deleteError.message }, '   Code');
                               // On continue quand même pour supprimer l'URL de la DB
                             } else {
@@ -699,7 +688,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
                             if (updateError) {
                               throw updateError;
                             }
-
 
                             setRegUrl(null);
                             setFile(null);

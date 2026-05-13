@@ -1,4 +1,5 @@
 import { getAppUrl } from '../lib/app-url';
+import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import {
   SignUpData,
@@ -9,10 +10,8 @@ import {
   CompanySizeOption,
   SupportObjectiveOption,
 } from '../types/auth';
-import { logger } from '../lib/logger';
 
 const log = logger.child({ module: 'auth.service' });
-
 
 // Fonction pour mapper les erreurs techniques vers des messages fonctionnels
 const mapAuthError = (error: any): string => {
@@ -438,7 +437,6 @@ export const authService = {
       );
     }
 
-
     // 3. Attendre un court instant pour que l'utilisateur soit synchronisé dans la base de données
     await new Promise((resolve) => setTimeout(resolve, 1000)); // Attendre 1 seconde
 
@@ -485,7 +483,6 @@ export const authService = {
       is_admin: false,
     };
 
-
     // 5. Essayer de créer le profil avec plusieurs stratégies
     let profileCreated = false;
     let profileError = null;
@@ -506,7 +503,6 @@ export const authService = {
           const filePrefix = isIndividualOwner ? 'cin' : 'rne';
           const filePath = `${filePrefix}_${authData.user.id}_${Date.now()}.${ext}`;
 
-
           // Upload vers le bucket registres
           const { error: uploadError } = await supabase.storage
             .from('registres')
@@ -516,7 +512,6 @@ export const authService = {
             log.error({ uploadError }, '⚠️ Erreur upload document (non bloquante)');
             return;
           }
-
 
           // Créer une URL signée
           const { data: signedData, error: signedError } = await supabase.storage
@@ -633,8 +628,7 @@ export const authService = {
           profileCreated = true;
         } else {
         }
-      } catch (rpcError) {
-      }
+      } catch (rpcError) {}
     }
 
     // Si aucune stratégie n'a fonctionné, bloquer l'inscription et exposer
@@ -666,7 +660,6 @@ export const authService = {
       );
     }
 
-
     // Vérification finale anti-profil manquant
     await this.ensureBusinessProfileExists(authData.user.id, data.email);
 
@@ -695,7 +688,6 @@ export const authService = {
   },
 
   async updatePassword(password: string) {
-
     // Vérifier les critères de base
     if (password.length < 6) {
       throw new Error('Le mot de passe doit contenir au moins 6 caractères');
@@ -707,10 +699,15 @@ export const authService = {
 
     if (error) {
       log.error({ error }, '❌ Erreur lors de la mise à jour du mot de passe');
-      log.error({ message: error.message,
-        details: (error as any).details,
-        hint: (error as any).hint,
-        code: error.code, }, "Détails de l'erreur");
+      log.error(
+        {
+          message: error.message,
+          details: (error as any).details,
+          hint: (error as any).hint,
+          code: error.code,
+        },
+        "Détails de l'erreur",
+      );
       throw new Error(mapAuthError(error));
     }
 
@@ -718,14 +715,12 @@ export const authService = {
   },
 
   async updateBusinessProfile(updateData: Partial<BusinessProfile>) {
-
     const {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
       throw new Error('Utilisateur non connecté');
     }
-
 
     const { data, error } = await supabase
       .from('business_profiles')
@@ -735,10 +730,10 @@ export const authService = {
 
     if (error) {
       log.error({ error }, '❌ Erreur Supabase');
-      log.error({ message: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code, }, "Détails de l'erreur");
+      log.error(
+        { message: error.message, details: error.details, hint: error.hint, code: error.code },
+        "Détails de l'erreur",
+      );
       throw new Error(`Erreur lors de la mise à jour du profil: ${error.message}`);
     }
 
@@ -774,7 +769,6 @@ export const authService = {
   async getBusinessProfile(): Promise<BusinessProfile | null> {
     const user = await this.getCurrentUser();
     if (!user) throw new Error('Utilisateur non connecté');
-
 
     try {
       // 1. Essayer de récupérer le profil normalement

@@ -1,8 +1,7 @@
-import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
+import { supabase } from '../lib/supabase';
 
 const log = logger.child({ module: 'video-upload.service' });
-
 
 export interface UploadProgress {
   progress: number;
@@ -118,7 +117,6 @@ export const videoUploadService = {
       const fileName = `${timestamp}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
       const filePath = `campaign-videos/${user.id}_${fileName}`;
 
-
       // Upload le fichier dans le bucket 'media'
       const { data, error } = await supabase.storage.from('media').upload(filePath, file, {
         cacheControl: '3600',
@@ -148,7 +146,6 @@ export const videoUploadService = {
           path: filePath,
         };
       }
-
 
       return {
         url: signedUrlData.signedUrl,

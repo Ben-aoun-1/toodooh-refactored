@@ -1,8 +1,7 @@
-import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
+import { supabase } from '../lib/supabase';
 
 const log = logger.child({ module: 'screens.service' });
-
 
 export interface Screen {
   id: string;
@@ -157,7 +156,6 @@ class ScreensService {
         return [];
       }
 
-
       // Récupérer UNIQUEMENT les écrans du propriétaire connecté
       const { data, error } = await supabase
         .from('screens')
@@ -167,17 +165,15 @@ class ScreensService {
 
       if (error) {
         log.error({ error }, '❌ Erreur Supabase');
-        log.error({ message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code, }, "Détails de l'erreur");
+        log.error(
+          { message: error.message, details: error.details, hint: error.hint, code: error.code },
+          "Détails de l'erreur",
+        );
         throw error;
       }
 
-
       if (data && data.length > 0) {
-        data.forEach((screen, index) => {
-        });
+        data.forEach((screen, index) => {});
       } else {
       }
 
@@ -206,7 +202,6 @@ class ScreensService {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) throw new Error('Utilisateur non connecté');
-
 
       let coordinatesPoint: string | null = null;
       if (screenData.coordinates) {
@@ -239,15 +234,14 @@ class ScreensService {
         insertData.coordinates = coordinatesPoint;
       }
 
-
       const { data, error } = await supabase.from('screens').insert(insertData).select().single();
 
       if (error) {
         log.error({ error }, '❌ Erreur Supabase lors de la création');
-        log.error({ message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code, }, "Détails de l'erreur");
+        log.error(
+          { message: error.message, details: error.details, hint: error.hint, code: error.code },
+          "Détails de l'erreur",
+        );
         throw error;
       }
 

@@ -1,9 +1,8 @@
 import type { HourlyPlanSlotOutput } from '../lib/dooh/hourly-plan';
-import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
+import { supabase } from '../lib/supabase';
 
 const log = logger.child({ module: 'campaign-hourly-location-plan.service' });
-
 
 function toDateStr(d: Date): string {
   const y = d.getFullYear();
@@ -81,7 +80,10 @@ export async function getOccupiedRepetitionsByLocationFromHourlyPlan(input: {
     .lte('diffusion_date', end);
 
   if (error) {
-    log.warn({ error }, 'getOccupiedRepetitionsByLocationFromHourlyPlan: lecture indisponible, occupation concurrente à 0.');
+    log.warn(
+      { error },
+      'getOccupiedRepetitionsByLocationFromHourlyPlan: lecture indisponible, occupation concurrente à 0.',
+    );
     return new Map<string, number>();
   }
   const all = (rows ?? []) as Array<{
@@ -103,7 +105,10 @@ export async function getOccupiedRepetitionsByLocationFromHourlyPlan(input: {
     .in('id', campaignIds)
     .in('status', ['active', 'pending']);
   if (cErr) {
-    log.warn({ cErr }, 'getOccupiedRepetitionsByLocationFromHourlyPlan: lecture statuts campagnes indisponible, occupation concurrente à 0.');
+    log.warn(
+      { cErr },
+      'getOccupiedRepetitionsByLocationFromHourlyPlan: lecture statuts campagnes indisponible, occupation concurrente à 0.',
+    );
     return new Map<string, number>();
   }
   const allowed = new Set((campaigns ?? []).map((c: { id: string }) => c.id));

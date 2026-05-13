@@ -12,7 +12,6 @@ import { logger } from '../lib/logger';
 
 const log = logger.child({ module: 'dooh-location-affluence-engine' });
 
-
 export {
   MS_PER_DAY,
   jsGetDayToDbDayOfWeek,
@@ -400,16 +399,21 @@ export function computeDoohLocationAffluenceCampaign(
 
   const expectedSlots = dayCount * 24 * input.locationIds.length;
   if (slotsEvaluated !== expectedSlots) {
-    log.error({ slotsEvaluated,
-      expectedSlots,
-      dayCount,
-      locationCount: input.locationIds.length, }, '[DOOH affluence] ERROR: incohérence slots évalués.');
+    log.error(
+      { slotsEvaluated, expectedSlots, dayCount, locationCount: input.locationIds.length },
+      '[DOOH affluence] ERROR: incohérence slots évalués.',
+    );
   }
 
   if (input.uiExpectedDayCount != null && input.uiExpectedDayCount !== dayCount) {
-    log.error({ uiExpectedDayCount: input.uiExpectedDayCount,
-      engineDayCount: dayCount,
-      periode: { debut: formatLocalCalendarDate(startDay), fin: formatLocalCalendarDate(endDay) }, }, '[DOOH affluence] ERROR: dayCount UI != moteur.');
+    log.error(
+      {
+        uiExpectedDayCount: input.uiExpectedDayCount,
+        engineDayCount: dayCount,
+        periode: { debut: formatLocalCalendarDate(startDay), fin: formatLocalCalendarDate(endDay) },
+      },
+      '[DOOH affluence] ERROR: dayCount UI != moteur.',
+    );
   }
 
   if (totalImpressions <= 0) {
@@ -420,20 +424,25 @@ export function computeDoohLocationAffluenceCampaign(
       lignesScheduleTotal += slots.length;
       for (const s of slots) dowsSchedule.add(Number(s.day_of_week));
     }
-    log.error({ message:
-        lignesScheduleTotal === 0
-          ? 'Aucune ligne dans locationScheduleSlots (SELECT location_affluence_schedule / wizard vide pour ces localités).'
-          : daysWithPositiveRawSlots === 0
-            ? 'Aucun créneau grille avec estimated_impressions > 0 pour les jours calendaires parcourus : vérifier day_of_week en base (1=lun..7=dim) vs mapping jsGetDayToDbDayOfWeek, ou affluence à 0 partout.'
-            : 'Données grille présentes mais tout est annulé par événements, indisponibilités ou occupation (ou taux facturable 0).',
-      periode: { debut: formatLocalCalendarDate(startDay), fin: formatLocalCalendarDate(endDay) },
-      localites: input.locationIds,
-      lignes_schedule_total: lignesScheduleTotal,
-      day_of_week_presents_dans_donnees: [...dowsSchedule].sort((a, b) => a - b),
-      jours_avec_au_moins_un_slot_grille_positif: daysWithPositiveRawSlots,
-      slotsEvaluated,
-      totalAffluence_effective: totalAffluence,
-      max_billable_spot_rate_per_hour: rate, }, '[DOOH affluence] ERROR: 0 impression — aucune diffusion facturable calculée.');
+    log.error(
+      {
+        message:
+          lignesScheduleTotal === 0
+            ? 'Aucune ligne dans locationScheduleSlots (SELECT location_affluence_schedule / wizard vide pour ces localités).'
+            : daysWithPositiveRawSlots === 0
+              ? 'Aucun créneau grille avec estimated_impressions > 0 pour les jours calendaires parcourus : vérifier day_of_week en base (1=lun..7=dim) vs mapping jsGetDayToDbDayOfWeek, ou affluence à 0 partout.'
+              : 'Données grille présentes mais tout est annulé par événements, indisponibilités ou occupation (ou taux facturable 0).',
+        periode: { debut: formatLocalCalendarDate(startDay), fin: formatLocalCalendarDate(endDay) },
+        localites: input.locationIds,
+        lignes_schedule_total: lignesScheduleTotal,
+        day_of_week_presents_dans_donnees: [...dowsSchedule].sort((a, b) => a - b),
+        jours_avec_au_moins_un_slot_grille_positif: daysWithPositiveRawSlots,
+        slotsEvaluated,
+        totalAffluence_effective: totalAffluence,
+        max_billable_spot_rate_per_hour: rate,
+      },
+      '[DOOH affluence] ERROR: 0 impression — aucune diffusion facturable calculée.',
+    );
   }
 
   return {
