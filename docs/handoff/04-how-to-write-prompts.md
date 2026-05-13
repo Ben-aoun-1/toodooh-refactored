@@ -123,6 +123,10 @@ Run that, paste me the report, and I'll give you a real answer."
 
 This is the right discipline. You are not the source of truth about the code. Claude Code is.
 
+## Iterate sequential pattern-match-and-delete to convergence
+
+Sequential pattern-match-and-delete scripts must iterate to convergence — line shifts can create new adjacencies that weren't visible to the original grep. Commit 3 of Step 5 (Cat 2a + 2b purge: `console.error` followed on the next line by `throw` or `toast.*`) found 5 extras on a second pass after the first wave's deletions brought new pairings into adjacency (two consecutive `console.error+throw` blocks where the first deletion exposed the second pattern). Single-pass deletion is incomplete. The fix is small: re-run the grep on the modified tree and apply the second wave; iterate until the grep returns zero matches.
+
 ## Compact summary
 
 - You see the handoff. Claude Code sees the code.

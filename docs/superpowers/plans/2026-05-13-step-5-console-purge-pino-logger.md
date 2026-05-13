@@ -632,6 +632,8 @@ No commit fires here; this is a measurement-and-pause step. Commit 4 fires AFTER
 
   If the file does NOT have an `@/`-prefixed import yet, check `vite.config.ts` / `tsconfig.app.json` for the alias — TOODOOH uses `@/` for `apps/web/src/`. If for some reason the alias is missing in this file's path, use the relative path (`../lib/logger`).
 
+  > **Footnote (added post-Commit-4):** `@/` alias is **NOT** configured in `tsconfig` or Vite for `apps/web`. The example above as-written produced 46 TS2307 ("Cannot find module '@/lib/logger'") errors during Commit 4's typecheck. Correction applied mid-Commit-4 via a small `fix-logger-imports.mjs` pass that computed the proper relative path per file (`../lib/logger`, `../../lib/logger`, etc. depending on depth) and rewrote all 46 imports. The actual `module:` binding shipped uses the file basename without extension (e.g. `'auth.service'`, `'Dashboard'`) rather than the relative path with subdirectories — simpler and human-readable. Plan example retained as-written to keep the failure mode documented for future plan-writers.
+
 - [ ] **Step 2: skip files that have only `console.warn` and 0 `console.error`** if there's any awkwardness; warns can still use the child-logger but verify the import added correctly.
 
 ## Task 4.3: Replace `console.error` calls with `log.error`
