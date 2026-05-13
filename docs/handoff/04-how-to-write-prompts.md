@@ -79,6 +79,20 @@ The actions Claude Code can perform during discovery:
 
 Frame discovery requests as concrete commands or as questions Claude Code can answer with concrete commands. "Tell me what's in App.tsx" works because Claude Code knows how to read a file. "Tell me if the auth flow is OK" doesn't work — it's not a discoverable property.
 
+## Verification gates: capture baselines live
+
+Most plans end with a "verification gate" block — the exact tooling numbers a successful execution must hit (typecheck error count, lint problem count, test files passing, build chunk count, main-bundle gzip size). When you write that block, capture the *current* baseline numbers at plan-writing time by having Claude Code run the gate commands fresh:
+
+```
+pnpm typecheck && pnpm lint && pnpm test && pnpm --filter @toodooh/web build
+```
+
+Do not reuse numbers from a prior plan. The baseline drifts: chunk count moves when a route is added or a dependency is swapped, lint problem count moves whenever someone touches anti-pattern code, the bundle's gzipped size shifts on any non-tree-shaken import.
+
+Step 4's plan said the build emitted **113 chunks**; the actual baseline at execution time was **110**. Stale baselines like that create false alarms — the executor sees the verification fail, halts, asks the user, and the user has to confirm the plan was wrong rather than the work. Each false alarm erodes trust in the gate signal. A gate that the executor stops trusting stops protecting them.
+
+The fix is small and cheap: re-run the four commands at the moment you write the verification block and paste the live numbers in. If the plan sits for a few days before execution, the executor will compare against the original commit's numbers anyway — those are what the plan recorded, and a small drift is still informative.
+
 ## When NOT to require discovery
 
 Some prompts genuinely don't need it. Examples:
