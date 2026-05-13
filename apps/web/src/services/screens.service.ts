@@ -181,7 +181,6 @@ class ScreensService {
 
       return data || [];
     } catch (error) {
-      console.error('❌ Erreur lors de la récupération des écrans:', error);
       throw error;
     }
   }
@@ -194,7 +193,6 @@ class ScreensService {
       if (error) throw error;
       return data;
     } catch (error) {
-      console.error("Erreur lors de la récupération de l'écran:", error);
       throw error;
     }
   }
@@ -261,7 +259,6 @@ class ScreensService {
 
       return data;
     } catch (error) {
-      console.error("❌ Erreur lors de la création de l'écran:", error);
       throw error;
     }
   }
@@ -279,7 +276,6 @@ class ScreensService {
       if (error) throw error;
       return data;
     } catch (error) {
-      console.error("Erreur lors de la mise à jour de l'écran:", error);
       throw error;
     }
   }
@@ -291,7 +287,6 @@ class ScreensService {
 
       if (error) throw error;
     } catch (error) {
-      console.error("Erreur lors de la suppression de l'écran:", error);
       throw error;
     }
   }
@@ -308,7 +303,6 @@ class ScreensService {
       if (error) throw error;
       return data;
     } catch (error) {
-      console.error('Erreur lors de la récupération de la configuration:', error);
       throw error;
     }
   }
@@ -329,7 +323,6 @@ class ScreensService {
       if (error) throw error;
       return data;
     } catch (error) {
-      console.error('Erreur lors de la mise à jour de la configuration:', error);
       throw error;
     }
   }
@@ -350,7 +343,6 @@ class ScreensService {
       if (error) throw error;
       return data || [];
     } catch (error) {
-      console.error("Erreur lors de la récupération des périodes d'indisponibilité:", error);
       throw error;
     }
   }
@@ -377,7 +369,6 @@ class ScreensService {
       if (error) throw error;
       return data;
     } catch (error) {
-      console.error("Erreur lors de la création de la période d'indisponibilité:", error);
       throw error;
     }
   }
@@ -389,7 +380,6 @@ class ScreensService {
 
       if (error) throw error;
     } catch (error) {
-      console.error("Erreur lors de la suppression de la période d'indisponibilité:", error);
       throw error;
     }
   }
@@ -407,7 +397,6 @@ class ScreensService {
       if (error) throw error;
       return data || [];
     } catch (error) {
-      console.error('Erreur lors de la récupération des statistiques:', error);
       throw error;
     }
   }
@@ -432,7 +421,6 @@ class ScreensService {
       if (error) throw error;
       return data || [];
     } catch (error) {
-      console.error('Erreur lors de la récupération des alertes:', error);
       throw error;
     }
   }
@@ -459,7 +447,6 @@ class ScreensService {
       if (error) throw error;
       return data;
     } catch (error) {
-      console.error("Erreur lors de la résolution de l'alerte:", error);
       throw error;
     }
   }
@@ -477,7 +464,6 @@ class ScreensService {
       if (error) throw error;
       return data || [];
     } catch (error) {
-      console.error("Erreur lors de la récupération des logs d'activité:", error);
       throw error;
     }
   }
@@ -498,7 +484,6 @@ class ScreensService {
 
       if (error) throw error;
     } catch (error) {
-      console.error("Erreur lors de la création du log d'activité:", error);
       throw error;
     }
   }
@@ -510,7 +495,6 @@ class ScreensService {
 
       if (error) throw error;
     } catch (error) {
-      console.error("Erreur lors de la vérification des statuts d'indisponibilité:", error);
       throw error;
     }
   }
@@ -550,7 +534,6 @@ class ScreensService {
         alertsCount,
       };
     } catch (error) {
-      console.error('Erreur lors de la récupération des statistiques globales:', error);
       throw error;
     }
   }

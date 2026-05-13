@@ -118,7 +118,6 @@ export default function MyClients() {
         .order('created_at', { ascending: false });
       setClients(data || []);
     } catch (error) {
-      console.error("Erreur lors de l'ajout:", error);
       toast.error("Erreur lors de l'ajout du client");
     }
   };
@@ -145,7 +144,6 @@ export default function MyClients() {
         .order('created_at', { ascending: false });
       setClients(data || []);
     } catch (error) {
-      console.error('Erreur lors de la modification:', error);
       toast.error('Erreur lors de la modification du client');
     }
   };
@@ -170,7 +168,6 @@ export default function MyClients() {
         .order('created_at', { ascending: false });
       setClients(data || []);
     } catch (error) {
-      console.error('Erreur lors de la suppression:', error);
       toast.error('Erreur lors de la suppression du client');
     }
   };

@@ -70,7 +70,6 @@ export default function OwnerRevenue() {
       setPeriodRevenues(periods);
       hasLoadedData.current = true;
     } catch (error) {
-      console.error('Erreur chargement revenus:', error);
       toast.error('Erreur lors du chargement des données');
     } finally {
       setLoading(false);

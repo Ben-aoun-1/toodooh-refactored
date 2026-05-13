@@ -224,7 +224,6 @@ export default function RechargeManagement() {
       setShowCreateModal(false);
       loadData();
     } catch (error: any) {
-      console.error('Erreur création recharge:', error);
       toast.error(error.message || 'Erreur lors de la création de la recharge');
     }
   };

@@ -138,7 +138,6 @@ class ExportService {
 
       return fileName;
     } catch (error) {
-      console.error('❌ Erreur lors de la génération du PDF:', error);
       throw error;
     }
   }
@@ -251,7 +250,6 @@ class ExportService {
 
       return fileName;
     } catch (error) {
-      console.error('❌ Erreur lors de la génération du fichier Excel:', error);
       throw error;
     }
   }
@@ -348,7 +346,6 @@ class ExportService {
 
       return fileName;
     } catch (error) {
-      console.error("❌ Erreur lors de l'export complet:", error);
       throw error;
     }
   }

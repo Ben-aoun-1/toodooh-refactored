@@ -388,7 +388,6 @@ export const authService = {
     const { emailExists } = await this.checkSignupConflicts(normalizedEmail, normalizedPhone);
 
     if (emailExists) {
-      console.error('❌ Email déjà utilisé');
       throw new Error(
         '📧 Cette adresse email est déjà associée à un compte existant. Veuillez vous connecter ou utiliser une autre adresse.',
       );
@@ -411,7 +410,6 @@ export const authService = {
             "⚠️ fleet_owner: tax_number déjà utilisé, génération d'un matricule technique.",
           );
         } else {
-          console.error('❌ Matricule fiscal déjà utilisé');
           throw new Error(
             "🏢 Ce numéro de matricule fiscal est déjà enregistré dans notre système. Si c'est votre entreprise, veuillez vous connecter avec votre compte existant.",
           );
@@ -429,18 +427,15 @@ export const authService = {
     });
 
     if (signUpError) {
-      console.error("❌ Erreur Auth lors de l'inscription:", signUpError);
       throw new Error(mapAuthError(signUpError));
     }
 
     if (!authData.user) {
-      console.error('❌ Aucun utilisateur retourné par Supabase Auth');
       throw new Error('La création du compte a échoué. Veuillez réessayer.');
     }
 
     // Vérifier si l'utilisateur a déjà été créé (identité existante)
     if (authData.user.identities && authData.user.identities.length === 0) {
-      console.error('❌ Email déjà enregistré (identities vide)');
       throw new Error(
         '📧 Cette adresse email est déjà associée à un compte existant. Si c\'est votre compte, veuillez vous connecter. Si vous avez oublié votre mot de passe, utilisez la fonction "Mot de passe oublié".',
       );
@@ -733,7 +728,6 @@ export const authService = {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-      console.error('❌ Utilisateur non connecté');
       throw new Error('Utilisateur non connecté');
     }
 
@@ -806,7 +800,6 @@ export const authService = {
 
       return profile;
     } catch (error) {
-      console.error('Error in getBusinessProfile:', error);
       throw error;
     }
   },

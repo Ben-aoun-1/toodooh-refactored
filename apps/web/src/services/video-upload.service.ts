@@ -122,7 +122,6 @@ export const videoUploadService = {
       });
 
       if (error) {
-        console.error("❌ Erreur lors de l'upload:", error);
         throw error;
       }
 
@@ -168,13 +167,11 @@ export const videoUploadService = {
       const { error } = await supabase.storage.from('media').remove([path]);
 
       if (error) {
-        console.error('Erreur lors de la suppression:', error);
         throw error;
       }
 
       return true;
     } catch (error) {
-      console.error('Erreur lors de la suppression de la vidéo:', error);
       throw error;
     }
   },
@@ -227,13 +224,11 @@ export const videoUploadService = {
       }
 
       if (error) {
-        console.error("Erreur lors de la création de l'entrée vidéo:", error);
         throw error;
       }
 
       return data;
     } catch (error) {
-      console.error("Erreur lors de la création de l'entrée vidéo:", error);
       throw error;
     }
   },

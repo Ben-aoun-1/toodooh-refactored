@@ -461,7 +461,6 @@ export default function OwnerCampaigns() {
         setBrokenLogoCampaignIds(new Set());
         setCampaigns(cards.filter((c) => c.ownerLocationsCount > 0 || c.ownerScreensCount > 0));
       } catch (error) {
-        console.error('Erreur chargement campagnes proprietaire:', error);
         toast.error('Impossible de charger les campagnes');
         setCampaigns([]);
       } finally {
@@ -580,7 +579,6 @@ export default function OwnerCampaigns() {
       setSelectedCampaign((prev) => (prev ? { ...prev, approvalStatus: 'approved' } : prev));
       setShowApprovalSuccessModal(true);
     } catch (error) {
-      console.error('Erreur approbation campagne propriétaire:', error);
       toast.error('Impossible d’accepter la campagne');
     } finally {
       setProcessingDecision(null);
@@ -600,7 +598,6 @@ export default function OwnerCampaigns() {
       setShowRejectConfirmModal(false);
       closeDetailsDrawer();
     } catch (error) {
-      console.error('Erreur rejet campagne propriétaire:', error);
       toast.error('Impossible de refuser la campagne');
     } finally {
       setProcessingDecision(null);

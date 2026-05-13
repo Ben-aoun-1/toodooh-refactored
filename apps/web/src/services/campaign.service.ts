@@ -249,7 +249,6 @@ export const campaignService = {
 
       return campaignResult;
     } catch (error) {
-      console.error('Erreur lors de la sauvegarde de la campagne:', error);
       throw error;
     }
   },
@@ -283,7 +282,6 @@ export const campaignService = {
       if (error) throw error;
       return data;
     } catch (error) {
-      console.error('Erreur lors de la soumission de la campagne:', error);
       throw error;
     }
   },
@@ -1021,7 +1019,6 @@ export const campaignService = {
       } else {
       }
     } catch (error) {
-      console.error("❌ Erreur lors de l'injection du planning de publication:", error);
       throw error;
     }
   },
@@ -1040,7 +1037,6 @@ export const campaignService = {
         actorOwnerId: options?.actorOwnerId,
       });
     } catch (error) {
-      console.error('❌ Erreur lors du recalcul des répétitions:', error);
       throw error;
     }
   },

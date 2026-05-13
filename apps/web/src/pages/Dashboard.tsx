@@ -756,7 +756,6 @@ export default function Dashboard() {
       navigate('/login');
       toast.success('Déconnexion réussie');
     } catch (error: any) {
-      console.error('❌ Erreur lors de la déconnexion:', error);
       toast.error(error?.message || "Une erreur inattendue s'est produite");
       // En cas d'erreur, forcer la redirection
       navigate('/login');

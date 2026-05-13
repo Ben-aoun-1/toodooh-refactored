@@ -317,7 +317,6 @@ export const adminScreensService = {
         totalPages: Math.ceil((count || 0) / limit),
       };
     } catch (error) {
-      console.error('Erreur lors de la récupération des localités:', error);
       throw error;
     }
   },
@@ -367,8 +366,6 @@ export const adminScreensService = {
       const { data, error, count } = await query;
 
       if (error) {
-        console.error('Erreur lors de la récupération des écrans:', error);
-        console.error('Error details:', JSON.stringify(error, null, 2));
         throw error;
       }
 
@@ -403,7 +400,6 @@ export const adminScreensService = {
         totalPages,
       };
     } catch (error) {
-      console.error('Erreur lors de la récupération des écrans:', error);
       throw error;
     }
   },
@@ -479,7 +475,6 @@ export const adminScreensService = {
         .single();
 
       if (error) {
-        console.error("Erreur lors de la création de l'écran:", error);
         throw error;
       }
 
@@ -508,7 +503,6 @@ export const adminScreensService = {
         owner_business_name: owner?.business_name || 'N/A',
       };
     } catch (error) {
-      console.error("Erreur lors de la création de l'écran:", error);
       throw error;
     }
   },
@@ -530,7 +524,6 @@ export const adminScreensService = {
         .single();
 
       if (error) {
-        console.error("Erreur lors de la mise à jour de l'écran:", error);
         throw error;
       }
 
@@ -553,7 +546,6 @@ export const adminScreensService = {
         owner_business_name: owner?.business_name || 'N/A',
       };
     } catch (error) {
-      console.error("Erreur lors de la mise à jour de l'écran:", error);
       throw error;
     }
   },
@@ -564,13 +556,11 @@ export const adminScreensService = {
       const { error } = await supabase.from('screens').delete().eq('id', screenId);
 
       if (error) {
-        console.error("Erreur lors de la suppression de l'écran:", error);
         throw error;
       }
 
       return true;
     } catch (error) {
-      console.error("Erreur lors de la suppression de l'écran:", error);
       throw error;
     }
   },
@@ -593,7 +583,6 @@ export const adminScreensService = {
         .range(from, to);
 
       if (error) {
-        console.error("Erreur lors de la récupération des données d'affluence:", error);
         throw error;
       }
 
@@ -605,7 +594,6 @@ export const adminScreensService = {
         totalPages,
       };
     } catch (error) {
-      console.error("Erreur lors de la récupération des données d'affluence:", error);
       throw error;
     }
   },
@@ -643,13 +631,11 @@ export const adminScreensService = {
         .single();
 
       if (error) {
-        console.error("Erreur lors de la création des données d'affluence:", error);
         throw error;
       }
 
       return data;
     } catch (error) {
-      console.error("Erreur lors de la création des données d'affluence:", error);
       throw error;
     }
   },
@@ -668,13 +654,11 @@ export const adminScreensService = {
         .single();
 
       if (error) {
-        console.error("Erreur lors de la mise à jour des données d'affluence:", error);
         throw error;
       }
 
       return data;
     } catch (error) {
-      console.error("Erreur lors de la mise à jour des données d'affluence:", error);
       throw error;
     }
   },
@@ -685,13 +669,11 @@ export const adminScreensService = {
       const { error } = await supabase.from('screen_affluence_data').delete().eq('id', affluenceId);
 
       if (error) {
-        console.error("Erreur lors de la suppression des données d'affluence:", error);
         throw error;
       }
 
       return true;
     } catch (error) {
-      console.error("Erreur lors de la suppression des données d'affluence:", error);
       throw error;
     }
   },
@@ -704,7 +686,6 @@ export const adminScreensService = {
         .select('status, screen_type, is_online, monthly_revenue, total_revenue');
 
       if (error) {
-        console.error('Erreur lors de la récupération des statistiques:', error);
         throw error;
       }
 
@@ -733,7 +714,6 @@ export const adminScreensService = {
 
       return stats;
     } catch (error) {
-      console.error('Erreur lors de la récupération des statistiques:', error);
       throw error;
     }
   },
@@ -747,7 +727,6 @@ export const adminScreensService = {
         .select('owner_id');
 
       if (locationsError) {
-        console.error('Erreur lors de la récupération des localités:', locationsError);
         throw locationsError;
       }
 
@@ -766,13 +745,11 @@ export const adminScreensService = {
         .order('business_name');
 
       if (error) {
-        console.error('Erreur lors de la récupération des propriétaires:', error);
         throw error;
       }
 
       return data || [];
     } catch (error) {
-      console.error('Erreur lors de la récupération des propriétaires:', error);
       throw error;
     }
   },

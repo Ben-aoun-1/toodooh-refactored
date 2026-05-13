@@ -81,7 +81,6 @@ export default function OwnerStatementDetailPage() {
       const name = await exportService.exportOwnerStatementPdf({ detail, recipient });
       toast.success(`PDF enregistré : ${name}`);
     } catch (e) {
-      console.error(e);
       toast.error('Impossible de générer le PDF');
     } finally {
       setDownloading(false);

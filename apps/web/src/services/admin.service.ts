@@ -32,8 +32,6 @@ export const adminService = {
       });
 
       if (error) {
-        console.error('Auth error:', error);
-        console.error('Auth error details:', JSON.stringify(error, null, 2));
         throw new Error(`Erreur de connexion: ${error.message}`);
       }
 
@@ -51,7 +49,6 @@ export const adminService = {
         .single();
 
       if (profileError) {
-        console.error('Profile error:', profileError);
         throw new Error("Accès refusé. Ce compte n'est pas autorisé.");
       }
 
@@ -68,7 +65,6 @@ export const adminService = {
 
       return adminProfile;
     } catch (error: any) {
-      console.error('Login error:', error);
       throw new Error(error.message || 'Erreur de connexion');
     }
   },
@@ -133,7 +129,6 @@ export const adminService = {
       });
 
       if (authError) {
-        console.error('Auth error:', authError);
         throw authError;
       }
 
@@ -159,13 +154,11 @@ export const adminService = {
         .single();
 
       if (profileError) {
-        console.error('Profile error:', profileError);
         throw profileError;
       }
 
       return adminProfile;
     } catch (error: any) {
-      console.error('Create admin error:', error);
       throw new Error(mapAdminError(error));
     }
   },

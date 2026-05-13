@@ -151,7 +151,6 @@ export default function CampaignDetails() {
         }
       }
     } catch (error: any) {
-      console.error('Erreur chargement campagne:', error);
       toast.error('Erreur lors du chargement de la campagne');
     } finally {
       setLoading(false);

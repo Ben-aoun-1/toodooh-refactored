@@ -84,7 +84,6 @@ export default function AffluenceModal({ location, onClose }: AffluenceModalProp
           }),
         );
       } catch (error) {
-        console.error('Erreur chargement affluence localité:', error);
         toast.error("Erreur lors du chargement de l'affluence");
       } finally {
         setLoading(false);

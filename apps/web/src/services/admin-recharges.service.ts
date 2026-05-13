@@ -111,7 +111,6 @@ class AdminRechargesService {
         total: count || 0,
       };
     } catch (error) {
-      console.error('❌ Erreur récupération recharges:', error);
       throw error;
     }
   }
@@ -176,7 +175,6 @@ class AdminRechargesService {
       if (error) throw error;
 
     } catch (error) {
-      console.error('❌ Erreur validation recharge:', error);
       throw error;
     }
   }
@@ -201,7 +199,6 @@ class AdminRechargesService {
       if (error) throw error;
 
     } catch (error) {
-      console.error('❌ Erreur rejet recharge:', error);
       throw error;
     }
   }
@@ -226,7 +223,6 @@ class AdminRechargesService {
       if (error) throw error;
 
     } catch (error) {
-      console.error('❌ Erreur annulation recharge:', error);
       throw error;
     }
   }

@@ -41,8 +41,6 @@ export const adminUserService = {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('❌ Error fetching users:', error);
-        console.error('❌ Error details:', JSON.stringify(error, null, 2));
         throw new Error(`Erreur Supabase: ${error.message}`);
       }
 
@@ -93,7 +91,6 @@ export const adminUserService = {
 
       return transformedUsers;
     } catch (error) {
-      console.error('❌ Exception in getUsers:', error);
       throw error;
     }
   },

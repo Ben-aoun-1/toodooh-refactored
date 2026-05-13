@@ -55,7 +55,6 @@ export default function OwnerLocations() {
       setLoading(false);
       hasLoadedData.current = true; // ✅ Marquer comme chargé
     } catch (error) {
-      console.error('Erreur lors du chargement des écrans:', error);
       toast.error('Erreur lors du chargement des emplacements');
       setLoading(false);
     }

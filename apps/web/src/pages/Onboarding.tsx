@@ -68,7 +68,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
     try {
       await handleSubmit();
     } catch (error) {
-      console.error('❌ Erreur lors de la finalisation:', error);
       toast.error('Erreur lors de la finalisation');
     }
   };
@@ -207,7 +206,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
         .upload(filePath, file);
 
       if (uploadError) {
-        console.error('❌ Erreur upload:', uploadError);
         throw uploadError;
       }
 
@@ -219,7 +217,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
         .createSignedUrl(filePath, 604800); // 7 jours
 
       if (signedError || !signedData) {
-        console.error('❌ Erreur création URL signée:', signedError);
         throw signedError || new Error("Impossible de créer l'URL signée");
       }
 
@@ -231,7 +228,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
         .eq('user_id', user.id);
 
       if (updateError) {
-        console.error('❌ Erreur mise à jour profil:', updateError);
         throw updateError;
       }
 
@@ -239,7 +235,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
       setRegUrl(signedData.signedUrl);
       toast.success('✅ Registre de commerce ajouté avec succès !');
     } catch (error: any) {
-      console.error("❌ Erreur lors de l'upload du registre:", error);
       toast.error(`❌ Erreur lors de l'upload: ${error.message || 'Erreur inconnue'}`);
     } finally {
       setUploading(false);
@@ -258,7 +253,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
         .upload(filePath, cinFile);
 
       if (uploadError) {
-        console.error('❌ Erreur upload:', uploadError);
         throw uploadError;
       }
 
@@ -269,7 +263,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
         .createSignedUrl(filePath, 604800); // 7 jours
 
       if (signedError || !signedData) {
-        console.error('❌ Erreur création URL signée:', signedError);
         throw signedError || new Error("Impossible de créer l'URL signée");
       }
 
@@ -281,7 +274,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
         .eq('user_id', user.id);
 
       if (updateError) {
-        console.error('❌ Erreur mise à jour profil:', updateError);
         throw updateError;
       }
 
@@ -289,7 +281,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
       setCinUrl(signedData.signedUrl);
       toast.success('✅ Document CIN ajouté avec succès !');
     } catch (error: any) {
-      console.error("❌ Erreur lors de l'upload du CIN:", error);
       toast.error(`❌ Erreur lors de l'upload: ${error.message || 'Erreur inconnue'}`);
     } finally {
       setUploadingCin(false);
@@ -343,7 +334,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
         .eq('user_id', user.id);
 
       if (updateError) {
-        console.error('❌ Erreur lors de la mise à jour de onboarding_completed:', updateError);
         throw updateError;
       }
 
@@ -369,7 +359,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
       // ✅ Fermer le modal en dernier
       onComplete();
     } catch (error) {
-      console.error('❌ Erreur lors de la soumission:', error);
       toast.error('❌ Erreur lors de la soumission. Veuillez réessayer.');
       setSubmitting(false); // ✅ Réinitialiser submitting en cas d'erreur
       // NE PAS marquer comme terminé en cas d'erreur
@@ -677,7 +666,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
 
 
                             if (!fileName) {
-                              console.error("❌ Impossible d'extraire le nom du fichier de l'URL");
                               throw new Error("Impossible d'extraire le nom du fichier");
                             }
 
@@ -708,7 +696,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
                               .eq('user_id', user.id);
 
                             if (updateError) {
-                              console.error('❌ Erreur mise à jour profil:', updateError);
                               throw updateError;
                             }
 
@@ -719,7 +706,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
                               '✅ Document supprimé avec succès. Vous pouvez uploader un nouveau fichier.',
                             );
                           } catch (error: any) {
-                            console.error('❌ Erreur lors de la suppression:', error);
                             toast.error(
                               `❌ Erreur lors de la suppression: ${error.message || 'Erreur inconnue'}`,
                             );

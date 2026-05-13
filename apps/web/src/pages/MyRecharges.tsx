@@ -118,7 +118,6 @@ export default function MyRecharges() {
         merged.sort((a, b) => b.date.getTime() - a.date.getTime());
         setTransactions(merged);
       } catch (error) {
-        console.error('Error loading finances:', error);
         toast.error('Erreur lors du chargement');
       } finally {
         setLoading(false);
@@ -196,7 +195,6 @@ export default function MyRecharges() {
         .single();
 
       if (error) {
-        console.error('Error creating recharge:', error);
         toast.error('Erreur lors de la création de la recharge');
         return;
       }
@@ -205,7 +203,6 @@ export default function MyRecharges() {
       setNewRecharge({ amount: '', payment_method: 'card', description: '' });
       setShowNewRechargeModal(false);
     } catch (error) {
-      console.error('Error submitting recharge:', error);
       toast.error('Erreur lors de la soumission');
     } finally {
       setSubmitting(false);

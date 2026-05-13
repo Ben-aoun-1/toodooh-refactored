@@ -107,7 +107,6 @@ export default function CreateAdmin() {
         description: `Création d'un ${formData.role === 'admin' ? 'administrateur' : 'modérateur'}: ${formData.first_name} ${formData.last_name}`,
       });
     } catch (error: any) {
-      console.error('Error creating admin:', error);
       toast.error(error.message || 'Erreur lors de la création');
     } finally {
       setLoading(false);

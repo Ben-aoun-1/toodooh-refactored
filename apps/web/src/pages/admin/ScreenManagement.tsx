@@ -35,7 +35,6 @@ export default function ScreenManagement() {
       const ownersData = await adminScreensService.getOwners();
       setOwners(ownersData.map((o) => ({ id: o.user_id, name: o.business_name })));
     } catch (error) {
-      console.error('Error loading owners:', error);
       toast.error('Erreur lors du chargement des propriétaires');
     }
   };
@@ -52,7 +51,6 @@ export default function ScreenManagement() {
       setTotal(result.total);
       setTotalPages(result.totalPages);
     } catch (error: any) {
-      console.error('Error loading locations:', error);
       toast.error('Erreur lors du chargement des localités');
     } finally {
       setLoading(false);

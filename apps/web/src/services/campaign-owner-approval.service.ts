@@ -166,7 +166,6 @@ export const campaignOwnerApprovalService = {
 
       return pendingCampaigns;
     } catch (error) {
-      console.error('Erreur lors de la récupération des campagnes en attente:', error);
       throw error;
     }
   },
@@ -210,7 +209,6 @@ export const campaignOwnerApprovalService = {
         actorOwnerId: ownerId,
       });
     } catch (error) {
-      console.error("Erreur lors de l'approbation automatique:", error);
       throw error;
     }
   },
@@ -241,7 +239,6 @@ export const campaignOwnerApprovalService = {
         actorOwnerId: ownerId,
       });
     } catch (error) {
-      console.error("Erreur lors de l'approbation de la campagne:", error);
       throw error;
     }
   },
@@ -275,7 +272,6 @@ export const campaignOwnerApprovalService = {
         actorOwnerId: ownerId,
       });
     } catch (error) {
-      console.error('Erreur lors du rejet de la campagne:', error);
       throw error;
     }
   },

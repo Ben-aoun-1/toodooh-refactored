@@ -152,7 +152,6 @@ export default function UserManagement() {
       await loadUsers();
       clearSelection();
     } catch (error: any) {
-      console.error("Erreur lors de l'approbation en lot:", error);
       toast.error(`❌ Erreur lors de l'approbation: ${error.message}`);
     } finally {
       setBulkActionLoading(false);
@@ -188,7 +187,6 @@ export default function UserManagement() {
       await loadUsers();
       clearSelection();
     } catch (error: any) {
-      console.error('Erreur lors du rejet en lot:', error);
       toast.error(`❌ Erreur lors du rejet: ${error.message}`);
     } finally {
       setBulkActionLoading(false);
@@ -247,7 +245,6 @@ export default function UserManagement() {
       await loadUsers();
       clearSelection();
     } catch (error: any) {
-      console.error('Erreur lors de la suppression en lot:', error);
       toast.error(`❌ Erreur lors de la suppression: ${error.message}`);
     } finally {
       setBulkActionLoading(false);
@@ -263,8 +260,6 @@ export default function UserManagement() {
 
       setUsers(usersData);
     } catch (error: any) {
-      console.error('❌ Error loading users in UserManagement:', error);
-      console.error('❌ Error details:', error.message);
       toast.error(`Erreur lors du chargement des utilisateurs: ${error.message}`);
     } finally {
       setLoading(false);
@@ -392,7 +387,6 @@ export default function UserManagement() {
         .upload(filePath, documentFile);
 
       if (uploadError) {
-        console.error('❌ Erreur upload:', uploadError);
         throw uploadError;
       }
 
@@ -403,7 +397,6 @@ export default function UserManagement() {
         .createSignedUrl(filePath, 604800); // 7 jours
 
       if (signedError || !signedData) {
-        console.error('❌ Erreur création URL signée:', signedError);
         throw signedError || new Error("Impossible de créer l'URL signée");
       }
 
@@ -416,7 +409,6 @@ export default function UserManagement() {
         .eq('user_id', authUserId);
 
       if (updateError) {
-        console.error('❌ Erreur mise à jour profil:', updateError);
         throw updateError;
       }
 
@@ -434,7 +426,6 @@ export default function UserManagement() {
       setDocumentFile(null);
       toast.success('✅ Document uploadé avec succès !');
     } catch (error: any) {
-      console.error("❌ Erreur lors de l'upload:", error);
       toast.error(`❌ Erreur lors de l'upload: ${error.message || 'Erreur inconnue'}`);
     } finally {
       setUploadingDocument(false);
@@ -543,7 +534,6 @@ export default function UserManagement() {
       );
       toast.success('Code agent enregistré');
     } catch (error: any) {
-      console.error('Erreur enregistrement code agent:', error);
       toast.error(`Erreur lors de l'enregistrement: ${error.message || 'Erreur inconnue'}`);
     } finally {
       setSavingAgentCode(false);

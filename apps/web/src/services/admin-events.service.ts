@@ -12,14 +12,12 @@ export const adminEventsService = {
         .order('start_date', { ascending: false });
 
       if (error) {
-        console.error('❌ Error fetching events:', error);
         throw new Error(`Erreur Supabase: ${error.message}`);
       }
 
 
       return data || [];
     } catch (error) {
-      console.error('❌ Exception in getEvents:', error);
       throw error;
     }
   },
@@ -40,13 +38,11 @@ export const adminEventsService = {
         .single();
 
       if (error) {
-        console.error('❌ Error creating event:', error);
         throw new Error(`Erreur lors de la création: ${error.message}`);
       }
 
       return data;
     } catch (error) {
-      console.error('❌ Exception in createEvent:', error);
       throw error;
     }
   },

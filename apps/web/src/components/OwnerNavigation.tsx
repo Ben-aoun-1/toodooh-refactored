@@ -186,8 +186,6 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
 
       toast.success('Déconnexion réussie');
     } catch (error) {
-      console.error('❌ Erreur lors de la déconnexion:', error);
-      console.error("❌ Détails de l'erreur:", JSON.stringify(error, null, 2));
       toast.error('Erreur lors de la déconnexion');
 
       // En cas d'erreur, forcer la redirection

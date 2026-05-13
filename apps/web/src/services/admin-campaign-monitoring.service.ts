@@ -51,7 +51,6 @@ class AdminCampaignMonitoringService {
 
       return data as CampaignGlobalStats;
     } catch (error) {
-      console.error('❌ Error fetching campaign global stats:', error);
       throw error;
     }
   }
@@ -176,7 +175,6 @@ class AdminCampaignMonitoringService {
         } as CampaignMonitoringData;
       });
     } catch (error) {
-      console.error('❌ Error fetching campaigns with screens:', error);
       throw error;
     }
   }
@@ -205,7 +203,6 @@ class AdminCampaignMonitoringService {
 
       return data as CampaignMonitoringData[];
     } catch (error) {
-      console.error('❌ Error fetching campaigns by status:', error);
       throw error;
     }
   }
@@ -247,7 +244,6 @@ class AdminCampaignMonitoringService {
 
       return data as CampaignByCategory[];
     } catch (error) {
-      console.error('❌ Error fetching campaigns by category:', error);
       throw error;
     }
   }
@@ -267,7 +263,6 @@ class AdminCampaignMonitoringService {
 
       return data as TopAdvertiser[];
     } catch (error) {
-      console.error('❌ Error fetching top advertisers:', error);
       throw error;
     }
   }
@@ -287,7 +282,6 @@ class AdminCampaignMonitoringService {
 
       return data as MostUsedScreen[];
     } catch (error) {
-      console.error('❌ Error fetching most used screens:', error);
       throw error;
     }
   }
@@ -303,7 +297,6 @@ class AdminCampaignMonitoringService {
 
       return campaign || null;
     } catch (error) {
-      console.error('❌ Error fetching campaign details:', error);
       throw error;
     }
   }

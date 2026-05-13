@@ -309,7 +309,6 @@ export default function ScreenCalendar({
 
       toast.success(`${createdPeriods.length} période(s) d'indisponibilité créée(s) avec succès`);
     } catch (error) {
-      console.error("❌ Erreur lors de la création des périodes d'indisponibilité:", error);
       toast.error("Erreur lors de la création des périodes d'indisponibilité");
     }
   };

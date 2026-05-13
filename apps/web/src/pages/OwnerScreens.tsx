@@ -93,7 +93,6 @@ export default function OwnerScreens() {
       setLoading(false);
       hasLoadedData.current = true; // ✅ Marquer comme chargé
     } catch (error) {
-      console.error('Erreur lors du chargement des écrans:', error);
       toast.error('Erreur lors du chargement des écrans');
       setLoading(false);
     }
@@ -185,7 +184,6 @@ export default function OwnerScreens() {
         .limit(1);
 
       if (checkError) {
-        console.error('Erreur lors de la vérification:', checkError);
         throw checkError;
       }
 
@@ -199,7 +197,6 @@ export default function OwnerScreens() {
           .eq('screen_id', screenId);
 
         if (updateError) {
-          console.error('Erreur lors de la mise à jour:', updateError);
           throw updateError;
         }
       } else {
@@ -218,7 +215,6 @@ export default function OwnerScreens() {
         });
 
         if (insertError) {
-          console.error("Erreur lors de l'insertion:", insertError);
           throw insertError;
         }
       }
@@ -234,7 +230,6 @@ export default function OwnerScreens() {
         newValue ? 'Acceptation automatique activée' : 'Acceptation automatique désactivée',
       );
     } catch (error) {
-      console.error('Erreur lors de la mise à jour de la configuration:', error);
       toast.error('Erreur lors de la mise à jour de la configuration');
     } finally {
       setUpdatingScreen(null);
@@ -266,7 +261,6 @@ export default function OwnerScreens() {
       toast.success(`Statut de l'écran mis à jour`);
       setShowStatusModal(false);
     } catch (error) {
-      console.error('❌ Erreur lors de la mise à jour du statut:', error);
       toast.error('Erreur lors de la mise à jour du statut');
     }
   };
@@ -303,7 +297,6 @@ export default function OwnerScreens() {
         );
       }
     } catch (error) {
-      console.error('❌ Erreur lors de la mise à jour du statut:', error);
       toast.error('Erreur lors de la mise à jour du statut');
     }
   };
@@ -320,7 +313,6 @@ export default function OwnerScreens() {
 
       toast.success("Période d'indisponibilité supprimée");
     } catch (error) {
-      console.error('❌ Erreur lors de la suppression de la période:', error);
       toast.error('Erreur lors de la suppression de la période');
     }
   };

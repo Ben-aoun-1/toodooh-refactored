@@ -76,7 +76,6 @@ export default function EventManagement() {
       const eventsData = await adminEventsService.getEvents();
       setEvents(eventsData);
     } catch (error: any) {
-      console.error('Error loading events:', error);
       toast.error(`Erreur lors du chargement des événements: ${error.message}`);
     } finally {
       setLoading(false);
@@ -161,7 +160,6 @@ export default function EventManagement() {
         loadStats();
       }
     } catch (error: any) {
-      console.error('Error creating event:', error);
       toast.error(error.message || 'Erreur lors de la création');
     }
   };
@@ -741,7 +739,6 @@ function EventImageUpload({
         .upload(path, file, { contentType: file.type, upsert: false });
 
       if (uploadError) {
-        console.error('Erreur upload:', uploadError);
         toast.error(uploadError.message || "Erreur lors de l'upload.");
         return;
       }

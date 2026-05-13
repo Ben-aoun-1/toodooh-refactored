@@ -105,7 +105,6 @@ class RevenueService {
 
       return screenRevenues;
     } catch (error) {
-      console.error('❌ Erreur lors de la récupération des revenus par écran:', error);
       throw error;
     }
   }
@@ -204,7 +203,6 @@ class RevenueService {
 
       return revenueData;
     } catch (error) {
-      console.error('❌ Erreur lors de la récupération des revenus par période:', error);
       throw error;
     }
   }
@@ -289,7 +287,6 @@ class RevenueService {
 
       return stats;
     } catch (error) {
-      console.error('❌ Erreur lors de la récupération des statistiques:', error);
       throw error;
     }
   }
@@ -357,7 +354,6 @@ class RevenueService {
 
       return comparisons;
     } catch (error) {
-      console.error('❌ Erreur lors de la récupération des comparaisons mensuelles:', error);
       throw error;
     }
   }

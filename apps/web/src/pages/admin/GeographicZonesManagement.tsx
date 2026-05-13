@@ -79,7 +79,6 @@ export default function GeographicZonesManagement() {
       const data = await predefinedZonesService.getAllForAdmin();
       setZones(data);
     } catch (error: any) {
-      console.error('Erreur lors du chargement des zones:', error);
       toast.error('Erreur lors du chargement des zones');
     } finally {
       setLoading(false);
@@ -217,7 +216,6 @@ export default function GeographicZonesManagement() {
       handleCloseModal();
       loadZones();
     } catch (error: any) {
-      console.error('Erreur lors de la sauvegarde:', error);
       toast.error(error.message || 'Erreur lors de la sauvegarde');
     }
   };
@@ -232,7 +230,6 @@ export default function GeographicZonesManagement() {
       toast.success('Zone supprimée avec succès');
       loadZones();
     } catch (error: any) {
-      console.error('Erreur lors de la suppression:', error);
       toast.error(error.message || 'Erreur lors de la suppression');
     }
   };
@@ -243,7 +240,6 @@ export default function GeographicZonesManagement() {
       toast.success(`Zone ${!currentStatus ? 'publiée' : 'dépubliée'} avec succès`);
       loadZones();
     } catch (error: any) {
-      console.error('Erreur lors du changement de statut:', error);
       toast.error(error.message || 'Erreur lors du changement de statut');
     }
   };
@@ -256,7 +252,6 @@ export default function GeographicZonesManagement() {
       );
       loadZones();
     } catch (error: any) {
-      console.error('Erreur lors du changement de statut en masse:', error);
       toast.error('Erreur lors du changement de statut en masse');
     }
   };

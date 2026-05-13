@@ -49,7 +49,6 @@ export default function VideoManagement() {
       const videosData = await adminVideoService.getVideos(statusFilter);
       setVideos(videosData);
     } catch (error: any) {
-      console.error('Error loading videos:', error);
       toast.error(`Erreur lors du chargement des vidéos: ${error.message}`);
     } finally {
       setLoading(false);
@@ -103,7 +102,6 @@ export default function VideoManagement() {
         toast.error("Erreur lors de l'approbation de la vidéo");
       }
     } catch (error: any) {
-      console.error('Error approving video:', error);
       toast.error(`Erreur: ${error.message || "Impossible d'approuver la vidéo"}`);
     }
   };
@@ -126,7 +124,6 @@ export default function VideoManagement() {
         toast.error('Erreur lors du rejet de la vidéo');
       }
     } catch (error: any) {
-      console.error('Error rejecting video:', error);
       toast.error(`Erreur: ${error.message || 'Impossible de rejeter la vidéo'}`);
     }
   };

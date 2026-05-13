@@ -115,7 +115,6 @@ export default function MyAccount() {
         termsAccepted: true,
       });
     } catch (error) {
-      console.error('Erreur lors du chargement du profil:', error);
       toast.error('Erreur lors du chargement du profil');
     }
   };
@@ -184,7 +183,6 @@ export default function MyAccount() {
         .upload(filePath, documentFile);
 
       if (uploadError) {
-        console.error('❌ Erreur upload:', uploadError);
         throw uploadError;
       }
 
@@ -195,7 +193,6 @@ export default function MyAccount() {
         .createSignedUrl(filePath, 604800); // 7 jours
 
       if (signedError || !signedData) {
-        console.error('❌ Erreur création URL signée:', signedError);
         throw signedError || new Error("Impossible de créer l'URL signée");
       }
 
@@ -208,7 +205,6 @@ export default function MyAccount() {
         .eq('user_id', user.id);
 
       if (updateError) {
-        console.error('❌ Erreur mise à jour profil:', updateError);
         throw updateError;
       }
 
@@ -219,7 +215,6 @@ export default function MyAccount() {
       setDocumentFile(null);
       toast.success('✅ Document uploadé avec succès !');
     } catch (error: any) {
-      console.error("❌ Erreur lors de l'upload:", error);
       toast.error(`❌ Erreur lors de l'upload: ${error.message || 'Erreur inconnue'}`);
     } finally {
       setUploadingDocument(false);
@@ -261,7 +256,6 @@ export default function MyAccount() {
         try {
           await authService.updatePassword(formData.password);
         } catch (passwordError) {
-          console.error('❌ Erreur lors de la mise à jour du mot de passe:', passwordError);
           throw new Error(
             `Erreur lors de la mise à jour du mot de passe: ${passwordError instanceof Error ? passwordError.message : 'Erreur inconnue'}`,
           );

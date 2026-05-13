@@ -47,7 +47,6 @@ export default function OwnerCampaignApprovals() {
       const pendingCampaigns = await campaignOwnerApprovalService.getPendingCampaigns(user!.id);
       setCampaigns(pendingCampaigns);
     } catch (error) {
-      console.error('Erreur lors du chargement des campagnes:', error);
       toast.error('Erreur lors du chargement des campagnes');
     } finally {
       setLoading(false);
@@ -61,7 +60,6 @@ export default function OwnerCampaignApprovals() {
       toast.success('Campagne approuvée avec succès');
       await loadCampaigns();
     } catch (error) {
-      console.error("Erreur lors de l'approbation:", error);
       toast.error("Erreur lors de l'approbation de la campagne");
     } finally {
       setProcessingId(null);
@@ -76,7 +74,6 @@ export default function OwnerCampaignApprovals() {
       toast.success('Campagne rejetée');
       await loadCampaigns();
     } catch (error) {
-      console.error('Erreur lors du rejet:', error);
       toast.error('Erreur lors du rejet de la campagne');
     } finally {
       setProcessingId(null);

@@ -276,7 +276,6 @@ export default function OwnerCalendarDevices() {
       }
       setSelectedDates([]);
     } catch (error) {
-      console.error('Erreur lors de la mise à jour de disponibilité:', error);
       toast.error('Erreur lors de la mise à jour des disponibilités');
     } finally {
       setProcessingAvailability(null);

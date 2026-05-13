@@ -99,7 +99,6 @@ export default function CampaignMonitoring() {
       const campaignsData = await adminCampaignMonitoringService.getCampaignsWithScreens();
       setCampaigns(campaignsData);
     } catch (error: any) {
-      console.error('Error loading campaigns:', error);
       toast.error('Erreur lors du chargement des campagnes');
     } finally {
       setLoading(false);
@@ -220,7 +219,6 @@ export default function CampaignMonitoring() {
       setStopReason('');
       loadData();
     } catch (error: any) {
-      console.error('Erreur arrêt campagne:', error);
       toast.error(error.message || "Erreur lors de l'arrêt de la campagne");
     }
   };

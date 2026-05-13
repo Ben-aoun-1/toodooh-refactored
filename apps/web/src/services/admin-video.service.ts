@@ -19,7 +19,6 @@ export const adminVideoService = {
       const { data, error } = await query;
 
       if (error) {
-        console.error('❌ Error fetching videos:', error);
         throw new Error(`Erreur Supabase: ${error.message}`);
       }
 
@@ -36,7 +35,6 @@ export const adminVideoService = {
         .neq('status', 'draft');
 
       if (linksError) {
-        console.error('❌ Error filtering non-draft campaign links:', linksError);
         throw new Error(`Erreur Supabase: ${linksError.message}`);
       }
 
@@ -51,7 +49,6 @@ export const adminVideoService = {
 
       return filteredVideos;
     } catch (error) {
-      console.error('❌ Exception in getVideos:', error);
       throw error;
     }
   },
@@ -68,7 +65,6 @@ export const adminVideoService = {
         .single();
 
       if (videoError) {
-        console.error('❌ Error fetching video:', videoError);
         throw new Error(`Erreur lors de la récupération de la vidéo: ${videoError.message}`);
       }
 
@@ -88,7 +84,6 @@ export const adminVideoService = {
         campaigns: campaignsData || [],
       };
     } catch (error) {
-      console.error('❌ Exception in getVideoDetails:', error);
       throw error;
     }
   },
@@ -114,7 +109,6 @@ export const adminVideoService = {
         .select();
 
       if (error) {
-        console.error('❌ Error approving video:', error);
         throw new Error(error.message);
       }
 
@@ -128,7 +122,6 @@ export const adminVideoService = {
       );
 
       if (campaignLinksError) {
-        console.error('❌ Error fetching campaigns using video (RPC):', campaignLinksError);
         throw new Error(
           campaignLinksError.message || 'Impossible de récupérer les campagnes liées à la vidéo',
         );
@@ -172,7 +165,6 @@ export const adminVideoService = {
           : { data: [], error: null as any };
 
       if (campaignsError) {
-        console.error('❌ Error loading linked pending campaigns:', campaignsError);
         throw new Error(
           campaignsError.message || 'Impossible de charger les campagnes liées à la vidéo',
         );
@@ -388,7 +380,6 @@ export const adminVideoService = {
 
       return true;
     } catch (error: any) {
-      console.error('❌ Error in approveVideo:', error);
       throw error;
     }
   },
@@ -414,13 +405,11 @@ export const adminVideoService = {
         .select();
 
       if (error) {
-        console.error('❌ Error rejecting video:', error);
         throw new Error(error.message);
       }
 
       return true;
     } catch (error: any) {
-      console.error('❌ Error in rejectVideo:', error);
       throw error;
     }
   },

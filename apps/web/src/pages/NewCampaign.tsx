@@ -704,7 +704,6 @@ export default function NewCampaign() {
 
       return campaign;
     } catch (error: any) {
-      console.error('❌ Erreur lors de la sauvegarde:', error);
       throw error;
     }
   };
@@ -759,7 +758,6 @@ export default function NewCampaign() {
       // Ne pas créer la campagne automatiquement, elle sera créée lors de la validation finale
       toast.success('Vidéo uploadée avec succès !');
     } catch (error: any) {
-      console.error('Erreur upload:', error);
       toast.error(error.message || "Erreur lors de l'upload");
       setSelectedVideo(null);
     } finally {
@@ -1887,7 +1885,6 @@ export default function NewCampaign() {
         const zones = await predefinedZonesService.getAll();
         setPredefinedZones(zones);
       } catch (error) {
-        console.error('Erreur lors du chargement des zones prédéfinies:', error);
         toast.error('Impossible de charger les zones prédéfinies');
       } finally {
         setLoadingPredefinedZones(false);

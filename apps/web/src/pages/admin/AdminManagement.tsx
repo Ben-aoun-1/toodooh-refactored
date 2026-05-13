@@ -42,7 +42,6 @@ export default function AdminManagement() {
       const data = await adminService.getAdmins();
       setAdmins(data);
     } catch (error: any) {
-      console.error('Error loading admins:', error);
       toast.error('Erreur lors du chargement des administrateurs');
     } finally {
       setLoading(false);
@@ -90,7 +89,6 @@ export default function AdminManagement() {
         });
       }
     } catch (error: any) {
-      console.error('Error deactivating admin:', error);
       toast.error('Erreur lors de la désactivation');
     }
   };
@@ -121,7 +119,6 @@ export default function AdminManagement() {
         });
       }
     } catch (error: any) {
-      console.error('Error reactivating admin:', error);
       toast.error('Erreur lors de la réactivation');
     }
   };

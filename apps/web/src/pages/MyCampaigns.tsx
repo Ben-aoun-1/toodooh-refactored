@@ -204,7 +204,6 @@ export default function MyCampaigns() {
           .order('created_at', { ascending: false });
 
         if (error) {
-          console.error('Error fetching campaigns:', error);
           toast.error('Erreur lors du chargement des campagnes');
           return;
         }
@@ -301,7 +300,6 @@ export default function MyCampaigns() {
           totalBudget,
         });
       } catch (error) {
-        console.error('Error loading campaigns:', error);
         toast.error('Erreur lors du chargement');
       } finally {
         setLoading(false);
@@ -443,7 +441,6 @@ export default function MyCampaigns() {
         .eq('status', 'draft');
 
       if (error) {
-        console.error('Erreur suppression brouillon:', error);
         toast.error('Impossible de supprimer ce brouillon');
         return;
       }
@@ -455,7 +452,6 @@ export default function MyCampaigns() {
       }
       toast.success('Brouillon supprimé');
     } catch (e) {
-      console.error('Erreur suppression brouillon:', e);
       toast.error('Erreur lors de la suppression du brouillon');
     }
   };
@@ -588,7 +584,6 @@ export default function MyCampaigns() {
       if (nextStatus === 'active') toast.success('Campagne activée avec succès');
       else toast('Campagne en attente de validation vidéo admin', { icon: '⏳' });
     } catch (error) {
-      console.error('Erreur activation brouillon:', error);
       toast.error("Erreur lors de l'activation du brouillon");
     }
   };

@@ -42,7 +42,6 @@ export const predefinedZonesService = {
 
       return data || [];
     } catch (error) {
-      console.error('❌ Erreur dans predefinedZonesService.getAll:', error);
       throw error;
     }
   },
@@ -74,7 +73,6 @@ export const predefinedZonesService = {
       if (error) throw error;
       return data || [];
     } catch (error) {
-      console.error('Erreur lors de la récupération des zones:', error);
       throw error;
     }
   },
@@ -106,7 +104,6 @@ export const predefinedZonesService = {
       if (error) throw error;
       return data;
     } catch (error) {
-      console.error('Erreur lors de la création de la zone:', error);
       throw error;
     }
   },
@@ -137,7 +134,6 @@ export const predefinedZonesService = {
       if (error) throw error;
       return data;
     } catch (error) {
-      console.error('Erreur lors de la mise à jour de la zone:', error);
       throw error;
     }
   },
@@ -148,7 +144,6 @@ export const predefinedZonesService = {
 
       if (error) throw error;
     } catch (error) {
-      console.error('Erreur lors de la suppression de la zone:', error);
       throw error;
     }
   },
@@ -165,7 +160,6 @@ export const predefinedZonesService = {
       if (error) throw error;
       return data;
     } catch (error) {
-      console.error('Erreur lors du changement de statut de la zone:', error);
       throw error;
     }
   },
