@@ -96,23 +96,23 @@ The current audit (`docs/audit.md` §5) has the roadmap ordered for the original
 | 4     | 4     | DOOH engine decouple + v3.0 pricing IP ☑                   | #12   |
 | **5** | **9** | **Frontend logger + `console.*` purge** ← **this plan**    | #7    |
 | **6** | 10    | Typing pass: fix `as any`, reduce tsc baseline             | #8    |
-| **7** | —     | **NEW — Decomposition discovery brainstorm** (no code; produces the spec for Step 8) | — |
-| **8** | 5     | Decompose `Dashboard.tsx` / `NewCampaign.tsx`              | #3    |
-| 9     | 6     | Restructure `src/` into `src/features/<domain>/`           | #4    |
-| 10    | 7     | Replace `window.location.reload()` in `MyAccount.tsx`      | #5    |
-| 11    | 8     | Introduce React Query for server state                     | #6    |
-| 12    | 11    | `jsx-a11y` + `exhaustive-deps` cleanup                     | #9    |
-| 13    | 12    | Tailwind `brand` token: replace hardcoded `#00B3A6`        | #10   |
-| 14    | 13    | Get CI green                                               | #11   |
-| 15    | 14    | Hoist duplicate devDependencies to root                    | #13   |
+| **7** | 5     | Decompose `Dashboard.tsx` / `NewCampaign.tsx`              | #3    |
+| 8     | 6     | Restructure `src/` into `src/features/<domain>/`           | #4    |
+| 9     | 7     | Replace `window.location.reload()` in `MyAccount.tsx`      | #5    |
+| 10    | 8     | Introduce React Query for server state                     | #6    |
+| 11    | 11    | `jsx-a11y` + `exhaustive-deps` cleanup                     | #9    |
+| 12    | 12    | Tailwind `brand` token: replace hardcoded `#00B3A6`        | #10   |
+| 13    | 13    | Get CI green                                               | #11   |
+| 14    | 14    | Hoist duplicate devDependencies to root                    | #13   |
 
 **Rationale for the new ordering:**
 
-- **Old 9 + 10 → New 5 + 6 (move earlier).** Console-purge and typing-pass are mechanical sweeps over the entire frontend. Doing them BEFORE Dashboard/NewCampaign decomposition means the sweeps run once on the current file shape, not twice (once now, once after the decomposed files exist). Diffs in Step 8 stay clean and reviewable because the mechanical noise is gone.
-- **Old 5 → New 8 (move later).** Dashboard decomposition is the largest single piece of work in the roadmap; doing it on a codebase that has been mechanically cleaned + typed is strictly easier than doing it on the current mess.
-- **New 7 (inserted) — decomposition discovery.** A read-only brainstorm step that produces the exact decomposition spec for Step 8, same pattern as Steps 2a / 2b / 3 / 4 / 5 themselves. No code; a discovery report.
-- **Old 6, 7, 8 → New 9, 10, 11 (cascade-shifted +1).** Folder restructure, `window.location.reload`, React Query slot in after decomposition.
-- **Old 11, 12, 13, 14 → New 12, 13, 14, 15 (cascade-shifted +1).** Late mechanical passes + CI / devDeps are unchanged in spirit; just renumbered.
+- **Old 9 + 10 → New 5 + 6 (move earlier).** Console-purge and typing-pass are mechanical sweeps over the entire frontend. Doing them BEFORE Dashboard/NewCampaign decomposition means the sweeps run once on the current file shape, not twice (once now, once after the decomposed files exist). Diffs in Step 7 (decomp) stay clean and reviewable because the mechanical noise is gone.
+- **Old 5 → New 7 (move later, but only +2 places).** Dashboard decomposition is the largest single piece of work in the roadmap; doing it on a codebase that has been mechanically cleaned + typed is strictly easier than doing it on the current mess.
+- **Old 6, 7, 8 → New 8, 9, 10 (cascade-shifted +2).** Folder restructure, `window.location.reload`, React Query slot in after decomposition.
+- **Old 11, 12, 13, 14 → unchanged.** Late mechanical passes + CI / devDeps are unchanged in spirit AND in number; only old 5–10 shuffle.
+
+**Why no separate "decomposition discovery" roadmap step.** Every step in this roadmap follows a brainstorm → spec → plan → execute cycle (see Step 4's discovery, plan, and execution as the recent precedent). The brainstorm has never been a separate roadmap entry — it's part of the step's planning phase. Decomposition is large but not categorically larger than e.g. the v3.0 IP work in Step 4: both touch substantial code, both benefit from a careful discovery report before plan-writing. Treating decomp's brainstorm as a separate roadmap row would be inconsistent with prior practice; treating it as part of new-Step-7's planning is the consistent choice. The discovery report happens; it just doesn't get a roadmap number.
 
 **Sign-off:** Before any audit edits, the executor pastes this mapping table back to the prompt-writer for explicit "go." If the prompt-writer revises the mapping, the executor updates this section and re-asks.
 
@@ -120,30 +120,30 @@ The current audit (`docs/audit.md` §5) has the roadmap ordered for the original
 
 Once the mapping is signed off, edits:
 
-- [ ] **§5 Roadmap table** (`docs/audit.md` lines ~309-326): rewrite the rows in the new order with the new `#` column. The `Status` column stays the same — Steps 1, 2a, 2b, 3, 4 are still `☑`. Insert the new Step 7 row. Renumber Steps 5-15. The `Issue` column stays the same — issue numbers do NOT change, only step numbers do.
-- [ ] **§3 anti-pattern inventory footers** — every "→ **Step N · #X**" line gets updated:
-  - Line 59 (`Dashboard.tsx` god-component): `Step 5 · #3` → `Step 8 · #3`
-  - Line 98 (Duplicate pages): `Step 2a · #1 · Step 5 · #3 · Step 6 · #4` → `Step 2a · #1 · Step 8 · #3 · Step 9 · #4`
-  - Line 138 (Duplicate services): `Step 2b · #14 · Step 6 · #4` → `Step 2b · #14 · Step 9 · #4`
+- [ ] **§5 Roadmap table** (`docs/audit.md` lines ~309-326): rewrite the rows in the new order with the new `#` column. The `Status` column stays the same — Steps 1, 2a, 2b, 3, 4 are still `☑`. Renumber Steps 5-10 per the mapping above (Steps 11-14 keep their current numbers). The `Issue` column stays the same — issue numbers do NOT change, only step numbers do.
+- [ ] **§3 anti-pattern inventory footers** — every "→ **Step N · #X**" line gets updated. Lines below reference current audit line numbers; verify against the file before editing:
+  - Line 59 (`Dashboard.tsx` god-component): `Step 5 · #3` → `Step 7 · #3`
+  - Line 98 (Duplicate pages): `Step 2a · #1 · Step 5 · #3 · Step 6 · #4` → `Step 2a · #1 · Step 7 · #3 · Step 8 · #4`
+  - Line 138 (Duplicate services): `Step 2b · #14 · Step 6 · #4` → `Step 2b · #14 · Step 8 · #4`
   - Line 182 (DOOH): `Step 4 · #12` — unchanged.
-  - Line 218 (Auth-state): `Step 3 · #2 · Step 5 · #3` → `Step 3 · #2 · Step 8 · #3`
+  - Line 218 (Auth-state): `Step 3 · #2 · Step 5 · #3` → `Step 3 · #2 · Step 7 · #3`
   - Line 224 (`console.*`): `Step 9 · #7` → **`Step 5 · #7`**.
   - Line 229 (`as any`): `Step 10 · #8` → **`Step 6 · #8`**.
-  - Line 238 (localStorage): `Step 5 · #3` → `Step 8 · #3`
-  - Line 243 (`window.location.reload`): `Step 7 · #5` → `Step 10 · #5`
-  - Line 247 (Hardcoded `#00B3A6`): `Step 12 · #10` → `Step 13 · #10`
-  - Line 253 (jsx-a11y / exhaustive-deps): `Step 11 · #9` → `Step 12 · #9`
-  - Line 258 (Flat folder structure): `Step 6 · #4` → `Step 9 · #4`
-  - Line 263 (No server-state layer): `Step 8 · #6` → `Step 11 · #6`
+  - Line 238 (localStorage): `Step 5 · #3` → `Step 7 · #3`
+  - Line 243 (`window.location.reload`): `Step 7 · #5` → `Step 9 · #5`
+  - Line 247 (Hardcoded `#00B3A6`): `Step 12 · #10` — **unchanged**.
+  - Line 253 (jsx-a11y / exhaustive-deps): `Step 11 · #9` — **unchanged**.
+  - Line 258 (Flat folder structure): `Step 6 · #4` → `Step 8 · #4`
+  - Line 263 (No server-state layer): `Step 8 · #6` → `Step 10 · #6`
   - Line 270 (Debug cruft): `Step 9 · #7` → `Step 5 · #7`
   - Line 276 (`tsconfig` softening): `Step 10 · #8` → `Step 6 · #8`
-  - Line 283 (Duplicate devDeps): `Step 14 · #13` → `Step 15 · #13`
+  - Line 283 (Duplicate devDeps): `Step 14 · #13` — **unchanged**.
 - [ ] **§3 inline prose mentions of step numbers** — every "Step N" in flowing prose:
-  - Lines 70-87 (the Duplicate pages section's prose): "Step 5" mentions → "Step 8" (where they refer to Dashboard decomposition).
-  - Lines 94-95: "Step 5 (`/owner-campaigns` … overlaps …)" → "Step 8 (…)"; "Step 6 (folder/route …)" → "Step 9 (folder/route …)".
-  - Line 117: "Step 5/Step 6 concern" → "Step 8/Step 9 concern".
-  - Line 206: "Step 6 concern" → "Step 9 concern".
-- [ ] **§2 Snapshot row** (CI / test mentions) — line 46 references "Step 13" for CI green; update to "Step 14". Other Step refs in §2 if any.
+  - Lines 70-87 (the Duplicate pages section's prose): "Step 5" mentions → "Step 7" (where they refer to Dashboard decomposition).
+  - Lines 94-95: "Step 5 (`/owner-campaigns` … overlaps …)" → "Step 7 (…)"; "Step 6 (folder/route …)" → "Step 8 (folder/route …)".
+  - Line 117: "Step 5/Step 6 concern" → "Step 7/Step 8 concern".
+  - Line 206: "Step 6 concern" → "Step 8 concern".
+- [ ] **§2 Snapshot row** — line 46 references "Step 13" for CI green; **unchanged** (CI green stays at Step 13). Verify by eye.
 - [ ] **§3 `console.*` subsection** (lines 220-224) — keep the text describing the current 938/917 state for now (Commit 5 refreshes it to "purged in Step 5"). Only the footer's step number changes here.
 - [ ] **§4 Already resolved** — verify any "Step N" references. (Likely Steps 1, 2a, 2b, 3, 4 already-done sections; no renumbering needed there.)
 - [ ] **§6 Maintenance** — verify any step refs and update.
@@ -159,15 +159,15 @@ Once the mapping is signed off, edits:
 **Commit:**
 
 ```
-docs(audit): renumber roadmap — console purge → Step 5, typing → Step 6, decomp → Step 8
+docs(audit): renumber roadmap — console purge → Step 5, typing → Step 6, decomp → Step 7
 
 Reorder the cleanup roadmap so mechanical sweeps (console-purge, typing pass)
 land BEFORE the Dashboard/NewCampaign decomposition. Doing the sweeps on the
 current file shape means they run once; doing them after decomposition would
-re-run them on 10+ new files with shared patterns. Insert new Step 7
-("decomposition discovery brainstorm") before Step 8 (decomp itself).
+re-run them on 10+ new files with shared patterns.
 
-Issue numbers (#1–#14) are unchanged; only step numbers move. Every "Step N"
+Six rows move (old 5/6/7/8/9/10 shuffle); four rows unchanged (11-14).
+Issue numbers (#1-#14) do NOT change; only step numbers move. Every "Step N"
 reference in §3 and §6 updated to the new mapping.
 ```
 
@@ -801,7 +801,7 @@ Closes #7.
 These are the explicit decisions in this plan; if the prompt-writer disagrees with any, push back before plan archival:
 
 1. **Six commits, in this order**: 0 renumber → 1 logger → 2 Cat 1 → 3 Cat 2a+2b → 4 Cat 2c+3 → 5 ESLint + docs. Commit 0 is mandatory before any other; Commits 2/3/4 could in theory be combined but the diff would be unreviewable.
-2. **Renumbering mapping** as proposed in Task 0.1 — specifically: console-purge becomes **Step 5** (not 8), typing-pass becomes **Step 6** (not 9), decomp becomes **Step 8** (not 7), and a NEW Step 7 ("decomposition discovery brainstorm") slots in.
+2. **Renumbering mapping** as in Task 0.1 — console-purge → **Step 5**, typing-pass → **Step 6**, Dashboard decomp → **Step 7**, folder restructure → **Step 8**, `window.location.reload` → **Step 9**, React Query → **Step 10**. Steps 11–14 unchanged. No separate "decomposition discovery" roadmap row — decomp's brainstorm is part of Step 7's planning (consistent with every prior step's brainstorm→spec→plan→execute cycle).
 3. **Cat 2b = DELETE not PROMOTE.** Already approved; reiterated here so it survives review.
 4. **Logger API: pino default shape**, child-logger per module, error in context object's `err` field. Locked before Commit 4 fires.
 5. **Bundle ceiling 8 KB target / 10 KB hard halt** for Commit 1. loglevel is the documented fallback if pino exceeds.
