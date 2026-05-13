@@ -1,4 +1,8 @@
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
+
+const log = logger.child({ module: 'predefined-zones.service' });
+
 
 export interface PredefinedZone {
   id: string;
@@ -27,13 +31,11 @@ export const predefinedZonesService = {
         .order('name', { ascending: true });
 
       if (error) {
-        console.error('❌ Erreur lors de la récupération des zones prédéfinies:', error);
-        console.error('Détails:', {
-          message: error.message,
+        log.error({ error }, '❌ Erreur lors de la récupération des zones prédéfinies');
+        log.error({ message: error.message,
           details: error.details,
           hint: error.hint,
-          code: error.code,
-        });
+          code: error.code, }, 'Détails');
         throw error;
       }
 
@@ -55,7 +57,7 @@ export const predefinedZonesService = {
       .single();
 
     if (error) {
-      console.error('Erreur lors de la récupération de la zone prédéfinie:', error);
+      log.error({ error }, 'Erreur lors de la récupération de la zone prédéfinie');
       return null;
     }
 

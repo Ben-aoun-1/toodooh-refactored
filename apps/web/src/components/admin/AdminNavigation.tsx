@@ -15,6 +15,10 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useAdminStore } from '../../stores/admin.store';
+import { logger } from '../../lib/logger';
+
+const log = logger.child({ module: 'AdminNavigation' });
+
 
 interface AdminNavigationProps {
   children: React.ReactNode;
@@ -32,7 +36,7 @@ export default function AdminNavigation({ children, title, subtitle }: AdminNavi
       await logout();
       navigate('/admin-login');
     } catch (error) {
-      console.error('Error during logout:', error);
+      log.error({ error }, 'Error during logout');
     }
   };
 

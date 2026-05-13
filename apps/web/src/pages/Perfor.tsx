@@ -20,6 +20,10 @@ import type {
   PerformanceKpis,
   PerformancePeriodPreset,
 } from '../types/performance';
+import { logger } from '../lib/logger';
+
+const log = logger.child({ module: 'Perfor' });
+
 
 const presetButtons: { key: PerformancePeriodPreset; label: string }[] = [
   { key: 'month', label: 'Ce mois' },
@@ -133,7 +137,7 @@ export default function Perfor() {
       setDataset(data);
       setFilters(data.filters);
     } catch (e) {
-      console.error(e);
+      log.error({ err: e }, 'error');
       setError('Impossible de charger les performances pour le moment.');
     } finally {
       setLoading(false);

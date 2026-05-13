@@ -7,6 +7,10 @@ import AdminLayout from '../../components/admin/AdminLayout';
 import { adminVideoService } from '../../services/admin-video.service';
 import { useAdminStore } from '../../stores/admin.store';
 import { Video, VideoValidationStats } from '../../types/video';
+import { logger } from '../../lib/logger';
+
+const log = logger.child({ module: 'VideoManagement' });
+
 
 export default function VideoManagement() {
   const { admin } = useAdminStore();
@@ -60,7 +64,7 @@ export default function VideoManagement() {
       const statsData = await adminVideoService.getValidationStats();
       setStats(statsData);
     } catch (error) {
-      console.error('Error loading stats:', error);
+      log.error({ error }, 'Error loading stats');
     }
   };
 

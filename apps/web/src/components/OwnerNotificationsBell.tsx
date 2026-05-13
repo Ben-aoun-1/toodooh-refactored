@@ -4,6 +4,10 @@ import { useNavigate } from 'react-router-dom';
 
 import { supabase } from '../lib/supabase';
 import { campaignOwnerApprovalService } from '../services/campaign-owner-approval.service';
+import { logger } from '../lib/logger';
+
+const log = logger.child({ module: 'OwnerNotificationsBell' });
+
 
 type OwnerNotificationKind =
   | 'campaign_validated_reminder'
@@ -280,7 +284,7 @@ export default function OwnerNotificationsBell({ userId }: { userId?: string }) 
       setItems(visible);
       setReadIds(new Set((reads || []).map((r: { notification_id: string }) => r.notification_id)));
     } catch (error) {
-      console.error('Erreur chargement notifications propriétaire:', error);
+      log.error({ error }, 'Erreur chargement notifications propriétaire');
       setItems([]);
     } finally {
       setLoading(false);
@@ -326,7 +330,7 @@ export default function OwnerNotificationsBell({ userId }: { userId?: string }) 
       { onConflict: 'user_id,scope,notification_id' },
     );
     if (error) {
-      console.error('Erreur marquage notification lue (proprio):', error);
+      log.error({ error }, 'Erreur marquage notification lue (proprio)');
     }
   };
 
@@ -345,7 +349,7 @@ export default function OwnerNotificationsBell({ userId }: { userId?: string }) 
       .from('user_notification_reads')
       .upsert(rows, { onConflict: 'user_id,scope,notification_id' });
     if (error) {
-      console.error('Erreur marquage toutes notifications lues (proprio):', error);
+      log.error({ error }, 'Erreur marquage toutes notifications lues (proprio)');
     }
   };
 

@@ -1,4 +1,8 @@
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
+
+const log = logger.child({ module: 'admin-recharges.service' });
+
 
 export interface AdminRecharge {
   id: string;
@@ -142,7 +146,7 @@ class AdminRechargesService {
 
       return stats;
     } catch (error) {
-      console.error('❌ Erreur récupération stats recharges:', error);
+      log.error({ error }, '❌ Erreur récupération stats recharges');
       return {
         total_recharges: 0,
         pending_count: 0,
@@ -240,7 +244,7 @@ class AdminRechargesService {
 
       return data || 0;
     } catch (error) {
-      console.error('❌ Erreur récupération solde:', error);
+      log.error({ error }, '❌ Erreur récupération solde');
       return 0;
     }
   }

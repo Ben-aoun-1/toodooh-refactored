@@ -1,5 +1,9 @@
 import { supabase } from '../lib/supabase';
 import type { LocationAffluenceSlot } from '../types/location';
+import { logger } from '../lib/logger';
+
+const log = logger.child({ module: 'campaign-screens.service' });
+
 
 /** Localité pour la carte et le ciblage campagne (une entrée par localité, pas par écran) */
 export interface CampaignLocation {
@@ -62,7 +66,7 @@ export const campaignScreensService = {
       // Enlever le filtre is_online pour afficher tous les écrans actifs
 
       if (error) {
-        console.error('Erreur lors de la récupération des écrans:', error);
+        log.error({ error }, 'Erreur lors de la récupération des écrans');
         return [];
       }
 
@@ -103,12 +107,12 @@ export const campaignScreensService = {
                 };
               }
             } catch (e) {
-              console.error('❌ Erreur parsing coordinates:', e, screen.coordinates);
+              log.error({ e, coordinates: screen.coordinates }, '❌ Erreur parsing coordinates');
             }
           }
 
           if (!coordinates) {
-            console.warn('⚠️ Écran sans coordonnées:', screen.name, screen.coordinates);
+            log.warn({ name: screen.name, coordinates: screen.coordinates }, '⚠️ Écran sans coordonnées');
           }
 
           return {
@@ -130,7 +134,7 @@ export const campaignScreensService = {
 
       return screensWithAffluence;
     } catch (error) {
-      console.error('Erreur lors de la récupération des écrans:', error);
+      log.error({ error }, 'Erreur lors de la récupération des écrans');
       return [];
     }
   },
@@ -146,7 +150,7 @@ export const campaignScreensService = {
         .single();
 
       if (configError) {
-        console.error('⚠️ Pas de config pour écran:', screenId, configError.message);
+        log.error({ screenId, message: configError.message }, '⚠️ Pas de config pour écran');
         // Fallback : retourner des valeurs par défaut
         return {
           avg_passby: 0,
@@ -178,7 +182,7 @@ export const campaignScreensService = {
         unique_sensors: 1,
       };
     } catch (error) {
-      console.error("Erreur lors de la récupération des données d'affluence:", error);
+      log.error({ error }, "Erreur lors de la récupération des données d'affluence");
       return undefined;
     }
   },
@@ -197,7 +201,7 @@ export const campaignScreensService = {
       // Enlever le filtre is_online pour afficher tous les écrans actifs
 
       if (error) {
-        console.error('Erreur lors de la récupération des écrans dans la zone:', error);
+        log.error({ error }, 'Erreur lors de la récupération des écrans dans la zone');
         return [];
       }
 
@@ -234,7 +238,7 @@ export const campaignScreensService = {
               };
             }
           } catch (e) {
-            console.error('Erreur parsing coordinates:', e);
+            log.error({ e }, 'Erreur parsing coordinates');
           }
         }
 
@@ -264,7 +268,7 @@ export const campaignScreensService = {
 
       return screensInZone;
     } catch (error) {
-      console.error('Erreur lors de la récupération des écrans:', error);
+      log.error({ error }, 'Erreur lors de la récupération des écrans');
       return [];
     }
   },
@@ -300,7 +304,7 @@ export const campaignScreensService = {
     ]);
     const { data: locs, error } = locsRes;
     if (error) {
-      console.error('Erreur getLocationsInArea:', error);
+      log.error({ error }, 'Erreur getLocationsInArea');
       return [];
     }
     const ownerIds = [...new Set((locs || []).map((l) => l.owner_id))];
@@ -406,7 +410,7 @@ export const campaignScreensService = {
     ]);
     const { data: locs, error } = locsRes;
     if (error) {
-      console.error('Erreur getAllLocationsForMap:', error);
+      log.error({ error }, 'Erreur getAllLocationsForMap');
       return [];
     }
     const countByLoc = new Map<string, number>();
@@ -505,7 +509,7 @@ export const campaignScreensService = {
     }
     const { data: locs, error } = await q.order('name');
     if (error) {
-      console.error('Erreur getLocationsWithAffluence:', error);
+      log.error({ error }, 'Erreur getLocationsWithAffluence');
       return [];
     }
     const ownerIdList = [...new Set((locs || []).map((l) => l.owner_id))];
@@ -575,7 +579,7 @@ export const campaignScreensService = {
       .select('id, name, address, coordinates, owner_id, owner_category')
       .in('id', locationIds);
     if (error) {
-      console.error('Erreur getLocationsByIds:', error);
+      log.error({ error }, 'Erreur getLocationsByIds');
       return [];
     }
     if (!locs?.length) return [];
@@ -672,7 +676,7 @@ export const campaignScreensService = {
       .in('location_id', locationIds)
       .eq('status', 'active');
     if (error) {
-      console.error('Erreur getScreenIdsByLocationIds:', error);
+      log.error({ error }, 'Erreur getScreenIdsByLocationIds');
       return [];
     }
     return (data || []).map((r) => r.id);

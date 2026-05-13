@@ -23,6 +23,10 @@ import {
   type RechargeStats,
 } from '../../services/admin-recharges.service';
 import { useAdminStore } from '../../stores/admin.store';
+import { logger } from '../../lib/logger';
+
+const log = logger.child({ module: 'RechargeManagement' });
+
 
 export default function RechargeManagement() {
   const { admin } = useAdminStore();
@@ -75,7 +79,7 @@ export default function RechargeManagement() {
 
       setAdvertisers(data || []);
     } catch (error) {
-      console.error('Erreur chargement annonceurs:', error);
+      log.error({ error }, 'Erreur chargement annonceurs');
     }
   };
 
@@ -100,8 +104,8 @@ export default function RechargeManagement() {
       const statsData = await adminRechargesService.getRechargeStats();
       setStats(statsData);
     } catch (error: any) {
-      console.error('❌ Erreur chargement données:', error);
-      console.error('❌ Détails:', error.message, error.code);
+      log.error({ error }, '❌ Erreur chargement données');
+      log.error({ message: error.message, code: error.code }, '❌ Détails');
 
       // Si la table n'existe pas encore
       if (

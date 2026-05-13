@@ -1,4 +1,8 @@
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
+
+const log = logger.child({ module: 'balance.service' });
+
 
 export interface BalanceInfo {
   available_balance: number;
@@ -29,14 +33,14 @@ class BalanceService {
       });
 
       if (error) {
-        console.error('Erreur RPC get_user_balance:', error);
+        log.error({ error }, 'Erreur RPC get_user_balance');
         // Fallback: calculer manuellement
         return await this.calculateBalanceManually(userId);
       }
 
       return data || 0;
     } catch (error) {
-      console.error('Erreur lors de la récupération du solde:', error);
+      log.error({ error }, 'Erreur lors de la récupération du solde');
       return 0;
     }
   }
@@ -75,7 +79,7 @@ class BalanceService {
 
       return totalRecharged - totalSpent;
     } catch (error) {
-      console.error('Erreur calcul manuel du solde:', error);
+      log.error({ error }, 'Erreur calcul manuel du solde');
       return 0;
     }
   }
@@ -101,7 +105,7 @@ class BalanceService {
         active_campaigns_count: data.active_campaigns_count || 0,
       };
     } catch (error) {
-      console.error('Erreur récupération balance info:', error);
+      log.error({ error }, 'Erreur récupération balance info');
       return null;
     }
   }
@@ -118,7 +122,7 @@ class BalanceService {
       });
 
       if (error) {
-        console.error('Erreur RPC check_campaign_balance:', error);
+        log.error({ error }, 'Erreur RPC check_campaign_balance');
         return null;
       }
 
@@ -140,7 +144,7 @@ class BalanceService {
 
       return adjustedData;
     } catch (error) {
-      console.error('Erreur lors de la vérification du solde:', error);
+      log.error({ error }, 'Erreur lors de la vérification du solde');
       return null;
     }
   }
@@ -158,7 +162,7 @@ class BalanceService {
 
       return data || 0;
     } catch (error) {
-      console.error('Erreur calcul coût campagne:', error);
+      log.error({ error }, 'Erreur calcul coût campagne');
       return 0;
     }
   }

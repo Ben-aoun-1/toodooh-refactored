@@ -25,6 +25,10 @@ import { supabase } from '../lib/supabase';
 import { campaignOwnerApprovalService } from '../services/campaign-owner-approval.service';
 import { getDoohConfigNumbers } from '../services/global-configuration.service';
 import { useAuthStore } from '../stores/auth.store';
+import { logger } from '../lib/logger';
+
+const log = logger.child({ module: 'OwnerCampaigns' });
+
 
 type OwnerCampaignStatusFilter =
   | 'all'
@@ -312,7 +316,7 @@ export default function OwnerCampaigns() {
             .select('user_id, business_name, logo_url')
             .in('user_id', advertiserUserIds);
           if (advertiserProfilesError) {
-            console.warn('OwnerCampaigns logo query by user_id failed:', advertiserProfilesError);
+            log.warn({ advertiserProfilesError }, 'OwnerCampaigns logo query by user_id failed');
           }
 
           (advertiserProfiles || []).forEach(
@@ -338,10 +342,7 @@ export default function OwnerCampaigns() {
               .select('business_name, logo_url')
               .in('business_name', advertiserClientNames);
           if (advertiserProfilesByNameError) {
-            console.warn(
-              'OwnerCampaigns logo query by business_name failed:',
-              advertiserProfilesByNameError,
-            );
+            log.warn({ advertiserProfilesByNameError }, 'OwnerCampaigns logo query by business_name failed');
           }
           (advertiserProfilesByName || []).forEach(
             (profile: { business_name?: string | null; logo_url?: string | null }) => {

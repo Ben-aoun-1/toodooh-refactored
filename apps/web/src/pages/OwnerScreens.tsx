@@ -25,6 +25,10 @@ import ScreenCalendar from '../components/ScreenCalendar';
 import { supabase } from '../lib/supabase';
 import { screensService, Screen, UnavailabilityPeriod } from '../services/screens.service';
 import { useAuthStore } from '../stores/auth.store';
+import { logger } from '../lib/logger';
+
+const log = logger.child({ module: 'OwnerScreens' });
+
 
 interface RevenueStats {
   totalRevenue: number;
@@ -325,7 +329,7 @@ export default function OwnerScreens() {
       });
       return true;
     } catch (error) {
-      console.error('❌ Erreur lors de la mise à jour du statut:', error);
+      log.error({ error }, '❌ Erreur lors de la mise à jour du statut');
       return false;
     }
   };

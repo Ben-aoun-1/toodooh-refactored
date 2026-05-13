@@ -14,6 +14,10 @@ import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { generateInvoicePDF } from '../services/invoice-pdf.service';
 import { useAuthStore } from '../stores/auth.store';
+import { logger } from '../lib/logger';
+
+const log = logger.child({ module: 'MyInvoices' });
+
 
 export default function MyInvoices() {
   const user = useAuthStore((state) => state.user);
@@ -34,7 +38,7 @@ export default function MyInvoices() {
         });
 
         if (error) {
-          console.error('Error fetching invoices:', error);
+          log.error({ error }, 'Error fetching invoices');
           let fallbackData, fallbackError;
           const fallbackQuery = await supabase
             .from('factures_with_campaigns')
@@ -56,7 +60,7 @@ export default function MyInvoices() {
           }
 
           if (fallbackError) {
-            console.error('Error in fallback query:', fallbackError);
+            log.error({ fallbackError }, 'Error in fallback query');
             setInvoices([]);
           } else {
             setInvoices(fallbackData || []);
@@ -74,7 +78,7 @@ export default function MyInvoices() {
           setInvoices(formattedData);
         }
       } catch (err) {
-        console.error('Error in fetchInvoices:', err);
+        log.error({ err }, 'Error in fetchInvoices');
         setInvoices([]);
       }
 
@@ -122,7 +126,7 @@ export default function MyInvoices() {
         user.id,
       );
     } catch (error) {
-      console.error('Erreur lors de la génération du PDF:', error);
+      log.error({ error }, 'Erreur lors de la génération du PDF');
       alert('Erreur lors de la génération du PDF. Veuillez réessayer.');
     }
   };

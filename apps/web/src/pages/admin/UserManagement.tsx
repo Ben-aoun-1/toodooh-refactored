@@ -24,6 +24,10 @@ import AdminLayout from '../../components/admin/AdminLayout';
 import { supabase } from '../../lib/supabase';
 import { adminUserService, AdminUser } from '../../services/admin-user.service';
 import { useAdminStore } from '../../stores/admin.store';
+import { logger } from '../../lib/logger';
+
+const log = logger.child({ module: 'UserManagement' });
+
 
 // Utiliser AdminUser du service
 
@@ -226,10 +230,10 @@ export default function UserManagement() {
             successCount++;
           } else {
             errorCount++;
-            console.error(`❌ Échec de la suppression de l'utilisateur ${i + 1}/${userIds.length}`);
+            log.error(`❌ Échec de la suppression de l'utilisateur ${i + 1}/${userIds.length}`);
           }
         } catch (error) {
-          console.error(`❌ Erreur lors de la suppression de l'utilisateur ${userId}:`, error);
+          log.error({ error }, `❌ Erreur lors de la suppression de l'utilisateur ${userId}`);
           errorCount++;
         }
       }

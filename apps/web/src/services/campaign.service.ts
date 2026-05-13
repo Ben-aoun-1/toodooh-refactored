@@ -25,6 +25,10 @@ import {
   type SpecialEventWindow,
 } from './dooh-hourly-grid';
 import { getDoohConfigNumbers } from './global-configuration.service';
+import { logger } from '../lib/logger';
+
+const log = logger.child({ module: 'campaign.service' });
+
 
 export interface CreateCampaignData {
   name: string;
@@ -85,10 +89,7 @@ async function getOccupiedRepetitionsByLocationSlotFromHourlyPlan(input: {
     .lte('diffusion_date', end);
 
   if (error) {
-    console.warn(
-      'getOccupiedRepetitionsByLocationSlotFromHourlyPlan: lecture indisponible, occupation concurrente à 0.',
-      error,
-    );
+    log.warn({ error }, 'getOccupiedRepetitionsByLocationSlotFromHourlyPlan: lecture indisponible, occupation concurrente à 0.');
     return new Map<string, number>();
   }
 
@@ -110,10 +111,7 @@ async function getOccupiedRepetitionsByLocationSlotFromHourlyPlan(input: {
     .in('id', campaignIds)
     .in('status', ['active', 'pending']);
   if (campaignsError) {
-    console.warn(
-      'getOccupiedRepetitionsByLocationSlotFromHourlyPlan: lecture statuts campagnes indisponible, occupation concurrente à 0.',
-      campaignsError,
-    );
+    log.warn({ campaignsError }, 'getOccupiedRepetitionsByLocationSlotFromHourlyPlan: lecture statuts campagnes indisponible, occupation concurrente à 0.');
     return new Map<string, number>();
   }
 
@@ -197,7 +195,7 @@ export const campaignService = {
         }));
         const { error: locErr } = await supabase.from('campaign_locations').insert(locInserts);
         if (locErr) {
-          console.error('Erreur campaign_locations:', locErr);
+          log.error({ locErr }, 'Erreur campaign_locations');
         } else {
           const { data: screensInLocs } = await supabase
             .from('screens')
@@ -222,7 +220,7 @@ export const campaignService = {
         const { error: screensError } = await supabase
           .from('campaign_screens')
           .insert(screenInserts);
-        if (screensError) console.error('Erreur ajout écrans:', screensError);
+        if (screensError) log.error({ screensError }, 'Erreur ajout écrans');
         else ;
       }
 
@@ -236,14 +234,14 @@ export const campaignService = {
         .delete()
         .eq('campaign_id', cid);
       if (delErr && !isMissingCampaignCategoriesTable(delErr)) {
-        console.error('Erreur suppression campaign_categories:', delErr);
+        log.error({ delErr }, 'Erreur suppression campaign_categories');
       }
       if (categoriesToSync.length > 0) {
         const { error: insErr } = await supabase
           .from('campaign_categories')
           .insert(categoriesToSync.map((cat) => ({ campaign_id: cid, category: cat })));
         if (insErr && !isMissingCampaignCategoriesTable(insErr)) {
-          console.error('Erreur insertion campaign_categories:', insErr);
+          log.error({ insErr }, 'Erreur insertion campaign_categories');
         }
       }
 
@@ -262,7 +260,7 @@ export const campaignService = {
       .order('category');
     if (error) {
       if (!isMissingCampaignCategoriesTable(error)) {
-        console.error('Erreur getCampaignCategories:', error);
+        log.error({ error }, 'Erreur getCampaignCategories');
       }
       return [];
     }
@@ -293,7 +291,7 @@ export const campaignService = {
       // Les validations sont gérées explicitement par owner approval.
       void campaignId;
     } catch (error) {
-      console.error('❌ Erreur lors de la création des approbations automatiques:', error);
+      log.error({ error }, '❌ Erreur lors de la création des approbations automatiques');
     }
   },
 
@@ -507,10 +505,7 @@ export const campaignService = {
         .eq('is_active', true);
 
       if (specialEventsError) {
-        console.warn(
-          '⚠️ Lecture special_events impossible (RLS ?). Chevauchements événement ignorés pour la grille horaire:',
-          specialEventsError.message,
-        );
+        log.warn({ message: specialEventsError.message }, '⚠️ Lecture special_events impossible (RLS ?). Chevauchements événement ignorés pour la grille horaire');
       }
 
       const activeEvents: SpecialEventWindow[] = (specialEventsRows || [])
@@ -534,10 +529,7 @@ export const campaignService = {
           excludeCampaignId: campaignId,
         });
       } catch (e) {
-        console.warn(
-          'injectCampaignPublicationSchedule: lecture occupation depuis campaign_hourly_location_plan impossible, fallback campaign_screens.',
-          e,
-        );
+        log.warn({ e }, 'injectCampaignPublicationSchedule: lecture occupation depuis campaign_hourly_location_plan impossible, fallback campaign_screens.');
         const { data: otherCsRows } = await supabase
           .from('campaign_screens')
           .select('campaign_id, screen_id, repetitions_per_hour')
@@ -657,7 +649,7 @@ export const campaignService = {
           .filter((c) => c > 0);
         // S'assurer qu'on a au moins une capacité valide
         if (capacities.length === 0) {
-          console.warn(`⚠️ Aucune capacité valide pour l'écran ${screen.id}`);
+          log.warn(`⚠️ Aucune capacité valide pour l'écran ${screen.id}`);
           return {
             screen_id: screen.id,
             impressions_per_hour: 0,
@@ -727,9 +719,7 @@ export const campaignService = {
 
         // Si l'écran a une capacité d'impression, on doit avoir au moins 1 répétition
         if (screen.impressions_per_hour > 0 && repetitionsPerHour === 0) {
-          console.warn(
-            `⚠️ Répétitions à 0 pour écran ${screen.id} avec capacité ${screen.impressions_per_hour}, forcer à 1`,
-          );
+          log.warn(`⚠️ Répétitions à 0 pour écran ${screen.id} avec capacité ${screen.impressions_per_hour}, forcer à 1`);
           repetitionsPerHour = 1;
         }
 
@@ -756,10 +746,7 @@ export const campaignService = {
           excludeCampaignId: campaignId,
         });
       } catch (e) {
-        console.warn(
-          'injectCampaignPublicationSchedule: lecture occupation par créneau indisponible, occupation concurrente à 0.',
-          e,
-        );
+        log.warn({ e }, 'injectCampaignPublicationSchedule: lecture occupation par créneau indisponible, occupation concurrente à 0.');
         occupiedRepetitionsBySlot = new Map<string, number>();
       }
 
@@ -871,10 +858,7 @@ export const campaignService = {
           scopeLocationIds: scopedLocationIds,
         });
       } catch (planWriteError) {
-        console.error(
-          `❌ Échec écriture campaign_hourly_location_plan pour ${campaignId}`,
-          planWriteError,
-        );
+        log.error({ planWriteError }, `❌ Échec écriture campaign_hourly_location_plan pour ${campaignId}`);
         throw planWriteError;
       }
 
@@ -891,17 +875,11 @@ export const campaignService = {
       const nPlanning = planningTableParCreneau.length;
       if (nPlanning === 0) {
         const effPos = slotDetailRows.filter((s) => s.effectiveAffluence > 0).length;
-        console.warn(
-          '📋 Aucune ligne à afficher : tous les créneaux ont 0 impression facturable (événement, indispo, occupation, ou pas d’affluence sur ce (jour, heure)).',
-          {
-            creneaux_parcourus: slotDetailRows.length,
+        log.warn({ creneaux_parcourus: slotDetailRows.length,
             creneaux_affluence_effective_strictement_positive: effPos,
             localites: orderedLocationIds.length,
-            hourlyScale,
-          },
-        );
+            hourlyScale, }, '📋 Aucune ligne à afficher : tous les créneaux ont 0 impression facturable (événement, indispo, occupation, ou pas d’affluence sur ce (jour, heure)).');
       } else {
-        console.table(planningTableParCreneau);
         const maxLines = 40;
         const lines = planningTableParCreneau
           .slice(0, maxLines)
@@ -955,21 +933,16 @@ export const campaignService = {
         } else {
           // L'écran n'existe pas, mais normalement il devrait exister
           // Si ce n'est pas le cas, on ne met pas à jour
-          console.warn(
-            `⚠️ L'écran ${schedule.screen_id} n'existe pas dans campaign_screens pour la campagne ${campaignId}`,
-          );
+          log.warn(`⚠️ L'écran ${schedule.screen_id} n'existe pas dans campaign_screens pour la campagne ${campaignId}`);
           continue;
         }
 
         if (screenUpdateError) {
-          console.error(
-            `❌ Erreur lors de la mise à jour de l'écran ${schedule.screen_id}:`,
-            screenUpdateError,
-          );
-          console.error('Code:', screenUpdateError.code);
-          console.error('Message:', screenUpdateError.message);
-          console.error('Details:', screenUpdateError.details);
-          console.error('Hint:', screenUpdateError.hint);
+          log.error({ screenUpdateError }, `❌ Erreur lors de la mise à jour de l'écran ${schedule.screen_id}`);
+          log.error({ code: screenUpdateError.code }, 'Code');
+          log.error({ message: screenUpdateError.message }, 'Message');
+          log.error({ details: screenUpdateError.details }, 'Details');
+          log.error({ hint: screenUpdateError.hint }, 'Hint');
         } else {
         }
       }
@@ -1048,11 +1021,11 @@ export const campaignService = {
       const { error } = await supabase.rpc('update_expired_campaigns');
 
       if (error) {
-        console.error('❌ Erreur lors de la mise à jour des campagnes expirées:', error);
+        log.error({ error }, '❌ Erreur lors de la mise à jour des campagnes expirées');
       } else {
       }
     } catch (error) {
-      console.error('❌ Erreur lors de la vérification des campagnes expirées:', error);
+      log.error({ error }, '❌ Erreur lors de la vérification des campagnes expirées');
     }
   },
 };

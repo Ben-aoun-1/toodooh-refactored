@@ -23,6 +23,10 @@ import { supabase } from '../lib/supabase';
 import { authService } from '../services/auth.service';
 import { useAuthStore } from '../stores/auth.store';
 import type { BusinessProfile } from '../types/auth';
+import { logger } from '../lib/logger';
+
+const log = logger.child({ module: 'Onboarding' });
+
 
 interface OnboardingModalProps {
   onComplete: () => void;
@@ -81,7 +85,7 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
       setProfile(data);
       setRegUrl(data?.registration_doc_url || null);
     } catch (error) {
-      console.error('Erreur lors du retry:', error);
+      log.error({ error }, 'Erreur lors du retry');
       setError('Erreur lors du chargement du profil');
     } finally {
       setLoading(false);
@@ -128,7 +132,7 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
           setCinUrl(existingProfile.cin_doc_url || null);
           setError(null);
         } else {
-          console.warn('⚠️ Aucun business_profile trouvé, tentative de rattrapage...');
+          log.warn('⚠️ Aucun business_profile trouvé, tentative de rattrapage...');
           await authService.createDefaultProfile(user.id, user.email || '');
 
           const { data: repairedProfile, error: repairedError } = await supabase
@@ -151,7 +155,7 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
           }
         }
       } catch (error) {
-        console.error('Error in fetchProfile:', error);
+        log.error({ error }, 'Error in fetchProfile');
         setProfile(null);
         setError('Erreur lors du chargement du profil');
         hasCheckedOnboardingRef.current = false; // Réessayer en cas d'erreur
@@ -676,11 +680,8 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
 
 
                             if (deleteError) {
-                              console.error(
-                                '❌ Erreur lors de la suppression du fichier:',
-                                deleteError,
-                              );
-                              console.error('   Code:', deleteError.message);
+                              log.error({ deleteError }, '❌ Erreur lors de la suppression du fichier');
+                              log.error({ message: deleteError.message }, '   Code');
                               // On continue quand même pour supprimer l'URL de la DB
                             } else {
                             }

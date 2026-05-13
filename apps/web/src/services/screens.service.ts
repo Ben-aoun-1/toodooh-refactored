@@ -1,4 +1,8 @@
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
+
+const log = logger.child({ module: 'screens.service' });
+
 
 export interface Screen {
   id: string;
@@ -162,13 +166,11 @@ class ScreensService {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('❌ Erreur Supabase:', error);
-        console.error("Détails de l'erreur:", {
-          message: error.message,
+        log.error({ error }, '❌ Erreur Supabase');
+        log.error({ message: error.message,
           details: error.details,
           hint: error.hint,
-          code: error.code,
-        });
+          code: error.code, }, "Détails de l'erreur");
         throw error;
       }
 
@@ -241,13 +243,11 @@ class ScreensService {
       const { data, error } = await supabase.from('screens').insert(insertData).select().single();
 
       if (error) {
-        console.error('❌ Erreur Supabase lors de la création:', error);
-        console.error("Détails de l'erreur:", {
-          message: error.message,
+        log.error({ error }, '❌ Erreur Supabase lors de la création');
+        log.error({ message: error.message,
           details: error.details,
           hint: error.hint,
-          code: error.code,
-        });
+          code: error.code, }, "Détails de l'erreur");
         throw error;
       }
 

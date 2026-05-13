@@ -1,4 +1,8 @@
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
+
+const log = logger.child({ module: 'campaign-owner-approval.service' });
+
 
 export interface CampaignOwnerApproval {
   id: string;
@@ -176,7 +180,7 @@ export const campaignOwnerApprovalService = {
       const pendingCampaigns = await this.getPendingCampaigns(ownerId);
       return pendingCampaigns.filter((c) => c.approval_status === 'pending').length;
     } catch (error) {
-      console.error('Erreur lors du comptage des campagnes en attente:', error);
+      log.error({ error }, 'Erreur lors du comptage des campagnes en attente');
       return 0;
     }
   },

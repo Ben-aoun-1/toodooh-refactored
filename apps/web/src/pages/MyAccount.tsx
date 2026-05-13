@@ -21,6 +21,10 @@ import { supabase } from '../lib/supabase';
 import { authService } from '../services/auth.service';
 import { useAuthStore } from '../stores/auth.store';
 import type { BusinessSector, Governorate, BusinessProfile } from '../types/auth';
+import { logger } from '../lib/logger';
+
+const log = logger.child({ module: 'MyAccount' });
+
 
 const steps = [
   { id: 1, title: 'Profil', icon: User },
@@ -128,7 +132,7 @@ export default function MyAccount() {
       setSectors(sectorsData);
       setGovernorates(governoratesData);
     } catch (error) {
-      console.error('Erreur lors du chargement des données de référence:', error);
+      log.error({ error }, 'Erreur lors du chargement des données de référence');
     }
   };
 
@@ -276,11 +280,9 @@ export default function MyAccount() {
         window.location.reload();
       }
     } catch (error) {
-      console.error('❌ Erreur lors de la mise à jour:', error);
-      console.error("Détails de l'erreur:", {
-        message: error instanceof Error ? error.message : 'Erreur inconnue',
-        stack: error instanceof Error ? error.stack : undefined,
-      });
+      log.error({ error }, '❌ Erreur lors de la mise à jour');
+      log.error({ message: error instanceof Error ? error.message : 'Erreur inconnue',
+        stack: error instanceof Error ? error.stack : undefined, }, "Détails de l'erreur");
       toast.error(
         `Erreur lors de la mise à jour du profil: ${error instanceof Error ? error.message : 'Erreur inconnue'}`,
       );

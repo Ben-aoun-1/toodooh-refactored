@@ -7,6 +7,10 @@ import {
   TopPerformingScreen,
   RecentActivity,
 } from '../types/platform-stats';
+import { logger } from '../lib/logger';
+
+const log = logger.child({ module: 'platform-stats.service' });
+
 
 export const platformStatsService = {
   // Récupérer les statistiques globales
@@ -72,7 +76,7 @@ export const platformStatsService = {
 
       return stats;
     } catch (error) {
-      console.error('❌ Exception in getGlobalStats:', error);
+      log.error({ error }, '❌ Exception in getGlobalStats');
       return null;
     }
   },
@@ -116,7 +120,7 @@ export const platformStatsService = {
 
       return stats;
     } catch (error) {
-      console.error('❌ Exception in getRevenueStats:', error);
+      log.error({ error }, '❌ Exception in getRevenueStats');
       return null;
     }
   },
@@ -152,7 +156,7 @@ export const platformStatsService = {
 
       return stats;
     } catch (error) {
-      console.error('❌ Exception in getOccupancyStats:', error);
+      log.error({ error }, '❌ Exception in getOccupancyStats');
       return null;
     }
   },
@@ -202,7 +206,7 @@ export const platformStatsService = {
 
       return stats;
     } catch (error) {
-      console.error('❌ Exception in getCampaignsPerformance:', error);
+      log.error({ error }, '❌ Exception in getCampaignsPerformance');
       return null;
     }
   },
@@ -261,7 +265,7 @@ export const platformStatsService = {
 
       return topScreens;
     } catch (error) {
-      console.error('❌ Exception in getTopScreens:', error);
+      log.error({ error }, '❌ Exception in getTopScreens');
       return [];
     }
   },
@@ -275,13 +279,13 @@ export const platformStatsService = {
       });
 
       if (error) {
-        console.error('❌ Error fetching recent activity:', error);
+        log.error({ error }, '❌ Error fetching recent activity');
         return [];
       }
 
       return data || [];
     } catch (error) {
-      console.error('❌ Exception in getRecentActivity:', error);
+      log.error({ error }, '❌ Exception in getRecentActivity');
       return [];
     }
   },

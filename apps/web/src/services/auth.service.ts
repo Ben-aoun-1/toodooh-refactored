@@ -9,6 +9,10 @@ import {
   CompanySizeOption,
   SupportObjectiveOption,
 } from '../types/auth';
+import { logger } from '../lib/logger';
+
+const log = logger.child({ module: 'auth.service' });
+
 
 // Fonction pour mapper les erreurs techniques vers des messages fonctionnels
 const mapAuthError = (error: any): string => {
@@ -189,7 +193,7 @@ async function insertFleetEstablishmentsAfterSignup(
   }));
   const { error } = await supabase.from('locations').insert(rows);
   if (error) {
-    console.error('⚠️ Insertion localités (parc) après inscription:', error);
+    log.error({ error }, '⚠️ Insertion localités (parc) après inscription');
   } else {
   }
 }
@@ -247,7 +251,7 @@ export const authService = {
       if (error) {
         // Ne pas logger les erreurs de session manquante (normal quand pas connecté)
         if (error.message !== 'Auth session missing!') {
-          console.error('Error getting current user:', error);
+          log.error({ error }, 'Error getting current user');
         }
         return null;
       }
@@ -255,7 +259,7 @@ export const authService = {
     } catch (error: any) {
       // Ne pas logger les erreurs de session manquante
       if (error.message !== 'Auth session missing!') {
-        console.error('Error in getCurrentUser:', error);
+        log.error({ error }, 'Error in getCurrentUser');
       }
       return null;
     }
@@ -330,9 +334,7 @@ export const authService = {
       // Compatibilité ascendante: si la RPC n'existe pas encore,
       // ne pas bloquer l'inscription (sinon régression annonceur).
       if (profileTypeCheckError.code === 'PGRST202') {
-        console.warn(
-          '⚠️ RPC validate_signup_profile_type absente; précheck ignoré temporairement.',
-        );
+        log.warn('⚠️ RPC validate_signup_profile_type absente; précheck ignoré temporairement.');
       } else {
         throw new Error(
           `Impossible de valider la configuration d'inscription (${profileTypeCheckError.code || 'UNKNOWN'}): ${profileTypeCheckError.message}`,
@@ -359,10 +361,7 @@ export const authService = {
         .order('display_order', { ascending: true });
 
       if (sectorsError) {
-        console.error(
-          '❌ Impossible de charger business_sectors pour profil agence:',
-          sectorsError,
-        );
+        log.error({ sectorsError }, '❌ Impossible de charger business_sectors pour profil agence');
         throw new Error(
           'Configuration des secteurs indisponible. Réessayez dans quelques instants.',
         );
@@ -406,9 +405,7 @@ export const authService = {
       if (existingTax && existingTax.length > 0) {
         if (requestedProfileType === 'fleet_owner') {
           fleetOwnerTaxNumberConflict = true;
-          console.warn(
-            "⚠️ fleet_owner: tax_number déjà utilisé, génération d'un matricule technique.",
-          );
+          log.warn("⚠️ fleet_owner: tax_number déjà utilisé, génération d'un matricule technique.");
         } else {
           throw new Error(
             "🏢 Ce numéro de matricule fiscal est déjà enregistré dans notre système. Si c'est votre entreprise, veuillez vous connecter avec votre compte existant.",
@@ -516,7 +513,7 @@ export const authService = {
             .upload(filePath, data.registration_doc);
 
           if (uploadError) {
-            console.error('⚠️ Erreur upload document (non bloquante):', uploadError);
+            log.error({ uploadError }, '⚠️ Erreur upload document (non bloquante)');
             return;
           }
 
@@ -527,7 +524,7 @@ export const authService = {
             .createSignedUrl(filePath, 604800); // 7 jours
 
           if (signedError || !signedData) {
-            console.error('⚠️ Erreur création URL signée:', signedError);
+            log.error({ signedError }, '⚠️ Erreur création URL signée');
             return;
           }
 
@@ -540,11 +537,11 @@ export const authService = {
             .eq('user_id', authData.user.id);
 
           if (updateError) {
-            console.error('⚠️ Erreur sauvegarde URL (non bloquante):', updateError);
+            log.error({ updateError }, '⚠️ Erreur sauvegarde URL (non bloquante)');
           } else {
           }
         } catch (fileError) {
-          console.error("⚠️ Erreur lors de l'upload du document (non bloquante):", fileError);
+          log.error({ fileError }, "⚠️ Erreur lors de l'upload du document (non bloquante)");
         }
       } else {
       }
@@ -564,7 +561,7 @@ export const authService = {
         .eq('user_id', authData.user.id);
 
       if (updateError) {
-        console.error('⚠️ Erreur mise à jour des champs optionnels:', updateError);
+        log.error({ updateError }, '⚠️ Erreur mise à jour des champs optionnels');
       }
     };
 
@@ -580,7 +577,7 @@ export const authService = {
           .from('registres')
           .upload(filePath, data.company_logo);
         if (uploadError) {
-          console.error('⚠️ Erreur upload logo (non bloquante):', uploadError);
+          log.error({ uploadError }, '⚠️ Erreur upload logo (non bloquante)');
           return;
         }
 
@@ -588,7 +585,7 @@ export const authService = {
           .from('registres')
           .createSignedUrl(filePath, 604800); // 7 jours
         if (signedError || !signedData) {
-          console.error('⚠️ Erreur URL logo signée (non bloquante):', signedError);
+          log.error({ signedError }, '⚠️ Erreur URL logo signée (non bloquante)');
           return;
         }
 
@@ -597,10 +594,10 @@ export const authService = {
           .update({ logo_url: signedData.signedUrl })
           .eq('user_id', authData.user.id);
         if (updateError) {
-          console.error('⚠️ Erreur sauvegarde logo_url (non bloquante):', updateError);
+          log.error({ updateError }, '⚠️ Erreur sauvegarde logo_url (non bloquante)');
         }
       } catch (logoError) {
-        console.error('⚠️ Erreur inattendue upload logo (non bloquante):', logoError);
+        log.error({ logoError }, '⚠️ Erreur inattendue upload logo (non bloquante)');
       }
     };
 
@@ -643,12 +640,12 @@ export const authService = {
     // Si aucune stratégie n'a fonctionné, bloquer l'inscription et exposer
     // l'erreur SQL pour identifier précisément le champ/problème manquant.
     if (!profileCreated) {
-      console.error('❌ Erreur critique lors de la création du profil:', profileError);
+      log.error({ profileError }, '❌ Erreur critique lors de la création du profil');
       if (profileError) {
-        console.error('Code erreur:', (profileError as any).code);
-        console.error('Message:', profileError.message);
-        console.error('Details:', (profileError as any).details);
-        console.error('Hint:', (profileError as any).hint);
+        log.error({ data: (profileError as any).code }, 'Code erreur');
+        log.error({ message: profileError.message }, 'Message');
+        log.error({ data: (profileError as any).details }, 'Details');
+        log.error({ data: (profileError as any).hint }, 'Hint');
       }
       const pErr = profileError as any;
       if (
@@ -709,13 +706,11 @@ export const authService = {
     });
 
     if (error) {
-      console.error('❌ Erreur lors de la mise à jour du mot de passe:', error);
-      console.error("Détails de l'erreur:", {
-        message: error.message,
+      log.error({ error }, '❌ Erreur lors de la mise à jour du mot de passe');
+      log.error({ message: error.message,
         details: (error as any).details,
         hint: (error as any).hint,
-        code: error.code,
-      });
+        code: error.code, }, "Détails de l'erreur");
       throw new Error(mapAuthError(error));
     }
 
@@ -739,13 +734,11 @@ export const authService = {
       .select();
 
     if (error) {
-      console.error('❌ Erreur Supabase:', error);
-      console.error("Détails de l'erreur:", {
-        message: error.message,
+      log.error({ error }, '❌ Erreur Supabase');
+      log.error({ message: error.message,
         details: error.details,
         hint: error.hint,
-        code: error.code,
-      });
+        code: error.code, }, "Détails de l'erreur");
       throw new Error(`Erreur lors de la mise à jour du profil: ${error.message}`);
     }
 

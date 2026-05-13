@@ -3,6 +3,10 @@ import { persist } from 'zustand/middleware';
 
 import { adminService } from '../services/admin.service';
 import { AdminProfile } from '../types/admin';
+import { logger } from '../lib/logger';
+
+const log = logger.child({ module: 'admin.store' });
+
 
 interface AdminState {
   admin: AdminProfile | null;
@@ -32,7 +36,7 @@ export const useAdminStore = create<AdminState>()(
 
           set({ admin, initialized: true, loading: false });
         } catch (error) {
-          console.error('❌ Admin store: Error initializing:', error);
+          log.error({ error }, '❌ Admin store: Error initializing');
           set({ admin: null, initialized: true, loading: false });
         }
       },
@@ -54,7 +58,7 @@ export const useAdminStore = create<AdminState>()(
           await adminService.logout();
           set({ admin: null, loading: false });
         } catch (error) {
-          console.error('Error during logout:', error);
+          log.error({ error }, 'Error during logout');
           set({ loading: false });
         }
       },

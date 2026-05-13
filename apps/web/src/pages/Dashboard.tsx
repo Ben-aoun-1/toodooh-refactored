@@ -36,7 +36,7 @@ class ContentErrorBoundary extends Component<
     return { hasError: true, error };
   }
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    console.error('ContentErrorBoundary:', error, info.componentStack);
+    log.error({ error, componentStack: info.componentStack }, 'ContentErrorBoundary');
   }
   render() {
     if (this.state.hasError && this.state.error) {
@@ -114,6 +114,10 @@ import MyClients from './MyClients';
 import { eventsService } from '../services/events.service';
 import type { SpecialEvent } from '../types/event';
 import AdvertiserNotificationsBell from '../components/AdvertiserNotificationsBell';
+import { logger } from '../lib/logger';
+
+const log = logger.child({ module: 'Dashboard' });
+
 
 const APPOINTMENT_OBJECTIVES_FALLBACK = [
   'Renseignements',
@@ -336,7 +340,7 @@ export default function Dashboard() {
           }
         }
       } catch (error) {
-        console.error('Erreur chargement profil:', error);
+        log.error({ error }, 'Erreur chargement profil');
         profileLoadedRef.current = false; // Réessayer en cas d'erreur
       }
     };
@@ -452,7 +456,7 @@ export default function Dashboard() {
           .eq('user_id', user.id);
 
         if (campaignsError) {
-          console.error('Error fetching campaigns:', campaignsError);
+          log.error({ campaignsError }, 'Error fetching campaigns');
         }
 
         const now = new Date();
@@ -506,7 +510,7 @@ export default function Dashboard() {
             balance = await balanceService.getUserBalance(user.id);
           }
         } catch (error) {
-          console.error('❌ Erreur récupération solde:', error);
+          log.error({ error }, '❌ Erreur récupération solde');
           balance = 0;
         }
 
@@ -530,7 +534,7 @@ export default function Dashboard() {
         });
         setAvailableBalanceTnd(balance);
       } catch (error) {
-        console.error('Error loading dashboard stats:', error);
+        log.error({ error }, 'Error loading dashboard stats');
         setAvailableBalanceTnd(0);
         setTotalCreatedCampaignsCount(0);
       } finally {
@@ -554,7 +558,7 @@ export default function Dashboard() {
           .order('created_at', { ascending: false })
           .limit(5);
         if (error) {
-          console.error('Error fetching last campaigns:', error);
+          log.error({ error }, 'Error fetching last campaigns');
           return;
         }
         const rows = data || [];
@@ -576,7 +580,7 @@ export default function Dashboard() {
             ]);
 
           if (categoryError && !isMissingCampaignCategoriesTable(categoryError)) {
-            console.error('Error fetching campaign categories:', categoryError);
+            log.error({ categoryError }, 'Error fetching campaign categories');
           }
 
           (categoryRows || []).forEach((row: any) => {
@@ -625,7 +629,7 @@ export default function Dashboard() {
           }),
         );
       } catch (e) {
-        console.error('Exception loadLastCampaigns:', e);
+        log.error({ e }, 'Exception loadLastCampaigns');
       } finally {
         setLoadingLastCampaigns(false);
       }
@@ -645,7 +649,7 @@ export default function Dashboard() {
             localStorage.setItem('user_raison_social', data.contact_name);
           }
         } catch (error) {
-          console.error('Error fetching profile:', error);
+          log.error({ error }, 'Error fetching profile');
           setProfile(null);
         }
       } else {
@@ -844,7 +848,7 @@ export default function Dashboard() {
           .eq('user_id', user.id);
 
         if (error) {
-          console.error('Erreur lors de la mise à jour onboarding_completed:', error);
+          log.error({ error }, 'Erreur lors de la mise à jour onboarding_completed');
           onboardingCheckRef.current = false; // Réessayer en cas d'erreur
         } else {
 
@@ -852,7 +856,7 @@ export default function Dashboard() {
           setOnboardingCompleted(true);
         }
       } catch (error) {
-        console.error("Erreur lors de la completion de l'onboarding:", error);
+        log.error({ error }, "Erreur lors de la completion de l'onboarding");
         onboardingCheckRef.current = false; // Réessayer en cas d'erreur
       }
     }
@@ -873,11 +877,11 @@ export default function Dashboard() {
           .eq('user_id', user.id);
 
         if (error) {
-          console.error('Erreur lors de la mise à jour onboarding_completed:', error);
+          log.error({ error }, 'Erreur lors de la mise à jour onboarding_completed');
         } else {
         }
       } catch (error) {
-        console.error("Erreur lors de la fermeture de l'onboarding:", error);
+        log.error({ error }, "Erreur lors de la fermeture de l'onboarding");
       }
     }
   };

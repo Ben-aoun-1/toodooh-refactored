@@ -1,4 +1,8 @@
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
+
+const log = logger.child({ module: 'video-upload.service' });
+
 
 export interface UploadProgress {
   progress: number;
@@ -133,7 +137,7 @@ export const videoUploadService = {
         .createSignedUrl(filePath, 31536000); // 365 jours en secondes
 
       if (signedError) {
-        console.error('Erreur création URL signée:', signedError);
+        log.error({ signedError }, 'Erreur création URL signée');
         // Fallback sur URL publique
         const {
           data: { publicUrl },
@@ -151,7 +155,7 @@ export const videoUploadService = {
         path: filePath,
       };
     } catch (error: any) {
-      console.error("❌ Erreur lors de l'upload de la vidéo:", error);
+      log.error({ error }, "❌ Erreur lors de l'upload de la vidéo");
       onProgress?.({
         progress: 0,
         status: 'error',
@@ -241,7 +245,7 @@ export const videoUploadService = {
       .update({ duration_seconds: Math.round(durationSeconds) })
       .eq('id', videoId);
     if (error) {
-      console.warn('updateVideoDurationSeconds:', error.message);
+      log.warn({ message: error.message }, 'updateVideoDurationSeconds');
       throw error;
     }
   },

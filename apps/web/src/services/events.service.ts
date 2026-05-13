@@ -1,5 +1,9 @@
 import { supabase } from '../lib/supabase';
 import type { SpecialEvent } from '../types/event';
+import { logger } from '../lib/logger';
+
+const log = logger.child({ module: 'events.service' });
+
 
 /**
  * Service pour les annonceurs : récupérer les événements mis en avant (dashboard).
@@ -12,12 +16,12 @@ export const eventsService = {
       });
 
       if (error) {
-        console.error('Error fetching featured events:', error);
+        log.error({ error }, 'Error fetching featured events');
         return [];
       }
       return (data || []) as SpecialEvent[];
     } catch (err) {
-      console.error('Exception getFeaturedEvents:', err);
+      log.error({ err }, 'Exception getFeaturedEvents');
       return [];
     }
   },
@@ -30,13 +34,13 @@ export const eventsService = {
         supabase.rpc('get_all_events_count'),
       ]);
       if (eventsRes.error) {
-        console.error('Error fetching all events:', eventsRes.error);
+        log.error({ error: eventsRes.error }, 'Error fetching all events');
         return { events: [], total: 0 };
       }
       const total = Number(countRes.data ?? 0);
       return { events: (eventsRes.data || []) as SpecialEvent[], total };
     } catch (err) {
-      console.error('Exception getAllEvents:', err);
+      log.error({ err }, 'Exception getAllEvents');
       return { events: [], total: 0 };
     }
   },
@@ -46,17 +50,13 @@ export const eventsService = {
     try {
       const { data, error } = await supabase.rpc('get_my_event_campaigns_events');
       if (error) {
-        console.error(
-          '[Mes événements] RPC get_my_event_campaigns_events a échoué:',
-          error.message,
-          error,
-        );
+        log.error({ message: error.message, error }, '[Mes événements] RPC get_my_event_campaigns_events a échoué');
         return [];
       }
       const list = (data || []) as SpecialEvent[];
       return list;
     } catch (err) {
-      console.error('[Mes événements] Exception getMyEventCampaignsEvents:', err);
+      log.error({ err }, '[Mes événements] Exception getMyEventCampaignsEvents');
       return [];
     }
   },
@@ -66,11 +66,7 @@ export const eventsService = {
     try {
       const { data, error } = await supabase.rpc('get_my_event_campaign_links');
       if (error) {
-        console.error(
-          '[Mes événements] RPC get_my_event_campaign_links a échoué:',
-          error.message,
-          error,
-        );
+        log.error({ message: error.message, error }, '[Mes événements] RPC get_my_event_campaign_links a échoué');
         return [];
       }
       return (data || []).map((r: { event_id: string; campaign_id: string }) => ({
@@ -78,7 +74,7 @@ export const eventsService = {
         campaign_id: r.campaign_id,
       }));
     } catch (err) {
-      console.error('[Mes événements] Exception getMyEventCampaignLinks:', err);
+      log.error({ err }, '[Mes événements] Exception getMyEventCampaignLinks');
       return [];
     }
   },

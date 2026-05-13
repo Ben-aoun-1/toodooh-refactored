@@ -33,6 +33,10 @@ import supportIconActive from '../assets/supports.png';
 import { authService } from '../services/auth.service';
 import { useAuthStore } from '../stores/auth.store';
 import type { BusinessProfile } from '../types/auth';
+import { logger } from '../lib/logger';
+
+const log = logger.child({ module: 'OwnerNavigation' });
+
 
 const APPOINTMENT_OBJECTIVES_FALLBACK = [
   'Renseignements',
@@ -130,7 +134,7 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
           const data = await authService.getBusinessProfile();
           setProfile(data);
         } catch (error) {
-          console.error('Error fetching profile:', error);
+          log.error({ error }, 'Error fetching profile');
         }
       }
     };

@@ -35,6 +35,10 @@ import {
   CampaignLocation,
   CampaignImpressionProgress,
 } from '../../types/campaign-monitoring';
+import { logger } from '../../lib/logger';
+
+const log = logger.child({ module: 'CampaignMonitoring' });
+
 
 export default function CampaignMonitoring() {
   const { admin } = useAdminStore();
@@ -170,7 +174,7 @@ export default function CampaignMonitoring() {
       setSelectedCampaignLocations(locations);
       setSelectedCampaignImpressionProgress(progress);
     } catch (error) {
-      console.error('Erreur chargement localités:', error);
+      log.error({ error }, 'Erreur chargement localités');
       setSelectedCampaignLocations([]);
       setSelectedCampaignImpressionProgress(null);
     }

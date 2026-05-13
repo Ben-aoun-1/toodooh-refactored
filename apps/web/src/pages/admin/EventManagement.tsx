@@ -20,6 +20,10 @@ import { supabase } from '../../lib/supabase';
 import { adminEventsService } from '../../services/admin-events.service';
 import { useAdminStore } from '../../stores/admin.store';
 import { SpecialEvent, CreateEventDTO, EventStats } from '../../types/event';
+import { logger } from '../../lib/logger';
+
+const log = logger.child({ module: 'EventManagement' });
+
 
 const EVENT_IMAGES_BUCKET = 'event-images';
 
@@ -87,7 +91,7 @@ export default function EventManagement() {
       const statsData = await adminEventsService.getStats();
       setStats(statsData);
     } catch (error) {
-      console.error('Error loading stats:', error);
+      log.error({ error }, 'Error loading stats');
     }
   };
 

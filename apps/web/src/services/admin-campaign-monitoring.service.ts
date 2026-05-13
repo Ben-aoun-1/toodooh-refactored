@@ -8,6 +8,10 @@ import {
   CampaignLocation,
   CampaignImpressionProgress,
 } from '../types/campaign-monitoring';
+import { logger } from '../lib/logger';
+
+const log = logger.child({ module: 'admin-campaign-monitoring.service' });
+
 
 class AdminCampaignMonitoringService {
   /**
@@ -20,7 +24,7 @@ class AdminCampaignMonitoringService {
       const { data, error } = await supabase.rpc('get_campaigns_global_stats');
 
       if (error) {
-        console.warn('⚠️ RPC get_campaigns_global_stats failed, using fallback:', error.message);
+        log.warn({ message: error.message }, '⚠️ RPC get_campaigns_global_stats failed, using fallback');
 
         // Fallback: requête directe
         const { data: campaigns, error: fallbackError } = await supabase
@@ -74,7 +78,7 @@ class AdminCampaignMonitoringService {
         })) as CampaignMonitoringData[];
       }
 
-      console.warn('⚠️ View admin_campaigns_monitoring failed, trying RPC/direct fallback');
+      log.warn('⚠️ View admin_campaigns_monitoring failed, trying RPC/direct fallback');
 
       // Fallback 1: RPC (on retire la liste lourde des écrans)
       const { data: rpcData, error: rpcError } = await supabase.rpc('get_campaigns_with_screens');
@@ -188,7 +192,7 @@ class AdminCampaignMonitoringService {
       const { data, error } = await supabase.rpc('get_campaigns_by_status', { p_status: status });
 
       if (error) {
-        console.warn('⚠️ RPC failed, using direct query:', error.message);
+        log.warn({ message: error.message }, '⚠️ RPC failed, using direct query');
 
         const { data: campaigns, error: fallbackError } = await supabase
           .from('campaigns')
@@ -216,7 +220,7 @@ class AdminCampaignMonitoringService {
       const { data, error } = await supabase.rpc('get_campaigns_by_category');
 
       if (error) {
-        console.warn('⚠️ RPC failed, using fallback:', error.message);
+        log.warn({ message: error.message }, '⚠️ RPC failed, using fallback');
 
         const { data: campaigns, error: fallbackError } = await supabase
           .from('campaigns')
@@ -257,7 +261,7 @@ class AdminCampaignMonitoringService {
       const { data, error } = await supabase.rpc('get_top_advertisers', { limit_count: limit });
 
       if (error) {
-        console.warn('⚠️ RPC failed, using fallback:', error.message);
+        log.warn({ message: error.message }, '⚠️ RPC failed, using fallback');
         return [];
       }
 
@@ -276,7 +280,7 @@ class AdminCampaignMonitoringService {
       const { data, error } = await supabase.rpc('get_most_used_screens', { limit_count: limit });
 
       if (error) {
-        console.warn('⚠️ RPC failed, using fallback:', error.message);
+        log.warn({ message: error.message }, '⚠️ RPC failed, using fallback');
         return [];
       }
 
@@ -388,7 +392,7 @@ class AdminCampaignMonitoringService {
 
       return locations;
     } catch (error) {
-      console.error('❌ Error fetching campaign locations:', error);
+      log.error({ error }, '❌ Error fetching campaign locations');
       return [];
     }
   }
@@ -420,7 +424,7 @@ class AdminCampaignMonitoringService {
         completion_rate: Math.max(0, completionRate),
       };
     } catch (error) {
-      console.error('❌ Error fetching campaign impression progress:', error);
+      log.error({ error }, '❌ Error fetching campaign impression progress');
       return {
         planned_impressions: 0,
         realized_impressions: 0,

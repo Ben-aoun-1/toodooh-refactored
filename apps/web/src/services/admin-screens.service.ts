@@ -1,4 +1,8 @@
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
+
+const log = logger.child({ module: 'admin-screens.service' });
+
 
 export interface AdminScreen {
   id: string;
@@ -414,7 +418,7 @@ export const adminScreensService = {
         .single();
 
       if (error) {
-        console.error("Erreur lors de la récupération de l'écran:", error);
+        log.error({ error }, "Erreur lors de la récupération de l'écran");
         return null;
       }
 
@@ -437,7 +441,7 @@ export const adminScreensService = {
         owner_business_name: owner?.business_name || 'N/A',
       };
     } catch (error) {
-      console.error("Erreur lors de la récupération de l'écran:", error);
+      log.error({ error }, "Erreur lors de la récupération de l'écran");
       return null;
     }
   },

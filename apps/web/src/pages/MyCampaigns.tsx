@@ -28,6 +28,10 @@ import { supabase } from '../lib/supabase';
 import { balanceService } from '../services/balance.service';
 import { campaignService } from '../services/campaign.service';
 import { useAuthStore } from '../stores/auth.store';
+import { logger } from '../lib/logger';
+
+const log = logger.child({ module: 'MyCampaigns' });
+
 
 const isMissingCampaignCategoriesTable = (error: any) =>
   error?.code === 'PGRST205' && String(error?.message || '').includes('campaign_categories');
@@ -226,7 +230,7 @@ export default function MyCampaigns() {
             ]);
 
           if (categoryError && !isMissingCampaignCategoriesTable(categoryError)) {
-            console.error('Error fetching campaign categories:', categoryError);
+            log.error({ categoryError }, 'Error fetching campaign categories');
           }
 
           (categoryRows || []).forEach((row: any) => {
@@ -333,7 +337,7 @@ export default function MyCampaigns() {
         (!filters.endDate || campaign.endDate <= filters.endDate)
       );
     } catch (error) {
-      console.error('Error filtering campaign:', error, campaign);
+      log.error({ error, campaign }, 'Error filtering campaign');
       return true;
     }
   });
@@ -398,7 +402,7 @@ export default function MyCampaigns() {
 
         setCampaignVideo(videoData);
       } catch (error) {
-        console.error('Erreur chargement vidéo:', error);
+        log.error({ error }, 'Erreur chargement vidéo');
       }
     } else {
       setCampaignVideo(null);

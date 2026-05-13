@@ -3,6 +3,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
+
+const log = logger.child({ module: 'AdvertiserNotificationsBell' });
+
 
 type AdvertiserNotificationKind = 'account_approved' | 'video_approved';
 
@@ -103,16 +107,13 @@ export default function AdvertiserNotificationsBell({ userId, emphasized = false
       });
 
       if (campaignsRes.error) {
-        console.error(
-          'Erreur chargement campagnes pour notifications annonceur:',
-          campaignsRes.error,
-        );
+        log.error({ error: campaignsRes.error }, 'Erreur chargement campagnes pour notifications annonceur');
       }
       if (notificationsRes.error) {
-        console.error('Erreur chargement user_notifications annonceur:', notificationsRes.error);
+        log.error({ error: notificationsRes.error }, 'Erreur chargement user_notifications annonceur');
       }
       if (readsRes.error) {
-        console.error('Erreur chargement user_notification_reads annonceur:', readsRes.error);
+        log.error({ error: readsRes.error }, 'Erreur chargement user_notification_reads annonceur');
       }
 
       const campaignRows = campaignsRes.error ? [] : campaigns || [];
@@ -206,7 +207,7 @@ export default function AdvertiserNotificationsBell({ userId, emphasized = false
       setItems(visible);
       setReadIds(new Set((reads || []).map((r: { notification_id: string }) => r.notification_id)));
     } catch (error) {
-      console.error('Erreur chargement notifications annonceur:', error);
+      log.error({ error }, 'Erreur chargement notifications annonceur');
       setItems([]);
     } finally {
       setLoading(false);
@@ -250,7 +251,7 @@ export default function AdvertiserNotificationsBell({ userId, emphasized = false
       { onConflict: 'user_id,scope,notification_id' },
     );
     if (error) {
-      console.error('Erreur marquage notification lue (annonceur):', error);
+      log.error({ error }, 'Erreur marquage notification lue (annonceur)');
     }
   };
 
@@ -269,7 +270,7 @@ export default function AdvertiserNotificationsBell({ userId, emphasized = false
       .from('user_notification_reads')
       .upsert(rows, { onConflict: 'user_id,scope,notification_id' });
     if (error) {
-      console.error('Erreur marquage toutes notifications lues (annonceur):', error);
+      log.error({ error }, 'Erreur marquage toutes notifications lues (annonceur)');
     }
   };
 

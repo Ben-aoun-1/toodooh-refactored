@@ -37,6 +37,10 @@ import type {
   PerformancePeriodPreset,
   PerformanceTrendPoint,
 } from '../types/performance';
+import { logger } from '../lib/logger';
+
+const log = logger.child({ module: 'OwnerPerformance' });
+
 
 const presetButtons: { key: PerformancePeriodPreset; label: string }[] = [
   { key: 'month', label: 'Ce mois' },
@@ -199,7 +203,7 @@ export default function OwnerPerformance() {
       setDataset(data);
       setFilters(data.filters);
     } catch (e) {
-      console.error(e);
+      log.error({ err: e }, 'error');
       setError('Impossible de charger les performances pour le moment.');
     } finally {
       setLoading(false);

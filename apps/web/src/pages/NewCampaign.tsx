@@ -70,6 +70,10 @@ import {
 import { useAuthStore } from '../stores/auth.store';
 import type { BusinessSector } from '../types/auth';
 import type { SpecialEvent } from '../types/event';
+import { logger } from '../lib/logger';
+
+const log = logger.child({ module: 'NewCampaign' });
+
 
 const ARIANE_ICONS = [ariane1, ariane2, ariane3, ariane4, ariane5, ariane6] as const;
 const ARIANE_ICONS_DONE = [ariane1s, ariane2s, ariane3s, ariane4s, ariane5s, ariane6s] as const;
@@ -580,7 +584,7 @@ export default function NewCampaign() {
           });
         }
       } catch (err) {
-        console.error('Erreur chargement catégories campagne:', err);
+        log.error({ err }, 'Erreur chargement catégories campagne');
       }
     };
 
@@ -1089,12 +1093,12 @@ export default function NewCampaign() {
             const periods = await screensService.getUnavailabilityPeriods(screenId);
             allPeriods.push(...periods);
           } catch (error) {
-            console.error(`Erreur chargement indisponibilités écran ${screenId}:`, error);
+            log.error({ error }, `Erreur chargement indisponibilités écran ${screenId}`);
           }
         }
         setUnavailabilityPeriods(allPeriods);
       } catch (error) {
-        console.error("Erreur chargement périodes d'indisponibilité:", error);
+        log.error({ error }, "Erreur chargement périodes d'indisponibilité");
       }
     };
     loadUnavailabilityPeriods();
@@ -1395,12 +1399,10 @@ export default function NewCampaign() {
         .eq('is_active', true);
 
       if (error) {
-        console.error('❌ Erreur lors de la récupération des événements:', error);
-        console.error('Détails:', {
-          message: error.message,
+        log.error({ error }, '❌ Erreur lors de la récupération des événements');
+        log.error({ message: error.message,
           details: error.details,
-          hint: error.hint,
-        });
+          hint: error.hint, }, 'Détails');
         return;
       }
 
@@ -1430,7 +1432,7 @@ export default function NewCampaign() {
         setDetectedEvents([]);
       }
     } catch (error) {
-      console.error('❌ Exception lors de la vérification des événements:', error);
+      log.error({ error }, '❌ Exception lors de la vérification des événements');
     }
   };
 
@@ -1460,7 +1462,7 @@ export default function NewCampaign() {
 
       setRecommendedEvents((data || []) as SpecialEvent[]);
     } catch (error) {
-      console.error('Erreur chargement événements recommandés:', error);
+      log.error({ error }, 'Erreur chargement événements recommandés');
       setRecommendedEvents([]);
     } finally {
       setLoadingRecommendedEvents(false);
@@ -1509,7 +1511,7 @@ export default function NewCampaign() {
         localStorage.setItem('campaign_cart_items', JSON.stringify([...deduped, nextItem]));
         window.dispatchEvent(new CustomEvent('toodooh:cart-updated', { detail: { open: true } }));
       } catch (error) {
-        console.error('Erreur mise à jour panier sidebar:', error);
+        log.error({ error }, 'Erreur mise à jour panier sidebar');
       }
     },
     [
@@ -1610,7 +1612,7 @@ export default function NewCampaign() {
             setVideoTab('existing');
           }
         } catch (error) {
-          console.error('Erreur chargement vidéo:', error);
+          log.error({ error }, 'Erreur chargement vidéo');
         }
       }
     };
@@ -1671,7 +1673,7 @@ export default function NewCampaign() {
           },
         ]);
       } catch (err) {
-        console.error('Erreur chargement zones campagne:', err);
+        log.error({ err }, 'Erreur chargement zones campagne');
       }
     };
     loadCampaignZones();
@@ -1694,7 +1696,7 @@ export default function NewCampaign() {
       if (error) throw error;
       setMyApprovedVideos(data || []);
     } catch (error) {
-      console.error('Erreur chargement vidéos validées:', error);
+      log.error({ error }, 'Erreur chargement vidéos validées');
     }
   };
 
@@ -1705,7 +1707,7 @@ export default function NewCampaign() {
       const screens = await campaignScreensService.getAllScreens();
       setAllScreens(screens);
     } catch (error) {
-      console.error('Erreur lors du chargement des écrans:', error);
+      log.error({ error }, 'Erreur lors du chargement des écrans');
     } finally {
       setLoadingScreens(false);
     }
@@ -1753,7 +1755,7 @@ export default function NewCampaign() {
 
       setAvailableParcs(parcs);
     } catch (error) {
-      console.error('Erreur chargement parcs:', error);
+      log.error({ error }, 'Erreur chargement parcs');
     } finally {
       setLoadingParcs(false);
     }
@@ -2065,7 +2067,7 @@ export default function NewCampaign() {
         if (mapRef.current) mapRef.current.setView([parseFloat(lat), parseFloat(lon)], 13);
       }
     } catch (e) {
-      console.error('Erreur lors de la recherche géographique:', e);
+      log.error({ e }, 'Erreur lors de la recherche géographique');
     }
   };
 

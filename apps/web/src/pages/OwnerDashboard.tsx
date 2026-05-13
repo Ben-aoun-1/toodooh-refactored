@@ -31,6 +31,10 @@ import { campaignOwnerApprovalService } from '../services/campaign-owner-approva
 import { revenueService, RevenueStats } from '../services/revenue.service';
 import { screensService, Screen } from '../services/screens.service';
 import { useAuthStore } from '../stores/auth.store';
+import { logger } from '../lib/logger';
+
+const log = logger.child({ module: 'OwnerDashboard' });
+
 
 interface Alert {
   id: string;
@@ -193,10 +197,7 @@ export default function OwnerDashboard() {
             }));
           setOwnerNotifications(mappedNotifications);
         } catch (notificationError) {
-          console.error(
-            'Erreur chargement notifications dashboard propriétaire:',
-            notificationError,
-          );
+          log.error({ notificationError }, 'Erreur chargement notifications dashboard propriétaire');
           setOwnerNotifications([]);
         }
       } else {

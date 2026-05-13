@@ -1,5 +1,9 @@
 import { supabase } from '../lib/supabase';
 import { Video, VideoValidationStats, CampaignUsingVideo } from '../types/video';
+import { logger } from '../lib/logger';
+
+const log = logger.child({ module: 'admin-video.service' });
+
 
 export const adminVideoService = {
   // Récupérer toutes les vidéos pour validation (seulement celles utilisées dans des campagnes)
@@ -75,7 +79,7 @@ export const adminVideoService = {
       );
 
       if (campaignsError) {
-        console.error('⚠️ Warning fetching campaigns:', campaignsError);
+        log.error({ campaignsError }, '⚠️ Warning fetching campaigns');
         // Ne pas échouer si on ne peut pas récupérer les campagnes
       }
 
@@ -143,7 +147,7 @@ export const adminVideoService = {
           .select('id')
           .eq('video_id', videoId);
         if (fallbackCampaignError) {
-          console.error('❌ Error fetching fallback campaigns by video_id:', fallbackCampaignError);
+          log.error({ fallbackCampaignError }, '❌ Error fetching fallback campaigns by video_id');
         } else {
           effectiveCampaignIds = Array.from(
             new Set(
@@ -191,7 +195,7 @@ export const adminVideoService = {
               .eq('id', campaign.id);
 
             if (activateError) {
-              console.error(`❌ Activation campagne ${campaign.id} impossible:`, activateError);
+              log.error({ activateError }, `❌ Activation campagne ${campaign.id} impossible`);
               continue;
             }
 
@@ -215,10 +219,7 @@ export const adminVideoService = {
                 { onConflict: 'external_key' },
               );
             if (advertiserNotificationError) {
-              console.error(
-                `❌ Insert notification annonceur impossible (${campaign.id}):`,
-                advertiserNotificationError,
-              );
+              log.error({ advertiserNotificationError }, `❌ Insert notification annonceur impossible (${campaign.id})`);
             }
 
             // Créer les validations propriétaires "pending" pour notifier
@@ -228,10 +229,7 @@ export const adminVideoService = {
               .select('screen_id')
               .eq('campaign_id', campaign.id);
             if (campaignScreensError) {
-              console.error(
-                `❌ Lecture campaign_screens impossible (${campaign.id}):`,
-                campaignScreensError,
-              );
+              log.error({ campaignScreensError }, `❌ Lecture campaign_screens impossible (${campaign.id})`);
             } else {
               const screenIds = (campaignScreens || [])
                 .map((r: any) => r.screen_id)
@@ -243,10 +241,7 @@ export const adminVideoService = {
                   .in('id', screenIds);
 
                 if (screensOwnersError) {
-                  console.error(
-                    `❌ Lecture owners écrans impossible (${campaign.id}):`,
-                    screensOwnersError,
-                  );
+                  log.error({ screensOwnersError }, `❌ Lecture owners écrans impossible (${campaign.id})`);
                 } else {
                   const ownerIds = Array.from(
                     new Set(
@@ -268,10 +263,7 @@ export const adminVideoService = {
                         .in('owner_id', ownerIds);
 
                     if (existingApprovalsError) {
-                      console.error(
-                        `❌ Lecture approvals existantes impossible (${campaign.id}):`,
-                        existingApprovalsError,
-                      );
+                      log.error({ existingApprovalsError }, `❌ Lecture approvals existantes impossible (${campaign.id})`);
                     } else {
                       const existingOwnerIds = new Set(
                         (existingApprovals || [])
@@ -295,10 +287,7 @@ export const adminVideoService = {
                           .insert(pendingRows);
 
                         if (ownerApprovalsError) {
-                          console.error(
-                            `❌ Insert approvals owners impossible (${campaign.id}):`,
-                            ownerApprovalsError,
-                          );
+                          log.error({ ownerApprovalsError }, `❌ Insert approvals owners impossible (${campaign.id})`);
                         } else {
                           const ownerNotifications = pendingRows.map((row) => ({
                             recipient_user_id: row.owner_id,
@@ -316,10 +305,7 @@ export const adminVideoService = {
                             .from('user_notifications')
                             .upsert(ownerNotifications, { onConflict: 'external_key' });
                           if (ownerNotificationsError) {
-                            console.error(
-                              `❌ Insert notifications owners impossible (${campaign.id}):`,
-                              ownerNotificationsError,
-                            );
+                            log.error({ ownerNotificationsError }, `❌ Insert notifications owners impossible (${campaign.id})`);
                           }
                         }
                       }
@@ -347,10 +333,7 @@ export const adminVideoService = {
           .eq('status', 'active');
 
         if (activeCampaignsError) {
-          console.error(
-            '❌ Error reading active campaigns for advertiser notifications:',
-            activeCampaignsError,
-          );
+          log.error({ activeCampaignsError }, '❌ Error reading active campaigns for advertiser notifications');
         } else if ((activeCampaigns || []).length > 0) {
           const advertiserNotifications = (activeCampaigns || []).map((campaign: any) => ({
             recipient_user_id: campaign.user_id,
@@ -370,10 +353,7 @@ export const adminVideoService = {
             .upsert(advertiserNotifications, { onConflict: 'external_key' });
 
           if (advertiserNotificationsError) {
-            console.error(
-              '❌ Insert/upsert advertiser notifications failed:',
-              advertiserNotificationsError,
-            );
+            log.error({ advertiserNotificationsError }, '❌ Insert/upsert advertiser notifications failed');
           }
         }
       }
@@ -421,13 +401,13 @@ export const adminVideoService = {
       const { error } = await supabase.from('videos').delete().eq('id', videoId);
 
       if (error) {
-        console.error('❌ Error deleting video:', error);
+        log.error({ error }, '❌ Error deleting video');
         return false;
       }
 
       return true;
     } catch (error) {
-      console.error('❌ Error in deleteVideo:', error);
+      log.error({ error }, '❌ Error in deleteVideo');
       return false;
     }
   },
@@ -439,7 +419,7 @@ export const adminVideoService = {
       const { data, error } = await supabase.rpc('get_video_validation_stats');
 
       if (error) {
-        console.error('❌ Error fetching stats:', error);
+        log.error({ error }, '❌ Error fetching stats');
         return {
           total_videos: 0,
           pending_videos: 0,
@@ -458,7 +438,7 @@ export const adminVideoService = {
         }
       );
     } catch (error) {
-      console.error('❌ Exception in getValidationStats:', error);
+      log.error({ error }, '❌ Exception in getValidationStats');
       return {
         total_videos: 0,
         pending_videos: 0,
@@ -481,13 +461,13 @@ export const adminVideoService = {
         .eq('id', videoId);
 
       if (error) {
-        console.error('❌ Error updating notes:', error);
+        log.error({ error }, '❌ Error updating notes');
         return false;
       }
 
       return true;
     } catch (error) {
-      console.error('❌ Error in updateValidationNotes:', error);
+      log.error({ error }, '❌ Error in updateValidationNotes');
       return false;
     }
   },
@@ -522,7 +502,7 @@ export const adminVideoService = {
         .eq('video_id', videoId);
 
       if (error) {
-        console.error('❌ Error fetching campaigns:', error);
+        log.error({ error }, '❌ Error fetching campaigns');
         return [];
       }
 
@@ -534,7 +514,7 @@ export const adminVideoService = {
         advertiser_name: 'N/A', // À enrichir si besoin
       }));
     } catch (error) {
-      console.error('❌ Exception in getCampaignsUsingVideo:', error);
+      log.error({ error }, '❌ Exception in getCampaignsUsingVideo');
       return [];
     }
   },

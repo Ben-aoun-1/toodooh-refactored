@@ -1,4 +1,8 @@
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
+
+const log = logger.child({ module: 'admin-user.service' });
+
 
 export interface AdminUser {
   id: string;
@@ -180,13 +184,13 @@ export const adminUserService = {
         .eq('id', userId);
 
       if (error) {
-        console.error('❌ Error approving user:', error);
+        log.error({ error }, '❌ Error approving user');
         return false;
       }
 
       return true;
     } catch (error) {
-      console.error('❌ Error in approveUser:', error);
+      log.error({ error }, '❌ Error in approveUser');
       return false;
     }
   },
@@ -216,13 +220,13 @@ export const adminUserService = {
         .eq('id', userId);
 
       if (error) {
-        console.error('❌ Error rejecting user:', error);
+        log.error({ error }, '❌ Error rejecting user');
         return false;
       }
 
       return true;
     } catch (error) {
-      console.error('❌ Error in rejectUser:', error);
+      log.error({ error }, '❌ Error in rejectUser');
       return false;
     }
   },
@@ -251,7 +255,7 @@ export const adminUserService = {
         .single();
 
       if (error) {
-        console.error('Error fetching user details:', error);
+        log.error({ error }, 'Error fetching user details');
         return null;
       }
 
@@ -271,7 +275,7 @@ export const adminUserService = {
 
       return transformedUser;
     } catch (error) {
-      console.error('Error in getUserDetails:', error);
+      log.error({ error }, 'Error in getUserDetails');
       return null;
     }
   },
@@ -288,7 +292,7 @@ export const adminUserService = {
         .single();
 
       if (profileError || !businessProfile) {
-        console.error('❌ Error fetching business profile:', profileError);
+        log.error({ profileError }, '❌ Error fetching business profile');
         return false;
       }
 
@@ -356,8 +360,8 @@ export const adminUserService = {
         .select();
 
       if (businessError) {
-        console.error('❌ Error deleting business profile:', businessError);
-        console.error('❌ Error details:', JSON.stringify(businessError, null, 2));
+        log.error({ businessError }, '❌ Error deleting business profile');
+        log.error({ data: JSON.stringify(businessError, null, 2) }, '❌ Error details');
         return false;
       }
 
@@ -370,7 +374,7 @@ export const adminUserService = {
         .single();
 
       if (checkProfile) {
-        console.error('❌ ERREUR : Le profil existe toujours après suppression !', checkProfile);
+        log.error({ checkProfile }, '❌ ERREUR : Le profil existe toujours après suppression !');
         return false;
       }
 
@@ -381,7 +385,7 @@ export const adminUserService = {
 
       return true;
     } catch (error) {
-      console.error('❌ Error in deleteUser:', error);
+      log.error({ error }, '❌ Error in deleteUser');
       return false;
     }
   },
@@ -403,7 +407,7 @@ export const adminUserService = {
       const { data, error } = await supabase.from('business_profiles').select('profile_type');
 
       if (error) {
-        console.error('Error fetching user stats:', error);
+        log.error({ error }, 'Error fetching user stats');
         return {
           total: 0,
           pending: 0,
@@ -435,7 +439,7 @@ export const adminUserService = {
 
       return stats;
     } catch (error) {
-      console.error('Error in getUserStats:', error);
+      log.error({ error }, 'Error in getUserStats');
       return {
         total: 0,
         pending: 0,

@@ -6,6 +6,10 @@ import { supabase } from '../lib/supabase';
 import { authService } from '../services/auth.service';
 
 import { useAdminStore } from './admin.store';
+import { logger } from '../lib/logger';
+
+const log = logger.child({ module: 'auth.store' });
+
 
 interface AuthState {
   user: User | null;
@@ -39,9 +43,7 @@ export const useAuthStore = create<AuthState>()(
           knownValidationStatus === 'approved' || knownValidationStatus === 'verified';
 
         if (wasApproved && knownProfileType) {
-          console.warn(
-            "⚠️ Erreur/timeout fetchProfileType — conservation de l'état approuvé connu",
-          );
+          log.warn("⚠️ Erreur/timeout fetchProfileType — conservation de l'état approuvé connu");
           return {
             profileType: knownProfileType,
             contactName: storeState.contactName ?? null,
@@ -51,9 +53,7 @@ export const useAuthStore = create<AuthState>()(
           };
         }
 
-        console.warn(
-          '⚠️ Erreur/timeout fetchProfileType — aucun état approuvé connu, fallback pending',
-        );
+        log.warn('⚠️ Erreur/timeout fetchProfileType — aucun état approuvé connu, fallback pending');
         return {
           profileType: knownProfileType,
           contactName: storeState.contactName ?? null,
@@ -154,9 +154,7 @@ export const useAuthStore = create<AuthState>()(
             } catch (timeoutError: any) {
               clearTimeout(timeoutId);
               if (timeoutError?.message?.includes('Timeout')) {
-                console.error(
-                  "⏱️ Timeout lors de la requête business_profiles — conservation de l'état connu",
-                );
+                log.error("⏱️ Timeout lors de la requête business_profiles — conservation de l'état connu");
                 return getPreservedStateOnError(cachedProfileType);
               }
               throw timeoutError;
@@ -165,7 +163,7 @@ export const useAuthStore = create<AuthState>()(
             const { data, error } = result;
 
             if (error) {
-              console.error('❌ Error fetching user info:', error);
+              log.error({ error }, '❌ Error fetching user info');
               if (error.code === 'PGRST116') {
               }
               // Erreur transitoire/réseau/RLS: on conserve l'état connu si possible
@@ -232,17 +230,17 @@ export const useAuthStore = create<AuthState>()(
               validationStatus,
             };
           } catch (dbError: any) {
-            console.error('Database error in fetchProfileType:', dbError);
+            log.error({ dbError }, 'Database error in fetchProfileType');
             if (dbError?.message?.includes('Timeout')) {
-              console.error('⏱️ Timeout lors de la récupération du profil utilisateur');
+              log.error('⏱️ Timeout lors de la récupération du profil utilisateur');
             }
             // Erreur transitoire: on conserve l'état connu (approuvé/verified) s'il existe
             return getPreservedStateOnError(cachedProfileType);
           }
         } catch (error: any) {
-          console.error('Error in fetchProfileType:', error);
+          log.error({ error }, 'Error in fetchProfileType');
           if (error?.message?.includes('Timeout')) {
-            console.error('⏱️ Timeout lors de la récupération du profil utilisateur');
+            log.error('⏱️ Timeout lors de la récupération du profil utilisateur');
           }
           return getPreservedStateOnError(null);
         }
@@ -339,7 +337,7 @@ export const useAuthStore = create<AuthState>()(
               validationStatus = result.validationStatus;
 
             } catch (error) {
-              console.error('❌ Auth listener error:', error);
+              log.error({ error }, '❌ Auth listener error');
               // En cas d'erreur inattendue, conserver l'état actuel du store plutôt
               // que de rétrograder l'utilisateur.
               const current = useAuthStore.getState();
@@ -423,12 +421,10 @@ export const useAuthStore = create<AuthState>()(
                 needsApproval = na || false;
                 validationStatus = vs;
               } catch (profileError: any) {
-                console.error('Error fetching profile type:', profileError);
+                log.error({ profileError }, 'Error fetching profile type');
                 // Si timeout, continuer avec des valeurs par défaut
                 if (profileError?.message?.includes('Timeout')) {
-                  console.warn(
-                    "⏱️ Timeout lors de l'initialisation, utilisation de valeurs par défaut",
-                  );
+                  log.warn("⏱️ Timeout lors de l'initialisation, utilisation de valeurs par défaut");
                 }
                 // Continuer sans profileType si il y a une erreur
               }
@@ -447,7 +443,7 @@ export const useAuthStore = create<AuthState>()(
               loading: false,
             });
           } catch (error) {
-            console.error('Error initializing auth:', error);
+            log.error({ error }, 'Error initializing auth');
             // Toujours initialiser pour éviter le blocage
             set({
               user: null,
@@ -568,7 +564,7 @@ export const useAuthStore = create<AuthState>()(
             });
 
           } catch (error) {
-            console.error('❌ Error refreshing user status:', error);
+            log.error({ error }, '❌ Error refreshing user status');
             set({ loading: false });
           }
         },

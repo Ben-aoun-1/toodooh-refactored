@@ -3,6 +3,10 @@ import React, { useState } from 'react';
 import { toast } from 'react-hot-toast';
 
 import { screensService, CreateScreenData } from '../services/screens.service';
+import { logger } from '../lib/logger';
+
+const log = logger.child({ module: 'AddScreen' });
+
 
 interface AddScreenProps {
   isOpen: boolean;
@@ -134,7 +138,7 @@ export default function AddScreen({ isOpen, onClose, onScreenAdded }: AddScreenP
       setStep(1);
       onClose();
     } catch (error) {
-      console.error("❌ Erreur lors de la création de l'écran:", error);
+      log.error({ error }, "❌ Erreur lors de la création de l'écran");
 
       // Afficher un message d'erreur plus détaillé
       let errorMessage = "Erreur lors de la création de l'écran. Veuillez réessayer.";

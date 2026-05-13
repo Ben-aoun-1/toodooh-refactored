@@ -1,5 +1,9 @@
 import { supabase } from '../lib/supabase';
 import { SpecialEvent, CreateEventDTO, EventStats } from '../types/event';
+import { logger } from '../lib/logger';
+
+const log = logger.child({ module: 'admin-events.service' });
+
 
 export const adminEventsService = {
   // Récupérer tous les événements
@@ -54,13 +58,13 @@ export const adminEventsService = {
       const { error } = await supabase.from('special_events').update(eventData).eq('id', eventId);
 
       if (error) {
-        console.error('❌ Error updating event:', error);
+        log.error({ error }, '❌ Error updating event');
         return false;
       }
 
       return true;
     } catch (error) {
-      console.error('❌ Exception in updateEvent:', error);
+      log.error({ error }, '❌ Exception in updateEvent');
       return false;
     }
   },
@@ -72,13 +76,13 @@ export const adminEventsService = {
       const { error } = await supabase.from('special_events').delete().eq('id', eventId);
 
       if (error) {
-        console.error('❌ Error deleting event:', error);
+        log.error({ error }, '❌ Error deleting event');
         return false;
       }
 
       return true;
     } catch (error) {
-      console.error('❌ Exception in deleteEvent:', error);
+      log.error({ error }, '❌ Exception in deleteEvent');
       return false;
     }
   },
@@ -93,13 +97,13 @@ export const adminEventsService = {
         .eq('id', eventId);
 
       if (error) {
-        console.error('❌ Error toggling status:', error);
+        log.error({ error }, '❌ Error toggling status');
         return false;
       }
 
       return true;
     } catch (error) {
-      console.error('❌ Exception in toggleEventStatus:', error);
+      log.error({ error }, '❌ Exception in toggleEventStatus');
       return false;
     }
   },
@@ -114,13 +118,13 @@ export const adminEventsService = {
         .eq('id', eventId);
 
       if (error) {
-        console.error('❌ Error toggling featured:', error);
+        log.error({ error }, '❌ Error toggling featured');
         return false;
       }
 
       return true;
     } catch (error) {
-      console.error('❌ Exception in toggleFeatured:', error);
+      log.error({ error }, '❌ Exception in toggleFeatured');
       return false;
     }
   },
@@ -138,12 +142,12 @@ export const adminEventsService = {
         .limit(limit);
 
       if (error) {
-        console.error('❌ Error fetching featured events:', error);
+        log.error({ error }, '❌ Error fetching featured events');
         return [];
       }
       return data || [];
     } catch (error) {
-      console.error('❌ Exception in getFeaturedEvents:', error);
+      log.error({ error }, '❌ Exception in getFeaturedEvents');
       return [];
     }
   },
@@ -155,7 +159,7 @@ export const adminEventsService = {
       const { data, error } = await supabase.rpc('get_events_stats');
 
       if (error) {
-        console.error('❌ Error fetching stats:', error);
+        log.error({ error }, '❌ Error fetching stats');
         return {
           total_events: 0,
           active_events: 0,
@@ -175,7 +179,7 @@ export const adminEventsService = {
         }
       );
     } catch (error) {
-      console.error('❌ Exception in getStats:', error);
+      log.error({ error }, '❌ Exception in getStats');
       return {
         total_events: 0,
         active_events: 0,
@@ -203,13 +207,13 @@ export const adminEventsService = {
       ]);
 
       if (error) {
-        console.error('❌ Error linking event to campaign:', error);
+        log.error({ error }, '❌ Error linking event to campaign');
         return false;
       }
 
       return true;
     } catch (error) {
-      console.error('❌ Exception in linkEventToCampaign:', error);
+      log.error({ error }, '❌ Exception in linkEventToCampaign');
       return false;
     }
   },
@@ -225,13 +229,13 @@ export const adminEventsService = {
         .eq('campaign_id', campaignId);
 
       if (error) {
-        console.error('❌ Error unlinking event from campaign:', error);
+        log.error({ error }, '❌ Error unlinking event from campaign');
         return false;
       }
 
       return true;
     } catch (error) {
-      console.error('❌ Exception in unlinkEventFromCampaign:', error);
+      log.error({ error }, '❌ Exception in unlinkEventFromCampaign');
       return false;
     }
   },

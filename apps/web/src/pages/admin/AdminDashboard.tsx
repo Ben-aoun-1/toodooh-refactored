@@ -26,6 +26,10 @@ import {
   CampaignsPerformance,
   TopPerformingScreen,
 } from '../../types/platform-stats';
+import { logger } from '../../lib/logger';
+
+const log = logger.child({ module: 'AdminDashboard' });
+
 
 export default function AdminDashboard() {
   const { admin } = useAdminStore();
@@ -59,7 +63,7 @@ export default function AdminDashboard() {
       setCampaignsPerf(campaigns);
       setTopScreens(top);
     } catch (error) {
-      console.error('Error loading stats:', error);
+      log.error({ error }, 'Error loading stats');
     } finally {
       setLoading(false);
     }

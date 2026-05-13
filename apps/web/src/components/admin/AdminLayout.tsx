@@ -20,6 +20,10 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 import { useAdminStore } from '../../stores/admin.store';
+import { logger } from '../../lib/logger';
+
+const log = logger.child({ module: 'AdminLayout' });
+
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -39,7 +43,7 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
       await logout();
       navigate('/admin-login');
     } catch (error) {
-      console.error('Logout error:', error);
+      log.error({ error }, 'Logout error');
     }
   };
 

@@ -1,5 +1,9 @@
 import { supabase } from '../lib/supabase';
 import { AdminProfile, AdminSignUpData, AdminDashboardStats, AdminActivity } from '../types/admin';
+import { logger } from '../lib/logger';
+
+const log = logger.child({ module: 'admin.service' });
+
 
 // Fonction pour mapper les erreurs admin
 const mapAdminError = (error: any): string => {
@@ -96,7 +100,7 @@ export const adminService = {
         .single();
 
       if (error) {
-        console.error('Error getting current admin:', error);
+        log.error({ error }, 'Error getting current admin');
         return null;
       }
 
@@ -106,7 +110,7 @@ export const adminService = {
 
       return adminProfile;
     } catch (error) {
-      console.error('Error getting current admin:', error);
+      log.error({ error }, 'Error getting current admin');
       return null;
     }
   },
@@ -273,7 +277,7 @@ export const adminService = {
         activeCampaigns: campaignsResult.count || 0,
       };
     } catch (error: any) {
-      console.error('Error getting dashboard stats:', error);
+      log.error({ error }, 'Error getting dashboard stats');
       return {
         totalUsers: 0,
         totalOwners: 0,
@@ -292,7 +296,7 @@ export const adminService = {
     try {
       await supabase.from('admin_activities').insert(activity);
     } catch (error) {
-      console.error('Error logging admin activity:', error);
+      log.error({ error }, 'Error logging admin activity');
     }
   },
 
