@@ -441,3 +441,84 @@ export function applyEventBudget(
     config,
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mixed cart — standard + event in one campaign (simulator's combined view)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type CombinedCartInput = {
+  screenhosts: readonly ScreenhostInput[];
+  /** Standard portion. Omit (or pass null) when the cart has no standard component. */
+  standard?: {
+    contentSeconds: number;
+    daysCount: number;
+    /** Requested budget for the standard portion; omit to leave `standardBudget` null. */
+    targetBudgetTnd?: number;
+  } | null;
+  /** Event portion. Omit (or pass null) when the cart has no event component. */
+  event?: {
+    contentSeconds: number;
+    durationHours: number;
+    /** Requested budget for the event portion; omit to leave `eventBudget` null. */
+    targetBudgetTnd?: number;
+  } | null;
+};
+
+export type CombinedCartResult = {
+  standard: StandardCampaignResult | null;
+  event: EventCampaignResult | null;
+  standardBudget: BudgetAllocation | null;
+  eventBudget: BudgetAllocation | null;
+  /** C_max_total = standard.maxBudgetTnd + event.maxBudgetTnd. */
+  totalMaxBudgetTnd: number;
+  /** C_cible_total = standardBudget.targetBudgetTnd + eventBudget.targetBudgetTnd. */
+  totalTargetBudgetTnd: number;
+};
+
+/**
+ * Combine a standard + event portion into one cart.
+ *
+ * The event is computed first; its `windowHours` is then fed into the standard run as
+ * `eventSlotsBlockedHours`, so the standard portion already accounts for the event's
+ * blackout on every screenhost (matching the simulator's evtSlots wiring).
+ */
+export function combineCart(input: CombinedCartInput, config: DoohConfigV3): CombinedCartResult {
+  const event = input.event
+    ? computeEventCampaign(
+        input.screenhosts,
+        input.event.contentSeconds,
+        input.event.durationHours,
+        config,
+      )
+    : null;
+
+  const standard = input.standard
+    ? computeStandardCampaign(
+        input.screenhosts,
+        input.standard.contentSeconds,
+        input.standard.daysCount,
+        config,
+        event?.windowHours ?? 0,
+      )
+    : null;
+
+  const standardBudget =
+    standard && input.standard?.targetBudgetTnd !== undefined
+      ? applyBudget(standard, input.standard.targetBudgetTnd, config)
+      : null;
+
+  const eventBudget =
+    event && input.event?.targetBudgetTnd !== undefined
+      ? applyEventBudget(event, input.event.targetBudgetTnd, config)
+      : null;
+
+  return {
+    standard,
+    event,
+    standardBudget,
+    eventBudget,
+    totalMaxBudgetTnd: (standard?.maxBudgetTnd ?? 0) + (event?.maxBudgetTnd ?? 0),
+    totalTargetBudgetTnd:
+      (standardBudget?.targetBudgetTnd ?? 0) + (eventBudget?.targetBudgetTnd ?? 0),
+  };
+}

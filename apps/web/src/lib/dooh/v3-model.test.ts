@@ -5,6 +5,7 @@ import {
   applyBudget,
   applyEventBudget,
   clampSpotSeconds,
+  combineCart,
   computeEventCampaign,
   computeStandardCampaign,
   credibilityThreshold,
@@ -361,5 +362,83 @@ describe('applyEventBudget', () => {
     const b = applyEventBudget(evt(), 999_999, CFG);
     expect(b.targetBudgetTnd).toBeCloseTo(992.25, 6);
     expect(b.fillRate).toBeCloseTo(1, 6);
+  });
+});
+
+describe('combineCart (mixed standard + event)', () => {
+  it('empty cart → both portions null, totals = 0', () => {
+    const r = combineCart({ screenhosts: demoScreenhosts() }, CFG);
+    expect(r.standard).toBeNull();
+    expect(r.event).toBeNull();
+    expect(r.standardBudget).toBeNull();
+    expect(r.eventBudget).toBeNull();
+    expect(r.totalMaxBudgetTnd).toBe(0);
+    expect(r.totalTargetBudgetTnd).toBe(0);
+  });
+
+  it('standard-only matches computeStandardCampaign with evtSlots = 0', () => {
+    const expected = computeStandardCampaign(demoScreenhosts(), 10, 25, CFG);
+    const r = combineCart(
+      { screenhosts: demoScreenhosts(), standard: { contentSeconds: 10, daysCount: 25 } },
+      CFG,
+    );
+    expect(r.event).toBeNull();
+    expect(r.standard!.maxImpressions).toBeCloseTo(expected.maxImpressions, 6);
+    expect(r.standard!.maxBudgetTnd).toBeCloseTo(expected.maxBudgetTnd, 6);
+    expect(r.totalMaxBudgetTnd).toBeCloseTo(expected.maxBudgetTnd, 6);
+  });
+
+  it('event-only matches computeEventCampaign', () => {
+    const expected = computeEventCampaign(demoScreenhosts(), 10, 2.5, CFG);
+    const r = combineCart(
+      { screenhosts: demoScreenhosts(), event: { contentSeconds: 10, durationHours: 2.5 } },
+      CFG,
+    );
+    expect(r.standard).toBeNull();
+    expect(r.event!.maxImpressions).toBeCloseTo(expected.maxImpressions, 6);
+    expect(r.event!.maxBudgetTnd).toBeCloseTo(expected.maxBudgetTnd, 6);
+    expect(r.totalMaxBudgetTnd).toBeCloseTo(expected.maxBudgetTnd, 6);
+  });
+
+  it('mixed: event windowHours blocks evtSlots in the standard portion; totals sum', () => {
+    const evtAlone = computeEventCampaign(demoScreenhosts(), 10, 2.5, CFG);
+    const stdWithBlackout = computeStandardCampaign(
+      demoScreenhosts(),
+      10,
+      25,
+      CFG,
+      evtAlone.windowHours,
+    );
+    const r = combineCart(
+      {
+        screenhosts: demoScreenhosts(),
+        standard: { contentSeconds: 10, daysCount: 25 },
+        event: { contentSeconds: 10, durationHours: 2.5 },
+      },
+      CFG,
+    );
+    expect(r.standard!.accepting.find((a) => a.id === 'sh1')!.netAvailabilityHours).toBeCloseTo(
+      200 - 4.5,
+      6,
+    );
+    expect(r.standard!.maxBudgetTnd).toBeCloseTo(stdWithBlackout.maxBudgetTnd, 6);
+    expect(r.totalMaxBudgetTnd).toBeCloseTo(
+      stdWithBlackout.maxBudgetTnd + evtAlone.maxBudgetTnd,
+      6,
+    );
+  });
+
+  it('targetBudgetTnd on each side → budgets allocated; totalTargetBudgetTnd sums them', () => {
+    const r = combineCart(
+      {
+        screenhosts: demoScreenhosts(),
+        standard: { contentSeconds: 10, daysCount: 25, targetBudgetTnd: 6000 },
+        event: { contentSeconds: 10, durationHours: 2.5, targetBudgetTnd: 500 },
+      },
+      CFG,
+    );
+    expect(r.standardBudget!.targetBudgetTnd).toBeCloseTo(6000, 6);
+    expect(r.eventBudget!.targetBudgetTnd).toBeCloseTo(500, 6);
+    expect(r.totalTargetBudgetTnd).toBeCloseTo(6500, 6);
   });
 });
