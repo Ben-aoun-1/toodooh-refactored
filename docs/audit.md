@@ -439,6 +439,182 @@ pass once the Phase-1 backend migration provides typed sources for the 131 TODO(
 were excluded during import — not present in this repo. The marketing landing-page source and the
 OVH hosting snapshot belong to the later infra phase, not here.
 
+### Methodology learnings from Step 6
+
+Step 6 (typing pass + regression remediation cycle) surfaced 19 process and tooling lessons worth
+preserving for future cleanup steps. Grouped by category. Each lesson cites its worked example
+with the commit hash where applicable.
+
+#### Sweep methodology
+
+**AST over regex for any sweep that classifies code by syntactic structure.** Step 6 ran three
+analysis sweeps (P2 Class-2 silent-ignore audit, P3 Class-3 console-deletion side-effect audit,
+and the post-P0d AST re-sweep). The first version of each used regex. Each was rebuilt as an AST
+walk because regex misses three repeatable patterns: (1) nested destructuring like
+`{ data: { user }, error }` — `[^}]*` stops at the inner `}`; (2) multi-line statements split
+across newlines; (3) brace-balanced parsing fooled by template literals containing braces. The P2
+re-sweep using `ts.createSourceFile` + `TryStatement` walk found 182 try/catch blocks vs the
+regex version's 95, and 13 candidates vs the regex version's 4. The undercount was systemic, not
+a single bug.
+
+**Suspicious-fraction signal — if a sweep's candidate count is a tiny percentage of the
+population, sanity-check the methodology before trusting the result.** P2's first run reported 4
+candidates of 95 total blocks (≈4%). That ratio felt low for a codebase known to have
+incomplete error handling. The AST re-sweep with proper detection brought it to 13 of 182 (≈7%) —
+still low but with a doubled candidate count and a doubled population. The right tell wasn't
+"too few candidates" alone; it was "too few candidates AND population gap signals the methodology
+itself is undercounting."
+
+**Total-population gap as the stronger methodology-failure tell.** When P2's regex returned 95
+blocks and the AST returned 182, the 87-block gap was the more reliable failure indicator than the
+4-vs-13 candidate gap. Candidate counts vary with code quality (real codebases can have any
+ratio); population counts should be deterministic. A population swing of ~2× between two
+detection approaches means the cheaper approach is missing real instances, not just classifying
+differently.
+
+**Zero-category sanity check — zero in a category is often a methodology bug, not a real signal.**
+Commit 1c's `_err` narrowing fix found a brace-counter bug in the discovery script that was
+emitting `0` for a category that had ~50 sites. The fix was a single character (replace `}` with
+`)` in the regex) but the bug had landed in the previous commit's plan as "0 sites to fix" which
+the user would have approved. When a count comes back zero, verify by spot-checking a known site
+manually before trusting the zero.
+
+**Pure-callee whitelists must match by method-suffix, not by full identifier path.** P3's first
+run flagged 6 "function NO LONGER CALLED ANYWHERE" findings that on manual triage all turned out
+to be `Date.prototype.toLocaleDateString`, `Array.prototype.slice`, `Array.prototype.join` calls.
+The whitelist contained `toString`, `JSON.stringify`, `Object.keys` (identifier forms) but didn't
+match `<varname>.toLocaleDateString` (suffix form). For receiver-bearing calls, maintain two
+whitelists: exact-identifier and method-suffix, and check both.
+
+#### Discovery vs execution drift
+
+**Plan-vs-actual count drift in chained mechanical commits.** Commit 5's plan said "30 no-empty →
+0". Actual main count at execution was **26** — 4 sites had been cleared incidentally by Commit
+4's `_`-prefix sweep and its eslint-fix pass. Discovery snapshots can go stale within hours when
+the commit chain is active. Re-baseline the per-rule count at the start of each commit ('current
+state' check) rather than carrying forward from the discovery report. Worked example: Commit 5
+(`00d464e`).
+
+**Untyped-root any cascades — Cat-C strips surface new Cat-A.** Commit 1b stripped 30
+callback-param annotations expecting a clean drop in `no-explicit-any` count. Instead, removing
+the annotations caused type inference to fall back to `any` at root sites whose source was
+already untyped (Supabase response types). 78 sites escalated from Cat-C to Cat-A — they couldn't
+be fixed without typed sources. Categorize by **distance from a typed root**, not by surface form
+of the annotation. Worked example: Commit 1b (`9c4839b`).
+
+**Dead-code cascades from compile-then-fix iteration.** During Step 6 Commit 2's Cat-B refactors,
+typing one component (the `ActionCard` chain) revealed two now-unused helper functions whose only
+typed callers had been removed. The compile-fix-recompile loop surfaces this naturally if you run
+typecheck between each refactor; it does not surface if you batch all refactors and run typecheck
+once at the end. Cost: a few extra typecheck runs per commit. Saving: avoiding a follow-up commit
+to remove the dead helpers.
+
+**Iterate sequential pattern-deletion to convergence.** Already documented in the prompt guide
+from Step 5's console purge. Step 6 added a second worked example: Commit 4's `no-unused-vars`
+cascade required **5 convergence iterations** — each pass deleted bindings whose only consumer
+was a binding deleted in the previous pass. Single-pass is incomplete for any rule whose fires
+form a chain. Worked example: Commit 4 (`0af5cc3`). For any rule that can fire on the consequence
+of another fire of the same rule, the script must loop until grep returns zero.
+
+#### Severity classification
+
+**Class-2(a) silent-ignore findings classify into four severity tiers.** Tier 1 admin destructive
+operations (worked examples: P0a `830c7b9` recharge; P0b `277c68f` deleteUser cascade). Tier 2
+user-data-mutating operations with success toasts (worked examples: P0c `a59cfb9` document upload;
+P0d `b3f50cb` cart-add + save-draft). Tier 3 read-only data fetches populating UI state — medium
+severity, with money-adjacency escalating to medium-high per CLAUDE.md (tracked in #17). Tier 4
+intentional best-effort writers — audit logs, telemetry; acceptable with diagnostic logging
+(tracked in #16). The original sweep framework was binary (admin destructive vs all-else); Tier 2
+and Tier 3 money-adjacent were both missed at first sweep. The tiered framework caught them on
+re-sweep.
+
+**Catch-rename vs destructure-removal are distinct non-regression classes.** Step 6 P1
+re-verification of `UserManagement.tsx` initially flagged 3 sites as destructure-removal
+regressions. Detailed inspection showed the pre-Step-5 catch bodies were already `toast.error(...)`
+with no logging — Step 4's work had only renamed the catch binding from `error` to `_error` to
+satisfy `caughtErrorsIgnorePattern: '^_'`. Native TS-safe rename, no semantic change. False alarm.
+Distinguish: **catch-binding rename** (just renamed `error` → `_error` in a catch clause; safe)
+vs **destructure-removal** (removed `{ error }` from a `const { data, error } =` destructure;
+unsafe unless verified).
+
+**Partial-success vs hard-fail framing.** Partial-success is appropriate only when the failed
+component is genuinely independent — cosmetic, async-followup, cacheable. When the failed
+component is constitutive of the operation's semantic identity (event-link to an event-campaign,
+owner-permission to an owner action), hard-fail is correct. The user-facing UX of an unintended
+half-state is worse than the UX of an explicit failure. Worked example: P0d's event-link RPC
+decision (`b3f50cb`).
+
+#### Failure-mode patterns
+
+**Partial-write orphan policy — leave orphan, surface error, no cleanup attempt.** On partial-write
+failures involving storage + DB, leave the storage file as orphan and surface the DB error to the
+user. Cleanup is the admin-side orphan job's responsibility, not the user-flow's. Avoid
+best-effort cleanup that introduces additional failure modes (e.g., cleanup itself fails, now
+you've logged two errors and surfaced a third). Same policy applies to multi-write DB sequences:
+do not roll back partial state, surface the failure honestly, return without proceeding. Worked
+examples: P0c (`a59cfb9`) for storage + DB; P0d (`b3f50cb`) for the multi-DB cart-add sequence.
+
+**Lint-driven cleanup vulnerability on inherited codebases.** Inherited codebases with inconsistent
+error-handling conventions are vulnerable to lint-driven cleanup. Rules like `no-unused-vars` and
+`no-empty` treat "binding never consumed" or "block never filled" as removable, but in code where
+error-checking was incomplete, those constructs are often the only surviving evidence that the
+operation can fail. The Step 6 P0a/P0b/P0c/P0d cycle is the worked example: every hotfix originated
+from a site where mechanical lint cleanup had removed an `error` destructure or an `if (error) {}`
+fragment that was the only remaining error-handling reference. Before any lint-driven sweep on
+such a codebase, do a discovery pass scanning for patterns that may encode incomplete
+error-handling: `{ error: <name> }` destructures with unused `<name>`, empty
+`if (errorCondition) { }` blocks, catch bindings named `error` or `_error` with empty bodies.
+
+**JSX expression containers cannot host eslint-disable directives.** Commit 3's Cat-A TODO marker
+work tried to add `// eslint-disable-next-line @typescript-eslint/no-explicit-any` before
+`recharts` chart component props with `any` types embedded in JSX. ESLint silently ignores
+disable directives inside JSX expression containers — the comment is parsed as a JSX text node, not
+as a directive. Worked example: the `RevenueCharts` inline-fix attempt during Commit 3 (`62e8813`).
+For Cat-A markers inside JSX, hoist the typed value into a variable above the JSX block and put
+the disable directive there. Single-line JSX `any` casts cannot be locally suppressed without
+restructuring.
+
+#### Tooling pitfalls
+
+**Renamed-destructure regex traps in bulk-edit scripts.** Commit 4's bulk no-unused-vars script
+matched `const { error } = await supabase...` and rewrote `error` to `_error` blindly. It missed
+that `error` was sometimes a _local rename target_ in the destructure (`const { data: error } =
+...`), not the original Supabase `error` property. The rewrite produced corrupted destructure
+patterns where the local variable was wrong. Worked example: P0a (`830c7b9`,
+`RechargeManagement.tsx:196`) where `const { data: error } = ...` was Step-4 corrupted such that
+every successful recharge `throw error` threw the inserted row. For any destructure-pattern
+bulk-edit, distinguish original-property-name from local-binding-name explicitly in the script,
+and refuse to edit when the form is ambiguous.
+
+**`_`-prefix scope: ESLint vs TS6133.** ESLint's `caughtErrorsIgnorePattern: '^_'` and
+`argsIgnorePattern: '^_'` cover catch bindings and function parameters. TypeScript's TS6133
+(`noUnusedLocals` / `noUnusedParameters`) respects the `_` prefix ONLY for function parameters
+and (since TS 4.4) destructuring pattern with explicit `_` patterns — it does NOT respect the
+prefix for arbitrary locals or function declarations. A destructured-object alias rename
+(`{ x: _x }`) prevents the warning at the destructure site but does not silence a separate
+TS6133 fire on the alias. The audit doc's earlier "`_`-prefix everywhere" framing was too
+broad — the prefix is a tool with different scopes per linter and per compiler. ESLint added
+`varsIgnorePattern: '^_'` in Commit 1's config to extend the ignore to arbitrary locals; that
+extends ESLint's behavior, not TypeScript's. Worked example: Commit 4 (`0af5cc3`).
+
+**Map-keyed-by-line collision in bulk-edit scripts.** Commit 1's Cat-D narrowing script kept a
+`Map<filepath:lineno, replacement>` for each rewrite. When two replacements happened to land on
+the same line (e.g., two `catch (err)` on lines 100 and 101 where the script's offset-based
+line-number was 100 for both after a prior edit shifted the file), the Map silently dropped one.
+Use either sequential per-line application with offset re-computation between edits, or
+convergence iteration (re-discover after each batch of edits). The Step 5 prompt-guide note on
+iteration covers the latter pattern.
+
+**Stash-and-restore as a known failure mode.** Step A of the resumption sequence applied
+`stash@{0}` which contained 15 files of in-flight work. One file (`admin-user.service.ts`) had
+been overwritten on `main` by P0b after the stash was created. The apply produced a conflict;
+naively `git checkout main -- <file>` resolved by adopting main's version, which was correct
+here but is a footgun in the general case (could drop the in-flight work the user expected to
+keep). When stashing in-flight work for an indeterminate period, log the file list at stash time
+so the resumer can compare against the head-state file list and surface discrepancies as
+decisions rather than silent resolutions. Worked example: Step A of the Step 6 regression
+remediation resumption.
+
 ---
 
 ## 4. Already resolved

@@ -125,7 +125,31 @@ This is the right discipline. You are not the source of truth about the code. Cl
 
 ## Iterate sequential pattern-match-and-delete to convergence
 
-Sequential pattern-match-and-delete scripts must iterate to convergence — line shifts can create new adjacencies that weren't visible to the original grep. Commit 3 of Step 5 (Cat 2a + 2b purge: `console.error` followed on the next line by `throw` or `toast.*`) found 5 extras on a second pass after the first wave's deletions brought new pairings into adjacency (two consecutive `console.error+throw` blocks where the first deletion exposed the second pattern). Single-pass deletion is incomplete. The fix is small: re-run the grep on the modified tree and apply the second wave; iterate until the grep returns zero matches.
+Sequential pattern-match-and-delete scripts must iterate to convergence — line shifts can create new adjacencies that weren't visible to the original grep. Commit 3 of Step 5 (Cat 2a + 2b purge: `console.error` followed on the next line by `throw` or `toast.*`) found 5 extras on a second pass after the first wave's deletions brought new pairings into adjacency (two consecutive `console.error+throw` blocks where the first deletion exposed the second pattern). Single-pass deletion is incomplete. The fix is small: re-run the grep on the modified tree and apply the second wave; iterate until the grep returns zero matches. Step 6's Commit 4 (`no-unused-vars` cascade) added a second worked example at scale: 5 convergence iterations, each one deleting bindings whose only consumer was a binding deleted in the prior pass. The same rule applies for any rule that can fire on the consequence of another fire of the same rule.
+
+## Prefer AST over regex for syntactic-structure sweeps
+
+When the prompt asks for analysis classifying code by syntactic structure (try/catch shape, destructure patterns, call-expression arguments), the script must walk an AST rather than match patterns with regex. Regex misses three repeatable patterns at every scale: nested destructuring like `{ data: { user }, error }` (where `[^}]*` stops at the inner `}`), multi-line statements split across newlines, and brace-balanced parsing fooled by template literals containing braces. Step 6's P2 sweep produced 4 candidates of 95 try/catch blocks with regex; the AST re-sweep produced 13 of 182. The population delta (95 vs 182) was the harder failure to spot but the more diagnostic. Default to `ts.createSourceFile` with a TypeScript-Compiler-API tree walk for any structural classification; use regex only for textual searches that don't depend on grammar.
+
+## Sanity-check the methodology when the result is a suspiciously round or low fraction
+
+Prompts requesting analysis should include an explicit sanity-check step: if the candidate fraction is small (under ~5% of the population) or implausibly round, the script's methodology may be undercounting before it ever gets to classification. Step 6's P2 regex returned 4 candidates of 95 blocks (4.2%) — low for a codebase known to have inconsistent error handling. The AST re-sweep doubled both the population and the candidates, confirming the methodology was the bottleneck. Build this check into the verification gate: when the result looks easy, force the executor to either spot-check the methodology against three known sites manually or re-run with an alternative detection approach before trusting the count.
+
+## Zero in a category is often a methodology bug, not a real signal
+
+Closely related: when a discovery script reports zero for a category that should have at least some sites, treat it as a bug to investigate rather than a fact to record. Step 6's Commit 1c found a brace-counter regex error that had been emitting `0` for a category with ~50 actual sites. The bug had landed in the prior commit's plan as "0 sites to fix" — which would have been approved without scrutiny if not caught. When a category comes back zero, verify by manually spot-checking one known instance the script should have caught.
+
+## Hard halts framed in regression terms (count increases, not decreases)
+
+Verification gates should halt the executor when a metric *increases* above its anchor, not when it merely fails to drop. Phrasing matters: "typecheck regresses above 66" is correct; "typecheck does not reach 0" is wrong if 0 was never the goal of this commit. The anchor is what the user approved; a decrease is the goal; an increase is the halt condition. Step 6's commit chain used this consistently — Commit 4 ran with anchor 197 and target 66, Commit 5 ran with anchor 66 and target 66 (no regression allowed). Each commit's hard halts reference the previous commit's actual result, not the original plan's aspiration.
+
+## Per-rule lint counts are first-class gates, not just lint totals
+
+A prompt asking for a typing pass cleanup should specify per-rule targets and gates, not only the lint total. The total is too coarse to detect a swap where one rule drops while another rises by the same amount. Step 6's commits used per-rule decomposition consistently: Commit 5's plan specified "no-empty: 26 → 0; no-unused-vars: 0 → 0; no-explicit-any: 0 → 0", and the verification gate confirmed each. The total dropped 25 (anchor 421 → 395, accounting for +1 then 0 on no-unused-vars after the orphan fix). The total alone would have been ambiguous; the per-rule breakdown was unambiguous. For the plan section, include "Required: per-rule lint breakdown before and after, with explicit zero-confirmations for the rules the commit is targeting."
+
+## When to pre-plan a format sweep vs surface-at-pause
+
+If a prompt anticipates that the work will include format-only changes (prettier rewrites of touched files, import-x/order autofixes, line-shift cascades), plan the format sweep as a separate commit or a separate step rather than letting it bleed into the substantive commit's diff. Reviewers can't distinguish "real" changes from autofix noise in a single commit, and the diff bloats sometimes 2-3x. The exception: when format autofix produces only a few lines of unambiguous change in directly-touched files, fold it in. Otherwise, surface at the pause: report "X lines of pure format-rewrite are pending; should I commit those separately?" and let the user decide. Step 5's audit logged this as a distinct sub-commit (`22f26cc`) after the substantive Step-5 work landed.
 
 ## Compact summary
 
