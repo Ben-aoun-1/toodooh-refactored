@@ -3,10 +3,8 @@ import { useLocation } from 'react-router-dom';
 
 import headerAgendaIcon from '../../assets/header/agenda.png';
 import headerCampagnesIcon from '../../assets/header/campagnes.png';
-import headerParcsIcon from '../../assets/header/ecrans.png';
 import headerFinanceIcon from '../../assets/header/finance.png';
 import headerParamsIcon from '../../assets/header/params.png';
-import headerPerformanceIcon from '../../assets/header/performance.png';
 import AdvertiserNotificationsBell from '../AdvertiserNotificationsBell';
 
 interface PageHeaderProps {
@@ -19,7 +17,7 @@ interface PageHeaderProps {
 }
 
 /** Pages where the right-side action buttons use the emphasized variant. */
-const EMPHASIZED_PATHS = ['/my-campaigns', '/parcs', '/evenements', '/perfor'];
+const EMPHASIZED_PATHS = ['/my-campaigns', '/evenements'];
 
 export default function PageHeader({
   onMobileMenuClick,
@@ -52,14 +50,6 @@ export default function PageHeader({
                 <p className="text-xs text-gray-500 truncate hidden sm:block">Gérez vos campagnes actives</p>
               </div>
             </>
-          ) : pathname === '/parcs' ? (
-            <>
-              <img src={headerParcsIcon} alt="" className="h-12 w-12 flex-shrink-0 object-contain" />
-              <div className="min-w-0">
-                <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">Parcs TV</h1>
-                <p className="text-xs text-gray-500 truncate hidden sm:block">Wording Youssef</p>
-              </div>
-            </>
           ) : pathname === '/evenements' ? (
             <>
               <img src={headerAgendaIcon} alt="" className="h-12 w-12 flex-shrink-0 object-contain" />
@@ -67,16 +57,6 @@ export default function PageHeader({
                 <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">Événements</h1>
                 <p className="text-xs text-gray-500 truncate hidden sm:block">
                   Profitez des pics d&apos;audience des événements pour amplifier votre impact
-                </p>
-              </div>
-            </>
-          ) : pathname === '/perfor' ? (
-            <>
-              <img src={headerPerformanceIcon} alt="" className="h-12 w-12 flex-shrink-0 object-contain" />
-              <div className="min-w-0">
-                <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">Mes performances</h1>
-                <p className="text-xs text-gray-500 truncate hidden sm:block">
-                  Analysez la performance de vos campagnes en un coup d&apos;oeil
                 </p>
               </div>
             </>

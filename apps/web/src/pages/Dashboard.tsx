@@ -10,8 +10,6 @@ import {
   DollarSign,
   RotateCcw,
   Rocket,
-  Monitor,
-  Crosshair,
   Link2,
   Check,
 } from 'lucide-react';
@@ -46,8 +44,6 @@ import MyClients from './MyClients';
 import MyInvoices from './MyInvoices';
 import MyRecharges from './MyRecharges';
 import NewCampaign from './NewCampaign';
-import Parcs from './Parcs';
-import Perfor from './Perfor';
 import UserProfile from './UserProfile';
 
 const log = logger.child({ module: 'Dashboard' });
@@ -458,12 +454,8 @@ export default function Dashboard() {
         return <NewCampaign />;
       case '/my-campaigns':
         return <MyCampaigns />;
-      case '/parcs':
-        return <Parcs />;
       case '/evenements':
         return <Events />;
-      case '/perfor':
-        return <Perfor />;
       case '/my-recharges':
         return <MyRecharges />;
       case '/my-invoices':
@@ -894,84 +886,6 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
-
-            {/* Parcs / Enseignes — masqué à la demande */}
-            {false && (
-              <div className="mb-10 rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-                <div className="flex flex-row items-center p-0 gap-6 px-5 py-4 border-b border-gray-200 bg-gray-50/50 min-h-[24px]">
-                  <h2 className="text-lg font-normal leading-6 text-gray-900 flex-1 order-0">
-                    Diffusez votre spot publicitaire sur une même enseigne
-                  </h2>
-                  <button
-                    type="button"
-                    onClick={() => navigate('/my-campaigns')}
-                    className="inline-flex items-center justify-center px-5 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-800 text-sm font-medium hover:bg-gray-50 hover:border-gray-300 transition-colors flex-none shadow-sm"
-                  >
-                    Voir tous les parcs
-                  </button>
-                </div>
-                <div className="p-5">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                    {[1, 2, 3].map((i) => (
-                      <div
-                        key={i}
-                        className="rounded-xl bg-white border border-gray-200 p-5 shadow-sm flex flex-col"
-                      >
-                        <div className="flex items-center gap-3 mb-3">
-                          <img
-                            src="https://back.carrefour.tn/media/logos/logo_car_25.png"
-                            alt="Carrefour"
-                            className="w-10 h-10 rounded-lg object-contain flex-shrink-0 bg-white"
-                          />
-                          <span className="font-semibold text-gray-900">Carrefour</span>
-                        </div>
-                        <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs text-gray-600 mb-2">
-                          <span className="flex items-center gap-1.5">
-                            <Monitor className="h-3.5 w-3.5 flex-shrink-0 text-gray-500" />
-                            32 écrans
-                          </span>
-                          <span className="flex items-center gap-1.5">
-                            <MapPin className="h-3.5 w-3.5 flex-shrink-0 text-gray-500" />
-                            12 établissements
-                          </span>
-                        </div>
-                        <div className="mb-3">
-                          <span className="inline-flex px-2.5 py-1 rounded-full bg-gray-200 text-gray-700 text-xs font-medium">
-                            Sport
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between gap-3 mb-4">
-                          <div>
-                            <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-gray-500">
-                              <Crosshair className="h-3 w-3 flex-shrink-0 text-gray-500" />
-                              <span>CIBLE DOMINANTE</span>
-                            </div>
-                            <p className="text-xs font-medium text-gray-900 mt-0.5">18 - 35 ans</p>
-                          </div>
-                          <div className="flex flex-col items-end">
-                            <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-gray-500">
-                              <TrendingUp className="h-3 w-3 text-[#7e51f5] flex-shrink-0" />
-                              <span>IMPRESSIONS</span>
-                            </div>
-                            <p className="text-xs font-semibold text-gray-900 tabular-nums mt-0.5">
-                              145 000
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex pt-4 mt-auto border-t border-gray-200 -mx-5 px-5">
-                          <button
-                            type="button"
-                            className="w-full py-2.5 rounded-lg bg-gray-700 text-white text-sm font-medium hover:bg-gray-800 transition-colors"
-                          >
-                            Diffuser sur ce parc
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* Mes événements — 2 cartes événement + Suggérez un événement */}
             <div className="mb-10 rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">

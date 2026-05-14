@@ -216,23 +216,7 @@ export default function App() {
               }
             />
             <Route
-              path="/parcs"
-              element={
-                <AdvertiserRoute>
-                  <Dashboard />
-                </AdvertiserRoute>
-              }
-            />
-            <Route
               path="/evenements"
-              element={
-                <AdvertiserRoute>
-                  <Dashboard />
-                </AdvertiserRoute>
-              }
-            />
-            <Route
-              path="/perfor"
               element={
                 <AdvertiserRoute>
                   <Dashboard />

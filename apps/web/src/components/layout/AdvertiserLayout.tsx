@@ -13,8 +13,6 @@ import campagneIconActive from '../../assets/sidebar/campagness.png';
 import dashboardIcon from '../../assets/sidebar/dashboard.png';
 import dashboardIconActive from '../../assets/sidebar/dashboards.png';
 import logoCompany from '../../assets/sidebar/logo.png';
-import performanceIcon from '../../assets/sidebar/performance.png';
-import performanceIconActive from '../../assets/sidebar/performances.png';
 import financeIcon from '../../assets/sidebar/portefeuille.png';
 import financeIconActive from '../../assets/sidebar/portefeuilles.png';
 import supportIcon from '../../assets/support.png';
@@ -133,15 +131,6 @@ export default function AdvertiserLayout({
             label="Événements"
             activeIcon={agendaIconActive}
             inactiveIcon={agendaIcon}
-            expanded={sidebarExpanded}
-            disabled={isDisabled}
-            onNavigate={() => setIsMenuOpen(false)}
-          />
-          <SidebarNavItem
-            path="/perfor"
-            label="Mes performances"
-            activeIcon={performanceIconActive}
-            inactiveIcon={performanceIcon}
             expanded={sidebarExpanded}
             disabled={isDisabled}
             onNavigate={() => setIsMenuOpen(false)}
