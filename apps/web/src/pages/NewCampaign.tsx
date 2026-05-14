@@ -17,7 +17,6 @@ import {
   CheckCircle,
   TrendingUp,
   Clock,
-  AlertCircle,
   Info,
   Monitor,
   Sparkles,
@@ -28,7 +27,6 @@ import {
   ChevronRight,
   Flame,
 } from 'lucide-react';
-import DatePicker from 'react-datepicker';
 import { toast } from 'react-hot-toast';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -85,6 +83,7 @@ import type { SpecialEvent } from '../types/event';
 
 import Step1NameType from './new-campaign/Step1NameType';
 import Step2 from './new-campaign/Step2';
+import Step3 from './new-campaign/Step3';
 
 const log = logger.child({ module: 'NewCampaign' });
 
@@ -100,13 +99,6 @@ L.Icon.Default.mergeOptions({
   iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
-
-const categoryMultipliers = {
-  'Publicité commerciale': 1.2,
-  'Événement culturel': 0.8,
-  'Promotion spéciale': 1.0,
-  'Annonce institutionnelle': 1.5,
-};
 
 
 const center = {
@@ -399,13 +391,9 @@ export default function NewCampaign() {
   );
   const [campaignCategories, setCampaignCategories] = useState<string[]>([]);
 
-  // États pour la validation
-  // errors/touched: removed in Commit 7 (Step1NameType + Step2 own their
-  //   own local errors/touched; Step3-6 will follow the same pattern).
-  // dateErrors/dateTouched still used by inline Step 3 (Période); will be
-  //   internalized when Step 3 extracts in Commit 8.
-  const [dateErrors, setDateErrors] = useState<{ [key: string]: string }>({});
-  const [dateTouched, setDateTouched] = useState<{ [key: string]: boolean }>({});
+  // Validation state: fully internalized into the extracted step components
+  // (Commit 7 moved errors/touched into Step1NameType + Step2; Commit 8
+  // moved dateErrors/dateTouched into Step3).
 
   // États pour les écrans / localités (zone unique : localités dans le cercle)
   const [_allScreens, setAllScreens] = useState<CampaignScreen[]>([]);
@@ -551,48 +539,10 @@ export default function NewCampaign() {
   // Calcul du prix total : (Nombre d'impressions / 1000) × CPM (potentiel max sur la sélection)
   const prixTotal = nbImpressions > 0 ? Math.round((nbImpressions / 1000) * cpmTnd * 100) / 100 : 0;
 
-  // Calculs dynamiques des estimations
-  const campaignEstimations = useMemo(() => {
-    const baseReach = Math.round((radius / 1000) * 1500); // Base: 1500 personnes par km
-    const baseCost = Math.round((radius / 1000) * 500); // Base: 500 TND par km
-
-    // Multiplicateur selon la catégorie
-    const categoryMultiplier =
-      categoryMultipliers[
-        (formData.categories[0] || formData.category) as keyof typeof categoryMultipliers
-      ] || 1;
-
-    // Multiplicateur selon la durée
-    const durationDays =
-      startDate && endDate
-        ? Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24))
-        : 1;
-    const durationMultiplier = Math.min(durationDays / 7, 2); // Max 2x pour 2 semaines
-
-    // Multiplicateur selon le budget
-    const budgetMultiplier = formData.budget ? Math.min(parseFloat(formData.budget) / 1000, 3) : 1; // Max 3x pour 3000 TND
-
-    const estimatedReach = Math.round(
-      baseReach * categoryMultiplier * durationMultiplier * budgetMultiplier,
-    );
-    const estimatedCost = Math.round(baseCost * categoryMultiplier * durationMultiplier);
-    const estimatedViews = Math.round(estimatedReach * 0.7); // 70% des personnes verront la pub
-    const estimatedEngagement = Math.round(estimatedViews * 0.15); // 15% d'engagement
-
-    // Calcul de la zone couverte (approximation)
-    const areaCovered = Math.PI * Math.pow(radius / 1000, 2);
-
-    return {
-      reach: estimatedReach,
-      cost: estimatedCost,
-      views: estimatedViews,
-      engagement: estimatedEngagement,
-      area: areaCovered,
-      duration: durationDays,
-      efficiency: estimatedReach / estimatedCost, // personnes par TND
-    };
-  }, [radius, formData.categories, formData.budget, startDate, endDate]);
-
+  // campaignEstimations memo: removed in Commit 8. Sole consumer was the
+  // inline Step 3 duration display; Step3.tsx now computes duration locally
+  // from startDate/endDate. The other fields (reach/cost/views/engagement/
+  // area/efficiency) were never read anywhere — pre-existing dead code.
 
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
@@ -1172,23 +1122,8 @@ export default function NewCampaign() {
   // replace them; breadcrumb call sites are rewritten inline).
 
   // Fonctions de validation pour les dates
-  const validateDate = (dateType: 'start' | 'end', date: Date | null) => {
-    let error = '';
-
-    if (!date) {
-      error =
-        dateType === 'start'
-          ? 'La date de début est obligatoire'
-          : 'La date de fin est obligatoire';
-    } else if (dateType === 'start' && endDate && date >= endDate) {
-      error = 'La date de début doit être antérieure à la date de fin';
-    } else if (dateType === 'end' && startDate && date <= startDate) {
-      error = 'La date de fin doit être postérieure à la date de début';
-    }
-    // Note: La validation minDate est gérée directement par le DatePicker avec minDate={tomorrow} (J+2)
-
-    return error;
-  };
+  // validateDate: moved into Step3.tsx (only callers were validateStep2 +
+  //   handleDateChange, both also moved).
 
   // Fonction pour vérifier les événements spéciaux durant la période
 
@@ -1271,53 +1206,9 @@ export default function NewCampaign() {
     ],
   );
 
-  const handleDateChange = (dateType: 'start' | 'end', date: Date | null) => {
-    if (dateType === 'start') {
-      setStartDate(date);
-    } else {
-      setEndDate(date);
-    }
-
-    // Marquer le champ comme touché
-    setDateTouched({ ...dateTouched, [dateType]: true });
-
-    // Valider le champ
-    const error = validateDate(dateType, date);
-    setDateErrors({ ...dateErrors, [dateType]: error });
-
-    // Détection des événements spéciaux désactivée (popup masquée)
-    // const newStartDate = dateType === 'start' ? date : startDate;
-    // const newEndDate = dateType === 'end' ? date : endDate;
-    // if (newStartDate && newEndDate && newStartDate < newEndDate) {
-    //   checkSpecialEvents(newStartDate, newEndDate);
-    // }
-
-    // Valider aussi l'autre date si elle existe
-    if (dateType === 'start' && endDate) {
-      const endError = validateDate('end', endDate);
-      setDateErrors({ ...dateErrors, [dateType]: error, end: endError });
-    } else if (dateType === 'end' && startDate) {
-      const startError = validateDate('start', startDate);
-      setDateErrors({ ...dateErrors, [dateType]: error, start: startError });
-    }
-  };
-
-  const validateStep2 = () => {
-    const newErrors: { [key: string]: string } = {};
-    const newTouched: { [key: string]: boolean } = {};
-
-    // Valider les dates
-    newTouched.start = true;
-    newTouched.end = true;
-    newErrors.start = validateDate('start', startDate);
-    newErrors.end = validateDate('end', endDate);
-
-    setDateTouched(newTouched);
-    setDateErrors(newErrors);
-
-    // Vérifier s'il y a des erreurs
-    return !Object.values(newErrors).some((error) => error !== '');
-  };
+  // handleDateChange + validateStep2 (the misnamed dates validator): moved
+  //   into Step3.tsx. Step3 owns its own dateErrors/dateTouched and the
+  //   cross-field re-validation logic.
 
 
   // Charger les écrans au montage du composant
@@ -1938,93 +1829,16 @@ export default function NewCampaign() {
             />
           )}
 
-          {/* Step 3: Planning (Période) */}
+          {/* Step 3: Planification (Période) — extracted to ./new-campaign/Step3 */}
           {currentStep === 3 && !isEventCampaign && (
-            <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
-              <div className="p-6 border-b border-gray-200">
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 rounded-lg bg-gradient-to-r from-[#00B3A6] to-[#00D4C4]">
-                    <Calendar className="h-5 w-5 text-white" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-bold text-[#00263A]">Planification</h2>
-                    <p className="text-gray-600">Définissez les dates de diffusion</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-6 space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Date de début <span className="text-red-500">*</span>
-                    </label>
-                    <DatePicker
-                      selected={startDate}
-                      onChange={(date: Date | null) => handleDateChange('start', date)}
-                      onBlur={() => setDateTouched({ ...dateTouched, start: true })}
-                      selectsStart
-                      startDate={startDate}
-                      endDate={endDate}
-                      minDate={today}
-                      className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent transition-all ${
-                        dateTouched.start && dateErrors.start
-                          ? 'border-red-300 bg-red-50'
-                          : 'border-gray-300'
-                      }`}
-                      placeholderText="Sélectionnez une date"
-                      dateFormat="dd/MM/yyyy"
-                    />
-                    {dateTouched.start && dateErrors.start && (
-                      <p className="mt-1 text-sm text-red-600 flex items-center">
-                        <AlertCircle className="h-4 w-4 mr-1" />
-                        {dateErrors.start}
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Date de fin <span className="text-red-500">*</span>
-                    </label>
-                    <DatePicker
-                      selected={endDate}
-                      onChange={(date: Date | null) => handleDateChange('end', date)}
-                      onBlur={() => setDateTouched({ ...dateTouched, end: true })}
-                      selectsEnd
-                      startDate={startDate}
-                      endDate={endDate}
-                      minDate={startDate || today}
-                      className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent transition-all ${
-                        dateTouched.end && dateErrors.end
-                          ? 'border-red-300 bg-red-50'
-                          : 'border-gray-300'
-                      }`}
-                      placeholderText="Sélectionnez une date"
-                      dateFormat="dd/MM/yyyy"
-                    />
-                    {dateTouched.end && dateErrors.end && (
-                      <p className="mt-1 text-sm text-red-600 flex items-center">
-                        <AlertCircle className="h-4 w-4 mr-1" />
-                        {dateErrors.end}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {campaignEstimations.duration > 0 && (
-                  <div className="bg-gradient-to-r from-[#00B3A6]/10 to-[#00D4C4]/10 rounded-xl p-4 border border-[#00B3A6]/20">
-                    <div className="flex items-center space-x-2 mb-2">
-                      <Clock className="h-5 w-5 text-[#00B3A6]" />
-                      <span className="font-medium text-[#00263A]">Durée de la campagne</span>
-                    </div>
-                    <p className="text-[#00263A]">
-                      {campaignEstimations.duration} jour
-                      {campaignEstimations.duration > 1 ? 's' : ''}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
+            <Step3
+              startDate={startDate}
+              endDate={endDate}
+              setStartDate={setStartDate}
+              setEndDate={setEndDate}
+              onNext={() => wiz.nextStep()}
+              onBack={() => wiz.prevStep()}
+            />
           )}
 
           {/* Step 3: Zones géographiques — design deux colonnes : cartes à gauche, carte à droite */}
@@ -2964,11 +2778,11 @@ export default function NewCampaign() {
             </div>
           )}
 
-          {/* Navigation Buttons — gated off for standard steps 1 and 2
-              because Step1NameType and Step2 render their own Suivant.
-              Event step 1/2 still uses this footer (those paths aren't
-              extracted yet). */}
-          {!showPostCartStep && (isEventCampaign || currentStep > 2) && (
+          {/* Navigation Buttons — gated off for standard steps 1, 2, 3
+              because their step components render their own Suivant. Event
+              step 1/2 still uses this footer (those paths aren't extracted
+              yet). */}
+          {!showPostCartStep && (isEventCampaign || currentStep > 3) && (
             <div className="flex items-center justify-between">
               <button
                 type="button"
@@ -3188,15 +3002,12 @@ export default function NewCampaign() {
                   type="button"
                   onClick={(e) => {
                     e.preventDefault();
-                    // Step 3 (Période) still surfaces field-level UX via
-                    // validateStep2 (the date validator); it mutates
-                    // dateTouched/dateErrors as a side effect. Step 2 owns
-                    // its own validation now (extracted in Commit 7); this
-                    // footer never fires for currentStep === 2 anyway (gated
-                    // above on currentStep > 2 for standard).
-                    if (!isEventCampaign && currentStep === 3) {
-                      if (!validateStep2()) return;
-                    }
+                    // Steps 1/2/3 own their own validate-and-surface
+                    // (Step1NameType, Step2, Step3); this footer never fires
+                    // for those standard steps (gated above on currentStep > 3).
+                    // Steps 4/5/6 use non-mutating cumulative gates via the
+                    // hook's canGoToStep predicate — no pre-nav side-effect
+                    // calls needed.
                     wiz.nextStep();
                   }}
                   disabled={!wiz.canGoToStep(currentStep + 1)}
