@@ -83,6 +83,8 @@ class AdminCampaignMonitoringService {
       // Fallback 1: RPC (on retire la liste lourde des écrans)
       const { data: rpcData, error: rpcError } = await supabase.rpc('get_campaigns_with_screens');
       if (!rpcError && rpcData) {
+        // TODO(phase-1): typed source [supabase] — see #15
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return (rpcData as any[]).map((row) => ({
           ...row,
           screens_list: [],
@@ -130,15 +132,23 @@ class AdminCampaignMonitoringService {
               .from('business_profiles')
               .select('user_id, business_name, contact_name, email')
               .in('user_id', advertiserIds)
+          // TODO(phase-1): typed source [supabase] — see #15
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           : Promise.resolve({ data: [] as any[] }),
         clientIds.length
           ? supabase.from('clients').select('id, name').in('id', clientIds)
+          // TODO(phase-1): typed source [supabase] — see #15
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           : Promise.resolve({ data: [] as any[] }),
         videoIds.length
           ? supabase.from('videos').select('id, url, filename').in('id', videoIds)
+          // TODO(phase-1): typed source [supabase] — see #15
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           : Promise.resolve({ data: [] as any[] }),
         campaignIds.length
           ? supabase.from('campaign_screens').select('campaign_id').in('campaign_id', campaignIds)
+          // TODO(phase-1): typed source [supabase] — see #15
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           : Promise.resolve({ data: [] as any[] }),
       ]);
 
@@ -201,6 +211,8 @@ class AdminCampaignMonitoringService {
 
         if (fallbackError) throw fallbackError;
 
+        // TODO(phase-1): typed source [supabase] — see #15
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return campaigns as any;
       }
 
@@ -349,12 +361,16 @@ class AdminCampaignMonitoringService {
             .from('business_profiles')
             .select('user_id, business_name, contact_name')
             .in('user_id', ownerIds)
+        // TODO(phase-1): typed source [supabase] — see #15
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         : { data: [] as any[] };
 
       const ownerMap = new Map(
         (ownersData || []).map((o) => [o.user_id, o.business_name || o.contact_name || 'N/A']),
       );
 
+      // TODO(phase-1): typed source [supabase] — see #15
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const screensByLocation = new Map<string, any[]>();
       (screensData || []).forEach((s) => {
         const list = screensByLocation.get(s.location_id) || [];
@@ -362,6 +378,8 @@ class AdminCampaignMonitoringService {
         screensByLocation.set(s.location_id, list);
       });
 
+      // TODO(phase-1): typed source [supabase] — see #15
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const getLocationStatus = (locationScreens: any[]): CampaignLocation['location_status'] => {
         if (!locationScreens.length) return 'no_screens';
         if (locationScreens.some((s) => s.status === 'active' && s.is_online)) return 'active';
@@ -406,6 +424,8 @@ class AdminCampaignMonitoringService {
       if (campaignError) throw campaignError;
 
       const planned = (planRows || []).reduce(
+        // TODO(phase-1): typed source [supabase] — see #15
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (sum: number, row: any) => sum + (Number(row.planned_impressions) || 0),
         0,
       );

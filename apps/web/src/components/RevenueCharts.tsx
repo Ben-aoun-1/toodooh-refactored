@@ -98,16 +98,20 @@ export default function RevenueCharts({ monthlyData, screenData, period }: Reven
   };
 
   // Custom tooltip pour les graphiques
+  // TODO(phase-1): typed source [recharts] — see #15
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-white p-4 rounded-lg shadow-lg border border-gray-200">
           <p className="font-semibold text-gray-900">{label}</p>
-          {payload.map((entry: any, index: number) => (
-            <p key={index} className="text-sm" style={{ color: entry.color }}>
-              {entry.name}: {formatCurrency(entry.value)}
-            </p>
-          ))}
+          {payload.map(
+            (entry: { color: string; name: string; value: number }, index: number) => (
+              <p key={index} className="text-sm" style={{ color: entry.color }}>
+                {entry.name}: {formatCurrency(entry.value)}
+              </p>
+            ),
+          )}
         </div>
       );
     }

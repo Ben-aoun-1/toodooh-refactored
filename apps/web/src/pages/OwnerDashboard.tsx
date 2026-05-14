@@ -76,6 +76,8 @@ export default function OwnerDashboard() {
   });
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [accountStatus, setAccountStatus] = useState<'active' | 'pending' | 'suspended'>('active');
+  // TODO(phase-1): typed source [supabase] — see #15
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [profile, setProfile] = useState<any>(null);
   const [businessSectorName, setBusinessSectorName] = useState<string>('');
   const [showGiftCatalog, setShowGiftCatalog] = useState(false);

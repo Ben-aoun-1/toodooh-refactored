@@ -9,6 +9,8 @@ import 'leaflet/dist/leaflet.css';
 const FRENCH_TILE_LAYER = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 
 // Fix pour les icônes Leaflet
+// TODO(phase-1): typed source [leaflet] — see #15
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -173,9 +175,13 @@ export default function LocationsMap({ screens, onScreenClick }: LocationsMapPro
                 icon={createStatusIcon(screen.status)}
                 eventHandlers={{
                   click: () => onScreenClick?.(screen),
+                  // TODO(phase-1): typed source [leaflet] — see #15
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   mouseover: (e: any) => {
                     e.target.openPopup();
                   },
+                  // TODO(phase-1): typed source [leaflet] — see #15
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   mouseout: (e: any) => {
                     e.target.closePopup();
                   },

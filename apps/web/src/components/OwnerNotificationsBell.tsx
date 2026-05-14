@@ -158,9 +158,13 @@ export default function OwnerNotificationsBell({ userId }: { userId?: string }) 
               .from('campaigns')
               .select('id, name, start_date, end_date, status, event_id, created_at, updated_at')
               .in('id', campaignIds)
+          // TODO(phase-1): typed source [supabase] — see #15
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           : { data: [] as any[] };
 
       const campaigns = campaignsRes.data || [];
+      // TODO(phase-1): typed source [internal] — see #15
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const campaignById = new Map<string, any>(campaigns.map((c) => [c.id, c]));
       const approvals = (ownerApprovals.data || []) as Array<{
         campaign_id: string;
@@ -184,6 +188,8 @@ export default function OwnerNotificationsBell({ userId }: { userId?: string }) 
             timestamp:
               toDate(ref?.updated_at) ||
               toDate(ref?.created_at) ||
+              // TODO(phase-1): typed source [supabase] — see #15
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               toDate((c as any)?.campaign_start_date) ||
               new Date(),
             actionLabel: 'Consulter la campagne',

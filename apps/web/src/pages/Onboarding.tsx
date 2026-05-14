@@ -37,6 +37,8 @@ interface OnboardingStep {
   id: number;
   title: string;
   subtitle: string;
+  // TODO(phase-1): typed source [supabase] — see #15
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   icon: React.ComponentType<any>;
   content: React.ReactNode;
 }

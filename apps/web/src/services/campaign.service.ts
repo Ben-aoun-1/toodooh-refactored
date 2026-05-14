@@ -134,6 +134,8 @@ async function getOccupiedRepetitionsByLocationSlotFromHourlyPlan(input: {
 
 export const campaignService = {
   // Créer ou mettre à jour une campagne en draft
+  // TODO(phase-1): typed source [supabase] — see #15
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async saveCampaignDraft(campaignData: CreateCampaignData, campaignId?: string): Promise<any> {
     try {
       const {
@@ -273,6 +275,8 @@ export const campaignService = {
   },
 
   // Finaliser une campagne (passer de draft à pending)
+  // TODO(phase-1): typed source [supabase] — see #15
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async submitCampaign(campaignId: string): Promise<any> {
     try {
       const { data, error } = await supabase
@@ -402,6 +406,8 @@ export const campaignService = {
 
       const screenToLocation = new Map<string, string>();
       const screensByLocation = new Map<string, string[]>();
+      // TODO(phase-1): typed source [supabase] — see #15
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (screensWithData || []).forEach((s: any) => {
         if (s.location_id) {
           screenToLocation.set(s.id, s.location_id);
@@ -411,6 +417,8 @@ export const campaignService = {
         }
       });
       const locationIds = [
+        // TODO(phase-1): typed source [supabase] — see #15
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ...new Set((screensWithData || []).map((s: any) => s.location_id).filter(Boolean)),
       ];
 
@@ -421,6 +429,8 @@ export const campaignService = {
           .from('location_affluence_schedule')
           .select('location_id, day_of_week, hour, estimated_impressions')
           .in('location_id', locationIds);
+        // TODO(phase-1): typed source [supabase] — see #15
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (locSchedule || []).forEach((r: any) => {
           if (!locationScheduleSlots.has(r.location_id)) {
             locationScheduleSlots.set(r.location_id, []);
@@ -491,6 +501,8 @@ export const campaignService = {
       const hoursPerDay = Math.max(0, BASE_HOURS_PER_DAY - unavailableHoursPerDay);
 
       const unavailabilityByScreen = new Map<string, UnavailabilityPeriod[]>();
+      // TODO(phase-1): typed source [supabase] — see #15
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (unavailabilityPeriods || []).forEach((p: any) => {
         if (!p.screen_id) return;
         const list = unavailabilityByScreen.get(p.screen_id) ?? [];
@@ -516,11 +528,15 @@ export const campaignService = {
       }
 
       const activeEvents: SpecialEventWindow[] = (specialEventsRows || [])
+        // TODO(phase-1): typed source [supabase] — see #15
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .filter((e: any) => {
           const es = String(e.start_date).split('T')[0];
           const ee = String(e.end_date).split('T')[0];
           return es <= ourEndStr && ee >= ourStartStr;
         })
+        // TODO(phase-1): typed source [supabase] — see #15
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .map((e: any) => ({
           id: e.id,
           start_date: String(e.start_date).split('T')[0],
@@ -546,6 +562,8 @@ export const campaignService = {
           .in('screen_id', screenIds)
           .neq('campaign_id', campaignId);
 
+        // TODO(phase-1): typed source [supabase] — see #15
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const otherCampaignIds = [...new Set((otherCsRows || []).map((r: any) => r.campaign_id))];
         const overlappingStatuses = new Set<string>();
         if (otherCampaignIds.length > 0) {
@@ -555,6 +573,8 @@ export const campaignService = {
             .in('id', otherCampaignIds)
             .in('status', ['active', 'pending']);
 
+          // TODO(phase-1): typed source [supabase] — see #15
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (otherCampaigns || []).forEach((c: any) => {
             const cs = String(c.start_date).split('T')[0];
             const ce = String(c.end_date).split('T')[0];
@@ -565,6 +585,8 @@ export const campaignService = {
         }
 
         const occupiedRepetitionsByScreen = new Map<string, number>();
+        // TODO(phase-1): typed source [supabase] — see #15
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (otherCsRows || []).forEach((row: any) => {
           if (!overlappingStatuses.has(row.campaign_id)) return;
           const sid = row.screen_id as string;
@@ -930,7 +952,11 @@ export const campaignService = {
           .eq('screen_id', schedule.screen_id)
           .single();
 
+        // TODO(phase-1): typed source [supabase] — see #15
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let updateData: any = null;
+        // TODO(phase-1): typed source [supabase] — see #15
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let screenUpdateError: any = null;
 
         if (existingScreen && !checkError) {

@@ -321,6 +321,8 @@ export const performanceService = {
 
       const { data: campaignsWithGeo, error: withGeoError } =
         Array.isArray(scopedCampaignIds) && scopedCampaignIds.length === 0
+          // TODO(phase-1): typed source [supabase] — see #15
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           ? { data: [], error: null as any }
           : await withGeoQuery;
 

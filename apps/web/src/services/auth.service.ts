@@ -15,6 +15,8 @@ import { getErrorMessage, isErrorWithCode } from '../lib/errors';
 const log = logger.child({ module: 'auth.service' });
 
 // Fonction pour mapper les erreurs techniques vers des messages fonctionnels
+// TODO(phase-1): typed source [supabase] — see #15
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mapAuthError = (error: any): string => {
   const errorMessage =
     error?.message || error?.error_description || "Une erreur inattendue s'est produite";
@@ -368,6 +370,8 @@ export const authService = {
       }
 
       const sectors = sectorsRows || [];
+      // TODO(phase-1): typed source [supabase] — see #15
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const target = sectors.find((s: any) => {
         const n = normalizeSectorName(String(s?.name || ''));
         return n === 'agence de publicite' || (n.includes('agence') && n.includes('publicit'));
@@ -545,6 +549,8 @@ export const authService = {
 
     // 7. Compléter les champs optionnels potentiellement absents après fallback RPC
     const enrichProfileOptionalFields = async () => {
+      // TODO(phase-1): typed source [internal] — see #15
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const patch: Record<string, any> = {
         fonction: data.fonction?.trim() || null,
         company_size: data.company_size || null,
@@ -637,11 +643,19 @@ export const authService = {
     if (!profileCreated) {
       log.error({ profileError }, '❌ Erreur critique lors de la création du profil');
       if (profileError) {
+        // TODO(phase-1): typed source [supabase] — see #15
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         log.error({ data: (profileError as any).code }, 'Code erreur');
         log.error({ message: profileError.message }, 'Message');
+        // TODO(phase-1): typed source [supabase] — see #15
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         log.error({ data: (profileError as any).details }, 'Details');
+        // TODO(phase-1): typed source [supabase] — see #15
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         log.error({ data: (profileError as any).hint }, 'Hint');
       }
+      // TODO(phase-1): typed source [supabase] — see #15
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const pErr = profileError as any;
       if (
         pErr?.code === '22P02' &&

@@ -79,6 +79,8 @@ const ARIANE_ICONS = [ariane1, ariane2, ariane3, ariane4, ariane5, ariane6] as c
 const ARIANE_ICONS_DONE = [ariane1s, ariane2s, ariane3s, ariane4s, ariane5s, ariane6s] as const;
 
 // Fix pour les icônes Leaflet
+// TODO(phase-1): typed source [leaflet] — see #15
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -106,6 +108,8 @@ const center = {
 // Composant pour gérer les événements de la carte
 function MapEvents({ onLocationSelect }: { onLocationSelect: (lat: number, lng: number) => void }) {
   useMapEvents({
+    // TODO(phase-1): typed source [supabase] — see #15
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     click: (e: any) => {
       onLocationSelect(e.latlng.lat, e.latlng.lng);
     },
@@ -444,7 +448,11 @@ export default function NewCampaign() {
   const [draftCampaignId, setDraftCampaignId] = useState<string>(
     editMode && campaignToEdit?.id ? campaignToEdit.id : '',
   );
+  // TODO(phase-1): typed source [supabase] — see #15
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [myApprovedVideos, setMyApprovedVideos] = useState<any[]>([]);
+  // TODO(phase-1): typed source [supabase] — see #15
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [selectedExistingVideo, setSelectedExistingVideo] = useState<any>(null);
   const [videoTab, setVideoTab] = useState<'upload' | 'existing'>('existing');
   const MAX_VIDEO_DURATION_SECONDS = 30;
@@ -1565,6 +1573,8 @@ export default function NewCampaign() {
     return !Object.values(newErrors).some((error) => error !== '');
   };
 
+  // TODO(phase-1): typed source [supabase] — see #15
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapRef = useRef<any>(null);
 
   // Charger les écrans au montage du composant

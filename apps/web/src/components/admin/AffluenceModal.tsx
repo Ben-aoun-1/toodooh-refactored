@@ -72,6 +72,8 @@ export default function AffluenceModal({ location, onClose }: AffluenceModalProp
         defaults.forEach((r) => {
           map.set(`${r.day_of_week}:${r.hour}`, r);
         });
+        // TODO(phase-1): typed source [supabase] — see #15
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         incoming.forEach((r: any) => {
           map.set(`${r.day_of_week}:${r.hour}`, {
             location_id: location.id,

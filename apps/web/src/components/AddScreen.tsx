@@ -54,6 +54,8 @@ export default function AddScreen({ isOpen, onClose, onScreenAdded }: AddScreenP
       setFormData((prev) => ({
         ...prev,
         [parent]: {
+          // TODO(phase-1): typed source [internal] — see #15
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           ...(prev[parent as keyof typeof prev] as any),
           [child]: value,
         },
@@ -95,6 +97,8 @@ export default function AddScreen({ isOpen, onClose, onScreenAdded }: AddScreenP
 
       // Ajouter les coordonnées si disponibles
       if (formData.coordinates.latitude && formData.coordinates.longitude) {
+        // TODO(phase-1): typed source [internal] — see #15
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (screenData as any).coordinates = {
           x: parseFloat(formData.coordinates.longitude),
           y: parseFloat(formData.coordinates.latitude),

@@ -64,6 +64,8 @@ const toNumber = (value: number | string | null | undefined) => {
   return 0;
 };
 
+// TODO(phase-1): typed source [supabase] — see #15
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const extractPlannedImpressions = (publicationSchedule: any): number => {
   if (!publicationSchedule) return 0;
   const raw = publicationSchedule?.total_impressions;
@@ -191,6 +193,8 @@ export default function OwnerCampaigns() {
           ]),
         );
 
+        // TODO(phase-1): typed source [supabase] — see #15
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const queryTasks: Promise<any>[] = [
           ownerLocationIds.length > 0
             ? supabase
@@ -268,6 +272,8 @@ export default function OwnerCampaigns() {
         if (campaignsError) throw campaignsError;
 
         const videoIds = Array.from(
+          // TODO(phase-1): typed source [supabase] — see #15
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           new Set((campaignsRows || []).map((c: any) => c.video_id).filter(Boolean)),
         );
         const approvedVideoIdSet = new Set<string>();
@@ -278,6 +284,8 @@ export default function OwnerCampaigns() {
             .in('id', videoIds)
             .eq('validation_status', 'approved');
           if (approvedVideosError) throw approvedVideosError;
+          // TODO(phase-1): typed source [supabase] — see #15
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (approvedVideos || []).forEach((video: any) => approvedVideoIdSet.add(video.id));
         }
 
@@ -296,6 +304,8 @@ export default function OwnerCampaigns() {
         const advertiserUserIds = Array.from(
           new Set(
             (campaignsRows || [])
+              // TODO(phase-1): typed source [supabase] — see #15
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               .flatMap((c: any) => [c.user_id, c.client?.user_id])
               .filter(Boolean),
           ),
@@ -303,6 +313,8 @@ export default function OwnerCampaigns() {
         const advertiserClientNames = Array.from(
           new Set(
             (campaignsRows || [])
+              // TODO(phase-1): typed source [supabase] — see #15
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               .map((c: any) => (typeof c.client?.name === 'string' ? c.client.name.trim() : ''))
               .filter(Boolean),
           ),
@@ -396,6 +408,8 @@ export default function OwnerCampaigns() {
         }
 
         const cards: OwnerCampaignCard[] = (campaignsRows || [])
+          // TODO(phase-1): typed source [supabase] — see #15
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           .filter((campaign: any) => {
             const advertiserValidated = campaign?.content_validation_status === 'approved';
             const videoValidated = Boolean(
@@ -403,6 +417,8 @@ export default function OwnerCampaigns() {
             );
             return advertiserValidated && videoValidated;
           })
+          // TODO(phase-1): typed source [supabase] — see #15
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           .map((campaign: any) => {
             const ownerLocIds = ownerLocationIdsByCampaign.get(campaign.id) || new Set<string>();
             const ownerScreenIdsForCampaign =

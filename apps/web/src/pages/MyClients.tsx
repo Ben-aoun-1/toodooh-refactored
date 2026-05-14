@@ -28,6 +28,8 @@ function getYear(dateStr: string) {
 
 export default function MyClients() {
   const user = useAuthStore((state) => state.user);
+  // TODO(phase-1): typed source [supabase] — see #15
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [clients, setClients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -35,6 +37,8 @@ export default function MyClients() {
   const [showViewModal, setShowViewModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  // TODO(phase-1): typed source [supabase] — see #15
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [selectedClient, setSelectedClient] = useState<any>(null);
   const [formData, setFormData] = useState({
     name: '',
@@ -173,11 +177,15 @@ export default function MyClients() {
   };
 
   // Ouvrir modals
+  // TODO(phase-1): typed source [supabase] — see #15
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const openViewModal = (client: any) => {
     setSelectedClient(client);
     setShowViewModal(true);
   };
 
+  // TODO(phase-1): typed source [supabase] — see #15
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const openEditModal = (client: any) => {
     setSelectedClient(client);
     setFormData({
@@ -189,6 +197,8 @@ export default function MyClients() {
     setShowEditModal(true);
   };
 
+  // TODO(phase-1): typed source [supabase] — see #15
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const openDeleteModal = (client: any) => {
     setSelectedClient(client);
     setShowDeleteModal(true);

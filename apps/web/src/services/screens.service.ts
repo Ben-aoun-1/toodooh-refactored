@@ -143,6 +143,8 @@ export interface UpdateConfigurationData {
   timezone?: string;
   language?: string;
   refresh_rate?: number;
+  // TODO(phase-1): typed source [supabase] — see #15
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   power_schedule?: any;
   maintenance_mode?: boolean;
 }
@@ -207,13 +209,19 @@ class ScreensService {
 
       let coordinatesPoint: string | null = null;
       if (screenData.coordinates) {
+        // TODO(phase-1): typed source [supabase] — see #15
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const lng = (screenData.coordinates as any).x ?? (screenData.coordinates as any).lng;
+        // TODO(phase-1): typed source [supabase] — see #15
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const lat = (screenData.coordinates as any).y ?? (screenData.coordinates as any).lat;
         if (lng != null && lat != null) {
           coordinatesPoint = `(${lng},${lat})`;
         }
       }
 
+      // TODO(phase-1): typed source [supabase] — see #15
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const insertData: any = {
         owner_id: user.id,
         name: screenData.name,
@@ -465,6 +473,8 @@ class ScreensService {
   }
 
   // Créer un log d'activité
+  // TODO(phase-1): typed source [supabase] — see #15
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async createActivityLog(screenId: string, action: string, details?: any): Promise<void> {
     try {
       const {

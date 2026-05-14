@@ -272,6 +272,8 @@ export const adminScreensService = {
       const ownerMap = new Map((ownersData || []).map((o) => [o.user_id, o.business_name]));
       const screensByLocation = new Map<string, AdminScreen[]>();
 
+      // TODO(phase-1): typed source [supabase] — see #15
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (screensData || []).forEach((screen: any) => {
         const locationId = screen.location_id as string | null;
         if (!locationId) return;
@@ -289,6 +291,8 @@ export const adminScreensService = {
         screensByLocation.set(locationId, existing);
       });
 
+      // TODO(phase-1): typed source [supabase] — see #15
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let mappedLocations: AdminLocation[] = locations.map((location: any) => {
         const locationScreens = screensByLocation.get(location.id) || [];
         return {
@@ -510,6 +514,8 @@ export const adminScreensService = {
   // Mettre à jour un écran
   async updateScreen(screenId: string, updateData: UpdateScreenData): Promise<AdminScreen | null> {
     try {
+      // TODO(phase-1): typed source [supabase] — see #15
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const updateFields: any = { ...updateData };
 
       if (updateData.coordinates) {

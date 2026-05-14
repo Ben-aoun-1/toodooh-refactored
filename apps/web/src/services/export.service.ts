@@ -118,6 +118,8 @@ class ExportService {
       }
 
       // Résumé
+      // TODO(phase-1): typed source [jspdf] — see #15
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const finalY = (doc as any).lastAutoTable.finalY + 20;
       doc.setFontSize(14);
       doc.setTextColor(0, 179, 166);
@@ -126,6 +128,8 @@ class ExportService {
       doc.setFontSize(10);
       doc.setTextColor(100, 100, 100);
       const totalRevenue = data.reduce(
+        // TODO(phase-1): typed source [supabase] — see #15
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (sum: number, item: any) => sum + (item.amount || item.total_revenue),
         0,
       );
@@ -150,6 +154,8 @@ class ExportService {
   ) {
     try {
 
+      // TODO(phase-1): typed source [supabase] — see #15
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let worksheetData: any[] = [];
       let headers: string[] = [];
 
@@ -212,6 +218,8 @@ class ExportService {
         [
           'Revenus totaux',
           data.reduce(
+            // TODO(phase-1): typed source [supabase] — see #15
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             (sum: number, item: any) => sum + (item.amount || item.total_revenue || item.revenue),
             0,
           ),
@@ -221,16 +229,22 @@ class ExportService {
         [
           'Revenu moyen',
           data.reduce(
+            // TODO(phase-1): typed source [supabase] — see #15
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             (sum: number, item: any) => sum + (item.amount || item.total_revenue || item.revenue),
             0,
           ) / data.length,
         ],
         [
           'Revenu maximum',
+          // TODO(phase-1): typed source [supabase] — see #15
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           Math.max(...data.map((item: any) => item.amount || item.total_revenue || item.revenue)),
         ],
         [
           'Revenu minimum',
+          // TODO(phase-1): typed source [supabase] — see #15
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           Math.min(...data.map((item: any) => item.amount || item.total_revenue || item.revenue)),
         ],
       ];
@@ -473,6 +487,8 @@ class ExportService {
       styles: { lineColor: [230, 230, 230], lineWidth: 0.1 },
     });
 
+    // TODO(phase-1): typed source [jspdf] — see #15
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let sumY = (doc as any).lastAutoTable.finalY + 10;
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);

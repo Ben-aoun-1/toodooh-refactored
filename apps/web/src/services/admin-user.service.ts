@@ -158,6 +158,8 @@ export const adminUserService = {
   // Approuver un utilisateur
   async approveUser(userId: string, adminId?: string, notes?: string): Promise<boolean> {
     try {
+      // TODO(phase-1): typed source [supabase] — see #15
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const updateData: any = {
         status: 'approved',
         verification_status: 'approved', // ✅ IMPORTANT : Mettre à jour verification_status aussi
@@ -194,6 +196,8 @@ export const adminUserService = {
   // Rejeter un utilisateur
   async rejectUser(userId: string, adminId?: string, notes?: string): Promise<boolean> {
     try {
+      // TODO(phase-1): typed source [supabase] — see #15
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const updateData: any = {
         status: 'rejected',
         verification_status: 'rejected', // ✅ IMPORTANT : Mettre à jour verification_status aussi

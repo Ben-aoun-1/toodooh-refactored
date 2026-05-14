@@ -288,6 +288,8 @@ export default function EventManagement() {
   };
 
   const getEventTypeBadge = (type: string) => {
+    // TODO(phase-1): typed source [supabase] — see #15
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const typeConfig: any = {
       concert: { color: 'bg-purple-100 text-purple-800', text: 'Concert' },
       sport: { color: 'bg-blue-100 text-blue-800', text: 'Sport' },

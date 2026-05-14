@@ -128,6 +128,8 @@ export const campaignOwnerApprovalService = {
       // Construire la liste des campagnes en attente
       const pendingCampaigns: PendingCampaign[] = [];
 
+      // TODO(phase-1): typed source [supabase] — see #15
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (const campaign of eligibleCampaigns as any[]) {
         const campaignScreenIds = campaignMap.get(campaign.id) || [];
         if (campaignScreenIds.length === 0) continue;

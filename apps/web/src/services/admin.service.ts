@@ -6,6 +6,8 @@ import { getErrorMessage } from '../lib/errors';
 const log = logger.child({ module: 'admin.service' });
 
 // Fonction pour mapper les erreurs admin
+// TODO(phase-1): typed source [supabase] — see #15
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mapAdminError = (error: any): string => {
   const errorMessage =
     error?.message || error?.error_description || "Une erreur inattendue s'est produite";

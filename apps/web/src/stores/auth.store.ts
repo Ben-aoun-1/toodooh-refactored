@@ -142,6 +142,8 @@ export const useAuthStore = create<AuthState>()(
               .limit(1)
               .maybeSingle();
 
+            // TODO(phase-1): typed source [supabase] — see #15
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             let result: any;
             try {
               result = await Promise.race([
@@ -405,6 +407,8 @@ export const useAuthStore = create<AuthState>()(
                   return result;
                 });
 
+                // TODO(phase-1): typed source [supabase] — see #15
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const result = (await Promise.race([profilePromise, timeoutPromise])) as any;
                 clearTimeout(initTimeoutId);
                 const {

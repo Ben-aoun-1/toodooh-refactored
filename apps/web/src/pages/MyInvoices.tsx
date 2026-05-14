@@ -20,6 +20,8 @@ const log = logger.child({ module: 'MyInvoices' });
 
 export default function MyInvoices() {
   const user = useAuthStore((state) => state.user);
+  // TODO(phase-1): typed source [supabase] — see #15
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -65,6 +67,8 @@ export default function MyInvoices() {
             setInvoices(fallbackData || []);
           }
         } else {
+          // TODO(phase-1): typed source [supabase] — see #15
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const formattedData = (data || []).map((invoice: any) => ({
             ...invoice,
             date_emission: invoice.date_emission
@@ -107,6 +111,8 @@ export default function MyInvoices() {
     setCurrentPage(1);
   }, [search]);
 
+  // TODO(phase-1): typed source [supabase] — see #15
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleDownloadPDF = async (facture: any) => {
     if (!user) return;
     try {
@@ -144,6 +150,8 @@ export default function MyInvoices() {
       amount,
     ) + ' TND';
 
+  // TODO(phase-1): typed source [supabase] — see #15
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const getDesignation = (f: any) => {
     if (f.description) return f.description;
     if (f.campaign_name) return f.campaign_name;

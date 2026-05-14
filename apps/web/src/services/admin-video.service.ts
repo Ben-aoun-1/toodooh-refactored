@@ -29,6 +29,8 @@ export const adminVideoService = {
 
       // Règle métier: les vidéos liées uniquement à des campagnes brouillon
       // ne doivent pas apparaître dans la validation admin.
+      // TODO(phase-1): typed source [supabase] — see #15
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const videoIds = videos.map((v: any) => v.id).filter(Boolean);
       const { data: nonDraftLinks, error: linksError } = await supabase
         .from('campaigns')
@@ -42,10 +44,16 @@ export const adminVideoService = {
 
       const eligibleVideoIds = new Set(
         (nonDraftLinks || [])
+          // TODO(phase-1): typed source [supabase] — see #15
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           .map((r: any) => r.video_id)
+          // TODO(phase-1): typed source [supabase] — see #15
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           .filter((id: any): id is string => typeof id === 'string' && id.length > 0),
       );
 
+      // TODO(phase-1): typed source [supabase] — see #15
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const filteredVideos = videos.filter((v: any) => eligibleVideoIds.has(v.id));
 
       return filteredVideos;
@@ -91,6 +99,8 @@ export const adminVideoService = {
   // Valider une vidéo (approuver)
   async approveVideo(videoId: string, adminId: string, notes?: string): Promise<boolean> {
     try {
+      // TODO(phase-1): typed source [supabase] — see #15
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const updateData: any = {
         validation_status: 'approved',
         validated_by: adminId,
@@ -128,7 +138,11 @@ export const adminVideoService = {
       const linkedCampaignIds = Array.from(
         new Set(
           (campaignLinks || [])
+            // TODO(phase-1): typed source [supabase] — see #15
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             .map((row: any) => row?.id || row?.campaign_id)
+            // TODO(phase-1): typed source [supabase] — see #15
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             .filter((id: any): id is string => typeof id === 'string' && id.length > 0),
         ),
       );
@@ -146,7 +160,11 @@ export const adminVideoService = {
           effectiveCampaignIds = Array.from(
             new Set(
               (fallbackCampaignRows || [])
+                // TODO(phase-1): typed source [supabase] — see #15
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 .map((row: any) => row?.id)
+                // TODO(phase-1): typed source [supabase] — see #15
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 .filter((id: any): id is string => typeof id === 'string' && id.length > 0),
             ),
           );
@@ -160,6 +178,8 @@ export const adminVideoService = {
               .select('id, name, user_id, status, content_validation_status')
               .in('id', effectiveCampaignIds)
               .in('status', ['pending'])
+          // TODO(phase-1): typed source [supabase] — see #15
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           : { data: [], error: null as any };
 
       if (campaignsError) {
@@ -231,6 +251,8 @@ export const adminVideoService = {
               );
             } else {
               const screenIds = (campaignScreens || [])
+                // TODO(phase-1): typed source [supabase] — see #15
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 .map((r: any) => r.screen_id)
                 .filter(Boolean);
               if (screenIds.length > 0) {
@@ -248,8 +270,12 @@ export const adminVideoService = {
                   const ownerIds = Array.from(
                     new Set(
                       (screensOwners || [])
+                        // TODO(phase-1): typed source [supabase] — see #15
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                         .map((r: any) => r.owner_id)
                         .filter(
+                          // TODO(phase-1): typed source [supabase] — see #15
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
                           (ownerId: any): ownerId is string =>
                             typeof ownerId === 'string' && ownerId.length > 0,
                         ),
@@ -272,8 +298,12 @@ export const adminVideoService = {
                     } else {
                       const existingOwnerIds = new Set(
                         (existingApprovals || [])
+                          // TODO(phase-1): typed source [supabase] — see #15
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
                           .map((r: any) => r.owner_id)
                           .filter(
+                            // TODO(phase-1): typed source [supabase] — see #15
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
                             (id: any): id is string => typeof id === 'string' && id.length > 0,
                           ),
                       );
@@ -348,6 +378,8 @@ export const adminVideoService = {
             '❌ Error reading active campaigns for advertiser notifications',
           );
         } else if ((activeCampaigns || []).length > 0) {
+          // TODO(phase-1): typed source [supabase] — see #15
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const advertiserNotifications = (activeCampaigns || []).map((campaign: any) => ({
             recipient_user_id: campaign.user_id,
             scope: 'advertiser',
@@ -383,6 +415,8 @@ export const adminVideoService = {
   // Rejeter une vidéo
   async rejectVideo(videoId: string, adminId: string, notes?: string): Promise<boolean> {
     try {
+      // TODO(phase-1): typed source [supabase] — see #15
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const updateData: any = {
         validation_status: 'rejected',
         validated_by: adminId,

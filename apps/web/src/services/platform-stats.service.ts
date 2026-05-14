@@ -174,6 +174,8 @@ export const platformStatsService = {
       const activeCampaigns = campaignsData?.filter((c) => c.status === 'active').length || 0;
       const totalViews = campaignsData?.reduce((sum, c) => sum + (c.views || 0), 0) || 0;
       const totalBudget =
+        // TODO(phase-1): typed source [supabase] — see #15
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         campaignsData?.reduce((sum, c) => sum + (parseFloat(c.budget as any) || 0), 0) || 0;
       const averageBudget = totalCampaigns > 0 ? totalBudget / totalCampaigns : 0;
 

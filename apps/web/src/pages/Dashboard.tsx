@@ -129,6 +129,8 @@ const APPOINTMENT_OBJECTIVES_FALLBACK = [
 ];
 
 const DISABLE_ONBOARDING_POPUPS = true;
+// TODO(phase-1): typed source [supabase] — see #15
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const isMissingCampaignCategoriesTable = (error: any) =>
   error?.code === 'PGRST205' && String(error?.message || '').includes('campaign_categories');
 
@@ -249,6 +251,8 @@ export default function Dashboard() {
   const shouldOnboard = useAuthStore((state) => state.shouldOnboard);
   const needsApproval = useAuthStore((state) => state.needsApproval);
   const validationStatus = useAuthStore((state) => state.validationStatus);
+  // TODO(phase-1): typed source [supabase] — see #15
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [profile, setProfile] = useState<any>(null);
   const [onboardingCompleted, setOnboardingCompleted] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -565,6 +569,8 @@ export default function Dashboard() {
           return;
         }
         const rows = data || [];
+        // TODO(phase-1): typed source [supabase] — see #15
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const campaignIds = rows.map((c: any) => c.id).filter(Boolean);
         const categoriesByCampaign = new Map<string, string[]>();
         const zonesByCampaign = new Map<string, string[]>();
@@ -586,6 +592,8 @@ export default function Dashboard() {
             log.error({ categoryError }, 'Error fetching campaign categories');
           }
 
+          // TODO(phase-1): typed source [supabase] — see #15
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (categoryRows || []).forEach((row: any) => {
             if (!row?.campaign_id || !row?.category) return;
             const prev = categoriesByCampaign.get(row.campaign_id) || [];
@@ -593,12 +601,16 @@ export default function Dashboard() {
             categoriesByCampaign.set(row.campaign_id, prev);
           });
 
+          // TODO(phase-1): typed source [supabase] — see #15
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           rows.forEach((c: any) => {
             const lat = Number(c?.location_lat);
             const lng = Number(c?.location_lng);
             const radius = Number(c?.location_radius);
             if (!Number.isFinite(lat) || !Number.isFinite(lng) || !Number.isFinite(radius)) return;
             const matched = (predefinedZonesRows || []).find(
+              // TODO(phase-1): typed source [supabase] — see #15
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               (z: any) =>
                 Math.abs(Number(z.latitude) - lat) <= 0.0005 &&
                 Math.abs(Number(z.longitude) - lng) <= 0.0005 &&
@@ -613,6 +625,8 @@ export default function Dashboard() {
         }
 
         setLastCampaigns(
+          // TODO(phase-1): typed source [supabase] — see #15
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           rows.map((c: any) => {
             const selectedCategories =
               categoriesByCampaign.get(c.id) || (c.category ? [c.category] : []);

@@ -32,6 +32,8 @@ import { useAuthStore } from '../stores/auth.store';
 
 const log = logger.child({ module: 'MyCampaigns' });
 
+// TODO(phase-1): typed source [supabase] — see #15
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const isMissingCampaignCategoriesTable = (error: any) =>
   error?.code === 'PGRST205' && String(error?.message || '').includes('campaign_categories');
 
@@ -175,6 +177,8 @@ export default function MyCampaigns() {
   }, [location.search]);
   const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  // TODO(phase-1): typed source [supabase] — see #15
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [campaigns, setCampaigns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
@@ -232,6 +236,8 @@ export default function MyCampaigns() {
             log.error({ categoryError }, 'Error fetching campaign categories');
           }
 
+          // TODO(phase-1): typed source [supabase] — see #15
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (categoryRows || []).forEach((row: any) => {
             if (!row?.campaign_id || !row?.category) return;
             const prev = categoriesByCampaign.get(row.campaign_id) || [];
@@ -239,12 +245,16 @@ export default function MyCampaigns() {
             categoriesByCampaign.set(row.campaign_id, prev);
           });
 
+          // TODO(phase-1): typed source [supabase] — see #15
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (campaignsData || []).forEach((c: any) => {
             const lat = Number(c?.location_lat);
             const lng = Number(c?.location_lng);
             const radius = Number(c?.location_radius);
             if (!Number.isFinite(lat) || !Number.isFinite(lng) || !Number.isFinite(radius)) return;
             const matched = (predefinedZonesRows || []).find(
+              // TODO(phase-1): typed source [supabase] — see #15
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               (z: any) =>
                 Math.abs(Number(z.latitude) - lat) <= 0.0005 &&
                 Math.abs(Number(z.longitude) - lng) <= 0.0005 &&
@@ -360,8 +370,12 @@ export default function MyCampaigns() {
     campaigns.length > 0 ? [...new Set(campaigns.map((c) => c.status).filter(Boolean))] : [];
 
   // État pour le modal de consultation
+  // TODO(phase-1): typed source [supabase] — see #15
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [selectedCampaign, setSelectedCampaign] = useState<any>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  // TODO(phase-1): typed source [supabase] — see #15
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [campaignVideo, setCampaignVideo] = useState<any>(null);
   const [openActionRowId, setOpenActionRowId] = useState<string | null>(null);
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -385,6 +399,8 @@ export default function MyCampaigns() {
   };
 
   // Fonction pour consulter une campagne
+  // TODO(phase-1): typed source [supabase] — see #15
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleViewCampaign = async (campaign: any) => {
     setSelectedCampaign(campaign);
 
@@ -409,6 +425,8 @@ export default function MyCampaigns() {
   };
 
   // Fonction pour modifier une campagne
+  // TODO(phase-1): typed source [supabase] — see #15
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleEditCampaign = (campaign: any) => {
     // Vérifier si la campagne peut être modifiée
     if (campaign.status === 'active') {
@@ -425,6 +443,8 @@ export default function MyCampaigns() {
 
   const canDeleteDraftCampaign = (status: string) => status === 'draft';
 
+  // TODO(phase-1): typed source [supabase] — see #15
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleDeleteDraftCampaign = async (campaign: any) => {
     if (!canDeleteDraftCampaign(campaign.status)) return;
     const confirmed = window.confirm(
@@ -456,6 +476,8 @@ export default function MyCampaigns() {
     }
   };
 
+  // TODO(phase-1): typed source [supabase] — see #15
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleActivateDraftCampaign = async (campaign: any) => {
     if (campaign.status !== 'draft') return;
     if (!user?.id) {
@@ -479,6 +501,8 @@ export default function MyCampaigns() {
         videoIsValidated = video?.validation_status === 'approved';
       }
 
+      // TODO(phase-1): typed source [supabase] — see #15
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const isMissingValidationNotesColumn = (error: any) =>
         error?.code === 'PGRST204' && String(error?.message || '').includes('validation_notes');
 
@@ -570,6 +594,8 @@ export default function MyCampaigns() {
         ),
       );
       if (selectedCampaign?.id === campaign.id) {
+        // TODO(phase-1): typed source [supabase] — see #15
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         setSelectedCampaign((prev: any) =>
           prev
             ? {

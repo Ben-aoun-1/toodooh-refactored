@@ -194,6 +194,8 @@ export const videoUploadService = {
     filename: string,
     fileSize?: number,
     durationSeconds?: number | null,
+  // TODO(phase-1): typed source [supabase] — see #15
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<any> {
     try {
       const {

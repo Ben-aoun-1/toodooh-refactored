@@ -40,6 +40,8 @@ interface Campaign {
   validated_impressions?: number;
 }
 
+// TODO(phase-1): typed source [supabase] — see #15
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const isMissingCampaignCategoriesTable = (error: any) =>
   error?.code === 'PGRST205' && String(error?.message || '').includes('campaign_categories');
 
@@ -51,6 +53,8 @@ interface Video {
   validation_status: string;
 }
 
+// TODO(phase-1): typed source [supabase] — see #15
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const statusConfig: Record<string, { label: string; color: string; icon: any }> = {
   draft: { label: 'Brouillon', color: 'bg-gray-100 text-gray-800', icon: AlertCircle },
   pending: { label: 'En attente', color: 'bg-yellow-100 text-yellow-800', icon: Clock },
@@ -100,6 +104,8 @@ export default function CampaignDetails() {
       }
 
       const selectedCategories = (categoryRows || [])
+        // TODO(phase-1): typed source [supabase] — see #15
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .map((row: any) => row.category)
         .filter(Boolean);
 
@@ -114,6 +120,8 @@ export default function CampaignDetails() {
       const radius = Number(campaignData?.location_radius);
       if (Number.isFinite(lat) && Number.isFinite(lng) && Number.isFinite(radius)) {
         const matched = (predefinedZonesRows || []).find(
+          // TODO(phase-1): typed source [supabase] — see #15
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (z: any) =>
             Math.abs(Number(z.latitude) - lat) <= 0.0005 &&
             Math.abs(Number(z.longitude) - lng) <= 0.0005 &&
