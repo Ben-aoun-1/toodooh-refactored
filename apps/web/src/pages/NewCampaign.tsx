@@ -49,6 +49,7 @@ import { useCampaignWizard } from '../hooks/new-campaign/useCampaignWizard';
 import { buildInitialWizardState } from '../hooks/new-campaign/wizard-init';
 import type {
   GeographicZone,
+  ParcTV,
   UseCampaignWizardOptions,
   WizardState,
 } from '../hooks/new-campaign/wizard-types';
@@ -83,6 +84,7 @@ import type { BusinessSector } from '../types/auth';
 import type { SpecialEvent } from '../types/event';
 
 import Step1NameType from './new-campaign/Step1NameType';
+import Step2 from './new-campaign/Step2';
 
 const log = logger.child({ module: 'NewCampaign' });
 
@@ -218,6 +220,17 @@ export default function NewCampaign() {
   );
   const setClient = useCallback(
     (value: string) => setState((prev) => ({ ...prev, client: value })),
+    [setState],
+  );
+  const setCategories = useCallback(
+    (next: string[] | ((prev: string[]) => string[])) =>
+      setState((prev) => ({
+        ...prev,
+        categories:
+          typeof next === 'function'
+            ? (next as (p: string[]) => string[])(prev.categories)
+            : next,
+      })),
     [setState],
   );
   const setDiffusionType = useCallback(
@@ -359,14 +372,7 @@ export default function NewCampaign() {
   const [_searchQuery, _setSearchQuery] = useState('');
   const [selectedVideo, setSelectedVideo] = useState<File | null>(null);
 
-  // Parcs TV
-  interface ParcTV {
-    ownerId: string;
-    name: string;
-    logo?: string;
-    screenCount: number;
-    screenIds: string[];
-  }
+  // Parcs TV (ParcTV interface imported from wizard-types)
   const [availableParcs, setAvailableParcs] = useState<ParcTV[]>([]);
   const [loadingParcs, setLoadingParcs] = useState(false);
 
@@ -394,8 +400,10 @@ export default function NewCampaign() {
   const [campaignCategories, setCampaignCategories] = useState<string[]>([]);
 
   // États pour la validation
-  const [errors, setErrors] = useState<{ [key: string]: string }>({});
-  const [touched, setTouched] = useState<{ [key: string]: boolean }>({});
+  // errors/touched: removed in Commit 7 (Step1NameType + Step2 own their
+  //   own local errors/touched; Step3-6 will follow the same pattern).
+  // dateErrors/dateTouched still used by inline Step 3 (Période); will be
+  //   internalized when Step 3 extracts in Commit 8.
   const [dateErrors, setDateErrors] = useState<{ [key: string]: string }>({});
   const [dateTouched, setDateTouched] = useState<{ [key: string]: boolean }>({});
 
@@ -987,107 +995,21 @@ export default function NewCampaign() {
     }
   };
 
-  // Fonctions de validation
-  const validateField = (name: string, value: string) => {
-    let error = '';
+  // validateField + handleFieldChange: removed (Step1NameType + Step2 own
+  //   their own field-level validation; Step3-6 will follow the same pattern
+  //   as they extract). The 'budget' / 'category' / 'categories' branches of
+  //   the old validateField were dead even before extraction (the live budget
+  //   gate is canProceedToStep6, not a string-input validator).
 
-    switch (name) {
-      case 'campaignName':
-        if (!value.trim()) {
-          error = 'Le nom de la campagne est obligatoire';
-        } else if (value.trim().length < 3) {
-          error = 'Le nom doit contenir au moins 3 caractères';
-        }
-        break;
-      case 'client':
-        // Le champ client est obligatoire uniquement pour les agences et organisateurs d'événements
-        if (shouldShowClientField) {
-          if (!value.trim()) {
-            error = 'Le nom du client est obligatoire';
-          } else if (value.trim().length < 2) {
-            error = 'Le nom du client doit contenir au moins 2 caractères';
-          }
-        }
-        break;
-      case 'category':
-        if (!value) {
-          error = 'La catégorie est obligatoire';
-        }
-        break;
-      case 'categories':
-        // Validé côté validateStep2Category via formData.categories.length
-        break;
-      case 'budget':
-        // Le budget n'est plus obligatoire, mais si une valeur est fournie, on la valide
-        if (value && value.trim() !== '') {
-          const numValue = parseFloat(value);
-          if (isNaN(numValue) || numValue <= 0) {
-            error = 'Le budget doit être supérieur à 0 TND';
-          } else if (numValue > 10000) {
-            error = 'Le budget maximum est de 10 000 TND';
-          }
-        }
-        break;
-    }
-
-    return error;
-  };
-
-  const handleFieldChange = (name: string, value: string) => {
-    // Migrated fields (campaignName, client) live in WizardState; other
-    // names would target the legacy formData stub but no other names are
-    // currently passed from the existing call sites.
-    if (name === 'campaignName') {
-      setCampaignName(value);
-    } else if (name === 'client') {
-      setClient(value);
-    }
-
-    // Marquer le champ comme touché
-    setTouched({ ...touched, [name]: true });
-
-    // Valider le champ
-    const error = validateField(name, value);
-    setErrors({ ...errors, [name]: error });
-  };
-
-  const handleCategoriesToggle = (category: string) => {
-    setState((prev) => ({
-      ...prev,
-      categories: prev.categories.includes(category)
-        ? prev.categories.filter((c) => c !== category)
-        : [...prev.categories, category],
-    }));
-    setTouched((t) => ({ ...t, categories: true }));
-  };
-
-  // validateStep1: removed (Step1NameType owns its own field-error surfacing).
+  // handleCategoriesToggle: removed (Step2.tsx owns its own toggle logic via
+  //   setCategories prop).
+  // validateStep1, validateStep2Category: removed (extracted step components
+  //   own their own field-error surfacing).
   // canProceedToStep2/3/4/5, canLeaveStep2, canNavigateToStep, handleStepClick:
-  //   removed (hook's stepList[i].validate + canGoToStep replace them).
+  //   removed in Commit 6 (hook's stepList[i].validate + canGoToStep replace).
   // canProceedToStep6 retained below — it carries the budget-bounds check
   //   (effectiveMin/effectiveMax against cpmTnd) that the hook's pure
   //   validateBudget intentionally omits per Commit 5's contract.
-
-  const validateStep2Category = () => {
-    if (diffusionType === 'parc_tv') {
-      const parcErr = selectedParcIds.length === 0 ? 'Sélectionnez au moins un parc' : '';
-      setErrors((e) => ({ ...e, parcs: parcErr }));
-      return !parcErr;
-    }
-    const catErr = formData.categories.length === 0 ? 'Sélectionnez au moins une catégorie' : '';
-    const clientErr = shouldShowClientField ? validateField('client', formData.client) : '';
-    setTouched((t) => ({
-      ...t,
-      categories: true,
-      ...(shouldShowClientField ? { client: true } : {}),
-    }));
-    setErrors((e) => ({
-      ...e,
-      categories: catErr,
-      ...(shouldShowClientField ? { client: clientErr } : {}),
-    }));
-    return !catErr && !clientErr;
-  };
 
   const canProceedToStep6 = () => {
     const impressionsFromSelection = calculateBudgetAndImpressions.impressions;
@@ -1588,11 +1510,7 @@ export default function NewCampaign() {
     if (diffusionType === 'parc_tv') loadAvailableParcs();
   }, [diffusionType]);
 
-  const handleParcToggle = (ownerId: string) => {
-    setSelectedParcIds((prev) =>
-      prev.includes(ownerId) ? prev.filter((id) => id !== ownerId) : [...prev, ownerId],
-    );
-  };
+  // handleParcToggle: removed (Step2.tsx owns the toggle via setSelectedParcIds prop).
 
   // Mettre à jour les localités dans la zone (cercle unique) quand centre ou rayon change
   useEffect(() => {
@@ -2001,155 +1919,23 @@ export default function NewCampaign() {
             />
           )}
 
-          {/* Step 2: Catégorie(s) — grille type maquette */}
-          {currentStep === 2 && !isEventCampaign && diffusionType === 'parc_tv' && (
-            <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
-              <div className="p-6 border-b border-gray-200">
-                <h2 className="text-xl font-bold text-gray-900">Parcs disponibles</h2>
-                <p className="text-gray-600 mt-1">Définissez votre ciblage thématique</p>
-              </div>
-              <div className="p-6 space-y-6">
-                {loadingParcs ? (
-                  <div className="flex justify-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#00B3A6]" />
-                  </div>
-                ) : availableParcs.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    <Monitor className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                    <p>Aucun parc disponible pour le moment</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {availableParcs.map((parc) => {
-                      const isSelected = selectedParcIds.includes(parc.ownerId);
-                      return (
-                        <button
-                          key={parc.ownerId}
-                          type="button"
-                          onClick={() => handleParcToggle(parc.ownerId)}
-                          className={`relative flex items-center gap-3 w-full px-4 py-4 rounded-xl border-2 text-left transition-all ${
-                            isSelected
-                              ? 'border-[#76E6AB] bg-[#76E6AB]/5'
-                              : 'border-gray-200 bg-white hover:border-gray-300'
-                          }`}
-                        >
-                          <div className="w-12 h-12 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-center flex-shrink-0 overflow-hidden">
-                            {parc.logo ? (
-                              <img
-                                src={parc.logo}
-                                alt={parc.name}
-                                className="w-10 h-10 object-contain"
-                              />
-                            ) : (
-                              <Monitor className="h-6 w-6 text-gray-400" />
-                            )}
-                          </div>
-                          <span className="text-sm font-medium text-gray-900">{parc.name}</span>
-                          <div
-                            className={`absolute top-3 right-3 w-5 h-5 rounded flex items-center justify-center flex-shrink-0 ${
-                              isSelected ? 'bg-[#76E6AB]' : 'border-2 border-gray-300 bg-white'
-                            }`}
-                          >
-                            {isSelected && (
-                              <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />
-                            )}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-                {errors.parcs && (
-                  <p className="text-sm text-red-600 flex items-center">
-                    <AlertCircle className="h-4 w-4 mr-1" />
-                    {errors.parcs}
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-
-          {currentStep === 2 && !isEventCampaign && diffusionType !== 'parc_tv' && (
-            <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
-              <div className="p-6 border-b border-gray-200">
-                <h2 className="text-xl font-bold text-gray-900">Catégories</h2>
-                <p className="text-gray-600 mt-1">Définissez votre ciblage thématique</p>
-              </div>
-              <div className="p-6 space-y-6">
-                <div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {categoryChoices.map((category) => {
-                      const isSelected = formData.categories.includes(category);
-                      return (
-                        <button
-                          key={category}
-                          type="button"
-                          onClick={() => handleCategoriesToggle(category)}
-                          className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg border-2 text-left transition-all ${
-                            isSelected
-                              ? 'border-[#00B3A6] bg-[#00B3A6]/5'
-                              : 'border-gray-200 bg-white hover:border-gray-300'
-                          }`}
-                        >
-                          <div
-                            className={`flex-shrink-0 w-5 h-5 rounded flex items-center justify-center ${
-                              isSelected ? 'bg-[#00B3A6]' : 'border-2 border-gray-300 bg-white'
-                            }`}
-                          >
-                            {isSelected && (
-                              <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} />
-                            )}
-                          </div>
-                          <span className="text-sm font-medium text-gray-900">{category}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {touched.categories && errors.categories && (
-                    <p className="mt-2 text-sm text-red-600 flex items-center">
-                      <AlertCircle className="h-4 w-4 mr-1" />
-                      {errors.categories}
-                    </p>
-                  )}
-                  {formData.categories?.length > 0 && (
-                    <div className="mt-4 flex items-center gap-3 px-4 py-3 bg-gray-100 rounded-lg">
-                      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-gray-400 flex items-center justify-center">
-                        <Info className="h-3.5 w-3.5 text-white" />
-                      </div>
-                      <p className="text-sm text-gray-600">
-                        Vous avez sélectionné {formData.categories.length} catégorie(s). Plus votre
-                        ciblage est large, plus vous augmentez votre portée.
-                      </p>
-                    </div>
-                  )}
-                </div>
-                {shouldShowClientField && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Client <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.client}
-                      onChange={(e) => handleFieldChange('client', e.target.value)}
-                      onBlur={() => setTouched({ ...touched, client: true })}
-                      className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent transition-all ${
-                        touched.client && errors.client
-                          ? 'border-red-300 bg-red-50'
-                          : 'border-gray-300'
-                      }`}
-                      placeholder="Nom du client"
-                    />
-                    {touched.client && errors.client && (
-                      <p className="mt-1 text-sm text-red-600 flex items-center">
-                        <AlertCircle className="h-4 w-4 mr-1" />
-                        {errors.client}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
+          {/* Step 2: Catégorie / Choix du parc — extracted to ./new-campaign/Step2 */}
+          {currentStep === 2 && !isEventCampaign && (
+            <Step2
+              diffusionType={diffusionType}
+              categoryChoices={categoryChoices}
+              selectedCategories={state.categories}
+              setSelectedCategories={setCategories}
+              shouldShowClientField={shouldShowClientField}
+              client={state.client}
+              setClient={setClient}
+              availableParcs={availableParcs}
+              loadingParcs={loadingParcs}
+              selectedParcIds={selectedParcIds}
+              setSelectedParcIds={setSelectedParcIds}
+              onNext={() => wiz.nextStep()}
+              onBack={() => wiz.prevStep()}
+            />
           )}
 
           {/* Step 3: Planning (Période) */}
@@ -3178,10 +2964,11 @@ export default function NewCampaign() {
             </div>
           )}
 
-          {/* Navigation Buttons — gated off for standard step 1 because
-              Step1NameType renders its own Suivant. Event step 1 still uses
-              this footer because that path isn't extracted yet. */}
-          {!showPostCartStep && (isEventCampaign || currentStep > 1) && (
+          {/* Navigation Buttons — gated off for standard steps 1 and 2
+              because Step1NameType and Step2 render their own Suivant.
+              Event step 1/2 still uses this footer (those paths aren't
+              extracted yet). */}
+          {!showPostCartStep && (isEventCampaign || currentStep > 2) && (
             <div className="flex items-center justify-between">
               <button
                 type="button"
@@ -3401,13 +3188,12 @@ export default function NewCampaign() {
                   type="button"
                   onClick={(e) => {
                     e.preventDefault();
-                    // Steps 2 (Catégories) and 3 (Période) still surface
-                    // field-level UX via validateStep2Category / validateStep2;
-                    // those mutate touched/errors as a side effect. The hook's
-                    // nextStep() handles the actual navigation + cumulative gate.
-                    if (!isEventCampaign && currentStep === 2) {
-                      if (!validateStep2Category()) return;
-                    }
+                    // Step 3 (Période) still surfaces field-level UX via
+                    // validateStep2 (the date validator); it mutates
+                    // dateTouched/dateErrors as a side effect. Step 2 owns
+                    // its own validation now (extracted in Commit 7); this
+                    // footer never fires for currentStep === 2 anyway (gated
+                    // above on currentStep > 2 for standard).
                     if (!isEventCampaign && currentStep === 3) {
                       if (!validateStep2()) return;
                     }

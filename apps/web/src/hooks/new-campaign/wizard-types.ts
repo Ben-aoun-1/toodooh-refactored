@@ -10,6 +10,17 @@ export interface GeographicZone {
   predefinedZoneId?: string;
 }
 
+/** Parc-TV (network owner) entry in Step 2's parc_tv mode. Owner-scoped
+ *  set of screens that diffuse together; selected by ownerId in the
+ *  wizard's `selectedParcIds` slot. */
+export interface ParcTV {
+  ownerId: string;
+  name: string;
+  logo?: string;
+  screenCount: number;
+  screenIds: string[];
+}
+
 export interface WizardState {
   campaignType: 'standard' | 'event';
   campaignName: string;
