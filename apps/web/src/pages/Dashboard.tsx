@@ -17,41 +17,9 @@ import {
   Crosshair,
   Link2,
   Check,
-  Trash2,
 } from 'lucide-react';
-import React, { useState, useEffect, useRef, useCallback, Component } from 'react';
-
-/** Affiche l'erreur à l'écran pour déboguer la page blanche */
-class ContentErrorBoundary extends Component<
-  { children: React.ReactNode },
-  { hasError: boolean; error: Error | null }
-> {
-  state = { hasError: false, error: null as Error | null };
-  static getDerivedStateFromError(error: Error) {
-    return { hasError: true, error };
-  }
-  componentDidCatch(error: Error, info: React.ErrorInfo) {
-    log.error({ error, componentStack: info.componentStack }, 'ContentErrorBoundary');
-  }
-  render() {
-    if (this.state.hasError && this.state.error) {
-      return (
-        <div className="p-8 max-w-2xl mx-auto bg-red-50 border border-red-200 rounded-xl">
-          <h2 className="text-lg font-bold text-red-800 mb-2">Erreur d&apos;affichage</h2>
-          <pre className="text-sm text-red-700 whitespace-pre-wrap break-words overflow-auto max-h-96">
-            {this.state.error.message}
-          </pre>
-          <p className="text-xs text-gray-600 mt-2">
-            Vérifiez la console (F12) pour plus de détails.
-          </p>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
+import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
-import Joyride, { CallBackProps, STATUS, Step } from 'react-joyride';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 import deconnexionIcon from '../assets/deconnexion.png';
@@ -85,10 +53,15 @@ import statIcon5 from '../assets/stats/5.png';
 import supportIcon from '../assets/support.png';
 import supportIconActive from '../assets/supports.png';
 import AdvertiserNotificationsBell from '../components/AdvertiserNotificationsBell';
+import CartSidebar from '../components/CartSidebar';
+import ContentErrorBoundary from '../components/ContentErrorBoundary';
 import { getErrorMessage } from '../lib/errors';
+import { MONTHS_FR, WEEKDAYS_FR } from '../lib/locale';
 import { logger } from '../lib/logger';
+import { getCalendarDays, isDatePast } from '../lib/ui-dates';
 import { eventsService } from '../services/events.service';
 import { useAuthStore } from '../stores/auth.store';
+import { useCartStore } from '../stores/cart.store';
 import type { SpecialEvent } from '../types/event';
 import { supabase } from '../lib/supabase';
 import { authService } from '../services/auth.service';
@@ -101,7 +74,6 @@ import MyClients from './MyClients';
 import MyInvoices from './MyInvoices';
 import MyRecharges from './MyRecharges';
 import NewCampaign from './NewCampaign';
-import OnboardingModal from './Onboarding';
 import Parcs from './Parcs';
 import Perfor from './Perfor';
 import UserProfile from './UserProfile';
@@ -120,7 +92,6 @@ const APPOINTMENT_OBJECTIVES_FALLBACK = [
   'Autre',
 ];
 
-const DISABLE_ONBOARDING_POPUPS = true;
 // TODO(phase-1): typed source [supabase] — see #15
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const isMissingCampaignCategoriesTable = (error: any) =>
@@ -130,58 +101,11 @@ function isAutreObjective(value: string): boolean {
   return value.trim().toLowerCase() === 'autre';
 }
 
-function getCalendarDays(year: number, month: number) {
-  const first = new Date(year, month, 1);
-  const last = new Date(year, month + 1, 0);
-  const startDay = first.getDay() === 0 ? 6 : first.getDay() - 1; // Lundi = 0
-  const daysInMonth = last.getDate();
-  const prevMonth = month === 0 ? 11 : month - 1;
-  const prevYear = month === 0 ? year - 1 : year;
-  const prevLast = new Date(prevYear, prevMonth + 1, 0).getDate();
-  const rows: { day: number; currentMonth: boolean; date: Date }[] = [];
-  for (let i = 0; i < startDay; i++) {
-    const d = prevLast - startDay + 1 + i;
-    rows.push({ day: d, currentMonth: false, date: new Date(prevYear, prevMonth, d) });
-  }
-  for (let d = 1; d <= daysInMonth; d++) {
-    rows.push({ day: d, currentMonth: true, date: new Date(year, month, d) });
-  }
-  const remaining = 42 - rows.length;
-  for (let i = 0; i < remaining; i++) {
-    rows.push({ day: i + 1, currentMonth: false, date: new Date(year, month + 1, i + 1) });
-  }
-  return rows;
-}
-
 function isDateUnavailable(date: Date) {
   const d = date.getDate();
   const unavailableDays = [6, 10, 17, 22];
   return unavailableDays.includes(d);
 }
-
-function isDatePast(date: Date) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d < today;
-}
-
-const MONTHS_FR = [
-  'Janvier',
-  'Février',
-  'Mars',
-  'Avril',
-  'Mai',
-  'Juin',
-  'Juillet',
-  'Août',
-  'Septembre',
-  'Octobre',
-  'Novembre',
-  'Décembre',
-];
-const WEEKDAYS_FR = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -189,13 +113,11 @@ export default function Dashboard() {
   const logout = useAuthStore((state) => state.logout);
   const profileType = useAuthStore((state) => state.profileType);
   const user = useAuthStore((state) => state.user);
-  const shouldOnboard = useAuthStore((state) => state.shouldOnboard);
   const needsApproval = useAuthStore((state) => state.needsApproval);
   const validationStatus = useAuthStore((state) => state.validationStatus);
   // TODO(phase-1): typed source [supabase] — see #15
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [profile, setProfile] = useState<any>(null);
-  const [onboardingCompleted, setOnboardingCompleted] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
   const [showContactModal, setShowContactModal] = useState(false);
@@ -212,17 +134,10 @@ export default function Dashboard() {
   const [contactMessage, setContactMessage] = useState('');
   const [contactCalendarMonth, setContactCalendarMonth] = useState(() => new Date());
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [_currentPage, _setCurrentPage] = useState('dashboard');
-  const profileLoadedRef = useRef(false);
-  const onboardingCheckRef = useRef(false);
-  // Header maquette : panier / notifications
-  const [cartItems, setCartItems] = useState<
-    Array<{ id: string; name: string; amount: number; periodLabel?: string; zonesLabel?: string }>
-  >([]);
-  const [cartOpen, setCartOpen] = useState(false); // colonne panier à droite, fermé par défaut
+  // Header : panier ouvert/fermé. Items proviennent du cart store.
+  const [cartOpen, setCartOpen] = useState(false);
   const [featuredEvents, setFeaturedEvents] = useState<SpecialEvent[]>([]);
-  const cartCount = cartItems.length;
-  const cartSubtotal = cartItems.reduce((sum, item) => sum + item.amount, 0);
+  const cartCount = useCartStore((s) => s.items.length);
   useEffect(() => {
     let active = true;
     const loadSupportObjectives = async () => {
@@ -251,79 +166,6 @@ export default function Dashboard() {
     !isDisabled && validationStatus === 'approved' && profile?.is_active !== false;
   const canLaunchCampaign = !isDisabled && validationStatus === 'approved';
 
-  // Charger le profil complet pour vérifier onboarding_completed (une seule fois)
-  useEffect(() => {
-    const loadProfile = async () => {
-      if (!user?.id || profileLoadedRef.current) return;
-
-      // Vérifier d'abord le localStorage pour éviter les requêtes inutiles
-      const onboardingCompletedLocal = localStorage.getItem('onboardingCompleted') === 'true';
-      if (onboardingCompletedLocal) {
-        setOnboardingCompleted(true);
-        profileLoadedRef.current = true;
-        return;
-      }
-
-      try {
-        profileLoadedRef.current = true;
-        const { data, error } = await supabase
-          .from('business_profiles')
-          .select('onboarding_completed, registration_doc_url')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (!error && data) {
-          const isCompleted = data.onboarding_completed || false;
-          setOnboardingCompleted(isCompleted);
-          if (isCompleted) {
-            localStorage.setItem('onboardingCompleted', 'true');
-          }
-        }
-      } catch (error) {
-        log.error({ error }, 'Erreur chargement profil');
-        profileLoadedRef.current = false; // Réessayer en cas d'erreur
-      }
-    };
-
-    loadProfile();
-  }, [user?.id]); // Utiliser user?.id au lieu de user pour éviter les re-renders
-
-  // Debug logs
-  useEffect(() => {}, [
-    needsApproval,
-    validationStatus,
-    isDisabled,
-    onboardingCompleted,
-    profileType,
-    user,
-  ]);
-
-  const [runTour, setRunTour] = useState(false);
-  const [tourStepIndex, setTourStepIndex] = useState(0);
-  const [showOnboarding, setShowOnboarding] = useState(
-    DISABLE_ONBOARDING_POPUPS ? false : shouldOnboard,
-  );
-  const onboardingModalInitializedRef = useRef(false);
-
-  // Debug pour showOnboarding (désactivé pour réduire les logs)
-  // useEffect(() => {
-  //   ;
-  // }, [showOnboarding]);
-
-  // Fonction helper pour ouvrir le modal d'onboarding
-  const openOnboardingModal = () => {
-    if (DISABLE_ONBOARDING_POPUPS) return;
-
-    // Nettoyer le localStorage pour éviter les conflits
-    const oldValue = localStorage.getItem('onboardingCompleted');
-    if (oldValue === 'true') {
-      localStorage.removeItem('onboardingCompleted');
-    }
-
-    setShowOnboarding(true);
-  };
   const [stats, setStats] = useState({
     activeCampaigns: 0,
     campaignsDiffused: 0,
@@ -368,26 +210,6 @@ export default function Dashboard() {
       }
     }
   }, [user, navigate]);
-
-  const steps: Step[] = [
-    {
-      target: '.dashboard-stats',
-      content: "Voici vos statistiques clés en un coup d'œil.",
-      disableBeacon: true,
-    },
-    {
-      target: '.dashboard-actions',
-      content: 'Lancez ou gérez vos campagnes ici.',
-    },
-    {
-      target: '.dashboard-quick-actions',
-      content: 'Accédez rapidement à vos recharges et factures.',
-    },
-    {
-      target: '.dashboard-profile',
-      content: 'Gérez votre profil et vos informations.',
-    },
-  ];
 
   // Charger les statistiques réelles
   useEffect(() => {
@@ -621,75 +443,6 @@ export default function Dashboard() {
     }
   }, [user, location.pathname]);
 
-  useEffect(() => {
-    if (DISABLE_ONBOARDING_POPUPS) {
-      setShowOnboarding(false);
-      onboardingModalInitializedRef.current = true;
-      return;
-    }
-    // Vérifier le localStorage et l'état pour éviter les boucles infinies
-    if (onboardingModalInitializedRef.current) return; // Ne s'exécuter qu'une fois
-
-    const onboardingCompletedLocal = localStorage.getItem('onboardingCompleted') === 'true';
-    if (onboardingCompletedLocal || onboardingCompleted) {
-      setShowOnboarding(false);
-      onboardingModalInitializedRef.current = true;
-    } else if (shouldOnboard) {
-      setShowOnboarding(true);
-      onboardingModalInitializedRef.current = true;
-    }
-  }, [shouldOnboard, onboardingCompleted]);
-
-  useEffect(() => {
-    if (localStorage.getItem('justOnboarded') === 'true') {
-      setRunTour(true);
-      localStorage.removeItem('justOnboarded');
-    }
-  }, []);
-
-  useEffect(() => {
-    const syncCart = (openCart = false) => {
-      try {
-        const raw = localStorage.getItem('campaign_cart_items');
-        const parsed = raw ? JSON.parse(raw) : [];
-        setCartItems(Array.isArray(parsed) ? parsed : []);
-        if (openCart) setCartOpen(true);
-      } catch {
-        setCartItems([]);
-      }
-    };
-
-    const onCartUpdated = (event: Event) => {
-      const customEvent = event as CustomEvent<{ open?: boolean }>;
-      syncCart(Boolean(customEvent.detail?.open));
-    };
-    const onStorage = () => syncCart();
-
-    syncCart();
-    window.addEventListener('storage', onStorage);
-    window.addEventListener('toodooh:cart-updated', onCartUpdated as EventListener);
-
-    return () => {
-      window.removeEventListener('storage', onStorage);
-      window.removeEventListener('toodooh:cart-updated', onCartUpdated as EventListener);
-    };
-  }, []);
-
-  const removeFromCart = useCallback((campaignId: string) => {
-    try {
-      const raw = localStorage.getItem('campaign_cart_items');
-      const current = raw ? JSON.parse(raw) : [];
-      const next = Array.isArray(current)
-        ? current.filter((item: { id?: string }) => item?.id !== campaignId)
-        : [];
-      localStorage.setItem('campaign_cart_items', JSON.stringify(next));
-      setCartItems(next);
-      window.dispatchEvent(new CustomEvent('toodooh:cart-updated', { detail: {} }));
-    } catch {
-      setCartItems([]);
-    }
-  }, []);
-
   // Charger les événements mis en avant pour le bloc dashboard
   useEffect(() => {
     if (location.pathname !== '/dashboard') return;
@@ -707,13 +460,7 @@ export default function Dashboard() {
 
   const handleLogout = async () => {
     try {
-      // Nettoyer le localStorage
-      localStorage.removeItem('onboardingCompleted');
-      localStorage.removeItem('justOnboarded');
-      localStorage.removeItem('user_profile_type');
-
       await logout();
-
       navigate('/login');
       toast.success('Déconnexion réussie');
     } catch (error) {
@@ -733,70 +480,6 @@ export default function Dashboard() {
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
 
-
-  const handleJoyrideCallback = (data: CallBackProps) => {
-    const { status, index } = data;
-    if (status === STATUS.FINISHED || status === STATUS.SKIPPED) {
-      setRunTour(false);
-      setTourStepIndex(0);
-    } else {
-      setTourStepIndex(index + 1);
-    }
-  };
-
-  const handleOnboardingComplete = useCallback(async () => {
-    if (onboardingCheckRef.current) return; // Éviter les appels multiples
-    onboardingCheckRef.current = true;
-
-    setShowOnboarding(false);
-
-    // Marquer l'onboarding comme terminé dans localStorage d'abord
-    localStorage.setItem('onboardingCompleted', 'true');
-
-    // Marquer l'onboarding comme terminé dans la base de données
-    if (user?.id) {
-      try {
-        const { error } = await supabase
-          .from('business_profiles')
-          .update({ onboarding_completed: true })
-          .eq('user_id', user.id);
-
-        if (error) {
-          log.error({ error }, 'Erreur lors de la mise à jour onboarding_completed');
-          onboardingCheckRef.current = false; // Réessayer en cas d'erreur
-        } else {
-          // Recharger l'état onboarding_completed
-          setOnboardingCompleted(true);
-        }
-      } catch (error) {
-        log.error({ error }, "Erreur lors de la completion de l'onboarding");
-        onboardingCheckRef.current = false; // Réessayer en cas d'erreur
-      }
-    }
-  }, [user?.id]);
-
-  const handleOnboardingClose = async () => {
-    setShowOnboarding(false);
-
-    // Marquer l'onboarding comme terminé dans localStorage d'abord
-    localStorage.setItem('onboardingCompleted', 'true');
-
-    // Marquer l'onboarding comme terminé pour éviter qu'il se relance
-    if (user) {
-      try {
-        const { error } = await supabase
-          .from('business_profiles')
-          .update({ onboarding_completed: true })
-          .eq('user_id', user.id);
-
-        if (error) {
-          log.error({ error }, 'Erreur lors de la mise à jour onboarding_completed');
-        }
-      } catch (error) {
-        log.error({ error }, "Erreur lors de la fermeture de l'onboarding");
-      }
-    }
-  };
 
   const renderContent = () => {
     // Détecter la route actuelle et afficher le bon composant
@@ -827,25 +510,6 @@ export default function Dashboard() {
       default:
         return (
           <div className="max-w-7xl mx-auto space-y-8">
-            {/* Joyride */}
-            <Joyride
-              steps={steps}
-              run={runTour}
-              stepIndex={tourStepIndex}
-              continuous
-              showSkipButton
-              showProgress
-              locale={{
-                back: 'Précédent',
-                close: 'Fermer',
-                last: 'Terminer',
-                next: 'Suivant',
-                skip: 'Passer',
-              }}
-              callback={handleJoyrideCallback}
-              styles={{ options: { zIndex: 9999 } }}
-            />
-
             {/* Première ligne sous la bannière : Solde disponible + Prêt à démarrer */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Carte Solde disponible */}
@@ -862,7 +526,6 @@ export default function Dashboard() {
                         toast.error(
                           '⚠️ Veuillez compléter vos informations pour accéder à cette fonctionnalité',
                         );
-                        openOnboardingModal();
                       } else {
                         navigate('/my-recharges');
                       }
@@ -899,7 +562,6 @@ export default function Dashboard() {
                       toast.error(
                         '⚠️ Veuillez compléter vos informations pour accéder à cette fonctionnalité',
                       );
-                      openOnboardingModal();
                     } else {
                       navigate('/new-campaign');
                     }
@@ -1685,7 +1347,6 @@ export default function Dashboard() {
                 toast.error(
                   '⚠️ Veuillez compléter vos informations pour accéder à cette fonctionnalité',
                 );
-                openOnboardingModal();
               } else {
                 navigate('/my-campaigns');
                 setIsMenuOpen(false);
@@ -1713,7 +1374,6 @@ export default function Dashboard() {
                 toast.error(
                   '⚠️ Veuillez compléter vos informations pour accéder à cette fonctionnalité',
                 );
-                openOnboardingModal();
               } else {
                 navigate('/evenements');
                 setIsMenuOpen(false);
@@ -1741,7 +1401,6 @@ export default function Dashboard() {
                 toast.error(
                   '⚠️ Veuillez compléter vos informations pour accéder à cette fonctionnalité',
                 );
-                openOnboardingModal();
               } else {
                 navigate('/perfor');
                 setIsMenuOpen(false);
@@ -1769,7 +1428,6 @@ export default function Dashboard() {
                 toast.error(
                   '⚠️ Veuillez compléter vos informations pour accéder à cette fonctionnalité',
                 );
-                openOnboardingModal();
               } else {
                 navigate('/my-recharges');
                 setIsMenuOpen(false);
@@ -1797,7 +1455,6 @@ export default function Dashboard() {
                   toast.error(
                     '⚠️ Veuillez compléter vos informations pour accéder à cette fonctionnalité',
                   );
-                  openOnboardingModal();
                 } else {
                   navigate('/my-clients');
                   setIsMenuOpen(false);
@@ -2087,81 +1744,8 @@ export default function Dashboard() {
         </main>
       </div>
 
-      {/* Colonne droite : Panier (emplacement maquette — Sous-total + montant + Mon panier en haut) */}
-      <aside
-        className={`hidden lg:flex flex-col flex-shrink-0 bg-gray-50/80 border-l border-[#E1E4EA] transition-[width] duration-200 ease-in-out overflow-hidden ${
-          cartOpen ? 'w-[136px]' : 'w-0 border-l-0'
-        }`}
-      >
-        {cartOpen && (
-          <>
-            <div className="flex-none p-4 flex flex-col gap-2 border-b border-[#E1E4EA]">
-              <p className="text-xs text-gray-500">Sous-total</p>
-              <p className="text-base font-bold text-gray-900">
-                {cartSubtotal.toLocaleString('fr-FR', {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}{' '}
-                TND
-              </p>
-              <button
-                type="button"
-                onClick={() => navigate('/my-cart')}
-                className="w-full py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700 text-sm font-medium"
-              >
-                Mon panier
-              </button>
-            </div>
-            <div className="flex-1 overflow-auto p-2 space-y-3">
-              {cartCount === 0 ? (
-                <p className="text-xs text-gray-500 text-center py-4">Panier vide</p>
-              ) : (
-                cartItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className="bg-white rounded-lg border border-gray-200 p-2 shadow-sm flex flex-col"
-                  >
-                    <div className="flex items-start justify-between gap-1 mb-2">
-                      <p className="text-[11px] font-semibold text-gray-900 break-words leading-tight flex-1 min-w-0">
-                        {item.name || 'Nom de la campagne'}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => removeFromCart(item.id)}
-                        className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 flex-shrink-0"
-                        title="Retirer du panier"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                    <div className="w-full h-24 rounded-md bg-gray-200 mb-2" />
-                    {(item.periodLabel || item.zonesLabel) && (
-                      <p
-                        className="text-[10px] text-gray-500 mb-1.5 leading-tight line-clamp-1"
-                        title={[item.periodLabel, item.zonesLabel].filter(Boolean).join(' · ')}
-                      >
-                        {[item.periodLabel, item.zonesLabel].filter(Boolean).join(' · ')}
-                      </p>
-                    )}
-                    <p className="text-sm font-bold text-gray-900">
-                      {item.amount.toLocaleString('fr-FR', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}{' '}
-                      TND
-                    </p>
-                  </div>
-                ))
-              )}
-            </div>
-          </>
-        )}
-      </aside>
-
-      {/* Onboarding Modal - Toujours disponible peu importe la route */}
-      {!DISABLE_ONBOARDING_POPUPS && showOnboarding && (
-        <OnboardingModal onComplete={handleOnboardingComplete} onClose={handleOnboardingClose} />
-      )}
+      {/* Colonne droite : Panier */}
+      <CartSidebar open={cartOpen} />
 
       {/* Modal confirmation déconnexion */}
       {showLogoutConfirm && (

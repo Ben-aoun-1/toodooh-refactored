@@ -19,50 +19,21 @@ import { balanceService } from '../services/balance.service';
 import { campaignService } from '../services/campaign.service';
 import { eventsService } from '../services/events.service';
 import { useAuthStore } from '../stores/auth.store';
+import { useCartStore, type CartItem } from '../stores/cart.store';
 import type { SpecialEvent } from '../types/event';
 
-interface CartItemSidebar {
-  id: string;
-  name: string;
-  amount: number;
-  /** Affiché dans le récap (ajout depuis nouvelle campagne) */
-  periodLabel?: string;
-  zonesLabel?: string;
-}
-
-const CART_STORAGE_KEY = 'campaign_cart_items';
 const TVA_RATE = 0.19;
 
 export default function CartPage() {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
-  const [cartItems, setCartItems] = useState<CartItemSidebar[]>([]);
+  const cartItems = useCartStore((s) => s.items);
+  const setCartItems = useCartStore((s) => s.setItems);
+  const removeItem = useCartStore((s) => s.removeItem);
   const [suggestedEvents, setSuggestedEvents] = useState<SpecialEvent[]>([]);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showInsufficientModal, setShowInsufficientModal] = useState(false);
   const [confirming, setConfirming] = useState(false);
-
-  const loadCart = () => {
-    try {
-      const raw = localStorage.getItem(CART_STORAGE_KEY);
-      const parsed = raw ? JSON.parse(raw) : [];
-      setCartItems(Array.isArray(parsed) ? parsed : []);
-    } catch {
-      setCartItems([]);
-    }
-  };
-
-  useEffect(() => {
-    loadCart();
-    const onStorage = () => loadCart();
-    const onCartUpdated = () => loadCart();
-    window.addEventListener('storage', onStorage);
-    window.addEventListener('toodooh:cart-updated', onCartUpdated);
-    return () => {
-      window.removeEventListener('storage', onStorage);
-      window.removeEventListener('toodooh:cart-updated', onCartUpdated);
-    };
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,18 +46,7 @@ export default function CartPage() {
   }, []);
 
   const removeFromCart = (campaignId: string) => {
-    try {
-      const raw = localStorage.getItem(CART_STORAGE_KEY);
-      const current = raw ? JSON.parse(raw) : [];
-      const next = Array.isArray(current)
-        ? current.filter((item: CartItemSidebar) => item.id !== campaignId)
-        : [];
-      localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(next));
-      setCartItems(next);
-      window.dispatchEvent(new CustomEvent('toodooh:cart-updated', { detail: {} }));
-    } catch {
-      setCartItems([]);
-    }
+    removeItem(campaignId);
   };
 
 
@@ -98,7 +58,7 @@ export default function CartPage() {
     }
     setConfirming(true);
     try {
-      const remainingItems: CartItemSidebar[] = [];
+      const remainingItems: CartItem[] = [];
       let activatedCount = 0;
       let pendingCount = 0;
       let insufficientCount = 0;
@@ -197,9 +157,7 @@ export default function CartPage() {
         }
       }
 
-      localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(remainingItems));
       setCartItems(remainingItems);
-      window.dispatchEvent(new CustomEvent('toodooh:cart-updated', { detail: {} }));
 
       if (activatedCount > 0) {
         if (pendingCount === 0 && insufficientCount === 0 && failedCount === 0) {

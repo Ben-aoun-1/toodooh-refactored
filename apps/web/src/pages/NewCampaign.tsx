@@ -70,6 +70,7 @@ import {
   type UploadProgress,
 } from '../services/video-upload.service';
 import { useAuthStore } from '../stores/auth.store';
+import { useCartStore } from '../stores/cart.store';
 import type { BusinessSector } from '../types/auth';
 import type { SpecialEvent } from '../types/event';
 
@@ -1200,36 +1201,26 @@ export default function NewCampaign() {
 
   const pushCampaignToSidebarCart = useCallback(
     (campaignId: string) => {
-      try {
-        const raw = localStorage.getItem('campaign_cart_items');
-        const current = raw ? JSON.parse(raw) : [];
-        const safeCurrent = Array.isArray(current) ? current : [];
-        const amount = adjustedBudget > 0 ? adjustedBudget : prixTotal;
-        const periodLabel =
-          startDate && endDate
-            ? `${startDate.toLocaleDateString('fr-FR')} – ${endDate.toLocaleDateString('fr-FR')}`
-            : undefined;
-        const totalAreaKm2 = geographicZones.reduce(
-          (sum, z) => sum + Math.PI * Math.pow(z.radius / 1000, 2),
-          0,
-        );
-        const zonesLabel =
-          geographicZones.length > 0
-            ? `${geographicZones.length} zone${geographicZones.length > 1 ? 's' : ''} · ${totalAreaKm2.toFixed(1)} km²`
-            : undefined;
-        const nextItem = {
-          id: campaignId,
-          name: formData.campaignName || eventFromState?.name || 'Nom de la campagne',
-          amount,
-          periodLabel,
-          zonesLabel,
-        };
-        const deduped = safeCurrent.filter((item: { id?: string }) => item?.id !== campaignId);
-        localStorage.setItem('campaign_cart_items', JSON.stringify([...deduped, nextItem]));
-        window.dispatchEvent(new CustomEvent('toodooh:cart-updated', { detail: { open: true } }));
-      } catch (error) {
-        log.error({ error }, 'Erreur mise à jour panier sidebar');
-      }
+      const amount = adjustedBudget > 0 ? adjustedBudget : prixTotal;
+      const periodLabel =
+        startDate && endDate
+          ? `${startDate.toLocaleDateString('fr-FR')} – ${endDate.toLocaleDateString('fr-FR')}`
+          : undefined;
+      const totalAreaKm2 = geographicZones.reduce(
+        (sum, z) => sum + Math.PI * Math.pow(z.radius / 1000, 2),
+        0,
+      );
+      const zonesLabel =
+        geographicZones.length > 0
+          ? `${geographicZones.length} zone${geographicZones.length > 1 ? 's' : ''} · ${totalAreaKm2.toFixed(1)} km²`
+          : undefined;
+      useCartStore.getState().addItem({
+        id: campaignId,
+        name: formData.campaignName || eventFromState?.name || 'Nom de la campagne',
+        amount,
+        periodLabel,
+        zonesLabel,
+      });
     },
     [
       adjustedBudget,
