@@ -21,10 +21,13 @@ import {
   sectorsForAdvertiserProfile,
 } from '../constants/advertiserBusinessSectors';
 import { getErrorMessage } from '../lib/errors';
+import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { authService } from '../services/auth.service';
 import { useAuthStore } from '../stores/auth.store';
 import type { BusinessProfile, BusinessSector, Governorate } from '../types/auth';
+
+const log = logger.child({ module: 'UserProfile' });
 
 type TabId = 'responsable' | 'entreprise' | 'notifications' | 'confidentialite';
 type EntrepriseSubId = 'informations' | 'adresse' | 'documents';
@@ -421,15 +424,37 @@ export default function UserProfile() {
     try {
       const ext = documentFile.name.split('.').pop();
       const filePath = `rne_${user.id}_${Date.now()}.${ext}`;
-      await supabase.storage.from('registres').upload(filePath, documentFile);
-      await supabase
+
+      const { error: uploadError } = await supabase
+        .storage
+        .from('registres')
+        .upload(filePath, documentFile);
+
+      if (uploadError) {
+        log.error({ error: uploadError }, 'failed to upload registration document');
+        toast.error(getErrorMessage(uploadError) || 'Erreur upload du document');
+        return;
+      }
+
+      const { error: updateError } = await supabase
         .from('business_profiles')
         .update({ registration_doc_path: filePath, registration_doc_url: null })
         .eq('user_id', user.id);
+
+      if (updateError) {
+        // The file is in storage but the DB doesn't reference it. We do not
+        // attempt cleanup — best-effort delete creates more failure modes than
+        // it solves; the orphan can be reclaimed by a storage GC job later.
+        log.error({ error: updateError }, 'failed to update business_profile after document upload');
+        toast.error(getErrorMessage(updateError) || 'Erreur enregistrement du chemin du document');
+        return;
+      }
+
       setDocumentFile(null);
       toast.success('Document enregistré');
       loadProfile();
     } catch (err) {
+      log.error({ err }, 'unexpected error during document upload flow');
       toast.error(getErrorMessage(err) || 'Erreur upload');
     } finally {
       setUploadingDocument(false);
