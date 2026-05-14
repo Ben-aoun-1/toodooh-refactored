@@ -178,7 +178,6 @@ class ScreensService {
 
       if (data && data.length > 0) {
         data.forEach((_screen, _index) => {});
-      } else {
       }
 
       return data || [];

@@ -80,10 +80,8 @@ export const campaignScreensService = {
 
       // Récupérer les données d'affluence pour chaque écran
       const screensWithAffluence = await Promise.all(
-        (data || []).map(async (screen, index) => {
+        (data || []).map(async (screen, _index) => {
           const affluenceData = await this.getScreenAffluenceData(screen.id);
-          if (index < 3) {
-          }
 
           // Extraire les coordonnées (format POINT PostgreSQL)
           let coordinates = undefined;

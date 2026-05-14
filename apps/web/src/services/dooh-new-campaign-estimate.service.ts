@@ -245,15 +245,8 @@ export async function computeNewCampaignDoohMaxImpressions(input: {
   applyWizardLocationAffluence(locationScheduleSlots, input.wizardLocationSlots);
 
   const locScheduleRows: ScheduleRow[] = [...(scheduleWizardResult.data ?? [])];
-  const affluenceScheduleFetchError = !!scheduleWizardResult.error;
   if (locScheduleRows.length > 0) {
     applyDbLocationScheduleRows(locationScheduleSlots, locScheduleRows);
-  } else if (evaluationLocationIds.length > 0 && !affluenceScheduleFetchError) {
-    const wizardFilled =
-      input.wizardLocationSlots &&
-      [...input.wizardLocationSlots.values()].some((slots) => slots.length > 0);
-    if (!wizardFilled) {
-    }
   }
 
   let videoDurationSeconds: number | undefined;

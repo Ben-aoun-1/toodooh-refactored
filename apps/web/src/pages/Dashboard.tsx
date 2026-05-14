@@ -791,7 +791,6 @@ export default function Dashboard() {
 
         if (error) {
           log.error({ error }, 'Erreur lors de la mise à jour onboarding_completed');
-        } else {
         }
       } catch (error) {
         log.error({ error }, "Erreur lors de la fermeture de l'onboarding");

@@ -675,7 +675,6 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
                               );
                               log.error({ message: deleteError.message }, '   Code');
                               // On continue quand même pour supprimer l'URL de la DB
-                            } else {
                             }
 
                             // IMPORTANT : Toujours mettre à jour le profil (supprimer l'URL)

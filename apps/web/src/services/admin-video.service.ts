@@ -358,7 +358,6 @@ export const adminVideoService = {
 
             // Injecter les informations de publication par heure
             await campaignService.injectCampaignPublicationSchedule(campaign.id);
-          } else {
           }
         }
       }
@@ -529,7 +528,10 @@ export const adminVideoService = {
         if (!error && data) {
           return data;
         }
-      } catch (_rpcError) {}
+      } catch {
+        // Intentional: RPC `get_campaigns_using_video` failure falls back to
+        // the direct-query path below.
+      }
 
       // Fallback: requête directe
       const { data, error } = await supabase

@@ -72,7 +72,6 @@ export default function OwnerScreens() {
 
       if (screensData && screensData.length > 0) {
         screensData.forEach((_screen, _index) => {});
-      } else {
       }
 
       setScreens(screensData);

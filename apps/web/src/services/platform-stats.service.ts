@@ -21,7 +21,10 @@ export const platformStatsService = {
         if (!error && data) {
           return data[0];
         }
-      } catch (_rpcError) {}
+      } catch {
+        // Intentional: RPC `get_platform_global_stats` failure falls back
+        // to the direct-query path below.
+      }
 
       // Fallback: Requêtes directes
       const [users, screens, campaigns, videos, events] = await Promise.all([
@@ -87,7 +90,10 @@ export const platformStatsService = {
         if (!error && data) {
           return data[0];
         }
-      } catch (_rpcError) {}
+      } catch {
+        // Intentional: RPC `get_platform_revenue_stats` failure falls back
+        // to the direct-query path below.
+      }
 
       // Fallback: Requêtes directes
       const { data: screensData } = await supabase
@@ -129,7 +135,10 @@ export const platformStatsService = {
         if (!error && data) {
           return data[0];
         }
-      } catch (_rpcError) {}
+      } catch {
+        // Intentional: RPC `get_screens_occupancy_rate` failure falls back
+        // to the direct-query path below.
+      }
 
       // Fallback: Requêtes directes
       const { data: screensData } = await supabase.from('screens').select('status, is_online');
@@ -163,7 +172,10 @@ export const platformStatsService = {
         if (!error && data) {
           return data[0];
         }
-      } catch (_rpcError) {}
+      } catch {
+        // Intentional: RPC `get_campaigns_performance` failure falls back
+        // to the direct-query path below.
+      }
 
       // Fallback: Requêtes directes
       const { data: campaignsData } = await supabase
@@ -215,7 +227,10 @@ export const platformStatsService = {
         if (!error && data) {
           return data;
         }
-      } catch (_rpcError) {}
+      } catch {
+        // Intentional: RPC `get_top_performing_screens` failure falls back
+        // to the direct-query path below.
+      }
 
       // Fallback: Requêtes directes avec jointure
       const { data: screensData } = await supabase

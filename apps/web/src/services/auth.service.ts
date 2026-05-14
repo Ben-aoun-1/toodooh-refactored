@@ -196,7 +196,6 @@ async function insertFleetEstablishmentsAfterSignup(
   const { error } = await supabase.from('locations').insert(rows);
   if (error) {
     log.error({ error }, '⚠️ Insertion localités (parc) après inscription');
-  } else {
   }
 }
 
@@ -538,12 +537,10 @@ export const authService = {
 
           if (updateError) {
             log.error({ updateError }, '⚠️ Erreur sauvegarde URL (non bloquante)');
-          } else {
           }
         } catch (fileError) {
           log.error({ fileError }, "⚠️ Erreur lors de l'upload du document (non bloquante)");
         }
-      } else {
       }
     };
 
@@ -633,9 +630,12 @@ export const authService = {
         });
         if (!rpcError) {
           profileCreated = true;
-        } else {
         }
-      } catch (_rpcError) {}
+      } catch {
+        // Intentional: RPC `create_business_profile` failure leaves
+        // `profileCreated = false`; the `if (!profileCreated)` block below
+        // logs the original `profileError` and throws.
+      }
     }
 
     // Si aucune stratégie n'a fonctionné, bloquer l'inscription et exposer

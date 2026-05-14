@@ -168,8 +168,6 @@ export const useAuthStore = create<AuthState>()(
 
             if (error) {
               log.error({ error }, '❌ Error fetching user info');
-              if (error.code === 'PGRST116') {
-              }
               // Erreur transitoire/réseau/RLS: on conserve l'état connu si possible
               return getPreservedStateOnError(cachedProfileType);
             }

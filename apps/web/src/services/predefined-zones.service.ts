@@ -37,8 +37,6 @@ export const predefinedZonesService = {
         throw error;
       }
 
-      if (data && data.length > 0) {
-      }
 
       return data || [];
     } catch (error) {

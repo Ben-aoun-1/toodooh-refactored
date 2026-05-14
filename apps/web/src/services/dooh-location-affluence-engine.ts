@@ -351,8 +351,6 @@ export function computeDoohLocationAffluenceCampaign(
     );
     if (slotsPositifsCeJour > 0) daysWithPositiveRawSlots += 1;
 
-    if (debug) {
-    }
 
     const dow = mappedDay;
 

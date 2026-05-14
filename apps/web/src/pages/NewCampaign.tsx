@@ -697,7 +697,6 @@ export default function NewCampaign() {
 
       if (!draftCampaignId) {
         setDraftCampaignId(campaign.id);
-      } else {
       }
 
       return campaign;

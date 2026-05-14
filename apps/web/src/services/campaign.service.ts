@@ -924,8 +924,6 @@ export const campaignService = {
           },
           '📋 Aucune ligne à afficher : tous les créneaux ont 0 impression facturable (événement, indispo, occupation, ou pas d’affluence sur ce (jour, heure)).',
         );
-      } else {
-
       }
 
       // Calculer le total des répétitions par heure (pour vérification)
@@ -985,7 +983,6 @@ export const campaignService = {
           log.error({ message: screenUpdateError.message }, 'Message');
           log.error({ details: screenUpdateError.details }, 'Details');
           log.error({ hint: screenUpdateError.hint }, 'Hint');
-        } else {
         }
       }
 
@@ -1030,7 +1027,6 @@ export const campaignService = {
 
       if (updateError) {
         throw updateError;
-      } else {
       }
     } catch (error) {
       throw error;
@@ -1062,7 +1058,6 @@ export const campaignService = {
 
       if (error) {
         log.error({ error }, '❌ Erreur lors de la mise à jour des campagnes expirées');
-      } else {
       }
     } catch (error) {
       log.error({ error }, '❌ Erreur lors de la vérification des campagnes expirées');
