@@ -38,7 +38,7 @@ export interface ScreenConfiguration {
   timezone: string;
   language: string;
   refresh_rate: number;
-  power_schedule?: any;
+  power_schedule?: unknown;
   maintenance_mode: boolean;
   created_at: string;
   updated_at: string;
@@ -94,7 +94,7 @@ export interface ScreenActivityLog {
   id: string;
   screen_id: string;
   action: string;
-  details?: any;
+  details?: unknown;
   performed_by?: string;
   created_at: string;
 }
@@ -120,6 +120,8 @@ export interface CreateUnavailabilityData {
   reason: string;
 }
 
+export type ScreenStatus = 'active' | 'inactive' | 'maintenance' | 'unavailable';
+
 export interface UpdateScreenData {
   name?: string;
   location?: string;
@@ -130,7 +132,7 @@ export interface UpdateScreenData {
   resolution_height?: number;
   screen_size_inches?: number;
   orientation?: 'landscape' | 'portrait' | 'square';
-  status?: 'active' | 'inactive' | 'maintenance' | 'unavailable';
+  status?: ScreenStatus;
 }
 
 export interface UpdateConfigurationData {

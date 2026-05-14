@@ -32,7 +32,7 @@ interface ScreenRevenue {
   total_revenue: number;
   monthly_revenue: number;
   average_revenue: number;
-  revenue_history: any[];
+  revenue_history: unknown[];
 }
 
 interface RevenueChartsProps {

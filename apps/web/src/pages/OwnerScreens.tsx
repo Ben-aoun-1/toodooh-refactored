@@ -24,7 +24,12 @@ import OwnerNavigation from '../components/OwnerNavigation';
 import ScreenCalendar from '../components/ScreenCalendar';
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
-import { screensService, Screen, UnavailabilityPeriod } from '../services/screens.service';
+import {
+  screensService,
+  Screen,
+  ScreenStatus,
+  UnavailabilityPeriod,
+} from '../services/screens.service';
 import { useAuthStore } from '../stores/auth.store';
 
 const log = logger.child({ module: 'OwnerScreens' });
@@ -236,11 +241,11 @@ export default function OwnerScreens() {
     }
   };
 
-  const handleStatusChange = async (screenId: string, newStatus: string, reason?: string) => {
+  const handleStatusChange = async (screenId: string, newStatus: ScreenStatus, reason?: string) => {
     try {
       // Appeler le service pour mettre à jour en base de données
       const updatedScreen = await screensService.updateScreen(screenId, {
-        status: newStatus as any,
+        status: newStatus,
       });
 
       // Mettre à jour l'état local
@@ -249,7 +254,7 @@ export default function OwnerScreens() {
           if (screen.id === screenId) {
             return {
               ...screen,
-              status: newStatus as any,
+              status: newStatus,
             };
           }
           return screen;
@@ -284,7 +289,7 @@ export default function OwnerScreens() {
             if (screen.id === period.screen_id) {
               return {
                 ...screen,
-                status: 'unavailable' as any,
+                status: 'unavailable',
               };
             }
             return screen;
@@ -311,10 +316,10 @@ export default function OwnerScreens() {
   };
 
   // Fonction pour mettre à jour le statut d'un écran en base de données
-  const updateScreenStatusInDatabase = async (screenId: string, newStatus: string) => {
+  const updateScreenStatusInDatabase = async (screenId: string, newStatus: ScreenStatus) => {
     try {
       const updatedScreen = await screensService.updateScreen(screenId, {
-        status: newStatus as any,
+        status: newStatus,
       });
       return true;
     } catch (error) {
@@ -350,7 +355,7 @@ export default function OwnerScreens() {
 
                   return {
                     ...screen,
-                    status: 'active' as any,
+                    status: 'active',
                   };
                 }
                 return screen;
@@ -377,7 +382,7 @@ export default function OwnerScreens() {
 
                   return {
                     ...screen,
-                    status: 'unavailable' as any,
+                    status: 'unavailable',
                   };
                 }
                 return screen;

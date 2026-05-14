@@ -65,7 +65,7 @@ export interface AdminActivity {
   action: string;
   resource: string;
   resource_id?: string;
-  details?: any;
+  details?: unknown;
   ip_address?: string;
   user_agent?: string;
   created_at: string;

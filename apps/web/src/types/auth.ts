@@ -109,8 +109,8 @@ export interface SignUpData {
 }
 
 export interface SignUpResult {
-  user: any;
-  session: any;
+  user: unknown;
+  session: unknown;
   requiresEmailConfirmation?: boolean;
   message?: string;
 }

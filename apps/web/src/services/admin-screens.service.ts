@@ -87,7 +87,7 @@ export interface ScreenAffluenceData {
   passby_count: number;
   turnback_count: number;
   avg_stay_time: number;
-  attributes?: any;
+  attributes?: unknown;
   global_id?: string;
   dwell_time?: number;
   enter_camera_sn?: string;
@@ -99,7 +99,7 @@ export interface ScreenAffluenceData {
   deduped_count: number;
   duplicate_total: number;
   original_enter_count: number;
-  records?: any;
+  records?: unknown;
   created_at: string;
   updated_at: string;
 }
@@ -160,7 +160,7 @@ export interface CreateAffluenceData {
   ip_address?: string;
   connection_type?: string;
   wifi_ssid?: string;
-  attributes?: any;
+  attributes?: unknown;
   global_id?: string;
   dwell_time?: number;
 }
@@ -179,7 +179,7 @@ export interface UpdateAffluenceData {
   ip_address?: string;
   connection_type?: string;
   wifi_ssid?: string;
-  attributes?: any;
+  attributes?: unknown;
   global_id?: string;
   dwell_time?: number;
 }

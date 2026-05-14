@@ -870,7 +870,10 @@ function EventFormModal({
                     required
                     value={formData.event_type}
                     onChange={(e) =>
-                      setFormData({ ...formData, event_type: e.target.value as any })
+                      setFormData({
+                        ...formData,
+                        event_type: e.target.value as CreateEventDTO['event_type'],
+                      })
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
                   >
@@ -891,7 +894,12 @@ function EventFormModal({
                   <label className="block text-sm font-medium text-gray-700 mb-1">Catégorie</label>
                   <select
                     value={formData.category}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value as any })}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        category: e.target.value as CreateEventDTO['category'],
+                      })
+                    }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
                   >
                     <option value="commercial">Commercial</option>

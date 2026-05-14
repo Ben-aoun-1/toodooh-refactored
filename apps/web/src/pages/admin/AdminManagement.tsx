@@ -267,7 +267,7 @@ export default function AdminManagement() {
           <div className="flex gap-4">
             <select
               value={roleFilter}
-              onChange={(e) => setRoleFilter(e.target.value as any)}
+              onChange={(e) => setRoleFilter(e.target.value as typeof roleFilter)}
               className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00B3A6]"
             >
               <option value="all">Tous les rôles</option>
