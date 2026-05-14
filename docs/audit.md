@@ -31,19 +31,19 @@ complementary and orthogonal — none subsumes the others; each should cross-ref
 
 ## 2. Snapshot
 
-_As of commit `22f26cc` (post-Step-5 console purge + pino logger introduction)._
+_As of commit `00d464e` (post-Step-6 typing pass + no-empty cleanup + regression remediation cycle)._
 
-| Metric                             | Value                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Files under `apps/web/src/`        | 230 (128 `.ts`/`.tsx`) — `lib/logger.ts` + `lib/logger.test.ts` added in Step 5                                                                                                                                                                                                                                                                                                                                                             |
-| Lines of `.ts`/`.tsx`              | ~56,300 (~700 net lines deleted across Step 5)                                                                                                                                                                                                                                                                                                                                                                                              |
-| Files > 1000 lines                 | 15 (`NewCampaign.tsx` 4359, `Dashboard.tsx` 2635, `auth/SignUpForm.tsx` 1954, `OwnerSettings.tsx` 1845, `MyCampaigns.tsx` 1748, `admin/UserManagement.tsx` 1485, `UserProfile.tsx` 1394, `admin/EventManagement.tsx` 1247, `OwnerCampaigns.tsx` 1235, `Onboarding.tsx` 1228, `OwnerDashboard.tsx` 1209, `services/campaign.service.ts` 1127, `OwnerScreens.tsx` 1100, `services/auth.service.ts` 1055, `admin/CampaignMonitoring.tsx` 1006) |
-| Files > 500 lines                  | 40                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `pnpm typecheck`                   | **197 errors** (was 179 pre-Step-5; +18 net from Commit 2's Cat-1 deletions unmasking TS6133 unused-vars whose only consumer was a deleted `console.log` — deferred to Step 6 typing pass)                                                                                                                                                                                                                                                  |
-| `pnpm lint`                        | **859 problems (835 errors, 24 warnings)** — top rules: `@typescript-eslint/no-explicit-any` 265, `jsx-a11y/label-has-associated-control` 230, `@typescript-eslint/no-unused-vars` 161, `no-useless-catch` 71, `no-empty` 30, `jsx-a11y/*` (other) ~58, `react-hooks/exhaustive-deps` 24 (warn), `import-x/order` 15. **`no-console`: 0** ✓                                                                                                 |
-| `pnpm test`                        | 6 suites pass (above 5 + `lib/logger`); 68 tests; 0 failures                                                                                                                                                                                                                                                                                                                                                                                |
-| `pnpm --filter @toodooh/web build` | passes — 110 chunks (unchanged), main `index-*.js` 445 kB / gzip **130.50 kB** (vs pre-Step-5 128.61 kB; +1.89 kB net = pino-browser cost minus deleted-string-literal savings). Largest chunk `Dashboard-*.js` ~622 kB (unchanged)                                                                                                                                                                                                         |
-| CI (`main`)                        | **red** — expected; goes green at Step 13                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Metric                             | Value                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Files under `apps/web/src/`        | 230 (128 `.ts`/`.tsx`) — `lib/logger.ts` + `lib/logger.test.ts` added in Step 5                                                                                                                                                                                                                                                                                                                                                                               |
+| Lines of `.ts`/`.tsx`              | ~56,300 (Step 5 -700 lines net; Step 6 small net delta — typing annotations + 5 hotfix error-check additions vs no-empty/orphan-binding deletions)                                                                                                                                                                                                                                                                                                            |
+| Files > 1000 lines                 | 15 (`NewCampaign.tsx` 4359, `Dashboard.tsx` 2635, `auth/SignUpForm.tsx` 1954, `OwnerSettings.tsx` 1845, `MyCampaigns.tsx` 1748, `admin/UserManagement.tsx` 1485, `UserProfile.tsx` 1394, `admin/EventManagement.tsx` 1247, `OwnerCampaigns.tsx` 1235, `Onboarding.tsx` 1228, `OwnerDashboard.tsx` 1209, `services/campaign.service.ts` 1127, `OwnerScreens.tsx` 1100, `services/auth.service.ts` 1055, `admin/CampaignMonitoring.tsx` 1006)                   |
+| Files > 500 lines                  | 40                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `pnpm typecheck`                   | **66 errors** (197 → 66, -131 net across Cat-D narrowing, Cat-C strips, Cat-B refactors, Cat-A TODO markers, and the no-unused-vars + no-empty mirror drops; remaining 66 are Cat-A pre-existing untyped-root cascades tracked in #15 for Phase 1)                                                                                                                                                                                                            |
+| `pnpm lint`                        | **395 problems (373 errors, 22 warnings)** — top rules: `jsx-a11y/label-has-associated-control` 230, `no-useless-catch` 71, `jsx-a11y/click-events-have-key-events` 26, `jsx-a11y/no-static-element-interactions` 23, `react-hooks/exhaustive-deps` 22 (warn), `import-x/order` 9, `jsx-a11y/media-has-caption` 6. **`no-console`: 0** ✓ · **`@typescript-eslint/no-explicit-any`: 0** ✓ · **`@typescript-eslint/no-unused-vars`: 0** ✓ · **`no-empty`: 0** ✓ |
+| `pnpm test`                        | 7 suites pass (above 6 + `dooh-hourly-grid` / `dooh-calculation.service` / `global-configuration.service` / `lib/dooh/*`); 77 tests; 0 failures                                                                                                                                                                                                                                                                                                               |
+| `pnpm --filter @toodooh/web build` | passes — 110 chunks (unchanged), main `index-*.js` 445 kB / gzip **130.71 kB** (vs post-Step-5 130.50 kB; +0.21 kB net = P0c/P0d error-check additions offset by no-empty deletions). Largest chunk `Dashboard-*.js` ~617 kB (unchanged)                                                                                                                                                                                                                      |
+| CI (`main`)                        | **red** — expected; goes green at Step 13                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 ---
 
@@ -256,38 +256,109 @@ unchanged at 110.
 
 → **Step 5 · #7** ☑
 
-### Residual lint gap surfaced by Step 5
+### Step 6 typing pass — completed
 
-Post-Step-5 lint total: **859 problems (835 errors, 24 warnings, 0 `no-console`)**.
+**Done in Step 6** (commits `6d212fb` Commit 0 discovery, `c007783` Commit 1, `9c4839b` Commit 1b,
+`ed7c261` Commit 1c, `abe594c` Commit 2, `62e8813` Commit 3, `0af5cc3` Commit 4, `00d464e` Commit 5,
+plus the rule-re-enable + audit refresh that closes the step).
+
+Pre-Step-6 baseline: 265 `no-explicit-any` + 161 `no-unused-vars` + 30 (later corrected to 26)
+`no-empty` + 197 `pnpm typecheck` errors (incl. 197 TS6133 unmasks from Step 5's console deletions).
+
+Sequence:
+
+- **Commit 0 (`6d212fb`)** — discovery + categorization report against the post-Step-5 baseline.
+  Five categories defined: Cat-A (untyped-root cascades — needs Supabase generated types, Phase 1),
+  Cat-B (refactorable in isolation), Cat-C (callback-param annotation strips), Cat-D (catch-error
+  narrowing via `isErrorWithCode`), Cat-Catch (no-unused-vars caught-error `_`-prefix work).
+- **Commit 1 (`c007783`)** — Cat-D narrowing across 77 sites + `isErrorWithCode` helper added to
+  `lib/errors.ts` + ESLint `caughtErrorsIgnorePattern: '^_'` config.
+- **Commit 1b (`9c4839b`)** — Cat-C strip of 30 callback-param annotations in cascade-free files;
+  78 sites escalated to Cat-A when the strip surfaced new cascades.
+- **Commit 1c (`ed7c261`)** — `_err` narrowing regression fix: 52 sites switched to the
+  `getErrorMessage(err)` pattern (where `err` is the unprefixed narrowed binding) + 2 sites
+  pattern-2 (kept narrowed shape but renamed). Resolved a `_`-prefix-eats-narrowing bug discovered
+  mid-Commit-1.
+- **Commit 2 (`abe594c`)** — Cat-B refactors: 23 sites typed in-place + 22 sites escalated to Cat-A
+  when type leakage from untyped roots was wider than expected.
+- **Commit 3 (`62e8813`)** — Cat-A: 132 sites marked with `TODO(phase-1)` per-site annotation +
+  `eslint-disable-next-line @typescript-eslint/no-explicit-any` comment + tracking via issue #15.
+  Closes `no-explicit-any` to 0 at the lint level while preserving the structural debt for the
+  Phase-1 typing pass that has Supabase generated types available.
+- **Commit 4 (`0af5cc3`)** — `no-unused-vars` cascade: 158 → 0 across five convergence iterations;
+  TS6133 typecheck subset 197 → 66 as a mirror drop (the remaining 66 are Cat-A untyped-root
+  cascades tracked in #15). `_`-prefix scope clarified (catch bindings + function params per
+  ESLint; `varsIgnorePattern: '^_'` added for arbitrary locals).
+- **Commit 5 (`00d464e`)** — `no-empty` cleanup: 26 → 0 (plan said 30; actual main count was 26 —
+  4 sites were cleared incidentally by Commit 4's `_`-prefix + eslint-fix sweep). 19 else-block
+  deletions + 7 catch-binding-drops with per-site RPC-fallback comments (each naming the specific
+  RPC and its fallback behavior — `services/admin-video.service.ts:531` get_campaigns_using_video,
+  `services/platform-stats.service.ts:24/93/138/175/230` for the platform-stats RPCs,
+  `services/auth.service.ts:634` create_business_profile) + 1 orphan-binding deletion at
+  `dooh-new-campaign-estimate.service.ts:248` (unmasked by the surrounding else-branch removal).
+
+End state: **0** `no-explicit-any` · **0** `no-unused-vars` · **0** `no-empty` · **66**
+`pnpm typecheck` (down from 197; residue all in #15) · **77/77** tests · gzip 130.71 kB
+(+0.21 kB vs Step 5 anchor, well under ceilings).
+
+Re-enabled in `eslint.config.js`: `@typescript-eslint/no-explicit-any: 'error'` (line 47),
+`@typescript-eslint/no-unused-vars: ['error', { argsIgnorePattern, varsIgnorePattern, caughtErrorsIgnorePattern, destructuredArrayIgnorePattern }]` (lines 70-78),
+`no-empty: 'error'` (inherited from `js.configs.recommended` at line 17).
+
+### Step 6 regression remediation cycle
+
+Commit 4's `no-unused-vars` cleanup unmasked four sites where mechanical binding-removal had
+silently swallowed Supabase API errors that were previously surfaced only via the `error` field of
+the destructured response object. Triggered a regression-class audit; five hotfixes shipped, all
+on `main`:
+
+- **P0a (`830c7b9`)** — `pages/admin/RechargeManagement.tsx:196`: destructure-rename corruption
+  (`const { data: error } = ...` had renamed `data` to local `error`, then `if (error) throw error`
+  was throwing the recharge row on success and silently succeeding on failure).
+- **P0b (`277c68f`)** — `services/admin-user.service.ts` deleteUser cascade: restored option-(c)
+  collect-then-throw-after error handling across 5 child-table deletes + recharges (parent
+  `business_profile` no longer silently deletes when a child cascade fails).
+- **P0c (`a59cfb9`)** — `pages/UserProfile.tsx:421`: document upload + business_profile update —
+  destructured both errors and inline-checked, surfacing failures rather than showing
+  `toast.success` on silent storage-upload-or-update failures.
+- **P0d (`b3f50cb`)** — `pages/NewCampaign.tsx:3218` (cart-add) + `:3171` (save-draft): three
+  cart-add mutations + one save-draft mutation now destructure and check errors. Event-link RPC
+  failure treated as hard-fail (event-campaigns require the link to be functional; partial-success
+  would leave an event-campaign without its event).
+
+Three tracking issues opened for downstream observability and typing work:
+
+- **#15** — Phase-1 typing prerequisites (131 `TODO(phase-1)` markers + Cat-A untyped-root cascades
+  - `tsconfig.app.json` un-softening, all blocked on Supabase generated types).
+- **#16** — Admin destructive operations diagnostic-logging gap (catch bodies fire user-facing
+  toasts but no structured log entries).
+- **#17** — Tier-3 read-only data fetches with silent-failure (9 sites including two money-adjacent:
+  `balance.service.ts::calculateBalanceManually`, `MyRecharges.tsx::load`).
+
+Methodology: four-tier severity framework for Class-2(a) silent-ignore findings (admin destructive
+/ user-data-mutating / read-only with money-adjacency / intentional best-effort writers); the
+methodology details + 15 learnings from Step 6 live in
+[`docs/audits/2026-05-14-step-6-regression-audit.md`](audits/2026-05-14-step-6-regression-audit.md).
+
+### Residual lint after Step 6
+
+Post-Step-6 lint total: **395 problems (373 errors, 22 warnings)**.
 
 Residual breakdown:
 
-- **`@typescript-eslint/no-unused-vars`: 161** — partial dual-surfacing of the TS6133 unmasks
-  from Commit 2 (same root cause, two rules). Pre-existing dead code that the `console.log` noise
-  was hiding; variables whose only consumer was a deleted log call (e.g. `const newScreen = await
-screensService.createScreen(...)` where `newScreen` was only logged). Step 6 addresses these via
-  the unused-var manual pass. Each requires per-case review rather than blanket deletion: some are
-  service-call return values whose call still has a needed side effect even if the binding is
-  unused (drop `const result =`, keep the `await`). → **Step 6 · #8**
-- **`no-empty`: 30** — newly unmasked by Commit 2's deletions of `console.log`-only function bodies
-  (`.then((r) => { })`, `} catch (rpcError) { }`, etc.). The wrapping syntax stayed; the body
-  disappeared. Same Step 6 review pattern: some should fold up (remove the entire wrapping), some
-  should keep the empty body intentionally. → **Step 6 · #8**
-- **`@typescript-eslint/no-explicit-any`: 265** — pre-existing, unchanged by Step 5. → **Step 6 · #8**
-- **`no-useless-catch`: 71** — pre-existing, unchanged. Try/catch wrappers that immediately re-throw
-  the caught error without transforming or logging it (now that the `console.error` is gone). Most
-  are legitimately removable; some carry the catch binding into a `throw new Error(mapAuthError(e))`
-  pattern that should be preserved. → **Step 6 · #8** or later step.
-- **`jsx-a11y/*`: ~317** (label-has-associated-control 230, click-events-have-key-events 26,
+- **`jsx-a11y/*`: ~288** (label-has-associated-control 230, click-events-have-key-events 26,
   no-static-element-interactions 23, media-has-caption 6, no-noninteractive-element-interactions 3
   …) — pre-existing, unchanged. → **Step 11 · #9**
-- **`react-hooks/exhaustive-deps`: 24** (warnings) — pre-existing latent stale-closure risks.
+- **`no-useless-catch`: 71** — pre-existing, unchanged. Try/catch wrappers that immediately re-throw
+  the caught error. Most are legitimately removable; some carry the binding into a
+  `throw new Error(mapAuthError(e))` pattern that should be preserved. → **Step 11 · #9** or
+  bundled with the observability-pass that addresses #16.
+- **`react-hooks/exhaustive-deps`: 22** (warnings) — pre-existing latent stale-closure risks.
   → **Step 11 · #9**
-- **`import-x/order`: 15** — residual ordering issues in files NOT touched by Commit 4 (Commit 4.5's
-  eslint-fix sweep was scoped to the 46 Step-5 files only). These are pre-existing and will surface
-  during Step 8 (`features/<domain>/` restructure) when imports get reshuffled anyway. Low priority.
-- **Long-tail rules**: `@typescript-eslint/no-unused-expressions` 3, `no-error-on-unmatched-pattern` 1,
-  `no-constant-binary-expression` 1, `import-x/no-unresolved` 1 — pre-existing.
+- **`import-x/order`: 9** — residual ordering in files not touched by Step 5/6 sweeps. Low
+  priority; will surface again in Step 8 (`features/<domain>/` restructure).
+- **Long-tail**: `@typescript-eslint/no-unused-expressions` 3, `no-constant-binary-expression` 1,
+  `import-x/no-unresolved` 1 — pre-existing.
 
 ### Deferred logger refinements
 
@@ -300,8 +371,11 @@ future logger-cleanup pass, not Step 6.
 
 ### `as any` / `@ts-ignore`
 
-44 `as any` occurrences; 0 `@ts-ignore` / `@ts-expect-error`. The full list is produced during the
-typing pass, not fixed opportunistically. → **Step 6 · #8**
+**Closed in Step 6** (commits `c007783`, `9c4839b`, `ed7c261`, `abe594c`, `62e8813`). 265 (not 44 —
+the original discovery snapshot was incomplete) `@typescript-eslint/no-explicit-any` lint fires
+brought to 0: 134 fixed directly via Cat-D narrowing / Cat-C strips / Cat-B refactors; 131 marked
+`TODO(phase-1)` per-site (Cat-A untyped-root cascades, blocked on Supabase generated types) and
+tracked in #15. `@ts-ignore` / `@ts-expect-error` remain at 0 — none introduced. → **Step 6 · #8** ☑
 
 ### `localStorage` outside Zustand `persist`
 
@@ -347,8 +421,10 @@ console-purge pass. → **Step 5 · #7** ☑
 ### `tsconfig` softening
 
 `apps/web/tsconfig.app.json` extends `tsconfig.base.json` but re-disables `verbatimModuleSyntax`,
-`noUncheckedIndexedAccess`, `noPropertyAccessFromIndexSignature` (with a tracking comment) — to be
-re-enabled after the structural refactor. → **Step 6 · #8**
+`noUncheckedIndexedAccess`, `noPropertyAccessFromIndexSignature` (with a tracking comment).
+**Deferred to Phase 1** with #15 — un-softening these without Supabase generated types would
+re-explode `no-explicit-any` and Cat-A cascades; the cleanest path is to land it as a single
+pass once the Phase-1 backend migration provides typed sources for the 131 TODO(phase-1) sites.
 
 ### Duplicate devDependencies
 
@@ -372,6 +448,7 @@ OVH hosting snapshot belong to the later infra phase, not here.
 - **Eager bundle / no code-splitting** — every route is `React.lazy()`; main bundle 3.25 MB → ~434 kB (commits `95df8a1`, `d80ef19`, `290024a`).
 - **Formatting & import hygiene** — one-time Prettier + ESLint `import-x/order`/`prefer-const` autofix + unused-import removal (`eslint-plugin-unused-imports`) (commits `82e8f66`, `c8b5f17`, `39536c1`; recorded in `.git-blame-ignore-revs`).
 - **Step 5 — Frontend logger + `console.*` purge** — Pino logger module landed at `apps/web/src/lib/logger.ts` with dev/prod/test config (silent in vitest, debug in dev, info in prod). 901 `console.*` calls (446 .log + 421 .error + 33 .warn + 1 .info + 1 .table) removed or promoted across 46 files. 222 `console.error` promoted to `log.error` and 33 `console.warn` to `log.warn` via pino child loggers scoped per-module; the rest were deleted (Cat-1 debug detritus, Cat-2a console.error+throw, Cat-2b console.error+toast — all signalled elsewhere). `no-console: 'error'` ESLint rule enforced project-wide. Bundle gzip 128.61 → 130.50 kB (+1.89 kB net pino-browser cost). Side effect: typecheck rose 179 → 197 (19 TS6133 unused-variable unmasks surfaced by removing console.log consumers; deferred to Step 6). → Issue #7. Commits `20d5034`, `f65bd16`, `c61934d`, `f0ebb37`, `22f26cc` (this audit refresh + Step-5 close-out).
+- **Step 6 — Typing pass + regression remediation** — 265 `@typescript-eslint/no-explicit-any` → 0 (134 fixed via Cat-D narrowing + Cat-C strips + Cat-B refactors; 131 marked `TODO(phase-1)` and tracked in #15); 161 `@typescript-eslint/no-unused-vars` → 0 via `_`-prefix + delete + restructure; TS6133 typecheck subset 197 → 66 as mirror drop (66 residue all Cat-A untyped-root cascades → #15); 26 `no-empty` → 0 via else-deletion + per-site catch-fallback comments + 1 orphan-binding cleanup. Five P0 hotfixes shipped during the regression remediation cycle triggered by Commit 4 unmasking incomplete error-handling: P0a (`830c7b9` recharge destructure), P0b (`277c68f` deleteUser cascade), P0c (`a59cfb9` document upload), P0d (`b3f50cb` cart-add + save-draft). Three tracking issues opened: #15 (Phase-1 typing prerequisites), #16 (admin destructive ops observability), #17 (Tier-3 read-only fetch observability). Full methodology + 15 learnings in `docs/audits/2026-05-14-step-6-regression-audit.md`. Bundle gzip 130.50 → 130.71 kB (+0.21 kB net). → Issue #8. Commits `6d212fb` (Commit 0), `c007783`, `9c4839b`, `ed7c261`, `abe594c`, `62e8813`, `0af5cc3`, `00d464e`, plus this audit refresh + #8 close-out.
 
 ---
 
@@ -393,7 +470,7 @@ plan → execute cycle.
 | 3   | Consolidate the auth-state layer                                                                                                                               | `stores/auth.store.ts` (persist + de-localStorage), `services/auth.service.ts` (stateless), `App.tsx` (drop `clearAuthCache` import), `pages/ContactPage.tsx`, delete `utils/clearAuthCache.ts` | `auth.store.ts` uses `persist`; no `localStorage` in `auth.store.ts`/`auth.service.ts`; `clearAuthCache.ts` deleted; `onAuthStateChange` subscription captured; `ContactPage` on the store; `Dashboard`+`Onboarding`+cart `localStorage` deferred to Step 7; typecheck/lint/test/build not regressed                                                                                         | #2    | ☑      |
 | 4   | Decouple DOOH engine's pure math from Supabase (4a) + write the v3.0 pricing model as a tested, unwired pure module (4b). Wiring + schema + UI = Phase 1 (4c). | `apps/web/src/lib/dooh/{config,dates,hourly-plan,v3-model}.ts` + `README.md`; `docs/handoff/pricing-model-v3.md`, `Toodooh_Simulateur_Pricing_v3.html`, `v3-data-requirements.md`               | `pnpm test` exits 0 (previously-failing `campaign-hourly-location-plan` test passes from `lib/dooh/hourly-plan.test.ts`); `lib/dooh/v3-model.ts` implements the v3.0 model and its tests match the simulator's numeric examples; `lib/dooh/README.md` documents the model + function↔simulator mapping; v3.0 is unwired (build output unchanged); 4c (wiring/schema/UI) tracked for Phase 1. | #12   | ☑      |
 | 5   | Frontend logger + `console.*` purge                                                                                                                            | new logger; ~917 call sites; ESLint config                                                                                                                                                      | 0 `no-console` errors                                                                                                                                                                                                                                                                                                                                                                        | #7    | ☑      |
-| 6   | Typing pass: fix `as any`, reduce tsc baseline, re-tighten tsconfig                                                                                            | many files; `tsconfig.app.json`                                                                                                                                                                 | typecheck 0 (or documented residue); 0 `as any`; tsconfig un-softened                                                                                                                                                                                                                                                                                                                        | #8    | ☐      |
+| 6   | Typing pass: fix `as any`, reduce tsc baseline, re-tighten tsconfig                                                                                            | many files; `tsconfig.app.json`                                                                                                                                                                 | 265 no-any → 0 (134 fixed directly, 131 marked TODO(phase-1) → #15); 161 no-unused-vars → 0; 26 no-empty → 0; typecheck 197 → 66 (66 residue = Cat-A untyped-root cascades, → #15); tsconfig un-softening deferred to Phase 1 with #15; regression cycle P0a-P0d shipped                                                                                                                     | #8    | ☑      |
 | 7   | Decompose `Dashboard.tsx` / `NewCampaign.tsx`                                                                                                                  | `pages/Dashboard.tsx`, `pages/NewCampaign.tsx`, `App.tsx` routes                                                                                                                                | each route renders its own page; largest chunk materially smaller; no regressions                                                                                                                                                                                                                                                                                                            | #3    | ☐      |
 | 8   | Restructure `src/` into `src/features/<domain>/`                                                                                                               | almost all of `src/`                                                                                                                                                                            | feature-based layout per conventions; imports updated; build OK                                                                                                                                                                                                                                                                                                                              | #4    | ☐      |
 | 9   | Replace `window.location.reload()` in `MyAccount.tsx`                                                                                                          | `pages/MyAccount.tsx`                                                                                                                                                                           | 0 `window.location.reload()` calls                                                                                                                                                                                                                                                                                                                                                           | #5    | ☐      |
