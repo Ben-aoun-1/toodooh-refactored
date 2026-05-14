@@ -1,5 +1,5 @@
 import { ChevronLeft, Download, Printer } from 'lucide-react';
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate, useParams } from 'react-router-dom';
 
@@ -80,7 +80,7 @@ export default function OwnerStatementDetailPage() {
       setDownloading(true);
       const name = await exportService.exportOwnerStatementPdf({ detail, recipient });
       toast.success(`PDF enregistré : ${name}`);
-    } catch (e) {
+    } catch (_e) {
       toast.error('Impossible de générer le PDF');
     } finally {
       setDownloading(false);

@@ -20,11 +20,11 @@ import {
   AGENCY_BUSINESS_SECTOR_NAME,
   sectorsForAdvertiserProfile,
 } from '../constants/advertiserBusinessSectors';
+import { getErrorMessage } from '../lib/errors';
 import { supabase } from '../lib/supabase';
 import { authService } from '../services/auth.service';
 import { useAuthStore } from '../stores/auth.store';
 import type { BusinessProfile, BusinessSector, Governorate } from '../types/auth';
-import { getErrorMessage } from '../lib/errors';
 
 type TabId = 'responsable' | 'entreprise' | 'notifications' | 'confidentialite';
 type EntrepriseSubId = 'informations' | 'adresse' | 'documents';

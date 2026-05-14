@@ -19,12 +19,12 @@ import React, { useEffect, useState, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 
 import AnimatedLogo from '../components/AnimatedLogo';
+import { getErrorMessage } from '../lib/errors';
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { authService } from '../services/auth.service';
 import { useAuthStore } from '../stores/auth.store';
 import type { BusinessProfile } from '../types/auth';
-import { getErrorMessage } from '../lib/errors';
 
 const log = logger.child({ module: 'Onboarding' });
 
@@ -73,7 +73,7 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
     // ✅ Tous les documents sont maintenant facultatifs, on peut fermer et terminer l'onboarding
     try {
       await handleSubmit();
-    } catch (error) {
+    } catch (_error) {
       toast.error('Erreur lors de la finalisation');
     }
   };
@@ -354,7 +354,7 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
 
       // ✅ Fermer le modal en dernier
       onComplete();
-    } catch (error) {
+    } catch (_error) {
       toast.error('❌ Erreur lors de la soumission. Veuillez réessayer.');
       setSubmitting(false); // ✅ Réinitialiser submitting en cas d'erreur
       // NE PAS marquer comme terminé en cas d'erreur
@@ -664,7 +664,7 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
                             }
 
                             // Supprimer le fichier du storage
-                            const { error: deleteError, data: deleteData } = await supabase.storage
+                            const { error: deleteError } = await supabase.storage
                               .from('registres')
                               .remove([fileName]);
 

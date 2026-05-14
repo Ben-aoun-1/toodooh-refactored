@@ -1,5 +1,5 @@
 import { BarChart3, X, TrendingUp, TrendingDown, Calendar, Monitor } from 'lucide-react';
-import React, { useState } from 'react';
+import { useState } from 'react';
 
 interface RevenueData {
   screenId: string;

@@ -1,15 +1,10 @@
 import {
   Calendar,
   Megaphone,
-  Wallet,
-  FileText,
   Users,
   ChevronLeft,
   ChevronRight,
   X,
-  PlusCircle,
-  Edit,
-  ArrowRight,
   TrendingUp,
   ShoppingBag,
   PanelLeft,
@@ -73,15 +68,9 @@ import paramIconActive from '../assets/params.png';
 import agendaIcon from '../assets/sidebar/agenda.png';
 import agendaIconActive from '../assets/sidebar/agendas.png';
 import campagneIcon from '../assets/sidebar/campagnes.png';
-
-import Parcs from './Parcs';
-import Perfor from './Perfor';
-import UserProfile from './UserProfile';
-import MyRecharges from './MyRecharges';
-
-import dashboardIconActive from '../assets/sidebar/dashboards.png';
 import campagneIconActive from '../assets/sidebar/campagness.png';
 import dashboardIcon from '../assets/sidebar/dashboard.png';
+import dashboardIconActive from '../assets/sidebar/dashboards.png';
 import logoCompany from '../assets/sidebar/logo.png';
 import performanceIcon from '../assets/sidebar/performance.png';
 import performanceIconActive from '../assets/sidebar/performances.png';
@@ -95,24 +84,27 @@ import statIcon4 from '../assets/stats/4.png';
 import statIcon5 from '../assets/stats/5.png';
 import supportIcon from '../assets/support.png';
 import supportIconActive from '../assets/supports.png';
-
-import MyInvoices from './MyInvoices';
-import MyClients from './MyClients';
-
-import { eventsService } from '../services/events.service';
-import type { SpecialEvent } from '../types/event';
 import AdvertiserNotificationsBell from '../components/AdvertiserNotificationsBell';
+import { getErrorMessage } from '../lib/errors';
 import { logger } from '../lib/logger';
+import { eventsService } from '../services/events.service';
+import { useAuthStore } from '../stores/auth.store';
+import type { SpecialEvent } from '../types/event';
 import { supabase } from '../lib/supabase';
 import { authService } from '../services/auth.service';
 import { balanceService } from '../services/balance.service';
-import { useAuthStore } from '../stores/auth.store';
+
 import CartPage from './CartPage';
 import Events from './Events';
 import MyCampaigns from './MyCampaigns';
+import MyClients from './MyClients';
+import MyInvoices from './MyInvoices';
+import MyRecharges from './MyRecharges';
 import NewCampaign from './NewCampaign';
 import OnboardingModal from './Onboarding';
-import { getErrorMessage } from '../lib/errors';
+import Parcs from './Parcs';
+import Perfor from './Perfor';
+import UserProfile from './UserProfile';
 
 const log = logger.child({ module: 'Dashboard' });
 
@@ -191,57 +183,6 @@ const MONTHS_FR = [
 ];
 const WEEKDAYS_FR = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
-type ActionCardProps = {
-  icon: React.ReactNode;
-  title: string;
-  subtitle: string;
-  actionLabel: string;
-  onClick: () => void;
-  disabled?: boolean;
-};
-
-function ActionCard({
-  icon,
-  title,
-  subtitle,
-  actionLabel,
-  onClick,
-  disabled = false,
-}: ActionCardProps) {
-  return (
-    <div
-      className={`bg-white rounded-xl shadow-lg border border-gray-200 p-6 flex flex-col justify-between min-h-[180px] transition ${
-        disabled ? 'opacity-60 cursor-not-allowed' : 'hover:shadow-xl'
-      }`}
-    >
-      <div className="flex items-center mb-4">
-        <div
-          className={`p-3 rounded-xl mr-4 shadow-lg flex items-center justify-center ${
-            disabled ? 'bg-gray-400' : 'bg-[#00B3A6]'
-          }`}
-        >
-          {icon}
-        </div>
-        <div>
-          <h3 className={`text-lg font-bold mb-1 ${disabled ? 'text-gray-500' : 'text-gray-900'}`}>
-            {title}
-          </h3>
-          <p className={`text-sm ${disabled ? 'text-gray-400' : 'text-gray-600'}`}>{subtitle}</p>
-        </div>
-      </div>
-      <button
-        onClick={onClick}
-        disabled={disabled}
-        className={`mt-auto font-semibold flex items-center gap-2 focus:outline-none ${
-          disabled ? 'text-gray-400 cursor-not-allowed' : 'text-[#00B3A6] hover:underline'
-        }`}
-      >
-        {actionLabel} <ArrowRight className="h-4 w-4" />
-      </button>
-    </div>
-  );
-}
-
 export default function Dashboard() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -271,7 +212,7 @@ export default function Dashboard() {
   const [contactMessage, setContactMessage] = useState('');
   const [contactCalendarMonth, setContactCalendarMonth] = useState(() => new Date());
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [currentPage, setCurrentPage] = useState('dashboard');
+  const [_currentPage, _setCurrentPage] = useState('dashboard');
   const profileLoadedRef = useRef(false);
   const onboardingCheckRef = useRef(false);
   // Header maquette : panier / notifications
@@ -762,7 +703,7 @@ export default function Dashboard() {
     };
   }, [location.pathname]);
 
-  const balance = user ? '2,500 TND' : null;
+
 
   const handleLogout = async () => {
     try {
@@ -782,37 +723,7 @@ export default function Dashboard() {
     }
   };
 
-  const campaignActions = [
-    {
-      title: 'Lancer une nouvelle campagne',
-      description: 'Créez et configurez une nouvelle campagne publicitaire',
-      icon: PlusCircle,
-      gradient: 'from-[#00B3A6] to-[#00B3A6]/80',
-      action: () => navigate('/new-campaign'),
-    },
-    {
-      title: 'Modifier une campagne active',
-      description: 'Gérez et optimisez vos campagnes en cours',
-      icon: Edit,
-      gradient: 'from-[#00263A] to-[#00B3A6]',
-      action: () => navigate('/my-campaigns'),
-    },
-  ];
 
-  const quickActions = [
-    {
-      icon: Wallet,
-      title: 'Recharger le compte',
-      description: 'Ajoutez des fonds à votre portefeuille',
-      gradient: 'from-[#00B3A6] to-[#00263A]',
-    },
-    {
-      icon: FileText,
-      title: 'Consulter les factures',
-      description: "Accédez à l'historique de vos factures",
-      gradient: 'from-[#00263A] to-[#00B3A6]',
-    },
-  ];
 
   // Format durée HH:MM:SS pour le widget "Durée totale de diffusion"
   const formatDuration = (totalSeconds: number) => {
@@ -822,19 +733,6 @@ export default function Dashboard() {
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
 
-  function renderProfileTypeLabel(type: string | null) {
-    if (!type) return null;
-    switch (type) {
-      case 'advertiser':
-        return 'Annonceur';
-      case 'individual_owner':
-        return 'Propriétaire individuel';
-      case 'fleet_owner':
-        return 'Propriétaire de parc';
-      default:
-        return type;
-    }
-  }
 
   const handleJoyrideCallback = (data: CallBackProps) => {
     const { status, index } = data;
@@ -2534,8 +2432,6 @@ export default function Dashboard() {
                       contactCalendarMonth.getFullYear(),
                       contactCalendarMonth.getMonth(),
                     ).map((cell, idx) => {
-                      const unavailable =
-                        !cell.currentMonth || isDatePast(cell.date) || isDateUnavailable(cell.date);
                       const selected =
                         contactDate &&
                         cell.currentMonth &&

@@ -1,5 +1,5 @@
 import { Loader2, Save } from 'lucide-react';
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 
 import AdminLayout from '../../components/admin/AdminLayout';

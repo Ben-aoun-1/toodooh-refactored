@@ -8,7 +8,7 @@ import {
   MapPin,
   CalendarX,
 } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 
 import {
@@ -308,7 +308,7 @@ export default function ScreenCalendar({
       setViewMode('calendar');
 
       toast.success(`${createdPeriods.length} période(s) d'indisponibilité créée(s) avec succès`);
-    } catch (error) {
+    } catch (_error) {
       toast.error("Erreur lors de la création des périodes d'indisponibilité");
     }
   };
@@ -326,7 +326,7 @@ export default function ScreenCalendar({
   };
 
   const getUnavailabilityForDate = (date: Date) => {
-    const dateString = date.toISOString().split('T')[0];
+
     return unavailabilityPeriods.filter((period) => {
       const periodStart = new Date(period.start_date);
       const periodEnd = new Date(period.end_date);

@@ -1,7 +1,6 @@
 import { Calendar, ChevronLeft, ChevronRight, Megaphone, Users, X } from 'lucide-react';
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
 
 import OwnerNavigation from '../components/OwnerNavigation';
 import OwnerNotificationsBell from '../components/OwnerNotificationsBell';
@@ -31,7 +30,7 @@ const isDayUnavailable = (day: Date, periods: UnavailabilityPeriod[]) => {
 };
 
 export default function OwnerCalendarDevices() {
-  const navigate = useNavigate();
+
   const { user, needsApproval, validationStatus } = useAuthStore();
   const isDisabled = needsApproval && validationStatus === 'pending';
 
@@ -275,7 +274,7 @@ export default function OwnerCalendarDevices() {
         toast.success('Établissement remis disponible pour les dates sélectionnées');
       }
       setSelectedDates([]);
-    } catch (error) {
+    } catch (_error) {
       toast.error('Erreur lors de la mise à jour des disponibilités');
     } finally {
       setProcessingAvailability(null);

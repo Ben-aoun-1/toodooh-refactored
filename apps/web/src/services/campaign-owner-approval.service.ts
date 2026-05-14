@@ -190,7 +190,7 @@ export const campaignOwnerApprovalService = {
   async autoApproveCampaign(
     campaignId: string,
     ownerId: string,
-    screenIds: string[],
+    _screenIds: string[],
   ): Promise<void> {
     try {
       const { error } = await supabase.from('campaign_owner_approvals').upsert(

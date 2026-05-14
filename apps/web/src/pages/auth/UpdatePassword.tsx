@@ -1,4 +1,4 @@
-import React from 'react';
+
 
 import AuthLayout from '../../components/auth/AuthLayout';
 import UpdatePasswordForm from '../../components/auth/UpdatePasswordForm';

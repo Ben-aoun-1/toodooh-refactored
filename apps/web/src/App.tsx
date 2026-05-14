@@ -2,9 +2,9 @@ import React, { lazy, Suspense, useEffect } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
-import { useAuthStore } from './stores/auth.store';
 import AdminRoute from './components/admin/AdminRoute';
 import PageLoadingFallback from './components/PageLoadingFallback';
+import { useAuthStore } from './stores/auth.store';
 
 // Toutes les pages sont chargées à la demande (code-splitting par route).
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -43,7 +43,7 @@ const GeographicZonesManagement = lazy(() => import('./pages/admin/GeographicZon
 const AdminGlobalConfiguration = lazy(() => import('./pages/admin/AdminGlobalConfiguration'));
 
 function AdvertiserRoute({ children }: { children: React.ReactNode }) {
-  const { user, initialized, profileType, needsApproval } = useAuthStore();
+  const { user, initialized, profileType } = useAuthStore();
   if (!initialized) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
@@ -70,7 +70,7 @@ function AdvertiserRoute({ children }: { children: React.ReactNode }) {
 }
 
 function OwnerRoute({ children }: { children: React.ReactNode }) {
-  const { user, initialized, profileType, needsApproval } = useAuthStore();
+  const { user, initialized, profileType } = useAuthStore();
   if (!initialized) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
@@ -97,7 +97,7 @@ function OwnerRoute({ children }: { children: React.ReactNode }) {
 }
 
 function PublicRoute({ children }: { children: React.ReactNode }) {
-  const { user, initialized, profileType, needsApproval } = useAuthStore();
+  const { user, initialized, profileType } = useAuthStore();
 
   if (!initialized) {
     return (

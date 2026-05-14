@@ -20,11 +20,12 @@ import {
   AlertCircle,
   StopCircle,
 } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { useLocation } from 'react-router-dom';
 
 import AdminLayout from '../../components/admin/AdminLayout';
+import { getErrorMessage } from '../../lib/errors';
 import { logger } from '../../lib/logger';
 import { supabase } from '../../lib/supabase';
 import { adminCampaignMonitoringService } from '../../services/admin-campaign-monitoring.service';
@@ -36,7 +37,6 @@ import {
   CampaignLocation,
   CampaignImpressionProgress,
 } from '../../types/campaign-monitoring';
-import { getErrorMessage } from '../../lib/errors';
 
 const log = logger.child({ module: 'CampaignMonitoring' });
 
@@ -102,7 +102,7 @@ export default function CampaignMonitoring() {
       // Charger la liste des campagnes en priorité (affichage rapide).
       const campaignsData = await adminCampaignMonitoringService.getCampaignsWithScreens();
       setCampaigns(campaignsData);
-    } catch (error) {
+    } catch (_error) {
       toast.error('Erreur lors du chargement des campagnes');
     } finally {
       setLoading(false);

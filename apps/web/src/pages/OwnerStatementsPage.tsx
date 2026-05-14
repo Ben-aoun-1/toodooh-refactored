@@ -1,5 +1,5 @@
 import { Calendar, ChevronRight, DollarSign, Download, Eye, Wallet } from 'lucide-react';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
@@ -59,7 +59,7 @@ export default function OwnerStatementsPage() {
         const recipient = buildStatementRecipient(profile, user?.email ?? null);
         const name = await exportService.exportOwnerStatementPdf({ detail, recipient });
         toast.success(`Téléchargement : ${name}`);
-      } catch (e) {
+      } catch (_e) {
         toast.error('Impossible de générer le PDF');
       } finally {
         setDownloadingId(null);

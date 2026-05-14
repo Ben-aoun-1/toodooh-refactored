@@ -1,7 +1,7 @@
+import { getErrorMessage } from '../lib/errors';
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { AdminProfile, AdminSignUpData, AdminDashboardStats, AdminActivity } from '../types/admin';
-import { getErrorMessage } from '../lib/errors';
 
 const log = logger.child({ module: 'admin.service' });
 
@@ -76,7 +76,7 @@ export const adminService = {
     try {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
-    } catch (error) {
+    } catch (_error) {
       throw new Error('Erreur lors de la déconnexion');
     }
   },
@@ -172,7 +172,7 @@ export const adminService = {
 
       if (error) throw error;
       return data || [];
-    } catch (error) {
+    } catch (_error) {
       throw new Error('Erreur lors de la récupération des administrateurs');
     }
   },
@@ -188,7 +188,7 @@ export const adminService = {
 
       if (error) throw error;
       return data;
-    } catch (error) {
+    } catch (_error) {
       throw new Error("Erreur lors de la mise à jour de l'administrateur");
     }
   },
@@ -201,7 +201,7 @@ export const adminService = {
         .eq('id', id);
 
       if (error) throw error;
-    } catch (error) {
+    } catch (_error) {
       throw new Error("Erreur lors de la suppression de l'administrateur");
     }
   },
@@ -214,7 +214,7 @@ export const adminService = {
         .eq('id', id);
 
       if (error) throw error;
-    } catch (error) {
+    } catch (_error) {
       throw new Error("Erreur lors de la réactivation de l'administrateur");
     }
   },
@@ -306,7 +306,7 @@ export const adminService = {
 
       if (error) throw error;
       return data || [];
-    } catch (error) {
+    } catch (_error) {
       throw new Error('Erreur lors de la récupération des activités');
     }
   },

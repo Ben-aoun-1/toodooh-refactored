@@ -111,7 +111,7 @@ export const adminVideoService = {
         updateData.validation_notes = notes;
       }
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('videos')
         .update(updateData)
         .eq('id', videoId)
@@ -427,7 +427,7 @@ export const adminVideoService = {
         updateData.validation_notes = notes;
       }
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('videos')
         .update(updateData)
         .eq('id', videoId)
@@ -529,7 +529,7 @@ export const adminVideoService = {
         if (!error && data) {
           return data;
         }
-      } catch (rpcError) {}
+      } catch (_rpcError) {}
 
       // Fallback: requête directe
       const { data, error } = await supabase

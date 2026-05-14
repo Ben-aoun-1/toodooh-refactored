@@ -1,4 +1,4 @@
-import React from 'react';
+
 
 import resetImg from '../../assets/reset.png';
 import AuthLayout from '../../components/auth/AuthLayout';

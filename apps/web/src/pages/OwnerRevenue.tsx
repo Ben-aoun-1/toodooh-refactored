@@ -11,17 +11,17 @@ import {
   Building2,
   UploadCloud,
 } from 'lucide-react';
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { toast } from 'react-hot-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import OwnerNavigation from '../components/OwnerNavigation';
 import OwnerNotificationsBell from '../components/OwnerNotificationsBell';
+import { getErrorMessage } from '../lib/errors';
 import { supabase } from '../lib/supabase';
 import { authService } from '../services/auth.service';
 import { revenueService, RevenueData, RevenueStats } from '../services/revenue.service';
 import { useAuthStore } from '../stores/auth.store';
-import { getErrorMessage } from '../lib/errors';
 
 type TxFilter = 'all' | 'recharges' | 'depenses';
 
@@ -70,7 +70,7 @@ export default function OwnerRevenue() {
       setRevenueStats(stats);
       setPeriodRevenues(periods);
       hasLoadedData.current = true;
-    } catch (error) {
+    } catch (_error) {
       toast.error('Erreur lors du chargement des données');
     } finally {
       setLoading(false);

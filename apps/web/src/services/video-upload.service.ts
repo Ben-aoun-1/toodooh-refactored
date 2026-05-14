@@ -1,6 +1,6 @@
+import { getErrorMessage } from '../lib/errors';
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
-import { getErrorMessage } from '../lib/errors';
 
 const log = logger.child({ module: 'video-upload.service' });
 
@@ -119,7 +119,7 @@ export const videoUploadService = {
       const filePath = `campaign-videos/${user.id}_${fileName}`;
 
       // Upload le fichier dans le bucket 'media'
-      const { data, error } = await supabase.storage.from('media').upload(filePath, file, {
+      const { error } = await supabase.storage.from('media').upload(filePath, file, {
         cacheControl: '3600',
         upsert: false,
       });
@@ -190,7 +190,7 @@ export const videoUploadService = {
   // Créer une entrée vidéo dans la table videos
   async createVideoEntry(
     videoUrl: string,
-    videoPath: string,
+    _videoPath: string,
     filename: string,
     fileSize?: number,
     durationSeconds?: number | null,

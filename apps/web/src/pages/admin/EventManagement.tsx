@@ -16,12 +16,12 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 
 import AdminLayout from '../../components/admin/AdminLayout';
+import { getErrorMessage } from '../../lib/errors';
 import { logger } from '../../lib/logger';
 import { supabase } from '../../lib/supabase';
 import { adminEventsService } from '../../services/admin-events.service';
 import { useAdminStore } from '../../stores/admin.store';
 import { SpecialEvent, CreateEventDTO, EventStats } from '../../types/event';
-import { getErrorMessage } from '../../lib/errors';
 
 const log = logger.child({ module: 'EventManagement' });
 
@@ -206,25 +206,11 @@ export default function EventManagement() {
         setSelectedEvent(null);
         loadStats();
       }
-    } catch (error) {
+    } catch (_error) {
       toast.error('Erreur lors de la suppression');
     }
   };
 
-  const handleToggleStatus = async (eventId: string, isActive: boolean) => {
-    try {
-      const success = await adminEventsService.toggleEventStatus(eventId, isActive);
-      if (success) {
-        setEvents(
-          events.map((evt) => (evt.id === eventId ? { ...evt, is_active: isActive } : evt)),
-        );
-        toast.success(isActive ? 'Événement activé' : 'Événement désactivé');
-        loadStats();
-      }
-    } catch (error) {
-      toast.error('Erreur lors du changement de statut');
-    }
-  };
 
   const handleToggleFeatured = async (eventId: string, isFeatured: boolean) => {
     try {
@@ -238,7 +224,7 @@ export default function EventManagement() {
         );
         loadStats();
       }
-    } catch (error) {
+    } catch (_error) {
       toast.error('Erreur lors du changement de statut');
     }
   };

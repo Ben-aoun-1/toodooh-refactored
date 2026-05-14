@@ -13,7 +13,7 @@ import {
   Star,
   BarChart3,
 } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import AdminLayout from '../../components/admin/AdminLayout';
@@ -594,11 +594,3 @@ export default function AdminDashboard() {
   );
 }
 
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('fr-FR', {
-    style: 'currency',
-    currency: 'TND',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
-}

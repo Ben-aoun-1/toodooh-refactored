@@ -1,4 +1,5 @@
 import { getAppUrl } from '../lib/app-url';
+import { getErrorMessage, isErrorWithCode } from '../lib/errors';
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import {
@@ -10,7 +11,6 @@ import {
   CompanySizeOption,
   SupportObjectiveOption,
 } from '../types/auth';
-import { getErrorMessage, isErrorWithCode } from '../lib/errors';
 
 const log = logger.child({ module: 'auth.service' });
 
@@ -635,7 +635,7 @@ export const authService = {
           profileCreated = true;
         } else {
         }
-      } catch (rpcError) {}
+      } catch (_rpcError) {}
     }
 
     // Si aucune stratégie n'a fonctionné, bloquer l'inscription et exposer

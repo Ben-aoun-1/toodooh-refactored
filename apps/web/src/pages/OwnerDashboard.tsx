@@ -2,7 +2,6 @@ import {
   Plus,
   AlertTriangle,
   CheckCircle,
-  XCircle,
   DollarSign,
   Monitor,
   Gift,
@@ -10,7 +9,6 @@ import {
   CalendarX,
   BarChart3,
   TrendingUp,
-  Bell,
   Settings,
   Star,
   LayoutGrid,
@@ -18,7 +16,7 @@ import {
   Eye,
   Building2,
 } from 'lucide-react';
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
@@ -74,8 +72,8 @@ export default function OwnerDashboard() {
     totalScreens: 0,
     loyaltyPoints: 0,
   });
-  const [alerts, setAlerts] = useState<Alert[]>([]);
-  const [accountStatus, setAccountStatus] = useState<'active' | 'pending' | 'suspended'>('active');
+  const [_alerts, setAlerts] = useState<Alert[]>([]);
+  const [_accountStatus, _setAccountStatus] = useState<'active' | 'pending' | 'suspended'>('active');
   // TODO(phase-1): typed source [supabase] — see #15
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [profile, setProfile] = useState<any>(null);
@@ -209,7 +207,7 @@ export default function OwnerDashboard() {
       }
 
       hasLoadedData.current = true; // ✅ Marquer comme chargé
-    } catch (error) {
+    } catch (_error) {
       toast.error('Erreur lors du chargement des données');
     } finally {
       setLoading(false);
@@ -231,76 +229,10 @@ export default function OwnerDashboard() {
     }
   }, [user, profileType, loadDashboardData]);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active':
-        return 'text-green-400 bg-green-500/20 border border-green-500/30';
-      case 'inactive':
-        return 'text-red-400 bg-red-500/20 border border-red-500/30';
-      case 'maintenance':
-        return 'text-yellow-400 bg-yellow-500/20 border border-yellow-500/30';
-      case 'unavailable':
-        return 'text-gray-400 bg-gray-500/20 border border-gray-500/30';
-      default:
-        return 'text-gray-400 bg-gray-500/20 border border-gray-500/30';
-    }
-  };
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'active':
-        return 'Actif';
-      case 'inactive':
-        return 'Inactif';
-      case 'maintenance':
-        return 'Maintenance';
-      case 'unavailable':
-        return 'Indisponible';
-      default:
-        return 'Inconnu';
-    }
-  };
 
-  const getAccountStatusColor = (status: string) => {
-    switch (status) {
-      case 'active':
-        return 'text-green-400 bg-green-500/20 border border-green-500/30';
-      case 'pending':
-        return 'text-yellow-400 bg-yellow-500/20 border border-yellow-500/30';
-      case 'suspended':
-        return 'text-red-400 bg-red-500/20 border border-red-500/30';
-      default:
-        return 'text-gray-400 bg-gray-500/20 border border-gray-500/30';
-    }
-  };
 
-  const getAccountStatusText = (status: string) => {
-    switch (status) {
-      case 'active':
-        return 'Actif';
-      case 'pending':
-        return 'En attente';
-      case 'suspended':
-        return 'Suspendu';
-      default:
-        return 'Inconnu';
-    }
-  };
 
-  const getAlertIcon = (type: string) => {
-    switch (type) {
-      case 'warning':
-        return <AlertTriangle className="h-5 w-5 text-yellow-500" />;
-      case 'info':
-        return <Bell className="h-5 w-5 text-blue-500" />;
-      case 'success':
-        return <CheckCircle className="h-5 w-5 text-green-500" />;
-      case 'error':
-        return <XCircle className="h-5 w-5 text-red-500" />;
-      default:
-        return <Bell className="h-5 w-5 text-gray-500" />;
-    }
-  };
 
   // Fonctions de redirection pour les widgets
   const handleNavigateToScreens = () => {
@@ -313,10 +245,6 @@ export default function OwnerDashboard() {
     toast.success('Redirection vers la page des revenus');
   };
 
-  const handleNavigateToLocations = () => {
-    navigate('/owner-locations');
-    toast.success('Redirection vers la page des emplacements');
-  };
 
   const handleNavigateToGiftCatalog = () => {
     setShowGiftCatalog(true);
@@ -326,18 +254,12 @@ export default function OwnerDashboard() {
     navigate('/owner-calendar-devices');
   };
 
-  const handleAddScreen = () => {
-    setShowAddScreen(true);
-  };
 
   const handleViewDetailedRevenue = () => {
     // Rediriger vers /owner-revenue en mode tableau
     navigate('/owner-revenue?viewMode=table');
   };
 
-  const handleAccessGiftCatalog = () => {
-    setShowGiftCatalog(true);
-  };
 
   const formatDuration = (totalSeconds: number) => {
     const n = Number(totalSeconds) || 0;

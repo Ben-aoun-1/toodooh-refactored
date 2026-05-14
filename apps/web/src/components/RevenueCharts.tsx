@@ -1,5 +1,5 @@
 import { TrendingUp, TrendingDown, DollarSign, Monitor, MapPin } from 'lucide-react';
-import React from 'react';
+
 import {
   LineChart,
   Line,
@@ -248,7 +248,7 @@ export default function RevenueCharts({ monthlyData, screenData, period }: Reven
                 fill="#8884d8"
                 dataKey="value"
               >
-                {locationChartData.map((entry, index) => (
+                {locationChartData.map((_entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>

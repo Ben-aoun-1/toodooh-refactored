@@ -4,9 +4,9 @@ import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 import AdminLayout from '../../components/admin/AdminLayout';
+import { getErrorMessage } from '../../lib/errors';
 import { adminService } from '../../services/admin.service';
 import { useAdminStore } from '../../stores/admin.store';
-import { getErrorMessage } from '../../lib/errors';
 
 interface AdminFormData {
   email: string;

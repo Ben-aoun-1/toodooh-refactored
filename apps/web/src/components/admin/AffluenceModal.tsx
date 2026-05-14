@@ -1,11 +1,11 @@
 import { X, Edit, Save, Calendar } from 'lucide-react';
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 
+import { isErrorWithCode } from '../../lib/errors';
 import { logger } from '../../lib/logger';
 import { supabase } from '../../lib/supabase';
 import type { AdminLocation } from '../../services/admin-screens.service';
-import { isErrorWithCode } from '../../lib/errors';
 
 const log = logger.child({ module: 'AffluenceModal' });
 
@@ -89,7 +89,7 @@ export default function AffluenceModal({ location, onClose }: AffluenceModalProp
             return a.hour - b.hour;
           }),
         );
-      } catch (error) {
+      } catch (_error) {
         toast.error("Erreur lors du chargement de l'affluence");
       } finally {
         setLoading(false);

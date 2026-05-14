@@ -12,7 +12,7 @@ import {
   Film,
   Building,
 } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { useParams, useNavigate } from 'react-router-dom';
 
@@ -87,7 +87,7 @@ export default function CampaignDetails() {
 
       if (campaignError) throw campaignError;
 
-      const [{ data: categoryRows, error: categoryError }, { data: campaignLocationRows }] =
+      const [{ data: categoryRows, error: categoryError }] =
         await Promise.all([
           supabase
             .from('campaign_categories')
@@ -158,7 +158,7 @@ export default function CampaignDetails() {
           setVideo(videoData);
         }
       }
-    } catch (error) {
+    } catch (_error) {
       toast.error('Erreur lors du chargement de la campagne');
     } finally {
       setLoading(false);

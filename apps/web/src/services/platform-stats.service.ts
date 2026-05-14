@@ -21,7 +21,7 @@ export const platformStatsService = {
         if (!error && data) {
           return data[0];
         }
-      } catch (rpcError) {}
+      } catch (_rpcError) {}
 
       // Fallback: Requêtes directes
       const [users, screens, campaigns, videos, events] = await Promise.all([
@@ -87,7 +87,7 @@ export const platformStatsService = {
         if (!error && data) {
           return data[0];
         }
-      } catch (rpcError) {}
+      } catch (_rpcError) {}
 
       // Fallback: Requêtes directes
       const { data: screensData } = await supabase
@@ -129,7 +129,7 @@ export const platformStatsService = {
         if (!error && data) {
           return data[0];
         }
-      } catch (rpcError) {}
+      } catch (_rpcError) {}
 
       // Fallback: Requêtes directes
       const { data: screensData } = await supabase.from('screens').select('status, is_online');
@@ -163,7 +163,7 @@ export const platformStatsService = {
         if (!error && data) {
           return data[0];
         }
-      } catch (rpcError) {}
+      } catch (_rpcError) {}
 
       // Fallback: Requêtes directes
       const { data: campaignsData } = await supabase
@@ -215,7 +215,7 @@ export const platformStatsService = {
         if (!error && data) {
           return data;
         }
-      } catch (rpcError) {}
+      } catch (_rpcError) {}
 
       // Fallback: Requêtes directes avec jointure
       const { data: screensData } = await supabase

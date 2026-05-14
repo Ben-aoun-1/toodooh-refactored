@@ -13,7 +13,7 @@ import {
   CheckCircle,
   XCircle,
 } from 'lucide-react';
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
@@ -54,7 +54,7 @@ export default function OwnerLocations() {
       setScreens(screensData);
       setLoading(false);
       hasLoadedData.current = true; // ✅ Marquer comme chargé
-    } catch (error) {
+    } catch (_error) {
       toast.error('Erreur lors du chargement des emplacements');
       setLoading(false);
     }

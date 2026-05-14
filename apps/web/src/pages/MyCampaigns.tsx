@@ -8,7 +8,6 @@ import {
   DollarSign,
   MoreVertical,
   Plus,
-  BarChart3,
   X,
   MapPin,
   Rocket,
@@ -17,7 +16,7 @@ import {
   Monitor,
   Trash2,
 } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import DatePicker from 'react-datepicker';
 import { toast } from 'react-hot-toast';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -38,110 +37,9 @@ const isMissingCampaignCategoriesTable = (error: any) =>
   error?.code === 'PGRST205' && String(error?.message || '').includes('campaign_categories');
 
 // Test data
-const testCampaigns = [
-  {
-    id: 1,
-    name: "Promotion d'été 2024",
-    client: 'Carrefour Tunisie',
-    category: 'Publicité commerciale',
-    startDate: new Date(2024, 5, 1),
-    endDate: new Date(2024, 8, 30),
-    status: 'active',
-    views: 15420,
-    budget: 5000,
-  },
-  {
-    id: 2,
-    name: 'Festival de Carthage',
-    client: 'Ministère de la Culture',
-    category: 'Événement culturel',
-    startDate: new Date(2024, 6, 15),
-    endDate: new Date(2024, 7, 15),
-    status: 'en attente',
-    views: 0,
-    budget: 8000,
-  },
-  {
-    id: 3,
-    name: 'Ramadan 2024',
-    client: 'Monoprix',
-    category: 'Promotion spéciale',
-    startDate: new Date(2024, 2, 1),
-    endDate: new Date(2024, 3, 15),
-    status: 'terminée',
-    views: 45200,
-    budget: 12000,
-  },
-  {
-    id: 4,
-    name: 'Rentrée Scolaire',
-    client: 'Librairie Al-Kitab',
-    category: 'Publicité commerciale',
-    startDate: new Date(2024, 8, 1),
-    endDate: new Date(2024, 9, 30),
-    status: 'en attente',
-    views: 0,
-    budget: 3500,
-  },
-  {
-    id: 5,
-    name: 'Black Friday',
-    client: 'Jumia Tunisie',
-    category: 'Promotion spéciale',
-    startDate: new Date(2024, 10, 20),
-    endDate: new Date(2024, 10, 27),
-    status: 'planifiée',
-    views: 0,
-    budget: 15000,
-  },
-  {
-    id: 6,
-    name: "Fête de l'Aid",
-    client: 'Géant',
-    category: 'Promotion spéciale',
-    startDate: new Date(2024, 5, 15),
-    endDate: new Date(2024, 6, 15),
-    status: 'active',
-    views: 8750,
-    budget: 7500,
-  },
-  {
-    id: 7,
-    name: "Exposition d'Art",
-    client: 'Galerie Kalysté',
-    category: 'Événement culturel',
-    startDate: new Date(2024, 3, 1),
-    endDate: new Date(2024, 3, 30),
-    status: 'terminée',
-    views: 12300,
-    budget: 4000,
-  },
-];
 
-type CampaignStatus = 'active' | 'en attente' | 'terminée' | 'planifiée';
+type _CampaignStatus = 'active' | 'en attente' | 'terminée' | 'planifiée';
 
-const statusConfig = {
-  active: {
-    color: 'bg-green-100 text-green-800',
-    gradient: 'from-green-500 to-emerald-500',
-    icon: TrendingUp,
-  },
-  'en attente': {
-    color: 'bg-yellow-100 text-yellow-800',
-    gradient: 'from-yellow-500 to-orange-500',
-    icon: Calendar,
-  },
-  terminée: {
-    color: 'bg-gray-100 text-gray-800',
-    gradient: 'from-gray-500 to-slate-500',
-    icon: BarChart3,
-  },
-  planifiée: {
-    color: 'bg-blue-100 text-blue-800',
-    gradient: 'from-blue-500 to-cyan-500',
-    icon: Calendar,
-  },
-};
 
 interface Filters {
   client: string;
@@ -181,7 +79,7 @@ export default function MyCampaigns() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [campaigns, setCampaigns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({
+  const [_stats, setStats] = useState({
     totalCampaigns: 0,
     activeCampaigns: 0,
     totalViews: 0,
@@ -310,7 +208,7 @@ export default function MyCampaigns() {
           totalViews,
           totalBudget,
         });
-      } catch (error) {
+      } catch (_error) {
         toast.error('Erreur lors du chargement');
       } finally {
         setLoading(false);
@@ -471,7 +369,7 @@ export default function MyCampaigns() {
         closeDetailsDrawer();
       }
       toast.success('Brouillon supprimé');
-    } catch (e) {
+    } catch (_e) {
       toast.error('Erreur lors de la suppression du brouillon');
     }
   };
@@ -609,7 +507,7 @@ export default function MyCampaigns() {
 
       if (nextStatus === 'active') toast.success('Campagne activée avec succès');
       else toast('Campagne en attente de validation vidéo admin', { icon: '⏳' });
-    } catch (error) {
+    } catch (_error) {
       toast.error("Erreur lors de l'activation du brouillon");
     }
   };

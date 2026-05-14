@@ -8,7 +8,7 @@ import {
   Search,
   ShieldCheck,
 } from 'lucide-react';
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
@@ -46,7 +46,7 @@ export default function OwnerCampaignApprovals() {
       setLoading(true);
       const pendingCampaigns = await campaignOwnerApprovalService.getPendingCampaigns(user!.id);
       setCampaigns(pendingCampaigns);
-    } catch (error) {
+    } catch (_error) {
       toast.error('Erreur lors du chargement des campagnes');
     } finally {
       setLoading(false);
@@ -59,7 +59,7 @@ export default function OwnerCampaignApprovals() {
       await campaignOwnerApprovalService.approveCampaign(campaignId, user!.id);
       toast.success('Campagne approuvée avec succès');
       await loadCampaigns();
-    } catch (error) {
+    } catch (_error) {
       toast.error("Erreur lors de l'approbation de la campagne");
     } finally {
       setProcessingId(null);
@@ -73,7 +73,7 @@ export default function OwnerCampaignApprovals() {
       await campaignOwnerApprovalService.rejectCampaign(campaignId, user!.id, reason || undefined);
       toast.success('Campagne rejetée');
       await loadCampaigns();
-    } catch (error) {
+    } catch (_error) {
       toast.error('Erreur lors du rejet de la campagne');
     } finally {
       setProcessingId(null);

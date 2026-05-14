@@ -9,7 +9,7 @@ import {
   ChevronUp,
   Bell,
 } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
@@ -28,7 +28,7 @@ interface GiftItem {
 
 export default function GiftCatalogPage() {
   const navigate = useNavigate();
-  const { user, profileType } = useAuthStore();
+  const { user } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [userPoints, setUserPoints] = useState(1250);
   const [selectedCategory, setSelectedCategory] = useState('all');

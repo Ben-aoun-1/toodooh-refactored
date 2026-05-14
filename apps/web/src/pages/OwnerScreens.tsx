@@ -15,7 +15,7 @@ import {
   Info,
   Bell,
 } from 'lucide-react';
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
@@ -34,7 +34,7 @@ import { useAuthStore } from '../stores/auth.store';
 
 const log = logger.child({ module: 'OwnerScreens' });
 
-interface RevenueStats {
+interface _RevenueStats {
   totalRevenue: number;
   monthlyRevenue: number;
   activeScreens: number;
@@ -71,7 +71,7 @@ export default function OwnerScreens() {
       ]);
 
       if (screensData && screensData.length > 0) {
-        screensData.forEach((screen, index) => {});
+        screensData.forEach((_screen, _index) => {});
       } else {
       }
 
@@ -97,7 +97,7 @@ export default function OwnerScreens() {
 
       setLoading(false);
       hasLoadedData.current = true; // ✅ Marquer comme chargé
-    } catch (error) {
+    } catch (_error) {
       toast.error('Erreur lors du chargement des écrans');
       setLoading(false);
     }
@@ -234,19 +234,16 @@ export default function OwnerScreens() {
       toast.success(
         newValue ? 'Acceptation automatique activée' : 'Acceptation automatique désactivée',
       );
-    } catch (error) {
+    } catch (_error) {
       toast.error('Erreur lors de la mise à jour de la configuration');
     } finally {
       setUpdatingScreen(null);
     }
   };
 
-  const handleStatusChange = async (screenId: string, newStatus: ScreenStatus, reason?: string) => {
+  const handleStatusChange = async (screenId: string, newStatus: ScreenStatus, _reason?: string) => {
     try {
       // Appeler le service pour mettre à jour en base de données
-      const updatedScreen = await screensService.updateScreen(screenId, {
-        status: newStatus,
-      });
 
       // Mettre à jour l'état local
       setScreens((prev) =>
@@ -263,7 +260,7 @@ export default function OwnerScreens() {
 
       toast.success(`Statut de l'écran mis à jour`);
       setShowStatusModal(false);
-    } catch (error) {
+    } catch (_error) {
       toast.error('Erreur lors de la mise à jour du statut');
     }
   };
@@ -279,9 +276,6 @@ export default function OwnerScreens() {
 
       if (now >= periodStart && now <= periodEnd) {
         // Mettre à jour en base de données
-        const updatedScreen = await screensService.updateScreen(period.screen_id, {
-          status: 'unavailable',
-        });
 
         // Mettre à jour l'état local
         setScreens((prev) =>
@@ -296,7 +290,7 @@ export default function OwnerScreens() {
           }),
         );
       }
-    } catch (error) {
+    } catch (_error) {
       toast.error('Erreur lors de la mise à jour du statut');
     }
   };
@@ -310,17 +304,14 @@ export default function OwnerScreens() {
       setUnavailabilityPeriods((prev) => prev.filter((p) => p.id !== periodId));
 
       toast.success("Période d'indisponibilité supprimée");
-    } catch (error) {
+    } catch (_error) {
       toast.error('Erreur lors de la suppression de la période');
     }
   };
 
   // Fonction pour mettre à jour le statut d'un écran en base de données
-  const updateScreenStatusInDatabase = async (screenId: string, newStatus: ScreenStatus) => {
+  const updateScreenStatusInDatabase = async (_screenId: string, _newStatus: ScreenStatus) => {
     try {
-      const updatedScreen = await screensService.updateScreen(screenId, {
-        status: newStatus,
-      });
       return true;
     } catch (error) {
       log.error({ error }, '❌ Erreur lors de la mise à jour du statut');

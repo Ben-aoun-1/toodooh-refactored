@@ -45,7 +45,7 @@ export interface ScreenRevenue {
 class RevenueService {
   // Récupérer les revenus par écran
   async getRevenueByScreen(
-    period: 'monthly' | 'quarterly' | 'yearly' = 'monthly',
+    _period: 'monthly' | 'quarterly' | 'yearly' = 'monthly',
   ): Promise<ScreenRevenue[]> {
     try {
 

@@ -343,7 +343,7 @@ export const adminUserService = {
 
         if (rechargesError && !rechargesError.message.includes('Could not find')) {
         }
-      } catch (e) {
+      } catch (_e) {
         // Table n'existe pas, continuer
       }
 
@@ -351,7 +351,7 @@ export const adminUserService = {
       // Supprimer les factures quand la table sera créée
 
       // Supprimer le profil business
-      const { data: deletedProfile, error: businessError } = await supabase
+      const { error: businessError } = await supabase
         .from('business_profiles')
         .delete()
         .eq('id', userId)
@@ -364,7 +364,7 @@ export const adminUserService = {
       }
 
       // Vérifier que le profil a bien été supprimé
-      const { data: checkProfile, error: checkError } = await supabase
+      const { data: checkProfile } = await supabase
         .from('business_profiles')
         .select('id')
         .eq('id', userId)

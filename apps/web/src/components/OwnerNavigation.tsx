@@ -9,7 +9,7 @@ import {
   ChevronRight,
   Megaphone,
 } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -91,18 +91,6 @@ const navigation = [
   },
 ];
 
-function renderProfileTypeLabel(profileType: string | null | undefined) {
-  switch (profileType) {
-    case 'advertiser':
-      return 'Annonceur';
-    case 'individual_owner':
-      return 'Propriétaire Individuel';
-    case 'fleet_owner':
-      return 'Propriétaire de Parc';
-    default:
-      return profileType || '';
-  }
-}
 
 interface OwnerNavigationProps {
   isDisabled?: boolean;
@@ -111,11 +99,11 @@ interface OwnerNavigationProps {
 export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationProps = {}) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, profileType, logout } = useAuthStore();
+  const { user, logout } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarExpanded, setSidebarExpanded] = useState(true); // desktop: true = 272px, false = 80px
   const [profile, setProfile] = useState<BusinessProfile | null>(null);
-  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [_showUserMenu, _setShowUserMenu] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const [showSupportModal, setShowSupportModal] = useState(false);
   const [supportObjective, setSupportObjective] = useState('');
@@ -187,7 +175,7 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
       navigate('/login');
 
       toast.success('Déconnexion réussie');
-    } catch (error) {
+    } catch (_error) {
       toast.error('Erreur lors de la déconnexion');
 
       // En cas d'erreur, forcer la redirection

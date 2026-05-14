@@ -81,7 +81,7 @@ export default function GeographicZonesManagement() {
       setLoading(true);
       const data = await predefinedZonesService.getAllForAdmin();
       setZones(data);
-    } catch (error) {
+    } catch (_error) {
       toast.error('Erreur lors du chargement des zones');
     } finally {
       setLoading(false);
@@ -247,17 +247,6 @@ export default function GeographicZonesManagement() {
     }
   };
 
-  const handleBulkToggleActive = async (ids: string[], activate: boolean) => {
-    try {
-      await Promise.all(ids.map((id) => predefinedZonesService.toggleActive(id, activate)));
-      toast.success(
-        `${ids.length} zone(s) ${activate ? 'publiée(s)' : 'dépubliée(s)'} avec succès`,
-      );
-      loadZones();
-    } catch (error) {
-      toast.error('Erreur lors du changement de statut en masse');
-    }
-  };
 
   return (
     <AdminLayout

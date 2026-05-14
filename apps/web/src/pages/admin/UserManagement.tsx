@@ -16,16 +16,16 @@ import {
   AlertCircle,
   Trash2,
 } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { useLocation } from 'react-router-dom';
 
 import AdminLayout from '../../components/admin/AdminLayout';
+import { getErrorMessage } from '../../lib/errors';
 import { logger } from '../../lib/logger';
 import { supabase } from '../../lib/supabase';
 import { adminUserService, AdminUser } from '../../services/admin-user.service';
 import { useAdminStore } from '../../stores/admin.store';
-import { getErrorMessage } from '../../lib/errors';
 
 const log = logger.child({ module: 'UserManagement' });
 
@@ -311,7 +311,7 @@ export default function UserManagement() {
       } else {
         toast.error("Erreur lors de l'approbation");
       }
-    } catch (error) {
+    } catch (_error) {
       toast.error("Erreur lors de l'approbation");
     }
   };
@@ -336,7 +336,7 @@ export default function UserManagement() {
       } else {
         toast.error('Erreur lors du rejet');
       }
-    } catch (error) {
+    } catch (_error) {
       toast.error('Erreur lors du rejet');
     }
   };
@@ -356,7 +356,7 @@ export default function UserManagement() {
       } else {
         toast.error('Erreur lors de la suppression');
       }
-    } catch (error) {
+    } catch (_error) {
       toast.error('Erreur lors de la suppression');
     } finally {
       setDeleting(false);

@@ -1,14 +1,14 @@
 import { Video as VideoIcon, Search, Filter, Eye, Check, X, Clock, FileVideo } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { useLocation } from 'react-router-dom';
 
 import AdminLayout from '../../components/admin/AdminLayout';
+import { getErrorMessage } from '../../lib/errors';
 import { logger } from '../../lib/logger';
 import { adminVideoService } from '../../services/admin-video.service';
 import { useAdminStore } from '../../stores/admin.store';
 import { Video, VideoValidationStats } from '../../types/video';
-import { getErrorMessage } from '../../lib/errors';
 
 const log = logger.child({ module: 'VideoManagement' });
 

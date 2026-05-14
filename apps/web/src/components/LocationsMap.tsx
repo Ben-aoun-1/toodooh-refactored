@@ -1,5 +1,5 @@
 import L from 'leaflet';
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 
 import { Screen } from '../services/screens.service';
@@ -79,7 +79,7 @@ export default function LocationsMap({ screens, onScreenClick }: LocationsMapPro
   );
 
   // Générer des coordonnées pour chaque emplacement
-  const getLocationCoordinates = (location: string, index: number): [number, number] => {
+  const getLocationCoordinates = (_location: string, index: number): [number, number] => {
     // En production, ces coordonnées viendraient de la base de données
     const baseLat = 36.8065 + (Math.random() - 0.5) * 0.1;
     const baseLng = 10.1815 + (Math.random() - 0.5) * 0.1;
@@ -91,8 +91,8 @@ export default function LocationsMap({ screens, onScreenClick }: LocationsMapPro
     if (mapRef.current && screens.length > 0) {
       const bounds = L.latLngBounds(defaultCenter);
 
-      Object.entries(locations).forEach(([location, locationScreens], locationIndex) => {
-        locationScreens.forEach((screen, screenIndex) => {
+      Object.entries(locations).forEach(([location, locationScreens], _locationIndex) => {
+        locationScreens.forEach((_screen, screenIndex) => {
           const coords = getLocationCoordinates(location, screenIndex);
           bounds.extend(coords);
         });
@@ -164,7 +164,7 @@ export default function LocationsMap({ screens, onScreenClick }: LocationsMapPro
           maxZoom={19}
         />
 
-        {Object.entries(locations).map(([location, locationScreens], locationIndex) => {
+        {Object.entries(locations).map(([location, locationScreens], _locationIndex) => {
           return locationScreens.map((screen, screenIndex) => {
             const coords = getLocationCoordinates(location, screenIndex);
 

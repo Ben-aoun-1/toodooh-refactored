@@ -117,7 +117,7 @@ export default function MyRecharges() {
 
         merged.sort((a, b) => b.date.getTime() - a.date.getTime());
         setTransactions(merged);
-      } catch (error) {
+      } catch (_error) {
         toast.error('Erreur lors du chargement');
       } finally {
         setLoading(false);
@@ -181,7 +181,7 @@ export default function MyRecharges() {
 
     try {
       setSubmitting(true);
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('recharges')
         .insert({
           user_id: user.id,
@@ -202,7 +202,7 @@ export default function MyRecharges() {
       toast.success('Recharge créée avec succès ! En attente de validation.');
       setNewRecharge({ amount: '', payment_method: 'card', description: '' });
       setShowNewRechargeModal(false);
-    } catch (error) {
+    } catch (_error) {
       toast.error('Erreur lors de la soumission');
     } finally {
       setSubmitting(false);

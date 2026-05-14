@@ -9,7 +9,7 @@ import {
   CheckCircle,
   AlertCircle,
 } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
@@ -41,7 +41,7 @@ export default function AdminManagement() {
       setLoading(true);
       const data = await adminService.getAdmins();
       setAdmins(data);
-    } catch (error) {
+    } catch (_error) {
       toast.error('Erreur lors du chargement des administrateurs');
     } finally {
       setLoading(false);
@@ -88,7 +88,7 @@ export default function AdminManagement() {
           description: `Désactivation de ${adminToDeactivate.first_name} ${adminToDeactivate.last_name}`,
         });
       }
-    } catch (error) {
+    } catch (_error) {
       toast.error('Erreur lors de la désactivation');
     }
   };
@@ -118,7 +118,7 @@ export default function AdminManagement() {
           description: `Réactivation de ${adminToReactivate.first_name} ${adminToReactivate.last_name}`,
         });
       }
-    } catch (error) {
+    } catch (_error) {
       toast.error('Erreur lors de la réactivation');
     }
   };

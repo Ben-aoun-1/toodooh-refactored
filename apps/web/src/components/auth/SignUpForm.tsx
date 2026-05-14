@@ -1,5 +1,5 @@
 import { Upload, FileText, X, Building2, MapPin, MoreVertical, Trash2 } from 'lucide-react';
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
@@ -19,6 +19,7 @@ import {
   AGENCY_BUSINESS_SECTOR_NAME,
   sectorsForAdvertiserAgencySignup,
 } from '../../constants/advertiserBusinessSectors';
+import { getErrorMessage } from '../../lib/errors';
 import { authService } from '../../services/auth.service';
 import type {
   BusinessSector,
@@ -27,7 +28,6 @@ import type {
   FleetEstablishmentInput,
   CompanySizeOption,
 } from '../../types/auth';
-import { getErrorMessage } from '../../lib/errors';
 
 type ProfileType = 'advertiser' | 'agency' | 'individual_owner' | 'fleet_owner';
 
@@ -127,27 +127,12 @@ function parseFleetScreenCount(v: string): number {
   return Number.isNaN(n) ? 0 : n;
 }
 
-const formuleOptions = [
-  {
-    id: 'abonnement',
-    title: 'Abonnement',
-    description:
-      'Toodooh prend en charge votre abonnement IPTV, Diwan Sport, etc., sans aucun frais',
-    icon: '📺',
-  },
-  {
-    id: 'revenue_share',
-    title: 'Revenue share',
-    description: 'Générez des revenus variables en recevant une part sur les publicités diffusées',
-    icon: '🤝',
-  },
-];
 
 export default function SignUpForm({ currentStep, onStepChange, onProfileTypeChange }: Props) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showPassword, _setShowPassword] = useState(false);
+  const [showConfirmPassword, _setShowConfirmPassword] = useState(false);
   const [sectors, setSectors] = useState<BusinessSector[]>([]);
   const [ownerSectors, setOwnerSectors] = useState<BusinessSector[]>([]);
   const [companySizeOptions, setCompanySizeOptions] = useState<CompanySizeOption[]>([]);

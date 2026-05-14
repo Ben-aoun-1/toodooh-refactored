@@ -17,12 +17,12 @@ import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 import OwnerNavigation from '../components/OwnerNavigation';
+import { getErrorMessage } from '../lib/errors';
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { authService } from '../services/auth.service';
 import { useAuthStore } from '../stores/auth.store';
 import type { BusinessSector, Governorate, BusinessProfile } from '../types/auth';
-import { getErrorMessage } from '../lib/errors';
 
 const log = logger.child({ module: 'MyAccount' });
 
@@ -117,7 +117,7 @@ export default function MyAccount() {
         formule: profileData?.formule || '',
         termsAccepted: true,
       });
-    } catch (error) {
+    } catch (_error) {
       toast.error('Erreur lors du chargement du profil');
     }
   };
@@ -148,15 +148,6 @@ export default function MyAccount() {
     }
   };
 
-  const handleStepChange = (step: number) => {
-    // Empêcher la soumission automatique quand on passe à l'étape Validation
-    if (step === 4) {
-      // Ne pas soumettre automatiquement, juste changer l'étape
-      setCurrentStep(step);
-    } else {
-      setCurrentStep(step);
-    }
-  };
 
   const prevStep = () => {
     if (currentStep > 1) {

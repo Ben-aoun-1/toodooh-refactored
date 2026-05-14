@@ -1,5 +1,5 @@
 import { Bell, CalendarDays, FileText, Settings, X } from 'lucide-react';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { logger } from '../lib/logger';
@@ -63,7 +63,7 @@ export default function OwnerNotificationsBell({ userId }: { userId?: string }) 
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
   const notificationScope = 'owner' as const;
   const autoOpenedRef = useRef(false);
-  const [prefs, setPrefs] = useState<NotificationPrefs>({
+  const [_prefs, setPrefs] = useState<NotificationPrefs>({
     notify_news_updates: false,
     notify_reminders_events: true,
     notify_promotions_offers: false,

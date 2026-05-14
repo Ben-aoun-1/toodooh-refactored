@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { MapContainer, TileLayer, Circle, useMapEvents, Marker, Popup } from 'react-leaflet';
 import 'react-datepicker/dist/react-datepicker.css';
 import 'leaflet/dist/leaflet.css';
@@ -46,6 +46,7 @@ import ariane6 from '../assets/ariane/6.png';
 import ariane6s from '../assets/ariane/6s.png';
 import panierPng from '../assets/panier.png';
 import { useAdvertiserGlobalConfig } from '../hooks/useAdvertiserGlobalConfig';
+import { getErrorMessage } from '../lib/errors';
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { authService } from '../services/auth.service';
@@ -71,7 +72,6 @@ import {
 import { useAuthStore } from '../stores/auth.store';
 import type { BusinessSector } from '../types/auth';
 import type { SpecialEvent } from '../types/event';
-import { getErrorMessage } from '../lib/errors';
 
 const log = logger.child({ module: 'NewCampaign' });
 
@@ -95,10 +95,6 @@ const categoryMultipliers = {
   'Annonce institutionnelle': 1.5,
 };
 
-const containerStyle = {
-  width: '100%',
-  height: '400px',
-};
 
 const center = {
   lat: 36.8065,
@@ -166,7 +162,7 @@ export default function NewCampaign() {
 
   const navigate = useNavigate();
   const location = useLocation();
-  const { profileType, user } = useAuthStore();
+  const { profileType } = useAuthStore();
 
   // Détecter le mode édition
   const editMode = location.state?.editMode || false;
@@ -198,8 +194,8 @@ export default function NewCampaign() {
       ? { lat: campaignToEdit.location_lat, lng: campaignToEdit.location_lng }
       : center,
   );
-  const [radius, setRadius] = useState(campaignToEdit?.location_radius || 1000);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [radius, _setRadius] = useState(campaignToEdit?.location_radius || 1000);
+  const [_searchQuery, _setSearchQuery] = useState('');
   const [selectedVideo, setSelectedVideo] = useState<File | null>(null);
   const [currentStep, setCurrentStep] = useState(1);
   const [diffusionType, setDiffusionType] = useState<'toodooh' | 'parc_tv'>('toodooh');
@@ -234,9 +230,9 @@ export default function NewCampaign() {
   const [dateTouched, setDateTouched] = useState<{ [key: string]: boolean }>({});
 
   // États pour les écrans / localités (zone unique : localités dans le cercle)
-  const [allScreens, setAllScreens] = useState<CampaignScreen[]>([]);
-  const [locationsInZone, setLocationsInZone] = useState<CampaignLocation[]>([]);
-  const [loadingScreens, setLoadingScreens] = useState(false);
+  const [_allScreens, setAllScreens] = useState<CampaignScreen[]>([]);
+  const [_locationsInZone, setLocationsInZone] = useState<CampaignLocation[]>([]);
+  const [_loadingScreens, setLoadingScreens] = useState(false);
 
   // États pour la gestion multi-zones (ciblage par localités : une entrée par localité sur la carte)
   interface GeographicZone {
@@ -266,10 +262,10 @@ export default function NewCampaign() {
 
   // Ajout d'un état pour le budget slider (avec bornes min/max)
   const BUDGET_MIN = 0;
-  const [budget, setBudget] = useState(BUDGET_MIN);
+  const [_budget, _setBudget] = useState(BUDGET_MIN);
   const [adjustedBudget, setAdjustedBudget] = useState(BUDGET_MIN);
   const [calculatedImpressions, setCalculatedImpressions] = useState(0);
-  const [budgetPercentage, setBudgetPercentage] = useState(100); // Pourcentage du budget (0-100%)
+  const [_budgetPercentage, setBudgetPercentage] = useState(100); // Pourcentage du budget (0-100%)
   const [customMinBudget, setCustomMinBudget] = useState<number | null>(null);
   const [customMaxBudget, setCustomMaxBudget] = useState<number | null>(null);
   const [unavailabilityPeriods, setUnavailabilityPeriods] = useState<UnavailabilityPeriod[]>([]);
@@ -296,7 +292,7 @@ export default function NewCampaign() {
     () => geographicZones.flatMap((zone) => zone.locations || []),
     [geographicZones],
   );
-  const nbLocationsSelected = allSelectedLocations.length;
+
   const nbEcransSelected = allSelectedLocations.reduce((s, loc) => s + (loc.screen_count || 0), 0);
 
   const selectedParcScreenIds = useMemo(() => {
@@ -386,10 +382,6 @@ export default function NewCampaign() {
   );
 
   const nbImpressions = doohMaxImpressions;
-  const displayScreenCount =
-    effectiveScreenIds.length > 0 ? effectiveScreenIds.length : nbEcransSelected;
-  const impressionsParEcran =
-    displayScreenCount > 0 ? Math.round(nbImpressions / displayScreenCount) : 0;
 
   // Calcul du prix total : (Nombre d'impressions / 1000) × CPM (potentiel max sur la sélection)
   const prixTotal = nbImpressions > 0 ? Math.round((nbImpressions / 1000) * cpmTnd * 100) / 100 : 0;
@@ -436,14 +428,11 @@ export default function NewCampaign() {
     };
   }, [radius, formData.categories, formData.budget, startDate, endDate]);
 
-  const handleLocationSelect = (lat: number, lng: number) => {
-    setSelectedLocation({ lat, lng });
-  };
 
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [uploadedVideoUrl, setUploadedVideoUrl] = useState<string>('');
-  const [uploadedVideoPath, setUploadedVideoPath] = useState<string>('');
+  const [_uploadedVideoPath, setUploadedVideoPath] = useState<string>('');
   const [uploadedVideoId, setUploadedVideoId] = useState<string>('');
   const [draftCampaignId, setDraftCampaignId] = useState<string>(
     editMode && campaignToEdit?.id ? campaignToEdit.id : '',
@@ -454,7 +443,7 @@ export default function NewCampaign() {
   // TODO(phase-1): typed source [supabase] — see #15
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [selectedExistingVideo, setSelectedExistingVideo] = useState<any>(null);
-  const [videoTab, setVideoTab] = useState<'upload' | 'existing'>('existing');
+  const [_videoTab, setVideoTab] = useState<'upload' | 'existing'>('existing');
   const MAX_VIDEO_DURATION_SECONDS = 30;
   const [showPostCartStep, setShowPostCartStep] = useState(false);
   const [recommendedEvents, setRecommendedEvents] = useState<SpecialEvent[]>([]);
@@ -550,7 +539,7 @@ export default function NewCampaign() {
   ]);
 
   // États pour les événements spéciaux
-  const [detectedEvents, setDetectedEvents] = useState<SpecialEvent[]>([]);
+  const [detectedEvents, _setDetectedEvents] = useState<SpecialEvent[]>([]);
   const [showEventsModal, setShowEventsModal] = useState(false);
   const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
 
@@ -629,7 +618,7 @@ export default function NewCampaign() {
     return base;
   }, [campaignCategories, formData.categories]);
 
-  const saveCampaignDraft = async (videoId?: string, isVideoValidated: boolean = false) => {
+  const saveCampaignDraft = async (videoId?: string, _isVideoValidated: boolean = false) => {
     try {
       // Validation des champs obligatoires
       if (!formData.campaignName || formData.campaignName.trim() === '') {
@@ -967,104 +956,6 @@ export default function NewCampaign() {
   };
 
   // Fonction pour calculer les heures d'indisponibilité par jour en moyenne (écrans des localités sélectionnées)
-  const calculateUnavailableHoursPerDay = useMemo(() => {
-    if (
-      !startDate ||
-      !endDate ||
-      effectiveScreenIds.length === 0 ||
-      unavailabilityPeriods.length === 0
-    ) {
-      return 0;
-    }
-    const totalDays = Math.max(
-      1,
-      Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)),
-    );
-    let totalUnavailableHours = 0;
-    const screenIdSet = new Set(effectiveScreenIds);
-    const periodsByScreen = new Map<string, UnavailabilityPeriod[]>();
-    unavailabilityPeriods.forEach((period) => {
-      if (screenIdSet.has(period.screen_id)) {
-        if (!periodsByScreen.has(period.screen_id)) {
-          periodsByScreen.set(period.screen_id, []);
-        }
-        periodsByScreen.get(period.screen_id)!.push(period);
-      }
-    });
-
-    // Pour chaque écran, calculer les heures d'indisponibilité
-    periodsByScreen.forEach((periods, screenId) => {
-      const campaignStart = new Date(startDate);
-      campaignStart.setHours(0, 0, 0, 0);
-      const campaignEnd = new Date(endDate);
-      campaignEnd.setHours(23, 59, 59, 999);
-
-      // Pour chaque jour de la campagne, calculer les heures d'indisponibilité
-      for (let day = 0; day < totalDays; day++) {
-        const currentDay = new Date(campaignStart);
-        currentDay.setDate(currentDay.getDate() + day);
-        const dayStart = new Date(currentDay);
-        dayStart.setHours(0, 0, 0, 0);
-        const dayEnd = new Date(currentDay);
-        dayEnd.setHours(23, 59, 59, 999);
-
-        // Trouver toutes les périodes d'indisponibilité qui chevauchent ce jour
-        let dayUnavailableHours = 0;
-        const dayPeriods: Array<{ start: number; end: number }> = [];
-
-        periods.forEach((period) => {
-          const periodStart = new Date(`${period.start_date}T${period.start_time}`);
-          const periodEnd = new Date(`${period.end_date}T${period.end_time}`);
-
-          // Si la période chevauche ce jour
-          if (periodEnd >= dayStart && periodStart <= dayEnd) {
-            const overlapStart = periodStart > dayStart ? periodStart : dayStart;
-            const overlapEnd = periodEnd < dayEnd ? periodEnd : dayEnd;
-
-            // Convertir en heures du jour (0-24)
-            const startHour = overlapStart.getHours() + overlapStart.getMinutes() / 60;
-            const endHour = overlapEnd.getHours() + overlapEnd.getMinutes() / 60;
-
-            dayPeriods.push({ start: startHour, end: endHour });
-          }
-        });
-
-        // Fusionner les périodes qui se chevauchent et calculer le total
-        if (dayPeriods.length > 0) {
-          // Trier par heure de début
-          dayPeriods.sort((a, b) => a.start - b.start);
-
-          // Fusionner les périodes qui se chevauchent
-          const merged: Array<{ start: number; end: number }> = [];
-          dayPeriods.forEach((period) => {
-            if (merged.length === 0) {
-              merged.push({ ...period });
-            } else {
-              const last = merged[merged.length - 1];
-              if (period.start <= last.end) {
-                // Chevauchement : fusionner
-                last.end = Math.max(last.end, period.end);
-              } else {
-                // Pas de chevauchement : ajouter
-                merged.push({ ...period });
-              }
-            }
-          });
-
-          // Calculer le total des heures d'indisponibilité pour ce jour
-          merged.forEach((period) => {
-            dayUnavailableHours += period.end - period.start;
-          });
-        }
-
-        totalUnavailableHours += dayUnavailableHours;
-      }
-    });
-
-    return totalDays > 0 && effectiveScreenIds.length > 0
-      ? totalUnavailableHours / (totalDays * effectiveScreenIds.length)
-      : 0;
-  }, [startDate, endDate, effectiveScreenIds.length, effectiveScreenIdsKey, unavailabilityPeriods]);
 
   // Dériver les IDs d'écrans des localités sélectionnées (pour indisponibilités)
   useEffect(() => {
@@ -1136,134 +1027,6 @@ export default function NewCampaign() {
   }, [adjustedBudget, calculateBudgetAndImpressions.impressions, cpmTnd]);
 
   /** Snapshot sérialisable : tout ce qui alimente l’étape Validation (étapes précédentes + moteur DOOH). */
-  const validationStepDebugSnapshot = useMemo(() => {
-    const locSource =
-      freshLocationsForEstimate.length > 0 ? freshLocationsForEstimate : allSelectedLocations;
-    const wizMap = buildWizardLocationScheduleMap(locSource);
-    const summarizeLocation = (l: CampaignLocation) => ({
-      id: l.id,
-      name: l.name,
-      screen_count: l.screen_count,
-      affluence_schedule_rows: l.affluence_schedule?.length ?? 0,
-    });
-    return {
-      capturedAt: new Date().toISOString(),
-      context: {
-        editMode,
-        draftCampaignId: draftCampaignId || null,
-        isEventCampaign,
-        eventId: (eventFromState?.id ?? campaignToEdit?.event_id ?? null) as string | null,
-      },
-      formData,
-      diffusion: {
-        diffusionType,
-        selectedParcIds,
-        selectedParcs: availableParcs
-          .filter((p) => selectedParcIds.includes(p.ownerId))
-          .map((p) => ({ ownerId: p.ownerId, name: p.name, screenCount: p.screenCount })),
-      },
-      dates: {
-        startDate: startDate?.toISOString() ?? null,
-        endDate: endDate?.toISOString() ?? null,
-        nbJours,
-      },
-      carteAncienne: { selectedLocation, radius },
-      geographicZones: geographicZones.map((z) => ({
-        id: z.id,
-        name: z.name,
-        radius: z.radius,
-        lat: z.location.lat,
-        lng: z.location.lng,
-        locationCount: z.locations?.length ?? 0,
-        predefinedZoneId: z.predefinedZoneId ?? null,
-      })),
-      localitesEtEcrans: {
-        allSelectedLocations: allSelectedLocations.map(summarizeLocation),
-        freshLocationsForEstimate: freshLocationsForEstimate.map(summarizeLocation),
-        estimateLocationIds,
-        screenIdsFromSelectedLocations,
-        effectiveScreenIds,
-        wizardLocationScheduleByLoc: [...wizMap.entries()].map(([id, slots]) => ({
-          location_id: id,
-          somme_estimated_impressions_hebdo: slots.reduce((a, s) => a + s.estimated_impressions, 0),
-          creneaux: slots.map((s) => ({
-            day_of_week: s.day_of_week,
-            hour: s.hour,
-            estimated_impressions: s.estimated_impressions,
-          })),
-        })),
-      },
-      indisponibilites: unavailabilityPeriods.map((p) => ({
-        screen_id: p.screen_id,
-        start_date: p.start_date,
-        end_date: p.end_date,
-        start_time: p.start_time,
-        end_time: p.end_time,
-      })),
-      video: {
-        uploadedVideoId: uploadedVideoId || null,
-        uploadedVideoPath: uploadedVideoPath || null,
-        uploadedVideoUrl: uploadedVideoUrl ? '(présent)' : null,
-        selectedExistingVideo: selectedExistingVideo
-          ? {
-              id: selectedExistingVideo.id,
-              duration_seconds: selectedExistingVideo.duration_seconds ?? null,
-            }
-          : null,
-      },
-      budget: {
-        adjustedBudget,
-        cpmTnd,
-        customMinBudget,
-        customMaxBudget,
-      },
-      moteurDooh: {
-        doohMaxImpressions,
-        doohEstimateLoading,
-        doohEstimateError,
-        impressionsForCurrentBudget,
-        impressionsMaxSelection: calculateBudgetAndImpressions.impressions,
-      },
-      configGlobaleDooh: { ...dooh },
-      campaignEstimationsHeuristiques: campaignEstimations,
-    };
-  }, [
-    freshLocationsForEstimate,
-    allSelectedLocations,
-    editMode,
-    draftCampaignId,
-    isEventCampaign,
-    eventFromState?.id,
-    campaignToEdit?.event_id,
-    formData,
-    diffusionType,
-    selectedParcIds,
-    availableParcs,
-    startDate,
-    endDate,
-    nbJours,
-    selectedLocation,
-    radius,
-    geographicZones,
-    estimateLocationIds,
-    screenIdsFromSelectedLocations,
-    effectiveScreenIds,
-    unavailabilityPeriods,
-    uploadedVideoId,
-    uploadedVideoPath,
-    uploadedVideoUrl,
-    selectedExistingVideo,
-    adjustedBudget,
-    cpmTnd,
-    customMinBudget,
-    customMaxBudget,
-    doohMaxImpressions,
-    doohEstimateLoading,
-    doohEstimateError,
-    impressionsForCurrentBudget,
-    dooh,
-    campaignEstimations,
-  ]);
 
   // Mettre à jour les impressions calculées quand le budget change
   useEffect(() => {
@@ -1390,51 +1153,6 @@ export default function NewCampaign() {
   };
 
   // Fonction pour vérifier les événements spéciaux durant la période
-  const checkSpecialEvents = async (start: Date | null, end: Date | null) => {
-    if (!start || !end) {
-      return;
-    }
-
-    try {
-      // Récupérer tous les événements actifs
-      const { data, error } = await supabase
-        .from('special_events')
-        .select('*')
-        .eq('is_active', true);
-
-      if (error) {
-        log.error({ error }, '❌ Erreur lors de la récupération des événements');
-        log.error({ message: error.message, details: error.details, hint: error.hint }, 'Détails');
-        return;
-      }
-
-      if (!data || data.length === 0) {
-        return;
-      }
-
-      // Filtrer les événements qui chevauchent la période de la campagne
-      const overlappingEvents = data.filter((event) => {
-        const eventStart = new Date(event.start_date);
-        const eventEnd = new Date(event.end_date);
-        const campaignStart = start;
-        const campaignEnd = end;
-
-        // Vérifier le chevauchement
-        const hasOverlap = eventStart <= campaignEnd && eventEnd >= campaignStart;
-
-        return hasOverlap;
-      });
-
-      if (overlappingEvents.length > 0) {
-        setDetectedEvents(overlappingEvents);
-        setShowEventsModal(true);
-      } else {
-        setDetectedEvents([]);
-      }
-    } catch (error) {
-      log.error({ error }, '❌ Exception lors de la vérification des événements');
-    }
-  };
 
   const loadRecommendedEventsForSelectedPeriod = useCallback(async () => {
     if (!startDate || !endDate) {
@@ -1573,9 +1291,6 @@ export default function NewCampaign() {
     return !Object.values(newErrors).some((error) => error !== '');
   };
 
-  // TODO(phase-1): typed source [supabase] — see #15
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const mapRef = useRef<any>(null);
 
   // Charger les écrans au montage du composant
   useEffect(() => {
@@ -1888,7 +1603,7 @@ export default function NewCampaign() {
         setLoadingPredefinedZones(true);
         const zones = await predefinedZonesService.getAll();
         setPredefinedZones(zones);
-      } catch (error) {
+      } catch (_error) {
         toast.error('Impossible de charger les zones prédéfinies');
       } finally {
         setLoadingPredefinedZones(false);
@@ -1966,22 +1681,8 @@ export default function NewCampaign() {
   };
 
   // Ouvrir la modal pour ajouter une nouvelle zone
-  const handleAddNewZone = () => {
-    setEditingZone(null);
-    setTempZoneLocation(center);
-    setTempZoneRadius(1000);
-    setTempZoneSearchQuery('');
-    setShowZoneModal(true);
-  };
 
   // Ouvrir la modal pour éditer une zone existante
-  const handleEditZone = (zone: GeographicZone) => {
-    setEditingZone(zone);
-    setTempZoneLocation(zone.location);
-    setTempZoneRadius(zone.radius);
-    setTempZoneSearchQuery('');
-    setShowZoneModal(true);
-  };
 
   // Sauvegarder une zone (nouvelle ou éditée)
   const handleSaveZone = () => {
@@ -2043,35 +1744,6 @@ export default function NewCampaign() {
   }, []);
 
   // Fonction de recherche améliorée pour la Tunisie
-  const handleSearch = async () => {
-    const query = searchQuery.trim().toLowerCase();
-
-    // Recherche dans les villes tunisiennes
-    const city = TUNISIA_CITIES.find(
-      (c) => c.name.toLowerCase().includes(query) || query.includes(c.name.toLowerCase()),
-    );
-
-    if (city) {
-      setSelectedLocation({ lat: city.lat, lng: city.lng });
-      if (mapRef.current) mapRef.current.setView([city.lat, city.lng], 13);
-      return;
-    }
-
-    // Sinon, géocodage Nominatim avec restriction à la Tunisie
-    try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery + ', Tunisie')}&countrycodes=tn&limit=1`,
-      );
-      const data = await res.json();
-      if (data && data.length > 0) {
-        const { lat, lon } = data[0];
-        setSelectedLocation({ lat: parseFloat(lat), lng: parseFloat(lon) });
-        if (mapRef.current) mapRef.current.setView([parseFloat(lat), parseFloat(lon)], 13);
-      }
-    } catch (e) {
-      log.error({ e }, 'Erreur lors de la recherche géographique');
-    }
-  };
 
   // Suggestions de villes tunisiennes
   const getCitySuggestions = (query: string) => {
@@ -3566,7 +3238,7 @@ export default function NewCampaign() {
                               duration: 5000,
                             });
                             toast(
-                              (t) => (
+                              (_t) => (
                                 <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
                                   <p className="font-bold text-yellow-800 mb-2">
                                     Votre campagne est sauvegardée en brouillon

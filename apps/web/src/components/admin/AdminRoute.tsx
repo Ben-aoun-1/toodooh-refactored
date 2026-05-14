@@ -8,7 +8,10 @@ interface AdminRouteProps {
   requiredRoles?: string[];
 }
 
-export default function AdminRoute({ children, requiredRoles = [] }: AdminRouteProps) {
+export default function AdminRoute({
+  children,
+  requiredRoles: _requiredRoles = [],
+}: AdminRouteProps) {
   const { admin, initialized, initialize, loading } = useAdminStore();
 
   useEffect(() => {

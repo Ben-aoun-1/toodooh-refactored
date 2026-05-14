@@ -925,13 +925,7 @@ export const campaignService = {
           '📋 Aucune ligne à afficher : tous les créneaux ont 0 impression facturable (événement, indispo, occupation, ou pas d’affluence sur ce (jour, heure)).',
         );
       } else {
-        const maxLines = 40;
-        const lines = planningTableParCreneau
-          .slice(0, maxLines)
-          .map(
-            (r) =>
-              `  ${r.localite_id} | ${r.jour} | h ${String(r.heure).padStart(2, '0')} | rph ${r.repetitions_par_heure} | imp ${r.impressions_a_generer}`,
-          );
+
       }
 
       // Calculer le total des répétitions par heure (pour vérification)
@@ -954,14 +948,11 @@ export const campaignService = {
 
         // TODO(phase-1): typed source [supabase] — see #15
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let updateData: any = null;
-        // TODO(phase-1): typed source [supabase] — see #15
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let screenUpdateError: any = null;
 
         if (existingScreen && !checkError) {
           // L'écran existe, utiliser UPDATE
-          const { data, error } = await supabase
+          const { error } = await supabase
             .from('campaign_screens')
             .update({
               repetitions_per_hour: schedule.repetitions_per_hour,
@@ -975,7 +966,6 @@ export const campaignService = {
             .select()
             .single();
 
-          updateData = data;
           screenUpdateError = error;
         } else {
           // L'écran n'existe pas, mais normalement il devrait exister

@@ -10,7 +10,7 @@ import {
   Frown,
   Loader2,
 } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
@@ -89,11 +89,6 @@ export default function CartPage() {
     }
   };
 
-  const clearCart = () => {
-    localStorage.setItem(CART_STORAGE_KEY, JSON.stringify([]));
-    setCartItems([]);
-    window.dispatchEvent(new CustomEvent('toodooh:cart-updated', { detail: {} }));
-  };
 
   const handleConfirmAndLaunch = async () => {
     if (cartItems.length === 0) return;

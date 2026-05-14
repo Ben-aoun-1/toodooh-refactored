@@ -113,7 +113,7 @@ export default function AddScreen({ isOpen, onClose, onScreenAdded }: AddScreenP
       }
 
       // Créer l'écran via le service
-      const newScreen = await screensService.createScreen(screenData);
+      await screensService.createScreen(screenData);
 
       toast.success('Écran ajouté avec succès !');
 

@@ -15,7 +15,7 @@ import {
   TrendingUp,
   X,
 } from 'lucide-react';
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -479,7 +479,7 @@ export default function OwnerCampaigns() {
 
         setBrokenLogoCampaignIds(new Set());
         setCampaigns(cards.filter((c) => c.ownerLocationsCount > 0 || c.ownerScreensCount > 0));
-      } catch (error) {
+      } catch (_error) {
         toast.error('Impossible de charger les campagnes');
         setCampaigns([]);
       } finally {
@@ -597,7 +597,7 @@ export default function OwnerCampaigns() {
       );
       setSelectedCampaign((prev) => (prev ? { ...prev, approvalStatus: 'approved' } : prev));
       setShowApprovalSuccessModal(true);
-    } catch (error) {
+    } catch (_error) {
       toast.error('Impossible d’accepter la campagne');
     } finally {
       setProcessingDecision(null);
@@ -616,7 +616,7 @@ export default function OwnerCampaigns() {
       toast.success('Campagne refusée');
       setShowRejectConfirmModal(false);
       closeDetailsDrawer();
-    } catch (error) {
+    } catch (_error) {
       toast.error('Impossible de refuser la campagne');
     } finally {
       setProcessingDecision(null);

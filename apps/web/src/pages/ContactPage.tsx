@@ -27,7 +27,7 @@ interface ContactForm {
 
 export default function ContactPage() {
   const navigate = useNavigate();
-  const { user, profileType, contactName } = useAuthStore();
+  const { user, contactName } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [formData, setFormData] = useState<ContactForm>({

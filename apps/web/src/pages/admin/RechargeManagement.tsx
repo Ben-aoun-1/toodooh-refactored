@@ -12,10 +12,11 @@ import {
   Filter,
   Plus,
 } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 
 import AdminLayout from '../../components/admin/AdminLayout';
+import { getErrorMessage, isErrorWithCode } from '../../lib/errors';
 import { logger } from '../../lib/logger';
 import { supabase } from '../../lib/supabase';
 import {
@@ -24,7 +25,6 @@ import {
   type RechargeStats,
 } from '../../services/admin-recharges.service';
 import { useAdminStore } from '../../stores/admin.store';
-import { getErrorMessage, isErrorWithCode } from '../../lib/errors';
 
 const log = logger.child({ module: 'RechargeManagement' });
 
@@ -152,7 +152,7 @@ export default function RechargeManagement() {
       setValidationNotes('');
       setSelectedRecharge(null);
       loadData();
-    } catch (error) {
+    } catch (_error) {
       toast.error('Erreur lors de la validation');
     }
   };
@@ -171,7 +171,7 @@ export default function RechargeManagement() {
       setRejectReason('');
       setSelectedRecharge(null);
       loadData();
-    } catch (error) {
+    } catch (_error) {
       toast.error('Erreur lors du rejet');
     }
   };
@@ -193,7 +193,7 @@ export default function RechargeManagement() {
       const amount = parseFloat(newRecharge.amount);
 
       // Créer la recharge
-      const { data: recharge, error } = await supabase
+      const { data: error } = await supabase
         .from('recharges')
         .insert({
           user_id: newRecharge.user_id,

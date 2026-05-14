@@ -3,8 +3,8 @@ import React, { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
-import { authService } from '../../services/auth.service';
 import { getErrorMessage } from '../../lib/errors';
+import { authService } from '../../services/auth.service';
 
 export default function UpdatePasswordForm() {
   const navigate = useNavigate();

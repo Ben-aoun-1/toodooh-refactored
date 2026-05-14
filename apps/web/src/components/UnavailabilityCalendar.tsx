@@ -8,7 +8,7 @@ interface Screen {
   location: string;
 }
 
-interface UnavailabilityPeriod {
+interface _UnavailabilityPeriod {
   screenId: string;
   startDate: string;
   endDate: string;
@@ -68,7 +68,7 @@ export default function UnavailabilityCalendar({
 
       // Fermer le modal
       onClose();
-    } catch (error) {
+    } catch (_error) {
       toast.error("Erreur lors de la déclaration d'indisponibilité");
     } finally {
       setIsSubmitting(false);

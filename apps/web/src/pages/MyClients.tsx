@@ -121,7 +121,7 @@ export default function MyClients() {
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
       setClients(data || []);
-    } catch (error) {
+    } catch (_error) {
       toast.error("Erreur lors de l'ajout du client");
     }
   };
@@ -147,7 +147,7 @@ export default function MyClients() {
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
       setClients(data || []);
-    } catch (error) {
+    } catch (_error) {
       toast.error('Erreur lors de la modification du client');
     }
   };
@@ -171,7 +171,7 @@ export default function MyClients() {
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
       setClients(data || []);
-    } catch (error) {
+    } catch (_error) {
       toast.error('Erreur lors de la suppression du client');
     }
   };

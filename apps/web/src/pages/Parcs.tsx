@@ -1,5 +1,5 @@
 import { Monitor, MapPin, Crosshair, TrendingUp } from 'lucide-react';
-import React from 'react';
+
 
 const CARREFOUR_LOGO = 'https://back.carrefour.tn/media/logos/logo_car_25.png';
 
