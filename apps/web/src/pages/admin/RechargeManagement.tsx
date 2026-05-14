@@ -193,7 +193,7 @@ export default function RechargeManagement() {
       const amount = parseFloat(newRecharge.amount);
 
       // Créer la recharge
-      const { data: error } = await supabase
+      const { error } = await supabase
         .from('recharges')
         .insert({
           user_id: newRecharge.user_id,
