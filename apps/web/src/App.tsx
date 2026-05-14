@@ -16,6 +16,9 @@ const Events = lazy(() => import('./pages/Events'));
 const MyRecharges = lazy(() => import('./pages/MyRecharges'));
 const MyInvoices = lazy(() => import('./pages/MyInvoices'));
 const MyClients = lazy(() => import('./pages/MyClients'));
+const AdvertiserPerformancePlaceholder = lazy(
+  () => import('./pages/AdvertiserPerformancePlaceholder'),
+);
 const CartPage = lazy(() => import('./pages/CartPage'));
 const OwnerDashboard = lazy(() => import('./pages/OwnerDashboard'));
 const CampaignDetails = lazy(() => import('./pages/CampaignDetails'));
@@ -286,6 +289,16 @@ export default function App() {
                 <AdvertiserRoute>
                   <AdvertiserLayout>
                     <MyClients />
+                  </AdvertiserLayout>
+                </AdvertiserRoute>
+              }
+            />
+            <Route
+              path="/perfor"
+              element={
+                <AdvertiserRoute>
+                  <AdvertiserLayout>
+                    <AdvertiserPerformancePlaceholder />
                   </AdvertiserLayout>
                 </AdvertiserRoute>
               }

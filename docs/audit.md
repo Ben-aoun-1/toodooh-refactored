@@ -81,6 +81,17 @@ _As of commit `00d464e` (post-Step-6 typing pass + no-empty cleanup + regression
   placeholder for advertiser-side location functionality that should be reimplemented (likely by reusing
   `OwnerLocations` components).
 
+**Step 7 disposition (resolved with CTO, 2026-05-14):**
+
+- `Perfor.tsx` — deletion stands (implementation was bad), but the **page itself is in scope** per
+  Figma `Performances.png`. Sidebar entry "Mes performances" restored pointing at `/perfor`, with a
+  placeholder route (`pages/AdvertiserPerformancePlaceholder.tsx`) until the full rebuild lands. Full
+  rebuild tracked in **#19**.
+- `Parcs.tsx` — sidebar entry disposition (campaign-targeting mode entry point vs standalone listing
+  page) is **deferred** pending product decision. Current state (entry removed in Step 7 Commit 3
+  `843498d`) is the working assumption until resolved. Revisit when picking up the next round of
+  routing work.
+
 **Dashboard-coupled page files** — imported only by `Dashboard.tsx`, which switches on `useLocation()`
 to render them for its 12 routes: `CartPage.tsx`, `MyCampaigns.tsx`, `MyInvoices.tsx`, `MyClients.tsx`,
 `MyRecharges.tsx`, `UserProfile.tsx`, `Events.tsx`, `Onboarding.tsx` (plus `NewCampaign.tsx`). Untangled

@@ -13,6 +13,8 @@ import campagneIconActive from '../../assets/sidebar/campagness.png';
 import dashboardIcon from '../../assets/sidebar/dashboard.png';
 import dashboardIconActive from '../../assets/sidebar/dashboards.png';
 import logoCompany from '../../assets/sidebar/logo.png';
+import performanceIcon from '../../assets/sidebar/performance.png';
+import performanceIconActive from '../../assets/sidebar/performances.png';
 import financeIcon from '../../assets/sidebar/portefeuille.png';
 import financeIconActive from '../../assets/sidebar/portefeuilles.png';
 import supportIcon from '../../assets/support.png';
@@ -83,7 +85,11 @@ function AdvertiserLayoutChrome({ children, userName }: AdvertiserLayoutProps) {
               }`}
             >
               {sidebarExpanded ? (
-                <img src={logoImage} alt="Logo" className="h-10 w-auto max-w-[178px] object-contain" />
+                <img
+                  src={logoImage}
+                  alt="Logo"
+                  className="h-10 w-auto max-w-[178px] object-contain"
+                />
               ) : (
                 <img src={logoCompany} alt="Logo" className="w-10 h-10 object-contain" />
               )}
@@ -94,7 +100,11 @@ function AdvertiserLayoutChrome({ children, userName }: AdvertiserLayoutProps) {
               className="flex-shrink-0 p-2 rounded-lg text-[#5C5C5C] hover:bg-gray-100 transition-colors hidden lg:flex"
               title={sidebarExpanded ? 'Réduire le menu' : 'Ouvrir le menu'}
             >
-              {sidebarExpanded ? <ChevronLeft className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
+              {sidebarExpanded ? (
+                <ChevronLeft className="h-5 w-5" />
+              ) : (
+                <ChevronRight className="h-5 w-5" />
+              )}
             </button>
             <button
               type="button"
@@ -142,6 +152,15 @@ function AdvertiserLayoutChrome({ children, userName }: AdvertiserLayoutProps) {
             disabled={isDisabled}
             onNavigate={() => setIsMenuOpen(false)}
           />
+          <SidebarNavItem
+            path="/perfor"
+            label="Mes performances"
+            activeIcon={performanceIconActive}
+            inactiveIcon={performanceIcon}
+            expanded={sidebarExpanded}
+            disabled={isDisabled}
+            onNavigate={() => setIsMenuOpen(false)}
+          />
           {showClientsLink && (
             <button
               onClick={() => {
@@ -185,9 +204,7 @@ function AdvertiserLayoutChrome({ children, userName }: AdvertiserLayoutProps) {
                 ? 'w-full max-w-[232px] px-3 py-2 gap-3'
                 : 'w-10 justify-center mx-auto'
             } ${
-              isProfileRoute
-                ? 'bg-[#E6F7ED] text-[#132B1B]'
-                : 'text-[#5C5C5C] hover:bg-gray-100/80'
+              isProfileRoute ? 'bg-[#E6F7ED] text-[#132B1B]' : 'text-[#5C5C5C] hover:bg-gray-100/80'
             }`}
           >
             <img
