@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 
 import AnimatedLogo from '../../components/AnimatedLogo';
 import { useAdminStore } from '../../stores/admin.store';
+import { isErrorWithCode } from '../../lib/errors';
 
 export default function AdminLogin() {
   const navigate = useNavigate();
@@ -26,8 +27,9 @@ export default function AdminLogin() {
       await login(formData.email, formData.password);
       toast.success('Connexion réussie');
       navigate('/admin-dashboard');
-    } catch (error: any) {
-      toast.error(error.message || 'Erreur de connexion');
+    } catch (error) {
+      const _err = isErrorWithCode(error) ? error : null;
+      toast.error(_err?.message || 'Erreur de connexion');
     }
   };
 

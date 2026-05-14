@@ -2,6 +2,7 @@ import { Plus, X, Save, Info } from 'lucide-react';
 import React, { useState } from 'react';
 import { toast } from 'react-hot-toast';
 
+import { isErrorWithCode } from '../lib/errors';
 import { logger } from '../lib/logger';
 import { screensService, CreateScreenData } from '../services/screens.service';
 
@@ -144,14 +145,9 @@ export default function AddScreen({ isOpen, onClose, onScreenAdded }: AddScreenP
 
       if (error instanceof Error) {
         errorMessage = error.message;
-      } else if (typeof error === 'object' && error !== null) {
-        // Si c'est un objet d'erreur Supabase
-        const supabaseError = error as any;
-        if (supabaseError.message) {
-          errorMessage = supabaseError.message;
-        } else if (supabaseError.details) {
-          errorMessage = supabaseError.details;
-        }
+      } else if (isErrorWithCode(error)) {
+        // Erreur Supabase (forme `{ code, message, details?, hint? }`)
+        errorMessage = error.message || error.details || errorMessage;
       }
 
       toast.error(errorMessage);

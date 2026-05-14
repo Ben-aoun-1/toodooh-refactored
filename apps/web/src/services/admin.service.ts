@@ -1,6 +1,7 @@
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { AdminProfile, AdminSignUpData, AdminDashboardStats, AdminActivity } from '../types/admin';
+import { isErrorWithCode } from '../lib/errors';
 
 const log = logger.child({ module: 'admin.service' });
 
@@ -64,8 +65,9 @@ export const adminService = {
         .eq('id', adminProfile.id);
 
       return adminProfile;
-    } catch (error: any) {
-      throw new Error(error.message || 'Erreur de connexion');
+    } catch (error) {
+      const _err = isErrorWithCode(error) ? error : null;
+      throw new Error(_err?.message || 'Erreur de connexion');
     }
   },
 
@@ -73,7 +75,7 @@ export const adminService = {
     try {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
-    } catch (error: any) {
+    } catch (error) {
       throw new Error('Erreur lors de la déconnexion');
     }
   },
@@ -155,7 +157,7 @@ export const adminService = {
       }
 
       return adminProfile;
-    } catch (error: any) {
+    } catch (error) {
       throw new Error(mapAdminError(error));
     }
   },
@@ -169,7 +171,7 @@ export const adminService = {
 
       if (error) throw error;
       return data || [];
-    } catch (error: any) {
+    } catch (error) {
       throw new Error('Erreur lors de la récupération des administrateurs');
     }
   },
@@ -185,7 +187,7 @@ export const adminService = {
 
       if (error) throw error;
       return data;
-    } catch (error: any) {
+    } catch (error) {
       throw new Error("Erreur lors de la mise à jour de l'administrateur");
     }
   },
@@ -198,7 +200,7 @@ export const adminService = {
         .eq('id', id);
 
       if (error) throw error;
-    } catch (error: any) {
+    } catch (error) {
       throw new Error("Erreur lors de la suppression de l'administrateur");
     }
   },
@@ -211,7 +213,7 @@ export const adminService = {
         .eq('id', id);
 
       if (error) throw error;
-    } catch (error: any) {
+    } catch (error) {
       throw new Error("Erreur lors de la réactivation de l'administrateur");
     }
   },
@@ -269,7 +271,7 @@ export const adminService = {
         pendingVerifications: verificationsResult.count || 0,
         activeCampaigns: campaignsResult.count || 0,
       };
-    } catch (error: any) {
+    } catch (error) {
       log.error({ error }, 'Error getting dashboard stats');
       return {
         totalUsers: 0,
@@ -303,7 +305,7 @@ export const adminService = {
 
       if (error) throw error;
       return data || [];
-    } catch (error: any) {
+    } catch (error) {
       throw new Error('Erreur lors de la récupération des activités');
     }
   },

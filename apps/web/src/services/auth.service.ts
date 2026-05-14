@@ -10,6 +10,7 @@ import {
   CompanySizeOption,
   SupportObjectiveOption,
 } from '../types/auth';
+import { isErrorWithCode } from '../lib/errors';
 
 const log = logger.child({ module: 'auth.service' });
 
@@ -255,9 +256,10 @@ export const authService = {
         return null;
       }
       return user;
-    } catch (error: any) {
+    } catch (error) {
+      const _err = isErrorWithCode(error) ? error : null;
       // Ne pas logger les erreurs de session manquante
-      if (error.message !== 'Auth session missing!') {
+      if (_err?.message !== 'Auth session missing!') {
         log.error({ error }, 'Error in getCurrentUser');
       }
       return null;
@@ -699,15 +701,17 @@ export const authService = {
 
     if (error) {
       log.error({ error }, '❌ Erreur lors de la mise à jour du mot de passe');
-      log.error(
-        {
-          message: error.message,
-          details: (error as any).details,
-          hint: (error as any).hint,
-          code: error.code,
-        },
-        "Détails de l'erreur",
-      );
+      if (isErrorWithCode(error)) {
+        log.error(
+          {
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            code: error.code,
+          },
+          "Détails de l'erreur",
+        );
+      }
       throw new Error(mapAuthError(error));
     }
 

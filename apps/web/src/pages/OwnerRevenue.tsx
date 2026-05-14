@@ -21,6 +21,7 @@ import { supabase } from '../lib/supabase';
 import { authService } from '../services/auth.service';
 import { revenueService, RevenueData, RevenueStats } from '../services/revenue.service';
 import { useAuthStore } from '../stores/auth.store';
+import { isErrorWithCode } from '../lib/errors';
 
 type TxFilter = 'all' | 'recharges' | 'depenses';
 
@@ -200,8 +201,9 @@ export default function OwnerRevenue() {
       setBankDocFile(null);
       if (bankFileInputRef.current) bankFileInputRef.current.value = '';
       toast.success('Coordonnées bancaires enregistrées');
-    } catch (error: any) {
-      toast.error(error?.message || 'Erreur lors de la sauvegarde des coordonnées bancaires');
+    } catch (error) {
+      const _err = isErrorWithCode(error) ? error : null;
+      toast.error(_err?.message || 'Erreur lors de la sauvegarde des coordonnées bancaires');
     } finally {
       setSavingBankDetails(false);
     }

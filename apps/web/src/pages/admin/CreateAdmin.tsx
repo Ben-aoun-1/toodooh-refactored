@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import AdminLayout from '../../components/admin/AdminLayout';
 import { adminService } from '../../services/admin.service';
 import { useAdminStore } from '../../stores/admin.store';
+import { isErrorWithCode } from '../../lib/errors';
 
 interface AdminFormData {
   email: string;
@@ -106,8 +107,9 @@ export default function CreateAdmin() {
         target_type: 'admin',
         description: `Création d'un ${formData.role === 'admin' ? 'administrateur' : 'modérateur'}: ${formData.first_name} ${formData.last_name}`,
       });
-    } catch (error: any) {
-      toast.error(error.message || 'Erreur lors de la création');
+    } catch (error) {
+      const _err = isErrorWithCode(error) ? error : null;
+      toast.error(_err?.message || 'Erreur lors de la création');
     } finally {
       setLoading(false);
     }

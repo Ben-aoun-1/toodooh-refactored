@@ -4,6 +4,7 @@ import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 import { authService } from '../../services/auth.service';
+import { isErrorWithCode } from '../../lib/errors';
 
 export default function UpdatePasswordForm() {
   const navigate = useNavigate();
@@ -38,8 +39,9 @@ export default function UpdatePasswordForm() {
       await authService.updatePassword(password);
       toast.success('Mot de passe mis à jour avec succès');
       navigate('/login');
-    } catch (error: any) {
-      toast.error(error?.message || "Une erreur inattendue s'est produite");
+    } catch (error) {
+      const _err = isErrorWithCode(error) ? error : null;
+      toast.error(_err?.message || "Une erreur inattendue s'est produite");
     } finally {
       setLoading(false);
     }

@@ -150,7 +150,7 @@ export default function CampaignDetails() {
           setVideo(videoData);
         }
       }
-    } catch (error: any) {
+    } catch (error) {
       toast.error('Erreur lors du chargement de la campagne');
     } finally {
       setLoading(false);

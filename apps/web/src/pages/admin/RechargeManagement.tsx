@@ -24,6 +24,7 @@ import {
   type RechargeStats,
 } from '../../services/admin-recharges.service';
 import { useAdminStore } from '../../stores/admin.store';
+import { isErrorWithCode } from '../../lib/errors';
 
 const log = logger.child({ module: 'RechargeManagement' });
 
@@ -102,15 +103,16 @@ export default function RechargeManagement() {
       // Charger les stats
       const statsData = await adminRechargesService.getRechargeStats();
       setStats(statsData);
-    } catch (error: any) {
+    } catch (error) {
+      const _err = isErrorWithCode(error) ? error : null;
       log.error({ error }, '❌ Erreur chargement données');
-      log.error({ message: error.message, code: error.code }, '❌ Détails');
+      log.error({ message: _err?.message, code: _err?.code }, '❌ Détails');
 
       // Si la table n'existe pas encore
       if (
-        error.code === 'PGRST204' ||
-        error.code === 'PGRST205' ||
-        error.message?.includes('does not exist')
+        _err?.code === 'PGRST204' ||
+        _err?.code === 'PGRST205' ||
+        _err?.message?.includes('does not exist')
       ) {
         toast.error(
           "La table recharges n'existe pas encore. Veuillez exécuter create_recharges_table.sql",
@@ -226,8 +228,9 @@ export default function RechargeManagement() {
       });
       setShowCreateModal(false);
       loadData();
-    } catch (error: any) {
-      toast.error(error.message || 'Erreur lors de la création de la recharge');
+    } catch (error) {
+      const _err = isErrorWithCode(error) ? error : null;
+      toast.error(_err?.message || 'Erreur lors de la création de la recharge');
     }
   };
 

@@ -41,7 +41,7 @@ export default function AdminManagement() {
       setLoading(true);
       const data = await adminService.getAdmins();
       setAdmins(data);
-    } catch (error: any) {
+    } catch (error) {
       toast.error('Erreur lors du chargement des administrateurs');
     } finally {
       setLoading(false);
@@ -88,7 +88,7 @@ export default function AdminManagement() {
           description: `Désactivation de ${adminToDeactivate.first_name} ${adminToDeactivate.last_name}`,
         });
       }
-    } catch (error: any) {
+    } catch (error) {
       toast.error('Erreur lors de la désactivation');
     }
   };
@@ -118,7 +118,7 @@ export default function AdminManagement() {
           description: `Réactivation de ${adminToReactivate.first_name} ${adminToReactivate.last_name}`,
         });
       }
-    } catch (error: any) {
+    } catch (error) {
       toast.error('Erreur lors de la réactivation');
     }
   };

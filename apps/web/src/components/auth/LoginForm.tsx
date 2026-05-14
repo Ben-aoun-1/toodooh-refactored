@@ -4,6 +4,7 @@ import { toast } from 'react-hot-toast';
 import { useNavigate, Link } from 'react-router-dom';
 
 import { useAuthStore } from '../../stores/auth.store';
+import { isErrorWithCode } from '../../lib/errors';
 
 export default function LoginForm() {
   const navigate = useNavigate();
@@ -31,8 +32,9 @@ export default function LoginForm() {
       }
 
       toast.success('Connexion réussie');
-    } catch (error: any) {
-      toast.error(error?.message || "Une erreur inattendue s'est produite");
+    } catch (error) {
+      const _err = isErrorWithCode(error) ? error : null;
+      toast.error(_err?.message || "Une erreur inattendue s'est produite");
     } finally {
       setLoading(false);
     }

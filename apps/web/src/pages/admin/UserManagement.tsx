@@ -25,6 +25,7 @@ import { logger } from '../../lib/logger';
 import { supabase } from '../../lib/supabase';
 import { adminUserService, AdminUser } from '../../services/admin-user.service';
 import { useAdminStore } from '../../stores/admin.store';
+import { isErrorWithCode } from '../../lib/errors';
 
 const log = logger.child({ module: 'UserManagement' });
 
@@ -154,8 +155,9 @@ export default function UserManagement() {
       toast.success(`✅ ${selectedUsers.size} utilisateur(s) approuvé(s) avec succès`);
       await loadUsers();
       clearSelection();
-    } catch (error: any) {
-      toast.error(`❌ Erreur lors de l'approbation: ${error.message}`);
+    } catch (error) {
+      const _err = isErrorWithCode(error) ? error : null;
+      toast.error(`❌ Erreur lors de l'approbation: ${_err?.message}`);
     } finally {
       setBulkActionLoading(false);
     }
@@ -189,8 +191,9 @@ export default function UserManagement() {
       toast.success(`✅ ${selectedUsers.size} utilisateur(s) rejeté(s) avec succès`);
       await loadUsers();
       clearSelection();
-    } catch (error: any) {
-      toast.error(`❌ Erreur lors du rejet: ${error.message}`);
+    } catch (error) {
+      const _err = isErrorWithCode(error) ? error : null;
+      toast.error(`❌ Erreur lors du rejet: ${_err?.message}`);
     } finally {
       setBulkActionLoading(false);
     }
@@ -246,8 +249,9 @@ export default function UserManagement() {
 
       await loadUsers();
       clearSelection();
-    } catch (error: any) {
-      toast.error(`❌ Erreur lors de la suppression: ${error.message}`);
+    } catch (error) {
+      const _err = isErrorWithCode(error) ? error : null;
+      toast.error(`❌ Erreur lors de la suppression: ${_err?.message}`);
     } finally {
       setBulkActionLoading(false);
     }
@@ -261,8 +265,9 @@ export default function UserManagement() {
       const usersData = await adminUserService.getUsers();
 
       setUsers(usersData);
-    } catch (error: any) {
-      toast.error(`Erreur lors du chargement des utilisateurs: ${error.message}`);
+    } catch (error) {
+      const _err = isErrorWithCode(error) ? error : null;
+      toast.error(`Erreur lors du chargement des utilisateurs: ${_err?.message}`);
     } finally {
       setLoading(false);
     }
@@ -424,8 +429,9 @@ export default function UserManagement() {
 
       setDocumentFile(null);
       toast.success('✅ Document uploadé avec succès !');
-    } catch (error: any) {
-      toast.error(`❌ Erreur lors de l'upload: ${error.message || 'Erreur inconnue'}`);
+    } catch (error) {
+      const _err = isErrorWithCode(error) ? error : null;
+      toast.error(`❌ Erreur lors de l'upload: ${_err?.message || 'Erreur inconnue'}`);
     } finally {
       setUploadingDocument(false);
     }
@@ -532,8 +538,9 @@ export default function UserManagement() {
         prev ? { ...prev, agent_toodooh: value, updated_at: new Date().toISOString() } : prev,
       );
       toast.success('Code agent enregistré');
-    } catch (error: any) {
-      toast.error(`Erreur lors de l'enregistrement: ${error.message || 'Erreur inconnue'}`);
+    } catch (error) {
+      const _err = isErrorWithCode(error) ? error : null;
+      toast.error(`Erreur lors de l'enregistrement: ${_err?.message || 'Erreur inconnue'}`);
     } finally {
       setSavingAgentCode(false);
     }

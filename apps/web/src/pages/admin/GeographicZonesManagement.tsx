@@ -22,6 +22,7 @@ import {
   type PredefinedZone,
 } from '../../services/predefined-zones.service';
 import 'leaflet/dist/leaflet.css';
+import { isErrorWithCode } from '../../lib/errors';
 
 // Fix pour les icônes Leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -78,7 +79,7 @@ export default function GeographicZonesManagement() {
       setLoading(true);
       const data = await predefinedZonesService.getAllForAdmin();
       setZones(data);
-    } catch (error: any) {
+    } catch (error) {
       toast.error('Erreur lors du chargement des zones');
     } finally {
       setLoading(false);
@@ -164,8 +165,9 @@ export default function GeographicZonesManagement() {
       const url = await predefinedZonesService.uploadZoneImage(editingZone.id, file);
       setZoneImageUrl(url);
       toast.success('Image mise à jour');
-    } catch (err: any) {
-      toast.error(err?.message || "Erreur lors de l'upload");
+    } catch (err) {
+      const _err = isErrorWithCode(err) ? err : null;
+      toast.error(_err?.message || "Erreur lors de l'upload");
     } finally {
       setUploadingImage(false);
       e.target.value = '';
@@ -215,8 +217,9 @@ export default function GeographicZonesManagement() {
       }
       handleCloseModal();
       loadZones();
-    } catch (error: any) {
-      toast.error(error.message || 'Erreur lors de la sauvegarde');
+    } catch (error) {
+      const _err = isErrorWithCode(error) ? error : null;
+      toast.error(_err?.message || 'Erreur lors de la sauvegarde');
     }
   };
 
@@ -229,8 +232,9 @@ export default function GeographicZonesManagement() {
       await predefinedZonesService.delete(id);
       toast.success('Zone supprimée avec succès');
       loadZones();
-    } catch (error: any) {
-      toast.error(error.message || 'Erreur lors de la suppression');
+    } catch (error) {
+      const _err = isErrorWithCode(error) ? error : null;
+      toast.error(_err?.message || 'Erreur lors de la suppression');
     }
   };
 
@@ -239,8 +243,9 @@ export default function GeographicZonesManagement() {
       await predefinedZonesService.toggleActive(id, !currentStatus);
       toast.success(`Zone ${!currentStatus ? 'publiée' : 'dépubliée'} avec succès`);
       loadZones();
-    } catch (error: any) {
-      toast.error(error.message || 'Erreur lors du changement de statut');
+    } catch (error) {
+      const _err = isErrorWithCode(error) ? error : null;
+      toast.error(_err?.message || 'Erreur lors du changement de statut');
     }
   };
 
@@ -251,7 +256,7 @@ export default function GeographicZonesManagement() {
         `${ids.length} zone(s) ${activate ? 'publiée(s)' : 'dépubliée(s)'} avec succès`,
       );
       loadZones();
-    } catch (error: any) {
+    } catch (error) {
       toast.error('Erreur lors du changement de statut en masse');
     }
   };

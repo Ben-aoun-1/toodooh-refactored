@@ -50,7 +50,7 @@ export default function ScreenManagement() {
       setLocations(result.locations);
       setTotal(result.total);
       setTotalPages(result.totalPages);
-    } catch (error: any) {
+    } catch (error) {
       toast.error('Erreur lors du chargement des localités');
     } finally {
       setLoading(false);

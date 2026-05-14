@@ -45,7 +45,7 @@ export const useAdminStore = create<AdminState>()(
           set({ loading: true });
           const admin = await adminService.login(email, password);
           set({ admin, loading: false });
-        } catch (error: any) {
+        } catch (error) {
           set({ loading: false });
           throw error;
         }

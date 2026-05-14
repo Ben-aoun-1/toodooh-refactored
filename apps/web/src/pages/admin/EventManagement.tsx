@@ -21,6 +21,7 @@ import { supabase } from '../../lib/supabase';
 import { adminEventsService } from '../../services/admin-events.service';
 import { useAdminStore } from '../../stores/admin.store';
 import { SpecialEvent, CreateEventDTO, EventStats } from '../../types/event';
+import { isErrorWithCode } from '../../lib/errors';
 
 const log = logger.child({ module: 'EventManagement' });
 
@@ -78,8 +79,9 @@ export default function EventManagement() {
       setLoading(true);
       const eventsData = await adminEventsService.getEvents();
       setEvents(eventsData);
-    } catch (error: any) {
-      toast.error(`Erreur lors du chargement des événements: ${error.message}`);
+    } catch (error) {
+      const _err = isErrorWithCode(error) ? error : null;
+      toast.error(`Erreur lors du chargement des événements: ${_err?.message}`);
     } finally {
       setLoading(false);
     }
@@ -161,8 +163,9 @@ export default function EventManagement() {
         resetForm();
         loadStats();
       }
-    } catch (error: any) {
-      toast.error(error.message || 'Erreur lors de la création');
+    } catch (error) {
+      const _err = isErrorWithCode(error) ? error : null;
+      toast.error(_err?.message || 'Erreur lors de la création');
     }
   };
 
@@ -188,8 +191,9 @@ export default function EventManagement() {
         setSelectedEvent(null);
         resetForm();
       }
-    } catch (error: any) {
-      toast.error(error.message || 'Erreur lors de la modification');
+    } catch (error) {
+      const _err = isErrorWithCode(error) ? error : null;
+      toast.error(_err?.message || 'Erreur lors de la modification');
     }
   };
 
@@ -749,8 +753,9 @@ function EventImageUpload({
 
       onImageUrlChange(urlData.publicUrl);
       toast.success('Image uploadée.');
-    } catch (err: any) {
-      toast.error(err?.message || "Erreur lors de l'upload.");
+    } catch (err) {
+      const _err = isErrorWithCode(err) ? err : null;
+      toast.error(_err?.message || "Erreur lors de l'upload.");
     } finally {
       setUploading(false);
       e.target.value = '';

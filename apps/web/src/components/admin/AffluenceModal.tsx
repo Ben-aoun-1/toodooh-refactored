@@ -5,6 +5,7 @@ import { toast } from 'react-hot-toast';
 import { logger } from '../../lib/logger';
 import { supabase } from '../../lib/supabase';
 import type { AdminLocation } from '../../services/admin-screens.service';
+import { isErrorWithCode } from '../../lib/errors';
 
 const log = logger.child({ module: 'AffluenceModal' });
 
@@ -138,9 +139,10 @@ export default function AffluenceModal({ location, onClose }: AffluenceModalProp
 
       toast.success('Affluence de la localité enregistrée');
       setEditing(false);
-    } catch (error: any) {
+    } catch (error) {
+      const _err = isErrorWithCode(error) ? error : null;
       log.error({ error }, 'Erreur enregistrement affluence localité');
-      const details = [error?.message, error?.details, error?.hint].filter(Boolean).join(' | ');
+      const details = [_err?.message, _err?.details, _err?.hint].filter(Boolean).join(' | ');
       toast.error(
         details ? `Erreur enregistrement: ${details}` : "Erreur lors de l'enregistrement",
       );

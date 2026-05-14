@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabase';
 import { authService } from '../services/auth.service';
 
 import { useAdminStore } from './admin.store';
+import { isErrorWithCode } from '../lib/errors';
 
 const log = logger.child({ module: 'auth.store' });
 
@@ -150,9 +151,10 @@ export const useAuthStore = create<AuthState>()(
                 }),
                 timeoutPromise,
               ]);
-            } catch (timeoutError: any) {
+            } catch (timeoutError) {
+              const _err = isErrorWithCode(timeoutError) ? timeoutError : null;
               clearTimeout(timeoutId);
-              if (timeoutError?.message?.includes('Timeout')) {
+              if (_err?.message?.includes('Timeout')) {
                 log.error(
                   "⏱️ Timeout lors de la requête business_profiles — conservation de l'état connu",
                 );
@@ -229,17 +231,19 @@ export const useAuthStore = create<AuthState>()(
               needsApproval: false,
               validationStatus,
             };
-          } catch (dbError: any) {
+          } catch (dbError) {
+            const _err = isErrorWithCode(dbError) ? dbError : null;
             log.error({ dbError }, 'Database error in fetchProfileType');
-            if (dbError?.message?.includes('Timeout')) {
+            if (_err?.message?.includes('Timeout')) {
               log.error('⏱️ Timeout lors de la récupération du profil utilisateur');
             }
             // Erreur transitoire: on conserve l'état connu (approuvé/verified) s'il existe
             return getPreservedStateOnError(cachedProfileType);
           }
-        } catch (error: any) {
+        } catch (error) {
+          const _err = isErrorWithCode(error) ? error : null;
           log.error({ error }, 'Error in fetchProfileType');
-          if (error?.message?.includes('Timeout')) {
+          if (_err?.message?.includes('Timeout')) {
             log.error('⏱️ Timeout lors de la récupération du profil utilisateur');
           }
           return getPreservedStateOnError(null);
@@ -419,10 +423,11 @@ export const useAuthStore = create<AuthState>()(
                 shouldOnboard = !oc;
                 needsApproval = na || false;
                 validationStatus = vs;
-              } catch (profileError: any) {
+              } catch (profileError) {
+                const _err = isErrorWithCode(profileError) ? profileError : null;
                 log.error({ profileError }, 'Error fetching profile type');
                 // Si timeout, continuer avec des valeurs par défaut
-                if (profileError?.message?.includes('Timeout')) {
+                if (_err?.message?.includes('Timeout')) {
                   log.warn(
                     "⏱️ Timeout lors de l'initialisation, utilisation de valeurs par défaut",
                   );

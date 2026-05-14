@@ -36,6 +36,7 @@ import {
   CampaignLocation,
   CampaignImpressionProgress,
 } from '../../types/campaign-monitoring';
+import { isErrorWithCode } from '../../lib/errors';
 
 const log = logger.child({ module: 'CampaignMonitoring' });
 
@@ -101,7 +102,7 @@ export default function CampaignMonitoring() {
       // Charger la liste des campagnes en priorité (affichage rapide).
       const campaignsData = await adminCampaignMonitoringService.getCampaignsWithScreens();
       setCampaigns(campaignsData);
-    } catch (error: any) {
+    } catch (error) {
       toast.error('Erreur lors du chargement des campagnes');
     } finally {
       setLoading(false);
@@ -221,8 +222,9 @@ export default function CampaignMonitoring() {
       setCampaignToStop(null);
       setStopReason('');
       loadData();
-    } catch (error: any) {
-      toast.error(error.message || "Erreur lors de l'arrêt de la campagne");
+    } catch (error) {
+      const _err = isErrorWithCode(error) ? error : null;
+      toast.error(_err?.message || "Erreur lors de l'arrêt de la campagne");
     }
   };
 

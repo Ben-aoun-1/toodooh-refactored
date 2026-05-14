@@ -8,6 +8,7 @@ import { logger } from '../../lib/logger';
 import { adminVideoService } from '../../services/admin-video.service';
 import { useAdminStore } from '../../stores/admin.store';
 import { Video, VideoValidationStats } from '../../types/video';
+import { isErrorWithCode } from '../../lib/errors';
 
 const log = logger.child({ module: 'VideoManagement' });
 
@@ -51,8 +52,9 @@ export default function VideoManagement() {
       setLoading(true);
       const videosData = await adminVideoService.getVideos(statusFilter);
       setVideos(videosData);
-    } catch (error: any) {
-      toast.error(`Erreur lors du chargement des vidéos: ${error.message}`);
+    } catch (error) {
+      const _err = isErrorWithCode(error) ? error : null;
+      toast.error(`Erreur lors du chargement des vidéos: ${_err?.message}`);
     } finally {
       setLoading(false);
     }
@@ -104,8 +106,9 @@ export default function VideoManagement() {
       } else {
         toast.error("Erreur lors de l'approbation de la vidéo");
       }
-    } catch (error: any) {
-      toast.error(`Erreur: ${error.message || "Impossible d'approuver la vidéo"}`);
+    } catch (error) {
+      const _err = isErrorWithCode(error) ? error : null;
+      toast.error(`Erreur: ${_err?.message || "Impossible d'approuver la vidéo"}`);
     }
   };
 
@@ -126,8 +129,9 @@ export default function VideoManagement() {
       } else {
         toast.error('Erreur lors du rejet de la vidéo');
       }
-    } catch (error: any) {
-      toast.error(`Erreur: ${error.message || 'Impossible de rejeter la vidéo'}`);
+    } catch (error) {
+      const _err = isErrorWithCode(error) ? error : null;
+      toast.error(`Erreur: ${_err?.message || 'Impossible de rejeter la vidéo'}`);
     }
   };
 

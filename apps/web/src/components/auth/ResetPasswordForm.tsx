@@ -4,6 +4,7 @@ import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 import { authService } from '../../services/auth.service';
+import { isErrorWithCode } from '../../lib/errors';
 
 export default function ResetPasswordForm() {
   const navigate = useNavigate();
@@ -18,8 +19,9 @@ export default function ResetPasswordForm() {
       await authService.resetPassword(email);
       toast.success('Un email de réinitialisation vous a été envoyé');
       navigate('/login');
-    } catch (error: any) {
-      toast.error(error?.message || "Une erreur inattendue s'est produite");
+    } catch (error) {
+      const _err = isErrorWithCode(error) ? error : null;
+      toast.error(_err?.message || "Une erreur inattendue s'est produite");
     } finally {
       setLoading(false);
     }

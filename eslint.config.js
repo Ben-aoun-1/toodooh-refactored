@@ -64,9 +64,18 @@ export default tseslint.config(
     rules: {
       ...reactHooks.configs.recommended.rules,
       // Autofixable: `eslint --fix` (incl. the pre-commit hook) strips unused imports.
-      // Unused *local variables/params* remain flagged by @typescript-eslint/no-unused-vars
-      // (not autofixable) for a later manual pass.
       'unused-imports/no-unused-imports': 'error',
+      // Allow `_`-prefixed params, locals, and catch bindings to satisfy the rule.
+      // Used in Step 6 to mark intentionally-unused fn params and catch bindings.
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+          destructuredArrayIgnorePattern: '^_',
+        },
+      ],
     },
   },
 

@@ -71,6 +71,7 @@ import {
 import { useAuthStore } from '../stores/auth.store';
 import type { BusinessSector } from '../types/auth';
 import type { SpecialEvent } from '../types/event';
+import { isErrorWithCode } from '../lib/errors';
 
 const log = logger.child({ module: 'NewCampaign' });
 
@@ -703,7 +704,7 @@ export default function NewCampaign() {
       }
 
       return campaign;
-    } catch (error: any) {
+    } catch (error) {
       throw error;
     }
   };
@@ -757,8 +758,9 @@ export default function NewCampaign() {
 
       // Ne pas créer la campagne automatiquement, elle sera créée lors de la validation finale
       toast.success('Vidéo uploadée avec succès !');
-    } catch (error: any) {
-      toast.error(error.message || "Erreur lors de l'upload");
+    } catch (error) {
+      const _err = isErrorWithCode(error) ? error : null;
+      toast.error(_err?.message || "Erreur lors de l'upload");
       setSelectedVideo(null);
     } finally {
       setUploading(false);
@@ -3501,8 +3503,9 @@ export default function NewCampaign() {
                           }
                           toast.success('Campagne sauvegardée en brouillon');
                           navigate('/my-campaigns?status=draft');
-                        } catch (error: any) {
-                          toast.error(error.message || 'Erreur lors de la sauvegarde');
+                        } catch (error) {
+                          const _err = isErrorWithCode(error) ? error : null;
+                          toast.error(_err?.message || 'Erreur lors de la sauvegarde');
                         }
                       }}
                       className="px-5 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-all text-sm font-medium"
@@ -3604,8 +3607,9 @@ export default function NewCampaign() {
                           toast.success(
                             "Campagne ajoutee au panier. Activez-la depuis le panier pour qu'elle soit diffusée.",
                           );
-                        } catch (error: any) {
-                          toast.error(error.message || 'Erreur lors de la finalisation');
+                        } catch (error) {
+                          const _err = isErrorWithCode(error) ? error : null;
+                          toast.error(_err?.message || 'Erreur lors de la finalisation');
                         } finally {
                           setAddingToCart(false);
                         }

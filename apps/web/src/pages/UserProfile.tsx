@@ -24,6 +24,7 @@ import { supabase } from '../lib/supabase';
 import { authService } from '../services/auth.service';
 import { useAuthStore } from '../stores/auth.store';
 import type { BusinessProfile, BusinessSector, Governorate } from '../types/auth';
+import { isErrorWithCode } from '../lib/errors';
 
 type TabId = 'responsable' | 'entreprise' | 'notifications' | 'confidentialite';
 type EntrepriseSubId = 'informations' | 'adresse' | 'documents';
@@ -230,8 +231,9 @@ export default function UserProfile() {
       });
       toast.success('Informations enregistrées');
       loadProfile();
-    } catch (err: any) {
-      toast.error(err?.message || 'Erreur lors de la mise à jour');
+    } catch (err) {
+      const _err = isErrorWithCode(err) ? err : null;
+      toast.error(_err?.message || 'Erreur lors de la mise à jour');
     }
   };
 
@@ -250,8 +252,9 @@ export default function UserProfile() {
       });
       toast.success('Informations entreprise enregistrées');
       loadProfile();
-    } catch (err: any) {
-      toast.error(err?.message || 'Erreur lors de la mise à jour');
+    } catch (err) {
+      const _err = isErrorWithCode(err) ? err : null;
+      toast.error(_err?.message || 'Erreur lors de la mise à jour');
     }
   };
 
@@ -275,8 +278,9 @@ export default function UserProfile() {
       });
       toast.success('Adresse enregistrée');
       loadProfile();
-    } catch (err: any) {
-      toast.error(err?.message || 'Erreur lors de la mise à jour');
+    } catch (err) {
+      const _err = isErrorWithCode(err) ? err : null;
+      toast.error(_err?.message || 'Erreur lors de la mise à jour');
     }
   };
 
@@ -290,8 +294,9 @@ export default function UserProfile() {
       });
       toast.success('Préférences enregistrées');
       loadProfile();
-    } catch (err: any) {
-      toast.error(err?.message || 'Erreur lors de la mise à jour');
+    } catch (err) {
+      const _err = isErrorWithCode(err) ? err : null;
+      toast.error(_err?.message || 'Erreur lors de la mise à jour');
     }
   };
 
@@ -320,8 +325,9 @@ export default function UserProfile() {
       );
       toast.success('Mot de passe mis à jour');
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-    } catch (err: any) {
-      toast.error(err?.message || 'Erreur lors de la mise à jour du mot de passe');
+    } catch (err) {
+      const _err = isErrorWithCode(err) ? err : null;
+      toast.error(_err?.message || 'Erreur lors de la mise à jour du mot de passe');
     }
   };
 
@@ -348,8 +354,9 @@ export default function UserProfile() {
       await authService.deactivateAccount();
       toast.success('Compte désactivé');
       navigate('/login');
-    } catch (err: any) {
-      toast.error(err?.message || 'Erreur lors de la désactivation');
+    } catch (err) {
+      const _err = isErrorWithCode(err) ? err : null;
+      toast.error(_err?.message || 'Erreur lors de la désactivation');
     } finally {
       setDeactivating(false);
     }
@@ -386,8 +393,9 @@ export default function UserProfile() {
       setLogoFile(null);
       toast.success('Logo mis à jour');
       loadProfile();
-    } catch (err: any) {
-      toast.error(err?.message || 'Erreur upload logo');
+    } catch (err) {
+      const _err = isErrorWithCode(err) ? err : null;
+      toast.error(_err?.message || 'Erreur upload logo');
     } finally {
       setUploadingLogo(false);
     }
@@ -400,8 +408,9 @@ export default function UserProfile() {
       setLogoFile(null);
       toast.success('Logo supprimé');
       loadProfile();
-    } catch (err: any) {
-      toast.error(err?.message || 'Erreur');
+    } catch (err) {
+      const _err = isErrorWithCode(err) ? err : null;
+      toast.error(_err?.message || 'Erreur');
     }
   };
 
@@ -428,8 +437,9 @@ export default function UserProfile() {
       setDocumentFile(null);
       toast.success('Document enregistré');
       loadProfile();
-    } catch (err: any) {
-      toast.error(err?.message || 'Erreur upload');
+    } catch (err) {
+      const _err = isErrorWithCode(err) ? err : null;
+      toast.error(_err?.message || 'Erreur upload');
     } finally {
       setUploadingDocument(false);
     }
@@ -441,8 +451,9 @@ export default function UserProfile() {
       setDocumentFile(null);
       toast.success('Document supprimé');
       loadProfile();
-    } catch (err: any) {
-      toast.error(err?.message || 'Erreur');
+    } catch (err) {
+      const _err = isErrorWithCode(err) ? err : null;
+      toast.error(_err?.message || 'Erreur');
     }
   };
 
@@ -460,8 +471,9 @@ export default function UserProfile() {
           .createSignedUrl(profile.registration_doc_path, 3600);
         if (error || !signed?.signedUrl) throw error;
         window.open(signed.signedUrl, '_blank', 'noopener,noreferrer');
-      } catch (err: any) {
-        toast.error(err?.message || "Impossible d'ouvrir le document");
+      } catch (err) {
+        const _err = isErrorWithCode(err) ? err : null;
+        toast.error(_err?.message || "Impossible d'ouvrir le document");
       }
       return;
     }

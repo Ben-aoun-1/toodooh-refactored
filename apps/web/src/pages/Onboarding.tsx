@@ -24,6 +24,7 @@ import { supabase } from '../lib/supabase';
 import { authService } from '../services/auth.service';
 import { useAuthStore } from '../stores/auth.store';
 import type { BusinessProfile } from '../types/auth';
+import { isErrorWithCode } from '../lib/errors';
 
 const log = logger.child({ module: 'Onboarding' });
 
@@ -234,8 +235,9 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
 
       setRegUrl(signedData.signedUrl);
       toast.success('✅ Registre de commerce ajouté avec succès !');
-    } catch (error: any) {
-      toast.error(`❌ Erreur lors de l'upload: ${error.message || 'Erreur inconnue'}`);
+    } catch (error) {
+      const _err = isErrorWithCode(error) ? error : null;
+      toast.error(`❌ Erreur lors de l'upload: ${_err?.message || 'Erreur inconnue'}`);
     } finally {
       setUploading(false);
     }
@@ -277,8 +279,9 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
 
       setCinUrl(signedData.signedUrl);
       toast.success('✅ Document CIN ajouté avec succès !');
-    } catch (error: any) {
-      toast.error(`❌ Erreur lors de l'upload: ${error.message || 'Erreur inconnue'}`);
+    } catch (error) {
+      const _err = isErrorWithCode(error) ? error : null;
+      toast.error(`❌ Erreur lors de l'upload: ${_err?.message || 'Erreur inconnue'}`);
     } finally {
       setUploadingCin(false);
     }
@@ -694,9 +697,10 @@ export default function OnboardingModal({ onComplete, onClose: _onClose }: Onboa
                             toast.success(
                               '✅ Document supprimé avec succès. Vous pouvez uploader un nouveau fichier.',
                             );
-                          } catch (error: any) {
+                          } catch (error) {
+                            const _err = isErrorWithCode(error) ? error : null;
                             toast.error(
-                              `❌ Erreur lors de la suppression: ${error.message || 'Erreur inconnue'}`,
+                              `❌ Erreur lors de la suppression: ${_err?.message || 'Erreur inconnue'}`,
                             );
                           }
                         }}

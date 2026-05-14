@@ -114,6 +114,7 @@ import Events from './Events';
 import MyCampaigns from './MyCampaigns';
 import NewCampaign from './NewCampaign';
 import OnboardingModal from './Onboarding';
+import { isErrorWithCode } from '../lib/errors';
 
 const log = logger.child({ module: 'Dashboard' });
 
@@ -762,8 +763,9 @@ export default function Dashboard() {
 
       navigate('/login');
       toast.success('Déconnexion réussie');
-    } catch (error: any) {
-      toast.error(error?.message || "Une erreur inattendue s'est produite");
+    } catch (error) {
+      const _err = isErrorWithCode(error) ? error : null;
+      toast.error(_err?.message || "Une erreur inattendue s'est produite");
       // En cas d'erreur, forcer la redirection
       navigate('/login');
     }

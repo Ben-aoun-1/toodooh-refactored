@@ -375,7 +375,7 @@ export const adminVideoService = {
       }
 
       return true;
-    } catch (error: any) {
+    } catch (error) {
       throw error;
     }
   },
@@ -404,7 +404,7 @@ export const adminVideoService = {
       }
 
       return true;
-    } catch (error: any) {
+    } catch (error) {
       throw error;
     }
   },
