@@ -6,9 +6,6 @@ import {
   ChevronRight,
   X,
   TrendingUp,
-  ShoppingBag,
-  PanelLeft,
-  LayoutGrid,
   MapPin,
   DollarSign,
   RotateCcw,
@@ -22,28 +19,7 @@ import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate, useLocation } from 'react-router-dom';
 
-import deconnexionIcon from '../assets/deconnexion.png';
-import headerAgendaIcon from '../assets/header/agenda.png';
-import headerCampagnesIcon from '../assets/header/campagnes.png';
-import headerParcsIcon from '../assets/header/ecrans.png';
-import headerFinanceIcon from '../assets/header/finance.png';
-import headerParamsIcon from '../assets/header/params.png';
-import headerPerformanceIcon from '../assets/header/performance.png';
-import logoImage from '../assets/logo.png';
 import matchImg from '../assets/match.png';
-import paramIcon from '../assets/param.png';
-import paramIconActive from '../assets/params.png';
-import agendaIcon from '../assets/sidebar/agenda.png';
-import agendaIconActive from '../assets/sidebar/agendas.png';
-import campagneIcon from '../assets/sidebar/campagnes.png';
-import campagneIconActive from '../assets/sidebar/campagness.png';
-import dashboardIcon from '../assets/sidebar/dashboard.png';
-import dashboardIconActive from '../assets/sidebar/dashboards.png';
-import logoCompany from '../assets/sidebar/logo.png';
-import performanceIcon from '../assets/sidebar/performance.png';
-import performanceIconActive from '../assets/sidebar/performances.png';
-import financeIcon from '../assets/sidebar/portefeuille.png';
-import financeIconActive from '../assets/sidebar/portefeuilles.png';
 import smart3Icon from '../assets/smart3.png';
 import statIcon1 from '../assets/stats/1.png';
 import statIcon2 from '../assets/stats/2.png';
@@ -51,17 +27,13 @@ import statIcon3 from '../assets/stats/3.png';
 import statIcon4 from '../assets/stats/4.png';
 import statIcon5 from '../assets/stats/5.png';
 import supportIcon from '../assets/support.png';
-import supportIconActive from '../assets/supports.png';
-import AdvertiserNotificationsBell from '../components/AdvertiserNotificationsBell';
-import CartSidebar from '../components/CartSidebar';
-import ContentErrorBoundary from '../components/ContentErrorBoundary';
+import AdvertiserLayout from '../components/layout/AdvertiserLayout';
 import { getErrorMessage } from '../lib/errors';
 import { MONTHS_FR, WEEKDAYS_FR } from '../lib/locale';
 import { logger } from '../lib/logger';
 import { getCalendarDays, isDatePast } from '../lib/ui-dates';
 import { eventsService } from '../services/events.service';
 import { useAuthStore } from '../stores/auth.store';
-import { useCartStore } from '../stores/cart.store';
 import type { SpecialEvent } from '../types/event';
 import { supabase } from '../lib/supabase';
 import { authService } from '../services/auth.service';
@@ -111,15 +83,12 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const location = useLocation();
   const logout = useAuthStore((state) => state.logout);
-  const profileType = useAuthStore((state) => state.profileType);
   const user = useAuthStore((state) => state.user);
   const needsApproval = useAuthStore((state) => state.needsApproval);
   const validationStatus = useAuthStore((state) => state.validationStatus);
   // TODO(phase-1): typed source [supabase] — see #15
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [profile, setProfile] = useState<any>(null);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [sidebarExpanded, setSidebarExpanded] = useState(true);
   const [showContactModal, setShowContactModal] = useState(false);
   const [showSupportModal, setShowSupportModal] = useState(false);
   const [supportObjective, setSupportObjective] = useState('');
@@ -134,10 +103,7 @@ export default function Dashboard() {
   const [contactMessage, setContactMessage] = useState('');
   const [contactCalendarMonth, setContactCalendarMonth] = useState(() => new Date());
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  // Header : panier ouvert/fermé. Items proviennent du cart store.
-  const [cartOpen, setCartOpen] = useState(false);
   const [featuredEvents, setFeaturedEvents] = useState<SpecialEvent[]>([]);
-  const cartCount = useCartStore((s) => s.items.length);
   useEffect(() => {
     let active = true;
     const loadSupportObjectives = async () => {
@@ -1272,480 +1238,17 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-white flex flex-col lg:flex-row">
-      {/* Sidebar : à gauche, fixe au scroll (sticky), pleine hauteur */}
-      <aside
-        className={`
-        ${isMenuOpen ? 'flex' : 'hidden'} lg:flex
-        fixed left-0 z-30 flex flex-col bg-white border-r border-[#E1E4EA] isolate transition-[width] duration-200 ease-in-out overflow-hidden
-        top-0 bottom-0 h-full lg:h-screen lg:sticky lg:top-0
-        w-[272px] ${sidebarExpanded ? 'lg:w-[272px]' : 'lg:w-[80px]'} lg:flex-shrink-0
-      `}
+    <>
+      <AdvertiserLayout
+        userName={profile?.contact_name || undefined}
+        onContactClick={() => setShowContactModal(true)}
+        onSupportClick={() => setShowSupportModal(true)}
+        onLogoutClick={() => setShowLogoutConfirm(true)}
+        isSupportOpen={showSupportModal}
       >
-        {/* Header logo + toggle */}
-        <div className="flex flex-col justify-center items-start p-3 gap-2.5 h-[88px] border-b border-[#E1E4EA] flex-none">
-          <div className="flex flex-row items-center w-full gap-2">
-            <div
-              className={`flex items-center justify-center overflow-hidden transition-all ${sidebarExpanded ? 'flex-1 min-w-0' : 'w-10 h-10 flex-shrink-0'}`}
-            >
-              {sidebarExpanded ? (
-                <img
-                  src={logoImage}
-                  alt="Logo"
-                  className="h-10 w-auto max-w-[178px] object-contain"
-                />
-              ) : (
-                <img src={logoCompany} alt="Logo" className="w-10 h-10 object-contain" />
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={() => setSidebarExpanded((v) => !v)}
-              className="flex-shrink-0 p-2 rounded-lg text-[#5C5C5C] hover:bg-gray-100 transition-colors hidden lg:flex"
-              title={sidebarExpanded ? 'Réduire le menu' : 'Ouvrir le menu'}
-            >
-              {sidebarExpanded ? (
-                <ChevronLeft className="h-5 w-5" />
-              ) : (
-                <ChevronRight className="h-5 w-5" />
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsMenuOpen(false)}
-              className="lg:hidden p-2 rounded-lg text-[#5C5C5C] hover:bg-gray-100"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-        </div>
-        <nav className="flex flex-col flex-1 py-5 gap-2 px-3">
-          {/* Dashboard */}
-          <button
-            onClick={() => {
-              navigate('/dashboard');
-              setIsMenuOpen(false);
-            }}
-            title={!sidebarExpanded ? 'Dashboard' : undefined}
-            className={`h-9 flex items-center rounded-lg text-sm font-medium transition-colors tracking-[-0.006em] ${
-              sidebarExpanded
-                ? 'w-full max-w-[232px] px-3 py-2 gap-3'
-                : 'w-10 justify-center px-0 mx-auto'
-            } ${location.pathname === '/dashboard' ? 'bg-[#E4F9EB] text-[#132B1B]' : 'text-[#5C5C5C] hover:bg-gray-100/80'}`}
-          >
-            <img
-              src={location.pathname === '/dashboard' ? dashboardIconActive : dashboardIcon}
-              alt=""
-              className="h-5 w-5 flex-shrink-0 object-contain"
-            />
-            {sidebarExpanded && <span className="leading-5 truncate">Dashboard</span>}
-          </button>
-          {/* Mes campagnes */}
-          <button
-            onClick={() => {
-              if (isDisabled) {
-                toast.error(
-                  '⚠️ Veuillez compléter vos informations pour accéder à cette fonctionnalité',
-                );
-              } else {
-                navigate('/my-campaigns');
-                setIsMenuOpen(false);
-              }
-            }}
-            disabled={isDisabled}
-            title={!sidebarExpanded ? 'Mes campagnes' : undefined}
-            className={`h-9 flex items-center rounded-lg text-sm font-medium transition-colors ${
-              sidebarExpanded
-                ? 'w-full max-w-[232px] px-3 py-2 gap-3'
-                : 'w-10 justify-center mx-auto'
-            } ${isDisabled ? 'text-[#5C5C5C] opacity-50 cursor-not-allowed' : location.pathname === '/my-campaigns' ? 'bg-[#E4F9EB] text-[#132B1B]' : 'text-[#5C5C5C] hover:bg-gray-100/80'}`}
-          >
-            <img
-              src={location.pathname === '/my-campaigns' ? campagneIconActive : campagneIcon}
-              alt=""
-              className="h-5 w-5 flex-shrink-0 object-contain"
-            />
-            {sidebarExpanded && <span className="leading-5 truncate">Mes campagnes</span>}
-          </button>
-          {/* Événements */}
-          <button
-            onClick={() => {
-              if (isDisabled) {
-                toast.error(
-                  '⚠️ Veuillez compléter vos informations pour accéder à cette fonctionnalité',
-                );
-              } else {
-                navigate('/evenements');
-                setIsMenuOpen(false);
-              }
-            }}
-            disabled={isDisabled}
-            title={!sidebarExpanded ? 'Événements' : undefined}
-            className={`h-9 flex items-center rounded-lg text-sm font-medium transition-colors ${
-              sidebarExpanded
-                ? 'w-full max-w-[232px] px-3 py-2 gap-3'
-                : 'w-10 justify-center mx-auto'
-            } ${isDisabled ? 'text-[#5C5C5C] opacity-50 cursor-not-allowed' : location.pathname === '/evenements' ? 'bg-[#E4F9EB] text-[#132B1B]' : 'text-[#5C5C5C] hover:bg-gray-100/80'}`}
-          >
-            <img
-              src={location.pathname === '/evenements' ? agendaIconActive : agendaIcon}
-              alt=""
-              className="h-5 w-5 flex-shrink-0 object-contain"
-            />
-            {sidebarExpanded && <span className="leading-5 truncate">Événements</span>}
-          </button>
-          {/* Mes performances */}
-          <button
-            onClick={() => {
-              if (isDisabled) {
-                toast.error(
-                  '⚠️ Veuillez compléter vos informations pour accéder à cette fonctionnalité',
-                );
-              } else {
-                navigate('/perfor');
-                setIsMenuOpen(false);
-              }
-            }}
-            disabled={isDisabled}
-            title={!sidebarExpanded ? 'Mes performances' : undefined}
-            className={`h-9 flex items-center rounded-lg text-sm font-medium transition-colors ${
-              sidebarExpanded
-                ? 'w-full max-w-[232px] px-3 py-2 gap-3'
-                : 'w-10 justify-center mx-auto'
-            } ${isDisabled ? 'text-[#5C5C5C] opacity-50 cursor-not-allowed' : location.pathname === '/perfor' ? 'bg-[#E4F9EB] text-[#132B1B]' : 'text-[#5C5C5C] hover:bg-gray-100/80'}`}
-          >
-            <img
-              src={location.pathname === '/perfor' ? performanceIconActive : performanceIcon}
-              alt=""
-              className="h-5 w-5 flex-shrink-0 object-contain"
-            />
-            {sidebarExpanded && <span className="leading-5 truncate">Mes performances</span>}
-          </button>
-          {/* Mes finances */}
-          <button
-            onClick={() => {
-              if (isDisabled) {
-                toast.error(
-                  '⚠️ Veuillez compléter vos informations pour accéder à cette fonctionnalité',
-                );
-              } else {
-                navigate('/my-recharges');
-                setIsMenuOpen(false);
-              }
-            }}
-            disabled={isDisabled}
-            title={!sidebarExpanded ? 'Mes finances' : undefined}
-            className={`h-9 flex items-center rounded-lg text-sm font-medium transition-colors ${
-              sidebarExpanded
-                ? 'w-full max-w-[232px] px-3 py-2 gap-3'
-                : 'w-10 justify-center mx-auto'
-            } ${isDisabled ? 'text-[#5C5C5C] opacity-50 cursor-not-allowed' : location.pathname === '/my-recharges' ? 'bg-[#E4F9EB] text-[#132B1B]' : 'text-[#5C5C5C] hover:bg-gray-100/80'}`}
-          >
-            <img
-              src={location.pathname === '/my-recharges' ? financeIconActive : financeIcon}
-              alt=""
-              className="h-5 w-5 flex-shrink-0 object-contain"
-            />
-            {sidebarExpanded && <span className="leading-5 truncate">Mes finances</span>}
-          </button>
-          {(profileType === 'advertising_agency' || profileType === 'event_organizer') && (
-            <button
-              onClick={() => {
-                if (isDisabled) {
-                  toast.error(
-                    '⚠️ Veuillez compléter vos informations pour accéder à cette fonctionnalité',
-                  );
-                } else {
-                  navigate('/my-clients');
-                  setIsMenuOpen(false);
-                }
-              }}
-              disabled={isDisabled}
-              title={!sidebarExpanded ? 'Mes clients' : undefined}
-              className={`h-9 flex items-center rounded-lg text-sm font-medium transition-colors ${
-                sidebarExpanded
-                  ? 'w-full max-w-[232px] px-3 py-2 gap-3'
-                  : 'w-10 justify-center mx-auto'
-              } ${isDisabled ? 'text-[#5C5C5C] opacity-50 cursor-not-allowed' : location.pathname === '/my-clients' ? 'bg-[#E4F9EB] text-[#132B1B]' : 'text-[#5C5C5C] hover:bg-gray-100/80'}`}
-            >
-              <Users className="h-5 w-5 flex-shrink-0" strokeWidth={1.5} />
-              {sidebarExpanded && <span className="leading-5 truncate">Mes clients</span>}
-            </button>
-          )}
-        </nav>
-        {/* Paramètres + Support juste au-dessus de déconnexion */}
-        <div
-          className={`flex flex-col flex-none pt-2 pb-2 gap-2 px-3 ${sidebarExpanded ? '' : 'items-center'}`}
-        >
-          <button
-            onClick={() => {
-              navigate('/profile');
-              setIsMenuOpen(false);
-            }}
-            title={!sidebarExpanded ? 'Mes informations' : undefined}
-            className={`h-9 flex items-center rounded-lg text-sm font-medium transition-colors ${
-              sidebarExpanded
-                ? 'w-full max-w-[232px] px-3 py-2 gap-3'
-                : 'w-10 justify-center mx-auto'
-            } ${location.pathname === '/profile' ? 'bg-[#E6F7ED] text-[#132B1B]' : 'text-[#5C5C5C] hover:bg-gray-100/80'}`}
-          >
-            <img
-              src={location.pathname === '/profile' ? paramIconActive : paramIcon}
-              alt=""
-              className="h-5 w-5 flex-shrink-0 object-contain"
-            />
-            {sidebarExpanded && <span className="leading-5 truncate">Paramètres</span>}
-          </button>
-          <button
-            onClick={() => {
-              setShowSupportModal(true);
-              setIsMenuOpen(false);
-            }}
-            title={!sidebarExpanded ? 'Support' : undefined}
-            className={`h-9 flex items-center rounded-lg text-sm font-medium transition-colors ${
-              sidebarExpanded
-                ? 'w-full max-w-[232px] px-3 py-2 gap-3'
-                : 'w-10 justify-center mx-auto'
-            } ${showSupportModal ? 'bg-[#E6F7ED] text-[#132B1B]' : 'text-[#5C5C5C] hover:bg-gray-100/80'}`}
-          >
-            <img
-              src={showSupportModal ? supportIconActive : supportIcon}
-              alt=""
-              className="h-5 w-5 flex-shrink-0 object-contain"
-            />
-            {sidebarExpanded && <span className="leading-5 truncate">Support</span>}
-          </button>
-        </div>
-        {/* Bloc utilisateur déconnexion (icône + nom, clic = confirmation) */}
-        <div
-          className={`flex flex-col flex-none border-t border-[#E1E4EA] ${sidebarExpanded ? '' : 'items-center'}`}
-        >
-          <button
-            type="button"
-            onClick={() => setShowLogoutConfirm(true)}
-            title={sidebarExpanded ? 'Déconnexion' : undefined}
-            className={`w-full h-12 flex flex-row items-center gap-3 rounded-none text-left ${
-              sidebarExpanded ? 'px-3 py-3' : 'justify-center p-2'
-            }`}
-          >
-            <img src={deconnexionIcon} alt="" className="h-9 w-9 flex-shrink-0 object-contain" />
-            {sidebarExpanded && (
-              <>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-[#5C5C5C] leading-5 tracking-[-0.006em] truncate">
-                    {profile?.contact_name || user?.email?.split('@')[0] || 'Utilisateur'}
-                  </p>
-                </div>
-                <ChevronRight className="h-5 w-5 flex-shrink-0 text-[#5C5C5C]" strokeWidth={1.5} />
-              </>
-            )}
-          </button>
-        </div>
-      </aside>
+        {renderContent()}
+      </AdvertiserLayout>
 
-      {/* Zone centrale : header + contenu (entre sidebar gauche et colonne panier droite) */}
-      <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
-        {/* Header : contenu adapté selon la page (Mes campagnes vs défaut) */}
-        <header className="flex-none h-16 bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
-          <div className="h-full w-full px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4 flex-nowrap">
-            {/* Gauche : selon la page */}
-            <div className="flex items-center gap-3 min-w-0 flex-shrink-0">
-              <button
-                className="md:hidden p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors text-gray-500 flex-shrink-0"
-                onClick={() => setIsMenuOpen(!isMenuOpen)}
-                aria-label="Menu"
-              >
-                <PanelLeft className="h-5 w-5" />
-              </button>
-              {location.pathname === '/my-campaigns' ? (
-                <>
-                  <img
-                    src={headerCampagnesIcon}
-                    alt=""
-                    className="h-12 w-12 flex-shrink-0 object-contain"
-                  />
-                  <div className="min-w-0">
-                    <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">
-                      Mes campagnes
-                    </h1>
-                    <p className="text-xs text-gray-500 truncate hidden sm:block">
-                      Gérez vos campagnes actives
-                    </p>
-                  </div>
-                </>
-              ) : location.pathname === '/parcs' ? (
-                <>
-                  <img
-                    src={headerParcsIcon}
-                    alt=""
-                    className="h-12 w-12 flex-shrink-0 object-contain"
-                  />
-                  <div className="min-w-0">
-                    <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">
-                      Parcs TV
-                    </h1>
-                    <p className="text-xs text-gray-500 truncate hidden sm:block">
-                      Wording Youssef
-                    </p>
-                  </div>
-                </>
-              ) : location.pathname === '/evenements' ? (
-                <>
-                  <img
-                    src={headerAgendaIcon}
-                    alt=""
-                    className="h-12 w-12 flex-shrink-0 object-contain"
-                  />
-                  <div className="min-w-0">
-                    <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">
-                      Événements
-                    </h1>
-                    <p className="text-xs text-gray-500 truncate hidden sm:block">
-                      Profitez des pics d'audience des événements pour amplifier votre impact
-                    </p>
-                  </div>
-                </>
-              ) : location.pathname === '/perfor' ? (
-                <>
-                  <img
-                    src={headerPerformanceIcon}
-                    alt=""
-                    className="h-12 w-12 flex-shrink-0 object-contain"
-                  />
-                  <div className="min-w-0">
-                    <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">
-                      Mes performances
-                    </h1>
-                    <p className="text-xs text-gray-500 truncate hidden sm:block">
-                      Analysez la performance de vos campagnes en un coup d&apos;oeil
-                    </p>
-                  </div>
-                </>
-              ) : location.pathname === '/my-recharges' ? (
-                <>
-                  <img
-                    src={headerFinanceIcon}
-                    alt=""
-                    className="h-12 w-12 flex-shrink-0 object-contain"
-                  />
-                  <div className="min-w-0">
-                    <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">
-                      Mes Finances
-                    </h1>
-                    <p className="text-xs text-gray-500 truncate hidden sm:block">
-                      Gérez votre solde et consultez l&apos;historique de vos transactions
-                    </p>
-                  </div>
-                </>
-              ) : location.pathname === '/my-invoices' ? (
-                <>
-                  <img
-                    src={headerFinanceIcon}
-                    alt=""
-                    className="h-12 w-12 flex-shrink-0 object-contain"
-                  />
-                  <div className="min-w-0 flex items-center gap-1.5">
-                    <span className="text-base sm:text-lg font-bold text-gray-400 truncate">
-                      Mes Finances
-                    </span>
-                    <ChevronRight className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                    <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">
-                      Mes factures
-                    </h1>
-                  </div>
-                </>
-              ) : location.pathname === '/profile' ? (
-                <>
-                  <img
-                    src={headerParamsIcon}
-                    alt=""
-                    className="h-12 w-12 flex-shrink-0 object-contain"
-                  />
-                  <div className="min-w-0">
-                    <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">
-                      Paramètres
-                    </h1>
-                    <p className="text-xs text-gray-500 truncate hidden sm:block">
-                      Gérez vos préférences et configurez différentes options.
-                    </p>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="hidden md:flex items-center gap-1 flex-shrink-0">
-                    <button
-                      type="button"
-                      className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500"
-                      aria-label="Vue grille"
-                    >
-                      <LayoutGrid className="h-5 w-5" />
-                    </button>
-                  </div>
-                  <div className="min-w-0">
-                    <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">
-                      Bonjour,{' '}
-                      {profile?.contact_name || user?.email?.split('@')[0] || 'Utilisateur'}
-                    </h1>
-                    <p className="text-xs text-gray-500 truncate hidden sm:block">
-                      Gérez vos campagnes et suivez vos performances en temps réel
-                    </p>
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Droite : Prendre rendez-vous + cloche + Mon panier (style adapté sur Mes campagnes) */}
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <button
-                type="button"
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg font-medium text-sm whitespace-nowrap ${
-                  location.pathname === '/my-campaigns' ||
-                  location.pathname === '/parcs' ||
-                  location.pathname === '/evenements' ||
-                  location.pathname === '/perfor'
-                    ? 'bg-[#76E6AB] hover:opacity-90 text-gray-900'
-                    : 'bg-[#9ae2b0] hover:bg-[#85d99e] text-gray-900'
-                }`}
-                onClick={() => setShowContactModal(true)}
-              >
-                <Users className="h-4 w-4 flex-shrink-0" />
-                <span className="hidden md:inline">Prendre rendez-vous</span>
-              </button>
-              <AdvertiserNotificationsBell
-                userId={user?.id}
-                emphasized={
-                  location.pathname === '/my-campaigns' ||
-                  location.pathname === '/parcs' ||
-                  location.pathname === '/evenements' ||
-                  location.pathname === '/perfor'
-                }
-              />
-              <button
-                type="button"
-                onClick={() => setCartOpen((v) => !v)}
-                className={`flex items-center gap-1.5 px-2.5 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap ${
-                  location.pathname === '/my-campaigns' ||
-                  location.pathname === '/parcs' ||
-                  location.pathname === '/evenements' ||
-                  location.pathname === '/perfor'
-                    ? 'bg-white border border-gray-200 hover:bg-gray-50 text-gray-700'
-                    : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-                }`}
-              >
-                <ShoppingBag className="h-5 w-5 flex-shrink-0" />
-                <span className="hidden md:inline">Mon panier</span>
-                <span className="text-red-500 font-semibold">{cartCount}</span>
-              </button>
-            </div>
-          </div>
-        </header>
-        <main className="flex-1 min-h-0 overflow-auto p-8">
-          <ContentErrorBoundary>{renderContent()}</ContentErrorBoundary>
-        </main>
-      </div>
-
-      {/* Colonne droite : Panier */}
-      <CartSidebar open={cartOpen} />
 
       {/* Modal confirmation déconnexion */}
       {showLogoutConfirm && (
@@ -2086,6 +1589,6 @@ export default function Dashboard() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
