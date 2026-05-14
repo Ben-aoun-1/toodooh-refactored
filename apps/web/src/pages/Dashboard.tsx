@@ -96,8 +96,6 @@ import statIcon5 from '../assets/stats/5.png';
 import supportIcon from '../assets/support.png';
 import supportIconActive from '../assets/supports.png';
 
-
-
 import MyInvoices from './MyInvoices';
 import MyClients from './MyClients';
 
@@ -114,7 +112,7 @@ import Events from './Events';
 import MyCampaigns from './MyCampaigns';
 import NewCampaign from './NewCampaign';
 import OnboardingModal from './Onboarding';
-import { isErrorWithCode } from '../lib/errors';
+import { getErrorMessage } from '../lib/errors';
 
 const log = logger.child({ module: 'Dashboard' });
 
@@ -764,8 +762,7 @@ export default function Dashboard() {
       navigate('/login');
       toast.success('Déconnexion réussie');
     } catch (error) {
-      const _err = isErrorWithCode(error) ? error : null;
-      toast.error(_err?.message || "Une erreur inattendue s'est produite");
+      toast.error(getErrorMessage(error) || "Une erreur inattendue s'est produite");
       // En cas d'erreur, forcer la redirection
       navigate('/login');
     }

@@ -22,7 +22,7 @@ import { supabase } from '../lib/supabase';
 import { authService } from '../services/auth.service';
 import { useAuthStore } from '../stores/auth.store';
 import type { BusinessSector, Governorate, BusinessProfile } from '../types/auth';
-import { isErrorWithCode } from '../lib/errors';
+import { getErrorMessage } from '../lib/errors';
 
 const log = logger.child({ module: 'MyAccount' });
 
@@ -215,8 +215,7 @@ export default function MyAccount() {
       setDocumentFile(null);
       toast.success('✅ Document uploadé avec succès !');
     } catch (error) {
-      const _err = isErrorWithCode(error) ? error : null;
-      toast.error(`❌ Erreur lors de l'upload: ${_err?.message || 'Erreur inconnue'}`);
+      toast.error(`❌ Erreur lors de l'upload: ${getErrorMessage(error) || 'Erreur inconnue'}`);
     } finally {
       setUploadingDocument(false);
     }

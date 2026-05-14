@@ -24,7 +24,7 @@ import { supabase } from '../lib/supabase';
 import { authService } from '../services/auth.service';
 import { useAuthStore } from '../stores/auth.store';
 import type { BusinessProfile, BusinessSector, Governorate } from '../types/auth';
-import { isErrorWithCode } from '../lib/errors';
+import { getErrorMessage } from '../lib/errors';
 
 type TabId = 'responsable' | 'entreprise' | 'notifications' | 'confidentialite';
 type EntrepriseSubId = 'informations' | 'adresse' | 'documents';
@@ -232,8 +232,7 @@ export default function UserProfile() {
       toast.success('Informations enregistrées');
       loadProfile();
     } catch (err) {
-      const _err = isErrorWithCode(err) ? err : null;
-      toast.error(_err?.message || 'Erreur lors de la mise à jour');
+      toast.error(getErrorMessage(err) || 'Erreur lors de la mise à jour');
     }
   };
 
@@ -253,8 +252,7 @@ export default function UserProfile() {
       toast.success('Informations entreprise enregistrées');
       loadProfile();
     } catch (err) {
-      const _err = isErrorWithCode(err) ? err : null;
-      toast.error(_err?.message || 'Erreur lors de la mise à jour');
+      toast.error(getErrorMessage(err) || 'Erreur lors de la mise à jour');
     }
   };
 
@@ -279,8 +277,7 @@ export default function UserProfile() {
       toast.success('Adresse enregistrée');
       loadProfile();
     } catch (err) {
-      const _err = isErrorWithCode(err) ? err : null;
-      toast.error(_err?.message || 'Erreur lors de la mise à jour');
+      toast.error(getErrorMessage(err) || 'Erreur lors de la mise à jour');
     }
   };
 
@@ -295,8 +292,7 @@ export default function UserProfile() {
       toast.success('Préférences enregistrées');
       loadProfile();
     } catch (err) {
-      const _err = isErrorWithCode(err) ? err : null;
-      toast.error(_err?.message || 'Erreur lors de la mise à jour');
+      toast.error(getErrorMessage(err) || 'Erreur lors de la mise à jour');
     }
   };
 
@@ -326,8 +322,7 @@ export default function UserProfile() {
       toast.success('Mot de passe mis à jour');
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (err) {
-      const _err = isErrorWithCode(err) ? err : null;
-      toast.error(_err?.message || 'Erreur lors de la mise à jour du mot de passe');
+      toast.error(getErrorMessage(err) || 'Erreur lors de la mise à jour du mot de passe');
     }
   };
 
@@ -355,8 +350,7 @@ export default function UserProfile() {
       toast.success('Compte désactivé');
       navigate('/login');
     } catch (err) {
-      const _err = isErrorWithCode(err) ? err : null;
-      toast.error(_err?.message || 'Erreur lors de la désactivation');
+      toast.error(getErrorMessage(err) || 'Erreur lors de la désactivation');
     } finally {
       setDeactivating(false);
     }
@@ -394,8 +388,7 @@ export default function UserProfile() {
       toast.success('Logo mis à jour');
       loadProfile();
     } catch (err) {
-      const _err = isErrorWithCode(err) ? err : null;
-      toast.error(_err?.message || 'Erreur upload logo');
+      toast.error(getErrorMessage(err) || 'Erreur upload logo');
     } finally {
       setUploadingLogo(false);
     }
@@ -409,8 +402,7 @@ export default function UserProfile() {
       toast.success('Logo supprimé');
       loadProfile();
     } catch (err) {
-      const _err = isErrorWithCode(err) ? err : null;
-      toast.error(_err?.message || 'Erreur');
+      toast.error(getErrorMessage(err) || 'Erreur');
     }
   };
 
@@ -438,8 +430,7 @@ export default function UserProfile() {
       toast.success('Document enregistré');
       loadProfile();
     } catch (err) {
-      const _err = isErrorWithCode(err) ? err : null;
-      toast.error(_err?.message || 'Erreur upload');
+      toast.error(getErrorMessage(err) || 'Erreur upload');
     } finally {
       setUploadingDocument(false);
     }
@@ -452,8 +443,7 @@ export default function UserProfile() {
       toast.success('Document supprimé');
       loadProfile();
     } catch (err) {
-      const _err = isErrorWithCode(err) ? err : null;
-      toast.error(_err?.message || 'Erreur');
+      toast.error(getErrorMessage(err) || 'Erreur');
     }
   };
 
@@ -472,8 +462,7 @@ export default function UserProfile() {
         if (error || !signed?.signedUrl) throw error;
         window.open(signed.signedUrl, '_blank', 'noopener,noreferrer');
       } catch (err) {
-        const _err = isErrorWithCode(err) ? err : null;
-        toast.error(_err?.message || "Impossible d'ouvrir le document");
+        toast.error(getErrorMessage(err) || "Impossible d'ouvrir le document");
       }
       return;
     }

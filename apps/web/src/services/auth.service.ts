@@ -10,7 +10,7 @@ import {
   CompanySizeOption,
   SupportObjectiveOption,
 } from '../types/auth';
-import { isErrorWithCode } from '../lib/errors';
+import { getErrorMessage, isErrorWithCode } from '../lib/errors';
 
 const log = logger.child({ module: 'auth.service' });
 
@@ -257,9 +257,8 @@ export const authService = {
       }
       return user;
     } catch (error) {
-      const _err = isErrorWithCode(error) ? error : null;
       // Ne pas logger les erreurs de session manquante
-      if (_err?.message !== 'Auth session missing!') {
+      if (getErrorMessage(error) !== 'Auth session missing!') {
         log.error({ error }, 'Error in getCurrentUser');
       }
       return null;

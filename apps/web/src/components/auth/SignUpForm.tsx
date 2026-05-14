@@ -27,7 +27,7 @@ import type {
   FleetEstablishmentInput,
   CompanySizeOption,
 } from '../../types/auth';
-import { isErrorWithCode } from '../../lib/errors';
+import { getErrorMessage } from '../../lib/errors';
 
 type ProfileType = 'advertiser' | 'agency' | 'individual_owner' | 'fleet_owner';
 
@@ -549,8 +549,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
       toast.success('Inscription réussie ! Veuillez vous connecter.');
       setTimeout(() => navigate('/login'), 2000);
     } catch (error) {
-      const _err = isErrorWithCode(error) ? error : null;
-      toast.error(_err?.message || 'Une erreur inattendue');
+      toast.error(getErrorMessage(error) || 'Une erreur inattendue');
     } finally {
       setLoading(false);
     }

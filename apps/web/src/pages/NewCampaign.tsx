@@ -71,7 +71,7 @@ import {
 import { useAuthStore } from '../stores/auth.store';
 import type { BusinessSector } from '../types/auth';
 import type { SpecialEvent } from '../types/event';
-import { isErrorWithCode } from '../lib/errors';
+import { getErrorMessage } from '../lib/errors';
 
 const log = logger.child({ module: 'NewCampaign' });
 
@@ -759,8 +759,7 @@ export default function NewCampaign() {
       // Ne pas créer la campagne automatiquement, elle sera créée lors de la validation finale
       toast.success('Vidéo uploadée avec succès !');
     } catch (error) {
-      const _err = isErrorWithCode(error) ? error : null;
-      toast.error(_err?.message || "Erreur lors de l'upload");
+      toast.error(getErrorMessage(error) || "Erreur lors de l'upload");
       setSelectedVideo(null);
     } finally {
       setUploading(false);
@@ -3504,8 +3503,7 @@ export default function NewCampaign() {
                           toast.success('Campagne sauvegardée en brouillon');
                           navigate('/my-campaigns?status=draft');
                         } catch (error) {
-                          const _err = isErrorWithCode(error) ? error : null;
-                          toast.error(_err?.message || 'Erreur lors de la sauvegarde');
+                          toast.error(getErrorMessage(error) || 'Erreur lors de la sauvegarde');
                         }
                       }}
                       className="px-5 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-all text-sm font-medium"
@@ -3608,8 +3606,7 @@ export default function NewCampaign() {
                             "Campagne ajoutee au panier. Activez-la depuis le panier pour qu'elle soit diffusée.",
                           );
                         } catch (error) {
-                          const _err = isErrorWithCode(error) ? error : null;
-                          toast.error(_err?.message || 'Erreur lors de la finalisation');
+                          toast.error(getErrorMessage(error) || 'Erreur lors de la finalisation');
                         } finally {
                           setAddingToCart(false);
                         }

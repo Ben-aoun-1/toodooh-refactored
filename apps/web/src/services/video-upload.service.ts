@@ -1,6 +1,6 @@
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
-import { isErrorWithCode } from '../lib/errors';
+import { getErrorMessage } from '../lib/errors';
 
 const log = logger.child({ module: 'video-upload.service' });
 
@@ -153,12 +153,11 @@ export const videoUploadService = {
         path: filePath,
       };
     } catch (error) {
-      const _err = isErrorWithCode(error) ? error : null;
       log.error({ error }, "❌ Erreur lors de l'upload de la vidéo");
       onProgress?.({
         progress: 0,
         status: 'error',
-        message: _err?.message || "Erreur lors de l'upload",
+        message: getErrorMessage(error) || "Erreur lors de l'upload",
       });
       throw error;
     }

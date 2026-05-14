@@ -1,7 +1,7 @@
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { AdminProfile, AdminSignUpData, AdminDashboardStats, AdminActivity } from '../types/admin';
-import { isErrorWithCode } from '../lib/errors';
+import { getErrorMessage } from '../lib/errors';
 
 const log = logger.child({ module: 'admin.service' });
 
@@ -66,8 +66,7 @@ export const adminService = {
 
       return adminProfile;
     } catch (error) {
-      const _err = isErrorWithCode(error) ? error : null;
-      throw new Error(_err?.message || 'Erreur de connexion');
+      throw new Error(getErrorMessage(error) || 'Erreur de connexion');
     }
   },
 

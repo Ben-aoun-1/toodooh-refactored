@@ -36,7 +36,7 @@ import {
   CampaignLocation,
   CampaignImpressionProgress,
 } from '../../types/campaign-monitoring';
-import { isErrorWithCode } from '../../lib/errors';
+import { getErrorMessage } from '../../lib/errors';
 
 const log = logger.child({ module: 'CampaignMonitoring' });
 
@@ -223,8 +223,7 @@ export default function CampaignMonitoring() {
       setStopReason('');
       loadData();
     } catch (error) {
-      const _err = isErrorWithCode(error) ? error : null;
-      toast.error(_err?.message || "Erreur lors de l'arrêt de la campagne");
+      toast.error(getErrorMessage(error) || "Erreur lors de l'arrêt de la campagne");
     }
   };
 

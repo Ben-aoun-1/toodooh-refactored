@@ -21,7 +21,7 @@ import { supabase } from '../../lib/supabase';
 import { adminEventsService } from '../../services/admin-events.service';
 import { useAdminStore } from '../../stores/admin.store';
 import { SpecialEvent, CreateEventDTO, EventStats } from '../../types/event';
-import { isErrorWithCode } from '../../lib/errors';
+import { getErrorMessage } from '../../lib/errors';
 
 const log = logger.child({ module: 'EventManagement' });
 
@@ -80,8 +80,7 @@ export default function EventManagement() {
       const eventsData = await adminEventsService.getEvents();
       setEvents(eventsData);
     } catch (error) {
-      const _err = isErrorWithCode(error) ? error : null;
-      toast.error(`Erreur lors du chargement des événements: ${_err?.message}`);
+      toast.error(`Erreur lors du chargement des événements: ${getErrorMessage(error)}`);
     } finally {
       setLoading(false);
     }
@@ -164,8 +163,7 @@ export default function EventManagement() {
         loadStats();
       }
     } catch (error) {
-      const _err = isErrorWithCode(error) ? error : null;
-      toast.error(_err?.message || 'Erreur lors de la création');
+      toast.error(getErrorMessage(error) || 'Erreur lors de la création');
     }
   };
 
@@ -192,8 +190,7 @@ export default function EventManagement() {
         resetForm();
       }
     } catch (error) {
-      const _err = isErrorWithCode(error) ? error : null;
-      toast.error(_err?.message || 'Erreur lors de la modification');
+      toast.error(getErrorMessage(error) || 'Erreur lors de la modification');
     }
   };
 
@@ -754,8 +751,7 @@ function EventImageUpload({
       onImageUrlChange(urlData.publicUrl);
       toast.success('Image uploadée.');
     } catch (err) {
-      const _err = isErrorWithCode(err) ? err : null;
-      toast.error(_err?.message || "Erreur lors de l'upload.");
+      toast.error(getErrorMessage(err) || "Erreur lors de l'upload.");
     } finally {
       setUploading(false);
       e.target.value = '';

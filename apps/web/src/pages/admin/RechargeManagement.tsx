@@ -24,7 +24,7 @@ import {
   type RechargeStats,
 } from '../../services/admin-recharges.service';
 import { useAdminStore } from '../../stores/admin.store';
-import { isErrorWithCode } from '../../lib/errors';
+import { getErrorMessage, isErrorWithCode } from '../../lib/errors';
 
 const log = logger.child({ module: 'RechargeManagement' });
 
@@ -229,8 +229,7 @@ export default function RechargeManagement() {
       setShowCreateModal(false);
       loadData();
     } catch (error) {
-      const _err = isErrorWithCode(error) ? error : null;
-      toast.error(_err?.message || 'Erreur lors de la création de la recharge');
+      toast.error(getErrorMessage(error) || 'Erreur lors de la création de la recharge');
     }
   };
 

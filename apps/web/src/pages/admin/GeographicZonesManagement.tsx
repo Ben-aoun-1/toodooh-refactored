@@ -22,7 +22,7 @@ import {
   type PredefinedZone,
 } from '../../services/predefined-zones.service';
 import 'leaflet/dist/leaflet.css';
-import { isErrorWithCode } from '../../lib/errors';
+import { getErrorMessage } from '../../lib/errors';
 
 // Fix pour les icônes Leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -166,8 +166,7 @@ export default function GeographicZonesManagement() {
       setZoneImageUrl(url);
       toast.success('Image mise à jour');
     } catch (err) {
-      const _err = isErrorWithCode(err) ? err : null;
-      toast.error(_err?.message || "Erreur lors de l'upload");
+      toast.error(getErrorMessage(err) || "Erreur lors de l'upload");
     } finally {
       setUploadingImage(false);
       e.target.value = '';
@@ -218,8 +217,7 @@ export default function GeographicZonesManagement() {
       handleCloseModal();
       loadZones();
     } catch (error) {
-      const _err = isErrorWithCode(error) ? error : null;
-      toast.error(_err?.message || 'Erreur lors de la sauvegarde');
+      toast.error(getErrorMessage(error) || 'Erreur lors de la sauvegarde');
     }
   };
 
@@ -233,8 +231,7 @@ export default function GeographicZonesManagement() {
       toast.success('Zone supprimée avec succès');
       loadZones();
     } catch (error) {
-      const _err = isErrorWithCode(error) ? error : null;
-      toast.error(_err?.message || 'Erreur lors de la suppression');
+      toast.error(getErrorMessage(error) || 'Erreur lors de la suppression');
     }
   };
 
@@ -244,8 +241,7 @@ export default function GeographicZonesManagement() {
       toast.success(`Zone ${!currentStatus ? 'publiée' : 'dépubliée'} avec succès`);
       loadZones();
     } catch (error) {
-      const _err = isErrorWithCode(error) ? error : null;
-      toast.error(_err?.message || 'Erreur lors du changement de statut');
+      toast.error(getErrorMessage(error) || 'Erreur lors du changement de statut');
     }
   };
 
