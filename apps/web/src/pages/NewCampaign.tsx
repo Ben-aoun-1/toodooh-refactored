@@ -3177,14 +3177,26 @@ export default function NewCampaign() {
                             }
                             await saveCampaignDraft(videoId, false);
                           } else {
-                            await supabase
+                            const { error } = await supabase
                               .from('campaigns')
                               .update({ status: 'draft' })
                               .eq('id', draftCampaignId);
+                            if (error) {
+                              log.error(
+                                { error, campaignId: draftCampaignId },
+                                'failed to save draft',
+                              );
+                              toast.error(
+                                getErrorMessage(error) ||
+                                  'Erreur lors de la sauvegarde du brouillon',
+                              );
+                              return;
+                            }
                           }
                           toast.success('Campagne sauvegardée en brouillon');
                           navigate('/my-campaigns?status=draft');
                         } catch (error) {
+                          log.error({ err: error }, 'unexpected error during save-draft flow');
                           toast.error(getErrorMessage(error) || 'Erreur lors de la sauvegarde');
                         }
                       }}
@@ -3230,10 +3242,21 @@ export default function NewCampaign() {
                           const balanceCheck =
                             await balanceService.checkCampaignBalance(campaignId);
                           if (balanceCheck && !balanceCheck.has_sufficient_balance) {
-                            await supabase
+                            const { error: revertError } = await supabase
                               .from('campaigns')
                               .update({ status: 'draft' })
                               .eq('id', campaignId);
+                            if (revertError) {
+                              log.error(
+                                { error: revertError, campaignId },
+                                'failed to revert campaign to draft on insufficient balance',
+                              );
+                              toast.error(
+                                getErrorMessage(revertError) ||
+                                  'Solde insuffisant et erreur lors de la mise à jour de la campagne',
+                              );
+                              return;
+                            }
                             toast.error('Solde insuffisant pour activer la campagne', {
                               duration: 5000,
                             });
@@ -3269,16 +3292,43 @@ export default function NewCampaign() {
 
                           // Tant que l'utilisateur n'a pas validé depuis le panier,
                           // la campagne reste en brouillon.
-                          await supabase
+                          const { error: updateError } = await supabase
                             .from('campaigns')
                             .update({ status: 'draft', content_validation_status: 'pending' })
                             .eq('id', campaignId);
+                          if (updateError) {
+                            log.error(
+                              { error: updateError, campaignId },
+                              'failed to update campaign for cart add',
+                            );
+                            toast.error(
+                              getErrorMessage(updateError) || 'Erreur lors de la finalisation',
+                            );
+                            return;
+                          }
 
                           if (isEventCampaign && eventFromState?.id) {
-                            await supabase.rpc('link_campaign_to_event', {
-                              p_campaign_id: campaignId,
-                              p_event_id: eventFromState.id,
-                            });
+                            const { error: linkError } = await supabase.rpc(
+                              'link_campaign_to_event',
+                              {
+                                p_campaign_id: campaignId,
+                                p_event_id: eventFromState.id,
+                              },
+                            );
+                            if (linkError) {
+                              // Event-campaigns require the link to be functional; without it the
+                              // campaign exists but isn't tied to its event. Surface the failure
+                              // and stop — do not proceed to cart-add. User can retry.
+                              log.error(
+                                { error: linkError, campaignId, eventId: eventFromState.id },
+                                'failed to link event campaign to event',
+                              );
+                              toast.error(
+                                getErrorMessage(linkError) ||
+                                  "Erreur lors du lien à l'événement — veuillez réessayer",
+                              );
+                              return;
+                            }
                           }
 
                           pushCampaignToSidebarCart(campaignId);
@@ -3288,6 +3338,7 @@ export default function NewCampaign() {
                             "Campagne ajoutee au panier. Activez-la depuis le panier pour qu'elle soit diffusée.",
                           );
                         } catch (error) {
+                          log.error({ err: error }, 'unexpected error during cart-add flow');
                           toast.error(getErrorMessage(error) || 'Erreur lors de la finalisation');
                         } finally {
                           setAddingToCart(false);
