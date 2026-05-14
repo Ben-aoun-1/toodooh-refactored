@@ -296,52 +296,61 @@ export const adminUserService = {
 
       const authUserId = businessProfile.user_id;
 
-      // 2. Supprimer de toutes les tables liées (dans l'ordre pour respecter les contraintes de clés étrangères)
+      // 2. Supprimer de toutes les tables liées (dans l'ordre pour respecter les contraintes de clés étrangères).
+      //
+      // Collect per-table failures, continue attempting each delete, and bail
+      // BEFORE the parent business_profile delete if any child cascade failed —
+      // partial cascade would leave child rows pointing to an orphaned
+      // auth.users row with no UI path to find them later. See the regression
+      // audit at docs/audits/2026-05-14-step-6-regression-audit.md (P0b).
+      const cascadeErrors: { table: string; error: unknown }[] = [];
 
       // Supprimer les campagnes publicitaires
-      const { error: campaignsError } = await supabase
-        .from('advertising_campaigns')
-        .delete()
-        .eq('advertiser_id', authUserId);
-
-      if (campaignsError) {
+      {
+        const { error } = await supabase
+          .from('advertising_campaigns')
+          .delete()
+          .eq('advertiser_id', authUserId);
+        if (error) cascadeErrors.push({ table: 'advertising_campaigns', error });
       }
 
       // Supprimer les écrans
-      const { error: screensError } = await supabase
-        .from('screens')
-        .delete()
-        .eq('owner_id', authUserId);
-
-      if (screensError) {
+      {
+        const { error } = await supabase
+          .from('screens')
+          .delete()
+          .eq('owner_id', authUserId);
+        if (error) cascadeErrors.push({ table: 'screens', error });
       }
 
       // Supprimer les emplacements
-      const { error: locationsError } = await supabase
-        .from('locations')
-        .delete()
-        .eq('owner_id', authUserId);
-
-      if (locationsError) {
+      {
+        const { error } = await supabase
+          .from('locations')
+          .delete()
+          .eq('owner_id', authUserId);
+        if (error) cascadeErrors.push({ table: 'locations', error });
       }
 
       // Supprimer les clients
-      const { error: clientsError } = await supabase
-        .from('clients')
-        .delete()
-        .eq('advertiser_id', authUserId);
-
-      if (clientsError) {
+      {
+        const { error } = await supabase
+          .from('clients')
+          .delete()
+          .eq('advertiser_id', authUserId);
+        if (error) cascadeErrors.push({ table: 'clients', error });
       }
 
-      // Supprimer les recharges (si la table existe)
+      // Supprimer les recharges (si la table existe). The recharges table may
+      // not be live yet — swallow "Could not find" errors at this level, but
+      // still collect real errors into cascadeErrors.
       try {
-        const { error: rechargesError } = await supabase
+        const { error } = await supabase
           .from('recharges')
           .delete()
           .eq('user_id', authUserId);
-
-        if (rechargesError && !rechargesError.message.includes('Could not find')) {
+        if (error && !error.message.includes('Could not find')) {
+          cascadeErrors.push({ table: 'recharges', error });
         }
       } catch (_e) {
         // Table n'existe pas, continuer
@@ -349,6 +358,19 @@ export const adminUserService = {
 
       // Note: Table invoices n'existe pas encore, on skip
       // Supprimer les factures quand la table sera créée
+
+      // If any child cascade failed, surface the full diagnostic and bail
+      // before touching the parent. business_profile has no incoming FK
+      // (per migration 20250313112646_wispy_leaf.sql), so the parent delete
+      // can't fail on FK violation; the guard prevents the harder problem of
+      // partial-cascade orphans.
+      if (cascadeErrors.length > 0) {
+        log.error(
+          { failedTables: cascadeErrors.map((e) => e.table), errors: cascadeErrors },
+          '❌ deleteUser cascade failed on one or more child tables — parent business_profile NOT deleted',
+        );
+        return false;
+      }
 
       // Supprimer le profil business
       const { error: businessError } = await supabase
