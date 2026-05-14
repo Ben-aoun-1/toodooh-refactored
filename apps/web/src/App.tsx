@@ -7,7 +7,16 @@ import PageLoadingFallback from './components/PageLoadingFallback';
 import { useAuthStore } from './stores/auth.store';
 
 // Toutes les pages sont chargées à la demande (code-splitting par route).
-const Dashboard = lazy(() => import('./pages/Dashboard'));
+const AdvertiserLayout = lazy(() => import('./components/layout/AdvertiserLayout'));
+const AdvertiserDashboard = lazy(() => import('./pages/AdvertiserDashboard'));
+const UserProfile = lazy(() => import('./pages/UserProfile'));
+const NewCampaign = lazy(() => import('./pages/NewCampaign'));
+const MyCampaigns = lazy(() => import('./pages/MyCampaigns'));
+const Events = lazy(() => import('./pages/Events'));
+const MyRecharges = lazy(() => import('./pages/MyRecharges'));
+const MyInvoices = lazy(() => import('./pages/MyInvoices'));
+const MyClients = lazy(() => import('./pages/MyClients'));
+const CartPage = lazy(() => import('./pages/CartPage'));
 const OwnerDashboard = lazy(() => import('./pages/OwnerDashboard'));
 const CampaignDetails = lazy(() => import('./pages/CampaignDetails'));
 const Login = lazy(() => import('./pages/auth/Login'));
@@ -187,7 +196,9 @@ export default function App() {
               path="/dashboard"
               element={
                 <AdvertiserRoute>
-                  <Dashboard />
+                  <AdvertiserLayout>
+                    <AdvertiserDashboard />
+                  </AdvertiserLayout>
                 </AdvertiserRoute>
               }
             />
@@ -195,7 +206,9 @@ export default function App() {
               path="/profile"
               element={
                 <AdvertiserRoute>
-                  <Dashboard />
+                  <AdvertiserLayout>
+                    <UserProfile />
+                  </AdvertiserLayout>
                 </AdvertiserRoute>
               }
             />
@@ -203,7 +216,9 @@ export default function App() {
               path="/new-campaign"
               element={
                 <AdvertiserRoute>
-                  <Dashboard />
+                  <AdvertiserLayout>
+                    <NewCampaign />
+                  </AdvertiserLayout>
                 </AdvertiserRoute>
               }
             />
@@ -211,7 +226,9 @@ export default function App() {
               path="/my-campaigns"
               element={
                 <AdvertiserRoute>
-                  <Dashboard />
+                  <AdvertiserLayout>
+                    <MyCampaigns />
+                  </AdvertiserLayout>
                 </AdvertiserRoute>
               }
             />
@@ -219,7 +236,9 @@ export default function App() {
               path="/evenements"
               element={
                 <AdvertiserRoute>
-                  <Dashboard />
+                  <AdvertiserLayout>
+                    <Events />
+                  </AdvertiserLayout>
                 </AdvertiserRoute>
               }
             />
@@ -227,7 +246,9 @@ export default function App() {
               path="/new-event-campaign"
               element={
                 <AdvertiserRoute>
-                  <Dashboard />
+                  <AdvertiserLayout>
+                    <NewCampaign />
+                  </AdvertiserLayout>
                 </AdvertiserRoute>
               }
             />
@@ -243,7 +264,9 @@ export default function App() {
               path="/my-recharges"
               element={
                 <AdvertiserRoute>
-                  <Dashboard />
+                  <AdvertiserLayout>
+                    <MyRecharges />
+                  </AdvertiserLayout>
                 </AdvertiserRoute>
               }
             />
@@ -251,7 +274,9 @@ export default function App() {
               path="/my-invoices"
               element={
                 <AdvertiserRoute>
-                  <Dashboard />
+                  <AdvertiserLayout>
+                    <MyInvoices />
+                  </AdvertiserLayout>
                 </AdvertiserRoute>
               }
             />
@@ -259,7 +284,9 @@ export default function App() {
               path="/my-clients"
               element={
                 <AdvertiserRoute>
-                  <Dashboard />
+                  <AdvertiserLayout>
+                    <MyClients />
+                  </AdvertiserLayout>
                 </AdvertiserRoute>
               }
             />
@@ -267,7 +294,9 @@ export default function App() {
               path="/my-cart"
               element={
                 <AdvertiserRoute>
-                  <Dashboard />
+                  <AdvertiserLayout>
+                    <CartPage />
+                  </AdvertiserLayout>
                 </AdvertiserRoute>
               }
             />
