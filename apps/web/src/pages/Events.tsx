@@ -190,7 +190,7 @@ export default function Events() {
           return;
         }
         const byId = new Map<string, CampaignForEdit>();
-        campaignsData.forEach((c: any) => {
+        campaignsData.forEach((c) => {
           const camp: CampaignForEdit = {
             id: c.id,
             name: c.name,

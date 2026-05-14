@@ -161,7 +161,7 @@ export default function OwnerNotificationsBell({ userId }: { userId?: string }) 
           : { data: [] as any[] };
 
       const campaigns = campaignsRes.data || [];
-      const campaignById = new Map<string, any>(campaigns.map((c: any) => [c.id, c]));
+      const campaignById = new Map<string, any>(campaigns.map((c) => [c.id, c]));
       const approvals = (ownerApprovals.data || []) as Array<{
         campaign_id: string;
         status: string;
@@ -192,7 +192,7 @@ export default function OwnerNotificationsBell({ userId }: { userId?: string }) 
         });
 
       // 2/3/4/5) Rappels + début/fin
-      campaigns.forEach((c: any) => {
+      campaigns.forEach((c) => {
         const start = toDate(c.start_date);
         const end = toDate(c.end_date);
         if (!start || !end) return;

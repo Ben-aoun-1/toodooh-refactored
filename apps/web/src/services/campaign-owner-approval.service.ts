@@ -88,7 +88,7 @@ export const campaignOwnerApprovalService = {
 
       // Garder uniquement les campagnes avec vidéo validée/active
       const videoIds = Array.from(
-        new Set((campaigns || []).map((c: any) => c.video_id).filter(Boolean)),
+        new Set((campaigns || []).map((c) => c.video_id).filter(Boolean)),
       );
       const approvedVideoIdSet = new Set<string>();
       if (videoIds.length > 0) {
@@ -98,10 +98,10 @@ export const campaignOwnerApprovalService = {
           .in('id', videoIds)
           .eq('validation_status', 'approved');
         if (videosError) throw videosError;
-        (approvedVideos || []).forEach((v: any) => approvedVideoIdSet.add(v.id));
+        (approvedVideos || []).forEach((v) => approvedVideoIdSet.add(v.id));
       }
 
-      const eligibleCampaigns = (campaigns || []).filter((campaign: any) => {
+      const eligibleCampaigns = (campaigns || []).filter((campaign) => {
         // Compat: accepter soit via content_validation_status approved, soit vidéo approved
         if (campaign?.content_validation_status === 'approved') return true;
         if (campaign?.video_id && approvedVideoIdSet.has(campaign.video_id)) return true;
@@ -109,7 +109,7 @@ export const campaignOwnerApprovalService = {
       });
       if (eligibleCampaigns.length === 0) return [];
 
-      const eligibleCampaignIds = eligibleCampaigns.map((c: any) => c.id);
+      const eligibleCampaignIds = eligibleCampaigns.map((c) => c.id);
 
       // Récupérer les validations existantes
       const { data: approvals, error: approvalsError } = await supabase
@@ -156,7 +156,7 @@ export const campaignOwnerApprovalService = {
       // Trier les campagnes par date de création décroissante (plus récente en premier)
       // Récupérer les dates de création depuis les campagnes
       const campaignCreationMap = new Map<string, string>();
-      eligibleCampaigns.forEach((campaign: any) => {
+      eligibleCampaigns.forEach((campaign) => {
         campaignCreationMap.set(campaign.id, campaign.created_at);
       });
 

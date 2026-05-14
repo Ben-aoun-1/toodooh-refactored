@@ -99,7 +99,7 @@ export default function AdvertiserNotificationsBell({ userId, emphasized = false
       const profile = profileRes.data;
       const campaigns = campaignsRes.data;
       const reads = readsRes.data;
-      const persistedNotifications = (notificationsRes.data || []).filter((n: any) => {
+      const persistedNotifications = (notificationsRes.data || []).filter((n) => {
         const scopeOk = !n?.scope || n.scope === notificationScope;
         const activeOk = n?.is_active !== false;
         return scopeOk && activeOk;
@@ -125,8 +125,8 @@ export default function AdvertiserNotificationsBell({ userId, emphasized = false
       const videoIds = Array.from(
         new Set(
           campaignRows
-            .map((campaign: any) => campaign.video_id)
-            .filter((value: any): value is string => typeof value === 'string' && value.length > 0),
+            .map((campaign) => campaign.video_id)
+            .filter((value): value is string => typeof value === 'string' && value.length > 0),
         ),
       );
 
@@ -137,7 +137,7 @@ export default function AdvertiserNotificationsBell({ userId, emphasized = false
           .select('id, validation_status, updated_at')
           .in('id', videoIds);
 
-        (videos || []).forEach((video: any) => {
+        (videos || []).forEach((video) => {
           if (video?.validation_status === 'approved') {
             approvedVideoMap.set(video.id, toDate(video.updated_at) || new Date());
           }
@@ -147,7 +147,7 @@ export default function AdvertiserNotificationsBell({ userId, emphasized = false
       const generated: AdvertiserNotification[] = [];
 
       // Source prioritaire: notifications persistées
-      persistedNotifications.forEach((n: any) => {
+      persistedNotifications.forEach((n) => {
         const notificationId =
           typeof n?.id === 'string' && n.id.length > 0
             ? n.id
@@ -175,7 +175,7 @@ export default function AdvertiserNotificationsBell({ userId, emphasized = false
         });
       }
 
-      campaignRows.forEach((campaign: any) => {
+      campaignRows.forEach((campaign) => {
         const isActiveCampaign = campaign?.status === 'active';
         const byCampaignStatus = campaign?.content_validation_status === 'approved';
         const byVideoStatus =

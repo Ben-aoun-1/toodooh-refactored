@@ -72,7 +72,7 @@ class AdminCampaignMonitoringService {
         .order('created_at', { ascending: false });
 
       if (!viewError && viewData) {
-        return viewData.map((row: any) => ({
+        return viewData.map((row) => ({
           ...row,
           screens_list: [],
         })) as CampaignMonitoringData[];
@@ -114,10 +114,10 @@ class AdminCampaignMonitoringService {
       if (directError) throw directError;
 
       const campaignRows = campaigns || [];
-      const advertiserIds = [...new Set(campaignRows.map((c: any) => c.user_id).filter(Boolean))];
-      const clientIds = [...new Set(campaignRows.map((c: any) => c.client_id).filter(Boolean))];
-      const videoIds = [...new Set(campaignRows.map((c: any) => c.video_id).filter(Boolean))];
-      const campaignIds = campaignRows.map((c: any) => c.id);
+      const advertiserIds = [...new Set(campaignRows.map((c) => c.user_id).filter(Boolean))];
+      const clientIds = [...new Set(campaignRows.map((c) => c.client_id).filter(Boolean))];
+      const videoIds = [...new Set(campaignRows.map((c) => c.video_id).filter(Boolean))];
+      const campaignIds = campaignRows.map((c) => c.id);
 
       const [
         { data: profilesData },
@@ -142,16 +142,16 @@ class AdminCampaignMonitoringService {
           : Promise.resolve({ data: [] as any[] }),
       ]);
 
-      const profileMap = new Map((profilesData || []).map((p: any) => [p.user_id, p]));
-      const clientMap = new Map((clientsData || []).map((c: any) => [c.id, c]));
-      const videoMap = new Map((videosData || []).map((v: any) => [v.id, v]));
+      const profileMap = new Map((profilesData || []).map((p) => [p.user_id, p]));
+      const clientMap = new Map((clientsData || []).map((c) => [c.id, c]));
+      const videoMap = new Map((videosData || []).map((v) => [v.id, v]));
       const screensCountMap = new Map<string, number>();
-      (campaignScreensData || []).forEach((r: any) => {
+      (campaignScreensData || []).forEach((r) => {
         const id = String(r.campaign_id);
         screensCountMap.set(id, (screensCountMap.get(id) || 0) + 1);
       });
 
-      return campaignRows.map((campaign: any) => {
+      return campaignRows.map((campaign) => {
         const profile = profileMap.get(campaign.user_id);
         const client = campaign.client_id ? clientMap.get(campaign.client_id) : null;
         const video = campaign.video_id ? videoMap.get(campaign.video_id) : null;
@@ -311,7 +311,7 @@ class AdminCampaignMonitoringService {
         .select('location_id')
         .eq('campaign_id', campaignId);
 
-      let locationIds = (campaignLocations || []).map((r: any) => r.location_id).filter(Boolean);
+      let locationIds = (campaignLocations || []).map((r) => r.location_id).filter(Boolean);
 
       // Fallback legacy si campaign_locations est vide
       if (locationIds.length === 0) {
@@ -320,7 +320,7 @@ class AdminCampaignMonitoringService {
           .select('screens(location_id)')
           .eq('campaign_id', campaignId);
         locationIds = Array.from(
-          new Set((campaignScreens || []).map((r: any) => r.screens?.location_id).filter(Boolean)),
+          new Set((campaignScreens || []).map((r) => r.screens?.location_id).filter(Boolean)),
         ) as string[];
       }
 
@@ -342,7 +342,7 @@ class AdminCampaignMonitoringService {
       if (screensError) throw screensError;
 
       const ownerIds = [
-        ...new Set((locationsData || []).map((l: any) => l.owner_id).filter(Boolean)),
+        ...new Set((locationsData || []).map((l) => l.owner_id).filter(Boolean)),
       ];
       const { data: ownersData } = ownerIds.length
         ? await supabase
@@ -352,11 +352,11 @@ class AdminCampaignMonitoringService {
         : { data: [] as any[] };
 
       const ownerMap = new Map(
-        (ownersData || []).map((o: any) => [o.user_id, o.business_name || o.contact_name || 'N/A']),
+        (ownersData || []).map((o) => [o.user_id, o.business_name || o.contact_name || 'N/A']),
       );
 
       const screensByLocation = new Map<string, any[]>();
-      (screensData || []).forEach((s: any) => {
+      (screensData || []).forEach((s) => {
         const list = screensByLocation.get(s.location_id) || [];
         list.push(s);
         screensByLocation.set(s.location_id, list);
@@ -371,7 +371,7 @@ class AdminCampaignMonitoringService {
         return 'unavailable';
       };
 
-      const locations: CampaignLocation[] = (locationsData || []).map((location: any) => {
+      const locations: CampaignLocation[] = (locationsData || []).map((location) => {
         const locationScreens = screensByLocation.get(location.id) || [];
         return {
           location_id: location.id,
