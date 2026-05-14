@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { MapContainer, TileLayer, Circle, useMapEvents, Marker, Popup } from 'react-leaflet';
 import 'react-datepicker/dist/react-datepicker.css';
 import 'leaflet/dist/leaflet.css';
@@ -45,10 +45,18 @@ import ariane5s from '../assets/ariane/5s.png';
 import ariane6 from '../assets/ariane/6.png';
 import ariane6s from '../assets/ariane/6s.png';
 import panierPng from '../assets/panier.png';
+import { useCampaignWizard } from '../hooks/new-campaign/useCampaignWizard';
+import { buildInitialWizardState } from '../hooks/new-campaign/wizard-init';
+import type {
+  GeographicZone,
+  UseCampaignWizardOptions,
+  WizardState,
+} from '../hooks/new-campaign/wizard-types';
 import { useAdvertiserGlobalConfig } from '../hooks/useAdvertiserGlobalConfig';
 import { getErrorMessage } from '../lib/errors';
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
+import { parseCampaignUiDate, toLocalDateOnlyString } from '../lib/wizard-dates';
 import { authService } from '../services/auth.service';
 import { balanceService } from '../services/balance.service';
 import {
@@ -73,6 +81,8 @@ import { useAuthStore } from '../stores/auth.store';
 import { useCartStore } from '../stores/cart.store';
 import type { BusinessSector } from '../types/auth';
 import type { SpecialEvent } from '../types/event';
+
+import Step1NameType from './new-campaign/Step1NameType';
 
 const log = logger.child({ module: 'NewCampaign' });
 
@@ -139,28 +149,6 @@ const TUNISIA_CITIES = [
 ];
 
 export default function NewCampaign() {
-  const toLocalDateOnlyString = (date: Date): string => {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  };
-
-  const parseCampaignUiDate = (value: Date | string | null | undefined): Date | null => {
-    if (!value) return null;
-    if (value instanceof Date) {
-      return new Date(value.getFullYear(), value.getMonth(), value.getDate(), 0, 0, 0, 0);
-    }
-    const part = String(value).trim().split('T')[0];
-    const ymd = /^(\d{4})-(\d{2})-(\d{2})$/.exec(part);
-    if (ymd) {
-      return new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]), 0, 0, 0, 0);
-    }
-    const parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return null;
-    return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), 0, 0, 0, 0);
-  };
-
   const navigate = useNavigate();
   const location = useLocation();
   const { profileType } = useAuthStore();
@@ -172,8 +160,9 @@ export default function NewCampaign() {
   const eventFromState = location.state?.event as SpecialEvent | undefined;
   const isEventCampaign = Boolean(
     (location.pathname === '/new-event-campaign' && eventFromState) ||
-    (editMode && campaignToEdit?.event_id),
+      (editMode && campaignToEdit?.event_id),
   );
+  const campaignType: 'standard' | 'event' = isEventCampaign ? 'event' : 'standard';
 
   const { dooh, refresh: refreshGlobalDoohConfig } = useAdvertiserGlobalConfig();
   const cpmTnd = isEventCampaign ? dooh.event_campaign_cpm_tnd : dooh.standard_campaign_cpm_tnd;
@@ -182,14 +171,185 @@ export default function NewCampaign() {
   const shouldShowClientField =
     profileType === 'advertising_agency' || profileType === 'event_organizer';
 
-  const [startDate, setStartDate] = useState<Date | null>(
-    parseCampaignUiDate(campaignToEdit?.startDate ?? campaignToEdit?.start_date) ??
-      parseCampaignUiDate(eventFromState?.start_date),
+  // --- Wizard hook adoption (Step 7 Commit 6). The hook owns 16 persistent
+  //     fields (WizardState); selectedLocation / radius / selectedVideo and
+  //     the UI overlays remain local. initialState is computed once via
+  //     useRef so the hook never re-initializes on later renders.
+  const initialStateRef = useRef<WizardState | null>(null);
+  if (initialStateRef.current === null) {
+    initialStateRef.current = buildInitialWizardState({
+      campaignType,
+      campaignToEdit,
+      eventFromState,
+    });
+  }
+  const wizOpts = useMemo<UseCampaignWizardOptions>(
+    () => ({
+      initialState: initialStateRef.current as WizardState,
+      campaignType,
+      clientRequired: shouldShowClientField,
+      cpmTnd,
+      eventId: eventFromState?.id ?? campaignToEdit?.event_id ?? null,
+      eventName: eventFromState?.name ?? null,
+      fallbackLocation: center,
+    }),
+    [
+      campaignType,
+      shouldShowClientField,
+      cpmTnd,
+      eventFromState?.id,
+      eventFromState?.name,
+      campaignToEdit?.event_id,
+    ],
   );
-  const [endDate, setEndDate] = useState<Date | null>(
-    parseCampaignUiDate(campaignToEdit?.endDate ?? campaignToEdit?.end_date) ??
-      parseCampaignUiDate(eventFromState?.end_date),
+  const wiz = useCampaignWizard(wizOpts);
+  const { state, setState } = wiz;
+  const currentStep = wiz.currentStep;
+  // setCurrentStep shim removed: all call sites were rewritten inline to
+  // wiz.nextStep / wiz.prevStep / wiz.goToStep during the Commit 6 footer
+  // + breadcrumb rewrite. Step 2/3/4/5 extractions in Commits 7-10 may
+  // re-introduce a step-specific setter pattern via their props.
+
+  // Per-field setter shims: preserve old setX(value | updater) API at every
+  // call site below so the migration touches reads only.
+  const setCampaignName = useCallback(
+    (value: string) => setState((prev) => ({ ...prev, campaignName: value })),
+    [setState],
   );
+  const setClient = useCallback(
+    (value: string) => setState((prev) => ({ ...prev, client: value })),
+    [setState],
+  );
+  const setDiffusionType = useCallback(
+    (value: 'toodooh' | 'parc_tv') =>
+      setState((prev) => ({ ...prev, diffusionType: value })),
+    [setState],
+  );
+  const setSelectedParcIds = useCallback(
+    (next: string[] | ((prev: string[]) => string[])) =>
+      setState((prev) => ({
+        ...prev,
+        selectedParcIds:
+          typeof next === 'function'
+            ? (next as (p: string[]) => string[])(prev.selectedParcIds)
+            : next,
+      })),
+    [setState],
+  );
+  const setStartDate = useCallback(
+    (next: Date | null) =>
+      setState((prev) => ({
+        ...prev,
+        startDate: next ? toLocalDateOnlyString(next) : null,
+      })),
+    [setState],
+  );
+  const setEndDate = useCallback(
+    (next: Date | null) =>
+      setState((prev) => ({
+        ...prev,
+        endDate: next ? toLocalDateOnlyString(next) : null,
+      })),
+    [setState],
+  );
+  const setGeographicZones = useCallback(
+    (next: GeographicZone[] | ((prev: GeographicZone[]) => GeographicZone[])) =>
+      setState((prev) => ({
+        ...prev,
+        geographicZones:
+          typeof next === 'function'
+            ? (next as (p: GeographicZone[]) => GeographicZone[])(prev.geographicZones)
+            : next,
+      })),
+    [setState],
+  );
+  const setAdjustedBudget = useCallback(
+    (next: number | ((prev: number) => number)) =>
+      setState((prev) => ({
+        ...prev,
+        adjustedBudget:
+          typeof next === 'function'
+            ? (next as (p: number) => number)(prev.adjustedBudget)
+            : next,
+      })),
+    [setState],
+  );
+  const setCalculatedImpressions = useCallback(
+    (next: number | ((prev: number) => number)) =>
+      setState((prev) => ({
+        ...prev,
+        calculatedImpressions:
+          typeof next === 'function'
+            ? (next as (p: number) => number)(prev.calculatedImpressions)
+            : next,
+      })),
+    [setState],
+  );
+  const setCustomMinBudget = useCallback(
+    (next: number | null | ((prev: number | null) => number | null)) =>
+      setState((prev) => ({
+        ...prev,
+        customMinBudget:
+          typeof next === 'function'
+            ? (next as (p: number | null) => number | null)(prev.customMinBudget)
+            : next,
+      })),
+    [setState],
+  );
+  const setCustomMaxBudget = useCallback(
+    (next: number | null | ((prev: number | null) => number | null)) =>
+      setState((prev) => ({
+        ...prev,
+        customMaxBudget:
+          typeof next === 'function'
+            ? (next as (p: number | null) => number | null)(prev.customMaxBudget)
+            : next,
+      })),
+    [setState],
+  );
+  const setUploadedVideoId = useCallback(
+    (value: string) => setState((prev) => ({ ...prev, uploadedVideoId: value })),
+    [setState],
+  );
+  const setUploadedVideoUrl = useCallback(
+    (value: string) => setState((prev) => ({ ...prev, uploadedVideoUrl: value })),
+    [setState],
+  );
+  const setDraftCampaignId = useCallback(
+    (value: string) => setState((prev) => ({ ...prev, draftCampaignId: value })),
+    [setState],
+  );
+
+  // Destructure wizard state: preserves the old variable names at every read
+  // site below. startDate/endDate are computed back to Date|null since the
+  // bulk of the file consumes them as Dates (toLocaleDateString, .getTime,
+  // DatePicker selected={...}). Serialization uses the ISO form on state.
+  const {
+    diffusionType,
+    selectedParcIds,
+    geographicZones,
+    adjustedBudget,
+    calculatedImpressions,
+    customMinBudget,
+    customMaxBudget,
+    uploadedVideoId,
+    uploadedVideoUrl,
+    existingVideoId,
+    draftCampaignId,
+  } = state;
+  // `categories` is read via `formData.categories` (the legacy-stub memo); no
+  // direct top-level alias needed in this commit. Step 2's extraction in
+  // Commit 7 may switch to a direct `state.categories` read.
+  const startDate = useMemo(
+    () => parseCampaignUiDate(state.startDate),
+    [state.startDate],
+  );
+  const endDate = useMemo(
+    () => parseCampaignUiDate(state.endDate),
+    [state.endDate],
+  );
+
+  // --- Transient/UI-local state (NOT in WizardState) ---
   const [selectedLocation, setSelectedLocation] = useState(
     campaignToEdit?.location_lat && campaignToEdit?.location_lng
       ? { lat: campaignToEdit.location_lat, lng: campaignToEdit.location_lng }
@@ -198,8 +358,6 @@ export default function NewCampaign() {
   const [radius, _setRadius] = useState(campaignToEdit?.location_radius || 1000);
   const [_searchQuery, _setSearchQuery] = useState('');
   const [selectedVideo, setSelectedVideo] = useState<File | null>(null);
-  const [currentStep, setCurrentStep] = useState(1);
-  const [diffusionType, setDiffusionType] = useState<'toodooh' | 'parc_tv'>('toodooh');
 
   // Parcs TV
   interface ParcTV {
@@ -210,18 +368,29 @@ export default function NewCampaign() {
     screenIds: string[];
   }
   const [availableParcs, setAvailableParcs] = useState<ParcTV[]>([]);
-  const [selectedParcIds, setSelectedParcIds] = useState<string[]>([]);
   const [loadingParcs, setLoadingParcs] = useState(false);
 
-  const [formData, setFormData] = useState({
-    campaignName: campaignToEdit?.name || (eventFromState ? eventFromState.name : ''),
-    client: campaignToEdit?.client || '',
-    category: campaignToEdit?.category || '',
-    categories: (campaignToEdit?.category ? [campaignToEdit.category] : []) as string[],
+  // --- Legacy formData stub. The migrated fields (campaignName, client,
+  //     categories) now live in WizardState. The remaining slots
+  //     (budget, nbImpressions, nbEcrans) feed only the dead
+  //     `campaignEstimations` memo (live DOOH engine drives via
+  //     doohMaxImpressions). Flagged for cleanup in a follow-up commit.
+  // TODO(step-7-cleanup): drop campaignEstimations memo + this stub.
+  const [legacyFormData, _setLegacyFormData] = useState({
     budget: campaignToEdit?.budget?.toString() || '',
     nbImpressions: 1000,
     nbEcrans: 1,
   });
+  const formData = useMemo(
+    () => ({
+      campaignName: state.campaignName,
+      client: state.client,
+      category: state.categories[0] ?? '',
+      categories: state.categories,
+      ...legacyFormData,
+    }),
+    [state.campaignName, state.client, state.categories, legacyFormData],
+  );
   const [campaignCategories, setCampaignCategories] = useState<string[]>([]);
 
   // États pour la validation
@@ -235,18 +404,6 @@ export default function NewCampaign() {
   const [_locationsInZone, setLocationsInZone] = useState<CampaignLocation[]>([]);
   const [_loadingScreens, setLoadingScreens] = useState(false);
 
-  // États pour la gestion multi-zones (ciblage par localités : une entrée par localité sur la carte)
-  interface GeographicZone {
-    id: string;
-    name: string;
-    location: { lat: number; lng: number };
-    radius: number;
-    locations: CampaignLocation[];
-    /** ID de la zone prédéfinie si la zone vient d’une carte prédéfinie */
-    predefinedZoneId?: string;
-  }
-
-  const [geographicZones, setGeographicZones] = useState<GeographicZone[]>([]);
   const [showZoneModal, setShowZoneModal] = useState(false);
   const [editingZone, setEditingZone] = useState<GeographicZone | null>(null);
   const [tempZoneLocation, setTempZoneLocation] = useState(center);
@@ -264,11 +421,10 @@ export default function NewCampaign() {
   // Ajout d'un état pour le budget slider (avec bornes min/max)
   const BUDGET_MIN = 0;
   const [_budget, _setBudget] = useState(BUDGET_MIN);
-  const [adjustedBudget, setAdjustedBudget] = useState(BUDGET_MIN);
-  const [calculatedImpressions, setCalculatedImpressions] = useState(0);
+  // adjustedBudget / calculatedImpressions / customMinBudget / customMaxBudget
+  // are now in WizardState; their setters are shimmed at the top of the
+  // component to preserve the setX(value|updater) API at all call sites.
   const [_budgetPercentage, setBudgetPercentage] = useState(100); // Pourcentage du budget (0-100%)
-  const [customMinBudget, setCustomMinBudget] = useState<number | null>(null);
-  const [customMaxBudget, setCustomMaxBudget] = useState<number | null>(null);
   const [unavailabilityPeriods, setUnavailabilityPeriods] = useState<UnavailabilityPeriod[]>([]);
   /** Plafond impressions (moteur DOOH horaire), aligné injectCampaignPublicationSchedule */
   const [doohMaxImpressions, setDoohMaxImpressions] = useState(0);
@@ -432,18 +588,31 @@ export default function NewCampaign() {
 
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
-  const [uploadedVideoUrl, setUploadedVideoUrl] = useState<string>('');
+  // uploadedVideoUrl / uploadedVideoId / draftCampaignId are in WizardState;
+  // their setters are shimmed at the top of the component.
   const [_uploadedVideoPath, setUploadedVideoPath] = useState<string>('');
-  const [uploadedVideoId, setUploadedVideoId] = useState<string>('');
-  const [draftCampaignId, setDraftCampaignId] = useState<string>(
-    editMode && campaignToEdit?.id ? campaignToEdit.id : '',
-  );
   // TODO(phase-1): typed source [supabase] — see #15
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [myApprovedVideos, setMyApprovedVideos] = useState<any[]>([]);
-  // TODO(phase-1): typed source [supabase] — see #15
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [selectedExistingVideo, setSelectedExistingVideo] = useState<any>(null);
+  // selectedExistingVideo: derived from existingVideoId via the
+  // myApprovedVideos catalogue (we only persist the id). setSelectedExistingVideo
+  // is a value-form shim — all current call sites pass either null or a video
+  // object (no updater-form usage in this file).
+  const selectedExistingVideo = useMemo(
+     
+    () =>
+      existingVideoId
+        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (myApprovedVideos.find((v: any) => v?.id === existingVideoId) ?? null)
+        : null,
+    [existingVideoId, myApprovedVideos],
+  );
+  const setSelectedExistingVideo = useCallback(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (video: any) =>
+      setState((prev) => ({ ...prev, existingVideoId: video?.id ?? null })),
+    [setState],
+  );
   const [_videoTab, setVideoTab] = useState<'upload' | 'existing'>('existing');
   const MAX_VIDEO_DURATION_SECONDS = 30;
   const [showPostCartStep, setShowPostCartStep] = useState(false);
@@ -572,12 +741,11 @@ export default function NewCampaign() {
 
         // Campagne événement: pré-remplir avec la 1ère catégorie DB si aucune sélection.
         if (isEventCampaign && names.length > 0) {
-          setFormData((prev) => {
+          setState((prev) => {
             if (prev.categories.length > 0) return prev;
             return {
               ...prev,
-              category: names[0],
-              categories: [names[0]],
+              categories: [names[0] as string],
             };
           });
         }
@@ -587,7 +755,9 @@ export default function NewCampaign() {
     };
 
     loadCampaignCategories();
-  }, [isEventCampaign]);
+    // setState is stable (useState's raw setter, exposed via the hook). We
+    // intentionally re-run only on isEventCampaign change.
+  }, [isEventCampaign, setState]);
 
   // En mode édition, charger les catégories multiples depuis campaign_categories
   useEffect(() => {
@@ -597,15 +767,17 @@ export default function NewCampaign() {
       .then((enumCategories) => {
         if (enumCategories.length > 0) {
           const displayNames = enumCategories.map((c) => categoryReverseMapping[c] || c);
-          setFormData((prev) => ({
+          setState((prev) => ({
             ...prev,
-            category: displayNames[0] || prev.category,
             categories: displayNames,
           }));
         }
       })
       .catch(() => {});
-  }, [editMode, draftCampaignId]);
+    // categoryReverseMapping is a component-local const (defined above), stable
+    // by reference between renders within a session; setState is stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editMode, draftCampaignId, setState]);
 
   const categoryChoices = useMemo(() => {
     const base =
@@ -862,7 +1034,14 @@ export default function NewCampaign() {
   };
 
   const handleFieldChange = (name: string, value: string) => {
-    setFormData({ ...formData, [name]: value });
+    // Migrated fields (campaignName, client) live in WizardState; other
+    // names would target the legacy formData stub but no other names are
+    // currently passed from the existing call sites.
+    if (name === 'campaignName') {
+      setCampaignName(value);
+    } else if (name === 'client') {
+      setClient(value);
+    }
 
     // Marquer le champ comme touché
     setTouched({ ...touched, [name]: true });
@@ -873,7 +1052,7 @@ export default function NewCampaign() {
   };
 
   const handleCategoriesToggle = (category: string) => {
-    setFormData((prev) => ({
+    setState((prev) => ({
       ...prev,
       categories: prev.categories.includes(category)
         ? prev.categories.filter((c) => c !== category)
@@ -882,12 +1061,12 @@ export default function NewCampaign() {
     setTouched((t) => ({ ...t, categories: true }));
   };
 
-  const validateStep1 = () => {
-    const err = validateField('campaignName', formData.campaignName);
-    setTouched((t) => ({ ...t, campaignName: true }));
-    setErrors((e) => ({ ...e, campaignName: err }));
-    return !err && Boolean(diffusionType);
-  };
+  // validateStep1: removed (Step1NameType owns its own field-error surfacing).
+  // canProceedToStep2/3/4/5, canLeaveStep2, canNavigateToStep, handleStepClick:
+  //   removed (hook's stepList[i].validate + canGoToStep replace them).
+  // canProceedToStep6 retained below — it carries the budget-bounds check
+  //   (effectiveMin/effectiveMax against cpmTnd) that the hook's pure
+  //   validateBudget intentionally omits per Commit 5's contract.
 
   const validateStep2Category = () => {
     if (diffusionType === 'parc_tv') {
@@ -908,32 +1087,6 @@ export default function NewCampaign() {
       ...(shouldShowClientField ? { client: clientErr } : {}),
     }));
     return !catErr && !clientErr;
-  };
-
-  const canProceedToStep2 = () => {
-    return Boolean(formData.campaignName.trim() && diffusionType);
-  };
-
-  const canLeaveStep2 = () => {
-    if (diffusionType === 'parc_tv') return selectedParcIds.length > 0;
-    if (formData.categories.length === 0) return false;
-    if (shouldShowClientField) return Boolean(formData.client.trim());
-    return true;
-  };
-
-  const canProceedToStep3 = () => {
-    return startDate && endDate && startDate < endDate;
-  };
-
-  const canProceedToStep4 = () => {
-    return (
-      geographicZones.length > 0 &&
-      geographicZones.some((zone) => (zone.locations || []).length > 0)
-    );
-  };
-
-  const canProceedToStep5 = () => {
-    return Boolean(uploadedVideoId || uploadedVideoUrl || selectedExistingVideo);
   };
 
   const canProceedToStep6 = () => {
@@ -1093,45 +1246,8 @@ export default function NewCampaign() {
 
   // Le budget ajusté est maintenant géré par le pourcentage, donc on n'a plus besoin de cette logique
 
-  // Fonction pour vérifier si on peut naviguer vers une étape
-  const canNavigateToStep = (stepId: number): boolean => {
-    if (isEventCampaign) {
-      if (stepId === 1) return true;
-      if (stepId === 2) return canProceedToStep4();
-      if (stepId === 3) return canProceedToStep4() && canProceedToStep5() && canProceedToStep6();
-      return false;
-    }
-    if (stepId === 1) return true; // L'étape 1 est toujours accessible
-    if (stepId === 2) return canProceedToStep2();
-    if (stepId === 3) return canProceedToStep2() && canLeaveStep2() && canProceedToStep3();
-    if (stepId === 4)
-      return canProceedToStep2() && canLeaveStep2() && canProceedToStep3() && canProceedToStep4();
-    if (stepId === 5)
-      return (
-        canProceedToStep2() &&
-        canLeaveStep2() &&
-        canProceedToStep3() &&
-        canProceedToStep4() &&
-        canProceedToStep5()
-      );
-    if (stepId === 6)
-      return (
-        canProceedToStep2() &&
-        canLeaveStep2() &&
-        canProceedToStep3() &&
-        canProceedToStep4() &&
-        canProceedToStep5() &&
-        canProceedToStep6()
-      );
-    return false;
-  };
-
-  // Fonction pour gérer le clic sur une étape de la file d'ariane
-  const handleStepClick = (stepId: number) => {
-    if (canNavigateToStep(stepId)) {
-      setCurrentStep(stepId);
-    }
-  };
+  // canNavigateToStep + handleStepClick: removed (hook's canGoToStep / goToStep
+  // replace them; breadcrumb call sites are rewritten inline).
 
   // Fonctions de validation pour les dates
   const validateDate = (dateType: 'start' | 'end', date: Date | null) => {
@@ -1820,7 +1936,7 @@ export default function NewCampaign() {
           {/* Progress Steps — étalés sur toute la largeur */}
           <div className="w-full flex items-start">
             {steps.map((step, index) => {
-              const isClickable = canNavigateToStep(step.id);
+              const isClickable = wiz.canGoToStep(step.id);
               const isCurrentStep = currentStep === step.id;
               const isCompleted = currentStep > step.id;
 
@@ -1828,7 +1944,9 @@ export default function NewCampaign() {
                 <React.Fragment key={step.id}>
                   <div className="flex-1 flex flex-col items-center justify-center min-w-0">
                     <div
-                      onClick={() => isClickable && handleStepClick(step.id)}
+                      onClick={() => {
+                        if (isClickable) wiz.goToStep(step.id);
+                      }}
                       className={`flex flex-col items-center transition-all w-full ${
                         isClickable
                           ? 'cursor-pointer hover:opacity-90'
@@ -1871,84 +1989,16 @@ export default function NewCampaign() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main Form */}
         <div className="lg:col-span-3 space-y-6">
-          {/* Step 1: Informations de base — Nom + Type de diffusion (maquette) */}
+          {/* Step 1: Informations de base — extracted to ./new-campaign/Step1NameType */}
           {currentStep === 1 && !isEventCampaign && (
-            <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
-              <div className="p-6 border-b border-gray-200">
-                <h2 className="text-xl font-bold text-[#00263A]">Informations de base</h2>
-                <p className="text-gray-600 mt-1">Définissez les détails de votre campagne</p>
-              </div>
-              <div className="p-6 space-y-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Nom <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.campaignName}
-                    onChange={(e) => handleFieldChange('campaignName', e.target.value)}
-                    onBlur={() => setTouched({ ...touched, campaignName: true })}
-                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent transition-all ${
-                      touched.campaignName && errors.campaignName
-                        ? 'border-red-300 bg-red-50'
-                        : 'border-gray-300'
-                    }`}
-                    placeholder="Nom"
-                  />
-                  {touched.campaignName && errors.campaignName && (
-                    <p className="mt-1 text-sm text-red-600 flex items-center">
-                      <AlertCircle className="h-4 w-4 mr-1" />
-                      {errors.campaignName}
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <h3 className="text-base font-semibold text-gray-900 mb-1">Type de diffusion</h3>
-                  <p className="text-sm text-gray-600 mb-4">
-                    Choisissez le réseau sur lequel votre spot publicitaire sera diffusé
-                  </p>
-                  <div className="grid grid-cols-1 gap-4">
-                    <button
-                      type="button"
-                      onClick={() => setDiffusionType('toodooh')}
-                      className={`relative text-left p-5 rounded-xl border-2 transition-all ${
-                        diffusionType === 'toodooh'
-                          ? 'border-[#00B3A6] bg-[#00B3A6]/5'
-                          : 'border-gray-200 bg-white hover:border-gray-300'
-                      }`}
-                    >
-                      {diffusionType === 'toodooh' && (
-                        <div className="absolute top-4 right-4 w-6 h-6 rounded-full bg-[#00B3A6] flex items-center justify-center">
-                          <CheckCircle className="h-4 w-4 text-white" />
-                        </div>
-                      )}
-                      {diffusionType !== 'toodooh' && (
-                        <div className="absolute top-4 right-4 w-6 h-6 rounded-full border-2 border-gray-300" />
-                      )}
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
-                          <Target className="h-6 w-6 text-gray-700" />
-                        </div>
-                        <div>
-                          <span className="font-semibold text-gray-900">Réseau Toodooh</span>
-                          <p className="text-sm text-gray-600 mt-0.5">
-                            Écrans digitaux en extérieur (DOOH)
-                          </p>
-                        </div>
-                      </div>
-                      <div className="border-t border-gray-200 my-3" />
-                      <p className="text-xs font-medium text-gray-600 mb-1">Avantages:</p>
-                      <ul className="text-sm text-gray-600 space-y-0.5 list-disc list-inside">
-                        <li>Large couverture urbaine</li>
-                        <li>Flexibilité des créneaux</li>
-                        <li>Ciblage géographique précis</li>
-                      </ul>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <Step1NameType
+              campaignName={state.campaignName}
+              diffusionType={diffusionType}
+              setCampaignName={setCampaignName}
+              setDiffusionType={setDiffusionType}
+              onNext={() => wiz.nextStep()}
+              isFirst={true}
+            />
           )}
 
           {/* Step 2: Catégorie(s) — grille type maquette */}
@@ -3128,12 +3178,14 @@ export default function NewCampaign() {
             </div>
           )}
 
-          {/* Navigation Buttons — type="button" pour éviter toute soumission de formulaire et rechargement */}
-          {!showPostCartStep && (
+          {/* Navigation Buttons — gated off for standard step 1 because
+              Step1NameType renders its own Suivant. Event step 1 still uses
+              this footer because that path isn't extracted yet. */}
+          {!showPostCartStep && (isEventCampaign || currentStep > 1) && (
             <div className="flex items-center justify-between">
               <button
                 type="button"
-                onClick={() => setCurrentStep(Math.max(1, currentStep - 1))}
+                onClick={() => wiz.prevStep()}
                 disabled={currentStep === 1}
                 className="flex items-center gap-2 px-5 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm font-medium"
               >
@@ -3349,46 +3401,23 @@ export default function NewCampaign() {
                   type="button"
                   onClick={(e) => {
                     e.preventDefault();
-                    if (isEventCampaign) {
-                      if (currentStep === 1 && canProceedToStep4()) setCurrentStep(2);
-                      else if (currentStep === 2 && canProceedToStep5()) setCurrentStep(3);
-                    } else {
-                      if (currentStep === 1) {
-                        if (validateStep1()) setCurrentStep(2);
-                      } else if (currentStep === 2) {
-                        if (validateStep2Category()) setCurrentStep(3);
-                      } else if (currentStep === 3) {
-                        if (validateStep2()) setCurrentStep(4);
-                      } else if (currentStep === 4) {
-                        if (canProceedToStep4()) setCurrentStep(5);
-                      } else if (currentStep === 5) {
-                        if (canProceedToStep5()) setCurrentStep(6);
-                      }
+                    // Steps 2 (Catégories) and 3 (Période) still surface
+                    // field-level UX via validateStep2Category / validateStep2;
+                    // those mutate touched/errors as a side effect. The hook's
+                    // nextStep() handles the actual navigation + cumulative gate.
+                    if (!isEventCampaign && currentStep === 2) {
+                      if (!validateStep2Category()) return;
                     }
+                    if (!isEventCampaign && currentStep === 3) {
+                      if (!validateStep2()) return;
+                    }
+                    wiz.nextStep();
                   }}
-                  disabled={
-                    isEventCampaign
-                      ? (currentStep === 1 && !canProceedToStep4()) ||
-                        (currentStep === 2 && !canProceedToStep5())
-                      : (currentStep === 1 && !canProceedToStep2()) ||
-                        (currentStep === 2 && !canLeaveStep2()) ||
-                        (currentStep === 3 && !canProceedToStep3()) ||
-                        (currentStep === 4 && !canProceedToStep4()) ||
-                        (currentStep === 5 && !canProceedToStep5())
-                  }
+                  disabled={!wiz.canGoToStep(currentStep + 1)}
                   className={`px-6 py-3 rounded-xl font-semibold transition-all flex items-center space-x-2 shadow-lg ${
-                    isEventCampaign
-                      ? (currentStep === 1 && !canProceedToStep4()) ||
-                        (currentStep === 2 && !canProceedToStep5())
-                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                        : 'bg-gradient-to-r from-[#00B3A6] to-[#00D4C4] text-white hover:from-[#00A396] hover:to-[#00C4B4]'
-                      : (currentStep === 1 && !canProceedToStep2()) ||
-                          (currentStep === 2 && !canLeaveStep2()) ||
-                          (currentStep === 3 && !canProceedToStep3()) ||
-                          (currentStep === 4 && !canProceedToStep4()) ||
-                          (currentStep === 5 && !canProceedToStep5())
-                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                        : 'bg-gradient-to-r from-[#00B3A6] to-[#00D4C4] text-white hover:from-[#00A396] hover:to-[#00C4B4]'
+                    !wiz.canGoToStep(currentStep + 1)
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-[#00B3A6] to-[#00D4C4] text-white hover:from-[#00A396] hover:to-[#00C4B4]'
                   }`}
                 >
                   <span>Suivant</span>

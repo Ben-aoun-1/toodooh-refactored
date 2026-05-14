@@ -1,5 +1,4 @@
 import { TrendingUp, TrendingDown, DollarSign, Monitor, MapPin } from 'lucide-react';
-
 import {
   LineChart,
   Line,
