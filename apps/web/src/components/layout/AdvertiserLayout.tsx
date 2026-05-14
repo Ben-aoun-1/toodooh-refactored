@@ -17,6 +17,7 @@ import financeIcon from '../../assets/sidebar/portefeuille.png';
 import financeIconActive from '../../assets/sidebar/portefeuilles.png';
 import supportIcon from '../../assets/support.png';
 import supportIconActive from '../../assets/supports.png';
+import { ModalProvider, useModal } from '../../contexts/ModalContext';
 import { useAuthStore } from '../../stores/auth.store';
 import { useCartStore } from '../../stores/cart.store';
 import CartSidebar from '../CartSidebar';
@@ -26,28 +27,24 @@ import PageHeader from './PageHeader';
 import SidebarNavItem from './SidebarNavItem';
 
 interface AdvertiserLayoutProps {
-  /** Page contents rendered inside the error boundary. */
   children: ReactNode;
   /** Optional override for the greeting name when on `/dashboard`. */
   userName?: string;
-  /** Triggered by the header's "Prendre rendez-vous" button. */
-  onContactClick: () => void;
-  /** Triggered by the sidebar's Support button. */
-  onSupportClick: () => void;
-  /** Triggered by the sidebar's user/logout button. */
-  onLogoutClick: () => void;
-  /** When true, sidebar support button shows its active state. */
-  isSupportOpen?: boolean;
 }
 
-export default function AdvertiserLayout({
-  children,
-  userName,
-  onContactClick,
-  onSupportClick,
-  onLogoutClick,
-  isSupportOpen = false,
-}: AdvertiserLayoutProps) {
+/**
+ * Public layout wrapper for advertiser routes. Mounts <ModalProvider>
+ * so the inner chrome and the page content both see modal triggers.
+ */
+export default function AdvertiserLayout({ children, userName }: AdvertiserLayoutProps) {
+  return (
+    <ModalProvider>
+      <AdvertiserLayoutChrome userName={userName}>{children}</AdvertiserLayoutChrome>
+    </ModalProvider>
+  );
+}
+
+function AdvertiserLayoutChrome({ children, userName }: AdvertiserLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const user = useAuthStore((s) => s.user);
@@ -56,6 +53,7 @@ export default function AdvertiserLayout({
   const validationStatus = useAuthStore((s) => s.validationStatus);
   const contactName = useAuthStore((s) => s.contactName);
   const cartCount = useCartStore((s) => s.items.length);
+  const { openLogout, openSupport, openAppointment, isSupportOpen } = useModal();
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
@@ -201,7 +199,7 @@ export default function AdvertiserLayout({
           </button>
           <button
             onClick={() => {
-              onSupportClick();
+              openSupport();
               setIsMenuOpen(false);
             }}
             title={!sidebarExpanded ? 'Support' : undefined}
@@ -229,7 +227,7 @@ export default function AdvertiserLayout({
         >
           <button
             type="button"
-            onClick={onLogoutClick}
+            onClick={openLogout}
             title={sidebarExpanded ? 'Déconnexion' : undefined}
             className={`w-full h-12 flex flex-row items-center gap-3 rounded-none text-left ${
               sidebarExpanded ? 'px-3 py-3' : 'justify-center p-2'
@@ -253,7 +251,7 @@ export default function AdvertiserLayout({
       <div className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden">
         <PageHeader
           onMobileMenuClick={() => setIsMenuOpen(!isMenuOpen)}
-          onContactClick={onContactClick}
+          onContactClick={openAppointment}
           onCartToggle={() => setCartOpen((v) => !v)}
           cartCount={cartCount}
           userId={user?.id}
