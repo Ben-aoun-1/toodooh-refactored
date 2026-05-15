@@ -1,7 +1,7 @@
 import { Calendar, Megaphone, TrendingUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-import { useFeaturedEvents } from '../../hooks/dashboard/useFeaturedEvents';
+import { useFeaturedEvents } from '../../hooks/useFeaturedEvents';
 
 const TYPE_CONFIG: Record<string, { bg: string; text: string; label: string }> = {
   sport: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Sport' },

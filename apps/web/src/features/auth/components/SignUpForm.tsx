@@ -15,11 +15,11 @@ import individuelIcon from '../../../assets/inscrit/individuel.png';
 import individuelIconS from '../../../assets/inscrit/individuels.png';
 import parcIcon from '../../../assets/inscrit/parc.png';
 import parcIconS from '../../../assets/inscrit/parcs.png';
+import { getErrorMessage } from '../../../lib/errors';
 import {
   AGENCY_BUSINESS_SECTOR_NAME,
   sectorsForAdvertiserAgencySignup,
-} from '../../../constants/advertiserBusinessSectors';
-import { getErrorMessage } from '../../../lib/errors';
+} from '../../advertiser/constants/advertiserBusinessSectors';
 import { authService } from '../services/auth.service';
 import type {
   BusinessSector,

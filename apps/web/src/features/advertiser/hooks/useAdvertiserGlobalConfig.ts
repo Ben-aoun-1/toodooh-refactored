@@ -3,11 +3,11 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   type DoohConfigNumbers,
   DEFAULT_DOOH_CONFIG_NUMBERS,
-} from '../services/dooh-calculation.service';
+} from '../../../services/dooh-calculation.service';
 import {
   getDoohConfigNumbers,
   invalidateGlobalConfigurationCache,
-} from '../services/global-configuration.service';
+} from '../../../services/global-configuration.service';
 
 export type AdvertiserGlobalConfigState = {
   dooh: DoohConfigNumbers;

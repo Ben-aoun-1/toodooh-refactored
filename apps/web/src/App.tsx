@@ -7,15 +7,15 @@ import PageLoadingFallback from './components/PageLoadingFallback';
 import { useAuthStore } from './features/auth/stores/auth.store';
 
 // Toutes les pages sont chargées à la demande (code-splitting par route).
-const AdvertiserLayout = lazy(() => import('./components/layout/AdvertiserLayout'));
-const AdvertiserDashboard = lazy(() => import('./pages/AdvertiserDashboard'));
-const UserProfile = lazy(() => import('./pages/UserProfile'));
+const AdvertiserLayout = lazy(() => import('./features/advertiser/components/AdvertiserLayout'));
+const AdvertiserDashboard = lazy(() => import('./features/advertiser/pages/AdvertiserDashboard'));
+const UserProfile = lazy(() => import('./features/advertiser/pages/UserProfile'));
 const NewCampaign = lazy(() => import('./pages/NewCampaign'));
 const MyCampaigns = lazy(() => import('./pages/MyCampaigns'));
 const Events = lazy(() => import('./features/events/pages/Events'));
 const MyRecharges = lazy(() => import('./features/wallet/pages/MyRecharges'));
 const MyInvoices = lazy(() => import('./features/wallet/pages/MyInvoices'));
-const MyClients = lazy(() => import('./pages/MyClients'));
+const MyClients = lazy(() => import('./features/advertiser/pages/MyClients'));
 const AdvertiserPerformancePlaceholder = lazy(
   () => import('./features/performances/pages/AdvertiserPerformancePlaceholder'),
 );

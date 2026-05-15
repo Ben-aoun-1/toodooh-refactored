@@ -2,8 +2,8 @@ import { Bell, CheckCircle2, Settings, Video, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { logger } from '../lib/logger';
-import { supabase } from '../lib/supabase';
+import { logger } from '../../../lib/logger';
+import { supabase } from '../../../lib/supabase';
 
 const log = logger.child({ module: 'AdvertiserNotificationsBell' });
 

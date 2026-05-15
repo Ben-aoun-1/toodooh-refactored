@@ -1,14 +1,14 @@
 
+import { useAuthStore } from '../../auth/stores/auth.store';
 import BalanceCard from '../components/dashboard/BalanceCard';
 import FeaturedEventsGrid from '../components/dashboard/FeaturedEventsGrid';
 import GettingStartedSection from '../components/dashboard/GettingStartedSection';
 import InsightsCard from '../components/dashboard/InsightsCard';
 import LastCampaignsGrid from '../components/dashboard/LastCampaignsGrid';
 import StatsGrid from '../components/dashboard/StatsGrid';
-import { useAuthStore } from '../features/auth/stores/auth.store';
-import { useDashboardStats } from '../hooks/dashboard/useDashboardStats';
-import { useLastCampaigns } from '../hooks/dashboard/useLastCampaigns';
-import { useUserProfile } from '../hooks/dashboard/useUserProfile';
+import { useDashboardStats } from '../hooks/useDashboardStats';
+import { useLastCampaigns } from '../hooks/useLastCampaigns';
+import { useUserProfile } from '../hooks/useUserProfile';
 
 export default function AdvertiserDashboard() {
   const user = useAuthStore((s) => s.user);

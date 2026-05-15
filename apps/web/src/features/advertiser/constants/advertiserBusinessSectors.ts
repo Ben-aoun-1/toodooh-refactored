@@ -1,4 +1,4 @@
-import type { BusinessSector } from '../features/auth/types/auth';
+import type { BusinessSector } from '../../auth/types/auth';
 
 /** Liste finale des secteurs d'activité (annonceurs), hors ligne « Agence de Publicité ». */
 export const ADVERTISER_BUSINESS_SECTOR_NAMES: readonly string[] = [

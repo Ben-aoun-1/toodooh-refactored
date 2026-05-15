@@ -26,6 +26,7 @@ import ariane5 from '../assets/ariane/5.png';
 import ariane5s from '../assets/ariane/5s.png';
 import ariane6 from '../assets/ariane/6.png';
 import ariane6s from '../assets/ariane/6s.png';
+import { useAdvertiserGlobalConfig } from '../features/advertiser/hooks/useAdvertiserGlobalConfig';
 import { authService } from '../features/auth/services/auth.service';
 import { useAuthStore } from '../features/auth/stores/auth.store';
 import type { BusinessSector } from '../features/auth/types/auth';
@@ -40,7 +41,6 @@ import type {
   UseCampaignWizardOptions,
   WizardState,
 } from '../hooks/new-campaign/wizard-types';
-import { useAdvertiserGlobalConfig } from '../hooks/useAdvertiserGlobalConfig';
 import { getErrorMessage } from '../lib/errors';
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';

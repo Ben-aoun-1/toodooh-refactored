@@ -16,16 +16,16 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate, useLocation } from 'react-router-dom';
 
+import { getErrorMessage } from '../../../lib/errors';
+import { logger } from '../../../lib/logger';
+import { supabase } from '../../../lib/supabase';
+import { authService } from '../../auth/services/auth.service';
+import { useAuthStore } from '../../auth/stores/auth.store';
+import type { BusinessProfile, BusinessSector, Governorate } from '../../auth/types/auth';
 import {
   AGENCY_BUSINESS_SECTOR_NAME,
   sectorsForAdvertiserProfile,
 } from '../constants/advertiserBusinessSectors';
-import { authService } from '../features/auth/services/auth.service';
-import { useAuthStore } from '../features/auth/stores/auth.store';
-import type { BusinessProfile, BusinessSector, Governorate } from '../features/auth/types/auth';
-import { getErrorMessage } from '../lib/errors';
-import { logger } from '../lib/logger';
-import { supabase } from '../lib/supabase';
 
 const log = logger.child({ module: 'UserProfile' });
 
