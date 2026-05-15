@@ -4,15 +4,9 @@ import {
   MapPin,
   Calendar,
   Film,
-  Users,
   DollarSign,
   CheckCircle,
-  TrendingUp,
-  Clock,
-  Monitor,
-  Sparkles,
   X,
-  PartyPopper,
   Megaphone,
   LayoutList,
   ChevronRight,
@@ -45,6 +39,7 @@ import { getErrorMessage } from '../lib/errors';
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { parseCampaignUiDate, toLocalDateOnlyString } from '../lib/wizard-dates';
+import { zonesLabel } from '../lib/wizard-zones';
 import { authService } from '../services/auth.service';
 import { balanceService } from '../services/balance.service';
 import {
@@ -68,7 +63,7 @@ import Step1NameType from './new-campaign/Step1NameType';
 import Step2 from './new-campaign/Step2';
 import Step3 from './new-campaign/Step3';
 import Step4 from './new-campaign/Step4';
-import Step5 from './new-campaign/Step5';
+import Step5, { type ApprovedVideo } from './new-campaign/Step5';
 import Step6 from './new-campaign/Step6';
 
 const log = logger.child({ module: 'NewCampaign' });
@@ -274,7 +269,6 @@ export default function NewCampaign() {
     selectedParcIds,
     geographicZones,
     adjustedBudget,
-    calculatedImpressions,
     customMinBudget,
     customMaxBudget,
     uploadedVideoId,
@@ -282,9 +276,11 @@ export default function NewCampaign() {
     existingVideoId,
     draftCampaignId,
   } = state;
-  // `categories` is read via `formData.categories` (the legacy-stub memo); no
-  // direct top-level alias needed in this commit. Step 2's extraction in
-  // Commit 7 may switch to a direct `state.categories` read.
+  // `categories` is read directly via `state.categories` at the few
+  // remaining call sites (post Commit 12 formData-facade removal).
+  // `calculatedImpressions` is read directly via `state.calculatedImpressions`
+  // where needed; it was previously destructured but never referenced
+  // top-level after Commit 11's Step 6 extraction.
   const startDate = useMemo(
     () => parseCampaignUiDate(state.startDate),
     [state.startDate],
@@ -302,8 +298,11 @@ export default function NewCampaign() {
     campaignToEdit?.location_lat && campaignToEdit?.location_lng
       ? { lat: campaignToEdit.location_lat, lng: campaignToEdit.location_lng }
       : center;
-  const [radius, _setRadius] = useState(campaignToEdit?.location_radius || 1000);
-  const [_searchQuery, _setSearchQuery] = useState('');
+  // `radius`: edit-mode initial value, never changed at runtime (no setter
+  // is called). Reads: saveCampaignDraft fallback + loadCampaignZones
+  // edit-mode hydration. `_searchQuery` / `_budget` / `_budgetPercentage`
+  // (formerly nearby) were write-only or never-used dead state — deleted.
+  const radius = campaignToEdit?.location_radius || 1000;
 
   // Parcs TV (ParcTV interface imported from wizard-types)
   const [availableParcs, setAvailableParcs] = useState<ParcTV[]>([]);
@@ -312,24 +311,12 @@ export default function NewCampaign() {
   // --- Legacy formData stub. The migrated fields (campaignName, client,
   //     categories) now live in WizardState. The remaining slots
   //     (budget, nbImpressions, nbEcrans) feed only the dead
-  //     `campaignEstimations` memo (live DOOH engine drives via
-  //     doohMaxImpressions). Flagged for cleanup in a follow-up commit.
-  // TODO(step-7-cleanup): drop campaignEstimations memo + this stub.
-  const [legacyFormData, _setLegacyFormData] = useState({
-    budget: campaignToEdit?.budget?.toString() || '',
-    nbImpressions: 1000,
-    nbEcrans: 1,
-  });
-  const formData = useMemo(
-    () => ({
-      campaignName: state.campaignName,
-      client: state.client,
-      category: state.categories[0] ?? '',
-      categories: state.categories,
-      ...legacyFormData,
-    }),
-    [state.campaignName, state.client, state.categories, legacyFormData],
-  );
+  // legacyFormData + formData useMemo facade: removed in Commit 12. The
+  // facade was kept across Commits 6-11 so that ~30 `formData.X` read
+  // sites could stay unchanged during step extractions. All reads are
+  // now converted to `state.X` directly; the spread of `legacyFormData`
+  // (budget/nbImpressions/nbEcrans) was dead since Commit 8 deleted its
+  // sole consumer (campaignEstimations memo).
   const [campaignCategories, setCampaignCategories] = useState<string[]>([]);
 
   // Validation state: fully internalized into the extracted step components
@@ -353,13 +340,14 @@ export default function NewCampaign() {
     [],
   );
 
-  // Ajout d'un état pour le budget slider (avec bornes min/max)
+  // BUDGET_MIN: floor of the budget slider's adjustable range. Used by
+  // canProceedToStep6 + the budget-recentering effects. The _budget /
+  // _budgetPercentage useState slots that lived here were dead state
+  // (never read or write-only) — deleted in Commit 12.
   const BUDGET_MIN = 0;
-  const [_budget, _setBudget] = useState(BUDGET_MIN);
   // adjustedBudget / calculatedImpressions / customMinBudget / customMaxBudget
-  // are now in WizardState; their setters are shimmed at the top of the
+  // are in WizardState; their setters are shimmed at the top of the
   // component to preserve the setX(value|updater) API at all call sites.
-  const [_budgetPercentage, setBudgetPercentage] = useState(100); // Pourcentage du budget (0-100%)
   const [unavailabilityPeriods, setUnavailabilityPeriods] = useState<UnavailabilityPeriod[]>([]);
   /** Plafond impressions (moteur DOOH horaire), aligné injectCampaignPublicationSchedule */
   const [doohMaxImpressions, setDoohMaxImpressions] = useState(0);
@@ -376,16 +364,15 @@ export default function NewCampaign() {
       ? Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)))
       : 0;
 
-  // Condition pour activer l'estimation
-  const canEstimate = geographicZones.length > 0 && nbJours > 0 && adjustedBudget > 0;
+  // canEstimate + nbEcransSelected: deleted in Commit 12. Sole consumer
+  // was the hidden sidebar block (className="space-y-6 hidden"), which
+  // also deleted in Commit 12 per CSS-gated dead-UI detection.
 
   // Mémoriser : un flatMap à chaque rendu créait une nouvelle référence → useMemo/useEffect en boucle + carte bloquée
   const allSelectedLocations = useMemo(
     () => geographicZones.flatMap((zone) => zone.locations || []),
     [geographicZones],
   );
-
-  const nbEcransSelected = allSelectedLocations.reduce((s, loc) => s + (loc.screen_count || 0), 0);
 
   const selectedParcScreenIds = useMemo(() => {
     if (diffusionType !== 'parc_tv' || selectedParcIds.length === 0) return null;
@@ -488,14 +475,11 @@ export default function NewCampaign() {
   // have parent-level consumers (DOOH estimate effect, saveDraft, cart
   // create, Step 6 recap). Step 5 receives them as props and patches the
   // duration_seconds write-back through setMyApprovedVideos.
-  // TODO(phase-1): typed source [supabase] — see #15
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [myApprovedVideos, setMyApprovedVideos] = useState<any[]>([]);
+  const [myApprovedVideos, setMyApprovedVideos] = useState<ApprovedVideo[]>([]);
   const selectedExistingVideo = useMemo(
     () =>
       existingVideoId
-        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (myApprovedVideos.find((v: any) => v?.id === existingVideoId) ?? null)
+        ? (myApprovedVideos.find((v) => v?.id === existingVideoId) ?? null)
         : null,
     [existingVideoId, myApprovedVideos],
   );
@@ -597,10 +581,13 @@ export default function NewCampaign() {
     dooh,
   ]);
 
-  // États pour les événements spéciaux
-  const [detectedEvents, _setDetectedEvents] = useState<SpecialEvent[]>([]);
-  const [showEventsModal, setShowEventsModal] = useState(false);
-  const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
+  // Events modal state (detectedEvents, showEventsModal, selectedEvents)
+  // deleted in Commit 12: the modal was rendered gated on
+  // `showEventsModal && detectedEvents.length > 0`, but neither
+  // setShowEventsModal(true) nor _setDetectedEvents was ever called
+  // anywhere in the file — the modal never opened. Setter-to-true
+  // verification (Commit 9 methodology) surfaced it; the ~175-line JSX
+  // block was deleted alongside the state slots.
 
   // Mapping des catégories français → anglais (enum)
   const categoryMapping: { [key: string]: string } = {
@@ -674,20 +661,20 @@ export default function NewCampaign() {
         ? [...campaignCategories]
         : Array.from(new Set(Object.values(categoryReverseMapping)));
 
-    for (const selected of formData.categories) {
+    for (const selected of state.categories) {
       if (!base.includes(selected)) base.push(selected);
     }
     return base;
-  }, [campaignCategories, formData.categories]);
+  }, [campaignCategories, state.categories]);
 
   const saveCampaignDraft = async (videoId?: string, _isVideoValidated: boolean = false) => {
     try {
       // Validation des champs obligatoires
-      if (!formData.campaignName || formData.campaignName.trim() === '') {
+      if (!state.campaignName || state.campaignName.trim() === '') {
         throw new Error('Le nom de la campagne est obligatoire');
       }
 
-      if (diffusionType !== 'parc_tv' && !formData.categories?.length) {
+      if (diffusionType !== 'parc_tv' && !state.categories.length) {
         throw new Error('Sélectionnez au moins une catégorie');
       }
 
@@ -698,7 +685,7 @@ export default function NewCampaign() {
       const mappedCategories =
         diffusionType === 'parc_tv'
           ? ['parc']
-          : formData.categories.map((c) => categoryMapping[c] || c);
+          : state.categories.map((c) => categoryMapping[c] || c);
       const primaryCategory = mappedCategories[0] || 'parc';
 
       // TOUJOURS créer en draft d'abord
@@ -738,7 +725,7 @@ export default function NewCampaign() {
 
       const campaign = await campaignService.saveCampaignDraft(
         {
-          name: formData.campaignName,
+          name: state.campaignName,
           category: primaryCategory,
           categories: mappedCategories,
           start_date: toLocalDateOnlyString(startDate),
@@ -895,29 +882,11 @@ export default function NewCampaign() {
       const maxImpressions = impressions > 0 ? impressions : Infinity;
       const finalImpressions = Math.min(calculatedImpressionsFromBudget, maxImpressions);
       setCalculatedImpressions(finalImpressions);
-
-      // Calculer le pourcentage pour l'affichage
-      const defaultMaxAmount = impressions > 0 ? (impressions / 1000) * cpmTnd : adjustedBudget;
-      const defaultMinAmount = BUDGET_MIN;
-      const effectiveMin = customMinBudget !== null ? customMinBudget : defaultMinAmount;
-      const effectiveMax = customMaxBudget !== null ? customMaxBudget : defaultMaxAmount;
-
-      // Calculer le pourcentage
-      const percentage =
-        effectiveMax > effectiveMin
-          ? ((adjustedBudget - effectiveMin) / (effectiveMax - effectiveMin)) * 100
-          : 100;
-      setBudgetPercentage(Math.max(0, Math.min(100, percentage)));
+      // setBudgetPercentage call removed in Commit 12 — wrote to dead state.
     } else {
       setCalculatedImpressions(0);
     }
-  }, [
-    adjustedBudget,
-    calculateBudgetAndImpressions.impressions,
-    customMinBudget,
-    customMaxBudget,
-    cpmTnd,
-  ]);
+  }, [adjustedBudget, calculateBudgetAndImpressions.impressions, cpmTnd]);
 
   // Recentrer le curseur uniquement quand la plage change (impressions / CPM / min-max perso), pas quand l'utilisateur déplace le slider
   useEffect(() => {
@@ -999,26 +968,18 @@ export default function NewCampaign() {
         startDate && endDate
           ? `${startDate.toLocaleDateString('fr-FR')} – ${endDate.toLocaleDateString('fr-FR')}`
           : undefined;
-      const totalAreaKm2 = geographicZones.reduce(
-        (sum, z) => sum + Math.PI * Math.pow(z.radius / 1000, 2),
-        0,
-      );
-      const zonesLabel =
-        geographicZones.length > 0
-          ? `${geographicZones.length} zone${geographicZones.length > 1 ? 's' : ''} · ${totalAreaKm2.toFixed(1)} km²`
-          : undefined;
       useCartStore.getState().addItem({
         id: campaignId,
-        name: formData.campaignName || eventFromState?.name || 'Nom de la campagne',
+        name: state.campaignName || eventFromState?.name || 'Nom de la campagne',
         amount,
         periodLabel,
-        zonesLabel,
+        zonesLabel: zonesLabel(geographicZones),
       });
     },
     [
       adjustedBudget,
       prixTotal,
-      formData.campaignName,
+      state.campaignName,
       eventFromState?.name,
       startDate,
       endDate,
@@ -1407,6 +1368,144 @@ export default function NewCampaign() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
+  /**
+   * Renders the single active step component for the current wizard
+   * position. Mutually-exclusive: only one return path fires per render.
+   * Step 4/5/6 each handle both standard and event-mode campaigns —
+   * standard mapping is steps 4/5/6, event mapping is steps 1/2/3 of
+   * the abbreviated event flow.
+   */
+  function renderActiveStep(): React.ReactElement | null {
+    if (showPostCartStep) {
+      return (
+        <PostCartStep
+          loadingRecommendedEvents={loadingRecommendedEvents}
+          recommendedEvents={recommendedEvents}
+          startDate={startDate}
+          endDate={endDate}
+          onGoToDashboard={() => navigate('/dashboard')}
+          onGoToEvents={() => navigate('/evenements')}
+          onJeMePositionne={(event) =>
+            navigate('/new-event-campaign', { state: { event } })
+          }
+        />
+      );
+    }
+    if (currentStep === 1 && !isEventCampaign) {
+      return (
+        <Step1NameType
+          campaignName={state.campaignName}
+          diffusionType={diffusionType}
+          setCampaignName={setCampaignName}
+          setDiffusionType={setDiffusionType}
+          onNext={() => wiz.nextStep()}
+          isFirst={true}
+        />
+      );
+    }
+    if (currentStep === 2 && !isEventCampaign) {
+      return (
+        <Step2
+          diffusionType={diffusionType}
+          categoryChoices={categoryChoices}
+          selectedCategories={state.categories}
+          setSelectedCategories={setCategories}
+          shouldShowClientField={shouldShowClientField}
+          client={state.client}
+          setClient={setClient}
+          availableParcs={availableParcs}
+          loadingParcs={loadingParcs}
+          selectedParcIds={selectedParcIds}
+          setSelectedParcIds={setSelectedParcIds}
+          onNext={() => wiz.nextStep()}
+          onBack={() => wiz.prevStep()}
+        />
+      );
+    }
+    if (currentStep === 3 && !isEventCampaign) {
+      return (
+        <Step3
+          startDate={startDate}
+          endDate={endDate}
+          setStartDate={setStartDate}
+          setEndDate={setEndDate}
+          onNext={() => wiz.nextStep()}
+          onBack={() => wiz.prevStep()}
+        />
+      );
+    }
+    if (
+      (currentStep === 4 && !isEventCampaign) ||
+      (currentStep === 1 && isEventCampaign)
+    ) {
+      return (
+        <Step4
+          geographicZones={geographicZones}
+          setGeographicZones={setGeographicZones}
+          diffusionType={diffusionType}
+          categories={state.categories}
+          predefinedZones={predefinedZones}
+          loadingPredefinedZones={loadingPredefinedZones}
+          onNext={() => wiz.nextStep()}
+          onBack={() => wiz.prevStep()}
+        />
+      );
+    }
+    if (
+      (currentStep === 5 && !isEventCampaign) ||
+      (currentStep === 2 && isEventCampaign)
+    ) {
+      return (
+        <Step5
+          uploadedVideoId={uploadedVideoId}
+          uploadedVideoUrl={uploadedVideoUrl}
+          existingVideoId={existingVideoId}
+          setUploadedVideoId={setUploadedVideoId}
+          setUploadedVideoUrl={setUploadedVideoUrl}
+          setExistingVideoId={setExistingVideoId}
+          myApprovedVideos={myApprovedVideos}
+          selectedExistingVideo={selectedExistingVideo}
+          setMyApprovedVideos={setMyApprovedVideos}
+          onNext={() => wiz.nextStep()}
+          onBack={() => wiz.prevStep()}
+        />
+      );
+    }
+    if (
+      (currentStep === 6 && !isEventCampaign) ||
+      (currentStep === 3 && isEventCampaign)
+    ) {
+      return (
+        <Step6
+          wizardState={state}
+          setAdjustedBudget={setAdjustedBudget}
+          setCustomMinBudget={setCustomMinBudget}
+          setCustomMaxBudget={setCustomMaxBudget}
+          isEventCampaign={isEventCampaign}
+          availableParcs={availableParcs}
+          selectedParcIds={selectedParcIds}
+          cpmTnd={cpmTnd}
+          maxImpressionsFromSelection={calculateBudgetAndImpressions.impressions}
+          impressionsForCurrentBudget={impressionsForCurrentBudget}
+          doohEstimateLoading={doohEstimateLoading}
+          doohEstimateError={doohEstimateError}
+          selectedExistingVideo={selectedExistingVideo}
+          nbJours={nbJours}
+          onBack={() => wiz.prevStep()}
+          onSaveDraft={handleSaveDraft}
+          onAddToCart={handleAddToCart}
+          canFinalize={
+            canProceedToStep6() &&
+            adjustedBudget > 0 &&
+            impressionsForCurrentBudget > 0
+          }
+          addingToCart={addingToCart}
+        />
+      );
+    }
+    return null;
+  }
+
   return (
     <div className="w-full mx-auto space-y-8">
       {/* Header Section — masqué à l'étape panier */}
@@ -1512,384 +1611,14 @@ export default function NewCampaign() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main Form */}
-        <div className="lg:col-span-3 space-y-6">
-          {/* Step 1: Informations de base — extracted to ./new-campaign/Step1NameType */}
-          {currentStep === 1 && !isEventCampaign && (
-            <Step1NameType
-              campaignName={state.campaignName}
-              diffusionType={diffusionType}
-              setCampaignName={setCampaignName}
-              setDiffusionType={setDiffusionType}
-              onNext={() => wiz.nextStep()}
-              isFirst={true}
-            />
-          )}
-
-          {/* Step 2: Catégorie / Choix du parc — extracted to ./new-campaign/Step2 */}
-          {currentStep === 2 && !isEventCampaign && (
-            <Step2
-              diffusionType={diffusionType}
-              categoryChoices={categoryChoices}
-              selectedCategories={state.categories}
-              setSelectedCategories={setCategories}
-              shouldShowClientField={shouldShowClientField}
-              client={state.client}
-              setClient={setClient}
-              availableParcs={availableParcs}
-              loadingParcs={loadingParcs}
-              selectedParcIds={selectedParcIds}
-              setSelectedParcIds={setSelectedParcIds}
-              onNext={() => wiz.nextStep()}
-              onBack={() => wiz.prevStep()}
-            />
-          )}
-
-          {/* Step 3: Planification (Période) — extracted to ./new-campaign/Step3 */}
-          {currentStep === 3 && !isEventCampaign && (
-            <Step3
-              startDate={startDate}
-              endDate={endDate}
-              setStartDate={setStartDate}
-              setEndDate={setEndDate}
-              onNext={() => wiz.nextStep()}
-              onBack={() => wiz.prevStep()}
-            />
-          )}
-
-          {/* Step 4: Zones géographiques — extracted to ./new-campaign/Step4 */}
-          {((currentStep === 4 && !isEventCampaign) || (currentStep === 1 && isEventCampaign)) && (
-            <Step4
-              geographicZones={geographicZones}
-              setGeographicZones={setGeographicZones}
-              diffusionType={diffusionType}
-              categories={state.categories}
-              predefinedZones={predefinedZones}
-              loadingPredefinedZones={loadingPredefinedZones}
-              onNext={() => wiz.nextStep()}
-              onBack={() => wiz.prevStep()}
-            />
-          )}
-
-          {/* Step 5: Contenu média (étape 2 en mode campagne événement) — extracted to ./new-campaign/Step5 */}
-          {((currentStep === 5 && !isEventCampaign) || (currentStep === 2 && isEventCampaign)) && (
-            <Step5
-              uploadedVideoId={uploadedVideoId}
-              uploadedVideoUrl={uploadedVideoUrl}
-              existingVideoId={existingVideoId}
-              setUploadedVideoId={setUploadedVideoId}
-              setUploadedVideoUrl={setUploadedVideoUrl}
-              setExistingVideoId={setExistingVideoId}
-              myApprovedVideos={myApprovedVideos}
-              selectedExistingVideo={selectedExistingVideo}
-              setMyApprovedVideos={setMyApprovedVideos}
-              onNext={() => wiz.nextStep()}
-              onBack={() => wiz.prevStep()}
-            />
-          )}
-
-          {/* Step 6: Validation — extracted to ./new-campaign/Step6 */}
-          {((currentStep === 6 && !isEventCampaign) || (currentStep === 3 && isEventCampaign)) &&
-            !showPostCartStep && (
-              <Step6
-                wizardState={state}
-                setAdjustedBudget={setAdjustedBudget}
-                setCustomMinBudget={setCustomMinBudget}
-                setCustomMaxBudget={setCustomMaxBudget}
-                isEventCampaign={isEventCampaign}
-                availableParcs={availableParcs}
-                selectedParcIds={selectedParcIds}
-                cpmTnd={cpmTnd}
-                maxImpressionsFromSelection={calculateBudgetAndImpressions.impressions}
-                impressionsForCurrentBudget={impressionsForCurrentBudget}
-                doohEstimateLoading={doohEstimateLoading}
-                doohEstimateError={doohEstimateError}
-                selectedExistingVideo={selectedExistingVideo}
-                nbJours={nbJours}
-                onBack={() => wiz.prevStep()}
-                onSaveDraft={handleSaveDraft}
-                onAddToCart={handleAddToCart}
-                canFinalize={
-                  canProceedToStep6() &&
-                  adjustedBudget > 0 &&
-                  impressionsForCurrentBudget > 0
-                }
-                addingToCart={addingToCart}
-              />
-            )}
-
-          {/* Post-cart success screen — extracted to ./new-campaign/PostCartStep */}
-          {showPostCartStep && (
-            <PostCartStep
-              loadingRecommendedEvents={loadingRecommendedEvents}
-              recommendedEvents={recommendedEvents}
-              startDate={startDate}
-              endDate={endDate}
-              onGoToDashboard={() => navigate('/dashboard')}
-              onGoToEvents={() => navigate('/evenements')}
-              onJeMePositionne={(event) =>
-                navigate('/new-event-campaign', { state: { event } })
-              }
-            />
-          )}
+        <div className="lg:col-span-3 space-y-6">{renderActiveStep()}
         </div>
 
-        {/* Sidebar with Dynamic Stats */}
-        <div className="space-y-6 hidden">
-          {/* Campaign Stats */}
-          <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
-            <h3 className="text-lg font-bold text-[#00263A] mb-4">Estimation dynamique</h3>
-            <div className="space-y-4">
-              {/* Nombre d'écrans sélectionnés */}
-              <div className="hidden flex items-center justify-between p-3 bg-gradient-to-r from-green-50 to-green-100 rounded-xl border border-green-200">
-                <div className="flex items-center space-x-3">
-                  <Monitor className="h-5 w-5 text-green-600" />
-                  <span className="text-sm text-gray-600">Écrans sélectionnés</span>
-                </div>
-                <span className="font-bold text-green-600">{nbEcransSelected}</span>
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-gradient-to-r from-[#00263A]/10 to-[#004466]/10 rounded-xl border border-[#00263A]/20">
-                <div className="flex items-center space-x-3">
-                  <Users className="h-5 w-5 text-[#00263A]" />
-                  <span className="text-sm text-gray-600">Nombre d'impressions</span>
-                </div>
-                <span className="font-bold text-[#00263A]">
-                  {currentStep >= 5 && calculatedImpressions > 0
-                    ? calculatedImpressions.toLocaleString('fr-FR')
-                    : canEstimate
-                      ? nbImpressions.toLocaleString('fr-FR')
-                      : 0}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-gradient-to-r from-[#00263A]/10 to-[#004466]/10 rounded-xl border border-[#00263A]/20">
-                <div className="flex items-center space-x-3">
-                  <Clock className="h-5 w-5 text-[#00263A]" />
-                  <span className="text-sm text-gray-600">Nombre de jours</span>
-                </div>
-                <span className="font-bold text-[#00263A]">{canEstimate ? nbJours : 0}</span>
-              </div>
-              <div className="p-3 bg-gradient-to-r from-[#00B3A6]/10 to-[#00D4C4]/10 rounded-xl border border-[#00B3A6]/20">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center space-x-3">
-                    <DollarSign className="h-5 w-5 text-[#00B3A6]" />
-                    <span className="text-sm text-gray-600">Prix total</span>
-                  </div>
-                  <span className="font-bold text-[#00B3A6] text-lg">
-                    {currentStep >= 5 && adjustedBudget > 0
-                      ? adjustedBudget.toLocaleString('fr-FR', {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })
-                      : canEstimate
-                        ? prixTotal.toLocaleString('fr-FR', {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })
-                        : '0.00'}{' '}
-                    TND
-                  </span>
-                </div>
-                {currentStep >= 5 && calculatedImpressions > 0 ? (
-                  <p className="text-xs text-gray-500 text-right">
-                    ({(calculatedImpressions / 1000).toFixed(1)}k impressions)
-                  </p>
-                ) : (
-                  canEstimate &&
-                  nbImpressions > 0 && (
-                    <p className="text-xs text-gray-500 text-right">
-                      ({(nbImpressions / 1000).toFixed(1)}k impressions × {cpmTnd} TND)
-                    </p>
-                  )
-                )}
-              </div>
-              <div className="flex items-center justify-between p-3 bg-gradient-to-r from-purple-50 to-purple-100 rounded-xl border border-purple-200">
-                <div className="flex items-center space-x-3">
-                  <TrendingUp className="h-5 w-5 text-purple-600" />
-                  <span className="text-sm text-gray-600">CPM (Coût pour 1000)</span>
-                </div>
-                <span className="font-bold text-purple-600">{cpmTnd.toFixed(2)} TND</span>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* showZoneModal && (<ZoneModal />) — entire modal block removed in
           Commit 9 (setShowZoneModal(true) was never called; unreachable UI). */}
 
-      {/* Modal Événements Spéciaux */}
-      {showEventsModal && detectedEvents.length > 0 && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            {/* Overlay */}
-            <div
-              className="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75"
-              onClick={() => setShowEventsModal(false)}
-            ></div>
-
-            {/* Modal */}
-            <div className="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
-              {/* Header */}
-              <div className="bg-gradient-to-r from-[#00B3A6] to-[#00D4C4] px-6 py-5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="p-2 bg-white rounded-xl">
-                      <PartyPopper className="h-6 w-6 text-[#00B3A6]" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-bold text-white">
-                        Événements Spéciaux Détectés !
-                      </h3>
-                      <p className="text-sm text-white/90 mt-1">
-                        Profitez d'une visibilité accrue pendant ces événements
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setShowEventsModal(false)}
-                    className="p-2 hover:bg-white/20 rounded-lg transition-colors"
-                  >
-                    <X className="h-5 w-5 text-white" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Content */}
-              <div className="px-6 py-5">
-                <div className="mb-5">
-                  <div className="flex items-start space-x-3 p-4 bg-blue-50 border border-blue-200 rounded-xl">
-                    <Sparkles className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                    <div className="text-sm text-blue-900">
-                      <p className="font-semibold mb-1">🎯 Opportunité exceptionnelle !</p>
-                      <p>
-                        Nous avons détecté{' '}
-                        <strong>
-                          {detectedEvents.length} événement{detectedEvents.length > 1 ? 's' : ''}{' '}
-                          spécial{detectedEvents.length > 1 ? 'aux' : ''}
-                        </strong>{' '}
-                        durant la période de votre campagne. Associer votre annonce à{' '}
-                        {detectedEvents.length > 1 ? 'ces événements' : 'cet événement'} vous
-                        permettra de bénéficier d'une <strong>audience plus large</strong> et d'une{' '}
-                        <strong>meilleure visibilité</strong>.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Liste des événements */}
-                <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                  {detectedEvents.map((event) => (
-                    <div
-                      key={event.id}
-                      className={`p-4 border-2 rounded-xl cursor-pointer transition-all ${
-                        selectedEvents.includes(event.id)
-                          ? 'border-[#00B3A6] bg-[#00B3A6]/5'
-                          : 'border-gray-200 hover:border-[#00B3A6]/50'
-                      }`}
-                      onClick={() => {
-                        setSelectedEvents((prev) =>
-                          prev.includes(event.id)
-                            ? prev.filter((id) => id !== event.id)
-                            : [...prev, event.id],
-                        );
-                      }}
-                    >
-                      <div className="flex items-start space-x-3">
-                        <div
-                          className={`p-2 rounded-lg ${
-                            selectedEvents.includes(event.id) ? 'bg-[#00B3A6]' : 'bg-gray-100'
-                          }`}
-                        >
-                          <Calendar
-                            className={`h-5 w-5 ${
-                              selectedEvents.includes(event.id) ? 'text-white' : 'text-gray-600'
-                            }`}
-                          />
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <h4 className="font-bold text-gray-900">{event.name}</h4>
-                              {event.description && (
-                                <p className="text-sm text-gray-600 mt-1">{event.description}</p>
-                              )}
-                            </div>
-                            {event.pricing_multiplier > 1 && (
-                              <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs font-semibold rounded-lg">
-                                x{event.pricing_multiplier}
-                              </span>
-                            )}
-                          </div>
-                          <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-600">
-                            <span className="flex items-center">
-                              📍 {event.location} • {event.city}
-                            </span>
-                            <span className="flex items-center">
-                              📅 {new Date(event.start_date).toLocaleDateString('fr-FR')} -{' '}
-                              {new Date(event.end_date).toLocaleDateString('fr-FR')}
-                            </span>
-                            {event.expected_attendance && (
-                              <span className="flex items-center">
-                                👥 {event.expected_attendance.toLocaleString()} visiteurs attendus
-                              </span>
-                            )}
-                          </div>
-                          {event.target_audience && (
-                            <p className="mt-2 text-xs text-gray-500 italic">
-                              🎯 {event.target_audience}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="bg-gray-50 px-6 py-4 flex items-center justify-between">
-                <div className="text-sm text-gray-600">
-                  {selectedEvents.length > 0 ? (
-                    <span className="font-semibold text-[#00B3A6]">
-                      {selectedEvents.length} événement{selectedEvents.length > 1 ? 's' : ''}{' '}
-                      sélectionné{selectedEvents.length > 1 ? 's' : ''}
-                    </span>
-                  ) : (
-                    <span>Sélectionnez les événements qui vous intéressent</span>
-                  )}
-                </div>
-                <div className="flex space-x-3">
-                  <button
-                    onClick={() => {
-                      setShowEventsModal(false);
-                      setSelectedEvents([]);
-                    }}
-                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors font-medium"
-                  >
-                    Plus tard
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowEventsModal(false);
-                      if (selectedEvents.length > 0) {
-                        toast.success(
-                          `${selectedEvents.length} événement${selectedEvents.length > 1 ? 's' : ''} sélectionné${selectedEvents.length > 1 ? 's' : ''} !`,
-                        );
-                      }
-                    }}
-                    className="px-4 py-2 bg-gradient-to-r from-[#00B3A6] to-[#00D4C4] text-white rounded-lg hover:shadow-lg transition-all font-medium"
-                  >
-                    {selectedEvents.length > 0
-                      ? 'Confirmer la sélection'
-                      : 'Continuer sans événements'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
