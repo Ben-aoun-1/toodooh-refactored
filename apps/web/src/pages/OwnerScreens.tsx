@@ -23,14 +23,14 @@ import AddScreen from '../components/AddScreen';
 import OwnerNavigation from '../components/OwnerNavigation';
 import ScreenCalendar from '../components/ScreenCalendar';
 import { useAuthStore } from '../features/auth/stores/auth.store';
-import { logger } from '../lib/logger';
-import { supabase } from '../lib/supabase';
 import {
   screensService,
   Screen,
   ScreenStatus,
   UnavailabilityPeriod,
-} from '../services/screens.service';
+} from '../features/screens/services/screens.service';
+import { logger } from '../lib/logger';
+import { supabase } from '../lib/supabase';
 
 const log = logger.child({ module: 'OwnerScreens' });
 

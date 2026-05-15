@@ -20,7 +20,7 @@ import AdminLayout from '../../components/admin/AdminLayout';
 import {
   predefinedZonesService,
   type PredefinedZone,
-} from '../../services/predefined-zones.service';
+} from '../../features/screens/services/predefined-zones.service';
 import 'leaflet/dist/leaflet.css';
 import { getErrorMessage } from '../../lib/errors';
 

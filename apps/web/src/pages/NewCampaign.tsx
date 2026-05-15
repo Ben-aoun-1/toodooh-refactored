@@ -30,6 +30,8 @@ import { authService } from '../features/auth/services/auth.service';
 import { useAuthStore } from '../features/auth/stores/auth.store';
 import type { BusinessSector } from '../features/auth/types/auth';
 import type { SpecialEvent } from '../features/events/types/event';
+import { predefinedZonesService, type PredefinedZone } from '../features/screens/services/predefined-zones.service';
+import { screensService, type UnavailabilityPeriod } from '../features/screens/services/screens.service';
 import { useCampaignWizard } from '../hooks/new-campaign/useCampaignWizard';
 import { buildInitialWizardState } from '../hooks/new-campaign/wizard-init';
 import type {
@@ -54,8 +56,6 @@ import {
   buildWizardLocationScheduleMap,
   computeNewCampaignDoohMaxImpressions,
 } from '../services/dooh-new-campaign-estimate.service';
-import { predefinedZonesService, type PredefinedZone } from '../services/predefined-zones.service';
-import { screensService, type UnavailabilityPeriod } from '../services/screens.service';
 import { useCartStore } from '../stores/cart.store';
 
 import PostCartStep from './new-campaign/PostCartStep';

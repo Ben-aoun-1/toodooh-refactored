@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase } from '../../../lib/supabase';
 import type { Location, LocationAffluenceSlot, LocationAffluenceGrid } from '../types/location';
 
 export const locationsService = {

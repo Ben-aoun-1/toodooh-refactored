@@ -1,16 +1,16 @@
-import { ArrowRight, Check, CheckCircle, Flame, MapPin, Users, X } from 'lucide-react';
 import L from 'leaflet';
+import { ArrowRight, Check, CheckCircle, Flame, MapPin, Users, X } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Circle, MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
 import { toast } from 'react-hot-toast';
+import { Circle, MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
 
+import type { PredefinedZone } from '../../features/screens/services/predefined-zones.service';
+import type { GeographicZone } from '../../hooks/new-campaign/wizard-types';
 import {
   campaignScreensService,
   type CampaignLocation,
 } from '../../services/campaign-screens.service';
-import type { PredefinedZone } from '../../services/predefined-zones.service';
-import type { GeographicZone } from '../../hooks/new-campaign/wizard-types';
 
 // Leaflet's default icon URLs are broken under bundlers (the bundler can't
 // see asset paths embedded in the package). The fix is the same one used
