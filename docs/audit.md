@@ -31,18 +31,18 @@ complementary and orthogonal — none subsumes the others; each should cross-ref
 
 ## 2. Snapshot
 
-_As of commit `6c48d30` (post-Step-7 Dashboard + NewCampaign decomposition + orchestrator cleanup)._
+_As of commit `6af378e` (post-Step-8 `features/<domain>/` restructure)._
 
 | Metric                             | Value                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Files under `apps/web/src/`        | ~245 (Step 7 added 9 new files: `hooks/useWizard.ts`, `hooks/new-campaign/{useCampaignWizard,wizard-types,wizard-steps,wizard-serialize,wizard-init}.ts`, `pages/new-campaign/{Step1NameType,Step2,Step3,Step4,Step5,Step6,PostCartStep}.tsx`, `lib/wizard-zones.ts`, plus AdvertiserDashboard split + 4 hooks + 6 components from Commit 4). Dashboard.tsx retired in Commit 7.                                                                |
-| Lines of `.ts`/`.tsx`              | similar net to pre-Step-7 (Step 7 is decomposition, not deletion: ~7000 lines moved from 2 mega-files into ~25 new files + orchestrator)                                                                                                                                                                                                                                                                                                       |
-| Files > 1000 lines                 | 13 (`NewCampaign.tsx` 1624 — was 4359; `Dashboard.tsx` retired; `auth/SignUpForm.tsx` 1954, `OwnerSettings.tsx` 1845, `MyCampaigns.tsx` 1748, `admin/UserManagement.tsx` 1485, `UserProfile.tsx` 1394, `admin/EventManagement.tsx` 1247, `OwnerCampaigns.tsx` 1235, `Onboarding.tsx` 1228, `OwnerDashboard.tsx` 1209, `services/campaign.service.ts` 1127, `OwnerScreens.tsx` 1100, `services/auth.service.ts` 1055, `admin/CampaignMonitoring.tsx` 1006) |
-| Files > 500 lines                  | ~38                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `pnpm typecheck`                   | **58 errors** (66 → 58, -8 net across Step 7's `any`-elimination cleanups on extracted files; remaining 58 are unchanged Cat-A pre-existing untyped-root cascades tracked in #15 for Phase 1)                                                                                                                                                                                                                                                  |
-| `pnpm lint`                        | **370 problems (352 errors, 18 warnings)** — top rules: `jsx-a11y/label-has-associated-control` 230, `no-useless-catch` 71, `jsx-a11y/click-events-have-key-events` 26, `jsx-a11y/no-static-element-interactions` 23, `react-hooks/exhaustive-deps` ~18 (warn), `import-x/order` ~7, `jsx-a11y/media-has-caption` 6. **`no-console`: 0** ✓ · **`@typescript-eslint/no-explicit-any`: 0** ✓ · **`@typescript-eslint/no-unused-vars`: 0** ✓ · **`no-empty`: 0** ✓ |
-| `pnpm test`                        | 8 suites pass (above 7 + `hooks/new-campaign/useCampaignWizard.test`); **98 tests**; 0 failures                                                                                                                                                                                                                                                                                                                                                |
-| `pnpm --filter @toodooh/web build` | passes — main `index-*.js` 447 kB / gzip **131.42 kB** (vs post-Step-6 130.71 kB; +0.71 kB net = wizard hook + step-component machinery). Dashboard chunk retired; new NewCampaign chunk: gzip **25.77 kB** (was 27.71 kB pre-Commit-12; the orchestrator-cleanup commit shed 1.94 kB).                                                                                                                                                         |
+| Files under `apps/web/src/`        | **164 `.ts`/`.tsx`** (corrects the prior "~245" — that figure counted the 101 PNG assets; the actual code surface is 164). Step 8 is a pure rename: no files added or deleted, 142 moved into `features/<domain>/`. |
+| Lines of `.ts`/`.tsx`              | unchanged net — Step 8 is rename-only (no logic edits, no deletions) |
+| Files > 1000 lines                 | unchanged from post-Step-7 (Step 8 moved files, did not decompose). Largest now under feature paths: `features/auth/components/SignUpForm.tsx` 1940 (→ TBD-D), `features/screenhost/pages/OwnerSettings.tsx` 1845, `features/campaigns/pages/MyCampaigns.tsx` 1657, `features/campaigns/pages/NewCampaign.tsx` 1624, `features/admin/pages/UserManagement.tsx` 1466, `features/advertiser/pages/UserProfile.tsx` 1420, … |
+| Files > 500 lines                  | ~38 (unchanged; rename-only) |
+| `pnpm typecheck`                   | **58 errors** (unchanged across all 9 Step-8 feature commits — rename-only; the 58 remain Cat-A pre-existing untyped-root cascades tracked in #15 for Phase 1) |
+| `pnpm lint`                        | **364 problems (346 errors, 18 warnings)** — top rules: `jsx-a11y/label-has-associated-control` 214, `no-useless-catch` 71, `jsx-a11y/click-events-have-key-events` 25, `jsx-a11y/no-static-element-interactions` 21, `react-hooks/exhaustive-deps` 18 (warn), `jsx-a11y/media-has-caption` 6, `jsx-a11y/no-noninteractive-element-interactions` 4, `@typescript-eslint/no-unused-expressions` 3, `import-x/order` 1, `import-x/no-unresolved` 1. **`no-console`: 0** ✓ · **`@typescript-eslint/no-explicit-any`: 0** ✓ · **`@typescript-eslint/no-unused-vars`: 0** ✓ · **`no-empty`: 0** ✓ · Step 8 reduced lint problems by 6 (370 → 364) via incidental `import-x/order` autofix during the rename sweeps — not a Step-8 goal, an emergent benefit. (Prior "~7 / 230 / 26 / 23" per-rule figures were stale; resynced here.) |
+| `pnpm test`                        | 8 suites pass; **98 tests**; 0 failures (unchanged across Step 8) |
+| `pnpm --filter @toodooh/web build` | passes — main `index-*.js` 447 kB / gzip **131.34 kB** (vs post-Step-7 131.42 kB; −0.08 kB drift, rename-only noise). NewCampaign chunk gzip **25.76 kB** (vs 25.77). |
 | CI (`main`)                        | **red** — expected; goes green at Step 13                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 ---
@@ -414,8 +414,49 @@ addressed when those files are decomposed. See "Auth-state layering" above. → 
 
 ### Flat folder structure
 
-`src/` is flat `pages/` + `components/` + `services/` + `stores/`, not the feature-based
-`src/features/<domain>/` the architecture conventions call for. → **Step 8 · #4**
+`src/` was flat `pages/` + `components/` + `services/` + `stores/`, not the feature-based
+`src/features/<domain>/` the architecture conventions call for.
+→ **Step 8 · #4** ☑
+
+**Resolved in Step 8.** `apps/web/src/` restructured into 9 feature folders under
+`features/`: 6 domain features (`auth`, `campaigns`, `events`, `performances`, `screens`,
+`wallet`) + 3 role features (`advertiser`, `screenhost`, `admin`). 142 files moved across
+9 rename-only feature commits. `pages/`, `stores/`, `types/`, `constants/`, `data/`,
+`utils/` directories removed entirely (their contents absorbed into features).
+The **types-at-root anti-pattern** is resolved as a side effect — `types/` is empty and
+removed; every type module lives in its owning feature.
+
+**Folder-structure conventions established in Step 8** (record for future contributors):
+
+- **Feature taxonomy.** Domain features (`auth`, `campaigns`, `events`, `performances`,
+  `screens`, `wallet`) own services, types, stores, and feature-internal `lib/`. Role
+  features (`advertiser`, `screenhost`, `admin`) own pages, layout chrome, and
+  role-specific components. Role features import services from domain features, never the
+  reverse — verified circular-edge-free at Step 8 Commit 9.
+- **Clarification A — `src/services/` deliberate root residual.** `src/services/` survives
+  for genuinely cross-cutting services with importers spanning 3+ features (currently
+  `balance.service.ts`, `global-configuration.service.ts`). Single-cluster services moved
+  into their feature. Do not liquidate `src/services/` — that would re-create the
+  cross-feature import edges Step 8 deliberately avoided.
+- **Clarification B — feature-internal `lib/`.** Pure utilities with a single feature
+  consumer live under `features/<X>/lib/`, mirroring root `src/lib/`. Established with
+  `features/campaigns/lib/wizard-zones.ts` + `wizard-dates.ts`.
+- **Clarification C — `lib/dooh/legacy/`.** Holds persistence-coupled pre-v3 services
+  slated for Phase-1 4c deletion. They live there for cutover-diff simplicity (one
+  `rm -rf`), NOT because portable IP. The portable v3 IP is everything in `lib/dooh/`
+  EXCEPT the `legacy/` subdirectory.
+- **`admin-screens.service` ↔ `screens.service` independence** (Step 8 Commit 5):
+  confirmed via grep — `admin-screens.service` does not import `screens.service`;
+  independent code paths against a shared DB table. Minor duplication; a future
+  service-dedup pass, not Step 8 scope.
+- **Dead-file clustering.** Step 8 surfaced 5 dead files (TBD-E…I): they cluster in
+  code paths not actively maintained — admin chrome, screenhost components, services
+  paired with pages that bypass them and call Supabase directly. Hot paths (campaigns,
+  auth) are clean. Scoped dead-code audit pass tracked as **TBD-J**.
+- **Placeholder pages.** Three route-wired "à compléter" pages remain live:
+  `AdvertiserPerformancePlaceholder` (tracked as #19), `OwnerActivity` (14 lines),
+  `OwnerMaintenance` (16 lines). The latter two should be triaged post-Step-8 if product
+  wants them tracked as rebuild targets.
 
 ### No server-state layer
 
@@ -830,6 +871,83 @@ inventory surfaced `docs/audit.md` as the actually-authoritative doc not listed 
 flagged as scope expansion; user accepted; `docs/audit.md` was updated in 13a alongside the
 named handoff docs.
 
+### Methodology learnings from Step 8
+
+Step 8 (the `features/<domain>/` restructure over 9 rename-only feature commits + a discovery
+commit + a plan commit + 8 interleaved notes/CF micro-commits) produced 9 carry-forward rules
+(CF-1…CF-9) plus a meta-observation. Captured live in
+`docs/superpowers/plans/2026-05-15-step-8-notes.md`; promoted here. These generalize to any
+future bulk file-move / restructure work.
+
+#### Sed-driven rename discipline
+
+**CF-1 — Sed coverage has four import-path shapes.** When moving a directory's contents:
+(1) external imports — `'../X'`, `'../../X'`, `'../../../X'` — the rewrite list must cover
+*every* root directory referenced, including ones easy to forget (`constants/` was missed at
+Commit 1); (2) self-sibling imports `'./X'` — covers BOTH static `from './X'` AND **dynamic
+`import('./X')`** (Commit 7's `admin-video.service` dynamic import was missed by a static-only
+grep; Commit 9 hit the same file again — dynamic service imports are a rare outlier worth a
+dedicated `import\(` grep); (3) intra-feature post-move siblings auto-correct via git rename
+detection — trust it; (4) **depth-classification by inspection** — never assume a file shares
+its directory-peers' depth; Commit 6's `AdvertiserNotificationsBell` was depth 1 while its
+`components/layout/` peers were depth 2. *Amendment:* generic patterns (`'../../services/X'`)
+matter alongside specific names — Commit 7 missed the generic `global-configuration.service`
+bump because the sed listed only admin-prefixed service names.
+
+**CF-2 — Post-sed autofix is routine, not regression.** Standard cadence:
+`typecheck → sed → eslint --fix (scoped to touched files) → lint → test → build`. Sed-injected
+`features/*` paths reshuffle import order; the resulting `import-x/order` spike is expected and
+cleared by the scoped `--fix`. Halt only if a *non-order* rule regressed after autofix.
+*Blind spot:* `--fix` cannot reorder across a CSS / side-effect import (`import 'x.css'`);
+when one interleaves path-rewritten imports, a manual reorder is needed (Commit 7's
+`GeographicZonesManagement`).
+
+**CF-3 — Chunk-hash is a soft signal, not a gate.** Source-string changes (a rewritten import
+path) legitimately change Vite chunk hashes. Hash *identity* is a happy outcome (module-graph
+collapse), not the expected case. Halt only on an *unexplained* hash change, an unexpected
+new/missing chunk, or gzip drift past tolerance.
+
+#### Inventory & discovery discipline
+
+**CF-4 — Importer-count predictions are ±1-suspect.** Numeric predictions in discovery/plan
+docs drift; re-grep importer surfaces at each commit's inventory phase, report actual vs
+predicted. (Generalizes Step 7's "verify line counts, don't eyeball" from line-counts to
+importer-counts.)
+
+**CF-8 — Grep-verify discovery claims at write time.** Discovery's "who imports X" claims must
+be grep-verified when written, not eyeballed. CF-8 was *generated* after Commit 4 surfaced
+three importer-count discrepancies; it then caught Commit 5's dead 153-line `locations.service`
+that discovery had treated as live. **Anchor the grep** (`'screens\.service'` not the bare
+substring) — Commit 5's first pass over-counted by matching `admin-screens.service`.
+
+**CF-8 meta-observation.** Methodology rules generated by recent commits' findings catch
+failure modes the discovery phase missed. When a refinement is surfaced mid-step, apply it
+retroactively to the next inventory — it often catches more than the originating finding did
+(CF-8, born to catch count drift, caught a dead 153-line file instead).
+
+**CF-5 — Audit/plan text drifts between major-step refreshes.** Four staleness findings
+accrued during Step 8 (stale §2 lint per-rule breakdown; an inaccurate §3 "OwnerDashboard
+imports performance.service" claim; a wrong plan §5 "4 revenue.service consumers" count; a
+wrong plan §5 "31 admin files" count). Pattern: re-verify audit text at the *start* of any
+future step rather than trusting the prior refresh.
+
+#### Process and review
+
+**CF-6 / CF-7 — Two-tier push policy.** Doc commits (plan, discovery, notes, audit refresh)
+push immediately — they are reviewed against the rendered version. Code commits hold local
+until the user's "go" approves them, so a bad commit can be amended/reverted without polluting
+`origin/main` with a public revert.
+
+**CF-9 — Pause-summary delivery format.** Deliver each commit's pause summary as a single
+copy-paste-fidelity text block in chat: all mandatory items inline, gates as a table, no
+"see file X" indirection, no terminal control sequences.
+
+**Risk-register accuracy.** The plan's §9 double-update predictions (a domain service moved
+before its owner-side consumers takes two path updates — once at the domain commit, once at
+the screenhost commit) held *exactly* across execution: 5 predicted pairs, 5 settled. When
+commit ordering forces double-updates, count them at plan time and verify the settle count
+per commit.
+
 ---
 
 ## 4. Already resolved
@@ -841,6 +959,7 @@ named handoff docs.
 - **Step 5 — Frontend logger + `console.*` purge** — Pino logger module landed at `apps/web/src/lib/logger.ts` with dev/prod/test config (silent in vitest, debug in dev, info in prod). 901 `console.*` calls (446 .log + 421 .error + 33 .warn + 1 .info + 1 .table) removed or promoted across 46 files. 222 `console.error` promoted to `log.error` and 33 `console.warn` to `log.warn` via pino child loggers scoped per-module; the rest were deleted (Cat-1 debug detritus, Cat-2a console.error+throw, Cat-2b console.error+toast — all signalled elsewhere). `no-console: 'error'` ESLint rule enforced project-wide. Bundle gzip 128.61 → 130.50 kB (+1.89 kB net pino-browser cost). Side effect: typecheck rose 179 → 197 (19 TS6133 unused-variable unmasks surfaced by removing console.log consumers; deferred to Step 6). → Issue #7. Commits `20d5034`, `f65bd16`, `c61934d`, `f0ebb37`, `22f26cc` (this audit refresh + Step-5 close-out).
 - **Step 6 — Typing pass + regression remediation** — 265 `@typescript-eslint/no-explicit-any` → 0 (134 fixed via Cat-D narrowing + Cat-C strips + Cat-B refactors; 131 marked `TODO(phase-1)` and tracked in #15); 161 `@typescript-eslint/no-unused-vars` → 0 via `_`-prefix + delete + restructure; TS6133 typecheck subset 197 → 66 as mirror drop (66 residue all Cat-A untyped-root cascades → #15); 26 `no-empty` → 0 via else-deletion + per-site catch-fallback comments + 1 orphan-binding cleanup. Five P0 hotfixes shipped during the regression remediation cycle triggered by Commit 4 unmasking incomplete error-handling: P0a (`830c7b9` recharge destructure), P0b (`277c68f` deleteUser cascade), P0c (`a59cfb9` document upload), P0d (`b3f50cb` cart-add + save-draft). Three tracking issues opened: #15 (Phase-1 typing prerequisites), #16 (admin destructive ops observability), #17 (Tier-3 read-only fetch observability). Full methodology + 15 learnings in `docs/audits/2026-05-14-step-6-regression-audit.md`. Bundle gzip 130.50 → 130.71 kB (+0.21 kB net). → Issue #8. Commits `6d212fb` (Commit 0), `c007783`, `9c4839b`, `ed7c261`, `abe594c`, `62e8813`, `0af5cc3`, `00d464e`, plus this audit refresh + #8 close-out.
 - **Step 7 — Dashboard + NewCampaign decomposition** — `Dashboard.tsx` (2635 lines) retired entirely, replaced by `AdvertiserDashboard` page + 4 hooks + 6 components + ModalProvider (Commits 1-4) + App.tsx route flip pointing all 12 advertiser routes at their real page components instead of `<Dashboard />` (Commit 7). The "Mes performances" sidebar entry restored per Figma `Performances.png` (tracked in #19 for the page-body rebuild). `NewCampaign.tsx` 4030 lines → **1624 lines** (-2406 net, ~60% shrink) via extraction of the campaign wizard's 6 steps into `pages/new-campaign/{Step1NameType,Step2,Step3,Step4,Step5,Step6,PostCartStep}.tsx`, the wizard state machine into `hooks/new-campaign/useCampaignWizard.ts` (composed over a generic `hooks/useWizard.ts`), pure functions into `wizard-{steps,serialize,init}.ts` + `lib/wizard-zones.ts`, and the dead-modal + dead-sidebar cascades surfaced by the setter-to-true and CSS-gated dead-UI detection patterns (Commits 9, 12). Path B chosen for the Save/AddToCart flow (extract verbatim) when the parent's inline handlers were found to have diverged from the Commit 5 `useCampaignWizard` wrappers across 5 production behaviors — tracked in #20 for future reconciliation. Figma consultation rule formalized in Commits 9-11 after the retroactive Performances.png finding; first proactive product-gap finding produced (#21 post-cart placement on /panier vs wizard). 19 methodology carry-forwards captured for the methodology learnings refresh in 13b. Typecheck 66 → 58, lint 395 → 370, tests 77 → 98 (21 new pure-function tests on the wizard's serialize/perform layer). Bundle gzip 130.71 → 131.42 kB (+0.71 kB net = wizard machinery); Dashboard chunk retired entirely; new NewCampaign chunk gzip 25.77 kB. Three follow-up tracking issues opened: #19 (Mes performances page rebuild per Figma), #20 (hook-wrapper adoption: reconcile useCampaignWizard with inline cart-add behavior), #21 (post-cart recommendations placement: wizard vs cart page per Figma). → Issue #3. Commits `46ae53d` (discovery), `dd9a066`, `2ba80bf`, `843498d`, `6022672`, `53bea06`, `5511110`, `6e47c6a`, `2a25ad8`, `329f576`, `ceec832`, `2bc7ebf`, `fade44f`, `6ed1103`, `6c48d30`, plus this audit refresh + #3 close-out.
+- **Step 8 — `src/features/<domain>/` restructure** — `apps/web/src/` restructured from a flat `pages/`+`components/`+`services/`+`stores/` layout into 9 feature folders under `features/`: 6 domain features (`auth`, `campaigns`, `events`, `performances`, `screens`, `wallet`) + 3 role features (`advertiser`, `screenhost`, `admin`). 142 files moved across 9 rename-only feature commits, ordered by fan-in / risk (auth first — broadest fan-in; campaigns last — largest). `pages/`, `stores/`, `types/`, `constants/`, `data/`, `utils/` directories removed; their contents absorbed into features. `src/components/` retains 4 truly-shared files (`Modal`, `AnimatedLogo`, `PageLoadingFallback`, `ContentErrorBoundary`); `src/hooks/` retains the generic `useWizard.ts`; `src/services/` retains the 2 cross-cutting services (`balance`, `global-configuration`) as a deliberate residual (Clarification A); `src/contexts/` retains `ModalContext.tsx` pending TBD-A. `lib/dooh/legacy/` added for the 5 persistence-coupled pre-v3 DOOH services (Clarification C). Pure rename — typecheck unchanged at 58, test unchanged at 98/8/0, build gzip 131.42 → 131.34 kB (rename noise); lint 370 → 364 (−6 incidental `import-x/order` autofix). 5 dead files surfaced for follow-up deletion (TBD-E…I); 10 follow-up issues filed (TBD-A…J); 9 carry-forward methodology rules (CF-1…9) captured — see §3 "Flat folder structure" for the conventions and the methodology subsection below. → Issue #4. Commits `63f73d2` (discovery), `45a4e2c` (plan), `9c34c60`, `eb31899`, `1c49f07`, `1d631f4`, `eb2511e`, `2516a0d`, `6752bf7`, `8bc614a`, `6af378e` (9 feature commits) + interleaved notes/CF doc commits (`e4ee678`, `e7e19cf`, `487ee59`, `3572e15`, `48529d7`, `f34c02f`, `11be543`, `3999fd8`) + this audit refresh + #4 close-out.
 
 ---
 
@@ -864,7 +983,7 @@ plan → execute cycle.
 | 5   | Frontend logger + `console.*` purge                                                                                                                            | new logger; ~917 call sites; ESLint config                                                                                                                                                      | 0 `no-console` errors                                                                                                                                                                                                                                                                                                                                                                        | #7    | ☑      |
 | 6   | Typing pass: fix `as any`, reduce tsc baseline, re-tighten tsconfig                                                                                            | many files; `tsconfig.app.json`                                                                                                                                                                 | 265 no-any → 0 (134 fixed directly, 131 marked TODO(phase-1) → #15); 161 no-unused-vars → 0; 26 no-empty → 0; typecheck 197 → 66 (66 residue = Cat-A untyped-root cascades, → #15); tsconfig un-softening deferred to Phase 1 with #15; regression cycle P0a-P0d shipped                                                                                                                     | #8    | ☑      |
 | 7   | Decompose `Dashboard.tsx` / `NewCampaign.tsx`                                                                                                                  | `pages/Dashboard.tsx` (retired), `pages/NewCampaign.tsx` (4030 → 1624), `App.tsx` routes, `pages/new-campaign/*` (7 step components), `hooks/new-campaign/*` (5 hook+pure-fn files), `lib/wizard-zones.ts` | Dashboard retired, replaced by AdvertiserDashboard + 4 hooks + 6 components; NewCampaign decomposed into wizard-hook + 6 step components + PostCartStep; bundle Dashboard chunk eliminated; new NewCampaign chunk gzip 25.77 kB; 21 new pure-function tests on the wizard serialize/perform layer; 3 follow-up issues (#19/#20/#21). 15 commits over the work session. | #3    | ☑      |
-| 8   | Restructure `src/` into `src/features/<domain>/`                                                                                                               | almost all of `src/`                                                                                                                                                                            | feature-based layout per conventions; imports updated; build OK                                                                                                                                                                                                                                                                                                                              | #4    | ☐      |
+| 8   | Restructure `src/` into `src/features/<domain>/`                                                                                                               | almost all of `src/` (142 files moved)                                                                                                                                                          | 9 feature folders (6 domain + 3 role); imports updated, no orphans; typecheck 58 / lint 364 / test 98 / build green; §2/§3/§5 refreshed; 10 follow-ups filed (TBD-A…J). Merge `6af378e`. | #4    | ☑      |
 | 9   | Replace `window.location.reload()` in `MyAccount.tsx`                                                                                                          | `pages/MyAccount.tsx`                                                                                                                                                                           | 0 `window.location.reload()` calls                                                                                                                                                                                                                                                                                                                                                           | #5    | ☐      |
 | 10  | Introduce React Query for server state                                                                                                                         | new query layer; (post-decomposition) pages                                                                                                                                                     | server data via React Query; Zustand limited to client state                                                                                                                                                                                                                                                                                                                                 | #6    | ☐      |
 | 11  | `jsx-a11y` + `exhaustive-deps` cleanup                                                                                                                         | many `.tsx` files                                                                                                                                                                               | 0 `jsx-a11y/*` errors; 0 `exhaustive-deps` warnings                                                                                                                                                                                                                                                                                                                                          | #9    | ☐      |
