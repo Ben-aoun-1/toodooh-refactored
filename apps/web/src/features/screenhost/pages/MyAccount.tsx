@@ -35,7 +35,7 @@ const steps = [
 
 export default function MyAccount() {
   const navigate = useNavigate();
-  const { user, profileType, needsApproval, validationStatus } = useAuthStore();
+  const { user, profileType, needsApproval, validationStatus, refreshUserStatus } = useAuthStore();
   const isDisabled = needsApproval && validationStatus === 'pending';
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -253,16 +253,16 @@ export default function MyAccount() {
 
       toast.success('Profil mis à jour avec succès');
 
+      // Rafraîchir l'affichage sans rechargement complet de la page
+      await loadProfileData();
+      await refreshUserStatus();
+
       // Demander confirmation avant de quitter
       const shouldLeave = window.confirm(
         'Profil mis à jour avec succès ! Voulez-vous retourner au tableau de bord ?',
       );
       if (shouldLeave) {
-        // Forcer le rechargement pour mettre à jour l'affichage
-        window.location.reload();
-      } else {
-        // Recharger la page pour mettre à jour l'affichage même si on reste
-        window.location.reload();
+        navigate('/owner-dashboard');
       }
     } catch (error) {
       log.error({ error }, '❌ Erreur lors de la mise à jour');
