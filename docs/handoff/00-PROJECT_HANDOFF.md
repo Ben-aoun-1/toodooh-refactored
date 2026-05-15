@@ -1,6 +1,6 @@
 # TOODOOH Platform Migration — Project Handoff
 
-**Status as of last session**: Step 5 of the frontend cleanup phase is complete. Step 6 (mechanical lint autofix pass) is the next executable task — the prompt is in `prompt-archive/step-6-lint-autofix.md`.
+**Status as of last session**: Step 7 of the authoritative cleanup audit (Dashboard + NewCampaign decomposition) is complete. The authoritative audit doc is `docs/audit.md` (see its §2 Snapshot and §4 Already resolved for current state); this handoff doc remains as historical context but its 15-step roadmap (`03-cleanup-roadmap.md`) uses different numbering than the authoritative audit's 14-step roadmap. The next executable task is `docs/audit.md` Step 8 (restructure `src/` into `src/features/<domain>/`).
 
 **How to use this handoff**: Read this doc first, then `02-migration-notes.md`, then the repo's root `CLAUDE.md`, then `03-cleanup-roadmap.md`. Reference `prompt-archive/` and `step-reports/` as needed when I ask about previous decisions. The current state of key files lives in `current-state/`.
 
@@ -126,25 +126,26 @@ Schema migration carries one mandatory simplification: **collapse the dual ident
 - 66 `localStorage.*` calls outside Zustand
 - 2 `window.location.reload()` calls in `MyAccount.tsx` — both branches of an `if/else` call `reload()`. Yes, really.
 
-**After steps 1–5 (current state):**
-- Typecheck: 310 errors (was 317 — dead-import cleanup cleared 7)
-- Lint: 2201 problems / 2174 errors / 27 warnings (was 2249)
-- `react-hooks/rules-of-hooks`: 0 (was 20)
-- Main bundle: 434 kB gzip 129 kB (was 3,254 kB / 937 kB) — 87% reduction
-- 110 chunks total now (was ~5)
-- Largest non-main chunk: Dashboard at 608 kB (the god-component)
-- Build: passes, dev server starts clean, tests: 3 suites pass, 1 pre-existing import failure
+**After steps 1–7 of the authoritative audit (current state, post commit `6c48d30`):**
+- Typecheck: **58 errors** (was 310 — Steps 5/6 typing pass + Step 7's `any`-elimination cleanups). Residue is Cat-A untyped-root cascades tracked in issue #15 for Phase 1.
+- Lint: **370 problems / 352 errors / 18 warnings** (was 2201). Top remaining rules: `jsx-a11y/label-has-associated-control` 230, `no-useless-catch` 71, `jsx-a11y/click-events-have-key-events` 26. `no-console: 0`, `no-explicit-any: 0`, `no-unused-vars: 0`, `no-empty: 0`.
+- `react-hooks/rules-of-hooks`: 0 (was 20).
+- Main bundle: 447 kB / gzip **131.42 kB** (was 3,254 kB / 937 kB).
+- Largest non-main chunk: was the 608 kB Dashboard god-component; **Dashboard retired in Step 7** (App.tsx route flip in Commit 7 of Step 7). New `NewCampaign` chunk gzip 25.77 kB.
+- Tests: **8 suites, 98 tests passing** (was 3 suites). Wizard's serialize/perform layer gained 21 new pure-function tests in Step 7 Commit 5.
+- Build: passes, dev server clean.
+- Step 7's three follow-up tracking issues: **#19** (Mes performances page rebuild per Figma), **#20** (hook-wrapper adoption: reconcile useCampaignWizard with inline cart-add behavior), **#21** (post-cart recommendations placement: wizard vs cart page per Figma).
 
 ## 7. Known anti-patterns in the codebase
 
 These are the structural problems the cleanup roadmap addresses. Some have already been disproved by direct inspection — the audit (in `01-initial-audit.md`) was right about most things but wrong about two. Both corrections are below.
 
-**Mega-files:**
-- `NewCampaign.tsx` — 3,814 lines
-- `Dashboard.tsx` — 2,161 lines
-- `OwnerSettings.tsx` — 1,704 lines
-- `admin/UserManagement.tsx` — 1,388 lines
-- `MyCampaigns.tsx` — 1,359 lines
+**Mega-files (post-Step-7 state):**
+- ~~`NewCampaign.tsx` — 3,814 lines~~ — addressed in audit Step 7; now **1,624 lines** as orchestrator + 6 step components + `useCampaignWizard` hook + `PostCartStep` + `lib/wizard-zones.ts`
+- ~~`Dashboard.tsx` — 2,161 lines~~ — retired in audit Step 7 (Commit 7); replaced by `AdvertiserDashboard` + 4 hooks + 6 components + `ModalProvider`; App.tsx routes flipped to render real page components
+- `OwnerSettings.tsx` — 1,845 lines (still pending; audit Step 13 in older handoff numbering / not yet sequenced in authoritative audit)
+- `admin/UserManagement.tsx` — 1,485 lines (still pending)
+- `MyCampaigns.tsx` — 1,748 lines (still pending)
 
 **Dashboard is a god-component router** (not App.tsx — App.tsx is fine). Dashboard internally switches on `useLocation()` and renders one of 7 different pages depending on the URL. 12 routes in App.tsx all render `<Dashboard />`. The Dashboard chunk is 608 kB after lazy-loading; it transitively imports `NewCampaign.tsx`. **Correction from original audit**: I previously claimed App.tsx was a god-router. It isn't; Dashboard is. The bug is one level deeper.
 
@@ -177,6 +178,8 @@ These exist in the **live Supabase project**. I cannot fix them because I don't 
 
 ## 9. Cleanup roadmap (15 steps, current phase)
 
+> **Numbering note**: this section's table uses the original 15-step roadmap (also in `03-cleanup-roadmap.md`). The **authoritative roadmap** lives in `docs/audit.md` §5 — a 14-step compressed version that was renumbered in commit `83dc394` to put mechanical sweeps (console-purge, typing pass) BEFORE the Dashboard/NewCampaign decomposition. Reading `docs/audit.md` is preferred for current status; this table is kept as a historical companion. Most-cited cross-reference: handoff Step 12 (Dashboard+NewCampaign decomp) = audit Step 7 = issue #3.
+
 Full detail with rationale per step is in `03-cleanup-roadmap.md`. Summary:
 
 | # | Task | Status |
@@ -184,20 +187,20 @@ Full detail with rationale per step is in `03-cleanup-roadmap.md`. Summary:
 | 1 | Fix `react-hooks/rules-of-hooks` violations | ✅ Done (commit `bc63fb1`) |
 | 2 | Replace hardcoded `itstrategix.tn` redirects | ✅ Done (commit `854f112`) |
 | 3 | React.lazy() all routes + code splitting | ✅ Done (commits `95df8a1`, `d80ef19`, `290024a`) |
-| 4 | Mechanical lint autofix pass (Prettier + ESLint) | 🔵 **NEXT** — prompt in `prompt-archive/step-6-lint-autofix.md` (named "step-6" because it's the 6th prompt I wrote overall, but it's the 4th cleanup step) |
-| 5 | Console removal + pino logger introduction | Pending |
-| 6 | a11y pass (label-has-associated-control, click-events-have-key-events) | Pending |
-| 7 | Decouple DOOH calculation services from Supabase | Pending |
-| 8 | Folder restructure to `features/<domain>/` | Pending |
-| 9 | Service deduplication + page-duplicate resolution | Pending |
-| 10 | Extract session logic from `auth.service.ts` back into `auth.store.ts` | Pending |
-| 11 | Tailwind theming pass (447 `#00B3A6` → `brand` token) | Pending |
-| 12 | Dashboard + NewCampaign decomposition (the big one — 1–2 weeks) | Pending |
-| 13 | Decompose remaining mega-files (OwnerSettings, UserManagement, MyCampaigns) | Pending |
-| 14 | Tsconfig tightening (re-enable `verbatimModuleSyntax`, `noUncheckedIndexedAccess`) | Pending |
-| 15 | Hoist duplicate devDeps to root | Pending |
+| 4 | Mechanical lint autofix pass (Prettier + ESLint) | ✅ Done (commits `82e8f66`, `c8b5f17`, `39536c1`) |
+| 5 | Console removal + pino logger introduction | ✅ Done — audit Step 5 / issue #7 (commits `20d5034`, `f65bd16`, `c61934d`, `f0ebb37`, `22f26cc`) |
+| 6 | a11y pass (label-has-associated-control, click-events-have-key-events) | Pending — audit Step 11 / issue #9 |
+| 7 | Decouple DOOH calculation services from Supabase | ✅ Done — audit Step 4 / issue #12 (`lib/dooh/` extracted) |
+| 8 | Folder restructure to `features/<domain>/` | 🔵 **NEXT** — audit Step 8 / issue #4 |
+| 9 | Service deduplication + page-duplicate resolution | Partial — Step 2a/2b ☑ (orphan deletions); rest folded into Step 12 (Dashboard decomp) |
+| 10 | Extract session logic from `auth.service.ts` back into `auth.store.ts` | ✅ Done — audit Step 3 / issue #2 |
+| 11 | Tailwind theming pass (447 `#00B3A6` → `brand` token) | Pending — audit Step 12 / issue #10 |
+| 12 | Dashboard + NewCampaign decomposition (the big one — 1–2 weeks) | ✅ **Done** as of commit `6c48d30` — audit Step 7 / issue #3. 15 commits over the work session. Dashboard retired; NewCampaign 3814 → 1624 lines. 3 follow-up issues: #19 (Mes performances rebuild), #20 (hook adoption), #21 (post-cart placement). |
+| 13 | Decompose remaining mega-files (OwnerSettings, UserManagement, MyCampaigns) | Pending — not in authoritative audit's table |
+| 14 | Tsconfig tightening (re-enable `verbatimModuleSyntax`, `noUncheckedIndexedAccess`) | Deferred to Phase 1 with issue #15 |
+| 15 | Hoist duplicate devDeps to root | Pending — audit Step 14 / issue #13 |
 
-After step 15, the frontend is tractable and Phase 1 (backend extraction) starts. Estimated effort for steps 4–15: **6–10 weeks solo**.
+After handoff Step 12 / audit Step 7, the frontend's structural decomposition is complete. Remaining steps are mostly mechanical (a11y, brand token, devDeps hoist) plus the features-folder restructure (handoff Step 8 / audit Step 8).
 
 ## 10. Decisions already made
 

@@ -1,5 +1,7 @@
 # Frontend Cleanup Roadmap
 
+> **Numbering note**: this document's 15-step numbering is **historical** and diverges from the authoritative cleanup roadmap. The current source of truth is `docs/audit.md` §5 — a 14-step compressed version that was renumbered in commit `83dc394` to put mechanical sweeps (console-purge, typing pass) BEFORE the Dashboard/NewCampaign decomposition. This doc remains as a companion for the early-step rationale; **for current step status read `docs/audit.md` first**. The most-cited cross-reference: this doc's **Step 12** (Dashboard+NewCampaign decomp) = audit's **Step 7** = issue #3 = ☑ done as of commit `6c48d30`.
+
 This document expands the 15-step cleanup roadmap referenced in `00-PROJECT_HANDOFF.md`. Each step has its scope, rationale, dependencies, status, and notes from execution (where applicable).
 
 The phase this document covers is **frontend cleanup**, which precedes backend migration. Goal: get `apps/web/` to a state where the next phases (backend extraction, auth rewrite, deployment) are tractable. Estimated total effort for the unfinished steps: **6–10 weeks solo + Claude Code**.
@@ -78,7 +80,7 @@ The phase this document covers is **frontend cleanup**, which precedes backend m
 
 ---
 
-## Step 4 — Mechanical lint autofix pass 🔵 NEXT
+## Step 4 — Mechanical lint autofix pass ✅ DONE
 
 **Scope:** One-time Prettier formatting pass across all of `apps/web/src/`, followed by ESLint `--fix` for safe auto-fixable rules (`import-x/order`, `prefer-const`), and then `no-unused-vars` removal with human-review checkpoint.
 
@@ -100,7 +102,7 @@ The phase this document covers is **frontend cleanup**, which precedes backend m
 
 ---
 
-## Step 5 — Console removal + pino logger introduction
+## Step 5 — Console removal + pino logger introduction ✅ DONE (audit Step 5 / issue #7)
 
 **Scope:** Replace 917+ `console.*` calls with a proper logger (pino). `console.log` becomes `logger.debug` or gets deleted entirely depending on intent. `console.warn` and `console.error` become `logger.warn` / `logger.error`. Side-effect debug imports (`clearAuthCache`) get deleted.
 
@@ -143,7 +145,7 @@ The phase this document covers is **frontend cleanup**, which precedes backend m
 
 ---
 
-## Step 7 — Decouple DOOH calculation services from Supabase
+## Step 7 — Decouple DOOH calculation services from Supabase ✅ DONE (audit Step 4 / issue #12)
 
 **Scope:** Extract pure functions from the DOOH calculation services (`dooh-calculation.service.ts`, `dooh-hourly-grid.ts`, `campaign-hourly-location-plan.service.ts`, `dooh-location-affluence-engine.ts`) so the math is independent of the persistence layer. Keep persistence-touching code separate.
 
@@ -219,7 +221,7 @@ apps/web/src/features/
 
 ---
 
-## Step 10 — Extract session logic from `auth.service.ts` back into `auth.store.ts`
+## Step 10 — Extract session logic from `auth.service.ts` back into `auth.store.ts` ✅ DONE (audit Step 3 / issue #2)
 
 **Scope:** The 1,000-line `auth.service.ts` owns session logic and writes localStorage directly. Pull that responsibility back into the Zustand store, which is the right home for client-side state.
 
@@ -252,7 +254,21 @@ apps/web/src/features/
 
 ---
 
-## Step 12 — Dashboard + NewCampaign decomposition (the big one)
+## Step 12 — Dashboard + NewCampaign decomposition (the big one) ✅ DONE (audit Step 7 / issue #3)
+
+**Outcome** (commit `6c48d30`, after 15 work commits over the session):
+- `Dashboard.tsx` (2635 lines) **retired entirely** — Commit 7 of Step 7 flipped App.tsx's 12 advertiser routes to render their real page components instead of `<Dashboard />`. Replaced by `AdvertiserDashboard` page + 4 hooks + 6 components + `ModalProvider` (extracted in Commit 4) + "Mes performances" sidebar entry restored per Figma (Commit 5, tracked in #19 for the page-body rebuild).
+- `NewCampaign.tsx` **4030 → 1624 lines** (-2406 net, ~60% shrink) via extraction of the 6-step wizard into `pages/new-campaign/{Step1NameType,Step2,Step3,Step4,Step5,Step6,PostCartStep}.tsx`, the state machine into `hooks/new-campaign/useCampaignWizard.ts` (composed over a generic `hooks/useWizard.ts`), pure logic into `hooks/new-campaign/wizard-{steps,serialize,init,types}.ts` + `lib/wizard-zones.ts`, and dead UI cascades surfaced by setter-to-true + CSS-gated dead-UI detection patterns (Commits 9, 12).
+- **Path B** (extraction-without-rewrite) chosen for Save/AddToCart flow when the parent's inline handlers were found to have diverged from the Commit-5 `useCampaignWizard` wrappers across 5 production behaviors — tracked in #20 for future reconciliation.
+- **Figma consultation rule** formalized in Commits 9-11 after the retroactive Performances.png finding; first proactive product-gap finding produced (#21 post-cart placement on /panier vs wizard).
+- 21 new pure-function tests on the wizard's serialize/perform layer; total test count 77 → 98.
+- 19 methodology carry-forwards captured for the methodology-learnings refresh (13b).
+- Gates: typecheck 66 → 58, lint 395 → 370, tests 77 → 98, bundle gzip 130.71 → 131.42 kB, Dashboard chunk eliminated, new NewCampaign chunk gzip 25.77 kB.
+- 3 follow-up issues: **#19** (Mes performances rebuild per Figma), **#20** (hook adoption / inline-handler reconciliation), **#21** (post-cart recommendations placement per Figma).
+
+The original scope description below is preserved for historical context.
+
+---
 
 **Scope:** Decompose two structures:
 
