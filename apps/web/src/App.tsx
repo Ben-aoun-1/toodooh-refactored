@@ -2,8 +2,8 @@ import React, { lazy, Suspense, useEffect } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
-import AdminRoute from './components/admin/AdminRoute';
 import PageLoadingFallback from './components/PageLoadingFallback';
+import AdminRoute from './features/admin/components/AdminRoute';
 import { useAuthStore } from './features/auth/stores/auth.store';
 
 // Toutes les pages sont chargées à la demande (code-splitting par route).
@@ -41,18 +41,18 @@ const OwnerCampaignApprovals = lazy(() => import('./pages/OwnerCampaignApprovals
 const GiftCatalogPage = lazy(() => import('./pages/GiftCatalogPage'));
 const ContactPage = lazy(() => import('./pages/ContactPage'));
 const MyAccount = lazy(() => import('./pages/MyAccount'));
-const AdminLogin = lazy(() => import('./pages/admin/AdminLogin'));
-const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
-const UserManagement = lazy(() => import('./pages/admin/UserManagement'));
-const VideoManagement = lazy(() => import('./pages/admin/VideoManagement'));
-const EventManagement = lazy(() => import('./pages/admin/EventManagement'));
-const CampaignMonitoring = lazy(() => import('./pages/admin/CampaignMonitoring'));
-const CreateAdmin = lazy(() => import('./pages/admin/CreateAdmin'));
-const AdminManagement = lazy(() => import('./pages/admin/AdminManagement'));
-const ScreenManagement = lazy(() => import('./pages/admin/ScreenManagement'));
-const RechargeManagement = lazy(() => import('./pages/admin/RechargeManagement'));
-const GeographicZonesManagement = lazy(() => import('./pages/admin/GeographicZonesManagement'));
-const AdminGlobalConfiguration = lazy(() => import('./pages/admin/AdminGlobalConfiguration'));
+const AdminLogin = lazy(() => import('./features/admin/pages/AdminLogin'));
+const AdminDashboard = lazy(() => import('./features/admin/pages/AdminDashboard'));
+const UserManagement = lazy(() => import('./features/admin/pages/UserManagement'));
+const VideoManagement = lazy(() => import('./features/admin/pages/VideoManagement'));
+const EventManagement = lazy(() => import('./features/admin/pages/EventManagement'));
+const CampaignMonitoring = lazy(() => import('./features/admin/pages/CampaignMonitoring'));
+const CreateAdmin = lazy(() => import('./features/admin/pages/CreateAdmin'));
+const AdminManagement = lazy(() => import('./features/admin/pages/AdminManagement'));
+const ScreenManagement = lazy(() => import('./features/admin/pages/ScreenManagement'));
+const RechargeManagement = lazy(() => import('./features/admin/pages/RechargeManagement'));
+const GeographicZonesManagement = lazy(() => import('./features/admin/pages/GeographicZonesManagement'));
+const AdminGlobalConfiguration = lazy(() => import('./features/admin/pages/AdminGlobalConfiguration'));
 
 function AdvertiserRoute({ children }: { children: React.ReactNode }) {
   const { user, initialized, profileType } = useAuthStore();

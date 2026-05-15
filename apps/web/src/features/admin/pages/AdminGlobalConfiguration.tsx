@@ -2,13 +2,13 @@ import { Loader2, Save } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 
-import AdminLayout from '../../components/admin/AdminLayout';
 import {
   globalConfigurationService,
   type GlobalConfigurationRow,
   type GlobalConfigurationValueType,
   validateValueForKey,
-} from '../../services/global-configuration.service';
+} from '../../../services/global-configuration.service';
+import AdminLayout from '../components/AdminLayout';
 
 function inputTypeForRow(row: GlobalConfigurationRow): 'number' | 'text' {
   return row.value_type === 'integer' || row.value_type === 'numeric' ? 'number' : 'text';

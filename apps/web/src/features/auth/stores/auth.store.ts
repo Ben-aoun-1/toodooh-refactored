@@ -5,7 +5,7 @@ import { persist } from 'zustand/middleware';
 import { getErrorMessage } from '../../../lib/errors';
 import { logger } from '../../../lib/logger';
 import { supabase } from '../../../lib/supabase';
-import { useAdminStore } from '../../../stores/admin.store';
+import { useAdminStore } from '../../admin/stores/admin.store';
 import { authService } from '../services/auth.service';
 
 

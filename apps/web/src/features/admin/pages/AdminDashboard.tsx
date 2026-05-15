@@ -16,17 +16,17 @@ import {
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import AdminLayout from '../../components/admin/AdminLayout';
-import { logger } from '../../lib/logger';
-import { platformStatsService } from '../../services/platform-stats.service';
-import { useAdminStore } from '../../stores/admin.store';
+import { logger } from '../../../lib/logger';
+import AdminLayout from '../components/AdminLayout';
+import { platformStatsService } from '../services/platform-stats.service';
+import { useAdminStore } from '../stores/admin.store';
 import {
   PlatformGlobalStats,
   PlatformRevenueStats,
   ScreensOccupancyStats,
   CampaignsPerformance,
   TopPerformingScreen,
-} from '../../types/platform-stats';
+} from '../types/platform-stats';
 
 const log = logger.child({ module: 'AdminDashboard' });
 

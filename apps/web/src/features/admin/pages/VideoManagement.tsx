@@ -3,12 +3,12 @@ import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { useLocation } from 'react-router-dom';
 
-import AdminLayout from '../../components/admin/AdminLayout';
-import { getErrorMessage } from '../../lib/errors';
-import { logger } from '../../lib/logger';
-import { adminVideoService } from '../../services/admin-video.service';
-import { useAdminStore } from '../../stores/admin.store';
-import { Video, VideoValidationStats } from '../../types/video';
+import { getErrorMessage } from '../../../lib/errors';
+import { logger } from '../../../lib/logger';
+import AdminLayout from '../components/AdminLayout';
+import { adminVideoService } from '../services/admin-video.service';
+import { useAdminStore } from '../stores/admin.store';
+import { Video, VideoValidationStats } from '../types/video';
 
 const log = logger.child({ module: 'VideoManagement' });
 

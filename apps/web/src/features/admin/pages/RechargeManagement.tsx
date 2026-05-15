@@ -15,16 +15,16 @@ import {
 import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 
-import AdminLayout from '../../components/admin/AdminLayout';
-import { getErrorMessage, isErrorWithCode } from '../../lib/errors';
-import { logger } from '../../lib/logger';
-import { supabase } from '../../lib/supabase';
+import { getErrorMessage, isErrorWithCode } from '../../../lib/errors';
+import { logger } from '../../../lib/logger';
+import { supabase } from '../../../lib/supabase';
+import AdminLayout from '../components/AdminLayout';
 import {
   adminRechargesService,
   type AdminRecharge,
   type RechargeStats,
-} from '../../services/admin-recharges.service';
-import { useAdminStore } from '../../stores/admin.store';
+} from '../services/admin-recharges.service';
+import { useAdminStore } from '../stores/admin.store';
 
 const log = logger.child({ module: 'RechargeManagement' });
 

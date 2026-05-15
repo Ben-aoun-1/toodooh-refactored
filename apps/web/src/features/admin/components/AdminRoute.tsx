@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 
-import { useAdminStore } from '../../stores/admin.store';
+import { useAdminStore } from '../stores/admin.store';
 
 interface AdminRouteProps {
   children: React.ReactNode;

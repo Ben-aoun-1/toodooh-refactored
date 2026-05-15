@@ -2,10 +2,10 @@ import { X, Edit, Save, Calendar } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 
-import { isErrorWithCode } from '../../lib/errors';
-import { logger } from '../../lib/logger';
-import { supabase } from '../../lib/supabase';
-import type { AdminLocation } from '../../services/admin-screens.service';
+import { isErrorWithCode } from '../../../lib/errors';
+import { logger } from '../../../lib/logger';
+import { supabase } from '../../../lib/supabase';
+import type { AdminLocation } from '../services/admin-screens.service';
 
 const log = logger.child({ module: 'AffluenceModal' });
 
