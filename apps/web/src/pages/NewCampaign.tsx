@@ -1,14 +1,10 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { MapContainer, TileLayer, Circle, useMapEvents, Marker, Popup } from 'react-leaflet';
 import 'react-datepicker/dist/react-datepicker.css';
-import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
 import {
   Upload,
   MapPin,
   Calendar,
   Film,
-  Search,
   Target,
   Users,
   DollarSign,
@@ -25,7 +21,6 @@ import {
   Megaphone,
   LayoutList,
   ChevronRight,
-  Flame,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -60,7 +55,6 @@ import { authService } from '../services/auth.service';
 import { balanceService } from '../services/balance.service';
 import {
   campaignScreensService,
-  type CampaignScreen,
   type CampaignLocation,
 } from '../services/campaign-screens.service';
 import { campaignService } from '../services/campaign.service';
@@ -84,63 +78,18 @@ import type { SpecialEvent } from '../types/event';
 import Step1NameType from './new-campaign/Step1NameType';
 import Step2 from './new-campaign/Step2';
 import Step3 from './new-campaign/Step3';
+import Step4 from './new-campaign/Step4';
 
 const log = logger.child({ module: 'NewCampaign' });
 
 const ARIANE_ICONS = [ariane1, ariane2, ariane3, ariane4, ariane5, ariane6] as const;
 const ARIANE_ICONS_DONE = [ariane1s, ariane2s, ariane3s, ariane4s, ariane5s, ariane6s] as const;
 
-// Fix pour les icônes Leaflet
-// TODO(phase-1): typed source [leaflet] — see #15
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-});
-
 
 const center = {
   lat: 36.8065,
   lng: 10.1815, // Tunis center coordinates
 };
-
-// Composant pour gérer les événements de la carte
-function MapEvents({ onLocationSelect }: { onLocationSelect: (lat: number, lng: number) => void }) {
-  useMapEvents({
-    // TODO(phase-1): typed source [supabase] — see #15
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    click: (e: any) => {
-      onLocationSelect(e.latlng.lat, e.latlng.lng);
-    },
-  });
-  return null;
-}
-
-// Villes tunisiennes pour les suggestions de recherche
-const TUNISIA_CITIES = [
-  { name: 'Tunis', lat: 36.8065, lng: 10.1815 },
-  { name: 'Sousse', lat: 35.8333, lng: 10.6333 },
-  { name: 'Sfax', lat: 34.7475, lng: 10.7667 },
-  { name: 'Ariana', lat: 36.8663, lng: 10.1647 },
-  { name: 'Bizerte', lat: 37.2744, lng: 9.8739 },
-  { name: 'Gabès', lat: 33.8818, lng: 10.0982 },
-  { name: 'Mahdia', lat: 35.5047, lng: 11.0622 },
-  { name: 'Nabeul', lat: 36.4518, lng: 10.7357 },
-  { name: 'Monastir', lat: 35.7771, lng: 10.8266 },
-  { name: 'Kairouan', lat: 35.6781, lng: 10.0963 },
-  { name: 'Gafsa', lat: 34.4258, lng: 8.7842 },
-  { name: 'Tozeur', lat: 33.9197, lng: 8.1336 },
-  { name: 'Béja', lat: 36.7256, lng: 9.1817 },
-  { name: 'Jendouba', lat: 36.5011, lng: 8.7803 },
-  { name: 'Kasserine', lat: 35.1667, lng: 8.8333 },
-  { name: 'Sidi Bouzid', lat: 35.0381, lng: 9.4847 },
-  { name: 'Kébili', lat: 33.7042, lng: 8.9694 },
-  { name: 'Tataouine', lat: 32.9297, lng: 10.4517 },
-  { name: 'Médenine', lat: 33.3547, lng: 10.5053 },
-  { name: 'Zaghouan', lat: 36.4028, lng: 10.1428 },
-];
 
 export default function NewCampaign() {
   const navigate = useNavigate();
@@ -355,11 +304,13 @@ export default function NewCampaign() {
   );
 
   // --- Transient/UI-local state (NOT in WizardState) ---
-  const [selectedLocation, setSelectedLocation] = useState(
+  // selectedLocation: still read by saveCampaignDraft's fallback when no
+  //   geographicZones are selected. setSelectedLocation removed (Commit 9):
+  //   only the deleted geolocation-at-mount effect ever called it.
+  const selectedLocation =
     campaignToEdit?.location_lat && campaignToEdit?.location_lng
       ? { lat: campaignToEdit.location_lat, lng: campaignToEdit.location_lng }
-      : center,
-  );
+      : center;
   const [radius, _setRadius] = useState(campaignToEdit?.location_radius || 1000);
   const [_searchQuery, _setSearchQuery] = useState('');
   const [selectedVideo, setSelectedVideo] = useState<File | null>(null);
@@ -395,20 +346,18 @@ export default function NewCampaign() {
   // (Commit 7 moved errors/touched into Step1NameType + Step2; Commit 8
   // moved dateErrors/dateTouched into Step3).
 
-  // États pour les écrans / localités (zone unique : localités dans le cercle)
-  const [_allScreens, setAllScreens] = useState<CampaignScreen[]>([]);
-  const [_locationsInZone, setLocationsInZone] = useState<CampaignLocation[]>([]);
-  const [_loadingScreens, setLoadingScreens] = useState(false);
-
-  const [showZoneModal, setShowZoneModal] = useState(false);
-  const [editingZone, setEditingZone] = useState<GeographicZone | null>(null);
-  const [tempZoneLocation, setTempZoneLocation] = useState(center);
-  const [tempZoneRadius, setTempZoneRadius] = useState(1000);
-  const [tempZoneSearchQuery, setTempZoneSearchQuery] = useState('');
+  // _allScreens / _locationsInZone / _loadingScreens removed (Commit 9):
+  //   pre-existing dead trio (write-only useState slots; never read). The
+  //   L1408 useEffect that wrote _locationsInZone is deleted alongside.
+  // showZoneModal / editingZone / tempZoneLocation / tempZoneRadius /
+  //   tempZoneSearchQuery removed (Commit 9): the custom-zone modal was
+  //   unreachable UI (setShowZoneModal(true) was never called anywhere).
+  //   The 370-line modal JSX + handleSaveZone + handleApplyPredefinedZone +
+  //   tempZoneLocations memo + MapEvents + TUNISIA_CITIES + getCitySuggestions
+  //   all deleted as one cascade.
   const [predefinedZones, setPredefinedZones] = useState<PredefinedZone[]>([]);
   const [loadingPredefinedZones, setLoadingPredefinedZones] = useState(false);
-  const [zoneFilterCountry, setZoneFilterCountry] = useState<string>('');
-  const [zoneFilterRegion, setZoneFilterRegion] = useState<string>('');
+  // zoneFilterCountry / zoneFilterRegion: moved into Step4.tsx as local state.
   /** IDs d'écrans des localités sélectionnées (pour indisponibilités) */
   const [screenIdsFromSelectedLocations, setScreenIdsFromSelectedLocations] = useState<string[]>(
     [],
@@ -1211,9 +1160,9 @@ export default function NewCampaign() {
   //   cross-field re-validation logic.
 
 
-  // Charger les écrans au montage du composant
+  // Charger les vidéos approuvées au montage du composant
+  // (loadAllScreens removed in Commit 9 — fed only the dead _allScreens trio).
   useEffect(() => {
-    loadAllScreens();
     loadMyApprovedVideos();
   }, []);
 
@@ -1336,18 +1285,8 @@ export default function NewCampaign() {
     }
   };
 
-  // Charger tous les écrans de la base de données
-  const loadAllScreens = async () => {
-    setLoadingScreens(true);
-    try {
-      const screens = await campaignScreensService.getAllScreens();
-      setAllScreens(screens);
-    } catch (error) {
-      log.error({ error }, 'Erreur lors du chargement des écrans');
-    } finally {
-      setLoadingScreens(false);
-    }
-  };
+  // loadAllScreens removed (Commit 9): wrote only to the dead _allScreens
+  //   useState trio (already write-only pre-Commit-9; trio deleted alongside).
 
   // Charger les parcs disponibles (owners ayant des écrans actifs)
   const loadAvailableParcs = async () => {
@@ -1403,113 +1342,11 @@ export default function NewCampaign() {
 
   // handleParcToggle: removed (Step2.tsx owns the toggle via setSelectedParcIds prop).
 
-  // Mettre à jour les localités dans la zone (cercle unique) quand centre ou rayon change
-  useEffect(() => {
-    if (selectedLocation && radius > 0) {
-      campaignScreensService
-        .getLocationsInArea(selectedLocation.lat, selectedLocation.lng, radius / 1000)
-        .then(setLocationsInZone)
-        .catch(() => setLocationsInZone([]));
-    } else {
-      setLocationsInZone([]);
-    }
-  }, [selectedLocation, radius]);
-
-  // ===== FONCTIONS DE GESTION DES ZONES MULTIPLES =====
-
-  // Obtenir les IDs des localités déjà utilisées dans d'autres zones
-  const getUsedLocationIds = (excludeZoneId?: string): string[] => {
-    return geographicZones
-      .filter((zone) => zone.id !== excludeZoneId)
-      .flatMap((zone) => (zone.locations || []).map((loc) => loc.id));
-  };
-
-  // Toutes les localités pour la carte (affichées en permanence, indépendamment du cercle)
-  const [allMapLocations, setAllMapLocations] = useState<CampaignLocation[]>([]);
-  const [loadingMapLocations, setLoadingMapLocations] = useState(false);
-
-  // Distance en km (Haversine) pour filtrer les localités dans le cercle
-  const distanceKm = useCallback((lat1: number, lng1: number, lat2: number, lng2: number) => {
-    const R = 6371;
-    const dLat = ((lat2 - lat1) * Math.PI) / 180;
-    const dLng = ((lng2 - lng1) * Math.PI) / 180;
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos((lat1 * Math.PI) / 180) *
-        Math.cos((lat2 * Math.PI) / 180) *
-        Math.sin(dLng / 2) *
-        Math.sin(dLng / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  }, []);
-
-  const normalizeCategoryName = useCallback((value?: string) => {
-    if (!value) return '';
-    return value
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .trim()
-      .toLowerCase()
-      .replace(/\s+/g, ' ');
-  }, []);
-
-  // Filtrage catégorie -> n'afficher que les localités des propriétaires de la(les) catégorie(s) sélectionnée(s).
-  const filteredMapLocations = useMemo(() => {
-    if (diffusionType === 'parc_tv') return allMapLocations;
-    if (!Array.isArray(allMapLocations) || allMapLocations.length === 0) return [];
-    if (!formData.categories || formData.categories.length === 0) return allMapLocations;
-
-    const selected = new Set(formData.categories.map((c) => normalizeCategoryName(c)));
-    return allMapLocations.filter((loc) => {
-      return selected.has(normalizeCategoryName(loc.owner_category || ''));
-    });
-  }, [allMapLocations, diffusionType, formData.categories, normalizeCategoryName]);
-
-  // Localités dans le cercle actuel (dérivé de allMapLocations), excluant celles déjà dans d'autres zones
-  const tempZoneLocations = useMemo(() => {
-    if (
-      !tempZoneLocation ||
-      tempZoneRadius <= 0 ||
-      !Array.isArray(filteredMapLocations) ||
-      filteredMapLocations.length === 0
-    )
-      return [];
-    const radiusKm = tempZoneRadius / 1000;
-    const usedIds = getUsedLocationIds(editingZone?.id);
-    return filteredMapLocations.filter((loc) => {
-      const c = loc?.coordinates;
-      if (
-        !c ||
-        typeof c.lat !== 'number' ||
-        typeof c.lng !== 'number' ||
-        Number.isNaN(c.lat) ||
-        Number.isNaN(c.lng)
-      )
-        return false;
-      const d = distanceKm(tempZoneLocation.lat, tempZoneLocation.lng, c.lat, c.lng);
-      return d <= radiusKm && !usedIds.includes(loc.id);
-    });
-  }, [
-    filteredMapLocations,
-    tempZoneLocation,
-    tempZoneRadius,
-    editingZone?.id,
-    geographicZones,
-    distanceKm,
-  ]);
-
-  const isZonesStep =
-    (currentStep === 4 && !isEventCampaign) || (currentStep === 1 && isEventCampaign);
-  // Charger toutes les localités quand on est sur l’étape zones (carte dans la page) ou à l’ouverture de la modale
-  useEffect(() => {
-    if (!isZonesStep && !showZoneModal) return;
-    setLoadingMapLocations(true);
-    campaignScreensService
-      .getAllLocationsForMap()
-      .then(setAllMapLocations)
-      .catch(() => setAllMapLocations([]))
-      .finally(() => setLoadingMapLocations(false));
-  }, [isZonesStep, showZoneModal]);
+  // Single-zone _locationsInZone effect, distanceKm, normalizeCategoryName,
+  // filteredMapLocations memo, tempZoneLocations memo, allMapLocations /
+  // loadingMapLocations useState, isZonesStep, loadAllMapLocations effect:
+  // all moved into Step4.tsx (Commit 9). The single-zone effect fed the
+  // pre-existing dead _locationsInZone slot; deleted alongside the trio.
 
   // Charger les zones prédéfinies
   useEffect(() => {
@@ -1527,146 +1364,13 @@ export default function NewCampaign() {
     loadPredefinedZones();
   }, []);
 
-  // Appliquer une zone prédéfinie (dans la modale : préremplit le formulaire)
-  const handleApplyPredefinedZone = async (zone: PredefinedZone) => {
-    setTempZoneLocation({ lat: zone.latitude, lng: zone.longitude });
-    setTempZoneRadius(zone.radius);
-    setTempZoneSearchQuery(zone.name);
-    toast.success(`Zone "${zone.name}" appliquée`);
-  };
-
-  // Obtenir les localités dans le cercle d’une zone prédéfinie (pour cartes et visiteurs)
-  const getLocationsForPredefinedZone = useCallback(
-    (zone: PredefinedZone): CampaignLocation[] => {
-      if (!filteredMapLocations.length) return [];
-      const radiusKm = zone.radius / 1000;
-      const usedIds = getUsedLocationIds();
-      return filteredMapLocations.filter((loc) => {
-        const c = loc?.coordinates;
-        if (!c || typeof c.lat !== 'number' || typeof c.lng !== 'number') return false;
-        const d = distanceKm(zone.latitude, zone.longitude, c.lat, c.lng);
-        return d <= radiusKm && !usedIds.includes(loc.id);
-      });
-    },
-    [filteredMapLocations, geographicZones, distanceKm],
-  );
-
-  // Visiteurs attendus pour l’affichage (toutes les localités dans le cercle, sans exclure les déjà sélectionnées)
-  const getEstimatedVisitorsForPredefinedZone = useCallback(
-    (zone: PredefinedZone): number => {
-      if (!filteredMapLocations.length) return 0;
-      const radiusKm = zone.radius / 1000;
-      const locs = filteredMapLocations.filter((loc) => {
-        const c = loc?.coordinates;
-        if (!c || typeof c.lat !== 'number' || typeof c.lng !== 'number') return false;
-        return distanceKm(zone.latitude, zone.longitude, c.lat, c.lng) <= radiusKm;
-      });
-      return locs.reduce((sum, loc) => {
-        const s = loc.affluence_schedule;
-        if (!s?.length) return sum;
-        return (
-          sum + s.reduce((acc, x) => acc + Math.max(0, Number(x.estimated_impressions) || 0), 0)
-        );
-      }, 0);
-    },
-    [filteredMapLocations, distanceKm],
-  );
-
-  // Carte prédéfinie : sélection / désélection (toggle)
-  const isPredefinedZoneSelected = (zone: PredefinedZone) =>
-    geographicZones.some((z) => z.predefinedZoneId === zone.id);
-
-  const handleTogglePredefinedZone = (zone: PredefinedZone) => {
-    if (isPredefinedZoneSelected(zone)) {
-      setGeographicZones((prev) => prev.filter((z) => z.predefinedZoneId !== zone.id));
-      toast.success(`Zone "${zone.name}" retirée`);
-      return;
-    }
-    const locs = getLocationsForPredefinedZone(zone);
-    const newZone: GeographicZone = {
-      id: `predefined-${zone.id}`,
-      name: zone.name,
-      location: { lat: zone.latitude, lng: zone.longitude },
-      radius: zone.radius,
-      locations: locs,
-      predefinedZoneId: zone.id,
-    };
-    setGeographicZones((prev) => [...prev, newZone]);
-    toast.success(`Zone "${zone.name}" ajoutée`);
-  };
-
-  // Ouvrir la modal pour ajouter une nouvelle zone
-
-  // Ouvrir la modal pour éditer une zone existante
-
-  // Sauvegarder une zone (nouvelle ou éditée)
-  const handleSaveZone = () => {
-    if (tempZoneLocations.length === 0) {
-      toast.error('Aucune localité disponible dans cette zone');
-      return;
-    }
-
-    const zoneName = tempZoneSearchQuery || `Zone ${geographicZones.length + 1}`;
-
-    if (editingZone) {
-      setGeographicZones((prev) =>
-        prev.map((zone) =>
-          zone.id === editingZone.id
-            ? {
-                ...zone,
-                name: zoneName,
-                location: tempZoneLocation,
-                radius: tempZoneRadius,
-                locations: tempZoneLocations,
-              }
-            : zone,
-        ),
-      );
-      toast.success('Zone modifiée avec succès');
-    } else {
-      const newZone: GeographicZone = {
-        id: `zone-${Date.now()}`,
-        name: zoneName,
-        location: tempZoneLocation,
-        radius: tempZoneRadius,
-        locations: tempZoneLocations,
-      };
-      setGeographicZones((prev) => [...prev, newZone]);
-      toast.success('Zone ajoutée avec succès');
-    }
-
-    setShowZoneModal(false);
-    setEditingZone(null);
-  };
-
-  // Supprimer une zone
-  const handleDeleteZone = (zoneId: string) => {
-    setGeographicZones((prev) => prev.filter((zone) => zone.id !== zoneId));
-    toast.success('Zone supprimée');
-  };
-
-  // Géolocalisation au chargement
-  useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setSelectedLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        },
-        () => {},
-        { enableHighAccuracy: true },
-      );
-    }
-  }, []);
-
-  // Fonction de recherche améliorée pour la Tunisie
-
-  // Suggestions de villes tunisiennes
-  const getCitySuggestions = (query: string) => {
-    if (!query.trim()) return [];
-    return TUNISIA_CITIES.filter((city) =>
-      city.name.toLowerCase().includes(query.toLowerCase()),
-    ).slice(0, 5);
-  };
+  // Zone-related handlers moved into Step4.tsx (Commit 9):
+  // handleApplyPredefinedZone (dead — only called from dead modal),
+  // getLocationsForPredefinedZone, getEstimatedVisitorsForPredefinedZone,
+  // isPredefinedZoneSelected, handleTogglePredefinedZone, handleSaveZone
+  // (dead), handleDeleteZone, geolocation-at-mount effect (fed only
+  // selectedLocation which only feeds saveDraft fallback — fallback now
+  // relies on center.lat/center.lng unchanged), getCitySuggestions (dead).
 
   const steps = isEventCampaign
     ? [
@@ -1841,282 +1545,18 @@ export default function NewCampaign() {
             />
           )}
 
-          {/* Step 3: Zones géographiques — design deux colonnes : cartes à gauche, carte à droite */}
+          {/* Step 4: Zones géographiques — extracted to ./new-campaign/Step4 */}
           {((currentStep === 4 && !isEventCampaign) || (currentStep === 1 && isEventCampaign)) && (
-            <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
-              <div className="p-6 border-b border-gray-200">
-                <div className="flex items-center justify-between gap-4 flex-wrap">
-                  <h2 className="text-xl font-bold text-[#00263A]">Zones géographiques</h2>
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <select
-                      value={zoneFilterCountry}
-                      onChange={(e) => setZoneFilterCountry(e.target.value)}
-                      className="min-w-[240px] px-3 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent bg-white"
-                    >
-                      <option value="">Pays</option>
-                      <option value="Tunisie">Tunisie</option>
-                    </select>
-                    <select
-                      value={zoneFilterRegion}
-                      onChange={(e) => setZoneFilterRegion(e.target.value)}
-                      className="min-w-[240px] px-3 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent bg-white"
-                    >
-                      <option value="">Région</option>
-                      {[...new Set(predefinedZones.map((z) => z.region).filter(Boolean))].map(
-                        (r) => (
-                          <option key={r!} value={r!}>
-                            {r}
-                          </option>
-                        ),
-                      )}
-                    </select>
-                  </div>
-                </div>
-                <p className="text-gray-600 mt-2">Ajoutez une ou plusieurs zones de diffusion</p>
-              </div>
-
-              <div className="flex flex-col lg:flex-row">
-                {/* Colonne gauche : 3 zones visibles puis scroll, hauteur = carte */}
-                <div className="w-full lg:w-[380px] flex-shrink-0 border-r border-gray-200 flex flex-col bg-gray-50/50">
-                  <div className="p-4">
-                    <div className="h-[384px] overflow-y-auto space-y-3">
-                      {loadingPredefinedZones ? (
-                        <div className="flex items-center justify-center py-12">
-                          <div className="animate-spin rounded-full h-8 w-8 border-2 border-[#00B3A6] border-t-transparent" />
-                        </div>
-                      ) : (
-                        (() => {
-                          const filtered = predefinedZones.filter((z) => {
-                            if (zoneFilterCountry && (z.country || '') !== zoneFilterCountry)
-                              return false;
-                            if (zoneFilterRegion && (z.region || '') !== zoneFilterRegion)
-                              return false;
-                            return true;
-                          });
-                          return filtered.length === 0 ? (
-                            <p className="text-sm text-gray-500 text-center py-8">
-                              Aucune zone prédéfinie
-                            </p>
-                          ) : (
-                            filtered.map((zone) => {
-                              const selected = isPredefinedZoneSelected(zone);
-                              const visitors = getEstimatedVisitorsForPredefinedZone(zone);
-                              return (
-                                <button
-                                  key={zone.id}
-                                  type="button"
-                                  onClick={() => handleTogglePredefinedZone(zone)}
-                                  className={`w-full text-left rounded-xl border-2 transition-all overflow-hidden ${
-                                    selected
-                                      ? 'border-[#00B3A6] bg-[#00B3A6]/5 shadow-md'
-                                      : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
-                                  }`}
-                                >
-                                  <div className="relative h-20 bg-gray-200">
-                                    <img
-                                      src={
-                                        zone.image_url ||
-                                        `https://picsum.photos/seed/zone-${zone.id}/400/200`
-                                      }
-                                      alt=""
-                                      className="w-full h-full object-cover"
-                                    />
-                                    <div
-                                      className={`absolute top-3 left-3 w-6 h-6 rounded-md border-2 flex items-center justify-center ${selected ? 'bg-[#00B3A6] border-[#00B3A6]' : 'bg-white border-gray-300'}`}
-                                    >
-                                      {selected && (
-                                        <Check className="w-4 h-4 text-white" strokeWidth={3} />
-                                      )}
-                                    </div>
-                                    {zone.is_hot && (
-                                      <span className="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-white border border-red-200 text-red-600 shadow-sm">
-                                        <Flame className="w-3 h-3" />
-                                        Hot right now
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="p-2">
-                                    <p className="text-sm font-semibold text-gray-900 truncate">
-                                      {zone.name}
-                                    </p>
-                                    <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-600">
-                                      <span className="flex items-center gap-1">
-                                        <MapPin className="w-3 h-3 flex-shrink-0" />
-                                        {(zone.radius / 1000).toFixed(0)} km
-                                      </span>
-                                      <span className="flex items-center gap-1">
-                                        <Users className="w-3 h-3 flex-shrink-0" />~{' '}
-                                        {visitors.toLocaleString('fr-FR')} visiteurs attendus
-                                      </span>
-                                    </div>
-                                  </div>
-                                </button>
-                              );
-                            })
-                          );
-                        })()
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Colonne droite : carte même hauteur que les 3 zones */}
-                <div className="flex-1 bg-white p-4">
-                  {loadingMapLocations ? (
-                    <div className="h-[384px] flex items-center justify-center rounded-xl border border-gray-200">
-                      <div className="animate-spin rounded-full h-10 w-10 border-2 border-[#00B3A6] border-t-transparent" />
-                    </div>
-                  ) : (
-                    <div className="h-[384px] rounded-xl overflow-hidden shadow-lg border border-gray-200">
-                      <MapContainer
-                        center={
-                          geographicZones.length > 0
-                            ? [geographicZones[0].location.lat, geographicZones[0].location.lng]
-                            : [36.83435, 10.21905]
-                        }
-                        zoom={geographicZones.length > 0 ? 12 : 11}
-                        style={{ height: '100%', width: '100%' }}
-                        className="rounded-lg"
-                      >
-                        <TileLayer
-                          url="https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png"
-                          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-                          subdomains="abcd"
-                          maxZoom={14}
-                        />
-                        <TileLayer
-                          url="https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png"
-                          attribution=""
-                          opacity={0.5}
-                          maxZoom={12}
-                          minZoom={8}
-                        />
-                        {/* Cercles de rayon pour chaque zone sélectionnée */}
-                        {geographicZones
-                          .filter((z) => z.location?.lat != null && z.location?.lng != null)
-                          .map((zone) => (
-                            <Circle
-                              key={zone.id}
-                              center={[zone.location!.lat, zone.location!.lng]}
-                              radius={zone.radius}
-                              pathOptions={{
-                                fillColor: '#00B3A6',
-                                fillOpacity: 0.2,
-                                color: '#00B3A6',
-                                weight: 2,
-                              }}
-                            />
-                          ))}
-                        {/* Marqueur centre violet pour chaque zone */}
-                        {geographicZones
-                          .filter((z) => z.location?.lat != null && z.location?.lng != null)
-                          .map((zone) => (
-                            <Marker
-                              key={`marker-${zone.id}`}
-                              position={[zone.location!.lat, zone.location!.lng]}
-                              icon={L.icon({
-                                iconUrl:
-                                  'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-icon-2x-violet.png',
-                                iconSize: [20, 32],
-                                iconAnchor: [10, 32],
-                              })}
-                            />
-                          ))}
-                        {/* Localités : vert = dans une zone sélectionnée, gris = hors zone */}
-                        {(filteredMapLocations || []).map((loc) => {
-                          const c = loc?.coordinates;
-                          if (
-                            !c ||
-                            typeof c.lat !== 'number' ||
-                            typeof c.lng !== 'number' ||
-                            Number.isNaN(c.lat) ||
-                            Number.isNaN(c.lng)
-                          )
-                            return null;
-                          const inZone = geographicZones.some(
-                            (z) =>
-                              distanceKm(z.location.lat, z.location.lng, c.lat, c.lng) <=
-                              z.radius / 1000,
-                          );
-                          const colorHex = inZone ? '#10b981' : '#6b7280';
-                          return (
-                            <Marker
-                              key={loc.id}
-                              position={[c.lat, c.lng]}
-                              icon={L.divIcon({
-                                className: 'custom-marker',
-                                html: `<div style="
-                                  width: 12px;
-                                  height: 12px;
-                                  border-radius: 50%;
-                                  background-color: ${colorHex};
-                                  border: 2px solid white;
-                                  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-                                "></div>`,
-                                iconSize: [12, 12],
-                                iconAnchor: [6, 6],
-                              })}
-                            >
-                              <Popup>
-                                <div className="text-xs">
-                                  <strong>{loc.name}</strong>
-                                  <span className="text-gray-500 ml-1">
-                                    ({loc.screen_count ?? 0} écran
-                                    {(loc.screen_count ?? 0) > 1 ? 's' : ''})
-                                  </span>
-                                  {inZone && (
-                                    <span className="text-green-600 ml-2">✓ dans une zone</span>
-                                  )}
-                                  {!inZone && <span className="text-gray-500 ml-2">Hors zone</span>}
-                                </div>
-                              </Popup>
-                            </Marker>
-                          );
-                        })}
-                      </MapContainer>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Résumé des zones sélectionnées */}
-              {geographicZones.length > 0 && (
-                <div className="px-6 py-4 border-t border-gray-200 bg-green-50/50">
-                  <div className="flex items-center justify-between flex-wrap gap-3">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
-                      <span className="text-sm font-medium text-gray-900">
-                        {geographicZones.length} zone{geographicZones.length > 1 ? 's' : ''}{' '}
-                        sélectionnée{geographicZones.length > 1 ? 's' : ''}
-                        {' · '}
-                        {geographicZones
-                          .reduce((sum, z) => sum + Math.PI * Math.pow(z.radius / 1000, 2), 0)
-                          .toFixed(1)}{' '}
-                        km²
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {geographicZones.map((z) => (
-                        <span
-                          key={z.id}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-gray-200 text-sm text-gray-700"
-                        >
-                          {z.name}
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteZone(z.id)}
-                            className="p-0.5 rounded hover:bg-gray-100 text-gray-500 hover:text-red-600"
-                            title="Retirer"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
+            <Step4
+              geographicZones={geographicZones}
+              setGeographicZones={setGeographicZones}
+              diffusionType={diffusionType}
+              categories={state.categories}
+              predefinedZones={predefinedZones}
+              loadingPredefinedZones={loadingPredefinedZones}
+              onNext={() => wiz.nextStep()}
+              onBack={() => wiz.prevStep()}
+            />
           )}
 
           {/* Step 4: Contenu média (étape 2 en mode campagne événement) — design maquette */}
@@ -3107,377 +2547,8 @@ export default function NewCampaign() {
         </div>
       </div>
 
-      {/* Modal Zone Géographique (Full Screen) */}
-      {showZoneModal && (
-        <div className="fixed inset-0 z-50 bg-white flex flex-col">
-          {/* Header */}
-          <div className="bg-gradient-to-r from-[#00263A] to-[#004466] px-6 py-4 flex items-center justify-between shadow-lg">
-            <div className="flex items-center space-x-3">
-              <MapPin className="h-6 w-6 text-white" />
-              <h2 className="text-xl font-bold text-white">
-                {editingZone ? 'Modifier la zone' : 'Ajouter une nouvelle zone'}
-              </h2>
-            </div>
-            <button
-              onClick={() => setShowZoneModal(false)}
-              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-            >
-              <X className="h-6 w-6 text-white" />
-            </button>
-          </div>
-
-          {/* Content - Layout 2 colonnes */}
-          <div className="flex-1 overflow-hidden flex">
-            {/* Colonne gauche - Contrôles */}
-            <div className="w-96 bg-gray-50 border-r border-gray-200 overflow-y-auto p-6 space-y-4">
-              {/* Barre de recherche */}
-              <div className="bg-white rounded-xl p-4 shadow-lg border border-gray-200">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Rechercher une zone
-                </label>
-                <div className="relative">
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="Ville tunisienne..."
-                      className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent transition-all"
-                      value={tempZoneSearchQuery}
-                      onChange={(e) => setTempZoneSearchQuery(e.target.value)}
-                      onKeyPress={(e) => {
-                        if (
-                          e.key === 'Enter' &&
-                          getCitySuggestions(tempZoneSearchQuery).length > 0
-                        ) {
-                          const city = getCitySuggestions(tempZoneSearchQuery)[0];
-                          setTempZoneSearchQuery(city.name);
-                          setTempZoneLocation({ lat: city.lat, lng: city.lng });
-                        }
-                      }}
-                    />
-                    <button
-                      onClick={() => {
-                        const suggestions = getCitySuggestions(tempZoneSearchQuery);
-                        if (suggestions.length > 0) {
-                          const city = suggestions[0];
-                          setTempZoneSearchQuery(city.name);
-                          setTempZoneLocation({ lat: city.lat, lng: city.lng });
-                        }
-                      }}
-                      className="px-3 py-2 bg-gradient-to-r from-[#00263A] to-[#004466] text-white rounded-lg hover:shadow-lg transition-all"
-                    >
-                      <Search className="h-4 w-4" />
-                    </button>
-                  </div>
-
-                  {/* Suggestions de villes */}
-                  {tempZoneSearchQuery && getCitySuggestions(tempZoneSearchQuery).length > 0 && (
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-10 max-h-60 overflow-y-auto">
-                      {getCitySuggestions(tempZoneSearchQuery).map((city, index) => (
-                        <button
-                          key={index}
-                          onClick={() => {
-                            setTempZoneSearchQuery(city.name);
-                            setTempZoneLocation({ lat: city.lat, lng: city.lng });
-                          }}
-                          className="w-full px-3 py-2 text-left hover:bg-gray-50 first:rounded-t-lg last:rounded-b-lg"
-                        >
-                          <div className="flex items-center space-x-2">
-                            <MapPin className="h-4 w-4 text-gray-400" />
-                            <span className="text-sm text-gray-700">{city.name}</span>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Curseur de rayon */}
-              <div className="bg-white rounded-xl p-4 shadow-lg border border-gray-200">
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Rayon de diffusion
-                </label>
-                <div className="text-center mb-3">
-                  <span className="text-2xl font-bold text-[#00B3A6]">{tempZoneRadius / 1000}</span>
-                  <span className="text-sm text-gray-500 ml-1">km</span>
-                </div>
-                <input
-                  type="range"
-                  min="500"
-                  max="50000"
-                  step="500"
-                  value={tempZoneRadius}
-                  onChange={(e) => setTempZoneRadius(Number(e.target.value))}
-                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
-                />
-                <div className="flex justify-between text-xs text-gray-500 mt-1">
-                  <span>0.5 km</span>
-                  <span>50 km</span>
-                </div>
-              </div>
-
-              {/* Localités dans la zone */}
-              <div className="bg-white rounded-xl p-4 shadow-lg border border-gray-200 flex-1 hidden">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Localités: {tempZoneLocations.length}
-                </label>
-                {tempZoneLocations.length > 0 ? (
-                  <div className="space-y-2">
-                    <div className="p-2 bg-green-50 border border-green-200 rounded-lg">
-                      <p className="text-xs font-semibold text-green-700">
-                        ✓ {tempZoneLocations.length} localité
-                        {tempZoneLocations.length > 1 ? 's' : ''} (
-                        {tempZoneLocations.reduce((s, l) => s + (l.screen_count || 0), 0)} écran
-                        {tempZoneLocations.reduce((s, l) => s + (l.screen_count || 0), 0) !== 1
-                          ? 's'
-                          : ''}
-                        )
-                      </p>
-                    </div>
-                    <div className="max-h-96 overflow-y-auto space-y-2 bg-gray-50 border border-gray-200 rounded-lg p-2">
-                      {tempZoneLocations.map((loc) => (
-                        <div
-                          key={loc.id}
-                          className="p-2 bg-white rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
-                        >
-                          <p className="text-xs font-medium text-gray-900 truncate">{loc.name}</p>
-                          {loc.address && (
-                            <p className="text-xs text-gray-500 truncate">{loc.address}</p>
-                          )}
-                          <p className="text-xs text-blue-600 mt-1">
-                            📺 {loc.screen_count ?? 0} écran{(loc.screen_count ?? 0) > 1 ? 's' : ''}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                    <p className="text-xs text-yellow-700">
-                      ⚠️ Aucune localité dans cette zone. Ajustez le rayon.
-                    </p>
-                    {getUsedLocationIds().length > 0 && (
-                      <p className="text-xs text-yellow-600 mt-1">
-                        {getUsedLocationIds().length} localité
-                        {getUsedLocationIds().length > 1 ? 's' : ''} déjà utilisée
-                        {getUsedLocationIds().length > 1 ? 's' : ''} ailleurs.
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Zones prédéfinies */}
-              <div className="bg-white rounded-xl p-4 shadow-lg border border-gray-200">
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Zones prédéfinies
-                </label>
-                {loadingPredefinedZones ? (
-                  <div className="text-center py-4">
-                    <p className="text-sm text-gray-500">Chargement...</p>
-                  </div>
-                ) : predefinedZones.length > 0 ? (
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {predefinedZones.map((zone) => (
-                      <button
-                        key={zone.id}
-                        onClick={() => handleApplyPredefinedZone(zone)}
-                        className="w-full p-3 text-left bg-gradient-to-r from-[#00B3A6]/5 to-[#00D4C4]/5 rounded-lg border border-[#00B3A6]/20 hover:border-[#00B3A6] hover:shadow-md transition-all group"
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <p className="text-sm font-semibold text-gray-900 group-hover:text-[#00B3A6] transition-colors">
-                              {zone.name}
-                            </p>
-                            {zone.description && (
-                              <p className="text-xs text-gray-500 mt-1">{zone.description}</p>
-                            )}
-                            <div className="flex items-center space-x-3 mt-2 text-xs text-gray-600">
-                              <span className="flex items-center">
-                                <MapPin className="h-3 w-3 mr-1" />
-                                {zone.radius / 1000} km
-                              </span>
-                            </div>
-                          </div>
-                          <div className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <ArrowRight className="h-4 w-4 text-[#00B3A6]" />
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-4">
-                    <p className="text-sm text-gray-500">Aucune zone prédéfinie disponible</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Colonne droite - Carte (plus grande) */}
-            <div className="flex-1 bg-white p-6">
-              <div className="h-full rounded-xl overflow-hidden shadow-lg border border-gray-200">
-                <MapContainer
-                  center={[
-                    tempZoneLocation?.lat ?? center.lat,
-                    tempZoneLocation?.lng ?? center.lng,
-                  ]}
-                  zoom={13}
-                  style={{ height: '100%', width: '100%' }}
-                  className="rounded-lg"
-                >
-                  <TileLayer
-                    url="https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png"
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-                    subdomains="abcd"
-                    maxZoom={14}
-                  />
-                  <TileLayer
-                    url="https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png"
-                    attribution=""
-                    opacity={0.5}
-                    maxZoom={12}
-                    minZoom={8}
-                  />
-                  <MapEvents onLocationSelect={(lat, lng) => setTempZoneLocation({ lat, lng })} />
-                  {/* Cercles des zones déjà sélectionnées (grisées) */}
-                  {geographicZones
-                    .filter(
-                      (zone) =>
-                        (!editingZone || zone.id !== editingZone.id) &&
-                        zone.location?.lat != null &&
-                        zone.location?.lng != null,
-                    )
-                    .map((zone) => (
-                      <Circle
-                        key={zone.id}
-                        center={[zone.location!.lat, zone.location!.lng]}
-                        radius={zone.radius}
-                        pathOptions={{
-                          fillColor: '#9CA3AF',
-                          fillOpacity: 0.15,
-                          color: '#6B7280',
-                          weight: 2,
-                          dashArray: '5, 5',
-                        }}
-                      />
-                    ))}
-                  {/* Cercle de zone en cours de sélection */}
-                  <Circle
-                    center={[
-                      tempZoneLocation?.lat ?? center.lat,
-                      tempZoneLocation?.lng ?? center.lng,
-                    ]}
-                    radius={tempZoneRadius ?? 1000}
-                    pathOptions={{
-                      fillColor: '#00B3A6',
-                      fillOpacity: 0.2,
-                      color: '#00B3A6',
-                      weight: 2,
-                    }}
-                  />
-                  {/* Marqueur du centre (simple, sans popup) */}
-                  <Marker
-                    position={[
-                      tempZoneLocation?.lat ?? center.lat,
-                      tempZoneLocation?.lng ?? center.lng,
-                    ]}
-                    icon={L.icon({
-                      iconUrl:
-                        'https://cdn.jsdelivr.net/gh/pointhi/leaflet-color-markers@master/img/marker-icon-2x-violet.png',
-                      iconSize: [20, 32],
-                      iconAnchor: [10, 32],
-                    })}
-                  />
-                  {/* Marqueurs : toutes les localités (vert = dans le cercle, rouge = déjà dans une autre zone, gris = hors cercle) */}
-                  {(allMapLocations || []).map((loc) => {
-                    const c = loc?.coordinates;
-                    if (
-                      !c ||
-                      typeof c.lat !== 'number' ||
-                      typeof c.lng !== 'number' ||
-                      Number.isNaN(c.lat) ||
-                      Number.isNaN(c.lng)
-                    )
-                      return null;
-                    const radiusKm = (tempZoneRadius || 0) / 1000;
-                    const inCircle =
-                      tempZoneLocation &&
-                      radiusKm > 0 &&
-                      distanceKm(tempZoneLocation.lat, tempZoneLocation.lng, c.lat, c.lng) <=
-                        radiusKm;
-                    const usedElsewhere = getUsedLocationIds(editingZone?.id).includes(loc.id);
-                    const iconColor = inCircle ? (usedElsewhere ? 'red' : 'green') : 'gray';
-                    const colorHex =
-                      iconColor === 'green'
-                        ? '#10b981'
-                        : iconColor === 'red'
-                          ? '#ef4444'
-                          : '#6b7280';
-                    return (
-                      <Marker
-                        key={loc.id}
-                        position={[c.lat, c.lng]}
-                        icon={L.divIcon({
-                          className: 'custom-marker',
-                          html: `<div style="
-                            width: 12px;
-                            height: 12px;
-                            border-radius: 50%;
-                            background-color: ${colorHex};
-                            border: 2px solid white;
-                            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-                          "></div>`,
-                          iconSize: [12, 12],
-                          iconAnchor: [6, 6],
-                        })}
-                      >
-                        <Popup>
-                          <div className="text-xs">
-                            <strong>{loc.name}</strong>
-                            <span className="text-gray-500 ml-1">
-                              ({loc.screen_count ?? 0} écran{(loc.screen_count ?? 0) > 1 ? 's' : ''}
-                              )
-                            </span>
-                            {inCircle && !usedElsewhere && (
-                              <span className="text-green-600 ml-2">✓ dans la zone</span>
-                            )}
-                            {inCircle && usedElsewhere && (
-                              <span className="text-red-600 ml-2">✗ déjà dans une autre zone</span>
-                            )}
-                            {!inCircle && <span className="text-gray-500 ml-2">Hors zone</span>}
-                          </div>
-                        </Popup>
-                      </Marker>
-                    );
-                  })}
-                </MapContainer>
-              </div>
-            </div>
-          </div>
-
-          {/* Footer avec boutons d'action */}
-          <div className="bg-white border-t border-gray-200 px-6 py-4 flex justify-between items-center shadow-lg">
-            <button
-              onClick={() => setShowZoneModal(false)}
-              className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors font-medium"
-            >
-              Annuler
-            </button>
-            <button
-              onClick={handleSaveZone}
-              disabled={tempZoneLocations.length === 0}
-              className={`px-6 py-3 rounded-lg font-medium transition-all ${
-                tempZoneLocations.length === 0
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-[#00B3A6] to-[#00D4C4] text-white hover:shadow-lg'
-              }`}
-            >
-              {editingZone ? 'Enregistrer les modifications' : 'Ajouter la zone'}
-            </button>
-          </div>
-        </div>
-      )}
+      {/* showZoneModal && (<ZoneModal />) — entire modal block removed in
+          Commit 9 (setShowZoneModal(true) was never called; unreachable UI). */}
 
       {/* Modal Événements Spéciaux */}
       {showEventsModal && detectedEvents.length > 0 && (
