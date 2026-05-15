@@ -626,6 +626,210 @@ so the resumer can compare against the head-state file list and surface discrepa
 decisions rather than silent resolutions. Worked example: Step A of the Step 6 regression
 remediation resumption.
 
+### Methodology learnings from Step 7
+
+Step 7 (Dashboard + NewCampaign decomposition over 15 commits) surfaced 19 process and tooling
+lessons worth preserving for future cleanup steps. Grouped into five categories matching the
+Step-6 precedent. Each lesson cites its worked-example commit hash; where a generalizable
+principle was promoted to a persistent working-memory file during the run, that file is
+referenced under "See also."
+
+> **Note on provenance**: items marked with † were captured as named carry-forwards during
+> Step 7's execution but their full content was reconstructed from conversation context after
+> the fact (rather than from a disk-persistent working-memory file written at capture time).
+> Disk-backed working-memory files exist for items #13, #15, #16, #18, #19 — those entries are
+> the highest-confidence text. Other items may warrant verification against the worked-example
+> commits if precise wording matters.
+
+#### Inventory & discovery discipline
+
+**Discovery-prediction verification†.** Phase-1 inventory predictions (line counts, call-site
+counts, prop counts, dead-code estimates) should be verified at write time (e.g., `wc -l`,
+`grep -c`, AST checks) before being treated as authoritative. Inflated or under-stated estimates
+compound into inflated commit-scope expectations. Worked example: Step 7 Commit 12 inventory
+estimated the hidden sidebar at ~250 lines; actual was 80 (3× overshot), which contributed to
+the 1100-1200 line-count target / 1624 actual gap in the orchestrator cleanup. *(Originally
+captured as two separate items during Step 7; merged into one entry as they refer to the same
+methodology of verifying inventory predictions before publishing.)*
+
+**Pre-extraction Q&A surfaces runtime-derived deps†.** Inventory-phase targeted questions to
+the user surface runtime-derived dependencies that wouldn't be visible without asking. The
+narrow-prop pattern's prop list, the lift-vs-pull decisions on cross-step consumers, and the
+"is this state still live post-extraction" judgments all depend on dep information the
+extractor doesn't have until it asks. Worked example: Step 7 Commits 9-11 inventories surfaced
+the `selectedExistingVideo` memo's parent-level consumers (`computeNewCampaignDoohMaxImpressions`,
+`saveCampaignDraft`, cart-create, Step 6 recap) — which forced the memo to stay in the parent
+rather than move into Step 5.
+
+**Extractions trigger cascading dead-code beyond inventory†.** Step extractions surface
+transitively dead code (handlers/state/imports) that wasn't in the pre-extraction inventory.
+Budget for setter-to-true verification + the resulting cleanup as part of the extraction commit,
+not as a follow-up. Worked examples: Commit 8 (Step 3 extraction → 3 residual unused bindings),
+Commit 9 (Step 4 extraction → dead zone modal + 3 dead useState slots, net −830 lines), Commit 12
+(orchestrator cleanup → dead Events modal + dead hidden sidebar + dead `formData` facade).
+
+**Discovery-target line-count drift when intermediate decisions change scope†.** When a
+Path-A/Path-B decision (or similar mid-commit scope branch) is made, the original line-count
+target drifts. Document the adjustment as the documented consequence of the decision rather
+than treating the commit as under-delivering. Worked example: Commit 11 Path B decision
+(extract verbatim instead of adopt hook wrappers) kept ~245 lines in the parent that Path A
+would have moved; the Commit 12 target of ~1100-1200 lines became 1624 actual, with the gap
+attributable to the Path B decision documented in the commit body.
+
+**Line-count estimates drift 2-3× — verify with `wc -l`.** Pre-extraction inventory line-count
+estimates of JSX/code blocks drift 2-3× from actual because eyeball estimates are biased by
+visual density (nesting depth, long className strings, wrapped attributes inflate perception).
+The Commit 12 hidden sidebar estimate was ~250 lines; actual was 80 — a 3× error. Methodology
+refinement: for any pre-extraction prediction of code-block line counts, count with `wc -l` (or
+equivalent line-range count) before publishing. See also: [[verify-line-counts-not-eyeball]]
+working memory.
+
+**Inventory phase 1 surfaces scope expansion — surface for user accept/decline/defer, don't
+reconcile silently†.** When the inventory phase reveals work outside the explicit prompt scope
+(another doc to update, another file to touch, another finding worth tracking), surface as a
+finding in the deliverable; don't reconcile silently by either expanding scope unilaterally or
+ignoring the finding. Worked example: Commit 13a inventory surfaced that `docs/audit.md` (not
+listed in the user's prompt) is the actually-authoritative doc per its own self-description
+and the Step 6 precedent (`a8de588`) updated it — expanded scope was the right call, but it
+was surfaced explicitly rather than slipped in.
+
+#### Extraction patterns
+
+**Setter-shim pattern for migration†.** When migrating from per-field `useState` to a unified
+`useState<WizardState>` (or equivalent state-machine), wrap each field's setter as a one-time
+`useCallback` shim that preserves the `setX(value|updater)` API: `const setCampaignName =
+useCallback((next) => setState(prev => ({ ...prev, campaignName: typeof next === 'function' ?
+next(prev.campaignName) : next })), [setState])`. The pattern is a one-time architectural
+investment that zero-touch propagates to subsequent step extractions — every existing
+`setX(value)` or `setX(prev => ...)` call site continues to work without rewriting. Worked
+example: Commit 6 `useCampaignWizard` adoption introduced 16 setter shims; Commits 6-12 reused
+them without rewriting a single call site.
+
+**Closure-capture → explicit-parameter during extraction†.** When extracting a function whose
+inner closure captures parent-scope vars (e.g., `validateDate(dateType, date)` reading
+`endDate` and `startDate` via closure), promote those vars to explicit parameters
+(`validateDate(dateType, date, otherDate)`) so the extracted version is testable in isolation
+and its dependencies are visible at the call site. Worked example: Commit 8 (Step 3 extraction)
+refactored `validateDate` to take `otherDate` explicitly + threaded the cross-field
+re-validation logic from `handleDateChange` accordingly.
+
+**State-as-single-prop departure from narrow-prop pattern for read-heavy step components†.**
+When a step component reads ~10+ WizardState fields (rather than the 4-8 typical of earlier
+steps), passing the whole `wizardState` object as a single read-only prop is the right
+departure from the narrow-prop pattern. Setters and handlers stay narrow. The reduction in
+prop-list noise outweighs the loss of explicit-read tracking. Worked example: Commit 11 Step 6
+extraction — Step 6 reads ~14 WizardState fields for its recap pane; the props interface was
+22 narrow props vs 14 props with the `wizardState: WizardState` single-prop approach.
+
+**Extraction-without-rewrite (Path B) when production-vs-wrapper divergence exists.** When
+extracting code whose inline implementation has diverged from a pre-existing pure wrapper
+(hook, service function, or helper), extract verbatim and track the wrapper-adoption decision
+as a separate issue. Path A (adopt the wrapper, expand it to model the divergences) breaks the
+scoped-extraction commit's safety profile (decomposition-without-logic-change) by adding a
+logic rewrite no matter how it's framed. Worked example: Commit 11 Save/AddToCart extraction —
+the parent's inline handlers had acquired 5 production behaviors the `useCampaignWizard`
+wrappers didn't model (`content_validation_status` update, `link_campaign_to_event` RPC,
+recommended-events preload, custom insufficient-balance UX with 3s auto-nav, `prixTotal`
+fallback). Path B preserved production behavior; Issue #20 tracks the adoption debt. See also:
+[[extraction-without-rewrite-discipline]] working memory.
+
+#### Dead-code detection
+
+**Dead-UI detection via setter-to-true call-site verification (pattern a)†.** Modals, overlays,
+and conditionally-rendered surfaces gated on `{showX && ...}` are dead when their gate variable
+is never flipped to its open state — i.e., zero `setShowX(true)` call sites in the symbol
+table. Detection is mechanical via `grep -n 'setShowX(true)'`; zero hits means the entire gated
+block is unreachable. Worked examples: Commit 9 dead zone modal (370 lines, `setShowZoneModal(true)`
+never called); Commit 12 dead Events modal (172 lines, `setShowEventsModal(true)` never called).
+
+**Dead-UI detection requires two complementary patterns: setter-to-true (a) AND CSS-gated (b).**
+Pattern (a) catches `{cond && ...}`-style conditional rendering. Pattern (b) catches
+unconditionally-rendered JSX with hardcoded `hidden` / `display:none` / `visibility:hidden` in
+its `className` — the element renders but doesn't paint. Conditional-rendering audits scan for
+`{cond && ...}` expressions and miss pattern (b) entirely. Both must run. Worked example:
+Commit 12 hidden sidebar — `<div className="space-y-6 hidden">` rendered ~80 lines of "Estimation
+dynamique" UI that `display:none` hid; class was hardcoded with no toggle. Setter-to-true would
+have missed it because there's no gate variable; the CSS-gated grep caught it. See also:
+[[dead-ui-detection-patterns]] working memory.
+
+#### Documentation / source-of-truth consultation
+
+**Figma consultation rule — consult the design source-of-truth BEFORE asking the user, deleting
+UI, or inventing UX.** The directory `~/Downloads/toodooh_figma/` is the canonical product-intent
+source for this project. Specific triggers: apparently-dead UI (check Figma before deleting —
+it may be unimplemented, not unintended), empty/loading/error states (check before inventing UX
+in either direction), conditional/mode-branching merges (check before merging visually-similar
+branches), copy/labels/button text (check before changing wording), removed nav entries (check
+before removing). At each commit's pre-extraction inventory, explicitly state either "Figma
+directory checked: [screen X.png] reviewed, [finding]" or "no UI/UX hesitancy in this commit,
+Figma check skipped." Worked example: Step 7 Commit 3 deleted `pages/Perfor.tsx` as dead code
+without consulting Figma; `Performances.png` showed the intended page — issue #19 had to be
+opened retroactively. Commits 9 onward formalized the rule. See also: [[figma-consultation-rule]]
+working memory.
+
+**Figma consultation rule produces first proactive product-gap finding.** Worked example:
+Commit 11 inventory consulted `screencast/Mon panier.png` before extracting the post-cart UI
+and found that Figma places the "Augmentez votre impact" recommendations section on the
+`/panier` cart page, not in the wizard's post-cart screen. The current code's in-wizard
+implementation was preserved as-is in the scoped extraction commit; Issue #21 was opened to
+track the product decision on placement. The retroactive-versus-proactive distinction matters:
+Performances.png in Commit 3 was a retroactive finding (deleted, then restored); Mon panier.png
+in Commit 11 was a proactive finding (preserved, tracked, no rebuild required). See also:
+[[design-source-of-truth-consultation]] working memory (generalizable principle).
+
+#### Process and review
+
+**Chunk-size hard-halt phrasing — use ±delta framing, not absolute thresholds†.** Hard-halt
+conditions for chunk size should specify the allowed delta (e.g., "moves more than ±5 kB from
+27.20") rather than an absolute floor or ceiling. The delta framing allows legitimate growth
+or shrink within tolerance while catching regressions; an absolute threshold either becomes
+stale (set too low, every commit halts) or meaningless (set too high, real regressions sneak
+through). Worked examples: Step 7 Commits 5-12 used `±5 kB` consistently, with the anchor
+re-baselining each commit to the previous commit's actual value.
+
+**Eager-imports in routing module — keep eager unless first-render latency demands lazy†.** Step
+components imported into the parent route eagerly (rather than via `React.lazy`) are simpler
+and produce stable chunk-size growth. Switching to lazy adds first-render latency on every step
+navigation and adds Suspense boundary plumbing. Worked example: the 6 step components +
+PostCartStep were imported eagerly throughout Step 7; cumulative NewCampaign chunk growth was
+under +2 kB across 13 extraction commits, well within the ±5 kB tolerance budget. Defer
+lazy-loading to a future-phase optimization if the chunk grows past the budget.
+
+**Singular-vs-plural legacy shadow detection†.** Service or page filename pairs like
+`service.ts` + `services.ts` are a class of pattern (legacy shadow created during ad-hoc
+refactors), not one-off dedups. Treat the pattern: grep across the relevant directory for
+filename twins differing only by a final `s` or `_v2` or capitalization variant. Worked
+examples: `campaign.service.ts` + `campaigns.service.ts` (resolved in earlier audit Step 2b);
+`screens.service.ts` + `services/api/screens.api.ts` (the `.api.ts` wrapping `.service.ts`
+shadow pattern).
+
+**Pre-commit lint-staged bypass — workspace `pnpm lint` is the authoritative gate†.** When the
+pre-commit hook's lint-staged surfaces pre-existing per-file errors that block a scoped commit
+on a long-lived inherited file (e.g., NewCampaign.tsx with 22 pre-existing jsx-a11y errors that
+predate Step 7), `--no-verify` is justified for the duration of that step's commit chain. The
+workspace `pnpm lint` total is the authoritative gate that matters for "is the codebase
+getting better or worse." Worked example: every Step 7 commit (Commits 6-12 + 13a + 13b) used
+`--no-verify` per standing authorization; workspace lint dropped 395 → 370 across the chain
+while lint-staged would have blocked every commit on inherited NewCampaign.tsx a11y errors.
+
+**Pause-review-vs-actual-diff blind spot in spec verification†.** The pause-summary describes
+what was intended; only the actual diff confirms what landed. When a previous commit's
+deliverable says "X was done" and the next commit's inventory finds X was actually NOT done,
+the gap typically is in the pause-summary verification — the writer described the intended
+change rather than the diff. Worked example: Commit 10 inventory found the Commit-9 footer-gate
+was still `currentStep > 3` despite Commit 9's deliverable claiming `currentStep > 4`; the
+pause-summary described the planned target, not the shipped diff. Commit 10 bundled in the fix.
+
+**Carry-forward #20 / Inventory scope expansion handling†.** When a Phase-1 inventory surfaces
+work outside the prompt's explicit file list (another doc to update, another finding to track,
+another decision the prompt didn't enumerate), surface as a "scope expansion finding" in the
+inventory deliverable with three options: (a) user accepts the expansion, (b) user declines and
+the work is dropped, (c) user defers to a follow-up commit. Don't reconcile silently by either
+expanding scope unilaterally or pretending the finding doesn't exist. Worked example: Commit 13a
+inventory surfaced `docs/audit.md` as the actually-authoritative doc not listed in the prompt;
+flagged as scope expansion; user accepted; `docs/audit.md` was updated in 13a alongside the
+named handoff docs.
+
 ---
 
 ## 4. Already resolved
