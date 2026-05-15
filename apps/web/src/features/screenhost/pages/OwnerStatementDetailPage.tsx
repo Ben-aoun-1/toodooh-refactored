@@ -3,12 +3,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate, useParams } from 'react-router-dom';
 
-import logoImage from '../assets/logo.png';
+import logoImage from '../../../assets/logo.png';
+import { authService } from '../../auth/services/auth.service';
+import { useAuthStore } from '../../auth/stores/auth.store';
 import OwnerNavigation from '../components/OwnerNavigation';
 import { TOODOOH_STATEMENT_EMITTER, OWNER_STATEMENT_FOOTER } from '../constants/ownerStatement';
 import { getOwnerStatementDetail } from '../data/ownerStatementDetails';
-import { authService } from '../features/auth/services/auth.service';
-import { useAuthStore } from '../features/auth/stores/auth.store';
 import { exportService } from '../services/export.service';
 import type { OwnerStatementDetail, StatementRecipientDisplay } from '../types/ownerStatement';
 import { buildStatementRecipient } from '../utils/statementRecipient';

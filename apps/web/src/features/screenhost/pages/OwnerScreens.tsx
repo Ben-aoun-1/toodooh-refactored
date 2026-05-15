@@ -19,18 +19,18 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
-import AddScreen from '../components/AddScreen';
-import OwnerNavigation from '../components/OwnerNavigation';
-import ScreenCalendar from '../components/ScreenCalendar';
-import { useAuthStore } from '../features/auth/stores/auth.store';
+import { logger } from '../../../lib/logger';
+import { supabase } from '../../../lib/supabase';
+import { useAuthStore } from '../../auth/stores/auth.store';
 import {
   screensService,
   Screen,
   ScreenStatus,
   UnavailabilityPeriod,
-} from '../features/screens/services/screens.service';
-import { logger } from '../lib/logger';
-import { supabase } from '../lib/supabase';
+} from '../../screens/services/screens.service';
+import AddScreen from '../components/AddScreen';
+import OwnerNavigation from '../components/OwnerNavigation';
+import ScreenCalendar from '../components/ScreenCalendar';
 
 const log = logger.child({ module: 'OwnerScreens' });
 

@@ -2,9 +2,9 @@ import { Plus, X, Save, Info } from 'lucide-react';
 import React, { useState } from 'react';
 import { toast } from 'react-hot-toast';
 
-import { screensService, CreateScreenData } from '../features/screens/services/screens.service';
-import { isErrorWithCode } from '../lib/errors';
-import { logger } from '../lib/logger';
+import { isErrorWithCode } from '../../../lib/errors';
+import { logger } from '../../../lib/logger';
+import { screensService, CreateScreenData } from '../../screens/services/screens.service';
 
 const log = logger.child({ module: 'AddScreen' });
 

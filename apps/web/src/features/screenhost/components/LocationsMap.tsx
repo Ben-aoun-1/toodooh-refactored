@@ -2,7 +2,7 @@ import L from 'leaflet';
 import { useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 
-import { Screen } from '../features/screens/services/screens.service';
+import { Screen } from '../../screens/services/screens.service';
 import 'leaflet/dist/leaflet.css';
 
 // Configuration pour la langue française - Utilisation d'OpenStreetMap avec style français

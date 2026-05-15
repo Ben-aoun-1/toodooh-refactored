@@ -15,7 +15,7 @@ import {
   UnavailabilityPeriod,
   Screen as ScreenType,
   screensService,
-} from '../features/screens/services/screens.service';
+} from '../../screens/services/screens.service';
 
 interface ScreenCalendarProps {
   screens: ScreenType[];

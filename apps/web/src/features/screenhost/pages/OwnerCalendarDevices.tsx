@@ -2,10 +2,10 @@ import { Calendar, ChevronLeft, ChevronRight, Megaphone, Users, X } from 'lucide
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 
+import { useAuthStore } from '../../auth/stores/auth.store';
+import { screensService, Screen, UnavailabilityPeriod } from '../../screens/services/screens.service';
 import OwnerNavigation from '../components/OwnerNavigation';
 import OwnerNotificationsBell from '../components/OwnerNotificationsBell';
-import { useAuthStore } from '../features/auth/stores/auth.store';
-import { screensService, Screen, UnavailabilityPeriod } from '../features/screens/services/screens.service';
 
 type EstablishmentStatus = 'active' | 'inactive' | 'maintenance' | 'unavailable';
 

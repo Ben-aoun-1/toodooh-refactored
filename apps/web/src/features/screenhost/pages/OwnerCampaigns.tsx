@@ -19,13 +19,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
 
+import { logger } from '../../../lib/logger';
+import { supabase } from '../../../lib/supabase';
+import { campaignOwnerApprovalService } from '../../../services/campaign-owner-approval.service';
+import { getDoohConfigNumbers } from '../../../services/global-configuration.service';
+import { useAuthStore } from '../../auth/stores/auth.store';
 import OwnerNavigation from '../components/OwnerNavigation';
 import OwnerNotificationsBell from '../components/OwnerNotificationsBell';
-import { useAuthStore } from '../features/auth/stores/auth.store';
-import { logger } from '../lib/logger';
-import { supabase } from '../lib/supabase';
-import { campaignOwnerApprovalService } from '../services/campaign-owner-approval.service';
-import { getDoohConfigNumbers } from '../services/global-configuration.service';
 
 const log = logger.child({ module: 'OwnerCampaigns' });
 

@@ -15,13 +15,13 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { toast } from 'react-hot-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
 
+import { getErrorMessage } from '../../../lib/errors';
+import { supabase } from '../../../lib/supabase';
+import { authService } from '../../auth/services/auth.service';
+import { useAuthStore } from '../../auth/stores/auth.store';
+import { revenueService, RevenueData, RevenueStats } from '../../wallet/services/revenue.service';
 import OwnerNavigation from '../components/OwnerNavigation';
 import OwnerNotificationsBell from '../components/OwnerNotificationsBell';
-import { authService } from '../features/auth/services/auth.service';
-import { useAuthStore } from '../features/auth/stores/auth.store';
-import { revenueService, RevenueData, RevenueStats } from '../features/wallet/services/revenue.service';
-import { getErrorMessage } from '../lib/errors';
-import { supabase } from '../lib/supabase';
 
 type TxFilter = 'all' | 'recharges' | 'depenses';
 

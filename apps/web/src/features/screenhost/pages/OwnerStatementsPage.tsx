@@ -3,14 +3,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
+import { authService } from '../../auth/services/auth.service';
+import { useAuthStore } from '../../auth/stores/auth.store';
 import OwnerNavigation from '../components/OwnerNavigation';
 import OwnerNotificationsBell from '../components/OwnerNotificationsBell';
 import {
   listOwnerStatementSummaries,
   getOwnerStatementDetail,
 } from '../data/ownerStatementDetails';
-import { authService } from '../features/auth/services/auth.service';
-import { useAuthStore } from '../features/auth/stores/auth.store';
 import { exportService } from '../services/export.service';
 import { buildStatementRecipient } from '../utils/statementRecipient';
 

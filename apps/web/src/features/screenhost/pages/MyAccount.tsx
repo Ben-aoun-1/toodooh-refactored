@@ -16,13 +16,13 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
+import { getErrorMessage } from '../../../lib/errors';
+import { logger } from '../../../lib/logger';
+import { supabase } from '../../../lib/supabase';
+import { authService } from '../../auth/services/auth.service';
+import { useAuthStore } from '../../auth/stores/auth.store';
+import type { BusinessSector, Governorate, BusinessProfile } from '../../auth/types/auth';
 import OwnerNavigation from '../components/OwnerNavigation';
-import { authService } from '../features/auth/services/auth.service';
-import { useAuthStore } from '../features/auth/stores/auth.store';
-import type { BusinessSector, Governorate, BusinessProfile } from '../features/auth/types/auth';
-import { getErrorMessage } from '../lib/errors';
-import { logger } from '../lib/logger';
-import { supabase } from '../lib/supabase';
 
 const log = logger.child({ module: 'MyAccount' });
 
