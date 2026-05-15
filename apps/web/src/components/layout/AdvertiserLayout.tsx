@@ -20,7 +20,7 @@ import financeIconActive from '../../assets/sidebar/portefeuilles.png';
 import supportIcon from '../../assets/support.png';
 import supportIconActive from '../../assets/supports.png';
 import { ModalProvider, useModal } from '../../contexts/ModalContext';
-import { useAuthStore } from '../../stores/auth.store';
+import { useAuthStore } from '../../features/auth/stores/auth.store';
 import { useCartStore } from '../../stores/cart.store';
 import CartSidebar from '../CartSidebar';
 import ContentErrorBoundary from '../ContentErrorBoundary';

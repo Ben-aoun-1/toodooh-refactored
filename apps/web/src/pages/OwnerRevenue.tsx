@@ -17,11 +17,11 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 import OwnerNavigation from '../components/OwnerNavigation';
 import OwnerNotificationsBell from '../components/OwnerNotificationsBell';
+import { authService } from '../features/auth/services/auth.service';
+import { useAuthStore } from '../features/auth/stores/auth.store';
 import { getErrorMessage } from '../lib/errors';
 import { supabase } from '../lib/supabase';
-import { authService } from '../services/auth.service';
 import { revenueService, RevenueData, RevenueStats } from '../services/revenue.service';
-import { useAuthStore } from '../stores/auth.store';
 
 type TxFilter = 'all' | 'recharges' | 'depenses';
 

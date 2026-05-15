@@ -4,7 +4,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 
 import AdminRoute from './components/admin/AdminRoute';
 import PageLoadingFallback from './components/PageLoadingFallback';
-import { useAuthStore } from './stores/auth.store';
+import { useAuthStore } from './features/auth/stores/auth.store';
 
 // Toutes les pages sont chargées à la demande (code-splitting par route).
 const AdvertiserLayout = lazy(() => import('./components/layout/AdvertiserLayout'));
@@ -22,10 +22,10 @@ const AdvertiserPerformancePlaceholder = lazy(
 const CartPage = lazy(() => import('./pages/CartPage'));
 const OwnerDashboard = lazy(() => import('./pages/OwnerDashboard'));
 const CampaignDetails = lazy(() => import('./pages/CampaignDetails'));
-const Login = lazy(() => import('./pages/auth/Login'));
-const SignUp = lazy(() => import('./pages/auth/SignUp'));
-const ResetPassword = lazy(() => import('./pages/auth/ResetPassword'));
-const UpdatePassword = lazy(() => import('./pages/auth/UpdatePassword'));
+const Login = lazy(() => import('./features/auth/pages/Login'));
+const SignUp = lazy(() => import('./features/auth/pages/SignUp'));
+const ResetPassword = lazy(() => import('./features/auth/pages/ResetPassword'));
+const UpdatePassword = lazy(() => import('./features/auth/pages/UpdatePassword'));
 const OwnerScreens = lazy(() => import('./pages/OwnerScreens'));
 const OwnerLocations = lazy(() => import('./pages/OwnerLocations'));
 const OwnerRevenue = lazy(() => import('./pages/OwnerRevenue'));

@@ -17,12 +17,12 @@ import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 import OwnerNavigation from '../components/OwnerNavigation';
+import { authService } from '../features/auth/services/auth.service';
+import { useAuthStore } from '../features/auth/stores/auth.store';
+import type { BusinessSector, Governorate, BusinessProfile } from '../features/auth/types/auth';
 import { getErrorMessage } from '../lib/errors';
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
-import { authService } from '../services/auth.service';
-import { useAuthStore } from '../stores/auth.store';
-import type { BusinessSector, Governorate, BusinessProfile } from '../types/auth';
 
 const log = logger.child({ module: 'MyAccount' });
 

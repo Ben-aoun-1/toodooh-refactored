@@ -1,7 +1,7 @@
 import React from 'react';
 
-import connexionImg from '../../assets/connexion.png';
-import logoFull from '../../assets/logo.png';
+import connexionImg from '../../../assets/connexion.png';
+import logoFull from '../../../assets/logo.png';
 
 interface AuthLayoutProps {
   children: React.ReactNode;

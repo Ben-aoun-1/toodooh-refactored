@@ -21,11 +21,11 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 import OwnerNavigation from '../components/OwnerNavigation';
 import OwnerNotificationsBell from '../components/OwnerNotificationsBell';
+import { useAuthStore } from '../features/auth/stores/auth.store';
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { campaignOwnerApprovalService } from '../services/campaign-owner-approval.service';
 import { getDoohConfigNumbers } from '../services/global-configuration.service';
-import { useAuthStore } from '../stores/auth.store';
 
 const log = logger.child({ module: 'OwnerCampaigns' });
 

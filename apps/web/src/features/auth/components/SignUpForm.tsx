@@ -3,31 +3,31 @@ import { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
-import inscriptionImg from '../../assets/inscription.png';
-import adresseStepIcon from '../../assets/inscrit/adressex.png';
-import agenceIcon from '../../assets/inscrit/agence.png';
-import agenceIconS from '../../assets/inscrit/agences.png';
-import annonceurIcon from '../../assets/inscrit/annonceur.png';
-import annonceurIconS from '../../assets/inscrit/annonceurs.png';
-import responsableStepIcon from '../../assets/inscrit/connexion.png';
-import documentStepIcon from '../../assets/inscrit/documentx.png';
-import individuelIcon from '../../assets/inscrit/individuel.png';
-import individuelIconS from '../../assets/inscrit/individuels.png';
-import parcIcon from '../../assets/inscrit/parc.png';
-import parcIconS from '../../assets/inscrit/parcs.png';
+import inscriptionImg from '../../../assets/inscription.png';
+import adresseStepIcon from '../../../assets/inscrit/adressex.png';
+import agenceIcon from '../../../assets/inscrit/agence.png';
+import agenceIconS from '../../../assets/inscrit/agences.png';
+import annonceurIcon from '../../../assets/inscrit/annonceur.png';
+import annonceurIconS from '../../../assets/inscrit/annonceurs.png';
+import responsableStepIcon from '../../../assets/inscrit/connexion.png';
+import documentStepIcon from '../../../assets/inscrit/documentx.png';
+import individuelIcon from '../../../assets/inscrit/individuel.png';
+import individuelIconS from '../../../assets/inscrit/individuels.png';
+import parcIcon from '../../../assets/inscrit/parc.png';
+import parcIconS from '../../../assets/inscrit/parcs.png';
 import {
   AGENCY_BUSINESS_SECTOR_NAME,
   sectorsForAdvertiserAgencySignup,
-} from '../../constants/advertiserBusinessSectors';
-import { getErrorMessage } from '../../lib/errors';
-import { authService } from '../../services/auth.service';
+} from '../../../constants/advertiserBusinessSectors';
+import { getErrorMessage } from '../../../lib/errors';
+import { authService } from '../services/auth.service';
 import type {
   BusinessSector,
   Governorate,
   SignUpData,
   FleetEstablishmentInput,
   CompanySizeOption,
-} from '../../types/auth';
+} from '../types/auth';
 
 type ProfileType = 'advertiser' | 'agency' | 'individual_owner' | 'fleet_owner';
 

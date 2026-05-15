@@ -13,11 +13,11 @@ import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 import OwnerNavigation from '../components/OwnerNavigation';
+import { useAuthStore } from '../features/auth/stores/auth.store';
 import {
   campaignOwnerApprovalService,
   PendingCampaign,
 } from '../services/campaign-owner-approval.service';
-import { useAuthStore } from '../stores/auth.store';
 
 export default function OwnerCampaignApprovals() {
   const navigate = useNavigate();

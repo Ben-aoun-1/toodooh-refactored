@@ -11,10 +11,10 @@ import {
 } from 'lucide-react';
 import { useEffect, useState, useMemo } from 'react';
 
+import { useAuthStore } from '../features/auth/stores/auth.store';
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { generateInvoicePDF } from '../services/invoice-pdf.service';
-import { useAuthStore } from '../stores/auth.store';
 
 const log = logger.child({ module: 'MyInvoices' });
 

@@ -1,7 +1,7 @@
-import { getAppUrl } from '../lib/app-url';
-import { getErrorMessage, isErrorWithCode } from '../lib/errors';
-import { logger } from '../lib/logger';
-import { supabase } from '../lib/supabase';
+import { getAppUrl } from '../../../lib/app-url';
+import { getErrorMessage, isErrorWithCode } from '../../../lib/errors';
+import { logger } from '../../../lib/logger';
+import { supabase } from '../../../lib/supabase';
 import {
   SignUpData,
   BusinessProfile,

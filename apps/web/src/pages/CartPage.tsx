@@ -14,11 +14,11 @@ import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
+import { useAuthStore } from '../features/auth/stores/auth.store';
 import { supabase } from '../lib/supabase';
 import { balanceService } from '../services/balance.service';
 import { campaignService } from '../services/campaign.service';
 import { eventsService } from '../services/events.service';
-import { useAuthStore } from '../stores/auth.store';
 import { useCartStore, type CartItem } from '../stores/cart.store';
 import type { SpecialEvent } from '../types/event';
 

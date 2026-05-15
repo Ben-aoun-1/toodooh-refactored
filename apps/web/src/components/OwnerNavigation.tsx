@@ -30,10 +30,10 @@ import financeIcon from '../assets/sidebar/portefeuille.png';
 import financeIconActive from '../assets/sidebar/portefeuilles.png';
 import supportIcon from '../assets/support.png';
 import supportIconActive from '../assets/supports.png';
+import { authService } from '../features/auth/services/auth.service';
+import { useAuthStore } from '../features/auth/stores/auth.store';
+import type { BusinessProfile } from '../features/auth/types/auth';
 import { logger } from '../lib/logger';
-import { authService } from '../services/auth.service';
-import { useAuthStore } from '../stores/auth.store';
-import type { BusinessProfile } from '../types/auth';
 
 const log = logger.child({ module: 'OwnerNavigation' });
 

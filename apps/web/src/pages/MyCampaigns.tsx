@@ -23,11 +23,11 @@ import { useNavigate, useLocation } from 'react-router-dom';
 
 import 'react-datepicker/dist/react-datepicker.css';
 import campagneIcon from '../assets/sidebar/campagnes.png';
+import { useAuthStore } from '../features/auth/stores/auth.store';
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { balanceService } from '../services/balance.service';
 import { campaignService } from '../services/campaign.service';
-import { useAuthStore } from '../stores/auth.store';
 
 const log = logger.child({ module: 'MyCampaigns' });
 

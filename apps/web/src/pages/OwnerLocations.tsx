@@ -19,8 +19,8 @@ import { useNavigate } from 'react-router-dom';
 
 import LocationsMap from '../components/LocationsMap';
 import OwnerNavigation from '../components/OwnerNavigation';
+import { useAuthStore } from '../features/auth/stores/auth.store';
 import { screensService, Screen } from '../services/screens.service';
-import { useAuthStore } from '../stores/auth.store';
 
 interface LocationStats {
   totalLocations: number;

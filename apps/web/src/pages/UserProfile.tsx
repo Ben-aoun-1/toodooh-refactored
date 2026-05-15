@@ -20,12 +20,12 @@ import {
   AGENCY_BUSINESS_SECTOR_NAME,
   sectorsForAdvertiserProfile,
 } from '../constants/advertiserBusinessSectors';
+import { authService } from '../features/auth/services/auth.service';
+import { useAuthStore } from '../features/auth/stores/auth.store';
+import type { BusinessProfile, BusinessSector, Governorate } from '../features/auth/types/auth';
 import { getErrorMessage } from '../lib/errors';
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
-import { authService } from '../services/auth.service';
-import { useAuthStore } from '../stores/auth.store';
-import type { BusinessProfile, BusinessSector, Governorate } from '../types/auth';
 
 const log = logger.child({ module: 'UserProfile' });
 

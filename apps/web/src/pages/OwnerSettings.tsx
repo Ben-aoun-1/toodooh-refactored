@@ -23,10 +23,10 @@ import { toast } from 'react-hot-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import OwnerNavigation from '../components/OwnerNavigation';
+import { authService } from '../features/auth/services/auth.service';
+import { useAuthStore } from '../features/auth/stores/auth.store';
+import type { BusinessProfile, BusinessSector, Governorate } from '../features/auth/types/auth';
 import { supabase } from '../lib/supabase';
-import { authService } from '../services/auth.service';
-import { useAuthStore } from '../stores/auth.store';
-import type { BusinessProfile, BusinessSector, Governorate } from '../types/auth';
 
 type TabId = 'responsable' | 'entreprise' | 'notifications' | 'confidentialite';
 type EntrepriseSubId = 'informations' | 'adresse' | 'documents' | 'coordonnees-bancaires';

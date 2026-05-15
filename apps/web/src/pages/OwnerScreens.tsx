@@ -22,6 +22,7 @@ import { useNavigate } from 'react-router-dom';
 import AddScreen from '../components/AddScreen';
 import OwnerNavigation from '../components/OwnerNavigation';
 import ScreenCalendar from '../components/ScreenCalendar';
+import { useAuthStore } from '../features/auth/stores/auth.store';
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import {
@@ -30,7 +31,6 @@ import {
   ScreenStatus,
   UnavailabilityPeriod,
 } from '../services/screens.service';
-import { useAuthStore } from '../stores/auth.store';
 
 const log = logger.child({ module: 'OwnerScreens' });
 

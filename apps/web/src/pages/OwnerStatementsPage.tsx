@@ -9,9 +9,9 @@ import {
   listOwnerStatementSummaries,
   getOwnerStatementDetail,
 } from '../data/ownerStatementDetails';
-import { authService } from '../services/auth.service';
+import { authService } from '../features/auth/services/auth.service';
+import { useAuthStore } from '../features/auth/stores/auth.store';
 import { exportService } from '../services/export.service';
-import { useAuthStore } from '../stores/auth.store';
 import { buildStatementRecipient } from '../utils/statementRecipient';
 
 export interface PaymentStatement {

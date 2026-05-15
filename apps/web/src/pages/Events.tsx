@@ -3,9 +3,9 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import matchImg from '../assets/match.png';
+import { useAuthStore } from '../features/auth/stores/auth.store';
 import { supabase } from '../lib/supabase';
 import { eventsService } from '../services/events.service';
-import { useAuthStore } from '../stores/auth.store';
 import type { SpecialEvent } from '../types/event';
 
 /** Forme campagne attendue par la page d’édition (comme MyCampaigns). */

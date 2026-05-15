@@ -1,7 +1,7 @@
 
 
-import AuthLayout from '../../components/auth/AuthLayout';
-import UpdatePasswordForm from '../../components/auth/UpdatePasswordForm';
+import AuthLayout from '../components/AuthLayout';
+import UpdatePasswordForm from '../components/UpdatePasswordForm';
 
 export default function UpdatePassword() {
   return (

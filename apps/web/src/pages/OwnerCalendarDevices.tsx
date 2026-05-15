@@ -4,8 +4,8 @@ import { toast } from 'react-hot-toast';
 
 import OwnerNavigation from '../components/OwnerNavigation';
 import OwnerNotificationsBell from '../components/OwnerNotificationsBell';
+import { useAuthStore } from '../features/auth/stores/auth.store';
 import { screensService, Screen, UnavailabilityPeriod } from '../services/screens.service';
-import { useAuthStore } from '../stores/auth.store';
 
 type EstablishmentStatus = 'active' | 'inactive' | 'maintenance' | 'unavailable';
 

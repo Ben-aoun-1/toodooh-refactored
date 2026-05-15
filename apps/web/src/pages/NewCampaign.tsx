@@ -26,6 +26,9 @@ import ariane5 from '../assets/ariane/5.png';
 import ariane5s from '../assets/ariane/5s.png';
 import ariane6 from '../assets/ariane/6.png';
 import ariane6s from '../assets/ariane/6s.png';
+import { authService } from '../features/auth/services/auth.service';
+import { useAuthStore } from '../features/auth/stores/auth.store';
+import type { BusinessSector } from '../features/auth/types/auth';
 import { useCampaignWizard } from '../hooks/new-campaign/useCampaignWizard';
 import { buildInitialWizardState } from '../hooks/new-campaign/wizard-init';
 import type {
@@ -40,7 +43,6 @@ import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { parseCampaignUiDate, toLocalDateOnlyString } from '../lib/wizard-dates';
 import { zonesLabel } from '../lib/wizard-zones';
-import { authService } from '../services/auth.service';
 import { balanceService } from '../services/balance.service';
 import {
   campaignScreensService,
@@ -53,9 +55,7 @@ import {
 } from '../services/dooh-new-campaign-estimate.service';
 import { predefinedZonesService, type PredefinedZone } from '../services/predefined-zones.service';
 import { screensService, type UnavailabilityPeriod } from '../services/screens.service';
-import { useAuthStore } from '../stores/auth.store';
 import { useCartStore } from '../stores/cart.store';
-import type { BusinessSector } from '../types/auth';
 import type { SpecialEvent } from '../types/event';
 
 import PostCartStep from './new-campaign/PostCartStep';

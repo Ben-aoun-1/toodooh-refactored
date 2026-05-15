@@ -1,4 +1,4 @@
-import type { BusinessProfile } from '../types/auth';
+import type { BusinessProfile } from '../features/auth/types/auth';
 import type { StatementRecipientDisplay } from '../types/ownerStatement';
 
 /** Valeurs de démo (maquette) si profil incomplet */

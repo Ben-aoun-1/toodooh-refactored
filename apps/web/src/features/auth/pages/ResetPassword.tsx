@@ -1,8 +1,8 @@
 
 
-import resetImg from '../../assets/reset.png';
-import AuthLayout from '../../components/auth/AuthLayout';
-import ResetPasswordForm from '../../components/auth/ResetPasswordForm';
+import resetImg from '../../../assets/reset.png';
+import AuthLayout from '../components/AuthLayout';
+import ResetPasswordForm from '../components/ResetPasswordForm';
 
 export default function ResetPassword() {
   return (

@@ -26,10 +26,10 @@ import {
 import performanceIntroIcon from '../assets/performance/1.png';
 import OwnerNavigation from '../components/OwnerNavigation';
 import OwnerNotificationsBell from '../components/OwnerNotificationsBell';
+import { useAuthStore } from '../features/auth/stores/auth.store';
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
 import { performanceService } from '../services/performance.service';
-import { useAuthStore } from '../stores/auth.store';
 import type {
   PerformanceCategoryPoint,
   PerformanceDataset,

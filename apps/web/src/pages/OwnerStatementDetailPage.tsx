@@ -7,9 +7,9 @@ import logoImage from '../assets/logo.png';
 import OwnerNavigation from '../components/OwnerNavigation';
 import { TOODOOH_STATEMENT_EMITTER, OWNER_STATEMENT_FOOTER } from '../constants/ownerStatement';
 import { getOwnerStatementDetail } from '../data/ownerStatementDetails';
-import { authService } from '../services/auth.service';
+import { authService } from '../features/auth/services/auth.service';
+import { useAuthStore } from '../features/auth/stores/auth.store';
 import { exportService } from '../services/export.service';
-import { useAuthStore } from '../stores/auth.store';
 import type { OwnerStatementDetail, StatementRecipientDisplay } from '../types/ownerStatement';
 import { buildStatementRecipient } from '../utils/statementRecipient';
 

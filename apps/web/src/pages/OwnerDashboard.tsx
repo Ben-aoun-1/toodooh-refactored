@@ -24,12 +24,12 @@ import AddScreen from '../components/AddScreen';
 import GiftCatalog from '../components/GiftCatalog';
 import OwnerNavigation from '../components/OwnerNavigation';
 import OwnerNotificationsBell from '../components/OwnerNotificationsBell';
+import { authService } from '../features/auth/services/auth.service';
+import { useAuthStore } from '../features/auth/stores/auth.store';
 import { logger } from '../lib/logger';
-import { authService } from '../services/auth.service';
 import { campaignOwnerApprovalService } from '../services/campaign-owner-approval.service';
 import { revenueService, RevenueStats } from '../services/revenue.service';
 import { screensService, Screen } from '../services/screens.service';
-import { useAuthStore } from '../stores/auth.store';
 
 const log = logger.child({ module: 'OwnerDashboard' });
 

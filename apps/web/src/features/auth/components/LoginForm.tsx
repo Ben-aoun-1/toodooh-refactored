@@ -3,8 +3,8 @@ import React, { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate, Link } from 'react-router-dom';
 
-import { getErrorMessage } from '../../lib/errors';
-import { useAuthStore } from '../../stores/auth.store';
+import { getErrorMessage } from '../../../lib/errors';
+import { useAuthStore } from '../stores/auth.store';
 
 export default function LoginForm() {
   const navigate = useNavigate();
