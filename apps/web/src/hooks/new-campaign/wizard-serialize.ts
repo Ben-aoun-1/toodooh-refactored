@@ -1,3 +1,4 @@
+import { zonesLabel } from '../../lib/wizard-zones';
 import type { CreateCampaignData } from '../../services/campaign.service';
 
 import type {
@@ -48,10 +49,6 @@ function formatFR(isoDate: string): string {
   const parts = isoDate.split('-');
   if (parts.length !== 3) return isoDate;
   return `${parts[2]}/${parts[1]}/${parts[0]}`;
-}
-
-function zonesAreaKm2(state: WizardState): number {
-  return state.geographicZones.reduce((sum, z) => sum + Math.PI * Math.pow(z.radius / 1000, 2), 0);
 }
 
 /**
@@ -185,13 +182,15 @@ export async function performAddToCart(args: {
       args.state.startDate && args.state.endDate
         ? `${formatFR(args.state.startDate)} – ${formatFR(args.state.endDate)}`
         : undefined;
-    const zoneCount = args.state.geographicZones.length;
-    const zonesLabel =
-      zoneCount > 0
-        ? `${zoneCount} zone${zoneCount > 1 ? 's' : ''} · ${zonesAreaKm2(args.state).toFixed(1)} km²`
-        : undefined;
+    const cartZonesLabel = zonesLabel(args.state.geographicZones);
 
-    args.deps.addCartItem({ id: campaignId, name, amount, periodLabel, zonesLabel });
+    args.deps.addCartItem({
+      id: campaignId,
+      name,
+      amount,
+      periodLabel,
+      zonesLabel: cartZonesLabel,
+    });
     return { kind: 'success', campaignId };
   } catch (e) {
     return { kind: 'error', error: e instanceof Error ? e : new Error(String(e)) };

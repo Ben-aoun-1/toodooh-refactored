@@ -4,15 +4,11 @@ import {
   MapPin,
   Calendar,
   Film,
-  Target,
   Users,
   DollarSign,
-  ArrowRight,
-  Check,
   CheckCircle,
   TrendingUp,
   Clock,
-  Info,
   Monitor,
   Sparkles,
   X,
@@ -36,7 +32,6 @@ import ariane5 from '../assets/ariane/5.png';
 import ariane5s from '../assets/ariane/5s.png';
 import ariane6 from '../assets/ariane/6.png';
 import ariane6s from '../assets/ariane/6s.png';
-import panierPng from '../assets/panier.png';
 import { useCampaignWizard } from '../hooks/new-campaign/useCampaignWizard';
 import { buildInitialWizardState } from '../hooks/new-campaign/wizard-init';
 import type {
@@ -68,11 +63,13 @@ import { useCartStore } from '../stores/cart.store';
 import type { BusinessSector } from '../types/auth';
 import type { SpecialEvent } from '../types/event';
 
+import PostCartStep from './new-campaign/PostCartStep';
 import Step1NameType from './new-campaign/Step1NameType';
 import Step2 from './new-campaign/Step2';
 import Step3 from './new-campaign/Step3';
 import Step4 from './new-campaign/Step4';
 import Step5 from './new-campaign/Step5';
+import Step6 from './new-campaign/Step6';
 
 const log = logger.child({ module: 'NewCampaign' });
 
@@ -992,17 +989,8 @@ export default function NewCampaign() {
     }
   }, [startDate, endDate, eventFromState?.id]);
 
-  // Événements recommandés limités à la période sélectionnée de la campagne (chevauchement)
-  const recommendedEventsInPeriod = useMemo(() => {
-    if (!startDate || !endDate || !recommendedEvents.length) return recommendedEvents;
-    const start = startDate.getTime();
-    const end = endDate.getTime();
-    return recommendedEvents.filter((ev) => {
-      const evStart = new Date(ev.start_date).getTime();
-      const evEnd = new Date(ev.end_date).getTime();
-      return evStart <= end && evEnd >= start;
-    });
-  }, [recommendedEvents, startDate, endDate]);
+  // recommendedEventsInPeriod memo moved into PostCartStep.tsx — it was
+  // only consumed by the post-cart UI.
 
   const pushCampaignToSidebarCart = useCallback(
     (campaignId: string) => {
@@ -1037,6 +1025,147 @@ export default function NewCampaign() {
       geographicZones,
     ],
   );
+
+  // Save / AddToCart parent handlers — passed to Step6.tsx as onSaveDraft /
+  // onAddToCart props. Inline behavior preserved from the previous parent
+  // footer onClicks (pre-Commit-11). Hook adoption is tracked in Issue #20.
+  const handleSaveDraft = async (): Promise<void> => {
+    try {
+      if (!draftCampaignId) {
+        const videoId = uploadedVideoId || selectedExistingVideo?.id;
+        if (!videoId) {
+          toast.error("Veuillez sélectionner ou uploader une vidéo d'abord");
+          return;
+        }
+        await saveCampaignDraft(videoId, false);
+      } else {
+        const { error } = await supabase
+          .from('campaigns')
+          .update({ status: 'draft' })
+          .eq('id', draftCampaignId);
+        if (error) {
+          log.error({ error, campaignId: draftCampaignId }, 'failed to save draft');
+          toast.error(getErrorMessage(error) || 'Erreur lors de la sauvegarde du brouillon');
+          return;
+        }
+      }
+      toast.success('Campagne sauvegardée en brouillon');
+      navigate('/my-campaigns?status=draft');
+    } catch (error) {
+      log.error({ err: error }, 'unexpected error during save-draft flow');
+      toast.error(getErrorMessage(error) || 'Erreur lors de la sauvegarde');
+    }
+  };
+
+  const handleAddToCart = async (): Promise<void> => {
+    if (addingToCart) return;
+    if (
+      !canProceedToStep6() ||
+      adjustedBudget <= 0 ||
+      impressionsForCurrentBudget <= 0
+    ) {
+      toast.error('La campagne doit être supérieure à 0 dinar et à 0 impression.');
+      return;
+    }
+    setAddingToCart(true);
+    try {
+      let campaignId = draftCampaignId;
+      if (!campaignId) {
+        const videoId = uploadedVideoId || selectedExistingVideo?.id;
+        if (!videoId) {
+          toast.error("Veuillez sélectionner ou uploader une vidéo d'abord");
+          return;
+        }
+        const campaign = await saveCampaignDraft(videoId, false);
+        campaignId = campaign.id;
+      }
+
+      const balanceCheck = await balanceService.checkCampaignBalance(campaignId);
+      if (balanceCheck && !balanceCheck.has_sufficient_balance) {
+        const { error: revertError } = await supabase
+          .from('campaigns')
+          .update({ status: 'draft' })
+          .eq('id', campaignId);
+        if (revertError) {
+          log.error(
+            { error: revertError, campaignId },
+            'failed to revert campaign to draft on insufficient balance',
+          );
+          toast.error(
+            getErrorMessage(revertError) ||
+              'Solde insuffisant et erreur lors de la mise à jour de la campagne',
+          );
+          return;
+        }
+        toast.error('Solde insuffisant pour activer la campagne', { duration: 5000 });
+        toast(
+          (_t) => (
+            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+              <p className="font-bold text-yellow-800 mb-2">
+                Votre campagne est sauvegardée en brouillon
+              </p>
+              <div className="text-xs text-yellow-600 space-y-1">
+                <p>
+                  Solde disponible:{' '}
+                  <strong>{balanceService.formatAmount(balanceCheck.available_balance)}</strong>
+                </p>
+                <p>
+                  Coût campagne:{' '}
+                  <strong>{balanceService.formatAmount(balanceCheck.campaign_cost)}</strong>
+                </p>
+              </div>
+            </div>
+          ),
+          { duration: 6000 },
+        );
+        setTimeout(() => navigate('/my-recharges'), 3000);
+        return;
+      }
+
+      const { error: updateError } = await supabase
+        .from('campaigns')
+        .update({ status: 'draft', content_validation_status: 'pending' })
+        .eq('id', campaignId);
+      if (updateError) {
+        log.error(
+          { error: updateError, campaignId },
+          'failed to update campaign for cart add',
+        );
+        toast.error(getErrorMessage(updateError) || 'Erreur lors de la finalisation');
+        return;
+      }
+
+      if (isEventCampaign && eventFromState?.id) {
+        const { error: linkError } = await supabase.rpc('link_campaign_to_event', {
+          p_campaign_id: campaignId,
+          p_event_id: eventFromState.id,
+        });
+        if (linkError) {
+          log.error(
+            { error: linkError, campaignId, eventId: eventFromState.id },
+            'failed to link event campaign to event',
+          );
+          toast.error(
+            getErrorMessage(linkError) ||
+              "Erreur lors du lien à l'événement — veuillez réessayer",
+          );
+          return;
+        }
+      }
+
+      pushCampaignToSidebarCart(campaignId);
+      await loadRecommendedEventsForSelectedPeriod();
+      setShowPostCartStep(true);
+      toast.success(
+        "Campagne ajoutee au panier. Activez-la depuis le panier pour qu'elle soit diffusée.",
+      );
+    } catch (error) {
+      log.error({ err: error }, 'unexpected error during cart-add flow');
+      toast.error(getErrorMessage(error) || 'Erreur lors de la finalisation');
+    } finally {
+      setAddingToCart(false);
+    }
+  };
 
   // handleDateChange + validateStep2 (the misnamed dates validator): moved
   //   into Step3.tsx. Step3 owns its own dateErrors/dateTouched and the
@@ -1458,764 +1587,49 @@ export default function NewCampaign() {
             />
           )}
 
-          {/* Step 6: Validation unified — Récapitulatif + Ajuster impact */}
-
-          {/* Step 6: Validation unified (étape 3 en mode campagne événement) */}
+          {/* Step 6: Validation — extracted to ./new-campaign/Step6 */}
           {((currentStep === 6 && !isEventCampaign) || (currentStep === 3 && isEventCampaign)) &&
             !showPostCartStep && (
-              <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
-                <div className="p-6 border-b border-gray-200">
-                  <h2 className="text-lg font-bold text-gray-900">Validation</h2>
-                  <p className="text-sm text-gray-500">Vérifiez et confirmez votre campagne</p>
-                </div>
-
-                <div className="p-6">
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    {/* ── Left: Récapitulatif ── */}
-                    <div className="border border-gray-200 rounded-xl p-5 space-y-5">
-                      <h3 className="text-base font-bold text-gray-900">Récapitulatif</h3>
-
-                      <div>
-                        <p className="text-xs font-medium text-gray-500 mb-1">Nom de la campagne</p>
-                        <p className="text-sm font-semibold text-gray-900">
-                          {formData.campaignName || '—'}
-                        </p>
-                      </div>
-
-                      {!isEventCampaign && (
-                        <div>
-                          <p className="text-xs font-medium text-gray-500 mb-2">
-                            Type de la campagne
-                          </p>
-                          <div className="flex gap-2">
-                            <span
-                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium ${diffusionType === 'toodooh' ? 'border-[#76E6AB] bg-[#76E6AB]/5 text-gray-900' : 'border-gray-200 text-gray-400'}`}
-                            >
-                              <Target className="h-3.5 w-3.5" /> Réseau Toodooh
-                            </span>
-                            <span
-                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium ${diffusionType === 'parc_tv' ? 'border-[#76E6AB] bg-[#76E6AB]/5 text-gray-900' : 'border-gray-200 text-gray-400'}`}
-                            >
-                              <Monitor className="h-3.5 w-3.5" /> Parc TV
-                            </span>
-                          </div>
-                        </div>
-                      )}
-
-                      <div>
-                        <p className="text-xs font-medium text-gray-500 mb-2">
-                          {diffusionType === 'parc_tv' ? 'Parc(s)' : 'Catégorie(s)'}
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {diffusionType === 'parc_tv' ? (
-                            selectedParcIds.length > 0 ? (
-                              availableParcs
-                                .filter((p) => selectedParcIds.includes(p.ownerId))
-                                .map((p) => (
-                                  <span
-                                    key={p.ownerId}
-                                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[#76E6AB] bg-[#76E6AB]/5 text-xs font-medium text-gray-900"
-                                  >
-                                    {p.logo && (
-                                      <img src={p.logo} alt="" className="w-5 h-5 object-contain" />
-                                    )}
-                                    {p.name}
-                                    <Check className="h-3 w-3 text-[#76E6AB]" />
-                                  </span>
-                                ))
-                            ) : (
-                              <span className="text-sm text-gray-400">—</span>
-                            )
-                          ) : (formData.categories?.length ?? 0) > 0 ? (
-                            (formData.categories || []).map((c) => (
-                              <span
-                                key={c}
-                                className="px-3 py-1 rounded-lg border border-gray-200 text-xs font-medium text-gray-700"
-                              >
-                                {c}
-                              </span>
-                            ))
-                          ) : (
-                            <span className="text-sm text-gray-400">
-                              {formData.category || '—'}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div>
-                        <p className="text-xs font-medium text-gray-500 mb-1">Période</p>
-                        <div className="flex flex-wrap items-center gap-4 text-sm text-gray-900">
-                          <span>
-                            Début: <strong>{startDate?.toLocaleDateString('fr-FR') || '—'}</strong>
-                          </span>
-                          <span>
-                            Fin: <strong>{endDate?.toLocaleDateString('fr-FR') || '—'}</strong>
-                          </span>
-                          <span>
-                            Durée:{' '}
-                            <strong>
-                              {nbJours > 0 ? `${nbJours} jour${nbJours > 1 ? 's' : ''}` : '—'}
-                            </strong>
-                          </span>
-                        </div>
-                      </div>
-
-                      <div>
-                        <p className="text-xs font-medium text-gray-500 mb-1">
-                          Zones géographiques
-                        </p>
-                        <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm text-gray-900">
-                          <span>
-                            Nombre de zones : <strong>{geographicZones.length}</strong>
-                          </span>
-                          <span>
-                            Zone couverte :{' '}
-                            <strong>
-                              {(() => {
-                                const totalArea = geographicZones.reduce(
-                                  (sum, z) => sum + Math.PI * Math.pow(z.radius / 1000, 2),
-                                  0,
-                                );
-                                return totalArea.toFixed(1);
-                              })()}{' '}
-                              km²
-                            </strong>
-                          </span>
-                          {calculateBudgetAndImpressions.impressions > 0 && (
-                            <span>
-                              Plan max (impressions) :{' '}
-                              <strong>
-                                {calculateBudgetAndImpressions.impressions.toLocaleString('fr-FR')}
-                              </strong>
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div>
-                        <p className="text-xs font-medium text-gray-500 mb-2">Spot</p>
-                        {uploadedVideoUrl || selectedExistingVideo ? (
-                          <div className="rounded-xl overflow-hidden border border-gray-200 bg-black aspect-video relative">
-                            <video
-                              src={uploadedVideoUrl || selectedExistingVideo?.url || ''}
-                              className="w-full h-full object-cover"
-                              controls
-                            />
-                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3 flex items-end justify-between pointer-events-none">
-                              <span className="text-white text-xs font-medium">
-                                Spot publicitaire
-                              </span>
-                            </div>
-                          </div>
-                        ) : (
-                          <p className="text-sm text-gray-400">Aucune vidéo sélectionnée</p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* ── Right: Ajuster votre impact ── Impressions totales (sélection) + Montant = impressions/1000*2,5 */}
-                    <div className="space-y-5">
-                      <div>
-                        <h3 className="text-base font-bold text-gray-900">Ajuster votre impact</h3>
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          Déplacez le curseur pour ajuster votre budget et vos impressions estimées
-                        </p>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3">
-                        <div
-                          className="border border-[#eef7f1] rounded-xl p-4"
-                          style={{ backgroundColor: '#f5fcf7' }}
-                        >
-                          <div className="mb-1">
-                            <div className="w-8 h-8 rounded-full bg-white/80 flex items-center justify-center mb-2">
-                              <DollarSign className="h-4 w-4 text-gray-400" />
-                            </div>
-                            <span className="block text-xs text-gray-500 font-medium">
-                              Montant estimé
-                            </span>
-                          </div>
-                          <p className="text-lg font-bold" style={{ color: '#355f43' }}>
-                            {calculateBudgetAndImpressions.impressions > 0
-                              ? adjustedBudget.toLocaleString('fr-FR', {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: 2,
-                                })
-                              : '0,00'}{' '}
-                            TND
-                          </p>
-                        </div>
-                        <div
-                          className="border border-[#e7e9fb] rounded-xl p-4"
-                          style={{ backgroundColor: '#f0f1fd' }}
-                        >
-                          <div className="mb-1">
-                            <div className="w-8 h-8 rounded-full bg-white/80 flex items-center justify-center mb-2">
-                              <TrendingUp className="h-4 w-4 text-gray-400" />
-                            </div>
-                            <span className="block text-xs text-gray-500 font-medium">
-                              Plan final (impressions)
-                            </span>
-                          </div>
-                          <p className="text-lg font-bold" style={{ color: '#3d438f' }}>
-                            {calculateBudgetAndImpressions.impressions > 0
-                              ? impressionsForCurrentBudget.toLocaleString('fr-FR')
-                              : '0'}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Budget slider — calcul selon sélection (zones + période), curseur pour ajuster budget et impressions */}
-                      <div className="border border-gray-200 rounded-xl p-5 space-y-4">
-                        {(() => {
-                          const impressionsFromSelection =
-                            calculateBudgetAndImpressions.impressions;
-                          const hasSelectionBasedEstimate = impressionsFromSelection > 0;
-                          const defaultMaxAmount = hasSelectionBasedEstimate
-                            ? (impressionsFromSelection / 1000) * cpmTnd
-                            : 0;
-                          const defaultMinAmount = hasSelectionBasedEstimate ? BUDGET_MIN : 0;
-                          const effectiveMin =
-                            customMinBudget !== null ? customMinBudget : defaultMinAmount;
-                          const effectiveMax =
-                            customMaxBudget !== null ? customMaxBudget : defaultMaxAmount;
-                          const safeMin = hasSelectionBasedEstimate
-                            ? Math.min(effectiveMin, effectiveMax - 1)
-                            : 0;
-                          const safeMax = hasSelectionBasedEstimate
-                            ? Math.max(effectiveMax, safeMin + 1)
-                            : 0;
-                          const rangeMin = safeMin;
-                          const rangeMax = safeMax;
-                          const currentAmount = hasSelectionBasedEstimate
-                            ? Math.max(rangeMin, Math.min(rangeMax, adjustedBudget))
-                            : 0;
-                          const percentage =
-                            rangeMax > rangeMin
-                              ? ((currentAmount - rangeMin) / (rangeMax - rangeMin)) * 100
-                              : 100;
-                          return (
-                            <>
-                              {!hasSelectionBasedEstimate && (
-                                <p className="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
-                                  Aucune capacité estimée : ajoutez des zones avec des localités (ou
-                                  des parcs TV) et des dates de campagne. Le plafond suit le moteur
-                                  DOOH horaire (affluence × répétitions autorisées par créneau,
-                                  selon la configuration globale et la durée du spot).
-                                </p>
-                              )}
-                              {doohEstimateLoading && hasSelectionBasedEstimate && (
-                                <p className="text-xs text-gray-500">
-                                  Mise à jour de l&apos;estimation DOOH…
-                                </p>
-                              )}
-                              {doohEstimateError && (
-                                <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                                  {doohEstimateError}
-                                </p>
-                              )}
-                              <p className="text-center text-2xl font-bold text-gray-900">
-                                {currentAmount.toLocaleString('fr-FR', {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: 2,
-                                })}{' '}
-                                TND
-                              </p>
-
-                              <div className="flex items-center justify-between text-[11px] text-gray-500">
-                                <span>
-                                  MIN:{' '}
-                                  {rangeMin.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}{' '}
-                                  TND
-                                </span>
-                                <span>
-                                  MAX:{' '}
-                                  {rangeMax.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}{' '}
-                                  TND
-                                </span>
-                              </div>
-
-                              <input
-                                type="range"
-                                min={rangeMin}
-                                max={rangeMax}
-                                step="any"
-                                value={currentAmount}
-                                onChange={(e) => {
-                                  const v = Math.max(
-                                    rangeMin,
-                                    Math.min(rangeMax, Number(e.target.value)),
-                                  );
-                                  setAdjustedBudget(v);
-                                }}
-                                onInput={(e) => {
-                                  const v = Math.max(
-                                    rangeMin,
-                                    Math.min(
-                                      rangeMax,
-                                      Number((e.target as HTMLInputElement).value),
-                                    ),
-                                  );
-                                  setAdjustedBudget(v);
-                                }}
-                                className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#76E6AB]"
-                                style={{
-                                  background: `linear-gradient(to right, #76E6AB 0%, #76E6AB ${percentage}%, #e5e7eb ${percentage}%, #e5e7eb 100%)`,
-                                }}
-                              />
-
-                              <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                  <label className="block text-xs text-gray-500 mb-1">
-                                    Montant minimum (TND)
-                                  </label>
-                                  <input
-                                    type="number"
-                                    value={customMinBudget !== null ? customMinBudget : ''}
-                                    onChange={(e) => {
-                                      const val = e.target.value ? Number(e.target.value) : null;
-                                      setCustomMinBudget(val);
-                                      if (val !== null && adjustedBudget < val)
-                                        setAdjustedBudget(val);
-                                    }}
-                                    placeholder={`Min: ${rangeMin.toFixed(2)} TND`}
-                                    min={0}
-                                    step={50}
-                                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#76E6AB]/40 focus:border-[#76E6AB]"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="block text-xs text-gray-500 mb-1">
-                                    Montant maximum (TND)
-                                  </label>
-                                  <input
-                                    type="number"
-                                    value={customMaxBudget !== null ? customMaxBudget : ''}
-                                    onChange={(e) => {
-                                      const val = e.target.value ? Number(e.target.value) : null;
-                                      setCustomMaxBudget(val);
-                                      if (val !== null && adjustedBudget > val)
-                                        setAdjustedBudget(val);
-                                    }}
-                                    placeholder={`Max: ${rangeMax.toFixed(2)} TND`}
-                                    min={0}
-                                    step={50}
-                                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#76E6AB]/40 focus:border-[#76E6AB]"
-                                  />
-                                </div>
-                              </div>
-                            </>
-                          );
-                        })()}
-                      </div>
-
-                      {/* Note */}
-                      <div className="flex gap-2.5 p-4 bg-gray-50 rounded-xl border border-gray-200">
-                        <Info className="h-4 w-4 text-gray-400 flex-shrink-0 mt-0.5" />
-                        <p className="text-xs text-gray-500 leading-relaxed">
-                          <strong className="text-gray-600">Note:</strong> Le curseur ajuste le plan
-                          final après le calcul du plan max. Le plan final (budget + impressions +
-                          répétitions horaires) devient la référence officielle soumise aux
-                          propriétaires et injectée en planification horaire.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <Step6
+                wizardState={state}
+                setAdjustedBudget={setAdjustedBudget}
+                setCustomMinBudget={setCustomMinBudget}
+                setCustomMaxBudget={setCustomMaxBudget}
+                isEventCampaign={isEventCampaign}
+                availableParcs={availableParcs}
+                selectedParcIds={selectedParcIds}
+                cpmTnd={cpmTnd}
+                maxImpressionsFromSelection={calculateBudgetAndImpressions.impressions}
+                impressionsForCurrentBudget={impressionsForCurrentBudget}
+                doohEstimateLoading={doohEstimateLoading}
+                doohEstimateError={doohEstimateError}
+                selectedExistingVideo={selectedExistingVideo}
+                nbJours={nbJours}
+                onBack={() => wiz.prevStep()}
+                onSaveDraft={handleSaveDraft}
+                onAddToCart={handleAddToCart}
+                canFinalize={
+                  canProceedToStep6() &&
+                  adjustedBudget > 0 &&
+                  impressionsForCurrentBudget > 0
+                }
+                addingToCart={addingToCart}
+              />
             )}
 
+          {/* Post-cart success screen — extracted to ./new-campaign/PostCartStep */}
           {showPostCartStep && (
-            <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
-              <div className="p-6 md:p-8">
-                <div className="flex flex-col items-center text-center">
-                  <div className="w-24 h-24 flex items-center justify-center">
-                    <img src={panierPng} alt="" className="h-full w-full object-contain" />
-                  </div>
-                  <p className="mt-5 text-xl font-medium text-gray-700 leading-snug">
-                    Votre campagne a ete ajoutee au panier
-                  </p>
-                </div>
-
-                <div className="mt-7">
-                  <h3 className="text-lg font-semibold text-center text-gray-900 mb-6 leading-snug">
-                    Augmentez votre impact en diffusant votre spot lors d'evenements prevus dans la
-                    meme periode
-                  </h3>
-
-                  {loadingRecommendedEvents ? (
-                    <div className="flex justify-center py-10">
-                      <div className="animate-spin rounded-full h-10 w-10 border-2 border-[#00B3A6] border-t-transparent" />
-                    </div>
-                  ) : recommendedEventsInPeriod.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      {recommendedEventsInPeriod.map((event) => {
-                        const typeConfig: Record<
-                          string,
-                          { bg: string; text: string; label: string }
-                        > = {
-                          sport: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Sport' },
-                          ramadan: { bg: 'bg-amber-100', text: 'text-amber-900', label: 'Ramadan' },
-                          culture: {
-                            bg: 'bg-purple-100',
-                            text: 'text-purple-800',
-                            label: 'Culture',
-                          },
-                          concert: {
-                            bg: 'bg-purple-100',
-                            text: 'text-purple-800',
-                            label: 'Concert',
-                          },
-                          festival: { bg: 'bg-pink-100', text: 'text-pink-800', label: 'Festival' },
-                          conference: {
-                            bg: 'bg-indigo-100',
-                            text: 'text-indigo-800',
-                            label: 'Conference',
-                          },
-                          exposition: {
-                            bg: 'bg-green-100',
-                            text: 'text-green-800',
-                            label: 'Exposition',
-                          },
-                          salon: { bg: 'bg-orange-100', text: 'text-orange-800', label: 'Salon' },
-                          autre: { bg: 'bg-gray-100', text: 'text-gray-800', label: 'Autre' },
-                        };
-                        const typeStyle = typeConfig[event.event_type] || typeConfig.autre;
-                        const start = new Date(event.start_date);
-                        const end = new Date(event.end_date);
-                        const dateStr = start.toLocaleDateString('fr-FR', {
-                          day: 'numeric',
-                          month: 'short',
-                        });
-                        const timeStr = `${start.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} - ${end.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
-                        const impressions =
-                          event.expected_attendance != null
-                            ? event.expected_attendance.toLocaleString('fr-FR')
-                            : '184 500';
-
-                        return (
-                          <div
-                            key={event.id}
-                            className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden flex flex-col"
-                          >
-                            <div className="aspect-[16/10] bg-gray-200 overflow-hidden">
-                              {event.image_url ? (
-                                <img
-                                  src={event.image_url}
-                                  alt={event.name}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
-                                  <Megaphone className="h-12 w-12 text-gray-400" />
-                                </div>
-                              )}
-                            </div>
-                            <div className="p-4 flex flex-col flex-1">
-                              <div className="flex items-start justify-between gap-2 mb-2">
-                                <h4 className="text-base font-bold text-gray-900 flex-1">
-                                  {event.name}
-                                </h4>
-                                <span
-                                  className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium flex-shrink-0 ${typeStyle.bg} ${typeStyle.text}`}
-                                >
-                                  {typeStyle.label}
-                                </span>
-                              </div>
-                              <div className="flex flex-wrap gap-1.5 mb-2">
-                                <span className="inline-flex px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs">
-                                  Restaurants
-                                </span>
-                                <span className="inline-flex px-2 py-0.5 rounded bg-gray-100 text-gray-700 text-xs">
-                                  Salles de sport
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-1.5 text-sm text-gray-600 mb-1">
-                                <Calendar className="h-4 w-4 flex-shrink-0" />
-                                <span>
-                                  {dateStr} | {timeStr}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-1.5 text-sm text-gray-600 mb-2">
-                                <TrendingUp className="h-4 w-4 flex-shrink-0" />
-                                <span>~ {impressions} impressions</span>
-                              </div>
-                              <p className="text-xs text-gray-500 mb-4">
-                                (En incluant automatiquement toutes les categories de commerces qui
-                                diffusent pendant l'evenement)
-                              </p>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  navigate('/new-event-campaign', { state: { event } })
-                                }
-                                className="mt-auto w-full py-2.5 rounded-xl bg-[#1f1f1f] hover:bg-black text-white text-sm font-medium transition-colors"
-                              >
-                                Je me positionne
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="text-center py-10 text-gray-500 border border-gray-200 rounded-2xl bg-gray-50">
-                      Aucun evenement actif ne chevauche la periode selectionnee.
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <button
-                    type="button"
-                    onClick={() => navigate('/dashboard')}
-                    className="w-full py-3 rounded-xl border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-medium"
-                  >
-                    Dashboard
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => navigate('/evenements')}
-                    className="w-full py-3 rounded-xl text-gray-900 font-medium"
-                    style={{ background: '#8de7a6' }}
-                  >
-                    Voir tous les evenements
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Navigation Buttons — gated to the final step only, because
-              Steps 1-5 (std) and event Steps 1-2 (= Step 4/5 components)
-              render their own Retour + Suivant. Only Step 6 (std) /
-              Step 3 (event) reaches this footer for the Enregistrer +
-              Ajouter au panier actions. (Also fixes a Commit-9 oversight
-              where the gate stayed at currentStep > 3 even though Step 4
-              already had its own footer.) */}
-          {!showPostCartStep && (isEventCampaign ? currentStep > 2 : currentStep > 5) && (
-            <div className="flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => wiz.prevStep()}
-                disabled={currentStep === 1}
-                className="flex items-center gap-2 px-5 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-sm font-medium"
-              >
-                <ArrowRight className="h-4 w-4 rotate-180" />
-                Retour
-              </button>
-
-              {/* Step 6 / final step: Enregistrer + Ajouter au panier */}
-              {((currentStep === 6 && !isEventCampaign) ||
-                (currentStep === 3 && isEventCampaign)) && (
-                <div className="flex flex-col items-end gap-2">
-                  {(!canProceedToStep6() ||
-                    adjustedBudget <= 0 ||
-                    impressionsForCurrentBudget <= 0) && (
-                    <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                      La campagne doit être supérieure à 0 dinar et à 0 impression pour pouvoir être
-                      validée.
-                    </p>
-                  )}
-                  <div className="flex items-center gap-3">
-                    {/* Enregistrer (brouillon) */}
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        try {
-                          if (!draftCampaignId) {
-                            const videoId = uploadedVideoId || selectedExistingVideo?.id;
-                            if (!videoId) {
-                              toast.error("Veuillez sélectionner ou uploader une vidéo d'abord");
-                              return;
-                            }
-                            await saveCampaignDraft(videoId, false);
-                          } else {
-                            const { error } = await supabase
-                              .from('campaigns')
-                              .update({ status: 'draft' })
-                              .eq('id', draftCampaignId);
-                            if (error) {
-                              log.error(
-                                { error, campaignId: draftCampaignId },
-                                'failed to save draft',
-                              );
-                              toast.error(
-                                getErrorMessage(error) ||
-                                  'Erreur lors de la sauvegarde du brouillon',
-                              );
-                              return;
-                            }
-                          }
-                          toast.success('Campagne sauvegardée en brouillon');
-                          navigate('/my-campaigns?status=draft');
-                        } catch (error) {
-                          log.error({ err: error }, 'unexpected error during save-draft flow');
-                          toast.error(getErrorMessage(error) || 'Erreur lors de la sauvegarde');
-                        }
-                      }}
-                      className="px-5 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-all text-sm font-medium"
-                    >
-                      Enregistrer
-                    </button>
-
-                    {/* Ajouter au panier */}
-                    <button
-                      type="button"
-                      disabled={
-                        addingToCart ||
-                        !canProceedToStep6() ||
-                        adjustedBudget <= 0 ||
-                        impressionsForCurrentBudget <= 0
-                      }
-                      onClick={async () => {
-                        if (addingToCart) return;
-                        if (
-                          !canProceedToStep6() ||
-                          adjustedBudget <= 0 ||
-                          impressionsForCurrentBudget <= 0
-                        ) {
-                          toast.error(
-                            'La campagne doit être supérieure à 0 dinar et à 0 impression.',
-                          );
-                          return;
-                        }
-                        setAddingToCart(true);
-                        try {
-                          let campaignId = draftCampaignId;
-                          if (!campaignId) {
-                            const videoId = uploadedVideoId || selectedExistingVideo?.id;
-                            if (!videoId) {
-                              toast.error("Veuillez sélectionner ou uploader une vidéo d'abord");
-                              return;
-                            }
-                            const campaign = await saveCampaignDraft(videoId, false);
-                            campaignId = campaign.id;
-                          }
-
-                          const balanceCheck =
-                            await balanceService.checkCampaignBalance(campaignId);
-                          if (balanceCheck && !balanceCheck.has_sufficient_balance) {
-                            const { error: revertError } = await supabase
-                              .from('campaigns')
-                              .update({ status: 'draft' })
-                              .eq('id', campaignId);
-                            if (revertError) {
-                              log.error(
-                                { error: revertError, campaignId },
-                                'failed to revert campaign to draft on insufficient balance',
-                              );
-                              toast.error(
-                                getErrorMessage(revertError) ||
-                                  'Solde insuffisant et erreur lors de la mise à jour de la campagne',
-                              );
-                              return;
-                            }
-                            toast.error('Solde insuffisant pour activer la campagne', {
-                              duration: 5000,
-                            });
-                            toast(
-                              (_t) => (
-                                <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
-                                  <p className="font-bold text-yellow-800 mb-2">
-                                    Votre campagne est sauvegardée en brouillon
-                                  </p>
-                                  <div className="text-xs text-yellow-600 space-y-1">
-                                    <p>
-                                      Solde disponible:{' '}
-                                      <strong>
-                                        {balanceService.formatAmount(
-                                          balanceCheck.available_balance,
-                                        )}
-                                      </strong>
-                                    </p>
-                                    <p>
-                                      Coût campagne:{' '}
-                                      <strong>
-                                        {balanceService.formatAmount(balanceCheck.campaign_cost)}
-                                      </strong>
-                                    </p>
-                                  </div>
-                                </div>
-                              ),
-                              { duration: 6000 },
-                            );
-                            setTimeout(() => navigate('/my-recharges'), 3000);
-                            return;
-                          }
-
-                          // Tant que l'utilisateur n'a pas validé depuis le panier,
-                          // la campagne reste en brouillon.
-                          const { error: updateError } = await supabase
-                            .from('campaigns')
-                            .update({ status: 'draft', content_validation_status: 'pending' })
-                            .eq('id', campaignId);
-                          if (updateError) {
-                            log.error(
-                              { error: updateError, campaignId },
-                              'failed to update campaign for cart add',
-                            );
-                            toast.error(
-                              getErrorMessage(updateError) || 'Erreur lors de la finalisation',
-                            );
-                            return;
-                          }
-
-                          if (isEventCampaign && eventFromState?.id) {
-                            const { error: linkError } = await supabase.rpc(
-                              'link_campaign_to_event',
-                              {
-                                p_campaign_id: campaignId,
-                                p_event_id: eventFromState.id,
-                              },
-                            );
-                            if (linkError) {
-                              // Event-campaigns require the link to be functional; without it the
-                              // campaign exists but isn't tied to its event. Surface the failure
-                              // and stop — do not proceed to cart-add. User can retry.
-                              log.error(
-                                { error: linkError, campaignId, eventId: eventFromState.id },
-                                'failed to link event campaign to event',
-                              );
-                              toast.error(
-                                getErrorMessage(linkError) ||
-                                  "Erreur lors du lien à l'événement — veuillez réessayer",
-                              );
-                              return;
-                            }
-                          }
-
-                          pushCampaignToSidebarCart(campaignId);
-                          await loadRecommendedEventsForSelectedPeriod();
-                          setShowPostCartStep(true);
-                          toast.success(
-                            "Campagne ajoutee au panier. Activez-la depuis le panier pour qu'elle soit diffusée.",
-                          );
-                        } catch (error) {
-                          log.error({ err: error }, 'unexpected error during cart-add flow');
-                          toast.error(getErrorMessage(error) || 'Erreur lors de la finalisation');
-                        } finally {
-                          setAddingToCart(false);
-                        }
-                      }}
-                      className="flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm text-white shadow-lg transition-all hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
-                      style={{ background: '#76E6AB' }}
-                    >
-                      <span>{addingToCart ? 'Ajout en cours...' : 'Ajouter au panier'}</span>
-                      <ArrowRight className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Suivant button: removed. The outer footer gate restricts
-                  this block to the final step (6 std / 3 event), so the
-                  Suivant branch (currentStep < final) was unreachable
-                  post Commit 10. Step navigation for Steps 1-5 (std) /
-                  Steps 1-2 (event) lives in the extracted step components'
-                  own Suivant buttons. */}
-            </div>
+            <PostCartStep
+              loadingRecommendedEvents={loadingRecommendedEvents}
+              recommendedEvents={recommendedEvents}
+              startDate={startDate}
+              endDate={endDate}
+              onGoToDashboard={() => navigate('/dashboard')}
+              onGoToEvents={() => navigate('/evenements')}
+              onJeMePositionne={(event) =>
+                navigate('/new-event-campaign', { state: { event } })
+              }
+            />
           )}
         </div>
 
