@@ -17,7 +17,7 @@ const MyRecharges = lazy(() => import('./pages/MyRecharges'));
 const MyInvoices = lazy(() => import('./pages/MyInvoices'));
 const MyClients = lazy(() => import('./pages/MyClients'));
 const AdvertiserPerformancePlaceholder = lazy(
-  () => import('./pages/AdvertiserPerformancePlaceholder'),
+  () => import('./features/performances/pages/AdvertiserPerformancePlaceholder'),
 );
 const CartPage = lazy(() => import('./pages/CartPage'));
 const OwnerDashboard = lazy(() => import('./pages/OwnerDashboard'));
