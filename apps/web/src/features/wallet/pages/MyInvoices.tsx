@@ -11,9 +11,9 @@ import {
 } from 'lucide-react';
 import { useEffect, useState, useMemo } from 'react';
 
-import { useAuthStore } from '../features/auth/stores/auth.store';
-import { logger } from '../lib/logger';
-import { supabase } from '../lib/supabase';
+import { logger } from '../../../lib/logger';
+import { supabase } from '../../../lib/supabase';
+import { useAuthStore } from '../../auth/stores/auth.store';
 import { generateInvoicePDF } from '../services/invoice-pdf.service';
 
 const log = logger.child({ module: 'MyInvoices' });

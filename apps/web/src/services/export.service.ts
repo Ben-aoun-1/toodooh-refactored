@@ -5,9 +5,9 @@ import * as XLSX from 'xlsx';
 
 import logoFullSrc from '../assets/logo.png';
 import { TOODOOH_STATEMENT_EMITTER, OWNER_STATEMENT_FOOTER } from '../constants/ownerStatement';
+import { RevenueData, ScreenRevenue, MonthlyComparison } from '../features/wallet/services/revenue.service';
 import type { OwnerStatementDetail, StatementRecipientDisplay } from '../types/ownerStatement';
 
-import { RevenueData, ScreenRevenue, MonthlyComparison } from './revenue.service';
 
 function loadImageAsBase64(src: string): Promise<string> {
   return new Promise((resolve, reject) => {

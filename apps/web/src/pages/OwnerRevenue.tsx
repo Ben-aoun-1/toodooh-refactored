@@ -19,9 +19,9 @@ import OwnerNavigation from '../components/OwnerNavigation';
 import OwnerNotificationsBell from '../components/OwnerNotificationsBell';
 import { authService } from '../features/auth/services/auth.service';
 import { useAuthStore } from '../features/auth/stores/auth.store';
+import { revenueService, RevenueData, RevenueStats } from '../features/wallet/services/revenue.service';
 import { getErrorMessage } from '../lib/errors';
 import { supabase } from '../lib/supabase';
-import { revenueService, RevenueData, RevenueStats } from '../services/revenue.service';
 
 type TxFilter = 'all' | 'recharges' | 'depenses';
 

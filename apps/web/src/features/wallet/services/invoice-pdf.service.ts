@@ -1,7 +1,7 @@
 import jsPDF from 'jspdf';
 
-import logoFullSrc from '../assets/logo.png';
-import { supabase } from '../lib/supabase';
+import logoFullSrc from '../../../assets/logo.png';
+import { supabase } from '../../../lib/supabase';
 
 interface InvoiceData {
   id: string;

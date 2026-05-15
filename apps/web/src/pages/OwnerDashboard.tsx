@@ -26,9 +26,9 @@ import OwnerNavigation from '../components/OwnerNavigation';
 import OwnerNotificationsBell from '../components/OwnerNotificationsBell';
 import { authService } from '../features/auth/services/auth.service';
 import { useAuthStore } from '../features/auth/stores/auth.store';
+import { revenueService, RevenueStats } from '../features/wallet/services/revenue.service';
 import { logger } from '../lib/logger';
 import { campaignOwnerApprovalService } from '../services/campaign-owner-approval.service';
-import { revenueService, RevenueStats } from '../services/revenue.service';
 import { screensService, Screen } from '../services/screens.service';
 
 const log = logger.child({ module: 'OwnerDashboard' });

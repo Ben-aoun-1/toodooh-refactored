@@ -13,8 +13,8 @@ const UserProfile = lazy(() => import('./pages/UserProfile'));
 const NewCampaign = lazy(() => import('./pages/NewCampaign'));
 const MyCampaigns = lazy(() => import('./pages/MyCampaigns'));
 const Events = lazy(() => import('./features/events/pages/Events'));
-const MyRecharges = lazy(() => import('./pages/MyRecharges'));
-const MyInvoices = lazy(() => import('./pages/MyInvoices'));
+const MyRecharges = lazy(() => import('./features/wallet/pages/MyRecharges'));
+const MyInvoices = lazy(() => import('./features/wallet/pages/MyInvoices'));
 const MyClients = lazy(() => import('./pages/MyClients'));
 const AdvertiserPerformancePlaceholder = lazy(
   () => import('./features/performances/pages/AdvertiserPerformancePlaceholder'),
