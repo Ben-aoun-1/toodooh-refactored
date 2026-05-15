@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import 'react-datepicker/dist/react-datepicker.css';
 import {
-  Upload,
   MapPin,
   Calendar,
   Film,
@@ -64,12 +63,6 @@ import {
 } from '../services/dooh-new-campaign-estimate.service';
 import { predefinedZonesService, type PredefinedZone } from '../services/predefined-zones.service';
 import { screensService, type UnavailabilityPeriod } from '../services/screens.service';
-import {
-  videoUploadService,
-  readVideoDurationFromFile,
-  readVideoDurationFromUrl,
-  type UploadProgress,
-} from '../services/video-upload.service';
 import { useAuthStore } from '../stores/auth.store';
 import { useCartStore } from '../stores/cart.store';
 import type { BusinessSector } from '../types/auth';
@@ -79,6 +72,7 @@ import Step1NameType from './new-campaign/Step1NameType';
 import Step2 from './new-campaign/Step2';
 import Step3 from './new-campaign/Step3';
 import Step4 from './new-campaign/Step4';
+import Step5 from './new-campaign/Step5';
 
 const log = logger.child({ module: 'NewCampaign' });
 
@@ -313,7 +307,6 @@ export default function NewCampaign() {
       : center;
   const [radius, _setRadius] = useState(campaignToEdit?.location_radius || 1000);
   const [_searchQuery, _setSearchQuery] = useState('');
-  const [selectedVideo, setSelectedVideo] = useState<File | null>(null);
 
   // Parcs TV (ParcTV interface imported from wizard-types)
   const [availableParcs, setAvailableParcs] = useState<ParcTV[]>([]);
@@ -493,20 +486,15 @@ export default function NewCampaign() {
   // from startDate/endDate. The other fields (reach/cost/views/engagement/
   // area/efficiency) were never read anywhere — pre-existing dead code.
 
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
-  // uploadedVideoUrl / uploadedVideoId / draftCampaignId are in WizardState;
-  // their setters are shimmed at the top of the component.
-  const [_uploadedVideoPath, setUploadedVideoPath] = useState<string>('');
+  // draftCampaignId is in WizardState; its setter is shimmed at the top.
+  // myApprovedVideos cache + selectedExistingVideo memo stay in parent — they
+  // have parent-level consumers (DOOH estimate effect, saveDraft, cart
+  // create, Step 6 recap). Step 5 receives them as props and patches the
+  // duration_seconds write-back through setMyApprovedVideos.
   // TODO(phase-1): typed source [supabase] — see #15
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [myApprovedVideos, setMyApprovedVideos] = useState<any[]>([]);
-  // selectedExistingVideo: derived from existingVideoId via the
-  // myApprovedVideos catalogue (we only persist the id). setSelectedExistingVideo
-  // is a value-form shim — all current call sites pass either null or a video
-  // object (no updater-form usage in this file).
   const selectedExistingVideo = useMemo(
-     
     () =>
       existingVideoId
         ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -514,14 +502,11 @@ export default function NewCampaign() {
         : null,
     [existingVideoId, myApprovedVideos],
   );
-  const setSelectedExistingVideo = useCallback(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (video: any) =>
-      setState((prev) => ({ ...prev, existingVideoId: video?.id ?? null })),
+  const setExistingVideoId = useCallback(
+    (value: string | null) =>
+      setState((prev) => ({ ...prev, existingVideoId: value })),
     [setState],
   );
-  const [_videoTab, setVideoTab] = useState<'upload' | 'existing'>('existing');
-  const MAX_VIDEO_DURATION_SECONDS = 30;
   const [showPostCartStep, setShowPostCartStep] = useState(false);
   const [recommendedEvents, setRecommendedEvents] = useState<SpecialEvent[]>([]);
   const [loadingRecommendedEvents, setLoadingRecommendedEvents] = useState(false);
@@ -785,114 +770,12 @@ export default function NewCampaign() {
     }
   };
 
-  const handleVideoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    try {
-      const durationSeconds = await readVideoDurationFromFile(file);
-      if (durationSeconds != null && durationSeconds > MAX_VIDEO_DURATION_SECONDS) {
-        toast.error(
-          'La vidéo ne doit pas dépasser 30 secondes. Veuillez choisir une vidéo plus courte.',
-        );
-        event.target.value = '';
-        return;
-      }
-
-      setUploading(true);
-      setSelectedVideo(file);
-      setSelectedExistingVideo(null);
-
-      // Upload la vidéo
-      const result = await videoUploadService.uploadVideo(file, (progress) => {
-        setUploadProgress(progress);
-      });
-
-      setUploadedVideoUrl(result.url);
-      setUploadedVideoPath(result.path);
-
-      // Créer l'entrée vidéo dans la table videos
-      const videoEntry = await videoUploadService.createVideoEntry(
-        result.url,
-        result.path,
-        file.name,
-        file.size,
-        durationSeconds,
-      );
-      setUploadedVideoId(videoEntry.id);
-
-      if ((durationSeconds == null || durationSeconds <= 0) && result.url) {
-        const fromUrl = await readVideoDurationFromUrl(result.url);
-        if (fromUrl != null) {
-          try {
-            await videoUploadService.updateVideoDurationSeconds(videoEntry.id, fromUrl);
-          } catch {
-            /* colonne absente ou RLS : le moteur DOOH utilisera la durée par défaut */
-          }
-        }
-      }
-
-      // Ne pas créer la campagne automatiquement, elle sera créée lors de la validation finale
-      toast.success('Vidéo uploadée avec succès !');
-    } catch (error) {
-      toast.error(getErrorMessage(error) || "Erreur lors de l'upload");
-      setSelectedVideo(null);
-    } finally {
-      setUploading(false);
-      setUploadProgress(null);
-    }
-  };
-
-  const handleSelectExistingVideo = (id: string) => {
-    if (!id) {
-      setSelectedExistingVideo(null);
-      setUploadedVideoId('');
-      setUploadedVideoUrl('');
-      return;
-    }
-
-    const video = (myApprovedVideos || []).find((v) => v.id === id);
-    if (!video) return;
-
-    const ds = Number(video.duration_seconds);
-    if (Number.isFinite(ds) && ds > MAX_VIDEO_DURATION_SECONDS) {
-      toast.error('La vidéo ne doit pas dépasser 30 secondes. Veuillez en sélectionner une autre.');
-      setSelectedExistingVideo(null);
-      setUploadedVideoId('');
-      setUploadedVideoUrl('');
-      return;
-    }
-
-    setSelectedExistingVideo(video);
-    setUploadedVideoId(video.id);
-    setUploadedVideoUrl(video.url);
-    setSelectedVideo(null);
-    toast.success('Vidéo sélectionnée !');
-
-    if (video.url && (!Number.isFinite(ds) || ds <= 0)) {
-      void (async () => {
-        const d = await readVideoDurationFromUrl(video.url);
-        if (d == null) return;
-        if (d > MAX_VIDEO_DURATION_SECONDS) {
-          toast.error(
-            'La vidéo ne doit pas dépasser 30 secondes. Veuillez en sélectionner une autre.',
-          );
-          setSelectedExistingVideo(null);
-          setUploadedVideoId('');
-          setUploadedVideoUrl('');
-          return;
-        }
-        try {
-          await videoUploadService.updateVideoDurationSeconds(video.id, d);
-          const patched = { ...video, duration_seconds: d };
-          setSelectedExistingVideo(patched);
-          setMyApprovedVideos((prev) => prev.map((v) => (v.id === video.id ? patched : v)));
-        } catch {
-          /* ignore */
-        }
-      })();
-    }
-  };
+  // handleVideoUpload + handleSelectExistingVideo + MAX_VIDEO_DURATION_SECONDS:
+  //   moved into Step5.tsx (Commit 10). Step 5 owns the upload flow, the
+  //   transient selectedVideo/uploading/uploadProgress useState slots, and the
+  //   30-second duration ceiling. The parent retains myApprovedVideos +
+  //   selectedExistingVideo memo because they have multiple parent-level
+  //   consumers (DOOH estimate effect, saveDraft, cart create, Step 6 recap).
 
   // validateField + handleFieldChange: removed (Step1NameType + Step2 own
   //   their own field-level validation; Step3-6 will follow the same pattern
@@ -1193,8 +1076,7 @@ export default function NewCampaign() {
               }
               return prev;
             });
-            setSelectedExistingVideo(videoData);
-            setVideoTab('existing');
+            setExistingVideoId(videoData.id);
           }
         } catch (error) {
           log.error({ error }, 'Erreur chargement vidéo');
@@ -1559,134 +1441,21 @@ export default function NewCampaign() {
             />
           )}
 
-          {/* Step 4: Contenu média (étape 2 en mode campagne événement) — design maquette */}
+          {/* Step 5: Contenu média (étape 2 en mode campagne événement) — extracted to ./new-campaign/Step5 */}
           {((currentStep === 5 && !isEventCampaign) || (currentStep === 2 && isEventCampaign)) && (
-            <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
-              <div className="p-6 border-b border-gray-200">
-                <h2 className="text-xl font-bold text-gray-900">Contenu média</h2>
-                <p className="text-gray-500 mt-1">
-                  Sélectionnez ou uploadez votre spot publicitaire
-                </p>
-              </div>
-
-              <div className="p-6 space-y-6">
-                {/* Spot publicitaire — sélection existant */}
-                <div>
-                  <label className="block text-sm font-bold text-gray-900 mb-2">
-                    Spot publicitaire
-                  </label>
-                  <select
-                    value={selectedExistingVideo?.id ?? ''}
-                    onChange={(e) => handleSelectExistingVideo(e.target.value)}
-                    className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl bg-gray-50 text-gray-700 focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent cursor-pointer"
-                  >
-                    <option value="">Sélectionner un spot existant</option>
-                    {(myApprovedVideos || []).map((video) => (
-                      <option key={video.id} value={video.id}>
-                        {video.filename}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Zone upload — ou uploadez un nouveau spot */}
-                {uploading ? (
-                  <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center bg-gray-50/50">
-                    <div className="animate-spin rounded-full h-10 w-10 border-2 border-[#00B3A6] border-t-transparent mx-auto mb-3" />
-                    <p className="text-sm font-medium text-gray-700">Upload en cours...</p>
-                    {uploadProgress && (
-                      <div className="max-w-xs mx-auto mt-2">
-                        <div className="w-full bg-gray-200 rounded-full h-1.5">
-                          <div
-                            className="bg-[#00B3A6] h-1.5 rounded-full transition-all"
-                            style={{ width: `${uploadProgress.progress}%` }}
-                          />
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">{uploadProgress.message}</p>
-                      </div>
-                    )}
-                  </div>
-                ) : selectedVideo && uploadedVideoUrl && !selectedExistingVideo ? (
-                  <div className="space-y-3">
-                    <div className="border-2 border-dashed border-gray-200 rounded-xl p-6 bg-green-50/50">
-                      <div className="flex items-center justify-between flex-wrap gap-3">
-                        <div className="flex items-center gap-3">
-                          <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
-                          <div>
-                            <p className="font-semibold text-gray-900 text-sm">
-                              {selectedVideo.name}
-                            </p>
-                            <p className="text-xs text-gray-600">
-                              {(selectedVideo.size / 1024 / 1024).toFixed(2)} MB · Uploadée avec
-                              succès
-                            </p>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedVideo(null);
-                            setUploadedVideoUrl('');
-                            setUploadedVideoId('');
-                          }}
-                          className="text-sm text-[#00B3A6] hover:underline font-medium"
-                        >
-                          Changer
-                        </button>
-                      </div>
-                    </div>
-                    <div className="rounded-xl overflow-hidden border border-gray-200 bg-black">
-                      <video src={uploadedVideoUrl} controls className="w-full max-h-80" />
-                    </div>
-                  </div>
-                ) : (
-                  <label className="block border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-[#00B3A6]/50 hover:bg-gray-50/50 transition-colors cursor-pointer">
-                    <div className="flex flex-col items-center gap-3">
-                      <div className="w-12 h-12 rounded-full bg-[#00B3A6]/15 flex items-center justify-center">
-                        <Upload className="w-6 h-6 text-[#00B3A6]" />
-                      </div>
-                      <p className="font-bold text-gray-900">Ou uploadez un nouveau spot</p>
-                      <p className="text-sm text-gray-500">
-                        Formats acceptés : MP4, MOV (max 100MB)
-                      </p>
-                      <span className="inline-flex items-center px-4 py-2.5 mt-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50">
-                        Parcourir les fichiers
-                      </span>
-                    </div>
-                    <input
-                      type="file"
-                      className="sr-only"
-                      accept="video/mp4,video/quicktime,video/x-msvideo,.mp4,.mov"
-                      onChange={handleVideoUpload}
-                    />
-                  </label>
-                )}
-
-                {/* Spécifications techniques */}
-                <div className="flex gap-3 p-4 rounded-xl bg-slate-50/80 border border-slate-100">
-                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center">
-                    <Info className="w-3.5 h-3.5 text-slate-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-gray-900 mb-2">
-                      Spécifications techniques
-                    </p>
-                    <ul className="text-sm text-gray-600 space-y-1">
-                      <li>Format : 16:9 (1920×1080px minimum)</li>
-                      <li>Durée : 30 secondes maximum</li>
-                      <li>Format vidéo : MP4 (H.264)</li>
-                    </ul>
-                  </div>
-                </div>
-
-                {/* Aperçu si spot existant sélectionné */}
-                {selectedExistingVideo && (
-                  <div className="rounded-xl overflow-hidden border border-gray-200 bg-black">
-                    <video src={selectedExistingVideo.url} controls className="w-full max-h-80" />
-                  </div>
-                )}
-              </div>
-            </div>
+            <Step5
+              uploadedVideoId={uploadedVideoId}
+              uploadedVideoUrl={uploadedVideoUrl}
+              existingVideoId={existingVideoId}
+              setUploadedVideoId={setUploadedVideoId}
+              setUploadedVideoUrl={setUploadedVideoUrl}
+              setExistingVideoId={setExistingVideoId}
+              myApprovedVideos={myApprovedVideos}
+              selectedExistingVideo={selectedExistingVideo}
+              setMyApprovedVideos={setMyApprovedVideos}
+              onNext={() => wiz.nextStep()}
+              onBack={() => wiz.prevStep()}
+            />
           )}
 
           {/* Step 6: Validation unified — Récapitulatif + Ajuster impact */}
@@ -2218,11 +1987,14 @@ export default function NewCampaign() {
             </div>
           )}
 
-          {/* Navigation Buttons — gated off for standard steps 1, 2, 3
-              because their step components render their own Suivant. Event
-              step 1/2 still uses this footer (those paths aren't extracted
-              yet). */}
-          {!showPostCartStep && (isEventCampaign || currentStep > 3) && (
+          {/* Navigation Buttons — gated to the final step only, because
+              Steps 1-5 (std) and event Steps 1-2 (= Step 4/5 components)
+              render their own Retour + Suivant. Only Step 6 (std) /
+              Step 3 (event) reaches this footer for the Enregistrer +
+              Ajouter au panier actions. (Also fixes a Commit-9 oversight
+              where the gate stayed at currentStep > 3 even though Step 4
+              already had its own footer.) */}
+          {!showPostCartStep && (isEventCampaign ? currentStep > 2 : currentStep > 5) && (
             <div className="flex items-center justify-between">
               <button
                 type="button"
@@ -2437,30 +2209,12 @@ export default function NewCampaign() {
                 </div>
               )}
 
-              {(isEventCampaign ? currentStep < 3 : currentStep < 6) && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    // Steps 1/2/3 own their own validate-and-surface
-                    // (Step1NameType, Step2, Step3); this footer never fires
-                    // for those standard steps (gated above on currentStep > 3).
-                    // Steps 4/5/6 use non-mutating cumulative gates via the
-                    // hook's canGoToStep predicate — no pre-nav side-effect
-                    // calls needed.
-                    wiz.nextStep();
-                  }}
-                  disabled={!wiz.canGoToStep(currentStep + 1)}
-                  className={`px-6 py-3 rounded-xl font-semibold transition-all flex items-center space-x-2 shadow-lg ${
-                    !wiz.canGoToStep(currentStep + 1)
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                      : 'bg-gradient-to-r from-[#00B3A6] to-[#00D4C4] text-white hover:from-[#00A396] hover:to-[#00C4B4]'
-                  }`}
-                >
-                  <span>Suivant</span>
-                  <ArrowRight className="h-4 w-4" />
-                </button>
-              )}
+              {/* Suivant button: removed. The outer footer gate restricts
+                  this block to the final step (6 std / 3 event), so the
+                  Suivant branch (currentStep < final) was unreachable
+                  post Commit 10. Step navigation for Steps 1-5 (std) /
+                  Steps 1-2 (event) lives in the extracted step components'
+                  own Suivant buttons. */}
             </div>
           )}
         </div>
