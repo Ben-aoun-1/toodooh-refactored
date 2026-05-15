@@ -2,7 +2,7 @@ import { Calendar, Megaphone, TrendingUp } from 'lucide-react';
 import { useMemo } from 'react';
 
 import panierPng from '../../assets/panier.png';
-import type { SpecialEvent } from '../../types/event';
+import type { SpecialEvent } from '../../features/events/types/event';
 
 interface PostCartStepProps {
   loadingRecommendedEvents: boolean;

@@ -1,6 +1,6 @@
+import { SpecialEvent, CreateEventDTO, EventStats } from '../features/events/types/event';
 import { logger } from '../lib/logger';
 import { supabase } from '../lib/supabase';
-import { SpecialEvent, CreateEventDTO, EventStats } from '../types/event';
 
 const log = logger.child({ module: 'admin-events.service' });
 

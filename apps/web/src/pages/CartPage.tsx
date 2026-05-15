@@ -15,12 +15,12 @@ import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 import { useAuthStore } from '../features/auth/stores/auth.store';
+import { eventsService } from '../features/events/services/events.service';
+import type { SpecialEvent } from '../features/events/types/event';
 import { supabase } from '../lib/supabase';
 import { balanceService } from '../services/balance.service';
 import { campaignService } from '../services/campaign.service';
-import { eventsService } from '../services/events.service';
 import { useCartStore, type CartItem } from '../stores/cart.store';
-import type { SpecialEvent } from '../types/event';
 
 const TVA_RATE = 0.19;
 

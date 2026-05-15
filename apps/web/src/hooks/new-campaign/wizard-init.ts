@@ -1,5 +1,5 @@
+import type { SpecialEvent } from '../../features/events/types/event';
 import { parseCampaignUiDate, toLocalDateOnlyString } from '../../lib/wizard-dates';
-import type { SpecialEvent } from '../../types/event';
 
 import type { WizardState } from './wizard-types';
 

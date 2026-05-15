@@ -2,9 +2,9 @@ import { Calendar, TrendingUp, ChevronLeft, ChevronRight, Search, Rocket } from 
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import matchImg from '../assets/match.png';
-import { useAuthStore } from '../features/auth/stores/auth.store';
-import { supabase } from '../lib/supabase';
+import matchImg from '../../../assets/match.png';
+import { supabase } from '../../../lib/supabase';
+import { useAuthStore } from '../../auth/stores/auth.store';
 import { eventsService } from '../services/events.service';
 import type { SpecialEvent } from '../types/event';
 

@@ -1,5 +1,5 @@
-import { logger } from '../lib/logger';
-import { supabase } from '../lib/supabase';
+import { logger } from '../../../lib/logger';
+import { supabase } from '../../../lib/supabase';
 import type { SpecialEvent } from '../types/event';
 
 const log = logger.child({ module: 'events.service' });

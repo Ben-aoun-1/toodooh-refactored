@@ -29,6 +29,7 @@ import ariane6s from '../assets/ariane/6s.png';
 import { authService } from '../features/auth/services/auth.service';
 import { useAuthStore } from '../features/auth/stores/auth.store';
 import type { BusinessSector } from '../features/auth/types/auth';
+import type { SpecialEvent } from '../features/events/types/event';
 import { useCampaignWizard } from '../hooks/new-campaign/useCampaignWizard';
 import { buildInitialWizardState } from '../hooks/new-campaign/wizard-init';
 import type {
@@ -56,7 +57,6 @@ import {
 import { predefinedZonesService, type PredefinedZone } from '../services/predefined-zones.service';
 import { screensService, type UnavailabilityPeriod } from '../services/screens.service';
 import { useCartStore } from '../stores/cart.store';
-import type { SpecialEvent } from '../types/event';
 
 import PostCartStep from './new-campaign/PostCartStep';
 import Step1NameType from './new-campaign/Step1NameType';

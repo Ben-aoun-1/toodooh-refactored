@@ -12,7 +12,7 @@ const AdvertiserDashboard = lazy(() => import('./pages/AdvertiserDashboard'));
 const UserProfile = lazy(() => import('./pages/UserProfile'));
 const NewCampaign = lazy(() => import('./pages/NewCampaign'));
 const MyCampaigns = lazy(() => import('./pages/MyCampaigns'));
-const Events = lazy(() => import('./pages/Events'));
+const Events = lazy(() => import('./features/events/pages/Events'));
 const MyRecharges = lazy(() => import('./pages/MyRecharges'));
 const MyInvoices = lazy(() => import('./pages/MyInvoices'));
 const MyClients = lazy(() => import('./pages/MyClients'));

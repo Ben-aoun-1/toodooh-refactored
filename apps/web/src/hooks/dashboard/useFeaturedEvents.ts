@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 
+import { eventsService } from '../../features/events/services/events.service';
+import type { SpecialEvent } from '../../features/events/types/event';
 import { logger } from '../../lib/logger';
-import { eventsService } from '../../services/events.service';
-import type { SpecialEvent } from '../../types/event';
 
 const log = logger.child({ module: 'useFeaturedEvents' });
 

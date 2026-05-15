@@ -16,12 +16,12 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 
 import AdminLayout from '../../components/admin/AdminLayout';
+import { SpecialEvent, CreateEventDTO, EventStats } from '../../features/events/types/event';
 import { getErrorMessage } from '../../lib/errors';
 import { logger } from '../../lib/logger';
 import { supabase } from '../../lib/supabase';
 import { adminEventsService } from '../../services/admin-events.service';
 import { useAdminStore } from '../../stores/admin.store';
-import { SpecialEvent, CreateEventDTO, EventStats } from '../../types/event';
 
 const log = logger.child({ module: 'EventManagement' });
 
