@@ -14,25 +14,29 @@ import {
 import { toast } from 'react-hot-toast';
 import { useNavigate, useLocation } from 'react-router-dom';
 
-import ariane1 from '../assets/ariane/1.png';
-import ariane1s from '../assets/ariane/1s.png';
-import ariane2 from '../assets/ariane/2.png';
-import ariane2s from '../assets/ariane/2s.png';
-import ariane3 from '../assets/ariane/3.png';
-import ariane3s from '../assets/ariane/3s.png';
-import ariane4 from '../assets/ariane/4.png';
-import ariane4s from '../assets/ariane/4s.png';
-import ariane5 from '../assets/ariane/5.png';
-import ariane5s from '../assets/ariane/5s.png';
-import ariane6 from '../assets/ariane/6.png';
-import ariane6s from '../assets/ariane/6s.png';
-import { useAdvertiserGlobalConfig } from '../features/advertiser/hooks/useAdvertiserGlobalConfig';
-import { authService } from '../features/auth/services/auth.service';
-import { useAuthStore } from '../features/auth/stores/auth.store';
-import type { BusinessSector } from '../features/auth/types/auth';
-import type { SpecialEvent } from '../features/events/types/event';
-import { predefinedZonesService, type PredefinedZone } from '../features/screens/services/predefined-zones.service';
-import { screensService, type UnavailabilityPeriod } from '../features/screens/services/screens.service';
+import ariane1 from '../../../assets/ariane/1.png';
+import ariane1s from '../../../assets/ariane/1s.png';
+import ariane2 from '../../../assets/ariane/2.png';
+import ariane2s from '../../../assets/ariane/2s.png';
+import ariane3 from '../../../assets/ariane/3.png';
+import ariane3s from '../../../assets/ariane/3s.png';
+import ariane4 from '../../../assets/ariane/4.png';
+import ariane4s from '../../../assets/ariane/4s.png';
+import ariane5 from '../../../assets/ariane/5.png';
+import ariane5s from '../../../assets/ariane/5s.png';
+import ariane6 from '../../../assets/ariane/6.png';
+import ariane6s from '../../../assets/ariane/6s.png';
+import { getErrorMessage } from '../../../lib/errors';
+import { logger } from '../../../lib/logger';
+import { supabase } from '../../../lib/supabase';
+import { balanceService } from '../../../services/balance.service';
+import { useAdvertiserGlobalConfig } from '../../advertiser/hooks/useAdvertiserGlobalConfig';
+import { authService } from '../../auth/services/auth.service';
+import { useAuthStore } from '../../auth/stores/auth.store';
+import type { BusinessSector } from '../../auth/types/auth';
+import type { SpecialEvent } from '../../events/types/event';
+import { predefinedZonesService, type PredefinedZone } from '../../screens/services/predefined-zones.service';
+import { screensService, type UnavailabilityPeriod } from '../../screens/services/screens.service';
 import { useCampaignWizard } from '../hooks/new-campaign/useCampaignWizard';
 import { buildInitialWizardState } from '../hooks/new-campaign/wizard-init';
 import type {
@@ -41,12 +45,8 @@ import type {
   UseCampaignWizardOptions,
   WizardState,
 } from '../hooks/new-campaign/wizard-types';
-import { getErrorMessage } from '../lib/errors';
-import { logger } from '../lib/logger';
-import { supabase } from '../lib/supabase';
 import { parseCampaignUiDate, toLocalDateOnlyString } from '../lib/wizard-dates';
 import { zonesLabel } from '../lib/wizard-zones';
-import { balanceService } from '../services/balance.service';
 import {
   campaignScreensService,
   type CampaignLocation,

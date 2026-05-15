@@ -5,7 +5,7 @@
  * Config type + defaults moved to `../lib/dooh/config`; re-exported here for back-compat.
  */
 
-import { DEFAULT_DOOH_CONFIG_NUMBERS, type DoohConfigNumbers } from '../lib/dooh/config';
+import { DEFAULT_DOOH_CONFIG_NUMBERS, type DoohConfigNumbers } from '../config';
 
 export { DEFAULT_DOOH_CONFIG_NUMBERS, type DoohConfigNumbers };
 

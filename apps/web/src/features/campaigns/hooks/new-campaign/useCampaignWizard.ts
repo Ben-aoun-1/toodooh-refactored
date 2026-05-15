@@ -1,10 +1,10 @@
 import { useCallback, useMemo, useState } from 'react';
 
-import { supabase } from '../../lib/supabase';
-import { balanceService } from '../../services/balance.service';
+import { useWizard } from '../../../../hooks/useWizard';
+import { supabase } from '../../../../lib/supabase';
+import { balanceService } from '../../../../services/balance.service';
 import { campaignService } from '../../services/campaign.service';
 import { useCartStore } from '../../stores/cart.store';
-import { useWizard } from '../useWizard';
 
 import {
   performAddToCart,

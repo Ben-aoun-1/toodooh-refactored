@@ -1,6 +1,6 @@
-import type { LocationAffluenceSlot } from '../features/screens/types/location';
-import { logger } from '../lib/logger';
-import { supabase } from '../lib/supabase';
+import { logger } from '../../../lib/logger';
+import { supabase } from '../../../lib/supabase';
+import type { LocationAffluenceSlot } from '../../screens/types/location';
 
 const log = logger.child({ module: 'campaign-screens.service' });
 

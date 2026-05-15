@@ -10,8 +10,8 @@ import { useAuthStore } from './features/auth/stores/auth.store';
 const AdvertiserLayout = lazy(() => import('./features/advertiser/components/AdvertiserLayout'));
 const AdvertiserDashboard = lazy(() => import('./features/advertiser/pages/AdvertiserDashboard'));
 const UserProfile = lazy(() => import('./features/advertiser/pages/UserProfile'));
-const NewCampaign = lazy(() => import('./pages/NewCampaign'));
-const MyCampaigns = lazy(() => import('./pages/MyCampaigns'));
+const NewCampaign = lazy(() => import('./features/campaigns/pages/NewCampaign'));
+const MyCampaigns = lazy(() => import('./features/campaigns/pages/MyCampaigns'));
 const Events = lazy(() => import('./features/events/pages/Events'));
 const MyRecharges = lazy(() => import('./features/wallet/pages/MyRecharges'));
 const MyInvoices = lazy(() => import('./features/wallet/pages/MyInvoices'));
@@ -19,9 +19,9 @@ const MyClients = lazy(() => import('./features/advertiser/pages/MyClients'));
 const AdvertiserPerformancePlaceholder = lazy(
   () => import('./features/performances/pages/AdvertiserPerformancePlaceholder'),
 );
-const CartPage = lazy(() => import('./pages/CartPage'));
+const CartPage = lazy(() => import('./features/campaigns/pages/CartPage'));
 const OwnerDashboard = lazy(() => import('./features/screenhost/pages/OwnerDashboard'));
-const CampaignDetails = lazy(() => import('./pages/CampaignDetails'));
+const CampaignDetails = lazy(() => import('./features/campaigns/pages/CampaignDetails'));
 const Login = lazy(() => import('./features/auth/pages/Login'));
 const SignUp = lazy(() => import('./features/auth/pages/SignUp'));
 const ResetPassword = lazy(() => import('./features/auth/pages/ResetPassword'));

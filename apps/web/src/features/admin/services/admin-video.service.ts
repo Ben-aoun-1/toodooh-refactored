@@ -190,7 +190,7 @@ export const adminVideoService = {
 
       if (campaigns && campaigns.length > 0) {
         // Importer le service de campagne pour utiliser injectCampaignPublicationSchedule
-        const { campaignService } = await import('../../../services/campaign.service');
+        const { campaignService } = await import('../../campaigns/services/campaign.service');
 
         for (const campaign of campaigns) {
           // Vérifier le solde avant d'activer

@@ -1,15 +1,8 @@
-import { buildHybridAdjustedHourlyPlan, type HourlyPlanSlotInput } from '../lib/dooh/hourly-plan';
-import { logger } from '../lib/logger';
-import { supabase } from '../lib/supabase';
-
-import {
-  getOccupiedRepetitionsByLocationFromHourlyPlan,
-  replaceCampaignHourlyLocationPlan,
-} from './campaign-hourly-location-plan.service';
+import { buildHybridAdjustedHourlyPlan, type HourlyPlanSlotInput } from '../../../lib/dooh/hourly-plan';
 import {
   computeRepetitionsPerHourVideo,
   resolveEffectiveVideoDuration,
-} from './dooh-calculation.service';
+} from '../../../lib/dooh/legacy/dooh-calculation.service';
 import {
   aggregateOccupiedRepetitionsByLocation,
   aggregateUnavailabilityByLocation,
@@ -24,8 +17,15 @@ import {
   type AffluenceSlot,
   type UnavailabilityPeriod,
   type SpecialEventWindow,
-} from './dooh-hourly-grid';
-import { getDoohConfigNumbers } from './global-configuration.service';
+} from '../../../lib/dooh/legacy/dooh-hourly-grid';
+import { logger } from '../../../lib/logger';
+import { supabase } from '../../../lib/supabase';
+import { getDoohConfigNumbers } from '../../../services/global-configuration.service';
+
+import {
+  getOccupiedRepetitionsByLocationFromHourlyPlan,
+  replaceCampaignHourlyLocationPlan,
+} from './campaign-hourly-location-plan.service';
 
 const log = logger.child({ module: 'campaign.service' });
 

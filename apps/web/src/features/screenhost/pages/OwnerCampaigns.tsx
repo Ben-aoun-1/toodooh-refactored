@@ -21,9 +21,9 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 import { logger } from '../../../lib/logger';
 import { supabase } from '../../../lib/supabase';
-import { campaignOwnerApprovalService } from '../../../services/campaign-owner-approval.service';
 import { getDoohConfigNumbers } from '../../../services/global-configuration.service';
 import { useAuthStore } from '../../auth/stores/auth.store';
+import { campaignOwnerApprovalService } from '../../campaigns/services/campaign-owner-approval.service';
 import OwnerNavigation from '../components/OwnerNavigation';
 import OwnerNotificationsBell from '../components/OwnerNotificationsBell';
 

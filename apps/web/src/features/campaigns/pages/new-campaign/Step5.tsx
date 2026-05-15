@@ -2,8 +2,8 @@ import { ArrowRight, CheckCircle, Info, Upload } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 
-import { getErrorMessage } from '../../lib/errors';
-import { logger } from '../../lib/logger';
+import { getErrorMessage } from '../../../../lib/errors';
+import { logger } from '../../../../lib/logger';
 import {
   readVideoDurationFromFile,
   readVideoDurationFromUrl,

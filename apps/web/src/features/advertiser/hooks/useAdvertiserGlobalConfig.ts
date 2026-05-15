@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   type DoohConfigNumbers,
   DEFAULT_DOOH_CONFIG_NUMBERS,
-} from '../../../services/dooh-calculation.service';
+} from '../../../lib/dooh/legacy/dooh-calculation.service';
 import {
   getDoohConfigNumbers,
   invalidateGlobalConfigurationCache,

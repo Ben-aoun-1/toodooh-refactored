@@ -8,14 +8,12 @@
  * L’affluence `location_affluence_schedule` est interrogée par **location_id** (souvent en parallèle
  * du fetch `screens` pour les ids wizard), pas « à cause » du retour des écrans.
  */
-import { logger } from '../lib/logger';
-import { supabase } from '../lib/supabase';
 
-import type { DoohConfigNumbers } from './dooh-calculation.service';
+import type { DoohConfigNumbers } from '../../../lib/dooh/legacy/dooh-calculation.service';
 import {
   computeRepetitionsPerHourVideo,
   effectiveVideoSecondsForDoohEstimate,
-} from './dooh-calculation.service';
+} from '../../../lib/dooh/legacy/dooh-calculation.service';
 import {
   computeCampaignDayCount,
   enumerateDoohLocationCampaignSlots,
@@ -23,7 +21,9 @@ import {
   type AffluenceSlot,
   type SpecialEventWindow,
   type UnavailabilityPeriod,
-} from './dooh-hourly-grid';
+} from '../../../lib/dooh/legacy/dooh-hourly-grid';
+import { logger } from '../../../lib/logger';
+import { supabase } from '../../../lib/supabase';
 
 const log = logger.child({ module: 'dooh-new-campaign-estimate.service' });
 

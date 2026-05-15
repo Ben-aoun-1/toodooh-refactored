@@ -21,9 +21,9 @@ import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 import { logger } from '../../../lib/logger';
-import { campaignOwnerApprovalService } from '../../../services/campaign-owner-approval.service';
 import { authService } from '../../auth/services/auth.service';
 import { useAuthStore } from '../../auth/stores/auth.store';
+import { campaignOwnerApprovalService } from '../../campaigns/services/campaign-owner-approval.service';
 import { screensService, Screen } from '../../screens/services/screens.service';
 import { revenueService, RevenueStats } from '../../wallet/services/revenue.service';
 import AddScreen from '../components/AddScreen';

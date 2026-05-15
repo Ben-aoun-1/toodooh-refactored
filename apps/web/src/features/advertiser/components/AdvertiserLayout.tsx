@@ -19,11 +19,11 @@ import financeIcon from '../../../assets/sidebar/portefeuille.png';
 import financeIconActive from '../../../assets/sidebar/portefeuilles.png';
 import supportIcon from '../../../assets/support.png';
 import supportIconActive from '../../../assets/supports.png';
-import CartSidebar from '../../../components/CartSidebar';
 import ContentErrorBoundary from '../../../components/ContentErrorBoundary';
 import { ModalProvider, useModal } from '../../../contexts/ModalContext';
-import { useCartStore } from '../../../stores/cart.store';
 import { useAuthStore } from '../../auth/stores/auth.store';
+import CartSidebar from '../../campaigns/components/CartSidebar';
+import { useCartStore } from '../../campaigns/stores/cart.store';
 
 import PageHeader from './PageHeader';
 import SidebarNavItem from './SidebarNavItem';

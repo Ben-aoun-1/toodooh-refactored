@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { Circle, MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
 
-import type { PredefinedZone } from '../../features/screens/services/predefined-zones.service';
+import type { PredefinedZone } from '../../../screens/services/predefined-zones.service';
 import type { GeographicZone } from '../../hooks/new-campaign/wizard-types';
 import {
   campaignScreensService,
