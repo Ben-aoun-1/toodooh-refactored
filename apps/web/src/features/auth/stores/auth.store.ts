@@ -2,11 +2,11 @@ import { User } from '@supabase/supabase-js';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-import { getErrorMessage } from '../../../lib/errors';
-import { logger } from '../../../lib/logger';
-import { supabase } from '../../../lib/supabase';
-import { useAdminStore } from '../../admin/stores/admin.store';
-import { authService } from '../services/auth.service';
+import { useAdminStore } from '@/features/admin/stores/admin.store';
+import { authService } from '@/features/auth/services/auth.service';
+import { getErrorMessage } from '@/lib/errors';
+import { logger } from '@/lib/logger';
+import { supabase } from '@/lib/supabase';
 
 
 const log = logger.child({ module: 'auth.store' });

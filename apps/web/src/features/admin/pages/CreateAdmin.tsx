@@ -3,10 +3,10 @@ import React, { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
-import { getErrorMessage } from '../../../lib/errors';
-import AdminLayout from '../components/AdminLayout';
-import { adminService } from '../services/admin.service';
-import { useAdminStore } from '../stores/admin.store';
+import AdminLayout from '@/features/admin/components/AdminLayout';
+import { adminService } from '@/features/admin/services/admin.service';
+import { useAdminStore } from '@/features/admin/stores/admin.store';
+import { getErrorMessage } from '@/lib/errors';
 
 interface AdminFormData {
   email: string;

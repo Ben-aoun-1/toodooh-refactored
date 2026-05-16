@@ -1,6 +1,6 @@
-import type { HourlyPlanSlotOutput } from '../../../lib/dooh/hourly-plan';
-import { logger } from '../../../lib/logger';
-import { supabase } from '../../../lib/supabase';
+import type { HourlyPlanSlotOutput } from '@/lib/dooh/hourly-plan';
+import { logger } from '@/lib/logger';
+import { supabase } from '@/lib/supabase';
 
 const log = logger.child({ module: 'campaign-hourly-location-plan.service' });
 

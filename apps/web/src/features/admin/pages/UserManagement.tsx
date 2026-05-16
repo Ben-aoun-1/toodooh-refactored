@@ -20,12 +20,12 @@ import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { useLocation } from 'react-router-dom';
 
-import { getErrorMessage } from '../../../lib/errors';
-import { logger } from '../../../lib/logger';
-import { supabase } from '../../../lib/supabase';
-import AdminLayout from '../components/AdminLayout';
-import { adminUserService, AdminUser } from '../services/admin-user.service';
-import { useAdminStore } from '../stores/admin.store';
+import AdminLayout from '@/features/admin/components/AdminLayout';
+import { adminUserService, AdminUser } from '@/features/admin/services/admin-user.service';
+import { useAdminStore } from '@/features/admin/stores/admin.store';
+import { getErrorMessage } from '@/lib/errors';
+import { logger } from '@/lib/logger';
+import { supabase } from '@/lib/supabase';
 
 const log = logger.child({ module: 'UserManagement' });
 

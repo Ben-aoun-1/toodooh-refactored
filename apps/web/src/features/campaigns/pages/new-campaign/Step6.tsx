@@ -1,7 +1,7 @@
 import { ArrowRight, Check, DollarSign, Info, Monitor, Target, TrendingUp } from 'lucide-react';
 
-import type { ParcTV, WizardState } from '../../hooks/new-campaign/wizard-types';
-import { zonesAreaKm2 } from '../../lib/wizard-zones';
+import type { ParcTV, WizardState } from '@/features/campaigns/hooks/new-campaign/wizard-types';
+import { zonesAreaKm2 } from '@/features/campaigns/lib/wizard-zones';
 
 import type { ApprovedVideo } from './Step5';
 

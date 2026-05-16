@@ -16,12 +16,12 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { MapContainer, TileLayer, Circle, useMapEvents, Marker } from 'react-leaflet';
 
-import { getErrorMessage } from '../../../lib/errors';
+import AdminLayout from '@/features/admin/components/AdminLayout';
 import {
   predefinedZonesService,
   type PredefinedZone,
-} from '../../screens/services/predefined-zones.service';
-import AdminLayout from '../components/AdminLayout';
+} from '@/features/screens/services/predefined-zones.service';
+import { getErrorMessage } from '@/lib/errors';
 import 'leaflet/dist/leaflet.css';
 
 // Fix pour les icônes Leaflet

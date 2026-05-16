@@ -1,7 +1,7 @@
 import { AlertCircle, ArrowRight, Check, Info, Monitor } from 'lucide-react';
 import { useState } from 'react';
 
-import type { ParcTV } from '../../hooks/new-campaign/wizard-types';
+import type { ParcTV } from '@/features/campaigns/hooks/new-campaign/wizard-types';
 
 interface Step2Props {
   // Branch selector

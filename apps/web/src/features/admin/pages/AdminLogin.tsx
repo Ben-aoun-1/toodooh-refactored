@@ -3,9 +3,9 @@ import React, { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
-import AnimatedLogo from '../../../components/AnimatedLogo';
-import { getErrorMessage } from '../../../lib/errors';
-import { useAdminStore } from '../stores/admin.store';
+import AnimatedLogo from '@/components/AnimatedLogo';
+import { useAdminStore } from '@/features/admin/stores/admin.store';
+import { getErrorMessage } from '@/lib/errors';
 
 export default function AdminLogin() {
   const navigate = useNavigate();

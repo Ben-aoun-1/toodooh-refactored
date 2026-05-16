@@ -1,5 +1,5 @@
-import { zonesLabel } from '../../lib/wizard-zones';
-import type { CreateCampaignData } from '../../services/campaign.service';
+import { zonesLabel } from '@/features/campaigns/lib/wizard-zones';
+import type { CreateCampaignData } from '@/features/campaigns/services/campaign.service';
 
 import type {
   AddToCartResult,

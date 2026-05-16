@@ -1,6 +1,6 @@
-import { getErrorMessage } from '../../../lib/errors';
-import { logger } from '../../../lib/logger';
-import { supabase } from '../../../lib/supabase';
+import { getErrorMessage } from '@/lib/errors';
+import { logger } from '@/lib/logger';
+import { supabase } from '@/lib/supabase';
 
 const log = logger.child({ module: 'video-upload.service' });
 

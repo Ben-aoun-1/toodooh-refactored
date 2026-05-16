@@ -13,8 +13,8 @@ import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
-import { useAuthStore } from '../../auth/stores/auth.store';
-import OwnerNavigation from '../components/OwnerNavigation';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
+import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
 
 interface GiftItem {
   id: string;

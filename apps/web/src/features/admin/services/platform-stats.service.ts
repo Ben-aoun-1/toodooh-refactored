@@ -1,5 +1,3 @@
-import { logger } from '../../../lib/logger';
-import { supabase } from '../../../lib/supabase';
 import {
   PlatformGlobalStats,
   PlatformRevenueStats,
@@ -7,7 +5,9 @@ import {
   CampaignsPerformance,
   TopPerformingScreen,
   RecentActivity,
-} from '../types/platform-stats';
+} from '@/features/admin/types/platform-stats';
+import { logger } from '@/lib/logger';
+import { supabase } from '@/lib/supabase';
 
 const log = logger.child({ module: 'platform-stats.service' });
 

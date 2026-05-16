@@ -22,12 +22,12 @@ import { toast } from 'react-hot-toast';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 import 'react-datepicker/dist/react-datepicker.css';
-import campagneIcon from '../../../assets/sidebar/campagnes.png';
-import { logger } from '../../../lib/logger';
-import { supabase } from '../../../lib/supabase';
-import { balanceService } from '../../../services/balance.service';
-import { useAuthStore } from '../../auth/stores/auth.store';
-import { campaignService } from '../services/campaign.service';
+import campagneIcon from '@/assets/sidebar/campagnes.png';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
+import { campaignService } from '@/features/campaigns/services/campaign.service';
+import { logger } from '@/lib/logger';
+import { supabase } from '@/lib/supabase';
+import { balanceService } from '@/services/balance.service';
 
 const log = logger.child({ module: 'MyCampaigns' });
 

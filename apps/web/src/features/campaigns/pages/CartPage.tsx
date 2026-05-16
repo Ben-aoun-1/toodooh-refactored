@@ -14,13 +14,13 @@ import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
-import { supabase } from '../../../lib/supabase';
-import { balanceService } from '../../../services/balance.service';
-import { useAuthStore } from '../../auth/stores/auth.store';
-import { eventsService } from '../../events/services/events.service';
-import type { SpecialEvent } from '../../events/types/event';
-import { campaignService } from '../services/campaign.service';
-import { useCartStore, type CartItem } from '../stores/cart.store';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
+import { campaignService } from '@/features/campaigns/services/campaign.service';
+import { useCartStore, type CartItem } from '@/features/campaigns/stores/cart.store';
+import { eventsService } from '@/features/events/services/events.service';
+import type { SpecialEvent } from '@/features/events/types/event';
+import { supabase } from '@/lib/supabase';
+import { balanceService } from '@/services/balance.service';
 
 const TVA_RATE = 0.19;
 

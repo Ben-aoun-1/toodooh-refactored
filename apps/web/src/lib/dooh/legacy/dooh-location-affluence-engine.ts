@@ -1,5 +1,4 @@
-import { logger } from '../../logger';
-import { type DoohConfigNumbers } from '../config';
+import { type DoohConfigNumbers } from '@/lib/dooh/config';
 import {
   MS_PER_DAY,
   jsGetDayToDbDayOfWeek,
@@ -8,7 +7,8 @@ import {
   computeCampaignDayCount,
   formatLocalCalendarDate,
   localSlotRange,
-} from '../dates';
+} from '@/lib/dooh/dates';
+import { logger } from '@/lib/logger';
 
 const log = logger.child({ module: 'dooh-location-affluence-engine' });
 

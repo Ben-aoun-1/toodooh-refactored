@@ -20,16 +20,16 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
-import { logger } from '../../../lib/logger';
-import { authService } from '../../auth/services/auth.service';
-import { useAuthStore } from '../../auth/stores/auth.store';
-import { campaignOwnerApprovalService } from '../../campaigns/services/campaign-owner-approval.service';
-import { screensService, Screen } from '../../screens/services/screens.service';
-import { revenueService, RevenueStats } from '../../wallet/services/revenue.service';
-import AddScreen from '../components/AddScreen';
-import GiftCatalog from '../components/GiftCatalog';
-import OwnerNavigation from '../components/OwnerNavigation';
-import OwnerNotificationsBell from '../components/OwnerNotificationsBell';
+import { authService } from '@/features/auth/services/auth.service';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
+import { campaignOwnerApprovalService } from '@/features/campaigns/services/campaign-owner-approval.service';
+import AddScreen from '@/features/screenhost/components/AddScreen';
+import GiftCatalog from '@/features/screenhost/components/GiftCatalog';
+import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
+import OwnerNotificationsBell from '@/features/screenhost/components/OwnerNotificationsBell';
+import { screensService, Screen } from '@/features/screens/services/screens.service';
+import { revenueService, RevenueStats } from '@/features/wallet/services/revenue.service';
+import { logger } from '@/lib/logger';
 
 const log = logger.child({ module: 'OwnerDashboard' });
 

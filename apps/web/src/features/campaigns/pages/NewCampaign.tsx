@@ -1,4 +1,3 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import 'react-datepicker/dist/react-datepicker.css';
 import {
   MapPin,
@@ -11,60 +10,60 @@ import {
   LayoutList,
   ChevronRight,
 } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate, useLocation } from 'react-router-dom';
 
-import ariane1 from '../../../assets/ariane/1.png';
-import ariane1s from '../../../assets/ariane/1s.png';
-import ariane2 from '../../../assets/ariane/2.png';
-import ariane2s from '../../../assets/ariane/2s.png';
-import ariane3 from '../../../assets/ariane/3.png';
-import ariane3s from '../../../assets/ariane/3s.png';
-import ariane4 from '../../../assets/ariane/4.png';
-import ariane4s from '../../../assets/ariane/4s.png';
-import ariane5 from '../../../assets/ariane/5.png';
-import ariane5s from '../../../assets/ariane/5s.png';
-import ariane6 from '../../../assets/ariane/6.png';
-import ariane6s from '../../../assets/ariane/6s.png';
-import { getErrorMessage } from '../../../lib/errors';
-import { logger } from '../../../lib/logger';
-import { supabase } from '../../../lib/supabase';
-import { balanceService } from '../../../services/balance.service';
-import { useAdvertiserGlobalConfig } from '../../advertiser/hooks/useAdvertiserGlobalConfig';
-import { authService } from '../../auth/services/auth.service';
-import { useAuthStore } from '../../auth/stores/auth.store';
-import type { BusinessSector } from '../../auth/types/auth';
-import type { SpecialEvent } from '../../events/types/event';
-import { predefinedZonesService, type PredefinedZone } from '../../screens/services/predefined-zones.service';
-import { screensService, type UnavailabilityPeriod } from '../../screens/services/screens.service';
-import { useCampaignWizard } from '../hooks/new-campaign/useCampaignWizard';
-import { buildInitialWizardState } from '../hooks/new-campaign/wizard-init';
+import ariane1 from '@/assets/ariane/1.png';
+import ariane1s from '@/assets/ariane/1s.png';
+import ariane2 from '@/assets/ariane/2.png';
+import ariane2s from '@/assets/ariane/2s.png';
+import ariane3 from '@/assets/ariane/3.png';
+import ariane3s from '@/assets/ariane/3s.png';
+import ariane4 from '@/assets/ariane/4.png';
+import ariane4s from '@/assets/ariane/4s.png';
+import ariane5 from '@/assets/ariane/5.png';
+import ariane5s from '@/assets/ariane/5s.png';
+import ariane6 from '@/assets/ariane/6.png';
+import ariane6s from '@/assets/ariane/6s.png';
+import { useAdvertiserGlobalConfig } from '@/features/advertiser/hooks/useAdvertiserGlobalConfig';
+import { authService } from '@/features/auth/services/auth.service';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
+import type { BusinessSector } from '@/features/auth/types/auth';
+import { useCampaignWizard } from '@/features/campaigns/hooks/new-campaign/useCampaignWizard';
+import { buildInitialWizardState } from '@/features/campaigns/hooks/new-campaign/wizard-init';
 import type {
   GeographicZone,
   ParcTV,
   UseCampaignWizardOptions,
   WizardState,
-} from '../hooks/new-campaign/wizard-types';
-import { parseCampaignUiDate, toLocalDateOnlyString } from '../lib/wizard-dates';
-import { zonesLabel } from '../lib/wizard-zones';
+} from '@/features/campaigns/hooks/new-campaign/wizard-types';
+import { parseCampaignUiDate, toLocalDateOnlyString } from '@/features/campaigns/lib/wizard-dates';
+import { zonesLabel } from '@/features/campaigns/lib/wizard-zones';
+import PostCartStep from '@/features/campaigns/pages/new-campaign/PostCartStep';
+import Step1NameType from '@/features/campaigns/pages/new-campaign/Step1NameType';
+import Step2 from '@/features/campaigns/pages/new-campaign/Step2';
+import Step3 from '@/features/campaigns/pages/new-campaign/Step3';
+import Step4 from '@/features/campaigns/pages/new-campaign/Step4';
+import Step5, { type ApprovedVideo } from '@/features/campaigns/pages/new-campaign/Step5';
+import Step6 from '@/features/campaigns/pages/new-campaign/Step6';
 import {
   campaignScreensService,
   type CampaignLocation,
-} from '../services/campaign-screens.service';
-import { campaignService } from '../services/campaign.service';
+} from '@/features/campaigns/services/campaign-screens.service';
+import { campaignService } from '@/features/campaigns/services/campaign.service';
 import {
   buildWizardLocationScheduleMap,
   computeNewCampaignDoohMaxImpressions,
-} from '../services/dooh-new-campaign-estimate.service';
-import { useCartStore } from '../stores/cart.store';
-
-import PostCartStep from './new-campaign/PostCartStep';
-import Step1NameType from './new-campaign/Step1NameType';
-import Step2 from './new-campaign/Step2';
-import Step3 from './new-campaign/Step3';
-import Step4 from './new-campaign/Step4';
-import Step5, { type ApprovedVideo } from './new-campaign/Step5';
-import Step6 from './new-campaign/Step6';
+} from '@/features/campaigns/services/dooh-new-campaign-estimate.service';
+import { useCartStore } from '@/features/campaigns/stores/cart.store';
+import type { SpecialEvent } from '@/features/events/types/event';
+import { predefinedZonesService, type PredefinedZone } from '@/features/screens/services/predefined-zones.service';
+import { screensService, type UnavailabilityPeriod } from '@/features/screens/services/screens.service';
+import { getErrorMessage } from '@/lib/errors';
+import { logger } from '@/lib/logger';
+import { supabase } from '@/lib/supabase';
+import { balanceService } from '@/services/balance.service';
 
 const log = logger.child({ module: 'NewCampaign' });
 

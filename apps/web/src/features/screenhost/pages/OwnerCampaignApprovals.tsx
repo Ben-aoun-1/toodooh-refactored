@@ -12,12 +12,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
-import { useAuthStore } from '../../auth/stores/auth.store';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
 import {
   campaignOwnerApprovalService,
   PendingCampaign,
-} from '../../campaigns/services/campaign-owner-approval.service';
-import OwnerNavigation from '../components/OwnerNavigation';
+} from '@/features/campaigns/services/campaign-owner-approval.service';
+import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
 
 export default function OwnerCampaignApprovals() {
   const navigate = useNavigate();

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { CampaignLocation } from '../../services/campaign-screens.service';
+import type { CampaignLocation } from '@/features/campaigns/services/campaign-screens.service';
 
 import { performAddToCart, performSaveDraft, serializeForDraft } from './wizard-serialize';
 import {

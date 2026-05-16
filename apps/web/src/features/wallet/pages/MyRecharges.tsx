@@ -16,9 +16,9 @@ import { useState, useEffect, useMemo } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
-import { supabase } from '../../../lib/supabase';
-import { balanceService } from '../../../services/balance.service';
-import { useAuthStore } from '../../auth/stores/auth.store';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
+import { supabase } from '@/lib/supabase';
+import { balanceService } from '@/services/balance.service';
 
 interface Transaction {
   id: string;

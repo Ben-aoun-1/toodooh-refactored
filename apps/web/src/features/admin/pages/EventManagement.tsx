@@ -15,13 +15,13 @@ import {
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 
-import { getErrorMessage } from '../../../lib/errors';
-import { logger } from '../../../lib/logger';
-import { supabase } from '../../../lib/supabase';
-import { SpecialEvent, CreateEventDTO, EventStats } from '../../events/types/event';
-import AdminLayout from '../components/AdminLayout';
-import { adminEventsService } from '../services/admin-events.service';
-import { useAdminStore } from '../stores/admin.store';
+import AdminLayout from '@/features/admin/components/AdminLayout';
+import { adminEventsService } from '@/features/admin/services/admin-events.service';
+import { useAdminStore } from '@/features/admin/stores/admin.store';
+import { SpecialEvent, CreateEventDTO, EventStats } from '@/features/events/types/event';
+import { getErrorMessage } from '@/lib/errors';
+import { logger } from '@/lib/logger';
+import { supabase } from '@/lib/supabase';
 
 const log = logger.child({ module: 'EventManagement' });
 

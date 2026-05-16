@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
-import { logger } from '../../../lib/logger';
-import { authService } from '../../auth/services/auth.service';
+import { authService } from '@/features/auth/services/auth.service';
+import { logger } from '@/lib/logger';
 
 const log = logger.child({ module: 'useUserProfile' });
 

@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase } from '@/lib/supabase';
 
 // Script pour vérifier la structure des tables admin
 export async function checkTableStructure() {

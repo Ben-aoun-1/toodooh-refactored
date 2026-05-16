@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 
-import { logger } from '../../../lib/logger';
-import { supabase } from '../../../lib/supabase';
-import { balanceService } from '../../../services/balance.service';
+import { logger } from '@/lib/logger';
+import { supabase } from '@/lib/supabase';
+import { balanceService } from '@/services/balance.service';
 
 const log = logger.child({ module: 'useDashboardStats' });
 

@@ -1,7 +1,7 @@
-import { getErrorMessage } from '../../../lib/errors';
-import { logger } from '../../../lib/logger';
-import { supabase } from '../../../lib/supabase';
-import { AdminProfile, AdminSignUpData, AdminDashboardStats, AdminActivity } from '../types/admin';
+import { AdminProfile, AdminSignUpData, AdminDashboardStats, AdminActivity } from '@/features/admin/types/admin';
+import { getErrorMessage } from '@/lib/errors';
+import { logger } from '@/lib/logger';
+import { supabase } from '@/lib/supabase';
 
 const log = logger.child({ module: 'admin.service' });
 

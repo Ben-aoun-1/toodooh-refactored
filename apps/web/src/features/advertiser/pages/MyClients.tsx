@@ -16,8 +16,8 @@ import {
 import React, { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 
-import { supabase } from '../../../lib/supabase';
-import { useAuthStore } from '../../auth/stores/auth.store';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
+import { supabase } from '@/lib/supabase';
 
 function getMonth(dateStr: string) {
   return new Date(dateStr).getMonth() + 1;

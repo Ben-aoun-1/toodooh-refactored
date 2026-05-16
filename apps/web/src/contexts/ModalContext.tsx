@@ -3,12 +3,12 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
-import supportIcon from '../assets/support.png';
-import { authService } from '../features/auth/services/auth.service';
-import { useAuthStore } from '../features/auth/stores/auth.store';
-import { getErrorMessage } from '../lib/errors';
-import { MONTHS_FR, WEEKDAYS_FR } from '../lib/locale';
-import { getCalendarDays, isDatePast } from '../lib/ui-dates';
+import supportIcon from '@/assets/support.png';
+import { authService } from '@/features/auth/services/auth.service';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
+import { getErrorMessage } from '@/lib/errors';
+import { MONTHS_FR, WEEKDAYS_FR } from '@/lib/locale';
+import { getCalendarDays, isDatePast } from '@/lib/ui-dates';
 
 const APPOINTMENT_OBJECTIVES_FALLBACK = [
   'Renseignements',

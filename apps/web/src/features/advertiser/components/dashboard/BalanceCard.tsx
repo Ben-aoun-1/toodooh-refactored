@@ -1,7 +1,7 @@
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
-import smart3Icon from '../../../../assets/smart3.png';
+import smart3Icon from '@/assets/smart3.png';
 
 interface BalanceCardProps {
   balance: string;

@@ -23,11 +23,9 @@ import {
   YAxis,
 } from 'recharts';
 
-import performanceIntroIcon from '../../../assets/performance/1.png';
-import { logger } from '../../../lib/logger';
-import { supabase } from '../../../lib/supabase';
-import { useAuthStore } from '../../auth/stores/auth.store';
-import { performanceService } from '../../performances/services/performance.service';
+import performanceIntroIcon from '@/assets/performance/1.png';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
+import { performanceService } from '@/features/performances/services/performance.service';
 import type {
   PerformanceCategoryPoint,
   PerformanceDataset,
@@ -35,9 +33,11 @@ import type {
   PerformanceKpis,
   PerformancePeriodPreset,
   PerformanceTrendPoint,
-} from '../../performances/types/performance';
-import OwnerNavigation from '../components/OwnerNavigation';
-import OwnerNotificationsBell from '../components/OwnerNotificationsBell';
+} from '@/features/performances/types/performance';
+import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
+import OwnerNotificationsBell from '@/features/screenhost/components/OwnerNotificationsBell';
+import { logger } from '@/lib/logger';
+import { supabase } from '@/lib/supabase';
 
 const log = logger.child({ module: 'OwnerPerformance' });
 

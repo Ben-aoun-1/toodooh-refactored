@@ -1,5 +1,5 @@
-import { logger } from '../../../lib/logger';
-import { supabase } from '../../../lib/supabase';
+import { logger } from '@/lib/logger';
+import { supabase } from '@/lib/supabase';
 
 const log = logger.child({ module: 'admin-user.service' });
 

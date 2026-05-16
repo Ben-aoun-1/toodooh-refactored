@@ -1,4 +1,3 @@
-import { supabase } from '../../../lib/supabase';
 import type {
   PerformanceDataset,
   PerformanceFilters,
@@ -7,7 +6,8 @@ import type {
   PerformanceTopCampaign,
   PerformanceZonePoint,
   PerformanceDetailedMetrics,
-} from '../types/performance';
+} from '@/features/performances/types/performance';
+import { supabase } from '@/lib/supabase';
 
 type CampaignRow = {
   id: string;

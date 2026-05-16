@@ -2,14 +2,14 @@ import { ArrowRight, CheckCircle, Info, Upload } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 
-import { getErrorMessage } from '../../../../lib/errors';
-import { logger } from '../../../../lib/logger';
 import {
   readVideoDurationFromFile,
   readVideoDurationFromUrl,
   type UploadProgress,
   videoUploadService,
-} from '../../services/video-upload.service';
+} from '@/features/campaigns/services/video-upload.service';
+import { getErrorMessage } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 
 const log = logger.child({ module: 'Step5' });
 

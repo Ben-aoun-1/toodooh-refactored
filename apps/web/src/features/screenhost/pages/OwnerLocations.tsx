@@ -17,10 +17,10 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
-import { useAuthStore } from '../../auth/stores/auth.store';
-import { screensService, Screen } from '../../screens/services/screens.service';
-import LocationsMap from '../components/LocationsMap';
-import OwnerNavigation from '../components/OwnerNavigation';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
+import LocationsMap from '@/features/screenhost/components/LocationsMap';
+import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
+import { screensService, Screen } from '@/features/screens/services/screens.service';
 
 interface LocationStats {
   totalLocations: number;

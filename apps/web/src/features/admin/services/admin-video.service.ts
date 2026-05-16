@@ -1,6 +1,6 @@
-import { logger } from '../../../lib/logger';
-import { supabase } from '../../../lib/supabase';
-import { Video, VideoValidationStats, CampaignUsingVideo } from '../types/video';
+import { Video, VideoValidationStats, CampaignUsingVideo } from '@/features/admin/types/video';
+import { logger } from '@/lib/logger';
+import { supabase } from '@/lib/supabase';
 
 const log = logger.child({ module: 'admin-video.service' });
 
@@ -190,11 +190,11 @@ export const adminVideoService = {
 
       if (campaigns && campaigns.length > 0) {
         // Importer le service de campagne pour utiliser injectCampaignPublicationSchedule
-        const { campaignService } = await import('../../campaigns/services/campaign.service');
+        const { campaignService } = await import('@/features/campaigns/services/campaign.service');
 
         for (const campaign of campaigns) {
           // Vérifier le solde avant d'activer
-          const { balanceService } = await import('../../../services/balance.service');
+          const { balanceService } = await import('@/services/balance.service');
           const balanceCheck = await balanceService.checkCampaignBalance(campaign.id);
 
           if (balanceCheck && balanceCheck.has_sufficient_balance) {

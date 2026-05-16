@@ -1,14 +1,14 @@
 
-import { useAuthStore } from '../../auth/stores/auth.store';
-import BalanceCard from '../components/dashboard/BalanceCard';
-import FeaturedEventsGrid from '../components/dashboard/FeaturedEventsGrid';
-import GettingStartedSection from '../components/dashboard/GettingStartedSection';
-import InsightsCard from '../components/dashboard/InsightsCard';
-import LastCampaignsGrid from '../components/dashboard/LastCampaignsGrid';
-import StatsGrid from '../components/dashboard/StatsGrid';
-import { useDashboardStats } from '../hooks/useDashboardStats';
-import { useLastCampaigns } from '../hooks/useLastCampaigns';
-import { useUserProfile } from '../hooks/useUserProfile';
+import BalanceCard from '@/features/advertiser/components/dashboard/BalanceCard';
+import FeaturedEventsGrid from '@/features/advertiser/components/dashboard/FeaturedEventsGrid';
+import GettingStartedSection from '@/features/advertiser/components/dashboard/GettingStartedSection';
+import InsightsCard from '@/features/advertiser/components/dashboard/InsightsCard';
+import LastCampaignsGrid from '@/features/advertiser/components/dashboard/LastCampaignsGrid';
+import StatsGrid from '@/features/advertiser/components/dashboard/StatsGrid';
+import { useDashboardStats } from '@/features/advertiser/hooks/useDashboardStats';
+import { useLastCampaigns } from '@/features/advertiser/hooks/useLastCampaigns';
+import { useUserProfile } from '@/features/advertiser/hooks/useUserProfile';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
 
 export default function AdvertiserDashboard() {
   const user = useAuthStore((s) => s.user);

@@ -1,7 +1,7 @@
-import statIcon1 from '../../../../assets/stats/1.png';
-import statIcon2 from '../../../../assets/stats/2.png';
-import statIcon3 from '../../../../assets/stats/3.png';
-import statIcon4 from '../../../../assets/stats/4.png';
+import statIcon1 from '@/assets/stats/1.png';
+import statIcon2 from '@/assets/stats/2.png';
+import statIcon3 from '@/assets/stats/3.png';
+import statIcon4 from '@/assets/stats/4.png';
 
 interface StatsGridProps {
   campaignsDiffused: number;

@@ -2,9 +2,9 @@ import { Bell, CalendarDays, FileText, Settings, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { logger } from '../../../lib/logger';
-import { supabase } from '../../../lib/supabase';
-import { campaignOwnerApprovalService } from '../../campaigns/services/campaign-owner-approval.service';
+import { campaignOwnerApprovalService } from '@/features/campaigns/services/campaign-owner-approval.service';
+import { logger } from '@/lib/logger';
+import { supabase } from '@/lib/supabase';
 
 const log = logger.child({ module: 'OwnerNotificationsBell' });
 

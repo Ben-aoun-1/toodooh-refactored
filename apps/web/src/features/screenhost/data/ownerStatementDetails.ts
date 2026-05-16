@@ -1,4 +1,4 @@
-import type { OwnerStatementDetail } from '../types/ownerStatement';
+import type { OwnerStatementDetail } from '@/features/screenhost/types/ownerStatement';
 
 /** Détail par relevé — à remplacer par API */
 const DETAILS: OwnerStatementDetail[] = [

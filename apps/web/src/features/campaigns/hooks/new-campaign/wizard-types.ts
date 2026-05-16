@@ -1,4 +1,4 @@
-import type { CampaignLocation } from '../../services/campaign-screens.service';
+import type { CampaignLocation } from '@/features/campaigns/services/campaign-screens.service';
 
 export interface GeographicZone {
   id: string;

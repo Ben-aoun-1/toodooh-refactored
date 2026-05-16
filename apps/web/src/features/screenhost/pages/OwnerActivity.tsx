@@ -1,6 +1,6 @@
 
 
-import OwnerNavigation from '../components/OwnerNavigation';
+import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
 export default function OwnerActivity() {
   return (
     <div className="min-h-screen bg-white flex">

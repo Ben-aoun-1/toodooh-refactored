@@ -2,10 +2,10 @@ import { ChevronDown, ChevronRight, MapPin, Monitor, Search, Activity } from 'lu
 import React, { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 
-import AdminLayout from '../components/AdminLayout';
-import AffluenceModal from '../components/AffluenceModal';
-import { adminScreensService } from '../services/admin-screens.service';
-import type { AdminLocation, AdminLocationStatus } from '../services/admin-screens.service';
+import AdminLayout from '@/features/admin/components/AdminLayout';
+import AffluenceModal from '@/features/admin/components/AffluenceModal';
+import { adminScreensService } from '@/features/admin/services/admin-screens.service';
+import type { AdminLocation, AdminLocationStatus } from '@/features/admin/services/admin-screens.service';
 
 export default function ScreenManagement() {
   const [locations, setLocations] = useState<AdminLocation[]>([]);

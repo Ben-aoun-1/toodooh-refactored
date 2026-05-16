@@ -3,15 +3,15 @@ import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate, useParams } from 'react-router-dom';
 
-import logoImage from '../../../assets/logo.png';
-import { authService } from '../../auth/services/auth.service';
-import { useAuthStore } from '../../auth/stores/auth.store';
-import OwnerNavigation from '../components/OwnerNavigation';
-import { TOODOOH_STATEMENT_EMITTER, OWNER_STATEMENT_FOOTER } from '../constants/ownerStatement';
-import { getOwnerStatementDetail } from '../data/ownerStatementDetails';
-import { exportService } from '../services/export.service';
-import type { OwnerStatementDetail, StatementRecipientDisplay } from '../types/ownerStatement';
-import { buildStatementRecipient } from '../utils/statementRecipient';
+import logoImage from '@/assets/logo.png';
+import { authService } from '@/features/auth/services/auth.service';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
+import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
+import { TOODOOH_STATEMENT_EMITTER, OWNER_STATEMENT_FOOTER } from '@/features/screenhost/constants/ownerStatement';
+import { getOwnerStatementDetail } from '@/features/screenhost/data/ownerStatementDetails';
+import { exportService } from '@/features/screenhost/services/export.service';
+import type { OwnerStatementDetail, StatementRecipientDisplay } from '@/features/screenhost/types/ownerStatement';
+import { buildStatementRecipient } from '@/features/screenhost/utils/statementRecipient';
 
 export default function OwnerStatementDetailPage() {
   const { statementId } = useParams<{ statementId: string }>();

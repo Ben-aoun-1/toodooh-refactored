@@ -22,11 +22,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { toast } from 'react-hot-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import { supabase } from '../../../lib/supabase';
-import { authService } from '../../auth/services/auth.service';
-import { useAuthStore } from '../../auth/stores/auth.store';
-import type { BusinessProfile, BusinessSector, Governorate } from '../../auth/types/auth';
-import OwnerNavigation from '../components/OwnerNavigation';
+import { authService } from '@/features/auth/services/auth.service';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
+import type { BusinessProfile, BusinessSector, Governorate } from '@/features/auth/types/auth';
+import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
+import { supabase } from '@/lib/supabase';
 
 type TabId = 'responsable' | 'entreprise' | 'notifications' | 'confidentialite';
 type EntrepriseSubId = 'informations' | 'adresse' | 'documents' | 'coordonnees-bancaires';

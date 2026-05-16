@@ -5,12 +5,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { Circle, MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
 
-import type { PredefinedZone } from '../../../screens/services/predefined-zones.service';
-import type { GeographicZone } from '../../hooks/new-campaign/wizard-types';
+import type { GeographicZone } from '@/features/campaigns/hooks/new-campaign/wizard-types';
 import {
   campaignScreensService,
   type CampaignLocation,
-} from '../../services/campaign-screens.service';
+} from '@/features/campaigns/services/campaign-screens.service';
+import type { PredefinedZone } from '@/features/screens/services/predefined-zones.service';
 
 // Leaflet's default icon URLs are broken under bundlers (the bundler can't
 // see asset paths embedded in the package). The fix is the same one used

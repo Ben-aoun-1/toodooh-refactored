@@ -3,10 +3,10 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 
-import logoFullSrc from '../../../assets/logo.png';
-import { RevenueData, ScreenRevenue, MonthlyComparison } from '../../wallet/services/revenue.service';
-import { TOODOOH_STATEMENT_EMITTER, OWNER_STATEMENT_FOOTER } from '../constants/ownerStatement';
-import type { OwnerStatementDetail, StatementRecipientDisplay } from '../types/ownerStatement';
+import logoFullSrc from '@/assets/logo.png';
+import { TOODOOH_STATEMENT_EMITTER, OWNER_STATEMENT_FOOTER } from '@/features/screenhost/constants/ownerStatement';
+import type { OwnerStatementDetail, StatementRecipientDisplay } from '@/features/screenhost/types/ownerStatement';
+import { RevenueData, ScreenRevenue, MonthlyComparison } from '@/features/wallet/services/revenue.service';
 
 
 function loadImageAsBase64(src: string): Promise<string> {

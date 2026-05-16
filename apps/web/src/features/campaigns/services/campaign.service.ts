@@ -1,8 +1,8 @@
-import { buildHybridAdjustedHourlyPlan, type HourlyPlanSlotInput } from '../../../lib/dooh/hourly-plan';
+import { buildHybridAdjustedHourlyPlan, type HourlyPlanSlotInput } from '@/lib/dooh/hourly-plan';
 import {
   computeRepetitionsPerHourVideo,
   resolveEffectiveVideoDuration,
-} from '../../../lib/dooh/legacy/dooh-calculation.service';
+} from '@/lib/dooh/legacy/dooh-calculation.service';
 import {
   aggregateOccupiedRepetitionsByLocation,
   aggregateUnavailabilityByLocation,
@@ -17,10 +17,10 @@ import {
   type AffluenceSlot,
   type UnavailabilityPeriod,
   type SpecialEventWindow,
-} from '../../../lib/dooh/legacy/dooh-hourly-grid';
-import { logger } from '../../../lib/logger';
-import { supabase } from '../../../lib/supabase';
-import { getDoohConfigNumbers } from '../../../services/global-configuration.service';
+} from '@/lib/dooh/legacy/dooh-hourly-grid';
+import { logger } from '@/lib/logger';
+import { supabase } from '@/lib/supabase';
+import { getDoohConfigNumbers } from '@/services/global-configuration.service';
 
 import {
   getOccupiedRepetitionsByLocationFromHourlyPlan,

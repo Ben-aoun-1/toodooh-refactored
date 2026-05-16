@@ -1,5 +1,3 @@
-import { logger } from '../../../lib/logger';
-import { supabase } from '../../../lib/supabase';
 import {
   CampaignMonitoringData,
   CampaignGlobalStats,
@@ -8,7 +6,9 @@ import {
   MostUsedScreen,
   CampaignLocation,
   CampaignImpressionProgress,
-} from '../types/campaign-monitoring';
+} from '@/features/admin/types/campaign-monitoring';
+import { logger } from '@/lib/logger';
+import { supabase } from '@/lib/supabase';
 
 const log = logger.child({ module: 'admin-campaign-monitoring.service' });
 

@@ -1,4 +1,4 @@
-import type { GeographicZone } from '../hooks/new-campaign/wizard-types';
+import type { GeographicZone } from '@/features/campaigns/hooks/new-campaign/wizard-types';
 
 /**
  * Total area in km² covered by a set of geographic zones, modeling each

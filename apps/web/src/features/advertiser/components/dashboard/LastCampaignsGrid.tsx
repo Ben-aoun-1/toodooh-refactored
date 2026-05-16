@@ -1,8 +1,8 @@
 import { Calendar, DollarSign, MapPin, Rocket, RotateCcw, TrendingUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-import statIcon5 from '../../../../assets/stats/5.png';
-import type { LastCampaign } from '../../hooks/useLastCampaigns';
+import statIcon5 from '@/assets/stats/5.png';
+import type { LastCampaign } from '@/features/advertiser/hooks/useLastCampaigns';
 
 const STATUS_MAP: Record<string, { label: string; bg: string; text: string; dot: string }> = {
   draft: { label: 'Non validé', bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500' },

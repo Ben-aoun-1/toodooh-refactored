@@ -2,11 +2,11 @@ import { Calendar, TrendingUp, ChevronLeft, ChevronRight, Search, Rocket } from 
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import matchImg from '../../../assets/match.png';
-import { supabase } from '../../../lib/supabase';
-import { useAuthStore } from '../../auth/stores/auth.store';
-import { eventsService } from '../services/events.service';
-import type { SpecialEvent } from '../types/event';
+import matchImg from '@/assets/match.png';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
+import { eventsService } from '@/features/events/services/events.service';
+import type { SpecialEvent } from '@/features/events/types/event';
+import { supabase } from '@/lib/supabase';
 
 /** Forme campagne attendue par la page d’édition (comme MyCampaigns). */
 export interface CampaignForEdit {

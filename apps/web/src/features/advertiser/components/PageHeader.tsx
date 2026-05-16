@@ -1,10 +1,10 @@
 import { ChevronRight, LayoutGrid, PanelLeft, ShoppingBag, Users } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 
-import headerAgendaIcon from '../../../assets/header/agenda.png';
-import headerCampagnesIcon from '../../../assets/header/campagnes.png';
-import headerFinanceIcon from '../../../assets/header/finance.png';
-import headerParamsIcon from '../../../assets/header/params.png';
+import headerAgendaIcon from '@/assets/header/agenda.png';
+import headerCampagnesIcon from '@/assets/header/campagnes.png';
+import headerFinanceIcon from '@/assets/header/finance.png';
+import headerParamsIcon from '@/assets/header/params.png';
 
 import AdvertiserNotificationsBell from './AdvertiserNotificationsBell';
 

@@ -1,5 +1,5 @@
-import type { BusinessProfile } from '../../auth/types/auth';
-import type { StatementRecipientDisplay } from '../types/ownerStatement';
+import type { BusinessProfile } from '@/features/auth/types/auth';
+import type { StatementRecipientDisplay } from '@/features/screenhost/types/ownerStatement';
 
 /** Valeurs de démo (maquette) si profil incomplet */
 const DEMO_RECIPIENT: StatementRecipientDisplay = {
