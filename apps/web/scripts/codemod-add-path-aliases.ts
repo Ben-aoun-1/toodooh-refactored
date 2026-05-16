@@ -24,6 +24,10 @@
  */
 import * as path from 'node:path';
 
+// ts-morph is a temporary tool, intentionally not installed; this codemod script
+// is preserved as the TBD-C audit record (issue #24). The import is deliberately
+// unresolvable in the committed tree — reinstall ts-morph to re-run the codemod.
+// eslint-disable-next-line import-x/no-unresolved
 import { Project, QuoteKind, SyntaxKind } from 'ts-morph';
 
 const SRC_ROOT = path.resolve('src');
