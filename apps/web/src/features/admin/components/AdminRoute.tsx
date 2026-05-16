@@ -8,10 +8,7 @@ interface AdminRouteProps {
   requiredRoles?: string[];
 }
 
-export default function AdminRoute({
-  children,
-  requiredRoles: _requiredRoles = [],
-}: AdminRouteProps) {
+export default function AdminRoute({ children, requiredRoles = [] }: AdminRouteProps) {
   const { admin, initialized, initialize, loading } = useAdminStore();
 
   useEffect(() => {
@@ -36,10 +33,10 @@ export default function AdminRoute({
     return <Navigate to="/admin-login" />;
   }
 
-  // Vérifier les rôles requis (pour l'instant, on skip cette vérification)
-  // if (requiredRoles.length > 0 && !requiredRoles.includes(admin.role?.name)) {
-  //   return <Navigate to="/admin-dashboard" />;
-  // }
+  // Vérifier les rôles requis
+  if (requiredRoles.length > 0 && !requiredRoles.includes(admin.role)) {
+    return <Navigate to="/admin-dashboard" />;
+  }
 
   return <>{children}</>;
 }
