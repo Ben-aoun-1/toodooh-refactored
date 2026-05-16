@@ -493,6 +493,15 @@ pass once the Phase-1 backend migration provides typed sources for the 131 TODO(
 `typescript`); `eslint-plugin-react-refresh` is unused (root ESLint config doesn't load it).
 → **Step 14 · #13**
 
+### Frontend authorization model
+
+The frontend has route guards via `AdminRoute` and in-component role checks on 4 admin
+pages. Frontend route-guard correctness was fixed in commit `1b533d3` — `AdminRoute`'s
+`requiredRoles` check was commented out AND miswritten (`admin.role?.name` on a
+string-typed `admin.role`). Defense-in-depth in-component checks on the 4 superadmin-tier
+pages (campaigns, events, admin-management, create-admin) were preserved. Backend
+authorization is out of scope for the cleanup phase and is addressed at Phase 1. ☑
+
 ### Not an issue here (noted for completeness)
 
 `src/services/auth.service.ts.backup` and the source repo's `debug-*.js` / `test-*.js` / `*.zip`
