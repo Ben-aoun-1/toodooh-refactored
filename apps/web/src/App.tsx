@@ -1,3 +1,4 @@
+import { QueryClientProvider } from '@tanstack/react-query';
 import React, { lazy, Suspense, useEffect } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
@@ -5,6 +6,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import PageLoadingFallback from '@/components/PageLoadingFallback';
 import AdminRoute from '@/features/admin/components/AdminRoute';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
+import { createQueryClient } from '@/lib/query-client';
 
 // Toutes les pages sont chargées à la demande (code-splitting par route).
 const AdvertiserLayout = lazy(() => import('@/features/advertiser/components/AdvertiserLayout'));
@@ -33,11 +35,15 @@ const OwnerCampaigns = lazy(() => import('@/features/screenhost/pages/OwnerCampa
 const OwnerPerformance = lazy(() => import('@/features/screenhost/pages/OwnerPerformance'));
 const OwnerCalendarDevices = lazy(() => import('@/features/screenhost/pages/OwnerCalendarDevices'));
 const OwnerStatementsPage = lazy(() => import('@/features/screenhost/pages/OwnerStatementsPage'));
-const OwnerStatementDetailPage = lazy(() => import('@/features/screenhost/pages/OwnerStatementDetailPage'));
+const OwnerStatementDetailPage = lazy(
+  () => import('@/features/screenhost/pages/OwnerStatementDetailPage'),
+);
 const OwnerActivity = lazy(() => import('@/features/screenhost/pages/OwnerActivity'));
 const OwnerMaintenance = lazy(() => import('@/features/screenhost/pages/OwnerMaintenance'));
 const OwnerSettings = lazy(() => import('@/features/screenhost/pages/OwnerSettings'));
-const OwnerCampaignApprovals = lazy(() => import('@/features/screenhost/pages/OwnerCampaignApprovals'));
+const OwnerCampaignApprovals = lazy(
+  () => import('@/features/screenhost/pages/OwnerCampaignApprovals'),
+);
 const GiftCatalogPage = lazy(() => import('@/features/screenhost/pages/GiftCatalogPage'));
 const ContactPage = lazy(() => import('@/features/screenhost/pages/ContactPage'));
 const MyAccount = lazy(() => import('@/features/screenhost/pages/MyAccount'));
@@ -51,8 +57,26 @@ const CreateAdmin = lazy(() => import('@/features/admin/pages/CreateAdmin'));
 const AdminManagement = lazy(() => import('@/features/admin/pages/AdminManagement'));
 const ScreenManagement = lazy(() => import('@/features/admin/pages/ScreenManagement'));
 const RechargeManagement = lazy(() => import('@/features/admin/pages/RechargeManagement'));
-const GeographicZonesManagement = lazy(() => import('@/features/admin/pages/GeographicZonesManagement'));
-const AdminGlobalConfiguration = lazy(() => import('@/features/admin/pages/AdminGlobalConfiguration'));
+const GeographicZonesManagement = lazy(
+  () => import('@/features/admin/pages/GeographicZonesManagement'),
+);
+const AdminGlobalConfiguration = lazy(
+  () => import('@/features/admin/pages/AdminGlobalConfiguration'),
+);
+
+// Client React Query unique pour toute l'application (config : voir D-Q).
+const queryClient = createQueryClient();
+
+// React Query Devtools — dev uniquement. Import dynamique sous une branche
+// `import.meta.env.DEV` (décision D-V) : le paquet devtools n'est jamais tiré
+// dans le bundle de production.
+const ReactQueryDevtools = import.meta.env.DEV
+  ? lazy(() =>
+      import('@tanstack/react-query-devtools').then((m) => ({
+        default: m.ReactQueryDevtools,
+      })),
+    )
+  : null;
 
 function AdvertiserRoute({ children }: { children: React.ReactNode }) {
   const { user, initialized, profileType } = useAuthStore();
@@ -153,7 +177,7 @@ export default function App() {
     );
   }
   return (
-    <>
+    <QueryClientProvider client={queryClient}>
       <Router>
         <Suspense fallback={<PageLoadingFallback />}>
           <Routes>
@@ -541,6 +565,11 @@ export default function App() {
         </Suspense>
       </Router>
       <Toaster position="top-right" />
-    </>
+      {ReactQueryDevtools ? (
+        <Suspense fallback={null}>
+          <ReactQueryDevtools initialIsOpen={false} />
+        </Suspense>
+      ) : null}
+    </QueryClientProvider>
   );
 }
