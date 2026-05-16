@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback } from 'react';
 
 import {
   type DoohConfigNumbers,
@@ -9,6 +10,8 @@ import {
   invalidateGlobalConfigurationCache,
 } from '@/services/global-configuration.service';
 
+import { advertiserKeys } from './queryKeys';
+
 export type AdvertiserGlobalConfigState = {
   dooh: DoohConfigNumbers;
   loading: boolean;
@@ -18,48 +21,33 @@ export type AdvertiserGlobalConfigState = {
 
 /**
  * Paramètres globaux pour parcours annonceur (CPM, durées vidéo affichées, etc.).
+ *
+ * `refresh` clears the global-configuration service cache and invalidates the
+ * React Query cache entry, which triggers a refetch — replacing the hook's
+ * former hand-rolled refetch. Interface preserved so `NewCampaign.tsx`
+ * (the only consumer) is untouched.
  */
 export function useAdvertiserGlobalConfig(): AdvertiserGlobalConfigState {
-  const [dooh, setDooh] = useState<DoohConfigNumbers>(DEFAULT_DOOH_CONFIG_NUMBERS);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
+  const query = useQuery({
+    queryKey: advertiserKeys.globalConfig(),
+    queryFn: getDoohConfigNumbers,
+  });
 
   const refresh = useCallback(async () => {
     invalidateGlobalConfigurationCache();
-    setLoading(true);
-    setError(null);
-    try {
-      const n = await getDoohConfigNumbers();
-      setDooh(n);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Erreur de chargement de la configuration');
-      setDooh(DEFAULT_DOOH_CONFIG_NUMBERS);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    await queryClient.invalidateQueries({ queryKey: advertiserKeys.globalConfig() });
+  }, [queryClient]);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const n = await getDoohConfigNumbers();
-        if (!cancelled) setDooh(n);
-      } catch (e: unknown) {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : 'Erreur de chargement de la configuration');
-          setDooh(DEFAULT_DOOH_CONFIG_NUMBERS);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  return { dooh, loading, error, refresh };
+  return {
+    dooh: query.data ?? DEFAULT_DOOH_CONFIG_NUMBERS,
+    loading: query.isLoading,
+    error: query.error
+      ? query.error instanceof Error
+        ? query.error.message
+        : 'Erreur de chargement de la configuration'
+      : null,
+    refresh,
+  };
 }

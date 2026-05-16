@@ -13,11 +13,12 @@ import {
   X,
   Save,
 } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { toast } from 'react-hot-toast';
 
+import { useClientMutations } from '@/features/advertiser/hooks/useClientMutations';
+import { useClients } from '@/features/advertiser/hooks/useClients';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
-import { supabase } from '@/lib/supabase';
 
 function getMonth(dateStr: string) {
   return new Date(dateStr).getMonth() + 1;
@@ -28,10 +29,8 @@ function getYear(dateStr: string) {
 
 export default function MyClients() {
   const user = useAuthStore((state) => state.user);
-  // TODO(phase-1): typed source [supabase] — see #15
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [clients, setClients] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { clients, loading } = useClients(user?.id);
+  const { createClient, updateClient, deleteClient } = useClientMutations(user?.id);
   const [search, setSearch] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
@@ -46,21 +45,6 @@ export default function MyClients() {
     contact_phone: '',
     societe: '',
   });
-
-  useEffect(() => {
-    async function fetchClients() {
-      setLoading(true);
-      if (!user) return;
-      const { data, error } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-      if (!error) setClients(data || []);
-      setLoading(false);
-    }
-    fetchClients();
-  }, [user]);
 
   // Stats
   const totalClients = clients.length;
@@ -96,31 +80,17 @@ export default function MyClients() {
     }));
   };
 
-  // Ajouter un client
+  // Ajouter un client — l'invalidation de la requête `clients` (onSuccess de
+  // la mutation) recharge la liste ; plus de re-`select` manuel.
   const handleAddClient = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
 
     try {
-      const { error } = await supabase.from('clients').insert([
-        {
-          ...formData,
-          user_id: user.id,
-        },
-      ]);
-
-      if (error) throw error;
-
+      await createClient.mutateAsync(formData);
       toast.success('Client ajouté avec succès');
       setShowAddModal(false);
       resetForm();
-      // Recharger la liste
-      const { data } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-      setClients(data || []);
     } catch (_error) {
       toast.error("Erreur lors de l'ajout du client");
     }
@@ -132,21 +102,11 @@ export default function MyClients() {
     if (!selectedClient) return;
 
     try {
-      const { error } = await supabase.from('clients').update(formData).eq('id', selectedClient.id);
-
-      if (error) throw error;
-
+      await updateClient.mutateAsync({ id: selectedClient.id, formData });
       toast.success('Client modifié avec succès');
       setShowEditModal(false);
       resetForm();
       setSelectedClient(null);
-      // Recharger la liste
-      const { data } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-      setClients(data || []);
     } catch (_error) {
       toast.error('Erreur lors de la modification du client');
     }
@@ -157,20 +117,10 @@ export default function MyClients() {
     if (!selectedClient) return;
 
     try {
-      const { error } = await supabase.from('clients').delete().eq('id', selectedClient.id);
-
-      if (error) throw error;
-
+      await deleteClient.mutateAsync(selectedClient.id);
       toast.success('Client supprimé avec succès');
       setShowDeleteModal(false);
       setSelectedClient(null);
-      // Recharger la liste
-      const { data } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-      setClients(data || []);
     } catch (_error) {
       toast.error('Erreur lors de la suppression du client');
     }

@@ -1,9 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 
 import { authService } from '@/features/auth/services/auth.service';
-import { logger } from '@/lib/logger';
 
-const log = logger.child({ module: 'useUserProfile' });
+import { advertiserKeys } from './queryKeys';
 
 interface UseUserProfileResult {
   // TODO(phase-1): typed source [supabase] — see #15
@@ -14,48 +13,24 @@ interface UseUserProfileResult {
 }
 
 /**
- * Loads the user's `business_profiles` row. Reloads when `userId` changes or
- * when the optional `reloadKey` changes (used to force re-fetch on
- * navigation, mirroring the original Dashboard.tsx behavior of refetching
- * on `location.pathname` change).
+ * Loads the user's `business_profiles` row via React Query.
+ *
+ * The pre-React-Query hook took a `reloadKey` param to force a refetch on
+ * navigation (a workaround for the old Dashboard.tsx behavior). React Query
+ * makes that obsolete — cache invalidation handles refetching — and no
+ * caller ever passed it, so the param is dropped. Commit 2b rewires
+ * `UserProfile.tsx` onto this same hook + the `advertiserKeys.profile` key.
  */
-export function useUserProfile(userId: string | undefined, reloadKey?: string): UseUserProfileResult {
-  // TODO(phase-1): typed source [supabase] — see #15
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [profile, setProfile] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
+export function useUserProfile(userId: string | undefined): UseUserProfileResult {
+  const query = useQuery({
+    queryKey: advertiserKeys.profile(userId ?? ''),
+    queryFn: () => authService.getBusinessProfile(),
+    enabled: !!userId,
+  });
 
-  useEffect(() => {
-    if (!userId) {
-      setProfile(null);
-      return;
-    }
-
-    let cancelled = false;
-
-    const load = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const data = await authService.getBusinessProfile();
-        if (!cancelled) setProfile(data);
-      } catch (e) {
-        if (cancelled) return;
-        const err = e instanceof Error ? e : new Error(String(e));
-        log.error({ error: err }, 'Error fetching profile');
-        setError(err);
-        setProfile(null);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [userId, reloadKey]);
-
-  return { profile, loading, error };
+  return {
+    profile: query.data ?? null,
+    loading: query.isLoading,
+    error: query.error,
+  };
 }

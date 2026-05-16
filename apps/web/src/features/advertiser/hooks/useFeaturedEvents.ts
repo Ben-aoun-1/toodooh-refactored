@@ -1,10 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 
 import { eventsService } from '@/features/events/services/events.service';
 import type { SpecialEvent } from '@/features/events/types/event';
-import { logger } from '@/lib/logger';
 
-const log = logger.child({ module: 'useFeaturedEvents' });
+import { advertiserKeys } from './queryKeys';
 
 interface UseFeaturedEventsResult {
   events: SpecialEvent[];
@@ -13,34 +12,14 @@ interface UseFeaturedEventsResult {
 }
 
 export function useFeaturedEvents(limit = 3): UseFeaturedEventsResult {
-  const [events, setEvents] = useState<SpecialEvent[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
+  const query = useQuery({
+    queryKey: advertiserKeys.featuredEvents(limit),
+    queryFn: () => eventsService.getFeaturedEvents(limit),
+  });
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const load = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const list = await eventsService.getFeaturedEvents(limit);
-        if (!cancelled) setEvents(list);
-      } catch (e) {
-        if (cancelled) return;
-        const err = e instanceof Error ? e : new Error(String(e));
-        log.error({ error: err }, 'Error loading featured events');
-        setError(err);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [limit]);
-
-  return { events, loading, error };
+  return {
+    events: query.data ?? [],
+    loading: query.isLoading,
+    error: query.error,
+  };
 }
