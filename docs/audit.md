@@ -31,18 +31,18 @@ complementary and orthogonal — none subsumes the others; each should cross-ref
 
 ## 2. Snapshot
 
-_As of commit `6af378e` (post-Step-8 `features/<domain>/` restructure)._
+_As of commit `78cdfc8` (post-TBD-J dead-code deletion; restructure was Step 8 `6af378e`)._
 
 | Metric                             | Value                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Files under `apps/web/src/`        | **164 `.ts`/`.tsx`** (corrects the prior "~245" — that figure counted the 101 PNG assets; the actual code surface is 164). Step 8 is a pure rename: no files added or deleted, 142 moved into `features/<domain>/`. |
+| Files under `apps/web/src/`        | **157 `.ts`/`.tsx`** (Step 8 restructure left 164; TBD-J deleted 7 dead files → 157). The prior audit "~245" counted the 101 PNG assets — the actual code surface is 157. |
 | Lines of `.ts`/`.tsx`              | unchanged net — Step 8 is rename-only (no logic edits, no deletions) |
 | Files > 1000 lines                 | unchanged from post-Step-7 (Step 8 moved files, did not decompose). Largest now under feature paths: `features/auth/components/SignUpForm.tsx` 1940 (→ TBD-D), `features/screenhost/pages/OwnerSettings.tsx` 1845, `features/campaigns/pages/MyCampaigns.tsx` 1657, `features/campaigns/pages/NewCampaign.tsx` 1624, `features/admin/pages/UserManagement.tsx` 1466, `features/advertiser/pages/UserProfile.tsx` 1420, … |
 | Files > 500 lines                  | ~38 (unchanged; rename-only) |
-| `pnpm typecheck`                   | **58 errors** (unchanged across all 9 Step-8 feature commits — rename-only; the 58 remain Cat-A pre-existing untyped-root cascades tracked in #15 for Phase 1) |
-| `pnpm lint`                        | **364 problems (346 errors, 18 warnings)** — top rules: `jsx-a11y/label-has-associated-control` 214, `no-useless-catch` 71, `jsx-a11y/click-events-have-key-events` 25, `jsx-a11y/no-static-element-interactions` 21, `react-hooks/exhaustive-deps` 18 (warn), `jsx-a11y/media-has-caption` 6, `jsx-a11y/no-noninteractive-element-interactions` 4, `@typescript-eslint/no-unused-expressions` 3, `import-x/order` 1, `import-x/no-unresolved` 1. **`no-console`: 0** ✓ · **`@typescript-eslint/no-explicit-any`: 0** ✓ · **`@typescript-eslint/no-unused-vars`: 0** ✓ · **`no-empty`: 0** ✓ · Step 8 reduced lint problems by 6 (370 → 364) via incidental `import-x/order` autofix during the rename sweeps — not a Step-8 goal, an emergent benefit. (Prior "~7 / 230 / 26 / 23" per-rule figures were stale; resynced here.) |
+| `pnpm typecheck`                   | **55 errors** (Step 8 held at 58; TBD-J's deletion removed 3 Cat-A errors that lived inside deleted dead files → 55). All remaining are Cat-A pre-existing untyped-root cascades tracked in #15 for Phase 1. |
+| `pnpm lint`                        | **358 problems (340 errors, 18 warnings)** — Step 8 left 364; TBD-J's deletion removed 6 (jsx-a11y surface carried by the 4 deleted dead components). **`no-console`: 0** ✓ · **`@typescript-eslint/no-explicit-any`: 0** ✓ · **`@typescript-eslint/no-unused-vars`: 0** ✓ · **`no-empty`: 0** ✓. |
 | `pnpm test`                        | 8 suites pass; **98 tests**; 0 failures (unchanged across Step 8) |
-| `pnpm --filter @toodooh/web build` | passes — main `index-*.js` 447 kB / gzip **131.34 kB** (vs post-Step-7 131.42 kB; −0.08 kB drift, rename-only noise). NewCampaign chunk gzip **25.76 kB** (vs 25.77). |
+| `pnpm --filter @toodooh/web build` | passes — main `index-*.js` gzip **131.47 kB**. The 7 TBD-J-deleted dead files were already tree-shaken, so deletion had near-zero bundle effect; the +0.13 kB since Step 8's 131.34 is the AdminRoute security fix's now-live role check. NewCampaign chunk gzip **25.76 kB**. |
 | CI (`main`)                        | **red** — expected; goes green at Step 13                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 ---
@@ -457,10 +457,23 @@ removed; every type module lives in its owning feature.
   confirmed via grep — `admin-screens.service` does not import `screens.service`;
   independent code paths against a shared DB table. Minor duplication; a future
   service-dedup pass, not Step 8 scope.
-- **Dead-file clustering.** Step 8 surfaced 5 dead files (TBD-E…I): they cluster in
-  code paths not actively maintained — admin chrome, screenhost components, services
-  paired with pages that bypass them and call Supabase directly. Hot paths (campaigns,
-  auth) are clean. Scoped dead-code audit pass tracked as **TBD-J**.
+- **Dead-file clustering — resolved by TBD-J** (commit `78cdfc8`). Step 8 surfaced 5
+  dead files; the TBD-J sweep confirmed those 5 plus 2 more (`components/Modal.tsx`,
+  `features/screenhost/components/RevenueCharts.tsx`) — **7 total, 1385 lines, all
+  deleted in one atomic commit.** Dead files clustered in code paths not actively
+  maintained: **3 of the 7 were screenhost components** (`UnavailabilityCalendar`,
+  `DetailedRevenue`, `RevenueCharts`) — the screenhost UX went through multiple
+  iterations and fossil cleanup was never done; useful context for future screenhost
+  work. 2 were dead services paired with pages that bypass them (Supabase-direct).
+  Hot paths (campaigns, auth) were clean. `components/Modal.tsx` was dead since its
+  creation in Step 7 Commit 1 (`dd9a066`) — extracted as a "shared" component but
+  never wired to a consumer; Step 8 Commit 10's §6 directory-survivor check counted
+  it as present (a `find` count) without verifying it was consumed. Methodology
+  refinement: a directory-survivor inventory must pair `find` with a consumer-grep —
+  "present" is not "alive". `cart.store.ts` and `MyCart.tsx`, flagged dead by the
+  TBD-J kickoff (a Codex finding against production code), were re-verified in the
+  migration branch: `MyCart.tsx` was already deleted in Step 2a; `cart.store.ts` is
+  the live cart store with 5 consumers — neither was deleted.
 - **Placeholder pages.** Three route-wired "à compléter" pages remain live:
   `AdvertiserPerformancePlaceholder` (tracked as #19), `OwnerActivity` (14 lines),
   `OwnerMaintenance` (16 lines). The latter two should be triaged post-Step-8 if product
