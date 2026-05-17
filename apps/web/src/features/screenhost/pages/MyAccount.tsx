@@ -120,7 +120,6 @@ export default function MyAccount() {
     }
   };
 
-
   const prevStep = () => {
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
@@ -317,7 +316,10 @@ export default function MyAccount() {
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label
+                          className="block text-sm font-medium text-gray-700 mb-2"
+                          htmlFor="first-name"
+                        >
                           Prénom
                         </label>
                         <input
@@ -327,10 +329,16 @@ export default function MyAccount() {
                           className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6]"
                           placeholder="Votre prénom"
                           required
+                          id="first-name"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Nom</label>
+                        <label
+                          className="block text-sm font-medium text-gray-700 mb-2"
+                          htmlFor="last-name"
+                        >
+                          Nom
+                        </label>
                         <input
                           type="text"
                           value={formData.lastName}
@@ -338,10 +346,14 @@ export default function MyAccount() {
                           className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6]"
                           placeholder="Votre nom"
                           required
+                          id="last-name"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label
+                          className="block text-sm font-medium text-gray-700 mb-2"
+                          htmlFor="email"
+                        >
                           Email
                         </label>
                         <input
@@ -349,13 +361,17 @@ export default function MyAccount() {
                           value={formData.email}
                           className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-gray-500 cursor-not-allowed"
                           disabled
+                          id="email"
                         />
                         <p className="text-xs text-gray-500 mt-1">
                           L'email ne peut pas être modifié
                         </p>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label
+                          className="block text-sm font-medium text-gray-700 mb-2"
+                          htmlFor="phone"
+                        >
                           Téléphone
                         </label>
                         <input
@@ -365,6 +381,7 @@ export default function MyAccount() {
                           className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6]"
                           placeholder="+216 XX XXX XXX"
                           required
+                          id="phone"
                         />
                       </div>
                     </div>
@@ -379,7 +396,10 @@ export default function MyAccount() {
                     </h3>
                     <div className="space-y-6">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label
+                          className="block text-sm font-medium text-gray-700 mb-2"
+                          htmlFor="business-name"
+                        >
                           Nom de l'entreprise
                         </label>
                         <input
@@ -389,11 +409,15 @@ export default function MyAccount() {
                           className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6]"
                           placeholder="Nom de votre entreprise"
                           required
+                          id="business-name"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label
+                          className="block text-sm font-medium text-gray-700 mb-2"
+                          htmlFor="business-type"
+                        >
                           Type d'entreprise
                         </label>
                         <select
@@ -405,6 +429,7 @@ export default function MyAccount() {
                               ? 'bg-gray-50 text-gray-500 cursor-not-allowed'
                               : 'bg-white'
                           }`}
+                          id="business-type"
                         >
                           <option value="local">Local</option>
                           <option value="national">National</option>
@@ -419,7 +444,10 @@ export default function MyAccount() {
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label
+                          className="block text-sm font-medium text-gray-700 mb-2"
+                          htmlFor="business-sector-id"
+                        >
                           Secteur d'activité
                         </label>
                         <select
@@ -427,6 +455,7 @@ export default function MyAccount() {
                           onChange={(e) => handleInputChange('businessSectorId', e.target.value)}
                           className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6]"
                           required
+                          id="business-sector-id"
                         >
                           <option value="">Sélectionner un secteur</option>
                           {sectors.map((sector) => (
@@ -438,7 +467,10 @@ export default function MyAccount() {
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label
+                          className="block text-sm font-medium text-gray-700 mb-2"
+                          htmlFor="tax-number"
+                        >
                           Numéro fiscal
                         </label>
                         <input
@@ -452,6 +484,7 @@ export default function MyAccount() {
                               : 'bg-white'
                           }`}
                           placeholder="Numéro fiscal de l'entreprise"
+                          id="tax-number"
                         />
                         {isFieldDisabled('taxNumber') && (
                           <p className="text-xs text-gray-500 mt-1">
@@ -464,9 +497,9 @@ export default function MyAccount() {
                       {(profileType === 'individual_owner' || profileType === 'fleet_owner') &&
                         formData.formule && (
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <span className="block text-sm font-medium text-gray-700 mb-2">
                               Formule choisie
-                            </label>
+                            </span>
                             <div className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-gray-900">
                               <div className="flex items-center">
                                 <span className="text-2xl mr-3">
@@ -496,7 +529,10 @@ export default function MyAccount() {
                     <h3 className="text-xl font-bold text-gray-900 mb-6">Adresse</h3>
                     <div className="space-y-6">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label
+                          className="block text-sm font-medium text-gray-700 mb-2"
+                          htmlFor="street-address"
+                        >
                           Adresse
                         </label>
                         <input
@@ -506,12 +542,16 @@ export default function MyAccount() {
                           className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6]"
                           placeholder="Adresse complète"
                           required
+                          id="street-address"
                         />
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                          <label
+                            className="block text-sm font-medium text-gray-700 mb-2"
+                            htmlFor="city"
+                          >
                             Ville
                           </label>
                           <input
@@ -521,11 +561,15 @@ export default function MyAccount() {
                             className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6]"
                             placeholder="Ville"
                             required
+                            id="city"
                           />
                         </div>
 
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                          <label
+                            className="block text-sm font-medium text-gray-700 mb-2"
+                            htmlFor="postal-code"
+                          >
                             Code postal
                           </label>
                           <input
@@ -535,11 +579,15 @@ export default function MyAccount() {
                             className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6]"
                             placeholder="XXXX"
                             required
+                            id="postal-code"
                           />
                         </div>
 
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                          <label
+                            className="block text-sm font-medium text-gray-700 mb-2"
+                            htmlFor="governorate-id"
+                          >
                             Gouvernorat
                           </label>
                           <select
@@ -547,6 +595,7 @@ export default function MyAccount() {
                             onChange={(e) => handleInputChange('governorateId', e.target.value)}
                             className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6]"
                             required
+                            id="governorate-id"
                           >
                             <option value="">Sélectionner un gouvernorat</option>
                             {governorates.map((governorate) => (
@@ -643,7 +692,9 @@ export default function MyAccount() {
                                         disabled={profileMutations.uploadDocument.isPending}
                                         className="px-4 py-3 bg-[#00B3A6] text-white rounded-lg hover:bg-[#008C82] transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                                       >
-                                        {profileMutations.uploadDocument.isPending ? 'Upload...' : 'Uploader'}
+                                        {profileMutations.uploadDocument.isPending
+                                          ? 'Upload...'
+                                          : 'Uploader'}
                                       </button>
                                       <button
                                         type="button"
@@ -734,7 +785,9 @@ export default function MyAccount() {
                                         disabled={profileMutations.uploadDocument.isPending}
                                         className="px-4 py-3 bg-[#00B3A6] text-white rounded-lg hover:bg-[#008C82] transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                                       >
-                                        {profileMutations.uploadDocument.isPending ? 'Upload...' : 'Uploader'}
+                                        {profileMutations.uploadDocument.isPending
+                                          ? 'Upload...'
+                                          : 'Uploader'}
                                       </button>
                                       <button
                                         type="button"
@@ -764,7 +817,10 @@ export default function MyAccount() {
                       </h3>
                       <div className="space-y-6">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                          <label
+                            className="block text-sm font-medium text-gray-700 mb-2"
+                            htmlFor="password"
+                          >
                             Nouveau mot de passe (optionnel)
                           </label>
                           <div className="relative">
@@ -774,6 +830,7 @@ export default function MyAccount() {
                               onChange={(e) => handleInputChange('password', e.target.value)}
                               className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6] pr-12"
                               placeholder="Laissez vide pour conserver le mot de passe actuel"
+                              id="password"
                             />
                             <button
                               type="button"
@@ -791,7 +848,10 @@ export default function MyAccount() {
 
                         {formData.password && (
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <label
+                              className="block text-sm font-medium text-gray-700 mb-2"
+                              htmlFor="confirm-password"
+                            >
                               Confirmer le mot de passe
                             </label>
                             <input
@@ -800,6 +860,7 @@ export default function MyAccount() {
                               onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
                               className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6]"
                               placeholder="Confirmer le nouveau mot de passe"
+                              id="confirm-password"
                             />
                           </div>
                         )}

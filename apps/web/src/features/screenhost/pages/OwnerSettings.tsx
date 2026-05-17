@@ -665,7 +665,10 @@ export default function OwnerSettings() {
                     <form onSubmit={handleSaveResponsable} className="p-6">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label
+                            className="block text-sm font-medium text-gray-700 mb-1"
+                            htmlFor="last-name"
+                          >
                             Nom <span className="text-red-500">*</span>
                           </label>
                           <input
@@ -676,10 +679,14 @@ export default function OwnerSettings() {
                             }
                             className={inputClass}
                             placeholder="Nom"
+                            id="last-name"
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label
+                            className="block text-sm font-medium text-gray-700 mb-1"
+                            htmlFor="first-name"
+                          >
                             Prénom <span className="text-red-500">*</span>
                           </label>
                           <input
@@ -690,10 +697,14 @@ export default function OwnerSettings() {
                             }
                             className={inputClass}
                             placeholder="Prénom"
+                            id="first-name"
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label
+                            className="block text-sm font-medium text-gray-700 mb-1"
+                            htmlFor="fonction"
+                          >
                             Fonction <span className="text-red-500">*</span>
                           </label>
                           <input
@@ -704,10 +715,14 @@ export default function OwnerSettings() {
                             }
                             className={inputClass}
                             placeholder="Ex: UI UX Designer"
+                            id="fonction"
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label
+                            className="block text-sm font-medium text-gray-700 mb-1"
+                            htmlFor="email"
+                          >
                             Email professionnel <span className="text-red-500">*</span>
                           </label>
                           <input
@@ -716,10 +731,14 @@ export default function OwnerSettings() {
                             value={user?.email ?? ''}
                             className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 text-gray-600 cursor-not-allowed"
                             placeholder="contact@entreprise.com"
+                            id="email"
                           />
                         </div>
                         <div className="md:col-span-2">
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label
+                            className="block text-sm font-medium text-gray-700 mb-1"
+                            htmlFor="contact-phone"
+                          >
                             Téléphone <span className="text-red-500">*</span>
                           </label>
                           <input
@@ -730,6 +749,7 @@ export default function OwnerSettings() {
                             }
                             className={inputClass}
                             placeholder="+216 52 44 1144"
+                            id="contact-phone"
                           />
                         </div>
                       </div>
@@ -834,7 +854,9 @@ export default function OwnerSettings() {
                                   className="self-start px-3 py-2 rounded-lg text-sm font-medium text-gray-900 disabled:opacity-50 hover:opacity-90"
                                   style={{ background: '#97d6a2' }}
                                 >
-                                  {profileMutations.uploadLogo.isPending ? 'Envoi...' : 'Enregistrer le logo'}
+                                  {profileMutations.uploadLogo.isPending
+                                    ? 'Envoi...'
+                                    : 'Enregistrer le logo'}
                                 </button>
                               )}
                             </div>
@@ -843,7 +865,10 @@ export default function OwnerSettings() {
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label
+                              className="block text-sm font-medium text-gray-700 mb-1"
+                              htmlFor="business-name"
+                            >
                               Nom de l&apos;entreprise <span className="text-red-500">*</span>
                             </label>
                             <input
@@ -854,10 +879,14 @@ export default function OwnerSettings() {
                               }
                               className={inputClass}
                               placeholder="Raison sociale"
+                              id="business-name"
                             />
                           </div>
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label
+                              className="block text-sm font-medium text-gray-700 mb-1"
+                              htmlFor="tax-number"
+                            >
                               Matricule fiscal <span className="text-red-500">*</span>
                             </label>
                             <input
@@ -868,13 +897,17 @@ export default function OwnerSettings() {
                               }
                               className={inputClass}
                               placeholder="Matricule fiscal"
+                              id="tax-number"
                             />
                           </div>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label
+                              className="block text-sm font-medium text-gray-700 mb-1"
+                              htmlFor="business-sector-id"
+                            >
                               Catégorie <span className="text-red-500">*</span>
                             </label>
                             <select
@@ -886,6 +919,7 @@ export default function OwnerSettings() {
                                 }))
                               }
                               className={`${inputClass} appearance-none pr-10`}
+                              id="business-sector-id"
                             >
                               <option value="">Sélectionner</option>
                               {ownerSectorOptions.map((s) => (
@@ -896,7 +930,10 @@ export default function OwnerSettings() {
                             </select>
                           </div>
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label
+                              className="block text-sm font-medium text-gray-700 mb-1"
+                              htmlFor="number-of-screens"
+                            >
                               Nombre d&apos;écrans <span className="text-red-500">*</span>
                             </label>
                             <select
@@ -908,6 +945,7 @@ export default function OwnerSettings() {
                                 }))
                               }
                               className={`${inputClass} appearance-none pr-10`}
+                              id="number-of-screens"
                             >
                               <option value="">Sélectionner</option>
                               {SCREEN_COUNT_OPTIONS.map((n) => (
@@ -921,7 +959,10 @@ export default function OwnerSettings() {
 
                         {isFleetOwner && (
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label
+                              className="block text-sm font-medium text-gray-700 mb-1"
+                              htmlFor="company-size"
+                            >
                               Nombre d&apos;établissements du parc{' '}
                               <span className="text-red-500">*</span>
                             </label>
@@ -931,6 +972,7 @@ export default function OwnerSettings() {
                                 setEntrepriseForm((p) => ({ ...p, company_size: e.target.value }))
                               }
                               className={`${inputClass} appearance-none pr-10 max-w-md`}
+                              id="company-size"
                             >
                               <option value="">Sélectionner</option>
                               {PARC_SIZE_OPTIONS.map((n) => (
@@ -943,7 +985,10 @@ export default function OwnerSettings() {
                         )}
 
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label
+                            className="block text-sm font-medium text-gray-700 mb-1"
+                            htmlFor="number-of-rooms"
+                          >
                             Nombre de salles <span className="text-red-500">*</span>
                           </label>
                           <select
@@ -952,6 +997,7 @@ export default function OwnerSettings() {
                               setEntrepriseForm((p) => ({ ...p, number_of_rooms: e.target.value }))
                             }
                             className={`${inputClass} appearance-none pr-10 max-w-full md:max-w-2xl`}
+                            id="number-of-rooms"
                           >
                             <option value="">Sélectionner</option>
                             {ROOM_COUNT_OPTIONS.map((n) => (
@@ -966,8 +1012,8 @@ export default function OwnerSettings() {
                           <button
                             type="button"
                             onClick={() => {
-                            if (profile) applyProfileToForms(profile);
-                          }}
+                              if (profile) applyProfileToForms(profile);
+                            }}
                             className="px-5 py-2.5 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50"
                           >
                             Annuler
@@ -986,7 +1032,10 @@ export default function OwnerSettings() {
                     {entrepriseSub === 'adresse' && (
                       <form onSubmit={handleSaveAdresse} className="p-6 space-y-4 max-w-2xl">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label
+                            className="block text-sm font-medium text-gray-700 mb-1"
+                            htmlFor="street-address"
+                          >
                             Adresse du siège <span className="text-red-500">*</span>
                           </label>
                           <input
@@ -997,11 +1046,15 @@ export default function OwnerSettings() {
                             }
                             className={inputClass}
                             placeholder="Adresse"
+                            id="street-address"
                           />
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label
+                              className="block text-sm font-medium text-gray-700 mb-1"
+                              htmlFor="city"
+                            >
                               Ville <span className="text-red-500">*</span>
                             </label>
                             <div className="relative">
@@ -1014,6 +1067,7 @@ export default function OwnerSettings() {
                                 }
                                 className={`${inputClass} pr-10`}
                                 placeholder="Ex: Tunis"
+                                id="city"
                               />
                               <datalist id="owner-ville-list">
                                 {[
@@ -1052,7 +1106,10 @@ export default function OwnerSettings() {
                             </div>
                           </div>
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label
+                              className="block text-sm font-medium text-gray-700 mb-1"
+                              htmlFor="postal-code"
+                            >
                               Code postal <span className="text-red-500">*</span>
                             </label>
                             <input
@@ -1064,11 +1121,15 @@ export default function OwnerSettings() {
                               className={inputClass}
                               placeholder="Ex: 1000"
                               maxLength={10}
+                              id="postal-code"
                             />
                           </div>
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label
+                            className="block text-sm font-medium text-gray-700 mb-1"
+                            htmlFor="zone"
+                          >
                             Zone / secteur
                           </label>
                           <input
@@ -1079,10 +1140,14 @@ export default function OwnerSettings() {
                             }
                             className={inputClass}
                             placeholder="Zone géographique ou secteur"
+                            id="zone"
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label
+                            className="block text-sm font-medium text-gray-700 mb-1"
+                            htmlFor="governorate-id"
+                          >
                             Gouvernorat <span className="text-red-500">*</span>
                           </label>
                           <div className="relative">
@@ -1092,6 +1157,7 @@ export default function OwnerSettings() {
                                 setAdresseForm((p) => ({ ...p, governorate_id: e.target.value }))
                               }
                               className={`${inputClass} appearance-none pr-10`}
+                              id="governorate-id"
                             >
                               <option value="">Sélectionner</option>
                               {governorates.map((g) => (
@@ -1121,8 +1187,8 @@ export default function OwnerSettings() {
                           <button
                             type="button"
                             onClick={() => {
-                            if (profile) applyProfileToForms(profile);
-                          }}
+                              if (profile) applyProfileToForms(profile);
+                            }}
                             className="px-5 py-2.5 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50"
                           >
                             Annuler
@@ -1224,7 +1290,9 @@ export default function OwnerSettings() {
                             className="px-5 py-2.5 rounded-xl font-medium text-gray-900 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                             style={{ background: '#97d6a2' }}
                           >
-                            {profileMutations.uploadDocument.isPending ? 'Enregistrement...' : 'Enregistrer'}
+                            {profileMutations.uploadDocument.isPending
+                              ? 'Enregistrement...'
+                              : 'Enregistrer'}
                           </button>
                         </div>
                       </div>
@@ -1233,7 +1301,10 @@ export default function OwnerSettings() {
                     {entrepriseSub === 'coordonnees-bancaires' && (
                       <form onSubmit={handleSaveBankDetails} className="p-6 space-y-5 max-w-3xl">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label
+                            className="block text-sm font-medium text-gray-700 mb-1"
+                            htmlFor="bank-account-holder"
+                          >
                             Nom et prénom du titulaire <span className="text-red-500">*</span>
                           </label>
                           <input
@@ -1244,10 +1315,14 @@ export default function OwnerSettings() {
                             }
                             className={inputClass}
                             placeholder="Nom et prénom"
+                            id="bank-account-holder"
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label
+                            className="block text-sm font-medium text-gray-700 mb-1"
+                            htmlFor="bank-rib"
+                          >
                             RIB <span className="text-red-500">*</span>
                           </label>
                           <input
@@ -1258,10 +1333,14 @@ export default function OwnerSettings() {
                             }
                             className={inputClass}
                             placeholder="RIB"
+                            id="bank-rib"
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label
+                            className="block text-sm font-medium text-gray-700 mb-1"
+                            htmlFor="bank-iban"
+                          >
                             IBAN <span className="text-red-500">*</span>
                           </label>
                           <input
@@ -1272,6 +1351,7 @@ export default function OwnerSettings() {
                             }
                             className={inputClass}
                             placeholder="IBAN"
+                            id="bank-iban"
                           />
                         </div>
 
@@ -1352,7 +1432,9 @@ export default function OwnerSettings() {
                             className="px-5 py-2.5 rounded-xl font-medium text-gray-900 hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
                             style={{ background: '#97d6a2' }}
                           >
-                            {saveBankDetailsMutation.isPending ? 'Enregistrement...' : 'Enregistrer'}
+                            {saveBankDetailsMutation.isPending
+                              ? 'Enregistrement...'
+                              : 'Enregistrer'}
                           </button>
                         </div>
                       </form>
@@ -1553,7 +1635,10 @@ export default function OwnerSettings() {
                     {confidentialiteSub === 'password' && (
                       <form onSubmit={handleUpdatePassword} className="p-6 max-w-xl space-y-4">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label
+                            className="block text-sm font-medium text-gray-700 mb-1"
+                            htmlFor="current-password"
+                          >
                             Mot de passe actuel <span className="text-red-500">*</span>
                           </label>
                           <div className="relative">
@@ -1565,6 +1650,7 @@ export default function OwnerSettings() {
                               }
                               className={`${inputClass} pr-10`}
                               placeholder="Mot de passe actuel"
+                              id="current-password"
                             />
                             <button
                               type="button"
@@ -1580,7 +1666,10 @@ export default function OwnerSettings() {
                           </div>
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label
+                            className="block text-sm font-medium text-gray-700 mb-1"
+                            htmlFor="new-password"
+                          >
                             Nouveau mot de passe <span className="text-red-500">*</span>
                           </label>
                           <input
@@ -1591,10 +1680,14 @@ export default function OwnerSettings() {
                             }
                             className={inputClass}
                             placeholder="Nouveau mot de passe"
+                            id="new-password"
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label
+                            className="block text-sm font-medium text-gray-700 mb-1"
+                            htmlFor="confirm-password"
+                          >
                             Confirmer le nouveau mot de passe{' '}
                             <span className="text-red-500">*</span>
                           </label>
@@ -1606,6 +1699,7 @@ export default function OwnerSettings() {
                             }
                             className={inputClass}
                             placeholder="Confirmer le nouveau mot de passe"
+                            id="confirm-password"
                           />
                         </div>
                         <div className="pt-2">
@@ -1696,7 +1790,10 @@ export default function OwnerSettings() {
                           </p>
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-900 mb-1.5">
+                          <label
+                            className="block text-sm font-medium text-gray-900 mb-1.5"
+                            htmlFor="delete-confirm-password"
+                          >
                             Confirmer la suppression *
                           </label>
                           <div className="relative">
@@ -1706,6 +1803,7 @@ export default function OwnerSettings() {
                               onChange={(e) => setDeleteConfirmPassword(e.target.value)}
                               className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500/30 focus:border-red-500 text-gray-900 placeholder-gray-400"
                               placeholder="••••••••"
+                              id="delete-confirm-password"
                             />
                             <button
                               type="button"

@@ -206,9 +206,7 @@ export default function Step5({
       <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
         <div className="p-6 border-b border-gray-200">
           <h2 className="text-xl font-bold text-gray-900">Contenu média</h2>
-          <p className="text-gray-500 mt-1">
-            Sélectionnez ou uploadez votre spot publicitaire
-          </p>
+          <p className="text-gray-500 mt-1">Sélectionnez ou uploadez votre spot publicitaire</p>
         </div>
 
         <div className="p-6 space-y-6">
@@ -259,12 +257,9 @@ export default function Step5({
                   <div className="flex items-center gap-3">
                     <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
                     <div>
-                      <p className="font-semibold text-gray-900 text-sm">
-                        {selectedVideo.name}
-                      </p>
+                      <p className="font-semibold text-gray-900 text-sm">{selectedVideo.name}</p>
                       <p className="text-xs text-gray-600">
-                        {(selectedVideo.size / 1024 / 1024).toFixed(2)} MB · Uploadée avec
-                        succès
+                        {(selectedVideo.size / 1024 / 1024).toFixed(2)} MB · Uploadée avec succès
                       </p>
                     </div>
                   </div>
@@ -286,15 +281,16 @@ export default function Step5({
               </div>
             </div>
           ) : (
-            <label className="block border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-[#00B3A6]/50 hover:bg-gray-50/50 transition-colors cursor-pointer">
+            <label
+              className="block border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-[#00B3A6]/50 hover:bg-gray-50/50 transition-colors cursor-pointer"
+              aria-label="Uploader un nouveau spot publicitaire"
+            >
               <div className="flex flex-col items-center gap-3">
                 <div className="w-12 h-12 rounded-full bg-[#00B3A6]/15 flex items-center justify-center">
                   <Upload className="w-6 h-6 text-[#00B3A6]" />
                 </div>
                 <p className="font-bold text-gray-900">Ou uploadez un nouveau spot</p>
-                <p className="text-sm text-gray-500">
-                  Formats acceptés : MP4, MOV (max 100MB)
-                </p>
+                <p className="text-sm text-gray-500">Formats acceptés : MP4, MOV (max 100MB)</p>
                 <span className="inline-flex items-center px-4 py-2.5 mt-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50">
                   Parcourir les fichiers
                 </span>
@@ -314,9 +310,7 @@ export default function Step5({
               <Info className="w-3.5 h-3.5 text-slate-600" />
             </div>
             <div>
-              <p className="text-sm font-bold text-gray-900 mb-2">
-                Spécifications techniques
-              </p>
+              <p className="text-sm font-bold text-gray-900 mb-2">Spécifications techniques</p>
               <ul className="text-sm text-gray-600 space-y-1">
                 <li>Format : 16:9 (1920×1080px minimum)</li>
                 <li>Durée : 30 secondes maximum</li>

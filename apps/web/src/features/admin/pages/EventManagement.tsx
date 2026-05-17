@@ -179,7 +179,6 @@ export default function EventManagement() {
     }
   };
 
-
   const handleToggleFeatured = async (eventId: string, isFeatured: boolean) => {
     try {
       const success = await toggleFeatured.mutateAsync({ eventId, isFeatured });
@@ -712,11 +711,12 @@ function EventImageUpload({
 
   return (
     <div className="md:col-span-2">
-      <label className="block text-sm font-medium text-gray-700 mb-1">
+      <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="event-image">
         Image de l&apos;événement
       </label>
       <div className="flex flex-col gap-2">
         <input
+          id="event-image"
           type="file"
           accept="image/*"
           onChange={handleFileChange}
@@ -781,7 +781,7 @@ function EventFormModal({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Nom */}
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="name">
                     Nom de l'événement *
                   </label>
                   <input
@@ -790,12 +790,16 @@ function EventFormModal({
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                    id="name"
                   />
                 </div>
 
                 {/* Description */}
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                    htmlFor="description"
+                  >
                     Description
                   </label>
                   <textarea
@@ -803,6 +807,7 @@ function EventFormModal({
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     rows={3}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                    id="description"
                   />
                 </div>
 
@@ -815,7 +820,10 @@ function EventFormModal({
 
                 {/* Type */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                    htmlFor="event-type"
+                  >
                     Type d'événement *
                   </label>
                   <select
@@ -828,6 +836,7 @@ function EventFormModal({
                       })
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                    id="event-type"
                   >
                     <option value="concert">Concert</option>
                     <option value="sport">Sport</option>
@@ -843,7 +852,12 @@ function EventFormModal({
 
                 {/* Catégorie */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Catégorie</label>
+                  <label
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                    htmlFor="category"
+                  >
+                    Catégorie
+                  </label>
                   <select
                     value={formData.category}
                     onChange={(e) =>
@@ -853,6 +867,7 @@ function EventFormModal({
                       })
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                    id="category"
                   >
                     <option value="commercial">Commercial</option>
                     <option value="cultural">Culturel</option>
@@ -863,7 +878,10 @@ function EventFormModal({
 
                 {/* Date et heure de début */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                    htmlFor="start-date"
+                  >
                     Date et heure de début *
                   </label>
                   <input
@@ -872,12 +890,16 @@ function EventFormModal({
                     value={formData.start_date}
                     onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                    id="start-date"
                   />
                 </div>
 
                 {/* Date et heure de fin */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                    htmlFor="end-date"
+                  >
                     Date et heure de fin *
                   </label>
                   <input
@@ -886,24 +908,33 @@ function EventFormModal({
                     value={formData.end_date}
                     onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                    id="end-date"
                   />
                 </div>
 
                 {/* Ville */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Ville *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="city">
+                    Ville *
+                  </label>
                   <input
                     type="text"
                     required
                     value={formData.city}
                     onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                    id="city"
                   />
                 </div>
 
                 {/* Lieu */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Lieu *</label>
+                  <label
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                    htmlFor="location"
+                  >
+                    Lieu *
+                  </label>
                   <input
                     type="text"
                     required
@@ -911,12 +942,13 @@ function EventFormModal({
                     onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
                     placeholder="Ex: Stade de France, Zénith de Paris..."
+                    id="location"
                   />
                 </div>
 
                 {/* Adresse complète */}
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="address">
                     Adresse complète
                   </label>
                   <input
@@ -924,12 +956,16 @@ function EventFormModal({
                     value={formData.address}
                     onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                    id="address"
                   />
                 </div>
 
                 {/* Audience attendue */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                    htmlFor="expected-attendance"
+                  >
                     Audience attendue
                   </label>
                   <input
@@ -943,12 +979,16 @@ function EventFormModal({
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
                     placeholder="Nombre de personnes"
+                    id="expected-attendance"
                   />
                 </div>
 
                 {/* Priorité */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                    htmlFor="priority-level"
+                  >
                     Niveau de priorité (1-10)
                   </label>
                   <input
@@ -960,6 +1000,7 @@ function EventFormModal({
                       setFormData({ ...formData, priority_level: parseInt(e.target.value) })
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                    id="priority-level"
                   />
                 </div>
 

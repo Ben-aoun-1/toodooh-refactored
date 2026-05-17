@@ -361,7 +361,7 @@ export default function MyRecharges() {
 
             <form onSubmit={handleSubmitRecharge} className="space-y-5">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="amount">
                   Montant (TND) *
                 </label>
                 <input
@@ -373,12 +373,16 @@ export default function MyRecharges() {
                   min="10"
                   step="0.01"
                   required
+                  id="amount"
                 />
                 <p className="text-xs text-gray-400 mt-1">Montant minimum : 10 TND</p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                  htmlFor="payment-method"
+                >
                   Méthode de paiement *
                 </label>
                 <select
@@ -388,6 +392,7 @@ export default function MyRecharges() {
                   }
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB]/40 focus:border-[#76E6AB] transition-all"
                   required
+                  id="payment-method"
                 >
                   <option value="card">Carte bancaire</option>
                   <option value="bank">Virement bancaire</option>
@@ -396,7 +401,10 @@ export default function MyRecharges() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                  htmlFor="description"
+                >
                   Description (optionnel)
                 </label>
                 <textarea
@@ -405,6 +413,7 @@ export default function MyRecharges() {
                   rows={3}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB]/40 focus:border-[#76E6AB] transition-all resize-none"
                   placeholder="Description de la recharge"
+                  id="description"
                 ></textarea>
               </div>
 

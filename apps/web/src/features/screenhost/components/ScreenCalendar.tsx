@@ -270,14 +270,12 @@ export default function ScreenCalendar({
     }
 
     try {
-
       // Créer une période d'indisponibilité pour chaque écran sélectionné
       const createdPeriods = [];
 
       for (const screenId of selectedScreens) {
         const screen = screens.find((s) => s.id === screenId);
         if (screen) {
-
           // Créer la période via React Query (invalide screensKeys → refetch parent).
           const newPeriod = await createPeriod.mutateAsync({
             screen_id: screenId,
@@ -287,7 +285,6 @@ export default function ScreenCalendar({
             end_time: endTime,
             reason,
           });
-
 
           // Ajouter à l'état local
           setUnavailabilityPeriods((prev) => [...prev, newPeriod]);
@@ -327,7 +324,6 @@ export default function ScreenCalendar({
   };
 
   const getUnavailabilityForDate = (date: Date) => {
-
     return unavailabilityPeriods.filter((period) => {
       const periodStart = new Date(period.start_date);
       const periodEnd = new Date(period.end_date);
@@ -515,6 +511,7 @@ export default function ScreenCalendar({
                 {screens.map((screen) => (
                   <label
                     key={screen.id}
+                    aria-label={`Sélectionner l'écran ${screen.name}`}
                     className={`flex items-center p-3 rounded-lg border cursor-pointer transition-colors ${
                       selectedScreens.includes(screen.id)
                         ? 'bg-[#00B3A6]/10 border-[#00B3A6]'
@@ -558,7 +555,10 @@ export default function ScreenCalendar({
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Période</h3>
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label
+                      className="block text-sm font-medium text-gray-700 mb-2"
+                      htmlFor="start-date"
+                    >
                       Date de début
                     </label>
                     <input
@@ -571,6 +571,7 @@ export default function ScreenCalendar({
                           ? 'border-red-500'
                           : 'border-gray-300'
                       }`}
+                      id="start-date"
                     />
                     {startDate && startDate < new Date().toISOString().split('T')[0] && (
                       <p className="text-red-600 text-xs mt-1">
@@ -579,7 +580,10 @@ export default function ScreenCalendar({
                     )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label
+                      className="block text-sm font-medium text-gray-700 mb-2"
+                      htmlFor="end-date"
+                    >
                       Date de fin
                     </label>
                     <input
@@ -592,6 +596,7 @@ export default function ScreenCalendar({
                           ? 'border-red-500'
                           : 'border-gray-300'
                       }`}
+                      id="end-date"
                     />
                     {startDate && endDate && endDate < startDate && (
                       <p className="text-red-600 text-xs mt-1">
@@ -606,7 +611,10 @@ export default function ScreenCalendar({
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Heures</h3>
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label
+                      className="block text-sm font-medium text-gray-700 mb-2"
+                      htmlFor="start-time"
+                    >
                       Heure de début
                     </label>
                     <input
@@ -620,6 +628,7 @@ export default function ScreenCalendar({
                           ? 'border-red-500'
                           : 'border-gray-300'
                       }`}
+                      id="start-time"
                     />
                     {startDate === new Date().toISOString().split('T')[0] &&
                       startTime &&
@@ -631,7 +640,10 @@ export default function ScreenCalendar({
                       )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label
+                      className="block text-sm font-medium text-gray-700 mb-2"
+                      htmlFor="end-time"
+                    >
                       Heure de fin
                     </label>
                     <input
@@ -649,6 +661,7 @@ export default function ScreenCalendar({
                           ? 'border-red-500'
                           : 'border-gray-300'
                       }`}
+                      id="end-time"
                     />
                     {startDate &&
                       endDate &&
@@ -672,7 +685,7 @@ export default function ScreenCalendar({
                 Raison de l'indisponibilité
               </h3>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="reason">
                   Motif <span className="text-red-500">*</span>
                 </label>
                 <textarea
@@ -681,6 +694,7 @@ export default function ScreenCalendar({
                   placeholder="Ex: Maintenance préventive, Panne technique, Événement privé..."
                   rows={3}
                   className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                  id="reason"
                 />
                 {!reason.trim() && (
                   <p className="text-red-600 text-xs mt-1">

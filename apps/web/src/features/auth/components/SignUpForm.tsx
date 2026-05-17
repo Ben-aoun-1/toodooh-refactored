@@ -127,7 +127,6 @@ function parseFleetScreenCount(v: string): number {
   return Number.isNaN(n) ? 0 : n;
 }
 
-
 export default function SignUpForm({ currentStep, onStepChange, onProfileTypeChange }: Props) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -672,10 +671,11 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {/* Nom */}
         <div>
-          <label className={labelClass}>
+          <label className={labelClass} htmlFor="signup-last-name">
             Nom <span className="text-red-500">*</span>
           </label>
           <input
+            id="signup-last-name"
             type="text"
             required
             value={lastName}
@@ -686,10 +686,11 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
         </div>
         {/* Prénom */}
         <div>
-          <label className={labelClass}>
+          <label className={labelClass} htmlFor="signup-first-name">
             Prénom <span className="text-red-500">*</span>
           </label>
           <input
+            id="signup-first-name"
             type="text"
             required
             value={firstName}
@@ -700,10 +701,11 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
         </div>
         {/* Fonction */}
         <div>
-          <label className={labelClass}>
+          <label className={labelClass} htmlFor="signup-fonction">
             Fonction <span className="text-red-500">*</span>
           </label>
           <input
+            id="signup-fonction"
             type="text"
             required
             value={fonction}
@@ -714,10 +716,11 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
         </div>
         {/* Email */}
         <div>
-          <label className={labelClass}>
+          <label className={labelClass} htmlFor="signup-email">
             Email professionnel <span className="text-red-500">*</span>
           </label>
           <input
+            id="signup-email"
             type="email"
             required
             value={formData.email}
@@ -735,10 +738,11 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
         </div>
         {/* Téléphone */}
         <div>
-          <label className={labelClass}>
+          <label className={labelClass} htmlFor="signup-phone">
             Téléphone <span className="text-red-500">*</span>
           </label>
           <input
+            id="signup-phone"
             type="tel"
             required
             value={formData.contact_phone}
@@ -759,11 +763,12 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
         </div>
         {/* Code screencast/screenhost agent (après email et téléphone) */}
         <div>
-          <label className={labelClass}>
+          <label className={labelClass} htmlFor="signup-agent-code">
             CODE DE VOTRE {isOwner ? 'SCREENHOST' : 'SCREENCAST'} AGENT{' '}
             <span className="text-red-500">*</span>
           </label>
           <input
+            id="signup-agent-code"
             type="text"
             required
             value={formData.agent_toodooh}
@@ -774,10 +779,11 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
         </div>
         {/* Mot de passe */}
         <div>
-          <label className={labelClass}>
+          <label className={labelClass} htmlFor="signup-password">
             Mot de passe <span className="text-red-500">*</span>
           </label>
           <input
+            id="signup-password"
             type={showPassword ? 'text' : 'password'}
             required
             value={formData.password}
@@ -788,10 +794,11 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
         </div>
         {/* Confirmer mot de passe */}
         <div>
-          <label className={labelClass}>
+          <label className={labelClass} htmlFor="signup-confirm-password">
             Confirmer Mot de passe <span className="text-red-500">*</span>
           </label>
           <input
+            id="signup-confirm-password"
             type={showConfirmPassword ? 'text' : 'password'}
             required
             value={confirmPassword}
@@ -920,7 +927,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <label className={labelClass}>
+              <label className={labelClass} htmlFor="etablissement-name">
                 Nom de l&apos;établissement <span className="text-red-500">*</span>
               </label>
               <input
@@ -930,10 +937,11 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
                 onChange={(e) => setEtablissementName(e.target.value)}
                 className={inputClass}
                 placeholder="Nom de l'établissement"
+                id="etablissement-name"
               />
             </div>
             <div>
-              <label className={labelClass}>
+              <label className={labelClass} htmlFor="tax-number">
                 Matricule fiscal <span className="text-red-500">*</span>
               </label>
               <input
@@ -943,10 +951,11 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
                 onChange={(e) => setFormData({ ...formData, tax_number: e.target.value })}
                 className={inputClass}
                 placeholder="Matricule fiscal"
+                id="tax-number"
               />
             </div>
             <div>
-              <label className={labelClass}>
+              <label className={labelClass} htmlFor="business-sector-id">
                 Catégorie <span className="text-red-500">*</span>
               </label>
               <select
@@ -954,6 +963,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
                 value={formData.business_sector_id}
                 onChange={(e) => setFormData({ ...formData, business_sector_id: e.target.value })}
                 className={inputClass}
+                id="business-sector-id"
               >
                 <option value="">Sélectionnez votre secteur</option>
                 {getDisplaySectors().map((s) => (
@@ -964,7 +974,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
               </select>
             </div>
             <div>
-              <label className={labelClass}>
+              <label className={labelClass} htmlFor="etablissement-screens">
                 Nombre d&apos;écrans <span className="text-red-500">*</span>
               </label>
               <select
@@ -972,6 +982,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
                 value={etablissementScreens}
                 onChange={(e) => setEtablissementScreens(e.target.value)}
                 className={inputClass}
+                id="etablissement-screens"
               >
                 {screenOptions.map((o) => (
                   <option key={`io-${o.value || 'empty'}`} value={o.value}>
@@ -981,7 +992,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
               </select>
             </div>
             <div>
-              <label className={labelClass}>
+              <label className={labelClass} htmlFor="etablissement-rooms">
                 Nombre de salles <span className="text-red-500">*</span>
               </label>
               <input
@@ -991,6 +1002,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
                 onChange={(e) => setEtablissementRooms(e.target.value)}
                 className={inputClass}
                 placeholder="2"
+                id="etablissement-rooms"
               />
             </div>
           </div>
@@ -1042,7 +1054,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <label className={labelClass}>
+              <label className={labelClass} htmlFor="business-name">
                 Nom de l&apos;entreprise <span className="text-red-500">*</span>
               </label>
               <input
@@ -1052,10 +1064,11 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
                 onChange={(e) => setFormData({ ...formData, business_name: e.target.value })}
                 className={inputClass}
                 placeholder="Nom de l'entreprise"
+                id="business-name"
               />
             </div>
             <div>
-              <label className={labelClass}>
+              <label className={labelClass} htmlFor="tax-number-2">
                 Matricule fiscal <span className="text-red-500">*</span>
               </label>
               <input
@@ -1065,15 +1078,17 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
                 onChange={(e) => setFormData({ ...formData, tax_number: e.target.value })}
                 className={inputClass}
                 placeholder="Matricule fiscal"
+                id="tax-number-2"
               />
             </div>
             <div>
-              <label className={labelClass}>
+              <label className={labelClass} htmlFor="signup-business-sector">
                 Catégorie <span className="text-red-500">*</span>
               </label>
               {selectedProfileType === 'agency' ? (
                 <>
                   <input
+                    id="signup-business-sector"
                     type="text"
                     value="Agence de publicité"
                     readOnly
@@ -1083,6 +1098,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
                 </>
               ) : (
                 <select
+                  id="signup-business-sector"
                   required
                   value={formData.business_sector_id}
                   onChange={(e) => setFormData({ ...formData, business_sector_id: e.target.value })}
@@ -1101,7 +1117,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
               )}
             </div>
             <div>
-              <label className={labelClass}>
+              <label className={labelClass} htmlFor="company-size">
                 {isOwner ? "Nombre d'établissements de votre parc" : "Taille de l'entreprise"}{' '}
                 <span className="text-red-500">*</span>
               </label>
@@ -1110,6 +1126,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
                 value={formData.company_size || ''}
                 onChange={(e) => setFormData({ ...formData, company_size: e.target.value })}
                 className={inputClass}
+                id="company-size"
               >
                 <option value="">{isOwner ? '12' : 'Sélectionnez la taille'}</option>
                 {isOwner
@@ -1128,7 +1145,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
           </div>
 
           <div>
-            <label className={labelClass}>
+            <label className={labelClass} htmlFor="street-address">
               Adresse du siège <span className="text-red-500">*</span>
             </label>
             <input
@@ -1138,12 +1155,13 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
               onChange={(e) => setFormData({ ...formData, street_address: e.target.value })}
               className={inputClass}
               placeholder="Adresse"
+              id="street-address"
             />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <label className={labelClass}>
+              <label className={labelClass} htmlFor="city">
                 Ville <span className="text-red-500">*</span>
               </label>
               <input
@@ -1153,10 +1171,11 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
                 onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                 className={inputClass}
                 placeholder="Ville"
+                id="city"
               />
             </div>
             <div>
-              <label className={labelClass}>
+              <label className={labelClass} htmlFor="zone">
                 Zone <span className="text-red-500">*</span>
               </label>
               <input
@@ -1166,12 +1185,13 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
                 onChange={(e) => setFormData({ ...formData, zone: e.target.value })}
                 className={inputClass}
                 placeholder="1000"
+                id="zone"
               />
             </div>
           </div>
           {selectedProfileType === 'fleet_owner' && (
             <div>
-              <label className={labelClass}>
+              <label className={labelClass} htmlFor="postal-code">
                 Code postal <span className="text-red-500">*</span>
               </label>
               <input
@@ -1182,12 +1202,13 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
                 onChange={(e) => setFormData({ ...formData, postal_code: e.target.value })}
                 className={inputClass}
                 placeholder="1000"
+                id="postal-code"
               />
             </div>
           )}
 
           <div>
-            <label className={labelClass}>
+            <label className={labelClass} htmlFor="governorate-id">
               Gouvernorat <span className="text-red-500">*</span>
             </label>
             <select
@@ -1195,6 +1216,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
               value={formData.governorate_id}
               onChange={(e) => setFormData({ ...formData, governorate_id: e.target.value })}
               className={inputClass}
+              id="governorate-id"
             >
               <option value="">Gouvernorat</option>
               {governorates.map((g) => (
@@ -1232,7 +1254,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
       </div>
       <div className="space-y-5">
         <div>
-          <label className={labelClass}>
+          <label className={labelClass} htmlFor="etablissement-name-2">
             Nom de l&apos;établissement <span className="text-red-500">*</span>
           </label>
           <input
@@ -1242,10 +1264,11 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             onChange={(e) => setEtablissementName(e.target.value)}
             className={inputClass}
             placeholder="Nom de l'établissement"
+            id="etablissement-name-2"
           />
         </div>
         <div>
-          <label className={labelClass}>
+          <label className={labelClass} htmlFor="etablissement-screens-2">
             Nombre d&apos;écrans <span className="text-red-500">*</span>
           </label>
           <select
@@ -1253,6 +1276,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             value={etablissementScreens}
             onChange={(e) => setEtablissementScreens(e.target.value)}
             className={inputClass}
+            id="etablissement-screens-2"
           >
             {screenOptions.map((o) => (
               <option key={o.value || 'empty'} value={o.value}>
@@ -1262,7 +1286,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
           </select>
         </div>
         <div>
-          <label className={labelClass}>
+          <label className={labelClass} htmlFor="etablissement-rooms-2">
             Nombre de salles <span className="text-red-500">*</span>
           </label>
           <input
@@ -1272,10 +1296,11 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             onChange={(e) => setEtablissementRooms(e.target.value)}
             className={inputClass}
             placeholder="2"
+            id="etablissement-rooms-2"
           />
         </div>
         <div>
-          <label className={labelClass}>
+          <label className={labelClass} htmlFor="street-address-2">
             Adresse <span className="text-red-500">*</span>
           </label>
           <input
@@ -1285,11 +1310,12 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             onChange={(e) => setFormData({ ...formData, street_address: e.target.value })}
             className={inputClass}
             placeholder="Adresse"
+            id="street-address-2"
           />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <div>
-            <label className={labelClass}>
+            <label className={labelClass} htmlFor="city-2">
               Ville <span className="text-red-500">*</span>
             </label>
             <input
@@ -1299,10 +1325,11 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
               onChange={(e) => setFormData({ ...formData, city: e.target.value })}
               className={inputClass}
               placeholder="Ville"
+              id="city-2"
             />
           </div>
           <div>
-            <label className={labelClass}>
+            <label className={labelClass} htmlFor="zone-2">
               Zone <span className="text-red-500">*</span>
             </label>
             <input
@@ -1312,11 +1339,12 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
               onChange={(e) => setFormData({ ...formData, zone: e.target.value })}
               className={inputClass}
               placeholder="Zone"
+              id="zone-2"
             />
           </div>
         </div>
         <div>
-          <label className={labelClass}>
+          <label className={labelClass} htmlFor="governorate-id-2">
             Gouvernorat <span className="text-red-500">*</span>
           </label>
           <select
@@ -1324,6 +1352,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             value={formData.governorate_id}
             onChange={(e) => setFormData({ ...formData, governorate_id: e.target.value })}
             className={inputClass}
+            id="governorate-id-2"
           >
             <option value="">Gouvernorat</option>
             {governorates.map((g) => (
@@ -1414,7 +1443,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
 
       <div className="space-y-5">
         <div>
-          <label className={labelClass}>
+          <label className={labelClass} htmlFor="fleet-draft-name">
             Nom de l&apos;établissement <span className="text-red-500">*</span>
           </label>
           <input
@@ -1423,16 +1452,18 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             onChange={(e) => setFleetDraftName(e.target.value)}
             className={inputClass}
             placeholder="Nom de l'établissement"
+            id="fleet-draft-name"
           />
         </div>
         <div>
-          <label className={labelClass}>
+          <label className={labelClass} htmlFor="fleet-draft-screens">
             Nombre d&apos;écrans <span className="text-red-500">*</span>
           </label>
           <select
             value={fleetDraftScreens}
             onChange={(e) => setFleetDraftScreens(e.target.value)}
             className={inputClass}
+            id="fleet-draft-screens"
           >
             {screenOptions.map((o) => (
               <option key={`f-${o.value || 'e'}`} value={o.value}>
@@ -1442,7 +1473,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
           </select>
         </div>
         <div>
-          <label className={labelClass}>
+          <label className={labelClass} htmlFor="fleet-draft-rooms">
             Nombre de salles <span className="text-red-500">*</span>
           </label>
           <input
@@ -1451,10 +1482,11 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             onChange={(e) => setFleetDraftRooms(e.target.value)}
             className={inputClass}
             placeholder="2"
+            id="fleet-draft-rooms"
           />
         </div>
         <div>
-          <label className={labelClass}>
+          <label className={labelClass} htmlFor="fleet-draft-street">
             Adresse <span className="text-red-500">*</span>
           </label>
           <input
@@ -1463,17 +1495,19 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             onChange={(e) => setFleetDraftStreet(e.target.value)}
             className={inputClass}
             placeholder="Adresse"
+            id="fleet-draft-street"
           />
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <div>
-            <label className={labelClass}>
+            <label className={labelClass} htmlFor="fleet-draft-city">
               Ville <span className="text-red-500">*</span>
             </label>
             <select
               value={fleetDraftCity}
               onChange={(e) => setFleetDraftCity(e.target.value)}
               className={inputClass}
+              id="fleet-draft-city"
             >
               <option value="">Ville</option>
               {tunisianCities.map((c) => (
@@ -1484,7 +1518,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             </select>
           </div>
           <div>
-            <label className={labelClass}>
+            <label className={labelClass} htmlFor="fleet-draft-zone">
               Zone <span className="text-red-500">*</span>
             </label>
             <input
@@ -1493,17 +1527,19 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
               onChange={(e) => setFleetDraftZone(e.target.value)}
               className={inputClass}
               placeholder="Zone ou code postal"
+              id="fleet-draft-zone"
             />
           </div>
         </div>
         <div>
-          <label className={labelClass}>
+          <label className={labelClass} htmlFor="fleet-draft-governorate">
             Gouvernorat <span className="text-red-500">*</span>
           </label>
           <select
             value={fleetDraftGovernorate}
             onChange={(e) => setFleetDraftGovernorate(e.target.value)}
             className={inputClass}
+            id="fleet-draft-governorate"
           >
             <option value="">Gouvernorat</option>
             {governorates.map((g) => (
@@ -1536,7 +1572,10 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
       </div>
 
       <div className="rounded-2xl p-5" style={{ background: '#F5F5F5' }}>
-        <label className="flex items-start cursor-pointer gap-3">
+        <label
+          className="flex items-start cursor-pointer gap-3"
+          aria-label="J'ajouterai mes coordonnées bancaires plus tard"
+        >
           <input
             type="checkbox"
             checked={addBankLater}
@@ -1634,7 +1673,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <div className="md:col-span-2">
-          <label className={labelClass}>
+          <label className={labelClass} htmlFor="street-address-3">
             Adresse <span className="text-red-500">*</span>
           </label>
           <input
@@ -1644,10 +1683,11 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             onChange={(e) => setFormData({ ...formData, street_address: e.target.value })}
             className={inputClass}
             placeholder="123 Rue de la Paix"
+            id="street-address-3"
           />
         </div>
         <div>
-          <label className={labelClass}>
+          <label className={labelClass} htmlFor="city-3">
             Ville <span className="text-red-500">*</span>
           </label>
           <input
@@ -1657,10 +1697,11 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             onChange={(e) => setFormData({ ...formData, city: e.target.value })}
             className={inputClass}
             placeholder="Tunis"
+            id="city-3"
           />
         </div>
         <div>
-          <label className={labelClass}>
+          <label className={labelClass} htmlFor="postal-code-2">
             Code postal <span className="text-red-500">*</span>
           </label>
           <input
@@ -1671,11 +1712,12 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             onChange={(e) => setFormData({ ...formData, postal_code: e.target.value })}
             className={inputClass}
             placeholder="1000"
+            id="postal-code-2"
           />
         </div>
         {(selectedProfileType === 'fleet_owner' || selectedProfileType === 'individual_owner') && (
           <div className="md:col-span-2">
-            <label className={labelClass}>
+            <label className={labelClass} htmlFor="zone-3">
               Secteur/Zone <span className="text-red-500">*</span>
             </label>
             <select
@@ -1683,6 +1725,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
               value={formData.zone}
               onChange={(e) => setFormData({ ...formData, zone: e.target.value })}
               className={inputClass}
+              id="zone-3"
             >
               <option value="">-- Choisissez --</option>
               {ownerZones.map((z, i) => (
@@ -1694,7 +1737,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
           </div>
         )}
         <div className="md:col-span-2">
-          <label className={labelClass}>
+          <label className={labelClass} htmlFor="governorate-id-3">
             Gouvernorat <span className="text-red-500">*</span>
           </label>
           <select
@@ -1702,6 +1745,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             value={formData.governorate_id}
             onChange={(e) => setFormData({ ...formData, governorate_id: e.target.value })}
             className={inputClass}
+            id="governorate-id-3"
           >
             <option value="">-- Choisissez --</option>
             {governorates.map((g) => (
@@ -1727,7 +1771,10 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
 
       {/* Ajouter plus tard */}
       <div className="rounded-2xl p-5" style={{ background: '#F5F5F5' }}>
-        <label className="flex items-start cursor-pointer gap-3">
+        <label
+          className="flex items-start cursor-pointer gap-3"
+          aria-label="J'ajouterai mes documents plus tard"
+        >
           <input
             type="checkbox"
             checked={addDocumentLater}

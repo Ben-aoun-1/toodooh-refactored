@@ -403,27 +403,27 @@ export default function AdminManagement() {
                 <div className="bg-gray-50 rounded-lg p-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-sm font-medium text-gray-600">Prénom</label>
+                      <span className="text-sm font-medium text-gray-600">Prénom</span>
                       <p className="text-sm text-gray-900 mt-1 font-semibold">
                         {selectedAdmin.first_name}
                       </p>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-gray-600">Nom</label>
+                      <span className="text-sm font-medium text-gray-600">Nom</span>
                       <p className="text-sm text-gray-900 mt-1 font-semibold">
                         {selectedAdmin.last_name}
                       </p>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-gray-600">Email</label>
+                      <span className="text-sm font-medium text-gray-600">Email</span>
                       <p className="text-sm text-gray-900 mt-1">{selectedAdmin.email}</p>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-gray-600">Rôle</label>
+                      <span className="text-sm font-medium text-gray-600">Rôle</span>
                       <div className="mt-1">{getRoleBadge(selectedAdmin.role)}</div>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-gray-600">Statut</label>
+                      <span className="text-sm font-medium text-gray-600">Statut</span>
                       <div className="mt-1">{getStatusBadge(selectedAdmin.is_active)}</div>
                     </div>
                   </div>
@@ -439,15 +439,13 @@ export default function AdminManagement() {
                 <div className="bg-gray-50 rounded-lg p-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-sm font-medium text-gray-600">Date de création</label>
+                      <span className="text-sm font-medium text-gray-600">Date de création</span>
                       <p className="text-sm text-gray-900 mt-1">
                         {formatDate(selectedAdmin.created_at)}
                       </p>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-gray-600">
-                        Dernière connexion
-                      </label>
+                      <span className="text-sm font-medium text-gray-600">Dernière connexion</span>
                       <p className="text-sm text-gray-900 mt-1">
                         {selectedAdmin.last_login ? formatDate(selectedAdmin.last_login) : 'Jamais'}
                       </p>

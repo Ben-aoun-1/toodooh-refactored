@@ -616,19 +616,17 @@ export default function CampaignMonitoring() {
                 <div className="bg-gray-50 rounded-lg p-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-sm font-medium text-gray-600">
-                        Nom de la campagne
-                      </label>
+                      <span className="text-sm font-medium text-gray-600">Nom de la campagne</span>
                       <p className="text-sm text-gray-900 mt-1 font-semibold">
                         {selectedCampaign.campaign_name}
                       </p>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-gray-600">Client</label>
+                      <span className="text-sm font-medium text-gray-600">Client</span>
                       <p className="text-sm text-gray-900 mt-1">{selectedCampaign.client_name}</p>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-gray-600">Annonceur</label>
+                      <span className="text-sm font-medium text-gray-600">Annonceur</span>
                       <p className="text-sm text-gray-900 mt-1 font-semibold">
                         {selectedCampaign.advertiser_name}
                       </p>
@@ -642,13 +640,13 @@ export default function CampaignMonitoring() {
                       </p>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-gray-600">Catégorie</label>
+                      <span className="text-sm font-medium text-gray-600">Catégorie</span>
                       <p className="text-sm text-gray-900 mt-1">
                         {getCategoryLabel(selectedCampaign.category)}
                       </p>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-gray-600">Période</label>
+                      <span className="text-sm font-medium text-gray-600">Période</span>
                       <p className="text-sm text-gray-900 mt-1">
                         Du {formatDate(selectedCampaign.start_date)}
                       </p>
@@ -657,21 +655,21 @@ export default function CampaignMonitoring() {
                       </p>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-gray-600">Date de création</label>
+                      <span className="text-sm font-medium text-gray-600">Date de création</span>
                       <p className="text-sm text-gray-900 mt-1">
                         {formatDate(selectedCampaign.created_at)}
                       </p>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-gray-600">
+                      <span className="text-sm font-medium text-gray-600">
                         Statut de la campagne
-                      </label>
+                      </span>
                       <div className="mt-1">{getStatusBadge(selectedCampaign.status)}</div>
                     </div>
                     <div>
-                      <label className="text-sm font-medium text-gray-600">
+                      <span className="text-sm font-medium text-gray-600">
                         Validation du contenu
-                      </label>
+                      </span>
                       <div className="mt-1">
                         {getValidationBadge(selectedCampaign.content_validation_status)}
                       </div>
@@ -918,7 +916,10 @@ export default function CampaignMonitoring() {
 
               {/* Champ raison */}
               <div className="mb-6">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <label
+                  className="block text-sm font-semibold text-gray-700 mb-2"
+                  htmlFor="stop-reason"
+                >
                   Raison de l'arrêt d'urgence *
                 </label>
                 <textarea
@@ -928,6 +929,7 @@ export default function CampaignMonitoring() {
                   placeholder="Ex: Contenu inapproprié détecté, violation des conditions d'utilisation, erreur technique critique..."
                   className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
                   required
+                  id="stop-reason"
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   Cette raison sera visible par l'annonceur et enregistrée dans l'historique.

@@ -35,7 +35,6 @@ const isDayUnavailable = (day: Date, periods: UnavailabilityPeriod[]) => {
 };
 
 export default function OwnerCalendarDevices() {
-
   const { user, needsApproval, validationStatus } = useAuthStore();
   const isDisabled = needsApproval && validationStatus === 'pending';
 
@@ -301,13 +300,17 @@ export default function OwnerCalendarDevices() {
 
                 <div className="p-4">
                   <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label
+                      className="block text-sm font-medium text-gray-700 mb-1"
+                      htmlFor="selected-establishment"
+                    >
                       Choix l&apos;établissement
                     </label>
                     <select
                       value={selectedEstablishment}
                       onChange={(e) => setSelectedEstablishment(e.target.value)}
                       className="h-11 min-w-[220px] rounded-lg border border-gray-200 px-3 text-sm"
+                      id="selected-establishment"
                     >
                       <option value="all">Toutes</option>
                       {establishments.map((e) => (

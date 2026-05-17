@@ -320,7 +320,9 @@ export default function MyClients() {
             </div>
             <form onSubmit={handleAddClient} className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Nom complet</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="name">
+                  Nom complet
+                </label>
                 <input
                   type="text"
                   name="name"
@@ -329,10 +331,16 @@ export default function MyClients() {
                   required
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6] transition-all text-gray-900"
                   placeholder="Nom du client"
+                  id="name"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                <label
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                  htmlFor="contact-email"
+                >
+                  Email
+                </label>
                 <input
                   type="email"
                   name="contact_email"
@@ -341,10 +349,16 @@ export default function MyClients() {
                   required
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6] transition-all text-gray-900"
                   placeholder="email@exemple.com"
+                  id="contact-email"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Téléphone</label>
+                <label
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                  htmlFor="contact-phone"
+                >
+                  Téléphone
+                </label>
                 <input
                   type="tel"
                   name="contact_phone"
@@ -353,10 +367,11 @@ export default function MyClients() {
                   required
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6] transition-all text-gray-900"
                   placeholder="+216 XX XXX XXX"
+                  id="contact-phone"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="societe">
                   Société (optionnel)
                 </label>
                 <input
@@ -366,6 +381,7 @@ export default function MyClients() {
                   onChange={handleInputChange}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6] transition-all text-gray-900"
                   placeholder="Nom de la société"
+                  id="societe"
                 />
               </div>
               <div className="flex justify-end space-x-3 pt-4">
@@ -466,7 +482,9 @@ export default function MyClients() {
             </div>
             <form onSubmit={handleEditClient} className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Nom complet</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="name-2">
+                  Nom complet
+                </label>
                 <input
                   type="text"
                   name="name"
@@ -474,10 +492,16 @@ export default function MyClients() {
                   onChange={handleInputChange}
                   required
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6] transition-all text-gray-900"
+                  id="name-2"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                <label
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                  htmlFor="contact-email-2"
+                >
+                  Email
+                </label>
                 <input
                   type="email"
                   name="contact_email"
@@ -485,10 +509,16 @@ export default function MyClients() {
                   onChange={handleInputChange}
                   required
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6] transition-all text-gray-900"
+                  id="contact-email-2"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Téléphone</label>
+                <label
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                  htmlFor="contact-phone-2"
+                >
+                  Téléphone
+                </label>
                 <input
                   type="tel"
                   name="contact_phone"
@@ -496,10 +526,11 @@ export default function MyClients() {
                   onChange={handleInputChange}
                   required
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6] transition-all text-gray-900"
+                  id="contact-phone-2"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="societe-2">
                   Société (optionnel)
                 </label>
                 <input
@@ -508,6 +539,7 @@ export default function MyClients() {
                   value={formData.societe}
                   onChange={handleInputChange}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6] transition-all text-gray-900"
+                  id="societe-2"
                 />
               </div>
               <div className="flex justify-end space-x-3 pt-4">

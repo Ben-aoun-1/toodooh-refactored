@@ -203,7 +203,10 @@ export function ModalProvider({ children }: { children: ReactNode }) {
               }}
             >
               <div>
-                <label className="block text-sm font-bold text-gray-900 mb-1.5">
+                <label
+                  className="block text-sm font-bold text-gray-900 mb-1.5"
+                  htmlFor="support-objective"
+                >
                   Choisissez vos objectifs *
                 </label>
                 <select
@@ -217,6 +220,7 @@ export function ModalProvider({ children }: { children: ReactNode }) {
                     backgroundSize: '1.25rem',
                     paddingRight: '2.5rem',
                   }}
+                  id="support-objective"
                 >
                   <option value="">Choisissez vos objectifs</option>
                   {appointmentObjectives.map((obj) => (
@@ -228,18 +232,27 @@ export function ModalProvider({ children }: { children: ReactNode }) {
               </div>
               {isAutreObjective(supportObjective) && (
                 <div>
-                  <label className="block text-sm font-bold text-gray-900 mb-1.5">Précision *</label>
+                  <label
+                    className="block text-sm font-bold text-gray-900 mb-1.5"
+                    htmlFor="support-other-detail"
+                  >
+                    Précision *
+                  </label>
                   <input
                     type="text"
                     value={supportOtherDetail}
                     onChange={(e) => setSupportOtherDetail(e.target.value)}
                     className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#97d8a5] focus:border-[#97d8a5]"
                     placeholder="Veuillez préciser dans la description"
+                    id="support-other-detail"
                   />
                 </div>
               )}
               <div>
-                <label className="block text-sm font-bold text-gray-900 mb-1.5">
+                <label
+                  className="block text-sm font-bold text-gray-900 mb-1.5"
+                  htmlFor="support-message"
+                >
                   Commentaire additionnels
                 </label>
                 <textarea
@@ -248,6 +261,7 @@ export function ModalProvider({ children }: { children: ReactNode }) {
                   onChange={(e) => setSupportMessage(e.target.value)}
                   className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#97d8a5] focus:border-[#97d8a5] resize-none"
                   placeholder="Votre Message ici.."
+                  id="support-message"
                 />
               </div>
               <div className="pt-1 border-t border-dashed border-sky-200 flex items-center gap-3">
@@ -317,7 +331,10 @@ export function ModalProvider({ children }: { children: ReactNode }) {
               }}
             >
               <div className="flex-shrink-0">
-                <label className="block text-sm font-bold text-gray-900 mb-1">
+                <label
+                  className="block text-sm font-bold text-gray-900 mb-1"
+                  htmlFor="appointment-objective"
+                >
                   Choisissez vos objectifs *
                 </label>
                 <select
@@ -331,6 +348,7 @@ export function ModalProvider({ children }: { children: ReactNode }) {
                     backgroundSize: '1.25rem',
                     paddingRight: '2.5rem',
                   }}
+                  id="appointment-objective"
                 >
                   <option value="">Choisissez vos objectifs</option>
                   {appointmentObjectives.map((obj) => (
@@ -342,20 +360,26 @@ export function ModalProvider({ children }: { children: ReactNode }) {
               </div>
               {isAutreObjective(appointmentObjective) && (
                 <div className="flex-shrink-0">
-                  <label className="block text-sm font-bold text-gray-900 mb-1">Précision *</label>
+                  <label
+                    className="block text-sm font-bold text-gray-900 mb-1"
+                    htmlFor="appointment-other-detail"
+                  >
+                    Précision *
+                  </label>
                   <input
                     type="text"
                     value={appointmentOtherDetail}
                     onChange={(e) => setAppointmentOtherDetail(e.target.value)}
                     className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#97d8a5] focus:border-[#97d8a5] text-sm"
                     placeholder="Veuillez préciser dans la description"
+                    id="appointment-other-detail"
                   />
                 </div>
               )}
               <div className="flex-shrink-0">
-                <label className="block text-sm font-bold text-gray-900 mb-1">
+                <span className="block text-sm font-bold text-gray-900 mb-1">
                   Choisissez un créneau *
-                </label>
+                </span>
                 <div className="border border-gray-200 rounded-xl p-2 bg-gray-50/50">
                   <div className="flex items-center justify-between mb-2">
                     <button
@@ -435,7 +459,10 @@ export function ModalProvider({ children }: { children: ReactNode }) {
                 </div>
               </div>
               <div className="flex-shrink-0">
-                <label className="block text-sm font-bold text-gray-900 mb-1">
+                <label
+                  className="block text-sm font-bold text-gray-900 mb-1"
+                  htmlFor="appointment-message"
+                >
                   Aidez-nous à préparer au mieux l&apos;entretien
                 </label>
                 <textarea
@@ -444,6 +471,7 @@ export function ModalProvider({ children }: { children: ReactNode }) {
                   onChange={(e) => setAppointmentMessage(e.target.value)}
                   className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#97d8a5] focus:border-[#97d8a5] resize-none text-sm"
                   placeholder="Votre Message ici.."
+                  id="appointment-message"
                 />
               </div>
               <div className="flex items-center gap-3 pt-2 flex-shrink-0">

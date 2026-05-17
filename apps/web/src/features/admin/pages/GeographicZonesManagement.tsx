@@ -232,7 +232,6 @@ export default function GeographicZonesManagement() {
     }
   };
 
-
   return (
     <AdminLayout
       title="Gestion des Zones Géographiques"
@@ -429,7 +428,10 @@ export default function GeographicZonesManagement() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label
+                      className="block text-sm font-medium text-gray-700 mb-2"
+                      htmlFor="zone-name"
+                    >
                       Nom de la zone *
                     </label>
                     <input
@@ -438,10 +440,14 @@ export default function GeographicZonesManagement() {
                       onChange={(e) => setZoneName(e.target.value)}
                       placeholder="Ex: Centre-ville Tunis"
                       className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                      id="zone-name"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label
+                      className="block text-sm font-medium text-gray-700 mb-2"
+                      htmlFor="zone-description"
+                    >
                       Description
                     </label>
                     <textarea
@@ -450,13 +456,14 @@ export default function GeographicZonesManagement() {
                       placeholder="Description de la zone..."
                       rows={3}
                       className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                      id="zone-description"
                     />
                   </div>
                   {editingZone && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <span className="block text-sm font-medium text-gray-700 mb-2">
                         Image de la zone
-                      </label>
+                      </span>
                       <div className="flex items-center gap-4">
                         {zoneImageUrl ? (
                           <img
@@ -504,27 +511,42 @@ export default function GeographicZonesManagement() {
                     </label>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Pays</label>
+                    <label
+                      className="block text-sm font-medium text-gray-700 mb-2"
+                      htmlFor="zone-country"
+                    >
+                      Pays
+                    </label>
                     <input
                       type="text"
                       value={zoneCountry}
                       onChange={(e) => setZoneCountry(e.target.value)}
                       placeholder="Ex: Tunisie"
                       className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                      id="zone-country"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Région</label>
+                    <label
+                      className="block text-sm font-medium text-gray-700 mb-2"
+                      htmlFor="zone-region"
+                    >
+                      Région
+                    </label>
                     <input
                       type="text"
                       value={zoneRegion}
                       onChange={(e) => setZoneRegion(e.target.value)}
                       placeholder="Ex: Tunis, Cap Bon"
                       className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                      id="zone-region"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label
+                      className="block text-sm font-medium text-gray-700 mb-2"
+                      htmlFor="radius"
+                    >
                       Rayon: {(radius / 1000).toFixed(1)} km
                     </label>
                     <input
@@ -538,6 +560,7 @@ export default function GeographicZonesManagement() {
                       style={{
                         background: `linear-gradient(to right, #00B3A6 0%, #00B3A6 ${((radius - 100) / (50000 - 100)) * 100}%, #e5e7eb ${((radius - 100) / (50000 - 100)) * 100}%, #e5e7eb 100%)`,
                       }}
+                      id="radius"
                     />
                     <div className="flex justify-between text-xs text-gray-500 mt-1">
                       <span>0.1 km</span>
@@ -548,9 +571,9 @@ export default function GeographicZonesManagement() {
                   {/* Liste des emplacements sélectionnés */}
                   {selectedLocations.length > 0 && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <span className="block text-sm font-medium text-gray-700 mb-2">
                         Emplacements sélectionnés ({selectedLocations.length})
-                      </label>
+                      </span>
                       <div className="space-y-2 max-h-32 overflow-y-auto">
                         {selectedLocations.map((loc, index) => (
                           <div

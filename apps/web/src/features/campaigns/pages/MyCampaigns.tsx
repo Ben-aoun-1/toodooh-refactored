@@ -35,7 +35,6 @@ const log = logger.child({ module: 'MyCampaigns' });
 
 type _CampaignStatus = 'active' | 'en attente' | 'terminée' | 'planifiée';
 
-
 interface Filters {
   client: string;
   category: string;
@@ -483,7 +482,12 @@ export default function MyCampaigns() {
             <p className="text-sm font-medium text-[#5C5C5C] mb-4">Filtres avancés</p>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
-                <label className="block text-sm font-medium text-[#5C5C5C] mb-1.5">Type</label>
+                <label
+                  className="block text-sm font-medium text-[#5C5C5C] mb-1.5"
+                  htmlFor="campaign-type"
+                >
+                  Type
+                </label>
                 <select
                   className="w-full h-10 px-3 text-sm border border-[#EBEBEB] rounded-md bg-white text-[#171717] focus:outline-none focus:ring-2 focus:ring-[#76E6AB]/30 focus:border-[#76E6AB] transition-colors"
                   value={filters.campaignType}
@@ -493,6 +497,7 @@ export default function MyCampaigns() {
                       campaignType: e.target.value as '' | 'campaign' | 'event',
                     })
                   }
+                  id="campaign-type"
                 >
                   <option value="">Tous les types</option>
                   <option value="campaign">Campagne</option>
@@ -500,11 +505,17 @@ export default function MyCampaigns() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-[#5C5C5C] mb-1.5">Catégorie</label>
+                <label
+                  className="block text-sm font-medium text-[#5C5C5C] mb-1.5"
+                  htmlFor="category"
+                >
+                  Catégorie
+                </label>
                 <select
                   className="w-full h-10 px-3 text-sm border border-[#EBEBEB] rounded-md bg-white text-[#171717] focus:outline-none focus:ring-2 focus:ring-[#76E6AB]/30 focus:border-[#76E6AB] transition-colors"
                   value={filters.category}
                   onChange={(e) => setFilters({ ...filters, category: e.target.value })}
+                  id="category"
                 >
                   <option value="">Toutes les catégories</option>
                   {uniqueCategories.map((category) => (
@@ -515,11 +526,14 @@ export default function MyCampaigns() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-[#5C5C5C] mb-1.5">Statut</label>
+                <label className="block text-sm font-medium text-[#5C5C5C] mb-1.5" htmlFor="status">
+                  Statut
+                </label>
                 <select
                   className="w-full h-10 px-3 text-sm border border-[#EBEBEB] rounded-md bg-white text-[#171717] focus:outline-none focus:ring-2 focus:ring-[#76E6AB]/30 focus:border-[#76E6AB] transition-colors"
                   value={filters.status}
                   onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+                  id="status"
                 >
                   <option value="">Tous les statuts</option>
                   {uniqueStatuses.map((status) => (
@@ -530,7 +544,10 @@ export default function MyCampaigns() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-[#5C5C5C] mb-1.5">
+                <label
+                  className="block text-sm font-medium text-[#5C5C5C] mb-1.5"
+                  htmlFor="start-date"
+                >
                   Date de début
                 </label>
                 <DatePicker
@@ -539,10 +556,14 @@ export default function MyCampaigns() {
                   className="w-full h-10 px-3 text-sm border border-[#EBEBEB] rounded-md bg-white text-[#171717] focus:outline-none focus:ring-2 focus:ring-[#76E6AB]/30 focus:border-[#76E6AB]"
                   dateFormat="dd/MM/yyyy"
                   placeholderText="Sélectionner"
+                  id="start-date"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[#5C5C5C] mb-1.5">
+                <label
+                  className="block text-sm font-medium text-[#5C5C5C] mb-1.5"
+                  htmlFor="end-date"
+                >
                   Date de fin
                 </label>
                 <DatePicker
@@ -551,6 +572,7 @@ export default function MyCampaigns() {
                   className="w-full h-10 px-3 text-sm border border-[#EBEBEB] rounded-md bg-white text-[#171717] focus:outline-none focus:ring-2 focus:ring-[#76E6AB]/30 focus:border-[#76E6AB]"
                   dateFormat="dd/MM/yyyy"
                   placeholderText="Sélectionner"
+                  id="end-date"
                 />
               </div>
             </div>

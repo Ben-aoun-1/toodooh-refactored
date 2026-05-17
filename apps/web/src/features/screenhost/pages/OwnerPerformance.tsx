@@ -350,13 +350,17 @@ export default function OwnerPerformance() {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
                     <div>
-                      <label className="mb-1 block text-sm font-semibold text-gray-700">
+                      <label
+                        className="mb-1 block text-sm font-semibold text-gray-700"
+                        htmlFor="campaign-id"
+                      >
                         Campagne
                       </label>
                       <select
                         value={filters.campaignId}
                         onChange={(e) => onFilterChange('campaignId', e.target.value)}
                         className="h-11 w-full rounded-lg border border-gray-200 px-3 text-sm"
+                        id="campaign-id"
                       >
                         <option value="">Toutes</option>
                         {(dataset?.options.campaigns || []).map((option) => (
@@ -367,7 +371,10 @@ export default function OwnerPerformance() {
                       </select>
                     </div>
                     <div>
-                      <label className="mb-1 block text-sm font-semibold text-gray-700">
+                      <label
+                        className="mb-1 block text-sm font-semibold text-gray-700"
+                        htmlFor="start-date"
+                      >
                         Date de début
                       </label>
                       <input
@@ -376,10 +383,14 @@ export default function OwnerPerformance() {
                         onChange={(e) => onFilterChange('startDate', e.target.value)}
                         disabled={!showCustomDate}
                         className="h-11 w-full rounded-lg border border-gray-200 px-3 text-sm disabled:bg-gray-50"
+                        id="start-date"
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-sm font-semibold text-gray-700">
+                      <label
+                        className="mb-1 block text-sm font-semibold text-gray-700"
+                        htmlFor="end-date"
+                      >
                         Date de fin
                       </label>
                       <input
@@ -388,6 +399,7 @@ export default function OwnerPerformance() {
                         onChange={(e) => onFilterChange('endDate', e.target.value)}
                         disabled={!showCustomDate}
                         className="h-11 w-full rounded-lg border border-gray-200 px-3 text-sm disabled:bg-gray-50"
+                        id="end-date"
                       />
                     </div>
                     <div className="flex justify-end">
@@ -423,13 +435,17 @@ export default function OwnerPerformance() {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
                     <div>
-                      <label className="mb-1 block text-sm font-semibold text-gray-700">
+                      <label
+                        className="mb-1 block text-sm font-semibold text-gray-700"
+                        htmlFor="location-id"
+                      >
                         Établissement
                       </label>
                       <select
                         value={filters.locationId}
                         onChange={(e) => onFilterChange('locationId', e.target.value)}
                         className="h-11 w-full rounded-lg border border-gray-200 px-3 text-sm"
+                        id="location-id"
                       >
                         <option value="">Toutes</option>
                         {(dataset?.options.locations || []).map((option) => (
@@ -440,7 +456,10 @@ export default function OwnerPerformance() {
                       </select>
                     </div>
                     <div>
-                      <label className="mb-1 block text-sm font-semibold text-gray-700">
+                      <label
+                        className="mb-1 block text-sm font-semibold text-gray-700"
+                        htmlFor="start-date-2"
+                      >
                         Date de début
                       </label>
                       <input
@@ -449,10 +468,14 @@ export default function OwnerPerformance() {
                         onChange={(e) => onFilterChange('startDate', e.target.value)}
                         disabled={!showCustomDate}
                         className="h-11 w-full rounded-lg border border-gray-200 px-3 text-sm disabled:bg-gray-50"
+                        id="start-date-2"
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-sm font-semibold text-gray-700">
+                      <label
+                        className="mb-1 block text-sm font-semibold text-gray-700"
+                        htmlFor="end-date-2"
+                      >
                         Date de fin
                       </label>
                       <input
@@ -461,14 +484,21 @@ export default function OwnerPerformance() {
                         onChange={(e) => onFilterChange('endDate', e.target.value)}
                         disabled={!showCustomDate}
                         className="h-11 w-full rounded-lg border border-gray-200 px-3 text-sm disabled:bg-gray-50"
+                        id="end-date-2"
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-sm font-semibold text-gray-700">Zone</label>
+                      <label
+                        className="mb-1 block text-sm font-semibold text-gray-700"
+                        htmlFor="zone-id"
+                      >
+                        Zone
+                      </label>
                       <select
                         value={filters.zoneId}
                         onChange={(e) => onFilterChange('zoneId', e.target.value)}
                         className="h-11 w-full rounded-lg border border-gray-200 px-3 text-sm"
+                        id="zone-id"
                       >
                         <option value="">Toutes</option>
                         {(dataset?.options.zones || []).map((option) => (
@@ -622,13 +652,17 @@ export default function OwnerPerformance() {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                       <div>
-                        <label className="mb-1 block text-sm font-semibold text-gray-700">
+                        <label
+                          className="mb-1 block text-sm font-semibold text-gray-700"
+                          htmlFor="campaign-id-2"
+                        >
                           Campagne
                         </label>
                         <select
                           value={filters.campaignId}
                           onChange={(e) => onFilterChange('campaignId', e.target.value)}
                           className="h-11 w-full rounded-lg border border-gray-200 px-3 text-sm"
+                          id="campaign-id-2"
                         >
                           <option value="">Toutes</option>
                           {(dataset?.options.campaigns || []).map((option) => (
@@ -639,7 +673,10 @@ export default function OwnerPerformance() {
                         </select>
                       </div>
                       <div>
-                        <label className="mb-1 block text-sm font-semibold text-gray-700">
+                        <label
+                          className="mb-1 block text-sm font-semibold text-gray-700"
+                          htmlFor="start-date-3"
+                        >
                           Date de début
                         </label>
                         <input
@@ -648,10 +685,14 @@ export default function OwnerPerformance() {
                           onChange={(e) => onFilterChange('startDate', e.target.value)}
                           disabled={!showCustomDate}
                           className="h-11 w-full rounded-lg border border-gray-200 px-3 text-sm disabled:bg-gray-50"
+                          id="start-date-3"
                         />
                       </div>
                       <div>
-                        <label className="mb-1 block text-sm font-semibold text-gray-700">
+                        <label
+                          className="mb-1 block text-sm font-semibold text-gray-700"
+                          htmlFor="end-date-3"
+                        >
                           Date de fin
                         </label>
                         <input
@@ -660,16 +701,21 @@ export default function OwnerPerformance() {
                           onChange={(e) => onFilterChange('endDate', e.target.value)}
                           disabled={!showCustomDate}
                           className="h-11 w-full rounded-lg border border-gray-200 px-3 text-sm disabled:bg-gray-50"
+                          id="end-date-3"
                         />
                       </div>
                       <div>
-                        <label className="mb-1 block text-sm font-semibold text-gray-700">
+                        <label
+                          className="mb-1 block text-sm font-semibold text-gray-700"
+                          htmlFor="zone-id-2"
+                        >
                           Zone
                         </label>
                         <select
                           value={filters.zoneId}
                           onChange={(e) => onFilterChange('zoneId', e.target.value)}
                           className="h-11 w-full rounded-lg border border-gray-200 px-3 text-sm"
+                          id="zone-id-2"
                         >
                           <option value="">Toutes</option>
                           {(dataset?.options.zones || []).map((option) => (

@@ -286,7 +286,7 @@ export default function RechargeManagement() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Filtre par statut */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="status-filter">
               <Filter className="inline h-4 w-4 mr-1" />
               Statut
             </label>
@@ -297,6 +297,7 @@ export default function RechargeManagement() {
                 setCurrentPage(1);
               }}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+              id="status-filter"
             >
               <option value="all">Tous les statuts</option>
               <option value="pending">En attente</option>
@@ -308,7 +309,7 @@ export default function RechargeManagement() {
 
           {/* Recherche */}
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="search-term">
               <Search className="inline h-4 w-4 mr-1" />
               Rechercher par référence
             </label>
@@ -321,6 +322,7 @@ export default function RechargeManagement() {
               }}
               placeholder="Rechercher une référence..."
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+              id="search-term"
             />
           </div>
         </div>
@@ -513,11 +515,11 @@ export default function RechargeManagement() {
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium text-gray-600">Référence</label>
+                    <span className="text-sm font-medium text-gray-600">Référence</span>
                     <p className="text-lg font-bold text-gray-900">{selectedRecharge.reference}</p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-600">Statut</label>
+                    <span className="text-sm font-medium text-gray-600">Statut</span>
                     <p>
                       <span
                         className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full border ${statusColors[selectedRecharge.status]}`}
@@ -529,7 +531,7 @@ export default function RechargeManagement() {
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-gray-600">Annonceur</label>
+                  <span className="text-sm font-medium text-gray-600">Annonceur</span>
                   <p className="text-lg font-semibold text-gray-900">
                     {selectedRecharge.business_name}
                   </p>
@@ -538,13 +540,13 @@ export default function RechargeManagement() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium text-gray-600">Montant</label>
+                    <span className="text-sm font-medium text-gray-600">Montant</span>
                     <p className="text-2xl font-bold text-[#00B3A6]">
                       {adminRechargesService.formatAmount(selectedRecharge.amount)}
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-600">Mode de paiement</label>
+                    <span className="text-sm font-medium text-gray-600">Mode de paiement</span>
                     <div className="flex items-center space-x-2 text-gray-900">
                       {paymentMethodIcons[selectedRecharge.payment_method]}
                       <span>{paymentMethodLabels[selectedRecharge.payment_method]}</span>
@@ -554,7 +556,7 @@ export default function RechargeManagement() {
 
                 {selectedRecharge.transaction_id && (
                   <div>
-                    <label className="text-sm font-medium text-gray-600">ID Transaction</label>
+                    <span className="text-sm font-medium text-gray-600">ID Transaction</span>
                     <p className="text-sm font-mono text-gray-900">
                       {selectedRecharge.transaction_id}
                     </p>
@@ -563,23 +565,21 @@ export default function RechargeManagement() {
 
                 {selectedRecharge.description && (
                   <div>
-                    <label className="text-sm font-medium text-gray-600">Description</label>
+                    <span className="text-sm font-medium text-gray-600">Description</span>
                     <p className="text-sm text-gray-900">{selectedRecharge.description}</p>
                   </div>
                 )}
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium text-gray-600">Date de création</label>
+                    <span className="text-sm font-medium text-gray-600">Date de création</span>
                     <p className="text-sm text-gray-900">
                       {new Date(selectedRecharge.created_at).toLocaleString('fr-FR')}
                     </p>
                   </div>
                   {selectedRecharge.validated_at && (
                     <div>
-                      <label className="text-sm font-medium text-gray-600">
-                        Date de validation
-                      </label>
+                      <span className="text-sm font-medium text-gray-600">Date de validation</span>
                       <p className="text-sm text-gray-900">
                         {new Date(selectedRecharge.validated_at).toLocaleString('fr-FR')}
                       </p>
@@ -589,14 +589,14 @@ export default function RechargeManagement() {
 
                 {selectedRecharge.validator_name && (
                   <div>
-                    <label className="text-sm font-medium text-gray-600">Validé par</label>
+                    <span className="text-sm font-medium text-gray-600">Validé par</span>
                     <p className="text-sm text-gray-900">{selectedRecharge.validator_name}</p>
                   </div>
                 )}
 
                 {selectedRecharge.validation_notes && (
                   <div>
-                    <label className="text-sm font-medium text-gray-600">Notes de validation</label>
+                    <span className="text-sm font-medium text-gray-600">Notes de validation</span>
                     <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-lg">
                       {selectedRecharge.validation_notes}
                     </p>
@@ -643,7 +643,10 @@ export default function RechargeManagement() {
               </div>
 
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                  htmlFor="validation-notes"
+                >
                   Notes (optionnel)
                 </label>
                 <textarea
@@ -652,6 +655,7 @@ export default function RechargeManagement() {
                   rows={3}
                   placeholder="Ajouter des notes de validation..."
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                  id="validation-notes"
                 />
               </div>
 
@@ -699,7 +703,10 @@ export default function RechargeManagement() {
               </div>
 
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                  htmlFor="reject-reason"
+                >
                   Raison du rejet *
                 </label>
                 <textarea
@@ -709,6 +716,7 @@ export default function RechargeManagement() {
                   placeholder="Indiquer la raison du rejet..."
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                   required
+                  id="reject-reason"
                 />
               </div>
 
@@ -749,7 +757,7 @@ export default function RechargeManagement() {
               <div className="space-y-4">
                 {/* Sélection annonceur */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="user-id">
                     Annonceur *
                   </label>
                   <select
@@ -757,6 +765,7 @@ export default function RechargeManagement() {
                     onChange={(e) => setNewRecharge({ ...newRecharge, user_id: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
                     required
+                    id="user-id"
                   >
                     <option value="">Sélectionner un annonceur</option>
                     {advertisers.map((adv) => (
@@ -769,7 +778,7 @@ export default function RechargeManagement() {
 
                 {/* Montant */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="amount">
                     Montant (TND) *
                   </label>
                   <input
@@ -781,12 +790,16 @@ export default function RechargeManagement() {
                     placeholder="Ex: 500.00"
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
                     required
+                    id="amount"
                   />
                 </div>
 
                 {/* Mode de paiement */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                    htmlFor="payment-method"
+                  >
                     Mode de paiement
                   </label>
                   <select
@@ -798,6 +811,7 @@ export default function RechargeManagement() {
                       })
                     }
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                    id="payment-method"
                   >
                     <option value="bank">Virement bancaire</option>
                     <option value="card">Carte bancaire</option>
@@ -807,7 +821,10 @@ export default function RechargeManagement() {
 
                 {/* Description */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                    htmlFor="description"
+                  >
                     Description (optionnel)
                   </label>
                   <textarea
@@ -818,6 +835,7 @@ export default function RechargeManagement() {
                     rows={3}
                     placeholder="Ajouter une description..."
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                    id="description"
                   />
                 </div>
 

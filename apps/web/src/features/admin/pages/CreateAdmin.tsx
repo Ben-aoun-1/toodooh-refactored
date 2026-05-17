@@ -163,9 +163,7 @@ export default function CreateAdmin() {
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Type de compte */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Type de compte *
-              </label>
+              <span className="block text-sm font-medium text-gray-700 mb-2">Type de compte *</span>
               <div className="grid grid-cols-2 gap-4">
                 <button
                   type="button"
@@ -220,7 +218,12 @@ export default function CreateAdmin() {
             {/* Informations personnelles */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Prénom *</label>
+                <label
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                  htmlFor="first-name"
+                >
+                  Prénom *
+                </label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
                   <input
@@ -231,12 +234,15 @@ export default function CreateAdmin() {
                     placeholder="Prénom"
                     className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
                     required
+                    id="first-name"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Nom *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="last-name">
+                  Nom *
+                </label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
                   <input
@@ -247,6 +253,7 @@ export default function CreateAdmin() {
                     placeholder="Nom"
                     className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
                     required
+                    id="last-name"
                   />
                 </div>
               </div>
@@ -254,7 +261,7 @@ export default function CreateAdmin() {
 
             {/* Email */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="email">
                 Adresse email *
               </label>
               <div className="relative">
@@ -267,13 +274,16 @@ export default function CreateAdmin() {
                   placeholder="admin@example.com"
                   className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
                   required
+                  id="email"
                 />
               </div>
             </div>
 
             {/* Mot de passe */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Mot de passe *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="password">
+                Mot de passe *
+              </label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
                 <input
@@ -284,6 +294,7 @@ export default function CreateAdmin() {
                   placeholder="Minimum 6 caractères"
                   className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
                   required
+                  id="password"
                 />
               </div>
               <p className="text-xs text-gray-500 mt-1">Minimum 6 caractères</p>
@@ -291,7 +302,10 @@ export default function CreateAdmin() {
 
             {/* Confirmation mot de passe */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label
+                className="block text-sm font-medium text-gray-700 mb-2"
+                htmlFor="confirm-password"
+              >
                 Confirmer le mot de passe *
               </label>
               <div className="relative">
@@ -304,6 +318,7 @@ export default function CreateAdmin() {
                   placeholder="Confirmer le mot de passe"
                   className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
                   required
+                  id="confirm-password"
                 />
               </div>
             </div>

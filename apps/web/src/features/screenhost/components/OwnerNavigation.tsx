@@ -88,7 +88,6 @@ const navigation = [
   },
 ];
 
-
 interface OwnerNavigationProps {
   isDisabled?: boolean;
 }
@@ -507,7 +506,10 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
               }}
             >
               <div>
-                <label className="block text-sm font-bold text-gray-900 mb-1.5">
+                <label
+                  className="block text-sm font-bold text-gray-900 mb-1.5"
+                  htmlFor="support-objective"
+                >
                   Choisissez vos objectifs *
                 </label>
                 <select
@@ -521,6 +523,7 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
                     backgroundSize: '1.25rem',
                     paddingRight: '2.5rem',
                   }}
+                  id="support-objective"
                 >
                   <option value="">Choisissez vos objectifs</option>
                   {appointmentObjectives.map((obj) => (
@@ -532,7 +535,10 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
               </div>
               {isAutreObjective(supportObjective) && (
                 <div>
-                  <label className="block text-sm font-bold text-gray-900 mb-1.5">
+                  <label
+                    className="block text-sm font-bold text-gray-900 mb-1.5"
+                    htmlFor="support-other-detail"
+                  >
                     Précision *
                   </label>
                   <input
@@ -541,11 +547,15 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
                     onChange={(e) => setSupportOtherDetail(e.target.value)}
                     className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#97d8a5] focus:border-[#97d8a5]"
                     placeholder="Veuillez préciser dans la description"
+                    id="support-other-detail"
                   />
                 </div>
               )}
               <div>
-                <label className="block text-sm font-bold text-gray-900 mb-1.5">
+                <label
+                  className="block text-sm font-bold text-gray-900 mb-1.5"
+                  htmlFor="support-message"
+                >
                   Commentaire additionnels
                 </label>
                 <textarea
@@ -554,6 +564,7 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
                   onChange={(e) => setSupportMessage(e.target.value)}
                   className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#97d8a5] focus:border-[#97d8a5] resize-none"
                   placeholder="Votre Message ici.."
+                  id="support-message"
                 />
               </div>
               <div className="pt-1 border-t border-dashed border-sky-200 flex items-center gap-3">

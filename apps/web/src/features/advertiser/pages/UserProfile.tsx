@@ -483,7 +483,10 @@ export default function UserProfile() {
             <form onSubmit={handleSaveResponsable} className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                    htmlFor="last-name"
+                  >
                     Nom <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -494,10 +497,14 @@ export default function UserProfile() {
                     }
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB]"
                     placeholder="Nom"
+                    id="last-name"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                    htmlFor="first-name"
+                  >
                     Prénom <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -508,10 +515,14 @@ export default function UserProfile() {
                     }
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB]"
                     placeholder="Prénom"
+                    id="first-name"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                    htmlFor="fonction"
+                  >
                     Fonction <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -522,10 +533,11 @@ export default function UserProfile() {
                     }
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB]"
                     placeholder="Ex: UI UX Designer"
+                    id="fonction"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="email">
                     Email professionnel <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -534,10 +546,14 @@ export default function UserProfile() {
                     value={user?.email ?? ''}
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-gray-50 text-gray-600 cursor-not-allowed"
                     placeholder="contact@entreprise.com"
+                    id="email"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                    htmlFor="contact-phone"
+                  >
                     Téléphone <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -548,6 +564,7 @@ export default function UserProfile() {
                     }
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB]"
                     placeholder="+216 52 44 1144"
+                    id="contact-phone"
                   />
                 </div>
               </div>
@@ -655,7 +672,10 @@ export default function UserProfile() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label
+                        className="block text-sm font-medium text-gray-700 mb-1"
+                        htmlFor="business-name"
+                      >
                         Nom de l&apos;entreprise <span className="text-red-500">*</span>
                       </label>
                       <input
@@ -666,10 +686,14 @@ export default function UserProfile() {
                         }
                         className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB]"
                         placeholder="Raison sociale"
+                        id="business-name"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label
+                        className="block text-sm font-medium text-gray-700 mb-1"
+                        htmlFor="tax-number"
+                      >
                         Matricule fiscal <span className="text-red-500">*</span>
                       </label>
                       <input
@@ -680,17 +704,22 @@ export default function UserProfile() {
                         }
                         className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB]"
                         placeholder="Matricule fiscal"
+                        id="tax-number"
                       />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label
+                        className="block text-sm font-medium text-gray-700 mb-1"
+                        htmlFor="profile-business-sector"
+                      >
                         Secteur d&apos;activité <span className="text-red-500">*</span>
                       </label>
                       {isAgencyProfile ? (
                         <input
+                          id="profile-business-sector"
                           type="text"
                           value="Agence de publicité"
                           readOnly
@@ -698,6 +727,7 @@ export default function UserProfile() {
                         />
                       ) : (
                         <select
+                          id="profile-business-sector"
                           value={entrepriseForm.business_sector_id}
                           onChange={(e) =>
                             setEntrepriseForm((p) => ({ ...p, business_sector_id: e.target.value }))
@@ -717,7 +747,10 @@ export default function UserProfile() {
                       )}
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label
+                        className="block text-sm font-medium text-gray-700 mb-1"
+                        htmlFor="company-size"
+                      >
                         Taille de l&apos;entreprise <span className="text-red-500">*</span>
                       </label>
                       <select
@@ -726,6 +759,7 @@ export default function UserProfile() {
                           setEntrepriseForm((p) => ({ ...p, company_size: e.target.value }))
                         }
                         className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB] bg-white"
+                        id="company-size"
                       >
                         <option value="">Sélectionner</option>
                         <option value="1-5">1-5</option>
@@ -759,7 +793,10 @@ export default function UserProfile() {
             {entrepriseSub === 'adresse' && (
               <form onSubmit={handleSaveAdresse} className="p-6 space-y-4 max-w-2xl">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                    htmlFor="street-address"
+                  >
                     Adresse <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -770,11 +807,12 @@ export default function UserProfile() {
                     }
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB]"
                     placeholder="Ex: Barista's Ain Zaghouen"
+                    id="street-address"
                   />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="city">
                       Ville <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
@@ -785,6 +823,7 @@ export default function UserProfile() {
                         onChange={(e) => setAdresseForm((p) => ({ ...p, city: e.target.value }))}
                         className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB] pr-10"
                         placeholder="Ex: Tunis"
+                        id="city"
                       />
                       <datalist id="ville-list">
                         {[
@@ -823,7 +862,10 @@ export default function UserProfile() {
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label
+                      className="block text-sm font-medium text-gray-700 mb-1"
+                      htmlFor="postal-code"
+                    >
                       Code postal <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -835,11 +877,15 @@ export default function UserProfile() {
                       className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB]"
                       placeholder="Ex: 2045"
                       maxLength={10}
+                      id="postal-code"
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                    htmlFor="governorate-id"
+                  >
                     Gouvernorat <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
@@ -849,6 +895,7 @@ export default function UserProfile() {
                         setAdresseForm((p) => ({ ...p, governorate_id: e.target.value }))
                       }
                       className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB] bg-white appearance-none pr-10"
+                      id="governorate-id"
                     >
                       <option value="">Sélectionner</option>
                       {governorates.map((g) => (
@@ -1165,7 +1212,10 @@ export default function UserProfile() {
             {confidentialiteSub === 'password' && (
               <form onSubmit={handleUpdatePassword} className="p-6 max-w-xl space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                    htmlFor="current-password"
+                  >
                     Mot de passe actuel <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
@@ -1177,6 +1227,7 @@ export default function UserProfile() {
                       }
                       className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB] pr-10"
                       placeholder="Mot de passe actuel"
+                      id="current-password"
                     />
                     <button
                       type="button"
@@ -1188,7 +1239,10 @@ export default function UserProfile() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                    htmlFor="new-password"
+                  >
                     Nouveau mot de passe <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -1199,10 +1253,14 @@ export default function UserProfile() {
                     }
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB]"
                     placeholder="Nouveau mot de passe"
+                    id="new-password"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                    htmlFor="confirm-password"
+                  >
                     Confirmer le nouveau mot de passe <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -1213,6 +1271,7 @@ export default function UserProfile() {
                     }
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB]"
                     placeholder="Confirmer le nouveau mot de passe"
+                    id="confirm-password"
                   />
                 </div>
                 <div className="pt-2">
@@ -1285,7 +1344,10 @@ export default function UserProfile() {
                   </p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-900 mb-1.5">
+                  <label
+                    className="block text-sm font-medium text-gray-900 mb-1.5"
+                    htmlFor="delete-confirm-password"
+                  >
                     Confirmer la suppression *
                   </label>
                   <div className="relative">
@@ -1295,6 +1357,7 @@ export default function UserProfile() {
                       onChange={(e) => setDeleteConfirmPassword(e.target.value)}
                       className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500/30 focus:border-red-500 text-gray-900 placeholder-gray-400"
                       placeholder="••••••••"
+                      id="delete-confirm-password"
                     />
                     <button
                       type="button"

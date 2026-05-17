@@ -471,9 +471,9 @@ export default function OwnerRevenue() {
             </div>
 
             <div className="px-6 py-5">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <span className="block text-sm font-medium text-gray-700 mb-2">
                 Mode de paiement enregistré
-              </label>
+              </span>
               <div className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3.5 text-gray-900 text-sm font-medium">
                 {registeredPaymentLabel}
               </div>
@@ -660,7 +660,9 @@ export default function OwnerRevenue() {
                 disabled={saveBankDetailsMutation.isPending}
                 className="inline-flex items-center justify-center px-5 py-2.5 rounded-xl bg-emerald-200 hover:bg-emerald-100 text-emerald-950 text-sm font-semibold transition-colors min-w-[120px] sm:min-w-[200px]"
               >
-                {saveBankDetailsMutation.isPending ? 'Enregistrement...' : 'Valider le mode de paiement'}
+                {saveBankDetailsMutation.isPending
+                  ? 'Enregistrement...'
+                  : 'Valider le mode de paiement'}
               </button>
             </div>
           </div>

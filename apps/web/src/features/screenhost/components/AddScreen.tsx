@@ -252,7 +252,7 @@ export default function AddScreen({ isOpen, onClose, onScreenAdded }: AddScreenP
                 /* Step 1: Informations de base */
                 <div className="space-y-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="name">
                       Nom de l'écran <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -262,11 +262,15 @@ export default function AddScreen({ isOpen, onClose, onScreenAdded }: AddScreenP
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       placeholder="Ex: Écran Centre-ville"
                       required
+                      id="name"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label
+                      className="block text-sm font-medium text-gray-700 mb-2"
+                      htmlFor="location"
+                    >
                       Emplacement <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -276,11 +280,15 @@ export default function AddScreen({ isOpen, onClose, onScreenAdded }: AddScreenP
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       placeholder="Ex: Avenue Habib Bourguiba"
                       required
+                      id="location"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label
+                      className="block text-sm font-medium text-gray-700 mb-2"
+                      htmlFor="description"
+                    >
                       Description
                     </label>
                     <textarea
@@ -289,11 +297,15 @@ export default function AddScreen({ isOpen, onClose, onScreenAdded }: AddScreenP
                       rows={3}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       placeholder="Description détaillée de l'emplacement..."
+                      id="description"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label
+                      className="block text-sm font-medium text-gray-700 mb-2"
+                      htmlFor="installation-date"
+                    >
                       Date d'installation
                     </label>
                     <input
@@ -301,6 +313,7 @@ export default function AddScreen({ isOpen, onClose, onScreenAdded }: AddScreenP
                       value={formData.installationDate}
                       onChange={(e) => handleInputChange('installationDate', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      id="installation-date"
                     />
                   </div>
                 </div>
@@ -310,7 +323,10 @@ export default function AddScreen({ isOpen, onClose, onScreenAdded }: AddScreenP
                 /* Step 2: Spécifications techniques */
                 <div className="space-y-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label
+                      className="block text-sm font-medium text-gray-700 mb-2"
+                      htmlFor="screen-type"
+                    >
                       Type d'écran <span className="text-red-500">*</span>
                     </label>
                     <select
@@ -318,6 +334,7 @@ export default function AddScreen({ isOpen, onClose, onScreenAdded }: AddScreenP
                       onChange={(e) => handleInputChange('screenType', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                       required
+                      id="screen-type"
                     >
                       <option value="">Choisir un type d'écran</option>
                       {screenTypes.map((type) => (
@@ -329,13 +346,17 @@ export default function AddScreen({ isOpen, onClose, onScreenAdded }: AddScreenP
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label
+                      className="block text-sm font-medium text-gray-700 mb-2"
+                      htmlFor="resolution"
+                    >
                       Résolution
                     </label>
                     <select
                       value={formData.resolution}
                       onChange={(e) => handleInputChange('resolution', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      id="resolution"
                     >
                       <option value="">Choisir une résolution</option>
                       {resolutions.map((res) => (
@@ -347,9 +368,9 @@ export default function AddScreen({ isOpen, onClose, onScreenAdded }: AddScreenP
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <span className="block text-sm font-medium text-gray-700 mb-2">
                       Orientation
-                    </label>
+                    </span>
                     <div className="flex space-x-4">
                       <label className="flex items-center">
                         <input
@@ -395,7 +416,10 @@ export default function AddScreen({ isOpen, onClose, onScreenAdded }: AddScreenP
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label
+                        className="block text-sm font-medium text-gray-700 mb-2"
+                        htmlFor="address"
+                      >
                         Adresse
                       </label>
                       <input
@@ -404,23 +428,33 @@ export default function AddScreen({ isOpen, onClose, onScreenAdded }: AddScreenP
                         onChange={(e) => handleInputChange('address', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                         placeholder="Numéro et rue"
+                        id="address"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Ville</label>
+                      <label
+                        className="block text-sm font-medium text-gray-700 mb-2"
+                        htmlFor="city"
+                      >
+                        Ville
+                      </label>
                       <input
                         type="text"
                         value={formData.city}
                         onChange={(e) => handleInputChange('city', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                         placeholder="Nom de la ville"
+                        id="city"
                       />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label
+                        className="block text-sm font-medium text-gray-700 mb-2"
+                        htmlFor="postal-code"
+                      >
                         Code postal
                       </label>
                       <input
@@ -429,13 +463,17 @@ export default function AddScreen({ isOpen, onClose, onScreenAdded }: AddScreenP
                         onChange={(e) => handleInputChange('postalCode', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                         placeholder="Code postal"
+                        id="postal-code"
                       />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label
+                        className="block text-sm font-medium text-gray-700 mb-2"
+                        htmlFor="latitude"
+                      >
                         Latitude
                       </label>
                       <input
@@ -445,10 +483,14 @@ export default function AddScreen({ isOpen, onClose, onScreenAdded }: AddScreenP
                         onChange={(e) => handleInputChange('coordinates.latitude', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                         placeholder="Ex: 36.8065"
+                        id="latitude"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label
+                        className="block text-sm font-medium text-gray-700 mb-2"
+                        htmlFor="longitude"
+                      >
                         Longitude
                       </label>
                       <input
@@ -458,6 +500,7 @@ export default function AddScreen({ isOpen, onClose, onScreenAdded }: AddScreenP
                         onChange={(e) => handleInputChange('coordinates.longitude', e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                         placeholder="Ex: 10.1815"
+                        id="longitude"
                       />
                     </div>
                   </div>
