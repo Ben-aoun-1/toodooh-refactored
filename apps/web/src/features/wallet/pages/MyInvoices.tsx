@@ -12,83 +12,18 @@ import {
 import { useEffect, useState, useMemo } from 'react';
 
 import { useAuthStore } from '@/features/auth/stores/auth.store';
+import { useInvoices } from '@/features/wallet/hooks/useInvoices';
 import { generateInvoicePDF } from '@/features/wallet/services/invoice-pdf.service';
 import { logger } from '@/lib/logger';
-import { supabase } from '@/lib/supabase';
 
 const log = logger.child({ module: 'MyInvoices' });
 
 export default function MyInvoices() {
   const user = useAuthStore((state) => state.user);
-  // TODO(phase-1): typed source [supabase] — see #15
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [invoices, setInvoices] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { invoices, loading } = useInvoices(user?.id);
   const [search, setSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 8;
-
-  useEffect(() => {
-    async function fetchInvoices() {
-      setLoading(true);
-      if (!user) return;
-
-      try {
-        const { data, error } = await supabase.rpc('get_user_invoices_with_monthly', {
-          p_user_id: user.id,
-        });
-
-        if (error) {
-          log.error({ error }, 'Error fetching invoices');
-          let fallbackData, fallbackError;
-          const fallbackQuery = await supabase
-            .from('factures_with_campaigns')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('date_emission', { ascending: false });
-
-          if (fallbackQuery.error && fallbackQuery.error.code === 'PGRST116') {
-            const directQuery = await supabase
-              .from('factures')
-              .select('*')
-              .eq('user_id', user.id)
-              .order('date_emission', { ascending: false });
-            fallbackData = directQuery.data;
-            fallbackError = directQuery.error;
-          } else {
-            fallbackData = fallbackQuery.data;
-            fallbackError = fallbackQuery.error;
-          }
-
-          if (fallbackError) {
-            log.error({ fallbackError }, 'Error in fallback query');
-            setInvoices([]);
-          } else {
-            setInvoices(fallbackData || []);
-          }
-        } else {
-          // TODO(phase-1): typed source [supabase] — see #15
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const formattedData = (data || []).map((invoice: any) => ({
-            ...invoice,
-            date_emission: invoice.date_emission
-              ? new Date(invoice.date_emission).toISOString()
-              : null,
-            date_echeance: invoice.date_echeance
-              ? new Date(invoice.date_echeance).toISOString()
-              : null,
-          }));
-          setInvoices(formattedData);
-        }
-      } catch (err) {
-        log.error({ err }, 'Error in fetchInvoices');
-        setInvoices([]);
-      }
-
-      setLoading(false);
-    }
-    fetchInvoices();
-  }, [user]);
 
   const filtered = useMemo(() => {
     if (!search) return invoices;

@@ -17,17 +17,8 @@ import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 import { useAuthStore } from '@/features/auth/stores/auth.store';
-import { supabase } from '@/lib/supabase';
-import { balanceService } from '@/services/balance.service';
-
-interface Transaction {
-  id: string;
-  type: 'recharge' | 'expense';
-  designation: string;
-  amount: number;
-  date: Date;
-  paymentMethod?: string;
-}
+import { useCreateRecharge } from '@/features/wallet/hooks/useCreateRecharge';
+import { useWalletTransactions } from '@/features/wallet/hooks/useWalletTransactions';
 
 const QUICK_AMOUNTS = [
   { value: 1000, label: '1 000 TND', tag: 'Populaire' },
@@ -41,9 +32,8 @@ type TabFilter = 'all' | 'recharges' | 'expenses';
 export default function MyRecharges() {
   const user = useAuthStore((state) => state.user);
   const navigate = useNavigate();
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [balance, setBalance] = useState(0);
+  const { balance, transactions, loading, isError } = useWalletTransactions(user?.id);
+  const createRecharge = useCreateRecharge(user?.id);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<TabFilter>('all');
   const [showNewRechargeModal, setShowNewRechargeModal] = useState(false);
@@ -55,76 +45,8 @@ export default function MyRecharges() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    const loadData = async () => {
-      if (!user?.id) return;
-      try {
-        setLoading(true);
-
-        const balanceInfo = await balanceService.getBalanceInfo(user.id);
-        if (balanceInfo) {
-          setBalance(balanceInfo.available_balance);
-        } else {
-          const b = await balanceService.getUserBalance(user.id);
-          setBalance(b);
-        }
-
-        const merged: Transaction[] = [];
-
-        const { data: rechargesData } = await supabase
-          .from('recharges')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('status', 'completed')
-          .order('created_at', { ascending: false });
-
-        if (rechargesData) {
-          rechargesData.forEach((r) => {
-            merged.push({
-              id: `r-${r.id}`,
-              type: 'recharge',
-              designation: 'Rechargement wallet',
-              amount: parseFloat(r.amount) || 0,
-              date: new Date(r.created_at),
-              paymentMethod:
-                r.payment_method === 'card'
-                  ? 'Carte Bancaire'
-                  : r.payment_method === 'bank'
-                    ? 'Virement'
-                    : 'Espèces',
-            });
-          });
-        }
-
-        const { data: campaignsData } = await supabase
-          .from('campaigns')
-          .select('id, name, budget, created_at')
-          .eq('user_id', user.id)
-          .in('status', ['active', 'completed'])
-          .order('created_at', { ascending: false });
-
-        if (campaignsData) {
-          campaignsData.forEach((c) => {
-            const budgetTTC = (parseFloat(c.budget) || 0) * 1.19;
-            merged.push({
-              id: `c-${c.id}`,
-              type: 'expense',
-              designation: c.name || 'Campagne',
-              amount: budgetTTC,
-              date: new Date(c.created_at),
-            });
-          });
-        }
-
-        merged.sort((a, b) => b.date.getTime() - a.date.getTime());
-        setTransactions(merged);
-      } catch (_error) {
-        toast.error('Erreur lors du chargement');
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadData();
-  }, [user]);
+    if (isError) toast.error('Erreur lors du chargement');
+  }, [isError]);
 
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 8;
@@ -181,29 +103,17 @@ export default function MyRecharges() {
 
     try {
       setSubmitting(true);
-      const { error } = await supabase
-        .from('recharges')
-        .insert({
-          user_id: user.id,
-          amount: parseFloat(newRecharge.amount),
-          payment_method: newRecharge.payment_method,
-          status: 'pending',
-          description:
-            newRecharge.description || `Recharge ${getMethodLabel(newRecharge.payment_method)}`,
-        })
-        .select()
-        .single();
-
-      if (error) {
-        toast.error('Erreur lors de la création de la recharge');
-        return;
-      }
-
+      await createRecharge.mutateAsync({
+        amount: parseFloat(newRecharge.amount),
+        payment_method: newRecharge.payment_method,
+        description:
+          newRecharge.description || `Recharge ${getMethodLabel(newRecharge.payment_method)}`,
+      });
       toast.success('Recharge créée avec succès ! En attente de validation.');
       setNewRecharge({ amount: '', payment_method: 'card', description: '' });
       setShowNewRechargeModal(false);
     } catch (_error) {
-      toast.error('Erreur lors de la soumission');
+      toast.error('Erreur lors de la création de la recharge');
     } finally {
       setSubmitting(false);
     }
