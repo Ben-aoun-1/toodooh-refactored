@@ -20,14 +20,14 @@ import {
   AGENCY_BUSINESS_SECTOR_NAME,
   sectorsForAdvertiserProfile,
 } from '@/features/advertiser/constants/advertiserBusinessSectors';
+import { useProfileMutations } from '@/features/advertiser/hooks/useProfileMutations';
+import { useUserProfile } from '@/features/advertiser/hooks/useUserProfile';
+import { useGovernorates } from '@/features/auth/hooks/useGovernorates';
+import { useSectors } from '@/features/auth/hooks/useSectors';
 import { authService } from '@/features/auth/services/auth.service';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
-import type { BusinessProfile, BusinessSector, Governorate } from '@/features/auth/types/auth';
 import { getErrorMessage } from '@/lib/errors';
-import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase';
-
-const log = logger.child({ module: 'UserProfile' });
 
 type TabId = 'responsable' | 'entreprise' | 'notifications' | 'confidentialite';
 type EntrepriseSubId = 'informations' | 'adresse' | 'documents';
@@ -70,10 +70,6 @@ const CONFIDENTIALITE_SUB: { id: ConfidentialiteSubId; label: string; icon: Reac
 export default function UserProfile() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState<BusinessProfile | null>(null);
-  const [sectors, setSectors] = useState<BusinessSector[]>([]);
-  const [governorates, setGovernorates] = useState<Governorate[]>([]);
   const [activeTab, setActiveTab] = useState<TabId>('responsable');
   const [entrepriseSub, setEntrepriseSub] = useState<EntrepriseSubId>('informations');
   const [confidentialiteSub, setConfidentialiteSub] = useState<ConfidentialiteSubId>('password');
@@ -118,12 +114,11 @@ export default function UserProfile() {
   const [showDeletePassword, setShowDeletePassword] = useState(false);
 
   const user = useAuthStore((s) => s.user);
+  const { profile, loading } = useUserProfile(user?.id);
+  const { data: sectors = [] } = useSectors();
+  const { data: governorates = [] } = useGovernorates();
+  const { updateProfile, uploadLogo, uploadDocument } = useProfileMutations(user?.id);
   const isAgencyProfile = profile?.profile_type === 'agency';
-
-  useEffect(() => {
-    loadProfile();
-    loadSectorsAndGovernorates();
-  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -181,30 +176,6 @@ export default function UserProfile() {
     }
   }, [profile]);
 
-  const loadProfile = async () => {
-    try {
-      const data = await authService.getBusinessProfile();
-      setProfile(data);
-      setLoading(false);
-    } catch {
-      toast.error('Erreur lors du chargement du profil');
-      setLoading(false);
-    }
-  };
-
-  const loadSectorsAndGovernorates = async () => {
-    try {
-      const [sectorsData, govData] = await Promise.all([
-        authService.getBusinessSectors(),
-        authService.getGovernorates(),
-      ]);
-      setSectors(sectorsData ?? []);
-      setGovernorates(govData ?? []);
-    } catch {
-      // non bloquant
-    }
-  };
-
   useEffect(() => {
     if (!isAgencyProfile) return;
     const agencySector = sectors.find(
@@ -227,13 +198,12 @@ export default function UserProfile() {
         [responsableForm.last_name, responsableForm.first_name].filter(Boolean).join(' ').trim() ||
         responsableForm.last_name ||
         responsableForm.first_name;
-      await authService.updateProfile({
+      await updateProfile.mutateAsync({
         contact_name,
         contact_phone: responsableForm.contact_phone,
         fonction: responsableForm.fonction || null,
       });
       toast.success('Informations enregistrées');
-      loadProfile();
     } catch (err) {
       toast.error(getErrorMessage(err) || 'Erreur lors de la mise à jour');
     }
@@ -246,14 +216,13 @@ export default function UserProfile() {
       return;
     }
     try {
-      await authService.updateProfile({
+      await updateProfile.mutateAsync({
         business_name: entrepriseForm.business_name,
         tax_number: entrepriseForm.tax_number,
         business_sector_id: entrepriseForm.business_sector_id || null,
         company_size: entrepriseForm.company_size || null,
       });
       toast.success('Informations entreprise enregistrées');
-      loadProfile();
     } catch (err) {
       toast.error(getErrorMessage(err) || 'Erreur lors de la mise à jour');
     }
@@ -271,14 +240,13 @@ export default function UserProfile() {
       return;
     }
     try {
-      await authService.updateProfile({
+      await updateProfile.mutateAsync({
         street_address: adresseForm.street_address,
         city: adresseForm.city,
         postal_code: adresseForm.postal_code,
         governorate_id: adresseForm.governorate_id || null,
       });
       toast.success('Adresse enregistrée');
-      loadProfile();
     } catch (err) {
       toast.error(getErrorMessage(err) || 'Erreur lors de la mise à jour');
     }
@@ -287,13 +255,12 @@ export default function UserProfile() {
   const handleSaveNotifications = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await authService.updateProfile({
+      await updateProfile.mutateAsync({
         notify_news_updates: notificationsForm.notify_news_updates,
         notify_reminders_events: notificationsForm.notify_reminders_events,
         notify_promotions_offers: notificationsForm.notify_promotions_offers,
       });
       toast.success('Préférences enregistrées');
-      loadProfile();
     } catch (err) {
       toast.error(getErrorMessage(err) || 'Erreur lors de la mise à jour');
     }
@@ -376,20 +343,9 @@ export default function UserProfile() {
     if (!logoFile || !user) return;
     setUploadingLogo(true);
     try {
-      const ext = logoFile.name.split('.').pop() || 'png';
-      const filePath = `logo_${user.id}_${Date.now()}.${ext}`;
-      const { error: uploadError } = await supabase.storage
-        .from('registres')
-        .upload(filePath, logoFile);
-      if (uploadError) throw uploadError;
-      const { data: signed, error: signedError } = await supabase.storage
-        .from('registres')
-        .createSignedUrl(filePath, 604800);
-      if (signedError || !signed) throw signedError || new Error('URL signée');
-      await authService.updateProfile({ logo_url: signed.signedUrl });
+      await uploadLogo.mutateAsync(logoFile);
       setLogoFile(null);
       toast.success('Logo mis à jour');
-      loadProfile();
     } catch (err) {
       toast.error(getErrorMessage(err) || 'Erreur upload logo');
     } finally {
@@ -399,11 +355,10 @@ export default function UserProfile() {
 
   const handleLogoRemove = async () => {
     try {
-      await authService.updateProfile({ logo_url: null });
+      await updateProfile.mutateAsync({ logo_url: null });
       setLogoPreview(null);
       setLogoFile(null);
       toast.success('Logo supprimé');
-      loadProfile();
     } catch (err) {
       toast.error(getErrorMessage(err) || 'Erreur');
     }
@@ -422,39 +377,10 @@ export default function UserProfile() {
     }
     setUploadingDocument(true);
     try {
-      const ext = documentFile.name.split('.').pop();
-      const filePath = `rne_${user.id}_${Date.now()}.${ext}`;
-
-      const { error: uploadError } = await supabase
-        .storage
-        .from('registres')
-        .upload(filePath, documentFile);
-
-      if (uploadError) {
-        log.error({ error: uploadError }, 'failed to upload registration document');
-        toast.error(getErrorMessage(uploadError) || 'Erreur upload du document');
-        return;
-      }
-
-      const { error: updateError } = await supabase
-        .from('business_profiles')
-        .update({ registration_doc_path: filePath, registration_doc_url: null })
-        .eq('user_id', user.id);
-
-      if (updateError) {
-        // The file is in storage but the DB doesn't reference it. We do not
-        // attempt cleanup — best-effort delete creates more failure modes than
-        // it solves; the orphan can be reclaimed by a storage GC job later.
-        log.error({ error: updateError }, 'failed to update business_profile after document upload');
-        toast.error(getErrorMessage(updateError) || 'Erreur enregistrement du chemin du document');
-        return;
-      }
-
+      await uploadDocument.mutateAsync(documentFile);
       setDocumentFile(null);
       toast.success('Document enregistré');
-      loadProfile();
     } catch (err) {
-      log.error({ err }, 'unexpected error during document upload flow');
       toast.error(getErrorMessage(err) || 'Erreur upload');
     } finally {
       setUploadingDocument(false);
@@ -463,10 +389,12 @@ export default function UserProfile() {
 
   const handleRemoveDocument = async () => {
     try {
-      await authService.updateProfile({ registration_doc_url: null, registration_doc_path: null });
+      await updateProfile.mutateAsync({
+        registration_doc_url: null,
+        registration_doc_path: null,
+      });
       setDocumentFile(null);
       toast.success('Document supprimé');
-      loadProfile();
     } catch (err) {
       toast.error(getErrorMessage(err) || 'Erreur');
     }
