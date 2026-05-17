@@ -23,9 +23,8 @@ import { useNavigate } from 'react-router-dom';
 
 import { useBusinessProfile } from '@/features/auth/hooks/useBusinessProfile';
 import { useSectors } from '@/features/auth/hooks/useSectors';
-import { authService } from '@/features/auth/services/auth.service';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
-import { campaignOwnerApprovalService } from '@/features/campaigns/services/campaign-owner-approval.service';
+import { useOwnerCampaignApprovals } from '@/features/campaigns/hooks/useOwnerCampaignApprovals';
 import AddScreen from '@/features/screenhost/components/AddScreen';
 import GiftCatalog from '@/features/screenhost/components/GiftCatalog';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
@@ -35,9 +34,6 @@ import type { Screen } from '@/features/screens/services/screens.service';
 import { walletKeys } from '@/features/wallet/hooks/queryKeys';
 import { useRevenueStats } from '@/features/wallet/hooks/useRevenue';
 import type { RevenueStats } from '@/features/wallet/services/revenue.service';
-import { logger } from '@/lib/logger';
-
-const log = logger.child({ module: 'OwnerDashboard' });
 
 interface Alert {
   id: string;
@@ -85,8 +81,6 @@ export default function OwnerDashboard() {
   const [showGiftCatalog, setShowGiftCatalog] = useState(false);
   const [showAddScreen, setShowAddScreen] = useState(false);
   const [selectedEstablishment, setSelectedEstablishment] = useState<string | null>(null);
-  const [ownerNotifications, setOwnerNotifications] = useState<OwnerDashboardNotification[]>([]);
-  const [notificationsLoading, setNotificationsLoading] = useState(true);
 
   const { profile, loading: profileLoading, error: profileError } = useBusinessProfile(user?.id);
   const { data: sectors, isLoading: sectorsLoading, isError: sectorsError } = useSectors();
@@ -96,6 +90,27 @@ export default function OwnerDashboard() {
     loading: revenueLoading,
     isError: revenueError,
   } = useRevenueStats(user?.id);
+  // Pending-approval notifications — Commit 7b adopts the campaigns-owned
+  // `useOwnerCampaignApprovals` hook (the former inline `getPendingCampaigns`
+  // read is the deferred-consumer rewire); the dashboard derives its
+  // notification list from the cached approvals.
+  const { campaigns: pendingApprovalCampaigns, loading: notificationsLoading } =
+    useOwnerCampaignApprovals(user?.id);
+  const ownerNotifications = useMemo<OwnerDashboardNotification[]>(
+    () =>
+      pendingApprovalCampaigns
+        .filter((c) => (c.approval_status || 'pending') === 'pending')
+        .map((c) => ({
+          id: `pending-${c.campaign_id}`,
+          title: c.campaign_name
+            ? `Nouvelle campagne à diffuser sur votre parc: ${c.campaign_name}`
+            : 'Nouvelle campagne à diffuser sur votre parc',
+          createdAt: new Date(c.campaign_start_date || Date.now()),
+          actionLabel: 'Consulter',
+          actionPath: '/owner-campaign-approvals',
+        })),
+    [pendingApprovalCampaigns],
+  );
 
   const stats = revenueStats ?? EMPTY_REVENUE_STATS;
   const loading =
@@ -125,47 +140,6 @@ export default function OwnerDashboard() {
       toast.error('Erreur lors du chargement des données');
     }
   }, [profileError, sectorsError, screensError, revenueError]);
-
-  // Notifications « campagnes en attente » — lecture inline conservée ; sa
-  // migration vers React Query est différée au Commit 7 (features/campaigns/),
-  // qui créera campaignsKeys + le hook propriétaire. Même motif de
-  // consommateur cross-feature laissé inline qu'au Commit 3 (events).
-  useEffect(() => {
-    if (!user) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const currentUser = await authService.getCurrentUser();
-        if (currentUser?.id) {
-          const pendingCampaigns = await campaignOwnerApprovalService.getPendingCampaigns(
-            currentUser.id,
-          );
-          const mappedNotifications: OwnerDashboardNotification[] = (pendingCampaigns || [])
-            .filter((c) => (c.approval_status || 'pending') === 'pending')
-            .map((c) => ({
-              id: `pending-${c.campaign_id}`,
-              title: c.campaign_name
-                ? `Nouvelle campagne à diffuser sur votre parc: ${c.campaign_name}`
-                : 'Nouvelle campagne à diffuser sur votre parc',
-              createdAt: new Date(c.campaign_start_date || Date.now()),
-              actionLabel: 'Consulter',
-              actionPath: '/owner-campaign-approvals',
-            }));
-          if (!cancelled) setOwnerNotifications(mappedNotifications);
-        } else if (!cancelled) {
-          setOwnerNotifications([]);
-        }
-      } catch (notificationError) {
-        log.error({ notificationError }, 'Erreur chargement notifications dashboard propriétaire');
-        if (!cancelled) setOwnerNotifications([]);
-      } finally {
-        if (!cancelled) setNotificationsLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [user]);
 
   // Régénère les alertes dérivées (écrans + revenus) une fois les données
   // chargées. NB : `_alerts` n'est consommé nulle part — état mort conservé

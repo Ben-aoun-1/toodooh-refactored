@@ -24,17 +24,12 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import 'react-datepicker/dist/react-datepicker.css';
 import campagneIcon from '@/assets/sidebar/campagnes.png';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
-import { campaignService } from '@/features/campaigns/services/campaign.service';
+import { useMyCampaigns } from '@/features/campaigns/hooks/useMyCampaigns';
+import { useMyCampaignsMutations } from '@/features/campaigns/hooks/useMyCampaignsMutations';
+import { useVideoById } from '@/features/campaigns/hooks/useVideoById';
 import { logger } from '@/lib/logger';
-import { supabase } from '@/lib/supabase';
-import { balanceService } from '@/services/balance.service';
 
 const log = logger.child({ module: 'MyCampaigns' });
-
-// TODO(phase-1): typed source [supabase] — see #15
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const isMissingCampaignCategoriesTable = (error: any) =>
-  error?.code === 'PGRST205' && String(error?.message || '').includes('campaign_categories');
 
 // Test data
 
@@ -75,148 +70,22 @@ export default function MyCampaigns() {
   }, [location.search]);
   const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  // TODO(phase-1): typed source [supabase] — see #15
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [campaigns, setCampaigns] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [_stats, setStats] = useState({
-    totalCampaigns: 0,
-    activeCampaigns: 0,
-    totalViews: 0,
-    totalBudget: 0,
-  });
+
+  // Server state via React Query (Commit 7b). `useMyCampaigns` consumes
+  // `campaignsKeys.list(userId)` — the key 7a's campaign-write mutations
+  // already invalidate. The page reads straight from the query: with the
+  // optimistic `setCampaigns` patches dropped (mutations now
+  // invalidate-and-refetch), no local mirror is needed.
+  const { campaigns, loading, isError } = useMyCampaigns(user?.id);
+  const { deleteCampaign, activateDraftCampaign } = useMyCampaignsMutations();
+
+  useEffect(() => {
+    if (isError) {
+      toast.error('Erreur lors du chargement des campagnes');
+    }
+  }, [isError]);
 
   const itemsPerPage = 6;
-
-  // Charger les campagnes réelles
-  useEffect(() => {
-    const loadCampaigns = async () => {
-      if (!user?.id) return;
-
-      try {
-        setLoading(true);
-
-        // Récupérer les campagnes de l'utilisateur avec les clients
-        const { data: campaignsData, error } = await supabase
-          .from('campaigns')
-          .select(
-            `
-            *,
-            client:clients(id, name)
-          `,
-          )
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false });
-
-        if (error) {
-          toast.error('Erreur lors du chargement des campagnes');
-          return;
-        }
-
-        const campaignIds = (campaignsData || []).map((c) => c.id).filter(Boolean);
-        const categoriesByCampaign = new Map<string, string[]>();
-        const zonesByCampaign = new Map<string, string[]>();
-
-        if (campaignIds.length > 0) {
-          const [{ data: categoryRows, error: categoryError }, { data: predefinedZonesRows }] =
-            await Promise.all([
-              supabase
-                .from('campaign_categories')
-                .select('campaign_id, category')
-                .in('campaign_id', campaignIds),
-              supabase
-                .from('predefined_zones')
-                .select('name, latitude, longitude, radius')
-                .eq('is_active', true),
-            ]);
-
-          if (categoryError && !isMissingCampaignCategoriesTable(categoryError)) {
-            log.error({ categoryError }, 'Error fetching campaign categories');
-          }
-
-          // TODO(phase-1): typed source [supabase] — see #15
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (categoryRows || []).forEach((row: any) => {
-            if (!row?.campaign_id || !row?.category) return;
-            const prev = categoriesByCampaign.get(row.campaign_id) || [];
-            if (!prev.includes(row.category)) prev.push(row.category);
-            categoriesByCampaign.set(row.campaign_id, prev);
-          });
-
-          // TODO(phase-1): typed source [supabase] — see #15
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (campaignsData || []).forEach((c: any) => {
-            const lat = Number(c?.location_lat);
-            const lng = Number(c?.location_lng);
-            const radius = Number(c?.location_radius);
-            if (!Number.isFinite(lat) || !Number.isFinite(lng) || !Number.isFinite(radius)) return;
-            const matched = (predefinedZonesRows || []).find(
-              // TODO(phase-1): typed source [supabase] — see #15
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              (z: any) =>
-                Math.abs(Number(z.latitude) - lat) <= 0.0005 &&
-                Math.abs(Number(z.longitude) - lng) <= 0.0005 &&
-                Math.abs(Number(z.radius) - radius) <= 50,
-            );
-            if (matched?.name) {
-              zonesByCampaign.set(c.id, [matched.name]);
-            } else {
-              zonesByCampaign.set(c.id, ['Grand Tunis']);
-            }
-          });
-        }
-
-        // Transformer les données pour correspondre au format attendu
-        const transformedCampaigns =
-          campaignsData?.map((c) => ({
-            selected_categories: categoriesByCampaign.get(c.id) || (c.category ? [c.category] : []),
-            selected_zones: zonesByCampaign.get(c.id) || [],
-            validated_impressions: Math.max(0, Number(c.views) || 0),
-            id: c.id,
-            name: c.name,
-            client: c.client?.name || 'N/A',
-            client_id: c.client_id,
-            category: c.category,
-            startDate: new Date(c.start_date),
-            endDate: new Date(c.end_date),
-            start_date: c.start_date,
-            end_date: c.end_date,
-            status: c.status,
-            views: c.views || 0,
-            budget: parseFloat(c.budget) || 0,
-            location_lat: c.location_lat,
-            location_lng: c.location_lng,
-            location_radius: c.location_radius,
-            video_id: c.video_id,
-            event_id: c.event_id ?? undefined,
-            content_validation_status: c.content_validation_status,
-            created_at: c.created_at,
-            user_id: c.user_id,
-          })) || [];
-
-        setCampaigns(transformedCampaigns);
-
-        // Calculer les statistiques
-        const totalCampaigns = transformedCampaigns.length;
-        const activeCampaigns = transformedCampaigns.filter((c) => c.status === 'active').length;
-        const totalViews = transformedCampaigns.reduce((sum, c) => sum + c.views, 0);
-        const totalBudget = transformedCampaigns.reduce((sum, c) => sum + c.budget, 0);
-
-        setStats({
-          totalCampaigns,
-          activeCampaigns,
-          totalViews,
-          totalBudget,
-        });
-      } catch (_error) {
-        toast.error('Erreur lors du chargement');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadCampaigns();
-  }, [user]);
 
   // Filter campaigns (status '' = all, 'upcoming' = startDate > now)
   const nowForFilter = new Date();
@@ -260,7 +129,7 @@ export default function MyCampaigns() {
               .flatMap((c) =>
                 c.selected_categories?.length ? c.selected_categories : [c.category],
               )
-              .filter(Boolean),
+              .filter((category): category is string => Boolean(category)),
           ),
         ]
       : [];
@@ -272,11 +141,12 @@ export default function MyCampaigns() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [selectedCampaign, setSelectedCampaign] = useState<any>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  // TODO(phase-1): typed source [supabase] — see #15
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [campaignVideo, setCampaignVideo] = useState<any>(null);
   const [openActionRowId, setOpenActionRowId] = useState<string | null>(null);
   const [drawerVisible, setDrawerVisible] = useState(false);
+
+  // Detail-modal video — the shared `useVideoById` consolidation (Commit 7b).
+  // Loads reactively when a campaign with a `video_id` is selected.
+  const { video: campaignVideo } = useVideoById(selectedCampaign?.video_id);
 
   // Animation du panneau droit : ouvrir après le montage, fermer avant le démontage
   useEffect(() => {
@@ -292,33 +162,15 @@ export default function MyCampaigns() {
     setTimeout(() => {
       setShowDetailsModal(false);
       setSelectedCampaign(null);
-      setCampaignVideo(null);
     }, 300);
   };
 
-  // Fonction pour consulter une campagne
+  // Fonction pour consulter une campagne — la vidéo est chargée par
+  // `useVideoById` dès que `selectedCampaign` change (Commit 7b).
   // TODO(phase-1): typed source [supabase] — see #15
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleViewCampaign = async (campaign: any) => {
+  const handleViewCampaign = (campaign: any) => {
     setSelectedCampaign(campaign);
-
-    // Charger la vidéo si elle existe
-    if (campaign.video_id) {
-      try {
-        const { data: videoData } = await supabase
-          .from('videos')
-          .select('*')
-          .eq('id', campaign.video_id)
-          .single();
-
-        setCampaignVideo(videoData);
-      } catch (error) {
-        log.error({ error }, 'Erreur chargement vidéo');
-      }
-    } else {
-      setCampaignVideo(null);
-    }
-
     setShowDetailsModal(true);
   };
 
@@ -345,25 +197,14 @@ export default function MyCampaigns() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleDeleteDraftCampaign = async (campaign: any) => {
     if (!canDeleteDraftCampaign(campaign.status)) return;
+    if (!user?.id) return;
     const confirmed = window.confirm(
       `Supprimer définitivement le brouillon "${campaign.name || 'Sans nom'}" ?`,
     );
     if (!confirmed) return;
 
     try {
-      const { error } = await supabase
-        .from('campaigns')
-        .delete()
-        .eq('id', campaign.id)
-        .eq('user_id', user?.id)
-        .eq('status', 'draft');
-
-      if (error) {
-        toast.error('Impossible de supprimer ce brouillon');
-        return;
-      }
-
-      setCampaigns((prev) => prev.filter((c) => c.id !== campaign.id));
+      await deleteCampaign.mutateAsync({ campaignId: campaign.id, userId: user.id });
       setOpenActionRowId((prev) => (prev === campaign.id ? null : prev));
       if (selectedCampaign?.id === campaign.id) {
         closeDetailsDrawer();
@@ -384,113 +225,23 @@ export default function MyCampaigns() {
     }
 
     try {
-      const balanceCheck = await balanceService.checkCampaignBalance(campaign.id);
-      const hasSufficientBalance = Boolean(balanceCheck?.has_sufficient_balance);
-      const insufficientMessage =
-        balanceCheck?.message || 'Solde insuffisant pour activer la campagne.';
+      const outcome = await activateDraftCampaign.mutateAsync({
+        campaign: {
+          id: campaign.id,
+          content_validation_status: campaign.content_validation_status ?? null,
+          video_id: campaign.video_id ?? null,
+        },
+        userId: user.id,
+      });
 
-      let videoIsValidated = campaign.content_validation_status === 'approved';
-      if (!videoIsValidated && campaign.video_id) {
-        const { data: video } = await supabase
-          .from('videos')
-          .select('validation_status')
-          .eq('id', campaign.video_id)
-          .single();
-        videoIsValidated = video?.validation_status === 'approved';
-      }
-
-      // TODO(phase-1): typed source [supabase] — see #15
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const isMissingValidationNotesColumn = (error: any) =>
-        error?.code === 'PGRST204' && String(error?.message || '').includes('validation_notes');
-
-      if (!hasSufficientBalance) {
-        let { error: updateDraftError } = await supabase
-          .from('campaigns')
-          .update({
-            status: 'draft',
-            content_validation_status: 'pending',
-            validation_notes: insufficientMessage,
-          })
-          .eq('id', campaign.id)
-          .eq('user_id', user.id);
-
-        if (isMissingValidationNotesColumn(updateDraftError)) {
-          const { error: fallbackError } = await supabase
-            .from('campaigns')
-            .update({
-              status: 'draft',
-              content_validation_status: 'pending',
-            })
-            .eq('id', campaign.id)
-            .eq('user_id', user.id);
-          updateDraftError = fallbackError;
-        }
-
-        if (updateDraftError) {
-          toast.error('Impossible de mettre à jour la campagne');
-          return;
-        }
-
-        setCampaigns((prev) =>
-          prev.map((c) =>
-            c.id === campaign.id
-              ? {
-                  ...c,
-                  status: 'draft',
-                  content_validation_status: 'pending',
-                }
-              : c,
-          ),
-        );
+      if (outcome === 'insufficient') {
         toast.error('Solde insuffisant pour activer la campagne');
         setTimeout(() => navigate('/my-recharges'), 1200);
         return;
       }
 
-      const nextStatus = videoIsValidated ? 'active' : 'pending';
-      let { error: updateError } = await supabase
-        .from('campaigns')
-        .update({
-          status: nextStatus,
-          content_validation_status: videoIsValidated ? 'approved' : 'pending',
-          validation_notes: null,
-        })
-        .eq('id', campaign.id)
-        .eq('user_id', user.id);
-
-      if (isMissingValidationNotesColumn(updateError)) {
-        const { error: fallbackError } = await supabase
-          .from('campaigns')
-          .update({
-            status: nextStatus,
-            content_validation_status: videoIsValidated ? 'approved' : 'pending',
-          })
-          .eq('id', campaign.id)
-          .eq('user_id', user.id);
-        updateError = fallbackError;
-      }
-
-      if (updateError) {
-        toast.error("Impossible d'activer ce brouillon");
-        return;
-      }
-
-      if (nextStatus === 'active') {
-        await campaignService.injectCampaignPublicationSchedule(campaign.id);
-      }
-
-      setCampaigns((prev) =>
-        prev.map((c) =>
-          c.id === campaign.id
-            ? {
-                ...c,
-                status: nextStatus,
-                content_validation_status: videoIsValidated ? 'approved' : 'pending',
-              }
-            : c,
-        ),
-      );
+      // Reflect the new status in the open detail modal (modal client state —
+      // the campaigns list itself refreshes via invalidate-and-refetch).
       if (selectedCampaign?.id === campaign.id) {
         // TODO(phase-1): typed source [supabase] — see #15
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -498,14 +249,14 @@ export default function MyCampaigns() {
           prev
             ? {
                 ...prev,
-                status: nextStatus,
-                content_validation_status: videoIsValidated ? 'approved' : 'pending',
+                status: outcome,
+                content_validation_status: outcome === 'active' ? 'approved' : 'pending',
               }
             : prev,
         );
       }
 
-      if (nextStatus === 'active') toast.success('Campagne activée avec succès');
+      if (outcome === 'active') toast.success('Campagne activée avec succès');
       else toast('Campagne en attente de validation vidéo admin', { icon: '⏳' });
     } catch (_error) {
       toast.error("Erreur lors de l'activation du brouillon");

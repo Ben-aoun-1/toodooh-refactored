@@ -33,7 +33,6 @@ import { useCampaignWizard } from '@/features/campaigns/hooks/new-campaign/useCa
 import { buildInitialWizardState } from '@/features/campaigns/hooks/new-campaign/wizard-init';
 import type {
   GeographicZone,
-  ParcTV,
   UseCampaignWizardOptions,
   WizardState,
 } from '@/features/campaigns/hooks/new-campaign/wizard-types';
@@ -43,6 +42,10 @@ import {
   useCampaignLocations,
   useScreenIdsByLocations,
 } from '@/features/campaigns/hooks/useCampaignScreens';
+import { useCampaignZonesForEdit } from '@/features/campaigns/hooks/useCampaignZonesForEdit';
+import { useMyApprovedVideos } from '@/features/campaigns/hooks/useMyApprovedVideos';
+import { useRecommendedEventsForPeriod } from '@/features/campaigns/hooks/useRecommendedEventsForPeriod';
+import { useVideoById } from '@/features/campaigns/hooks/useVideoById';
 import { parseCampaignUiDate, toLocalDateOnlyString } from '@/features/campaigns/lib/wizard-dates';
 import { zonesLabel } from '@/features/campaigns/lib/wizard-zones';
 import PostCartStep from '@/features/campaigns/pages/new-campaign/PostCartStep';
@@ -52,18 +55,17 @@ import Step3 from '@/features/campaigns/pages/new-campaign/Step3';
 import Step4 from '@/features/campaigns/pages/new-campaign/Step4';
 import Step5, { type ApprovedVideo } from '@/features/campaigns/pages/new-campaign/Step5';
 import Step6 from '@/features/campaigns/pages/new-campaign/Step6';
-import { campaignScreensService } from '@/features/campaigns/services/campaign-screens.service';
 import {
   buildWizardLocationScheduleMap,
   computeNewCampaignDoohMaxImpressions,
 } from '@/features/campaigns/services/dooh-new-campaign-estimate.service';
 import { useCartStore } from '@/features/campaigns/stores/cart.store';
 import type { SpecialEvent } from '@/features/events/types/event';
+import { useAvailableParcs } from '@/features/screens/hooks/useAvailableParcs';
 import { usePredefinedZones } from '@/features/screens/hooks/usePredefinedZones';
 import { useUnavailabilityPeriods } from '@/features/screens/hooks/useUnavailabilityPeriods';
 import { getErrorMessage } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { supabase } from '@/lib/supabase';
 import { balanceService } from '@/services/balance.service';
 
 const log = logger.child({ module: 'NewCampaign' });
@@ -80,7 +82,7 @@ const center = {
 export default function NewCampaign() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { profileType } = useAuthStore();
+  const { profileType, user } = useAuthStore();
 
   // Détecter le mode édition
   const editMode = location.state?.editMode || false;
@@ -304,9 +306,10 @@ export default function NewCampaign() {
   // (formerly nearby) were write-only or never-used dead state — deleted.
   const radius = campaignToEdit?.location_radius || 1000;
 
-  // Parcs TV (ParcTV interface imported from wizard-types)
-  const [availableParcs, setAvailableParcs] = useState<ParcTV[]>([]);
-  const [loadingParcs, setLoadingParcs] = useState(false);
+  // Parcs TV — server read via React Query (Commit 7b), gated on parc_tv mode.
+  const { parcs: availableParcs, loading: loadingParcs } = useAvailableParcs({
+    enabled: diffusionType === 'parc_tv',
+  });
 
   // --- Legacy formData stub. The migrated fields (campaignName, client,
   //     categories) now live in WizardState. The remaining slots
@@ -362,6 +365,14 @@ export default function NewCampaign() {
   // status patches + the event link. `saveCampaignDraft` / `handleSaveDraft` /
   // `handleAddToCart` drive these via `mutateAsync`.
   const { saveDraft, updateCampaign, linkToEvent } = useCampaignMutations();
+  // Commit 7b folded-in reads: the advertiser's approved-videos picker source
+  // and the two edit-mode hydration reads (existing video + saved zones).
+  const { videos: approvedVideosData } = useMyApprovedVideos(user?.id);
+  const editModeVideoId =
+    editMode && campaignToEdit?.video_id ? campaignToEdit.video_id : undefined;
+  const { video: existingVideoRecord } = useVideoById(editModeVideoId);
+  const editModeCampaignId = editMode && campaignToEdit?.id ? campaignToEdit.id : undefined;
+  const { zones: editModeZones } = useCampaignZonesForEdit(editModeCampaignId);
   // zoneFilterCountry / zoneFilterRegion: moved into Step4.tsx as local state.
   // screenIdsFromSelectedLocations / unavailabilityPeriods / freshLocations-
   // ForEstimate: migrated to React Query reads (Commit 7a) — the hooks are
@@ -522,8 +533,12 @@ export default function NewCampaign() {
     [setState],
   );
   const [showPostCartStep, setShowPostCartStep] = useState(false);
-  const [recommendedEvents, setRecommendedEvents] = useState<SpecialEvent[]>([]);
-  const [loadingRecommendedEvents, setLoadingRecommendedEvents] = useState(false);
+  // Post-cart recommended events — the React Query read fires once the
+  // post-cart step shows (Commit 7b; replaces the imperatively-called fetch).
+  const { events: recommendedEvents, loading: loadingRecommendedEvents } =
+    useRecommendedEventsForPeriod(startDate, endDate, eventFromState?.id ?? null, {
+      enabled: showPostCartStep,
+    });
   const [addingToCart, setAddingToCart] = useState(false);
 
   const isValidationStepUi =
@@ -875,40 +890,9 @@ export default function NewCampaign() {
   // validateDate: moved into Step3.tsx (only callers were validateStep2 +
   //   handleDateChange, both also moved).
 
-  // Fonction pour vérifier les événements spéciaux durant la période
-
-  const loadRecommendedEventsForSelectedPeriod = useCallback(async () => {
-    if (!startDate || !endDate) {
-      setRecommendedEvents([]);
-      return;
-    }
-
-    setLoadingRecommendedEvents(true);
-    try {
-      let query = supabase
-        .from('special_events')
-        .select('*')
-        .eq('is_active', true)
-        .lte('start_date', endDate.toISOString())
-        .gte('end_date', startDate.toISOString())
-        .order('start_date', { ascending: true })
-        .limit(3);
-
-      if (eventFromState?.id) {
-        query = query.neq('id', eventFromState.id);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-
-      setRecommendedEvents((data || []) as SpecialEvent[]);
-    } catch (error) {
-      log.error({ error }, 'Erreur chargement événements recommandés');
-      setRecommendedEvents([]);
-    } finally {
-      setLoadingRecommendedEvents(false);
-    }
-  }, [startDate, endDate, eventFromState?.id]);
+  // Les événements recommandés post-panier sont fournis par
+  // `useRecommendedEventsForPeriod` (Commit 7b) — la lecture déclenchée
+  // impérativement a été remplacée par une query gatée sur `showPostCartStep`.
 
   // recommendedEventsInPeriod memo moved into PostCartStep.tsx — it was
   // only consumed by the post-cart UI.
@@ -1065,7 +1049,7 @@ export default function NewCampaign() {
       }
 
       pushCampaignToSidebarCart(campaignId);
-      await loadRecommendedEventsForSelectedPeriod();
+      // `useRecommendedEventsForPeriod` fetches once `showPostCartStep` flips.
       setShowPostCartStep(true);
       toast.success(
         "Campagne ajoutee au panier. Activez-la depuis le panier pour qu'elle soit diffusée.",
@@ -1083,11 +1067,33 @@ export default function NewCampaign() {
   //   cross-field re-validation logic.
 
 
-  // Charger les vidéos approuvées au montage du composant
-  // (loadAllScreens removed in Commit 9 — fed only the dead _allScreens trio).
+  // Approved-videos mirror (Commit 7b). Seeded from the `useMyApprovedVideos`
+  // query and merged with the edit-mode existing video; kept as local state
+  // because Step5 patches a row's duration after a successful write.
   useEffect(() => {
-    loadMyApprovedVideos();
-  }, []);
+    let merged = approvedVideosData;
+    if (existingVideoRecord && !merged.some((v) => v.id === existingVideoRecord.id)) {
+      merged = [
+        ...merged,
+        {
+          id: existingVideoRecord.id,
+          url: existingVideoRecord.url,
+          filename: existingVideoRecord.filename,
+          duration_seconds: existingVideoRecord.duration_seconds ?? null,
+        },
+      ];
+    }
+    setMyApprovedVideos(merged);
+  }, [approvedVideosData, existingVideoRecord]);
+
+  // Edit-mode existing video — seed the wizard's video slots once the
+  // `useVideoById` read resolves (CF-16 derive-from-query, guarded).
+  useEffect(() => {
+    if (!existingVideoRecord) return;
+    setUploadedVideoId(existingVideoRecord.id);
+    setUploadedVideoUrl(existingVideoRecord.url);
+    setExistingVideoId(existingVideoRecord.id);
+  }, [existingVideoRecord, setUploadedVideoId, setUploadedVideoUrl, setExistingVideoId]);
 
   // Redirection si campagne événement sans événement en state
   useEffect(() => {
@@ -1096,171 +1102,13 @@ export default function NewCampaign() {
     }
   }, [location.pathname, eventFromState, navigate]);
 
-  // Charger la vidéo existante en mode édition
+  // Edit-mode geographic zones — seed the wizard once `useCampaignZonesForEdit`
+  // resolves (CF-16 derive-from-query, guarded on the cached data being present).
   useEffect(() => {
-    const loadExistingVideo = async () => {
-      if (editMode && campaignToEdit?.video_id) {
-        try {
-          const { data: videoData } = await supabase
-            .from('videos')
-            .select('*')
-            .eq('id', campaignToEdit.video_id)
-            .single();
-
-          if (videoData) {
-            setUploadedVideoId(videoData.id);
-            setUploadedVideoUrl(videoData.url);
-            setMyApprovedVideos((prev) => {
-              if (!prev.find((v) => v.id === videoData.id)) {
-                return [...prev, videoData];
-              }
-              return prev;
-            });
-            setExistingVideoId(videoData.id);
-          }
-        } catch (error) {
-          log.error({ error }, 'Erreur chargement vidéo');
-        }
-      }
-    };
-
-    loadExistingVideo();
-  }, [editMode, campaignToEdit?.video_id]);
-
-  // Charger les zones (campaign_locations) en mode édition pour restaurer la sélection
-  useEffect(() => {
-    const loadCampaignZones = async () => {
-      if (!editMode || !campaignToEdit?.id) return;
-      try {
-        const { data: campaignLocs, error } = await supabase
-          .from('campaign_locations')
-          .select('location_id')
-          .eq('campaign_id', campaignToEdit.id);
-        if (error || !campaignLocs?.length) return;
-        const locationIds = campaignLocs.map((r: { location_id: string }) => r.location_id);
-        const locations = await campaignScreensService.getLocationsByIds(locationIds);
-        if (locations.length === 0) return;
-        const withCoords = locations.filter(
-          (loc) =>
-            loc.coordinates &&
-            typeof loc.coordinates.lat === 'number' &&
-            typeof loc.coordinates.lng === 'number',
-        );
-        const latAvg = withCoords.length
-          ? withCoords.reduce((s, l) => s + l.coordinates!.lat, 0) / withCoords.length
-          : 36.8;
-        const lngAvg = withCoords.length
-          ? withCoords.reduce((s, l) => s + l.coordinates!.lng, 0) / withCoords.length
-          : 10.2;
-        const radiusM = withCoords.length
-          ? Math.max(
-              1000,
-              ...withCoords.map((l) => {
-                const lat = l.coordinates!.lat;
-                const lng = l.coordinates!.lng;
-                const R = 6371000;
-                const dLat = ((lat - latAvg) * Math.PI) / 180;
-                const dLng = ((lng - lngAvg) * Math.PI) / 180;
-                const a =
-                  Math.sin(dLat / 2) ** 2 +
-                  Math.cos((latAvg * Math.PI) / 180) *
-                    Math.cos((lat * Math.PI) / 180) *
-                    Math.sin(dLng / 2) ** 2;
-                return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-              }),
-            )
-          : 5000;
-        setGeographicZones([
-          {
-            id: 'edit-restored',
-            name: 'Sélection existante',
-            location: { lat: latAvg, lng: lngAvg },
-            radius: Math.round(radiusM),
-            locations,
-          },
-        ]);
-      } catch (err) {
-        log.error({ err }, 'Erreur chargement zones campagne');
-      }
-    };
-    loadCampaignZones();
-  }, [editMode, campaignToEdit?.id]);
-
-  const loadMyApprovedVideos = async () => {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data, error } = await supabase
-        .from('videos')
-        .select('*')
-        .eq('uploaded_by', user.id)
-        .eq('validation_status', 'approved')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setMyApprovedVideos(data || []);
-    } catch (error) {
-      log.error({ error }, 'Erreur chargement vidéos validées');
+    if (editModeZones.length > 0) {
+      setGeographicZones(editModeZones);
     }
-  };
-
-  // loadAllScreens removed (Commit 9): wrote only to the dead _allScreens
-  //   useState trio (already write-only pre-Commit-9; trio deleted alongside).
-
-  // Charger les parcs disponibles (owners ayant des écrans actifs)
-  const loadAvailableParcs = async () => {
-    setLoadingParcs(true);
-    try {
-      const { data: screens } = await supabase
-        .from('screens')
-        .select('id, owner_id')
-        .eq('status', 'active');
-
-      if (!screens || screens.length === 0) {
-        setAvailableParcs([]);
-        return;
-      }
-
-      const ownerScreenMap = new Map<string, string[]>();
-      screens.forEach((s) => {
-        const list = ownerScreenMap.get(s.owner_id) || [];
-        list.push(s.id);
-        ownerScreenMap.set(s.owner_id, list);
-      });
-
-      const ownerIds = [...ownerScreenMap.keys()];
-      const { data: owners } = await supabase
-        .from('business_profiles')
-        .select('user_id, business_name, logo_url')
-        .in('user_id', ownerIds);
-
-      const parcs: ParcTV[] = ownerIds
-        .map((oid) => {
-          const profile = owners?.find((o) => o.user_id === oid);
-          return {
-            ownerId: oid,
-            name: profile?.business_name || 'Parc inconnu',
-            logo: profile?.logo_url || undefined,
-            screenCount: ownerScreenMap.get(oid)?.length || 0,
-            screenIds: ownerScreenMap.get(oid) || [],
-          };
-        })
-        .filter((p) => p.screenCount > 0);
-
-      setAvailableParcs(parcs);
-    } catch (error) {
-      log.error({ error }, 'Erreur chargement parcs');
-    } finally {
-      setLoadingParcs(false);
-    }
-  };
-
-  useEffect(() => {
-    if (diffusionType === 'parc_tv') loadAvailableParcs();
-  }, [diffusionType]);
+  }, [editModeZones, setGeographicZones]);
 
   // handleParcToggle: removed (Step2.tsx owns the toggle via setSelectedParcIds prop).
 

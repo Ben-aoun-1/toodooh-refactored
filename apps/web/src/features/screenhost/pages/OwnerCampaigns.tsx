@@ -20,14 +20,14 @@ import { toast } from 'react-hot-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { useAuthStore } from '@/features/auth/stores/auth.store';
-import { campaignOwnerApprovalService } from '@/features/campaigns/services/campaign-owner-approval.service';
+import { useOwnerCampaignApprovalMutations } from '@/features/campaigns/hooks/useOwnerCampaignApprovalMutations';
+import { useVideoById } from '@/features/campaigns/hooks/useVideoById';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
 import OwnerNotificationsBell from '@/features/screenhost/components/OwnerNotificationsBell';
 import {
   useOwnerCampaignsOverview,
   type OwnerCampaignCard,
 } from '@/features/screenhost/hooks/useOwnerCampaignsOverview';
-import { supabase } from '@/lib/supabase';
 
 type OwnerCampaignStatusFilter =
   | 'all'
@@ -103,14 +103,12 @@ export default function OwnerCampaigns() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<OwnerCampaignStatusFilter>('all');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
-  const [campaigns, setCampaigns] = useState<OwnerCampaignCard[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [brokenLogoCampaignIds, setBrokenLogoCampaignIds] = useState<Set<string>>(new Set());
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
   const [selectedCampaign, setSelectedCampaign] = useState<OwnerCampaignCard | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [drawerVisible, setDrawerVisible] = useState(false);
-  const [campaignVideo, setCampaignVideo] = useState<{ url?: string | null } | null>(null);
   const [processingDecision, setProcessingDecision] = useState<'accept' | 'reject' | null>(null);
   const [showApprovalSuccessModal, setShowApprovalSuccessModal] = useState(false);
   const [showRejectConfirmModal, setShowRejectConfirmModal] = useState(false);
@@ -121,13 +119,21 @@ export default function OwnerCampaigns() {
     loading,
     isError: overviewError,
   } = useOwnerCampaignsOverview(user?.id);
+  const { approveCampaign, rejectCampaign } = useOwnerCampaignApprovalMutations(user?.id);
 
-  // Mirror the query payload into local state — the approve / reject handlers
-  // apply optimistic `setCampaigns` patches (those writes stay inline pending
-  // Commit 7), so the page needs a writable copy seeded from the query.
+  // Commit 7b — the approve / reject handlers now invalidate-and-refetch (the
+  // optimistic `setCampaigns` patches are dropped), so the former local-state
+  // mirror's only justification is gone: the page reads straight from the
+  // query. The `?? []` is memoised so dependent hooks keep a stable reference
+  // (CF-16).
+  const campaigns = useMemo(() => overviewCampaigns ?? [], [overviewCampaigns]);
+
+  // Detail-modal video — the shared `useVideoById` consolidation (Commit 7b).
+  const { video: campaignVideo } = useVideoById(selectedCampaign?.videoId);
+
+  // Reset broken-logo tracking whenever the campaign set refreshes.
   useEffect(() => {
     if (overviewCampaigns) {
-      setCampaigns(overviewCampaigns);
       setBrokenLogoCampaignIds(new Set());
     }
   }, [overviewCampaigns]);
@@ -201,29 +207,16 @@ export default function OwnerCampaigns() {
     setTimeout(() => {
       setShowDetailsModal(false);
       setSelectedCampaign(null);
-      setCampaignVideo(null);
       setProcessingDecision(null);
       setShowRejectConfirmModal(false);
     }, 300);
   };
 
-  const handleViewCampaign = async (campaign: OwnerCampaignCard) => {
+  // The detail-modal video is loaded by `useVideoById` (reactive on
+  // `selectedCampaign?.videoId`), so opening the drawer is now synchronous.
+  const handleViewCampaign = (campaign: OwnerCampaignCard) => {
     setSelectedCampaign(campaign);
     setOpenActionMenuId(null);
-    if (campaign.videoId) {
-      try {
-        const { data: videoData } = await supabase
-          .from('videos')
-          .select('url')
-          .eq('id', campaign.videoId)
-          .single();
-        setCampaignVideo(videoData || null);
-      } catch {
-        setCampaignVideo(null);
-      }
-    } else {
-      setCampaignVideo(null);
-    }
     setShowDetailsModal(true);
   };
 
@@ -239,10 +232,9 @@ export default function OwnerCampaigns() {
     if (!selectedCampaign || !user?.id) return;
     try {
       setProcessingDecision('accept');
-      await campaignOwnerApprovalService.approveCampaign(selectedCampaign.id, user.id);
-      setCampaigns((prev) =>
-        prev.map((c) => (c.id === selectedCampaign.id ? { ...c, approvalStatus: 'approved' } : c)),
-      );
+      await approveCampaign.mutateAsync({ campaignId: selectedCampaign.id });
+      // Reflect the decision in the open drawer (modal client state — the
+      // campaign list itself refreshes via invalidate-and-refetch).
       setSelectedCampaign((prev) => (prev ? { ...prev, approvalStatus: 'approved' } : prev));
       setShowApprovalSuccessModal(true);
     } catch (_error) {
@@ -256,10 +248,7 @@ export default function OwnerCampaigns() {
     if (!selectedCampaign || !user?.id) return;
     try {
       setProcessingDecision('reject');
-      await campaignOwnerApprovalService.rejectCampaign(selectedCampaign.id, user.id, undefined);
-      setCampaigns((prev) =>
-        prev.map((c) => (c.id === selectedCampaign.id ? { ...c, approvalStatus: 'rejected' } : c)),
-      );
+      await rejectCampaign.mutateAsync({ campaignId: selectedCampaign.id });
       setSelectedCampaign((prev) => (prev ? { ...prev, approvalStatus: 'rejected' } : prev));
       toast.success('Campagne refusée');
       setShowRejectConfirmModal(false);

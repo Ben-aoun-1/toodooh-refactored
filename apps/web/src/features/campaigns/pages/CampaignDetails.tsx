@@ -12,46 +12,12 @@ import {
   Film,
   Building,
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { useParams, useNavigate } from 'react-router-dom';
 
-import { supabase } from '@/lib/supabase';
-
-interface Campaign {
-  id: string;
-  name: string;
-  client?: string;
-  category: string;
-  start_date: string;
-  end_date: string;
-  status: string;
-  budget: number;
-  views: number;
-  location_lat?: number;
-  location_lng?: number;
-  location_radius?: number;
-  video_id?: string;
-  content_validation_status?: string;
-  created_at: string;
-  user_id: string;
-  selected_categories?: string[];
-  selected_zones?: string[];
-  validated_impressions?: number;
-}
-
-// TODO(phase-1): typed source [supabase] — see #15
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const isMissingCampaignCategoriesTable = (error: any) =>
-  error?.code === 'PGRST205' && String(error?.message || '').includes('campaign_categories');
-
-interface Video {
-  id: string;
-  filename: string;
-  url: string;
-  duration: number;
-  validation_status: string;
-}
+import { useCampaignDetail } from '@/features/campaigns/hooks/useCampaignDetail';
+import { useVideoById } from '@/features/campaigns/hooks/useVideoById';
 
 // TODO(phase-1): typed source [supabase] — see #15
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -66,104 +32,16 @@ const statusConfig: Record<string, { label: string; color: string; icon: any }> 
 export default function CampaignDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [campaign, setCampaign] = useState<Campaign | null>(null);
-  const [video, setVideo] = useState<Video | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Server state via React Query (Commit 7b). The video read is the shared
+  // `useVideoById` consolidation (4-consumer CF-13 first-amendment hook).
+  const { campaign, loading, isError } = useCampaignDetail(id);
+  const { video } = useVideoById(campaign?.video_id);
 
   useEffect(() => {
-    loadCampaign();
-  }, [id]);
-
-  const loadCampaign = async () => {
-    try {
-      setLoading(true);
-
-      // Charger la campagne
-      const { data: campaignData, error: campaignError } = await supabase
-        .from('campaigns')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (campaignError) throw campaignError;
-
-      const [{ data: categoryRows, error: categoryError }] =
-        await Promise.all([
-          supabase
-            .from('campaign_categories')
-            .select('category')
-            .eq('campaign_id', campaignData.id),
-          supabase
-            .from('campaign_locations')
-            .select('location_id')
-            .eq('campaign_id', campaignData.id),
-        ]);
-
-      if (categoryError && !isMissingCampaignCategoriesTable(categoryError)) {
-        throw categoryError;
-      }
-
-      const selectedCategories = (categoryRows || [])
-        // TODO(phase-1): typed source [supabase] — see #15
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .map((row: any) => row.category)
-        .filter(Boolean);
-
-      let selectedZones: string[] = [];
-
-      const { data: predefinedZonesRows } = await supabase
-        .from('predefined_zones')
-        .select('name, latitude, longitude, radius')
-        .eq('is_active', true);
-      const lat = Number(campaignData?.location_lat);
-      const lng = Number(campaignData?.location_lng);
-      const radius = Number(campaignData?.location_radius);
-      if (Number.isFinite(lat) && Number.isFinite(lng) && Number.isFinite(radius)) {
-        const matched = (predefinedZonesRows || []).find(
-          // TODO(phase-1): typed source [supabase] — see #15
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (z: any) =>
-            Math.abs(Number(z.latitude) - lat) <= 0.0005 &&
-            Math.abs(Number(z.longitude) - lng) <= 0.0005 &&
-            Math.abs(Number(z.radius) - radius) <= 50,
-        );
-        if (matched?.name) {
-          selectedZones = [matched.name];
-        } else {
-          selectedZones = ['Grand Tunis'];
-        }
-      }
-
-      setCampaign({
-        ...campaignData,
-        selected_categories:
-          selectedCategories.length > 0
-            ? selectedCategories
-            : campaignData.category
-              ? [campaignData.category]
-              : [],
-        selected_zones: Array.from(new Set(selectedZones)),
-        validated_impressions: Math.max(0, Number(campaignData.views) || 0),
-      });
-
-      // Charger la vidéo si elle existe
-      if (campaignData.video_id) {
-        const { data: videoData, error: videoError } = await supabase
-          .from('videos')
-          .select('*')
-          .eq('id', campaignData.video_id)
-          .single();
-
-        if (!videoError) {
-          setVideo(videoData);
-        }
-      }
-    } catch (_error) {
+    if (isError) {
       toast.error('Erreur lors du chargement de la campagne');
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [isError]);
 
   if (loading) {
     return (

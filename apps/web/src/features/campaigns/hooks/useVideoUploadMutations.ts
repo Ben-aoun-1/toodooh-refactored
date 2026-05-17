@@ -1,10 +1,13 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { adminKeys } from '@/features/admin/hooks/queryKeys';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
 import {
   videoUploadService,
   type UploadProgress,
 } from '@/features/campaigns/services/video-upload.service';
+
+import { campaignsKeys } from './queryKeys';
 
 interface UploadVideoInput {
   file: File;
@@ -47,18 +50,27 @@ export interface CreatedVideo {
  *   (b) cross-session cross-role, the admin `VideoManagement` moderation
  *   queue — `adminKeys.videos(*)` (every status bucket, prefix-invalidated)
  *   and `adminKeys.videoStats()`. No-op against the admin's uncached session;
- *   kept for intent. There is no (a) within-session reader: `NewCampaign`'s
- *   `myApprovedVideos` cache lists only *approved* videos and a freshly
- *   created entry is `pending`.
+ *   kept for intent.
+ * - (a) within-session — `campaignsKeys.myApprovedVideos(userId)`: Commit 7b
+ *   added `useMyApprovedVideos` as the wizard's existing-spot picker source,
+ *   so the (a) reader the 7a graph noted as absent now exists. A freshly
+ *   created entry is `pending` (not yet in the approved list); the
+ *   invalidation is kept so the picker refreshes once moderation approves it
+ *   and a re-upload during the same session re-reads cleanly.
  */
 export function useVideoUploadMutations() {
   const queryClient = useQueryClient();
+  const userId = useAuthStore((state) => state.user?.id);
 
   // (b) every admin VideoManagement status bucket — `adminKeys.videos` keys
   // on a status arg, so invalidate the shared `[...'admin', 'videos']` prefix.
+  // (a) the signed-in advertiser's approved-videos picker.
   const invalidateAdminVideos = () => {
     queryClient.invalidateQueries({ queryKey: [...adminKeys.all, 'videos'] });
     queryClient.invalidateQueries({ queryKey: adminKeys.videoStats() });
+    queryClient.invalidateQueries({
+      queryKey: campaignsKeys.myApprovedVideos(userId ?? ''),
+    });
   };
 
   const uploadVideo = useMutation({

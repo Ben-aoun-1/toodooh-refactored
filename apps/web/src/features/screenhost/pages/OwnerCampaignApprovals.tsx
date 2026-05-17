@@ -13,10 +13,8 @@ import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 import { useAuthStore } from '@/features/auth/stores/auth.store';
-import {
-  campaignOwnerApprovalService,
-  PendingCampaign,
-} from '@/features/campaigns/services/campaign-owner-approval.service';
+import { useOwnerCampaignApprovalMutations } from '@/features/campaigns/hooks/useOwnerCampaignApprovalMutations';
+import { useOwnerCampaignApprovals } from '@/features/campaigns/hooks/useOwnerCampaignApprovals';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
 
 export default function OwnerCampaignApprovals() {
@@ -24,41 +22,32 @@ export default function OwnerCampaignApprovals() {
   const { user, needsApproval, validationStatus } = useAuthStore();
   const isDisabled = needsApproval && validationStatus === 'pending';
 
-  const [loading, setLoading] = useState(true);
-  const [campaigns, setCampaigns] = useState<PendingCampaign[]>([]);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>(
     'pending',
   );
   const [searchTerm, setSearchTerm] = useState('');
 
-  useEffect(() => {
-    if (!user) {
-      navigate('/login');
-      return;
-    }
+  // Server state via React Query (Commit 7b). `campaign-owner-approval`
+  // service is campaigns-owned (D6), so the hooks live under campaigns/.
+  const { campaigns, loading, isError, refetch } = useOwnerCampaignApprovals(user?.id);
+  const { approveCampaign, rejectCampaign } = useOwnerCampaignApprovalMutations(user?.id);
 
-    loadCampaigns();
+  useEffect(() => {
+    if (!user) navigate('/login');
   }, [user, navigate]);
 
-  const loadCampaigns = async () => {
-    try {
-      setLoading(true);
-      const pendingCampaigns = await campaignOwnerApprovalService.getPendingCampaigns(user!.id);
-      setCampaigns(pendingCampaigns);
-    } catch (_error) {
+  useEffect(() => {
+    if (isError) {
       toast.error('Erreur lors du chargement des campagnes');
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [isError]);
 
   const handleApprove = async (campaignId: string) => {
     try {
       setProcessingId(campaignId);
-      await campaignOwnerApprovalService.approveCampaign(campaignId, user!.id);
+      await approveCampaign.mutateAsync({ campaignId });
       toast.success('Campagne approuvée avec succès');
-      await loadCampaigns();
     } catch (_error) {
       toast.error("Erreur lors de l'approbation de la campagne");
     } finally {
@@ -70,9 +59,8 @@ export default function OwnerCampaignApprovals() {
     const reason = prompt('Raison du rejet (optionnel):');
     try {
       setProcessingId(campaignId);
-      await campaignOwnerApprovalService.rejectCampaign(campaignId, user!.id, reason || undefined);
+      await rejectCampaign.mutateAsync({ campaignId, reason: reason || undefined });
       toast.success('Campagne rejetée');
-      await loadCampaigns();
     } catch (_error) {
       toast.error('Erreur lors du rejet de la campagne');
     } finally {
@@ -152,7 +140,7 @@ export default function OwnerCampaignApprovals() {
                   </div>
                 </div>
                 <button
-                  onClick={loadCampaigns}
+                  onClick={refetch}
                   className="h-10 w-10 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 inline-flex items-center justify-center text-gray-600"
                   title="Actualiser"
                 >

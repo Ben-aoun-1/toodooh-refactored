@@ -35,6 +35,11 @@ describe('screensKeys', () => {
     expect(screensKeys.unavailabilityForScreens(['s1'])[0]).toBe('screens');
   });
 
+  it('keys the available-parcs read under the screens prefix', () => {
+    expect(screensKeys.availableParcs()).toEqual(['screens', 'availableParcs']);
+    expect(screensKeys.availableParcs()).not.toEqual(screensKeys.list());
+  });
+
   it('keeps every view key distinct and prefix-matchable by screensKeys.all', () => {
     const views = [
       screensKeys.list(),
@@ -42,6 +47,7 @@ describe('screensKeys', () => {
       screensKeys.calendarDevices(),
       screensKeys.predefinedZones(),
       screensKeys.unavailabilityForScreens(['s1']),
+      screensKeys.availableParcs(),
     ];
     for (const key of views) {
       expect(key.slice(0, screensKeys.all.length)).toEqual(screensKeys.all);
