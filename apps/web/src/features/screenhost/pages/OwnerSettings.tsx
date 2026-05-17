@@ -18,14 +18,19 @@ import {
   Check,
   Info,
 } from 'lucide-react';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { toast } from 'react-hot-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import { authService } from '@/features/auth/services/auth.service';
+import { useBusinessProfile } from '@/features/auth/hooks/useBusinessProfile';
+import { useGovernorates } from '@/features/auth/hooks/useGovernorates';
+import { useOwnerBusinessSectors } from '@/features/auth/hooks/useOwnerBusinessSectors';
+import { useOwnerProfileMutations } from '@/features/auth/hooks/useOwnerProfileMutations';
+import { useSectors } from '@/features/auth/hooks/useSectors';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
-import type { BusinessProfile, BusinessSector, Governorate } from '@/features/auth/types/auth';
+import type { BusinessProfile } from '@/features/auth/types/auth';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
+import { useSaveBankDetails } from '@/features/wallet/hooks/useSaveBankDetails';
 import { supabase } from '@/lib/supabase';
 
 type TabId = 'responsable' | 'entreprise' | 'notifications' | 'confidentialite';
@@ -82,11 +87,13 @@ export default function OwnerSettings() {
   const isDisabled = needsApproval && validationStatus === 'pending';
   const isFleetOwner = profileType === 'fleet_owner';
 
-  const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState<BusinessProfile | null>(null);
-  const [sectors, setSectors] = useState<BusinessSector[]>([]);
-  const [ownerSectors, setOwnerSectors] = useState<BusinessSector[]>([]);
-  const [governorates, setGovernorates] = useState<Governorate[]>([]);
+  const { profile, loading } = useBusinessProfile(user?.id);
+  const { data: sectors = [] } = useSectors();
+  const { data: ownerSectors = [] } = useOwnerBusinessSectors();
+  const { data: governorates = [] } = useGovernorates();
+  const profileMutations = useOwnerProfileMutations(user?.id);
+  const saveBankDetailsMutation = useSaveBankDetails();
+
   const [activeTab, setActiveTab] = useState<TabId>('responsable');
   const [entrepriseSub, setEntrepriseSub] = useState<EntrepriseSubId>('informations');
   const [confidentialiteSub, setConfidentialiteSub] = useState<ConfidentialiteSubId>('password');
@@ -127,10 +134,7 @@ export default function OwnerSettings() {
 
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [documentFile, setDocumentFile] = useState<File | null>(null);
-  const [uploadingDocument, setUploadingDocument] = useState(false);
-  const [bankDetailsSaving, setBankDetailsSaving] = useState(false);
   const [bankDocFile, setBankDocFile] = useState<File | null>(null);
   const [bankForm, setBankForm] = useState({
     bank_account_holder: '',
@@ -153,10 +157,7 @@ export default function OwnerSettings() {
   useEffect(() => {
     if (!user) {
       navigate('/login');
-      return;
     }
-    loadProfile();
-    loadSectorsAndGovernorates();
   }, [user, navigate]);
 
   useEffect(() => {
@@ -182,80 +183,62 @@ export default function OwnerSettings() {
     }
   }, [location.search]);
 
+  /**
+   * Re-seeds the editable forms from a profile row. Driven by the
+   * `useBusinessProfile` query on load + after every mutation (the mutations
+   * invalidate `authKeys.profile`, so a fresh row flows back here), and called
+   * directly by the "Annuler" buttons to revert unsaved edits.
+   */
+  const applyProfileToForms = useCallback((p: BusinessProfile) => {
+    const full = (p.contact_name ?? '').trim();
+    const space = full.indexOf(' ');
+    const last_name = space <= 0 ? full : full.slice(0, space);
+    const first_name = space <= 0 ? '' : full.slice(space + 1).trim();
+    setResponsableForm({
+      last_name,
+      first_name,
+      fonction: p.fonction ?? '',
+      contact_phone: p.contact_phone ?? '',
+    });
+    setEntrepriseForm({
+      business_name: p.business_name ?? '',
+      tax_number: p.tax_number ?? '',
+      business_sector_id: p.business_sector_id ?? '',
+      number_of_screens:
+        p.number_of_screens != null && p.number_of_screens !== undefined
+          ? String(p.number_of_screens)
+          : '',
+      number_of_rooms:
+        p.number_of_rooms != null && p.number_of_rooms !== undefined
+          ? String(p.number_of_rooms)
+          : '',
+      company_size: p.company_size ?? '',
+    });
+    setAdresseForm({
+      street_address: p.street_address ?? '',
+      city: p.city ?? '',
+      postal_code: p.postal_code ?? '',
+      governorate_id: p.governorate_id ?? '',
+      zone: p.zone ?? '',
+    });
+    if (p.logo_url) setLogoPreview(p.logo_url);
+    setBankForm({
+      bank_account_holder: p.bank_account_holder ?? '',
+      bank_rib: p.bank_rib ?? '',
+      bank_iban: p.bank_iban ?? '',
+    });
+    setExistingBankDocPath(p.bank_doc_path ?? null);
+    setExistingBankDocUrl(p.bank_doc_url ?? null);
+    setNotificationsForm({
+      notify_news_updates: p.notify_news_updates ?? false,
+      notify_reminders_events: p.notify_reminders_events ?? true,
+      notify_promotions_offers: p.notify_promotions_offers ?? false,
+    });
+  }, []);
+
   useEffect(() => {
-    if (profile) {
-      const full = (profile.contact_name ?? '').trim();
-      const space = full.indexOf(' ');
-      const last_name = space <= 0 ? full : full.slice(0, space);
-      const first_name = space <= 0 ? '' : full.slice(space + 1).trim();
-      setResponsableForm({
-        last_name,
-        first_name,
-        fonction: profile.fonction ?? '',
-        contact_phone: profile.contact_phone ?? '',
-      });
-      setEntrepriseForm({
-        business_name: profile.business_name ?? '',
-        tax_number: profile.tax_number ?? '',
-        business_sector_id: profile.business_sector_id ?? '',
-        number_of_screens:
-          profile.number_of_screens != null && profile.number_of_screens !== undefined
-            ? String(profile.number_of_screens)
-            : '',
-        number_of_rooms:
-          profile.number_of_rooms != null && profile.number_of_rooms !== undefined
-            ? String(profile.number_of_rooms)
-            : '',
-        company_size: profile.company_size ?? '',
-      });
-      setAdresseForm({
-        street_address: profile.street_address ?? '',
-        city: profile.city ?? '',
-        postal_code: profile.postal_code ?? '',
-        governorate_id: profile.governorate_id ?? '',
-        zone: profile.zone ?? '',
-      });
-      if (profile.logo_url) setLogoPreview(profile.logo_url);
-      setBankForm({
-        bank_account_holder: profile.bank_account_holder ?? '',
-        bank_rib: profile.bank_rib ?? '',
-        bank_iban: profile.bank_iban ?? '',
-      });
-      setExistingBankDocPath(profile.bank_doc_path ?? null);
-      setExistingBankDocUrl(profile.bank_doc_url ?? null);
-      setNotificationsForm({
-        notify_news_updates: profile.notify_news_updates ?? false,
-        notify_reminders_events: profile.notify_reminders_events ?? true,
-        notify_promotions_offers: profile.notify_promotions_offers ?? false,
-      });
-    }
-  }, [profile]);
-
-  const loadProfile = async () => {
-    try {
-      const data = await authService.getBusinessProfile();
-      setProfile(data);
-      setLoading(false);
-    } catch {
-      toast.error('Erreur lors du chargement du profil');
-      setLoading(false);
-    }
-  };
-
-  const loadSectorsAndGovernorates = async () => {
-    try {
-      const [sectorsData, ownerSectorsData, govData] = await Promise.all([
-        authService.getBusinessSectors(),
-        authService.getOwnerBusinessSectors(),
-        authService.getGovernorates(),
-      ]);
-      setSectors(sectorsData ?? []);
-      setOwnerSectors(ownerSectorsData ?? []);
-      setGovernorates(govData ?? []);
-    } catch {
-      /* non bloquant */
-    }
-  };
+    if (profile) applyProfileToForms(profile);
+  }, [profile, applyProfileToForms]);
 
   const handleSaveResponsable = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -268,13 +251,12 @@ export default function OwnerSettings() {
         .filter(Boolean)
         .join(' ')
         .trim();
-      await authService.updateProfile({
+      await profileMutations.updateProfile.mutateAsync({
         contact_name,
         contact_phone: responsableForm.contact_phone,
         fonction: responsableForm.fonction || null,
       });
       toast.success('Informations enregistrées');
-      loadProfile();
     } catch (err: unknown) {
       const m = err instanceof Error ? err.message : 'Erreur lors de la mise à jour';
       toast.error(m);
@@ -308,7 +290,7 @@ export default function OwnerSettings() {
     try {
       const ns = parseScreenCount(entrepriseForm.number_of_screens);
       const nr = parseInt(entrepriseForm.number_of_rooms, 10);
-      await authService.updateBusinessProfile({
+      await profileMutations.updateBusinessProfile.mutateAsync({
         business_name: entrepriseForm.business_name,
         tax_number: entrepriseForm.tax_number,
         business_sector_id: entrepriseForm.business_sector_id,
@@ -317,7 +299,6 @@ export default function OwnerSettings() {
         ...(isFleetOwner ? { company_size: entrepriseForm.company_size || null } : {}),
       });
       toast.success('Informations entreprise enregistrées');
-      loadProfile();
     } catch (err: unknown) {
       const m = err instanceof Error ? err.message : 'Erreur lors de la mise à jour';
       toast.error(m);
@@ -336,7 +317,7 @@ export default function OwnerSettings() {
       return;
     }
     try {
-      await authService.updateBusinessProfile({
+      await profileMutations.updateBusinessProfile.mutateAsync({
         street_address: adresseForm.street_address,
         city: adresseForm.city,
         postal_code: adresseForm.postal_code,
@@ -344,7 +325,6 @@ export default function OwnerSettings() {
         zone: adresseForm.zone?.trim() || null,
       });
       toast.success('Adresse enregistrée');
-      loadProfile();
     } catch (err: unknown) {
       const m = err instanceof Error ? err.message : 'Erreur lors de la mise à jour';
       toast.error(m);
@@ -354,13 +334,12 @@ export default function OwnerSettings() {
   const handleSaveNotifications = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await authService.updateProfile({
+      await profileMutations.updateProfile.mutateAsync({
         notify_news_updates: notificationsForm.notify_news_updates,
         notify_reminders_events: notificationsForm.notify_reminders_events,
         notify_promotions_offers: notificationsForm.notify_promotions_offers,
       });
       toast.success('Préférences enregistrées');
-      loadProfile();
     } catch (err: unknown) {
       const m = err instanceof Error ? err.message : 'Erreur lors de la mise à jour';
       toast.error(m);
@@ -386,10 +365,10 @@ export default function OwnerSettings() {
       return;
     }
     try {
-      await authService.updatePasswordWithOld(
-        passwordData.currentPassword,
-        passwordData.newPassword,
-      );
+      await profileMutations.updatePasswordWithOld.mutateAsync({
+        currentPassword: passwordData.currentPassword,
+        newPassword: passwordData.newPassword,
+      });
       toast.success('Mot de passe mis à jour');
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (err: unknown) {
@@ -419,7 +398,7 @@ export default function OwnerSettings() {
         setDeactivating(false);
         return;
       }
-      await authService.deactivateAccount();
+      await profileMutations.deactivateAccount.mutateAsync();
       toast.success('Compte désactivé');
       navigate('/login');
     } catch (err: unknown) {
@@ -445,37 +424,22 @@ export default function OwnerSettings() {
 
   const handleLogoUpload = async () => {
     if (!logoFile || !user) return;
-    setUploadingLogo(true);
     try {
-      const ext = logoFile.name.split('.').pop() || 'png';
-      const filePath = `logo_${user.id}_${Date.now()}.${ext}`;
-      const { error: uploadError } = await supabase.storage
-        .from('registres')
-        .upload(filePath, logoFile);
-      if (uploadError) throw uploadError;
-      const { data: signed, error: signedError } = await supabase.storage
-        .from('registres')
-        .createSignedUrl(filePath, 604800);
-      if (signedError || !signed) throw signedError || new Error('URL signée');
-      await authService.updateProfile({ logo_url: signed.signedUrl });
+      await profileMutations.uploadLogo.mutateAsync(logoFile);
       setLogoFile(null);
       toast.success('Logo mis à jour');
-      loadProfile();
     } catch (err: unknown) {
       const m = err instanceof Error ? err.message : 'Erreur upload logo';
       toast.error(m);
-    } finally {
-      setUploadingLogo(false);
     }
   };
 
   const handleLogoRemove = async () => {
     try {
-      await authService.updateProfile({ logo_url: null });
+      await profileMutations.updateProfile.mutateAsync({ logo_url: null });
       setLogoPreview(null);
       setLogoFile(null);
       toast.success('Logo supprimé');
-      loadProfile();
     } catch (err: unknown) {
       const m = err instanceof Error ? err.message : 'Erreur';
       toast.error(m);
@@ -497,57 +461,25 @@ export default function OwnerSettings() {
       toast.error('Fichier trop volumineux (max 5 Mo)');
       return;
     }
-    setUploadingDocument(true);
     try {
-      const ext = documentFile.name.split('.').pop();
-      const filePrefix = isIndividualOwner ? 'cin' : 'rne';
-      const filePath = `${filePrefix}_${user.id}_${Date.now()}.${ext}`;
-      await supabase.storage.from('registres').upload(filePath, documentFile);
-      const { data: signedData, error: signedError } = await supabase.storage
-        .from('registres')
-        .createSignedUrl(filePath, 604800);
-      if (signedError || !signedData) throw signedError || new Error('URL signée');
-
-      if (isIndividualOwner) {
-        await supabase
-          .from('business_profiles')
-          .update({ cin_doc_url: signedData.signedUrl })
-          .eq('user_id', user.id);
-      } else {
-        await supabase
-          .from('business_profiles')
-          .update({ registration_doc_path: filePath, registration_doc_url: signedData.signedUrl })
-          .eq('user_id', user.id);
-      }
+      await profileMutations.uploadDocument.mutateAsync({
+        file: documentFile,
+        isIndividualOwner,
+      });
       setDocumentFile(null);
       toast.success('Document enregistré');
-      loadProfile();
     } catch (err: unknown) {
       const m = err instanceof Error ? err.message : 'Erreur upload';
       toast.error(m);
-    } finally {
-      setUploadingDocument(false);
     }
   };
 
   const handleRemoveDocument = async () => {
     if (!user) return;
     try {
-      if (isIndividualOwner) {
-        const { error } = await supabase
-          .from('business_profiles')
-          .update({ cin_doc_url: null })
-          .eq('user_id', user.id);
-        if (error) throw error;
-      } else {
-        await authService.updateProfile({
-          registration_doc_url: null,
-          registration_doc_path: null,
-        });
-      }
+      await profileMutations.removeDocument.mutateAsync(isIndividualOwner);
       setDocumentFile(null);
       toast.success('Document supprimé');
-      loadProfile();
     } catch (err: unknown) {
       const m = err instanceof Error ? err.message : 'Erreur';
       toast.error(m);
@@ -625,50 +557,26 @@ export default function OwnerSettings() {
       return;
     }
 
-    setBankDetailsSaving(true);
+    if (bankDocFile && bankDocFile.size > 5 * 1024 * 1024) {
+      toast.error('Fichier trop volumineux (max 5 Mo)');
+      return;
+    }
+
     try {
-      let nextBankDocPath = existingBankDocPath;
-      let nextBankDocUrl = existingBankDocUrl;
-
-      if (bankDocFile) {
-        if (bankDocFile.size > 5 * 1024 * 1024) {
-          toast.error('Fichier trop volumineux (max 5 Mo)');
-          return;
-        }
-        const ext = bankDocFile.name.split('.').pop() || 'pdf';
-        const filePath = `bank_${user.id}_${Date.now()}.${ext}`;
-        const { error: uploadError } = await supabase.storage
-          .from('registres')
-          .upload(filePath, bankDocFile);
-        if (uploadError) throw uploadError;
-        const { data: signedData, error: signedError } = await supabase.storage
-          .from('registres')
-          .createSignedUrl(filePath, 604800);
-        if (signedError || !signedData) throw signedError || new Error('URL signée');
-        nextBankDocPath = filePath;
-        nextBankDocUrl = signedData.signedUrl;
-      }
-
-      await authService.updateBusinessProfile({
-        bank_account_holder: holder,
-        bank_rib: rib,
-        bank_iban: iban,
-        bank_doc_path: nextBankDocPath || null,
-        bank_doc_url: nextBankDocUrl || null,
-        bank_details_updated_at: new Date().toISOString(),
+      await saveBankDetailsMutation.mutateAsync({
+        userId: user.id,
+        name: holder,
+        rib,
+        iban,
+        bankDocFile,
+        existingBankDocPath,
       });
-
-      setExistingBankDocPath(nextBankDocPath || null);
-      setExistingBankDocUrl(nextBankDocUrl || null);
       setBankDocFile(null);
       toast.success('Coordonnées bancaires enregistrées');
-      loadProfile();
       navigate('/owner-dashboard');
     } catch (err: unknown) {
       const m = err instanceof Error ? err.message : 'Erreur lors de la mise à jour bancaire';
       toast.error(m);
-    } finally {
-      setBankDetailsSaving(false);
     }
   };
 
@@ -828,7 +736,9 @@ export default function OwnerSettings() {
                       <div className="flex gap-3 pt-6 justify-end max-w-3xl">
                         <button
                           type="button"
-                          onClick={() => loadProfile()}
+                          onClick={() => {
+                            if (profile) applyProfileToForms(profile);
+                          }}
                           className="px-5 py-2.5 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50"
                         >
                           Annuler
@@ -920,11 +830,11 @@ export default function OwnerSettings() {
                                 <button
                                   type="button"
                                   onClick={handleLogoUpload}
-                                  disabled={uploadingLogo}
+                                  disabled={profileMutations.uploadLogo.isPending}
                                   className="self-start px-3 py-2 rounded-lg text-sm font-medium text-gray-900 disabled:opacity-50 hover:opacity-90"
                                   style={{ background: '#97d6a2' }}
                                 >
-                                  {uploadingLogo ? 'Envoi...' : 'Enregistrer le logo'}
+                                  {profileMutations.uploadLogo.isPending ? 'Envoi...' : 'Enregistrer le logo'}
                                 </button>
                               )}
                             </div>
@@ -1055,7 +965,9 @@ export default function OwnerSettings() {
                         <div className="flex gap-3 pt-2 justify-end">
                           <button
                             type="button"
-                            onClick={() => loadProfile()}
+                            onClick={() => {
+                            if (profile) applyProfileToForms(profile);
+                          }}
                             className="px-5 py-2.5 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50"
                           >
                             Annuler
@@ -1208,7 +1120,9 @@ export default function OwnerSettings() {
                         <div className="flex gap-3 pt-4 justify-end">
                           <button
                             type="button"
-                            onClick={() => loadProfile()}
+                            onClick={() => {
+                            if (profile) applyProfileToForms(profile);
+                          }}
                             className="px-5 py-2.5 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50"
                           >
                             Annuler
@@ -1306,11 +1220,11 @@ export default function OwnerSettings() {
                           <button
                             type="button"
                             onClick={handleUploadDocument}
-                            disabled={!documentFile || uploadingDocument}
+                            disabled={!documentFile || profileMutations.uploadDocument.isPending}
                             className="px-5 py-2.5 rounded-xl font-medium text-gray-900 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                             style={{ background: '#97d6a2' }}
                           >
-                            {uploadingDocument ? 'Enregistrement...' : 'Enregistrer'}
+                            {profileMutations.uploadDocument.isPending ? 'Enregistrement...' : 'Enregistrer'}
                           </button>
                         </div>
                       </div>
@@ -1434,11 +1348,11 @@ export default function OwnerSettings() {
                           </button>
                           <button
                             type="submit"
-                            disabled={bankDetailsSaving}
+                            disabled={saveBankDetailsMutation.isPending}
                             className="px-5 py-2.5 rounded-xl font-medium text-gray-900 hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
                             style={{ background: '#97d6a2' }}
                           >
-                            {bankDetailsSaving ? 'Enregistrement...' : 'Enregistrer'}
+                            {saveBankDetailsMutation.isPending ? 'Enregistrement...' : 'Enregistrer'}
                           </button>
                         </div>
                       </form>

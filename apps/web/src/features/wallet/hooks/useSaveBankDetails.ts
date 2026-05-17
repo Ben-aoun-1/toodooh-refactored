@@ -1,6 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { authKeys } from '@/features/auth/hooks/queryKeys';
+import { authService } from '@/features/auth/services/auth.service';
+import type { BusinessProfile } from '@/features/auth/types/auth';
 import { supabase } from '@/lib/supabase';
 
 interface SaveBankDetailsInput {
@@ -20,9 +22,11 @@ interface SaveBankDetailsResult {
 }
 
 /**
- * Persists the owner's bank details — verbatim port of `OwnerRevenue`'s
- * former `handleSaveBankDetails` write path: an optional `registres`
- * storage upload + signed URL, then a `business_profiles` update.
+ * Persists the owner's bank details — an optional `registres` storage upload
+ * + signed URL, then a profile update routed through
+ * `authService.updateBusinessProfile` (the service path, not a direct
+ * `supabase.from('business_profiles').update()` — Commit 5c1 reconciliation,
+ * shared by `OwnerRevenue` and `OwnerSettings`).
  *
  * Caller-side validation (required fields, the 5 MB size limit) stays in the
  * page handler; this mutation owns only the async upload + write.
@@ -52,20 +56,16 @@ async function saveBankDetails(input: SaveBankDetailsInput): Promise<SaveBankDet
     signedUrl = signedData.signedUrl;
   }
 
-  const payload: Record<string, unknown> = {
+  const patch: Partial<BusinessProfile> = {
     bank_account_holder: name,
     bank_rib: rib,
     bank_iban: iban,
     bank_details_updated_at: new Date().toISOString(),
   };
-  if (uploadedPath) payload.bank_doc_path = uploadedPath;
-  if (signedUrl) payload.bank_doc_url = signedUrl;
+  if (uploadedPath) patch.bank_doc_path = uploadedPath;
+  if (signedUrl) patch.bank_doc_url = signedUrl;
 
-  const { error: updateError } = await supabase
-    .from('business_profiles')
-    .update(payload)
-    .eq('user_id', userId);
-  if (updateError) throw updateError;
+  await authService.updateBusinessProfile(patch);
 
   return { bankDocPath: uploadedPath };
 }

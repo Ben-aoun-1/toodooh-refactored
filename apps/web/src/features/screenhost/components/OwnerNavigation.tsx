@@ -9,7 +9,7 @@ import {
   ChevronRight,
   Megaphone,
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -30,12 +30,9 @@ import financeIcon from '@/assets/sidebar/portefeuille.png';
 import financeIconActive from '@/assets/sidebar/portefeuilles.png';
 import supportIcon from '@/assets/support.png';
 import supportIconActive from '@/assets/supports.png';
-import { authService } from '@/features/auth/services/auth.service';
+import { useAppointmentObjectives } from '@/features/auth/hooks/useAppointmentObjectives';
+import { useBusinessProfile } from '@/features/auth/hooks/useBusinessProfile';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
-import type { BusinessProfile } from '@/features/auth/types/auth';
-import { logger } from '@/lib/logger';
-
-const log = logger.child({ module: 'OwnerNavigation' });
 
 const APPOINTMENT_OBJECTIVES_FALLBACK = [
   'Renseignements',
@@ -102,60 +99,26 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
   const { user, logout } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarExpanded, setSidebarExpanded] = useState(true); // desktop: true = 272px, false = 80px
-  const [profile, setProfile] = useState<BusinessProfile | null>(null);
   const [_showUserMenu, _setShowUserMenu] = useState(false);
-  const [displayName, setDisplayName] = useState('');
   const [showSupportModal, setShowSupportModal] = useState(false);
   const [supportObjective, setSupportObjective] = useState('');
-  const [appointmentObjectives, setAppointmentObjectives] = useState<string[]>(
-    APPOINTMENT_OBJECTIVES_FALLBACK,
-  );
   const [supportOtherDetail, setSupportOtherDetail] = useState('');
   const [supportMessage, setSupportMessage] = useState('');
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
-  useEffect(() => {
-    const fetchProfile = async () => {
-      if (user) {
-        try {
-          const data = await authService.getBusinessProfile();
-          setProfile(data);
-        } catch (error) {
-          log.error({ error }, 'Error fetching profile');
-        }
-      }
-    };
+  const { profile } = useBusinessProfile(user?.id);
+  const { data: objectiveRows } = useAppointmentObjectives();
 
-    fetchProfile();
-  }, [user]);
+  const displayName = profile?.contact_name || user?.email || 'Non connecté';
 
-  // Effet pour mettre à jour le nom d'affichage
-  useEffect(() => {
-    if (profile?.contact_name) {
-      setDisplayName(profile.contact_name);
-    } else {
-      setDisplayName(user?.email || 'Non connecté');
-    }
-  }, [profile, user]);
-
-  useEffect(() => {
-    let active = true;
-    const loadSupportObjectives = async () => {
-      try {
-        const rows = await authService.getAppointmentObjectives();
-        if (!active) return;
-        if (rows.length > 0) {
-          setAppointmentObjectives(rows.map((r) => r.label));
-        }
-      } catch {
-        // fallback local conservé
-      }
-    };
-    loadSupportObjectives();
-    return () => {
-      active = false;
-    };
-  }, []);
+  // Liste serveur si non vide, sinon repli local.
+  const appointmentObjectives = useMemo(
+    () =>
+      objectiveRows && objectiveRows.length > 0
+        ? objectiveRows.map((r) => r.label)
+        : APPOINTMENT_OBJECTIVES_FALLBACK,
+    [objectiveRows],
+  );
 
   useEffect(() => {
     const handleOpenSupportModal = () => {
