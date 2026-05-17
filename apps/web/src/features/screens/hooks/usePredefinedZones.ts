@@ -9,11 +9,16 @@ import {
 import { screensKeys } from './queryKeys';
 
 /**
- * Predefined geographic zones (admin view — includes inactive zones).
- * `predefined-zones.service` is screens-owned (D6); `GeographicZonesManagement`
- * (an admin page) is its first React Query consumer, so the hooks land here.
+ * Predefined geographic zones — the canonical read.
+ *
+ * The `queryFn` calls `getAllForAdmin()` (every zone, active and inactive):
+ * one cache entry keyed `screensKeys.predefinedZones()` then serves both
+ * consumers. `GeographicZonesManagement` (admin, Commit 6c) renders the full
+ * set; `NewCampaign`'s wizard (campaigns, Commit 7a) filters to active zones
+ * at render. This is the brief §8 locked default — render-time active
+ * filtering is cheap and aligns with D4 (wrap the existing data path).
  */
-export function useAdminZones(): {
+export function usePredefinedZones(): {
   zones: PredefinedZone[];
   loading: boolean;
   isError: boolean;
@@ -28,6 +33,13 @@ export function useAdminZones(): {
     isError: query.isError,
   };
 }
+
+/**
+ * Admin alias of {@link usePredefinedZones}, kept for the existing
+ * `GeographicZonesManagement` consumer (Commit 6c). Both hooks share the
+ * single `screensKeys.predefinedZones()` cache entry.
+ */
+export const useAdminZones = usePredefinedZones;
 
 type CreateZoneInput = Parameters<typeof predefinedZonesService.create>[0];
 

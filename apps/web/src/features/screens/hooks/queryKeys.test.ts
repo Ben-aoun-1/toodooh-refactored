@@ -21,12 +21,27 @@ describe('screensKeys', () => {
     expect(screensKeys.predefinedZones()).not.toEqual(screensKeys.list());
   });
 
+  it('deduplicates and sorts screen IDs for the unavailability key', () => {
+    // Re-ordered, duplicate-bearing ID lists must resolve to the same key.
+    expect(screensKeys.unavailabilityForScreens(['b', 'a'])).toEqual(
+      screensKeys.unavailabilityForScreens(['a', 'b']),
+    );
+    expect(screensKeys.unavailabilityForScreens(['a', 'a'])).toEqual(
+      screensKeys.unavailabilityForScreens(['a']),
+    );
+    expect(screensKeys.unavailabilityForScreens(['a'])).not.toEqual(
+      screensKeys.unavailabilityForScreens(['a', 'b']),
+    );
+    expect(screensKeys.unavailabilityForScreens(['s1'])[0]).toBe('screens');
+  });
+
   it('keeps every view key distinct and prefix-matchable by screensKeys.all', () => {
     const views = [
       screensKeys.list(),
       screensKeys.ownerScreensData(),
       screensKeys.calendarDevices(),
       screensKeys.predefinedZones(),
+      screensKeys.unavailabilityForScreens(['s1']),
     ];
     for (const key of views) {
       expect(key.slice(0, screensKeys.all.length)).toEqual(screensKeys.all);

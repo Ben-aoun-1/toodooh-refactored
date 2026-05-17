@@ -27,9 +27,8 @@ import ariane5s from '@/assets/ariane/5s.png';
 import ariane6 from '@/assets/ariane/6.png';
 import ariane6s from '@/assets/ariane/6s.png';
 import { useAdvertiserGlobalConfig } from '@/features/advertiser/hooks/useAdvertiserGlobalConfig';
-import { authService } from '@/features/auth/services/auth.service';
+import { useOwnerBusinessSectors } from '@/features/auth/hooks/useOwnerBusinessSectors';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
-import type { BusinessSector } from '@/features/auth/types/auth';
 import { useCampaignWizard } from '@/features/campaigns/hooks/new-campaign/useCampaignWizard';
 import { buildInitialWizardState } from '@/features/campaigns/hooks/new-campaign/wizard-init';
 import type {
@@ -38,6 +37,12 @@ import type {
   UseCampaignWizardOptions,
   WizardState,
 } from '@/features/campaigns/hooks/new-campaign/wizard-types';
+import { useCampaignCategories } from '@/features/campaigns/hooks/useCampaignCategories';
+import { useCampaignMutations } from '@/features/campaigns/hooks/useCampaignMutations';
+import {
+  useCampaignLocations,
+  useScreenIdsByLocations,
+} from '@/features/campaigns/hooks/useCampaignScreens';
 import { parseCampaignUiDate, toLocalDateOnlyString } from '@/features/campaigns/lib/wizard-dates';
 import { zonesLabel } from '@/features/campaigns/lib/wizard-zones';
 import PostCartStep from '@/features/campaigns/pages/new-campaign/PostCartStep';
@@ -47,19 +52,15 @@ import Step3 from '@/features/campaigns/pages/new-campaign/Step3';
 import Step4 from '@/features/campaigns/pages/new-campaign/Step4';
 import Step5, { type ApprovedVideo } from '@/features/campaigns/pages/new-campaign/Step5';
 import Step6 from '@/features/campaigns/pages/new-campaign/Step6';
-import {
-  campaignScreensService,
-  type CampaignLocation,
-} from '@/features/campaigns/services/campaign-screens.service';
-import { campaignService } from '@/features/campaigns/services/campaign.service';
+import { campaignScreensService } from '@/features/campaigns/services/campaign-screens.service';
 import {
   buildWizardLocationScheduleMap,
   computeNewCampaignDoohMaxImpressions,
 } from '@/features/campaigns/services/dooh-new-campaign-estimate.service';
 import { useCartStore } from '@/features/campaigns/stores/cart.store';
 import type { SpecialEvent } from '@/features/events/types/event';
-import { predefinedZonesService, type PredefinedZone } from '@/features/screens/services/predefined-zones.service';
-import { screensService, type UnavailabilityPeriod } from '@/features/screens/services/screens.service';
+import { usePredefinedZones } from '@/features/screens/hooks/usePredefinedZones';
+import { useUnavailabilityPeriods } from '@/features/screens/hooks/useUnavailabilityPeriods';
 import { getErrorMessage } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase';
@@ -316,7 +317,17 @@ export default function NewCampaign() {
   // now converted to `state.X` directly; the spread of `legacyFormData`
   // (budget/nbImpressions/nbEcrans) was dead since Commit 8 deleted its
   // sole consumer (campaignEstimations memo).
-  const [campaignCategories, setCampaignCategories] = useState<string[]>([]);
+  // Owner business sectors → campaign category choices. Reuses the auth
+  // feature's `useOwnerBusinessSectors` query (5c1); the wizard derives the
+  // sector-name list from the cached rows (Commit 7a).
+  const { data: ownerSectors } = useOwnerBusinessSectors();
+  const campaignCategories = useMemo(
+    () =>
+      (ownerSectors ?? [])
+        .map((sector) => sector.name)
+        .filter((name): name is string => Boolean(name && name.trim())),
+    [ownerSectors],
+  );
 
   // Validation state: fully internalized into the extracted step components
   // (Commit 7 moved errors/touched into Step1NameType + Step2; Commit 8
@@ -331,13 +342,30 @@ export default function NewCampaign() {
   //   The 370-line modal JSX + handleSaveZone + handleApplyPredefinedZone +
   //   tempZoneLocations memo + MapEvents + TUNISIA_CITIES + getCitySuggestions
   //   all deleted as one cascade.
-  const [predefinedZones, setPredefinedZones] = useState<PredefinedZone[]>([]);
-  const [loadingPredefinedZones, setLoadingPredefinedZones] = useState(false);
-  // zoneFilterCountry / zoneFilterRegion: moved into Step4.tsx as local state.
-  /** IDs d'écrans des localités sélectionnées (pour indisponibilités) */
-  const [screenIdsFromSelectedLocations, setScreenIdsFromSelectedLocations] = useState<string[]>(
-    [],
+  // Predefined zones: one React Query cache entry (`usePredefinedZones`,
+  // Commit 7a) shared with GeographicZonesManagement. The hook returns every
+  // zone (active + inactive); the wizard renders active-only, sorted by name —
+  // behaviour-identical to the former `getAll()` server filter.
+  const {
+    zones: allPredefinedZones,
+    loading: loadingPredefinedZones,
+    isError: predefinedZonesError,
+  } = usePredefinedZones();
+  const predefinedZones = useMemo(
+    () =>
+      allPredefinedZones
+        .filter((zone) => zone.is_active)
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [allPredefinedZones],
   );
+  // Campaign-write mutations (Commit 7a): the campaign draft save + the
+  // status patches + the event link. `saveCampaignDraft` / `handleSaveDraft` /
+  // `handleAddToCart` drive these via `mutateAsync`.
+  const { saveDraft, updateCampaign, linkToEvent } = useCampaignMutations();
+  // zoneFilterCountry / zoneFilterRegion: moved into Step4.tsx as local state.
+  // screenIdsFromSelectedLocations / unavailabilityPeriods / freshLocations-
+  // ForEstimate: migrated to React Query reads (Commit 7a) — the hooks are
+  // called below, once `allSelectedLocations` / `effectiveScreenIds` exist.
 
   // BUDGET_MIN: floor of the budget slider's adjustable range. Used by
   // canProceedToStep6 + the budget-recentering effects. The _budget /
@@ -347,15 +375,10 @@ export default function NewCampaign() {
   // adjustedBudget / calculatedImpressions / customMinBudget / customMaxBudget
   // are in WizardState; their setters are shimmed at the top of the
   // component to preserve the setX(value|updater) API at all call sites.
-  const [unavailabilityPeriods, setUnavailabilityPeriods] = useState<UnavailabilityPeriod[]>([]);
   /** Plafond impressions (moteur DOOH horaire), aligné injectCampaignPublicationSchedule */
   const [doohMaxImpressions, setDoohMaxImpressions] = useState(0);
   const [doohEstimateLoading, setDoohEstimateLoading] = useState(false);
   const [doohEstimateError, setDoohEstimateError] = useState<string | null>(null);
-  /** Rechargement affluence depuis l’API (évite les objets zone figés avant RLS / données). */
-  const [freshLocationsForEstimate, setFreshLocationsForEstimate] = useState<CampaignLocation[]>(
-    [],
-  );
 
   // Calcul dynamique des jours
   const nbJours =
@@ -372,6 +395,18 @@ export default function NewCampaign() {
     () => geographicZones.flatMap((zone) => zone.locations || []),
     [geographicZones],
   );
+
+  // Server reads for the DOOH estimate (Commit 7a): hydrated locations + the
+  // active screen IDs of the wizard's current location selection. The key
+  // factory deduplicates + sorts the ID list, so the per-render `.map` array
+  // identity does not churn the cache.
+  const selectedLocationIds = useMemo(
+    () => allSelectedLocations.map((loc) => loc.id),
+    [allSelectedLocations],
+  );
+  const { locations: freshLocationsForEstimate } = useCampaignLocations(selectedLocationIds);
+  const { screenIds: screenIdsFromSelectedLocations } =
+    useScreenIdsByLocations(selectedLocationIds);
 
   const selectedParcScreenIds = useMemo(() => {
     if (diffusionType !== 'parc_tv' || selectedParcIds.length === 0) return null;
@@ -397,6 +432,10 @@ export default function NewCampaign() {
     [effectiveScreenIds],
   );
 
+  // Unavailability periods for every screen in the current selection
+  // (Commit 7a) — the React Query read replaces the per-screen fetch loop.
+  const { periods: unavailabilityPeriods } = useUnavailabilityPeriods(effectiveScreenIds);
+
   const unavailabilityPeriodsKey = useMemo(
     () =>
       unavailabilityPeriods
@@ -419,11 +458,6 @@ export default function NewCampaign() {
         })
         .sort()
         .join('||'),
-    [allSelectedLocations],
-  );
-
-  const selectedLocationIdsKey = useMemo(
-    () => [...new Set(allSelectedLocations.map((l) => l.id))].sort().join(','),
     [allSelectedLocations],
   );
 
@@ -491,21 +525,6 @@ export default function NewCampaign() {
   const [recommendedEvents, setRecommendedEvents] = useState<SpecialEvent[]>([]);
   const [loadingRecommendedEvents, setLoadingRecommendedEvents] = useState(false);
   const [addingToCart, setAddingToCart] = useState(false);
-
-  useEffect(() => {
-    const ids = selectedLocationIdsKey.split(',').filter(Boolean);
-    if (ids.length === 0) {
-      setFreshLocationsForEstimate([]);
-      return;
-    }
-    let cancelled = false;
-    campaignScreensService.getLocationsByIds(ids).then((locs) => {
-      if (!cancelled) setFreshLocationsForEstimate(locs);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedLocationIdsKey]);
 
   const isValidationStepUi =
     (currentStep === 6 && !isEventCampaign) || (currentStep === 3 && isEventCampaign);
@@ -604,55 +623,32 @@ export default function NewCampaign() {
     institutional: 'Annonce institutionnelle',
   };
 
+  // Campagne événement : pré-remplir avec la 1ère catégorie une fois les
+  // secteurs chargés (Commit 7a — derive-from-query seed; CF-16(c): guarded on
+  // the cached data being present).
   useEffect(() => {
-    const loadCampaignCategories = async () => {
-      try {
-        const sectors = await authService.getOwnerBusinessSectors();
-        const names = (sectors || [])
-          .map((s: BusinessSector) => s.name)
-          .filter((name): name is string => Boolean(name && name.trim()));
+    if (!isEventCampaign || campaignCategories.length === 0) return;
+    setState((prev) => {
+      if (prev.categories.length > 0) return prev;
+      return { ...prev, categories: [campaignCategories[0] as string] };
+    });
+  }, [isEventCampaign, campaignCategories, setState]);
 
-        setCampaignCategories(names);
-
-        // Campagne événement: pré-remplir avec la 1ère catégorie DB si aucune sélection.
-        if (isEventCampaign && names.length > 0) {
-          setState((prev) => {
-            if (prev.categories.length > 0) return prev;
-            return {
-              ...prev,
-              categories: [names[0] as string],
-            };
-          });
-        }
-      } catch (err) {
-        log.error({ err }, 'Erreur chargement catégories campagne');
-      }
-    };
-
-    loadCampaignCategories();
-    // setState is stable (useState's raw setter, exposed via the hook). We
-    // intentionally re-run only on isEventCampaign change.
-  }, [isEventCampaign, setState]);
-
-  // En mode édition, charger les catégories multiples depuis campaign_categories
+  // En mode édition, restaurer les catégories multiples depuis
+  // campaign_categories (Commit 7a — `useCampaignCategories` query is disabled
+  // outside edit mode; the seed effect derives the display names once the
+  // cached rows arrive).
+  const { categories: editModeCategories } = useCampaignCategories(
+    editMode && draftCampaignId ? draftCampaignId : undefined,
+  );
   useEffect(() => {
-    if (!editMode || !draftCampaignId) return;
-    campaignService
-      .getCampaignCategories(draftCampaignId)
-      .then((enumCategories) => {
-        if (enumCategories.length > 0) {
-          const displayNames = enumCategories.map((c) => categoryReverseMapping[c] || c);
-          setState((prev) => ({
-            ...prev,
-            categories: displayNames,
-          }));
-        }
-      })
-      .catch(() => {});
+    if (!editMode || editModeCategories.length === 0) return;
+    const displayNames = editModeCategories.map((c) => categoryReverseMapping[c] || c);
+    setState((prev) => ({ ...prev, categories: displayNames }));
     // categoryReverseMapping is a component-local const (defined above), stable
     // by reference between renders within a session; setState is stable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editMode, draftCampaignId, setState]);
+  }, [editMode, editModeCategories, setState]);
 
   const categoryChoices = useMemo(() => {
     const base =
@@ -722,8 +718,8 @@ export default function NewCampaign() {
           ? Math.min(Math.round((adjustedBudget / cpmTnd) * 1000), maxImpSave)
           : 0;
 
-      const campaign = await campaignService.saveCampaignDraft(
-        {
+      const campaign = await saveDraft.mutateAsync({
+        data: {
           name: state.campaignName,
           category: primaryCategory,
           categories: mappedCategories,
@@ -740,8 +736,8 @@ export default function NewCampaign() {
           location_ids: selectedLocationIds.length > 0 ? selectedLocationIds : undefined,
           screen_ids: undefined,
         },
-        draftCampaignId || undefined,
-      );
+        campaignId: draftCampaignId || undefined,
+      });
 
       if (!draftCampaignId) {
         setDraftCampaignId(campaign.id);
@@ -796,49 +792,6 @@ export default function NewCampaign() {
   };
 
   // Fonction pour calculer les heures d'indisponibilité par jour en moyenne (écrans des localités sélectionnées)
-
-  // Dériver les IDs d'écrans des localités sélectionnées (pour indisponibilités)
-  useEffect(() => {
-    const run = async () => {
-      const ids = allSelectedLocations.map((l) => l.id);
-      if (ids.length === 0) {
-        setScreenIdsFromSelectedLocations([]);
-        return;
-      }
-      const screenIds = await campaignScreensService.getScreenIdsByLocationIds(ids);
-      setScreenIdsFromSelectedLocations((prev) => {
-        if (prev.length === screenIds.length && prev.every((id, i) => id === screenIds[i]))
-          return prev;
-        return screenIds;
-      });
-    };
-    run();
-  }, [allSelectedLocations]);
-
-  // Charger les périodes d'indisponibilité pour tous les écrans concernés (localités + parcs TV)
-  useEffect(() => {
-    const loadUnavailabilityPeriods = async () => {
-      if (effectiveScreenIds.length === 0) {
-        setUnavailabilityPeriods([]);
-        return;
-      }
-      try {
-        const allPeriods: UnavailabilityPeriod[] = [];
-        for (const screenId of effectiveScreenIds) {
-          try {
-            const periods = await screensService.getUnavailabilityPeriods(screenId);
-            allPeriods.push(...periods);
-          } catch (error) {
-            log.error({ error }, `Erreur chargement indisponibilités écran ${screenId}`);
-          }
-        }
-        setUnavailabilityPeriods(allPeriods);
-      } catch (error) {
-        log.error({ error }, "Erreur chargement périodes d'indisponibilité");
-      }
-    };
-    loadUnavailabilityPeriods();
-  }, [effectiveScreenIdsKey]);
 
   // Impressions : source unique = moteur DOOH affluence (créneaux réels), sans moyenne artificielle.
   const calculateBudgetAndImpressions = useMemo(() => {
@@ -999,11 +952,12 @@ export default function NewCampaign() {
         }
         await saveCampaignDraft(videoId, false);
       } else {
-        const { error } = await supabase
-          .from('campaigns')
-          .update({ status: 'draft' })
-          .eq('id', draftCampaignId);
-        if (error) {
+        try {
+          await updateCampaign.mutateAsync({
+            id: draftCampaignId,
+            patch: { status: 'draft' },
+          });
+        } catch (error) {
           log.error({ error, campaignId: draftCampaignId }, 'failed to save draft');
           toast.error(getErrorMessage(error) || 'Erreur lors de la sauvegarde du brouillon');
           return;
@@ -1042,11 +996,9 @@ export default function NewCampaign() {
 
       const balanceCheck = await balanceService.checkCampaignBalance(campaignId);
       if (balanceCheck && !balanceCheck.has_sufficient_balance) {
-        const { error: revertError } = await supabase
-          .from('campaigns')
-          .update({ status: 'draft' })
-          .eq('id', campaignId);
-        if (revertError) {
+        try {
+          await updateCampaign.mutateAsync({ id: campaignId, patch: { status: 'draft' } });
+        } catch (revertError) {
           log.error(
             { error: revertError, campaignId },
             'failed to revert campaign to draft on insufficient balance',
@@ -1082,11 +1034,12 @@ export default function NewCampaign() {
         return;
       }
 
-      const { error: updateError } = await supabase
-        .from('campaigns')
-        .update({ status: 'draft', content_validation_status: 'pending' })
-        .eq('id', campaignId);
-      if (updateError) {
+      try {
+        await updateCampaign.mutateAsync({
+          id: campaignId,
+          patch: { status: 'draft', content_validation_status: 'pending' },
+        });
+      } catch (updateError) {
         log.error(
           { error: updateError, campaignId },
           'failed to update campaign for cart add',
@@ -1096,11 +1049,9 @@ export default function NewCampaign() {
       }
 
       if (isEventCampaign && eventFromState?.id) {
-        const { error: linkError } = await supabase.rpc('link_campaign_to_event', {
-          p_campaign_id: campaignId,
-          p_event_id: eventFromState.id,
-        });
-        if (linkError) {
+        try {
+          await linkToEvent.mutateAsync({ campaignId, eventId: eventFromState.id });
+        } catch (linkError) {
           log.error(
             { error: linkError, campaignId, eventId: eventFromState.id },
             'failed to link event campaign to event',
@@ -1319,21 +1270,14 @@ export default function NewCampaign() {
   // all moved into Step4.tsx (Commit 9). The single-zone effect fed the
   // pre-existing dead _locationsInZone slot; deleted alongside the trio.
 
-  // Charger les zones prédéfinies
+  // Predefined-zones fetch failure surfacing — preserves the error toast the
+  // former `loadPredefinedZones` effect raised (Commit 7a; the fetch itself is
+  // now the `usePredefinedZones` query).
   useEffect(() => {
-    const loadPredefinedZones = async () => {
-      try {
-        setLoadingPredefinedZones(true);
-        const zones = await predefinedZonesService.getAll();
-        setPredefinedZones(zones);
-      } catch (_error) {
-        toast.error('Impossible de charger les zones prédéfinies');
-      } finally {
-        setLoadingPredefinedZones(false);
-      }
-    };
-    loadPredefinedZones();
-  }, []);
+    if (predefinedZonesError) {
+      toast.error('Impossible de charger les zones prédéfinies');
+    }
+  }, [predefinedZonesError]);
 
   // Zone-related handlers moved into Step4.tsx (Commit 9):
   // handleApplyPredefinedZone (dead — only called from dead modal),

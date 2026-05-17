@@ -24,7 +24,20 @@ export const screensKeys = {
   /**
    * Predefined geographic zones. `predefined-zones.service` is screens-owned
    * (D6), so its admin consumer (`GeographicZonesManagement`, Commit 6c) keys
-   * here rather than under `adminKeys`.
+   * here rather than under `adminKeys`. Commit 7a adds the campaign-wizard
+   * consumer (`NewCampaign`) on the same key — one cache entry, two readers.
    */
   predefinedZones: () => [...screensKeys.all, 'predefinedZones'] as const,
+
+  /**
+   * Unavailability periods for a set of screens (campaign-wizard DOOH
+   * estimate, Commit 7a). The screen IDs are deduplicated and sorted into one
+   * stable string segment so a re-ordered ID list resolves to the same entry.
+   */
+  unavailabilityForScreens: (screenIds: readonly string[]) =>
+    [
+      ...screensKeys.all,
+      'unavailabilityForScreens',
+      [...new Set(screenIds)].sort().join(','),
+    ] as const,
 };

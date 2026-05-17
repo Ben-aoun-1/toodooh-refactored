@@ -1,0 +1,44 @@
+/**
+ * Step 10 — React Query key factory for the `campaigns` feature.
+ *
+ * Follows the CF-13 convention: one `queryKeys.ts` per feature exporting a
+ * named `<feature>Keys` factory; hierarchical readonly tuples; `.all` is the
+ * feature-wide invalidation prefix (React Query matches query keys by prefix).
+ *
+ * Created by Commit 7a — the first campaigns React Query consumer
+ * (`NewCampaign` + `CartPage` creation flow). `list` and `detail` are
+ * declared here even though no query reads them yet: Commit 7a's
+ * campaign-write mutations invalidate `campaignsKeys.list(userId)`
+ * forward-compatibly so that Commit 7b (`MyCampaigns` / `CampaignDetails`)
+ * consumes a key the creation-flow mutations already refresh — the same
+ * factory→consumer handoff shape 6c established for `screensKeys`.
+ *
+ * `locations` / `screenIds` key off a *set* of location IDs; the args are
+ * deduplicated and sorted into one stable string segment so a re-ordered or
+ * duplicate-bearing ID list resolves to the same cache entry.
+ */
+function stableIdsSegment(ids: readonly string[]): string {
+  return [...new Set(ids)].sort().join(',');
+}
+
+export const campaignsKeys = {
+  all: ['campaigns'] as const,
+
+  /** The signed-in advertiser's campaign list (`MyCampaigns` — Commit 7b). */
+  list: (userId: string) => [...campaignsKeys.all, 'list', userId] as const,
+
+  /** A single campaign's detail view (`CampaignDetails` — Commit 7b). */
+  detail: (id: string) => [...campaignsKeys.all, 'detail', id] as const,
+
+  /** Persisted `campaign_categories` rows for a campaign (edit-mode hydration). */
+  categories: (campaignId: string) =>
+    [...campaignsKeys.all, 'categories', campaignId] as const,
+
+  /** Hydrated `CampaignLocation[]` for a set of selected location IDs. */
+  locations: (locationIds: readonly string[]) =>
+    [...campaignsKeys.all, 'locations', stableIdsSegment(locationIds)] as const,
+
+  /** Active screen IDs belonging to a set of selected location IDs. */
+  screenIds: (locationIds: readonly string[]) =>
+    [...campaignsKeys.all, 'screenIds', stableIdsSegment(locationIds)] as const,
+};

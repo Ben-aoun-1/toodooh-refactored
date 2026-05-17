@@ -10,17 +10,14 @@ import {
   Frown,
   Loader2,
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
+import { useFeaturedEvents } from '@/features/advertiser/hooks/useFeaturedEvents';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
-import { campaignService } from '@/features/campaigns/services/campaign.service';
-import { useCartStore, type CartItem } from '@/features/campaigns/stores/cart.store';
-import { eventsService } from '@/features/events/services/events.service';
-import type { SpecialEvent } from '@/features/events/types/event';
-import { supabase } from '@/lib/supabase';
-import { balanceService } from '@/services/balance.service';
+import { useConfirmCartLaunch } from '@/features/campaigns/hooks/useConfirmCartLaunch';
+import { useCartStore } from '@/features/campaigns/stores/cart.store';
 
 const TVA_RATE = 0.19;
 
@@ -30,20 +27,13 @@ export default function CartPage() {
   const cartItems = useCartStore((s) => s.items);
   const setCartItems = useCartStore((s) => s.setItems);
   const removeItem = useCartStore((s) => s.removeItem);
-  const [suggestedEvents, setSuggestedEvents] = useState<SpecialEvent[]>([]);
+  // Suggested events: reuses the advertiser-feature `useFeaturedEvents` query
+  // (Commit 3) — `eventsService.getFeaturedEvents` is events-owned and the
+  // advertiser hook already wraps it; CartPage passes a fetch size of 5.
+  const { events: suggestedEvents } = useFeaturedEvents(5);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showInsufficientModal, setShowInsufficientModal] = useState(false);
-  const [confirming, setConfirming] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    eventsService.getFeaturedEvents(5).then((list) => {
-      if (!cancelled) setSuggestedEvents(list);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const confirmCart = useConfirmCartLaunch();
 
   const removeFromCart = (campaignId: string) => {
     removeItem(campaignId);
@@ -56,106 +46,15 @@ export default function CartPage() {
       toast.error('Veuillez vous connecter pour confirmer.');
       return;
     }
-    setConfirming(true);
     try {
-      const remainingItems: CartItem[] = [];
-      let activatedCount = 0;
-      let pendingCount = 0;
-      let insufficientCount = 0;
-      let failedCount = 0;
-      let hasInsufficientUnvalidated = false;
-
-      for (const item of cartItems) {
-        try {
-          const { data: campaignRow, error: campaignError } = await supabase
-            .from('campaigns')
-            .select('id, user_id, status, video_id, content_validation_status')
-            .eq('id', item.id)
-            .eq('user_id', user.id)
-            .single();
-
-          if (campaignError || !campaignRow) {
-            failedCount += 1;
-            remainingItems.push(item);
-            continue;
-          }
-
-          // Déjà active: la conserver telle quelle et retirer du panier.
-          if (campaignRow.status === 'active') {
-            activatedCount += 1;
-            continue;
-          }
-
-          let videoIsValidated = campaignRow.content_validation_status === 'approved';
-          if (!videoIsValidated && campaignRow.video_id) {
-            const { data: videoRow } = await supabase
-              .from('videos')
-              .select('validation_status')
-              .eq('id', campaignRow.video_id)
-              .single();
-            videoIsValidated = videoRow?.validation_status === 'approved';
-          }
-
-          const balanceCheck = await balanceService.checkCampaignBalance(item.id);
-          const hasSufficientBalance = Boolean(balanceCheck?.has_sufficient_balance);
-
-          // Règle métier: vidéo non validée + solde insuffisant => brouillon + message + redirection recharge.
-          if (!videoIsValidated && !hasSufficientBalance) {
-            const { error: setDraftError } = await supabase
-              .from('campaigns')
-              .update({
-                status: 'draft',
-                content_validation_status: 'pending',
-              })
-              .eq('id', item.id)
-              .eq('user_id', user.id);
-
-            if (setDraftError) {
-              failedCount += 1;
-              remainingItems.push(item);
-              continue;
-            }
-
-            insufficientCount += 1;
-            hasInsufficientUnvalidated = true;
-            remainingItems.push(item);
-            continue;
-          }
-
-          if (!hasSufficientBalance) {
-            insufficientCount += 1;
-            remainingItems.push(item);
-            continue;
-          }
-
-          const nextStatus = videoIsValidated ? 'active' : 'pending';
-
-          const { error: updateError } = await supabase
-            .from('campaigns')
-            .update({
-              status: nextStatus,
-              content_validation_status: videoIsValidated ? 'approved' : 'pending',
-            })
-            .eq('id', item.id)
-            .eq('user_id', user.id);
-
-          if (updateError) {
-            failedCount += 1;
-            remainingItems.push(item);
-            continue;
-          }
-
-          if (nextStatus === 'active') {
-            await campaignService.injectCampaignPublicationSchedule(item.id);
-            activatedCount += 1;
-          } else {
-            pendingCount += 1;
-          }
-        } catch {
-          failedCount += 1;
-          remainingItems.push(item);
-        }
-      }
+      const {
+        remainingItems,
+        activatedCount,
+        pendingCount,
+        insufficientCount,
+        failedCount,
+        hasInsufficientUnvalidated,
+      } = await confirmCart.mutateAsync({ items: cartItems, userId: user.id });
 
       setCartItems(remainingItems);
 
@@ -181,8 +80,6 @@ export default function CartPage() {
       }
     } catch {
       toast.error('Erreur lors de la vérification du solde.');
-    } finally {
-      setConfirming(false);
     }
   };
 
@@ -329,12 +226,12 @@ export default function CartPage() {
           <button
             type="button"
             onClick={handleConfirmAndLaunch}
-            disabled={cartItems.length === 0 || confirming}
+            disabled={cartItems.length === 0 || confirmCart.isPending}
             className="w-full mt-6 py-3.5 rounded-xl text-lg font-medium transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
             style={{ background: '#96d4a1', color: '#111827' }}
           >
-            {confirming && <Loader2 className="h-5 w-5 animate-spin" />}
-            <span>{confirming ? 'Vérification...' : 'Confirmer et lancer'}</span>
+            {confirmCart.isPending && <Loader2 className="h-5 w-5 animate-spin" />}
+            <span>{confirmCart.isPending ? 'Vérification...' : 'Confirmer et lancer'}</span>
           </button>
         </div>
       </div>

@@ -2,11 +2,11 @@ import { ArrowRight, CheckCircle, Info, Upload } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 
+import { useVideoUploadMutations } from '@/features/campaigns/hooks/useVideoUploadMutations';
 import {
   readVideoDurationFromFile,
   readVideoDurationFromUrl,
   type UploadProgress,
-  videoUploadService,
 } from '@/features/campaigns/services/video-upload.service';
 import { getErrorMessage } from '@/lib/errors';
 import { logger } from '@/lib/logger';
@@ -75,6 +75,11 @@ export default function Step5({
   const [selectedVideo, setSelectedVideo] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
+  // Video-upload writes go through React Query mutations (Commit 7a). The
+  // `uploading` / `uploadProgress` / `selectedVideo` slots above stay as local
+  // state — they are transient upload UI spanning the multi-step flow, not
+  // server state.
+  const { uploadVideo, createVideoEntry, updateVideoDuration } = useVideoUploadMutations();
 
   const handleVideoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -94,26 +99,32 @@ export default function Step5({
       setSelectedVideo(file);
       setExistingVideoId(null);
 
-      const result = await videoUploadService.uploadVideo(file, (progress) => {
-        setUploadProgress(progress);
+      const result = await uploadVideo.mutateAsync({
+        file,
+        onProgress: (progress) => {
+          setUploadProgress(progress);
+        },
       });
 
       setUploadedVideoUrl(result.url);
 
-      const videoEntry = await videoUploadService.createVideoEntry(
-        result.url,
-        result.path,
-        file.name,
-        file.size,
+      const videoEntry = await createVideoEntry.mutateAsync({
+        videoUrl: result.url,
+        videoPath: result.path,
+        filename: file.name,
+        fileSize: file.size,
         durationSeconds,
-      );
+      });
       setUploadedVideoId(videoEntry.id);
 
       if ((durationSeconds == null || durationSeconds <= 0) && result.url) {
         const fromUrl = await readVideoDurationFromUrl(result.url);
         if (fromUrl != null) {
           try {
-            await videoUploadService.updateVideoDurationSeconds(videoEntry.id, fromUrl);
+            await updateVideoDuration.mutateAsync({
+              videoId: videoEntry.id,
+              durationSeconds: fromUrl,
+            });
           } catch {
             /* colonne absente ou RLS : le moteur DOOH utilisera la durée par défaut */
           }
@@ -170,7 +181,7 @@ export default function Step5({
           return;
         }
         try {
-          await videoUploadService.updateVideoDurationSeconds(video.id, d);
+          await updateVideoDuration.mutateAsync({ videoId: video.id, durationSeconds: d });
           const patched: ApprovedVideo = { ...video, duration_seconds: d };
           setMyApprovedVideos((prev) => prev.map((v) => (v.id === video.id ? patched : v)));
         } catch (err) {
