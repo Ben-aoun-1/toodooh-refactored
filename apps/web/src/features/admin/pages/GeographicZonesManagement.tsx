@@ -12,15 +12,13 @@ import {
   Upload,
   Flame,
 } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { MapContainer, TileLayer, Circle, useMapEvents, Marker } from 'react-leaflet';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
-import {
-  predefinedZonesService,
-  type PredefinedZone,
-} from '@/features/screens/services/predefined-zones.service';
+import { useAdminZones, useZoneMutations } from '@/features/screens/hooks/usePredefinedZones';
+import type { PredefinedZone } from '@/features/screens/services/predefined-zones.service';
 import { getErrorMessage } from '@/lib/errors';
 import 'leaflet/dist/leaflet.css';
 
@@ -49,8 +47,8 @@ function MapClickHandler({
 }
 
 export default function GeographicZonesManagement() {
-  const [zones, setZones] = useState<PredefinedZone[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { zones, loading } = useAdminZones();
+  const zoneMutations = useZoneMutations();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [showModal, setShowModal] = useState(false);
@@ -71,22 +69,6 @@ export default function GeographicZonesManagement() {
   const [zoneRegion, setZoneRegion] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
   const [mapCenter, setMapCenter] = useState<[number, number]>([36.8065, 10.1815]);
-
-  useEffect(() => {
-    loadZones();
-  }, []);
-
-  const loadZones = async () => {
-    try {
-      setLoading(true);
-      const data = await predefinedZonesService.getAllForAdmin();
-      setZones(data);
-    } catch (_error) {
-      toast.error('Erreur lors du chargement des zones');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const filteredZones = zones.filter((zone) => {
     const matchesSearch =
@@ -164,7 +146,10 @@ export default function GeographicZonesManagement() {
     }
     try {
       setUploadingImage(true);
-      const url = await predefinedZonesService.uploadZoneImage(editingZone.id, file);
+      const url = await zoneMutations.uploadZoneImage.mutateAsync({
+        zoneId: editingZone.id,
+        file,
+      });
       setZoneImageUrl(url);
       toast.success('Image mise à jour');
     } catch (err) {
@@ -188,22 +173,25 @@ export default function GeographicZonesManagement() {
 
     try {
       if (editingZone) {
-        await predefinedZonesService.update(editingZone.id, {
-          name: zoneName,
-          description: zoneDescription || null,
-          latitude: selectedLocations[0].lat,
-          longitude: selectedLocations[0].lng,
-          radius: radius,
-          image_url: zoneImageUrl || null,
-          is_hot: zoneIsHot,
-          country: zoneCountry || null,
-          region: zoneRegion || null,
+        await zoneMutations.updateZone.mutateAsync({
+          id: editingZone.id,
+          patch: {
+            name: zoneName,
+            description: zoneDescription || null,
+            latitude: selectedLocations[0].lat,
+            longitude: selectedLocations[0].lng,
+            radius: radius,
+            image_url: zoneImageUrl || null,
+            is_hot: zoneIsHot,
+            country: zoneCountry || null,
+            region: zoneRegion || null,
+          },
         });
         toast.success('Zone mise à jour avec succès');
       } else {
         // Création : créer une zone pour chaque emplacement sélectionné
         for (const location of selectedLocations) {
-          await predefinedZonesService.create({
+          await zoneMutations.createZone.mutateAsync({
             name: zoneName,
             description: zoneDescription || null,
             latitude: location.lat,
@@ -217,7 +205,6 @@ export default function GeographicZonesManagement() {
         toast.success(`${selectedLocations.length} zone(s) créée(s) avec succès`);
       }
       handleCloseModal();
-      loadZones();
     } catch (error) {
       toast.error(getErrorMessage(error) || 'Erreur lors de la sauvegarde');
     }
@@ -229,9 +216,8 @@ export default function GeographicZonesManagement() {
     }
 
     try {
-      await predefinedZonesService.delete(id);
+      await zoneMutations.deleteZone.mutateAsync(id);
       toast.success('Zone supprimée avec succès');
-      loadZones();
     } catch (error) {
       toast.error(getErrorMessage(error) || 'Erreur lors de la suppression');
     }
@@ -239,9 +225,8 @@ export default function GeographicZonesManagement() {
 
   const handleToggleActive = async (id: string, currentStatus: boolean) => {
     try {
-      await predefinedZonesService.toggleActive(id, !currentStatus);
+      await zoneMutations.toggleZoneActive.mutateAsync({ id, isActive: !currentStatus });
       toast.success(`Zone ${!currentStatus ? 'publiée' : 'dépubliée'} avec succès`);
-      loadZones();
     } catch (error) {
       toast.error(getErrorMessage(error) || 'Erreur lors du changement de statut');
     }

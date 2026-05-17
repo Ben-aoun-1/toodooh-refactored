@@ -20,4 +20,11 @@ export const screensKeys = {
 
   /** OwnerCalendarDevices composite: screens + unavailability periods. */
   calendarDevices: () => [...screensKeys.all, 'calendarDevices'] as const,
+
+  /**
+   * Predefined geographic zones. `predefined-zones.service` is screens-owned
+   * (D6), so its admin consumer (`GeographicZonesManagement`, Commit 6c) keys
+   * here rather than under `adminKeys`.
+   */
+  predefinedZones: () => [...screensKeys.all, 'predefinedZones'] as const,
 };

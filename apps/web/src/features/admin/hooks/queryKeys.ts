@@ -36,4 +36,25 @@ export const adminKeys = {
   users: () => [...adminKeys.all, 'users'] as const,
   /** Admin-account list for AdminManagement (`adminService.getAdmins`). */
   admins: () => [...adminKeys.all, 'admins'] as const,
+
+  /** Special-event list + stats for EventManagement (`adminEventsService`). */
+  events: () => [...adminKeys.all, 'events'] as const,
+  eventStats: () => [...adminKeys.all, 'eventStats'] as const,
+
+  /** Paginated, filtered location list for ScreenManagement. */
+  adminLocations: (
+    status: string,
+    ownerId: string,
+    search: string,
+    page: number,
+    perPage: number,
+  ) => [...adminKeys.all, 'adminLocations', status, ownerId, search, page, perPage] as const,
+  screenOwners: () => [...adminKeys.all, 'screenOwners'] as const,
+
+  /** AdminDashboard's platform-stats composite. */
+  platformStats: () => [...adminKeys.all, 'platformStats'] as const,
+
+  /** Per-location hourly affluence schedule (AffluenceModal). */
+  affluenceSchedule: (locationId: string) =>
+    [...adminKeys.all, 'affluenceSchedule', locationId] as const,
 };

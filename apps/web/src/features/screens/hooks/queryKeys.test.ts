@@ -16,11 +16,17 @@ describe('screensKeys', () => {
     expect(screensKeys.calendarDevices()).toEqual(['screens', 'calendarDevices']);
   });
 
+  it('keys the predefined-zones reference read under the screens prefix', () => {
+    expect(screensKeys.predefinedZones()).toEqual(['screens', 'predefinedZones']);
+    expect(screensKeys.predefinedZones()).not.toEqual(screensKeys.list());
+  });
+
   it('keeps every view key distinct and prefix-matchable by screensKeys.all', () => {
     const views = [
       screensKeys.list(),
       screensKeys.ownerScreensData(),
       screensKeys.calendarDevices(),
+      screensKeys.predefinedZones(),
     ];
     for (const key of views) {
       expect(key.slice(0, screensKeys.all.length)).toEqual(screensKeys.all);

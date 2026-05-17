@@ -1,61 +1,33 @@
 import { ChevronDown, ChevronRight, MapPin, Monitor, Search, Activity } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
-import { toast } from 'react-hot-toast';
+import React, { useState } from 'react';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
 import AffluenceModal from '@/features/admin/components/AffluenceModal';
-import { adminScreensService } from '@/features/admin/services/admin-screens.service';
-import type { AdminLocation, AdminLocationStatus } from '@/features/admin/services/admin-screens.service';
+import { useAdminLocations, useScreenOwners } from '@/features/admin/hooks/useAdminScreens';
+import type {
+  AdminLocation,
+  AdminLocationStatus,
+} from '@/features/admin/services/admin-screens.service';
 
 export default function ScreenManagement() {
-  const [locations, setLocations] = useState<AdminLocation[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | AdminLocationStatus>('all');
   const [ownerFilter, setOwnerFilter] = useState<string>('all');
-  const [owners, setOwners] = useState<{ id: string; name: string }[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [total, setTotal] = useState(0);
   const [itemsPerPage, setItemsPerPage] = useState(20);
   const [selectedLocationForAffluence, setSelectedLocationForAffluence] =
     useState<AdminLocation | null>(null);
   const [expandedLocationId, setExpandedLocationId] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadOwners();
-  }, []);
-
-  useEffect(() => {
-    loadLocations();
-  }, [currentPage, statusFilter, ownerFilter, searchTerm, itemsPerPage]);
-
-  const loadOwners = async () => {
-    try {
-      const ownersData = await adminScreensService.getOwners();
-      setOwners(ownersData.map((o) => ({ id: o.user_id, name: o.business_name })));
-    } catch (_error) {
-      toast.error('Erreur lors du chargement des propriétaires');
-    }
-  };
-
-  const loadLocations = async () => {
-    try {
-      setLoading(true);
-      const result = await adminScreensService.getLocationsWithScreens(currentPage, itemsPerPage, {
-        status: statusFilter !== 'all' ? statusFilter : undefined,
-        owner_id: ownerFilter !== 'all' ? ownerFilter : undefined,
-        search: searchTerm || undefined,
-      });
-      setLocations(result.locations);
-      setTotal(result.total);
-      setTotalPages(result.totalPages);
-    } catch (_error) {
-      toast.error('Erreur lors du chargement des localités');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { locations, total, totalPages, loading } = useAdminLocations({
+    status: statusFilter,
+    ownerId: ownerFilter,
+    search: searchTerm,
+    page: currentPage,
+    perPage: itemsPerPage,
+  });
+  const { owners: ownersRaw } = useScreenOwners();
+  const owners = ownersRaw.map((o) => ({ id: o.user_id, name: o.business_name }));
 
   const getLocationStatusBadge = (status: AdminLocationStatus) => {
     const config = {

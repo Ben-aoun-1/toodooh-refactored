@@ -2,10 +2,13 @@ import { X, Edit, Save, Calendar } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 
+import {
+  useAffluenceSchedule,
+  useSaveAffluenceSchedule,
+} from '@/features/admin/hooks/useAdminScreens';
 import type { AdminLocation } from '@/features/admin/services/admin-screens.service';
 import { isErrorWithCode } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { supabase } from '@/lib/supabase';
 
 const log = logger.child({ module: 'AffluenceModal' });
 
@@ -48,56 +51,31 @@ function buildDefaultRows(locationId: string): LocationAffluenceRow[] {
 
 export default function AffluenceModal({ location, onClose }: AffluenceModalProps) {
   const [rows, setRows] = useState<LocationAffluenceRow[]>([]);
-  const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  const { rows: fetchedRows, loading, isError } = useAffluenceSchedule(location.id);
+  const saveAffluence = useSaveAffluenceSchedule();
+
+  // Fusionne les lignes stockées sur une grille 7×24 par défaut (éditable).
   useEffect(() => {
-    const loadRows = async () => {
-      try {
-        setLoading(true);
-        const { data, error } = await supabase
-          .from('location_affluence_schedule')
-          .select('location_id, day_of_week, hour, estimated_impressions')
-          .eq('location_id', location.id)
-          .order('day_of_week', { ascending: true })
-          .order('hour', { ascending: true });
+    if (!fetchedRows) return;
+    const map = new Map<string, LocationAffluenceRow>();
+    buildDefaultRows(location.id).forEach((r) => map.set(`${r.day_of_week}:${r.hour}`, r));
+    fetchedRows.forEach((r) => map.set(`${r.day_of_week}:${r.hour}`, r));
+    setRows(
+      Array.from(map.values()).sort((a, b) => {
+        if (a.day_of_week !== b.day_of_week) return a.day_of_week - b.day_of_week;
+        return a.hour - b.hour;
+      }),
+    );
+  }, [fetchedRows, location.id]);
 
-        if (error) throw error;
-
-        const defaults = buildDefaultRows(location.id);
-        const incoming = data || [];
-        const map = new Map<string, LocationAffluenceRow>();
-
-        defaults.forEach((r) => {
-          map.set(`${r.day_of_week}:${r.hour}`, r);
-        });
-        // TODO(phase-1): typed source [supabase] — see #15
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        incoming.forEach((r: any) => {
-          map.set(`${r.day_of_week}:${r.hour}`, {
-            location_id: location.id,
-            day_of_week: Number(r.day_of_week),
-            hour: Number(r.hour),
-            estimated_impressions: Number(r.estimated_impressions) || 0,
-          });
-        });
-
-        setRows(
-          Array.from(map.values()).sort((a, b) => {
-            if (a.day_of_week !== b.day_of_week) return a.day_of_week - b.day_of_week;
-            return a.hour - b.hour;
-          }),
-        );
-      } catch (_error) {
-        toast.error("Erreur lors du chargement de l'affluence");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadRows();
-  }, [location.id]);
+  useEffect(() => {
+    if (isError) {
+      toast.error("Erreur lors du chargement de l'affluence");
+    }
+  }, [isError]);
 
   const totalWeekImpressions = useMemo(
     () => rows.reduce((sum, row) => sum + (Number(row.estimated_impressions) || 0), 0),
@@ -132,12 +110,7 @@ export default function AffluenceModal({ location, onClose }: AffluenceModalProp
         estimated_impressions: Math.max(0, Number(row.estimated_impressions) || 0),
       }));
 
-      if (payload.length > 0) {
-        const { error: upsertError } = await supabase
-          .from('location_affluence_schedule')
-          .upsert(payload, { onConflict: 'location_id,day_of_week,hour' });
-        if (upsertError) throw upsertError;
-      }
+      await saveAffluence.mutateAsync({ locationId: location.id, rows: payload });
 
       toast.success('Affluence de la localité enregistrée');
       setEditing(false);

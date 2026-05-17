@@ -16,21 +16,23 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
-import { adminEventsService } from '@/features/admin/services/admin-events.service';
+import {
+  useAdminEventMutations,
+  useAdminEvents,
+  useAdminEventStats,
+} from '@/features/admin/hooks/useAdminEvents';
 import { useAdminStore } from '@/features/admin/stores/admin.store';
-import { SpecialEvent, CreateEventDTO, EventStats } from '@/features/events/types/event';
+import { SpecialEvent, CreateEventDTO } from '@/features/events/types/event';
 import { getErrorMessage } from '@/lib/errors';
-import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase';
-
-const log = logger.child({ module: 'EventManagement' });
 
 const EVENT_IMAGES_BUCKET = 'event-images';
 
 export default function EventManagement() {
   const { admin } = useAdminStore();
-  const [events, setEvents] = useState<SpecialEvent[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { events, loading } = useAdminEvents();
+  const { stats: eventStats } = useAdminEventStats();
+  const { createEvent, updateEvent, deleteEvent, toggleFeatured } = useAdminEventMutations();
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -41,13 +43,13 @@ export default function EventManagement() {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
-  const [stats, setStats] = useState<EventStats>({
+  const stats = eventStats ?? {
     total_events: 0,
     active_events: 0,
     upcoming_events: 0,
     past_events: 0,
     featured_events: 0,
-  });
+  };
 
   const [formData, setFormData] = useState<CreateEventDTO>({
     name: '',
@@ -67,33 +69,6 @@ export default function EventManagement() {
     pricing_multiplier: 1.0,
     priority_level: 5,
   });
-
-  // Charger les événements
-  useEffect(() => {
-    loadEvents();
-    loadStats();
-  }, []);
-
-  const loadEvents = async () => {
-    try {
-      setLoading(true);
-      const eventsData = await adminEventsService.getEvents();
-      setEvents(eventsData);
-    } catch (error) {
-      toast.error(`Erreur lors du chargement des événements: ${getErrorMessage(error)}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadStats = async () => {
-    try {
-      const statsData = await adminEventsService.getStats();
-      setStats(statsData);
-    } catch (error) {
-      log.error({ error }, 'Error loading stats');
-    }
-  };
 
   const filteredEvents = events.filter((event) => {
     const matchesSearch =
@@ -154,13 +129,11 @@ export default function EventManagement() {
         end_date: endDate.toISOString(),
       };
 
-      const newEvent = await adminEventsService.createEvent(eventData, admin.id);
+      const newEvent = await createEvent.mutateAsync({ eventData, adminId: admin.id });
       if (newEvent) {
-        setEvents([newEvent, ...events]);
         toast.success('Événement créé avec succès');
         setShowCreateModal(false);
         resetForm();
-        loadStats();
       }
     } catch (error) {
       toast.error(getErrorMessage(error) || 'Erreur lors de la création');
@@ -179,11 +152,8 @@ export default function EventManagement() {
         end_date: new Date(formData.end_date).toISOString(),
       };
 
-      const success = await adminEventsService.updateEvent(selectedEvent.id, eventData);
+      const success = await updateEvent.mutateAsync({ eventId: selectedEvent.id, eventData });
       if (success) {
-        setEvents(
-          events.map((evt) => (evt.id === selectedEvent.id ? { ...evt, ...eventData } : evt)),
-        );
         toast.success('Événement modifié avec succès');
         setShowEditModal(false);
         setSelectedEvent(null);
@@ -198,13 +168,11 @@ export default function EventManagement() {
     if (!selectedEvent) return;
 
     try {
-      const success = await adminEventsService.deleteEvent(selectedEvent.id);
+      const success = await deleteEvent.mutateAsync(selectedEvent.id);
       if (success) {
-        setEvents(events.filter((evt) => evt.id !== selectedEvent.id));
         toast.success('Événement supprimé');
         setShowDeleteModal(false);
         setSelectedEvent(null);
-        loadStats();
       }
     } catch (_error) {
       toast.error('Erreur lors de la suppression');
@@ -214,15 +182,11 @@ export default function EventManagement() {
 
   const handleToggleFeatured = async (eventId: string, isFeatured: boolean) => {
     try {
-      const success = await adminEventsService.toggleFeatured(eventId, isFeatured);
+      const success = await toggleFeatured.mutateAsync({ eventId, isFeatured });
       if (success) {
-        setEvents(
-          events.map((evt) => (evt.id === eventId ? { ...evt, is_featured: isFeatured } : evt)),
-        );
         toast.success(
           isFeatured ? 'Événement mis en avant' : 'Événement retiré de la mise en avant',
         );
-        loadStats();
       }
     } catch (_error) {
       toast.error('Erreur lors du changement de statut');

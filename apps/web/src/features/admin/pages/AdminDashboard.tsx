@@ -13,60 +13,21 @@ import {
   Star,
   BarChart3,
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
-import { platformStatsService } from '@/features/admin/services/platform-stats.service';
+import { usePlatformStats } from '@/features/admin/hooks/usePlatformStats';
 import { useAdminStore } from '@/features/admin/stores/admin.store';
-import {
-  PlatformGlobalStats,
-  PlatformRevenueStats,
-  ScreensOccupancyStats,
-  CampaignsPerformance,
-  TopPerformingScreen,
-} from '@/features/admin/types/platform-stats';
-import { logger } from '@/lib/logger';
-
-const log = logger.child({ module: 'AdminDashboard' });
 
 export default function AdminDashboard() {
   const { admin } = useAdminStore();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [globalStats, setGlobalStats] = useState<PlatformGlobalStats | null>(null);
-  const [revenueStats, setRevenueStats] = useState<PlatformRevenueStats | null>(null);
-  const [occupancyStats, setOccupancyStats] = useState<ScreensOccupancyStats | null>(null);
-  const [campaignsPerf, setCampaignsPerf] = useState<CampaignsPerformance | null>(null);
-  const [topScreens, setTopScreens] = useState<TopPerformingScreen[]>([]);
-
-  useEffect(() => {
-    loadAllStats();
-  }, []);
-
-  const loadAllStats = async () => {
-    try {
-      setLoading(true);
-
-      const [global, revenue, occupancy, campaigns, top] = await Promise.all([
-        platformStatsService.getGlobalStats(),
-        platformStatsService.getRevenueStats(),
-        platformStatsService.getOccupancyStats(),
-        platformStatsService.getCampaignsPerformance(),
-        platformStatsService.getTopScreens(5),
-      ]);
-
-      setGlobalStats(global);
-      setRevenueStats(revenue);
-      setOccupancyStats(occupancy);
-      setCampaignsPerf(campaigns);
-      setTopScreens(top);
-    } catch (error) {
-      log.error({ error }, 'Error loading stats');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: platformStats, loading } = usePlatformStats();
+  const globalStats = platformStats?.global ?? null;
+  const revenueStats = platformStats?.revenue ?? null;
+  const occupancyStats = platformStats?.occupancy ?? null;
+  const campaignsPerf = platformStats?.campaigns ?? null;
+  const topScreens = platformStats?.top ?? [];
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('fr-FR', {
