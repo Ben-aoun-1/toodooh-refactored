@@ -25,10 +25,10 @@ import {
 
 import performanceIntroIcon from '@/assets/performance/1.png';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
+import { usePerformanceDataset } from '@/features/performances/hooks/usePerformanceDataset';
 import { performanceService } from '@/features/performances/services/performance.service';
 import type {
   PerformanceCategoryPoint,
-  PerformanceDataset,
   PerformanceFilters,
   PerformanceKpis,
   PerformancePeriodPreset,
@@ -36,10 +36,6 @@ import type {
 } from '@/features/performances/types/performance';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
 import OwnerNotificationsBell from '@/features/screenhost/components/OwnerNotificationsBell';
-import { logger } from '@/lib/logger';
-import { supabase } from '@/lib/supabase';
-
-const log = logger.child({ module: 'OwnerPerformance' });
 
 const presetButtons: { key: PerformancePeriodPreset; label: string }[] = [
   { key: 'month', label: 'Ce mois' },
@@ -144,76 +140,24 @@ export default function OwnerPerformance() {
   const [filters, setFilters] = useState<PerformanceFilters>(
     performanceService.buildDefaultFilters(),
   );
-  const [dataset, setDataset] = useState<PerformanceDataset | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [ownerCampaignIds, setOwnerCampaignIds] = useState<string[]>([]);
   const [temporalGranularity, setTemporalGranularity] = useState<TemporalGranularity>('day');
   const [ageSegment, setAgeSegment] = useState<AgeSegment>('all');
   const [sexSegment, setSexSegment] = useState<SexSegment>('all');
 
+  const {
+    dataset,
+    loading,
+    isError,
+    refetch: refetchDataset,
+  } = usePerformanceDataset(user?.id, filters);
+  const error = isError ? 'Impossible de charger les performances pour le moment.' : '';
+
+  // Resynchronise les filtres avec les dates normalisées renvoyées par le service.
   useEffect(() => {
-    const loadOwnerScope = async () => {
-      if (!user?.id) return;
-      const [{ data: ownerLocations }, { data: ownerScreens }, { data: ownerApprovals }] =
-        await Promise.all([
-          supabase.from('locations').select('id').eq('owner_id', user.id),
-          supabase.from('screens').select('id').eq('owner_id', user.id),
-          supabase.from('campaign_owner_approvals').select('campaign_id').eq('owner_id', user.id),
-        ]);
-
-      const locationIds = (ownerLocations || []).map((r: { id: string }) => r.id);
-      const screenIds = (ownerScreens || []).map((r: { id: string }) => r.id);
-      const [ownerCampaignLocRes, ownerCampaignScreenRes] = await Promise.all([
-        locationIds.length
-          ? supabase.from('campaign_locations').select('campaign_id').in('location_id', locationIds)
-          : Promise.resolve({ data: [], error: null }),
-        screenIds.length
-          ? supabase.from('campaign_screens').select('campaign_id').in('screen_id', screenIds)
-          : Promise.resolve({ data: [], error: null }),
-      ]);
-
-      const ids = Array.from(
-        new Set(
-          [
-            ...((ownerCampaignLocRes.data || []) as Array<{ campaign_id: string }>).map(
-              (r) => r.campaign_id,
-            ),
-            ...((ownerCampaignScreenRes.data || []) as Array<{ campaign_id: string }>).map(
-              (r) => r.campaign_id,
-            ),
-            ...((ownerApprovals || []) as Array<{ campaign_id: string }>).map((r) => r.campaign_id),
-          ].filter(Boolean),
-        ),
-      );
-      setOwnerCampaignIds(ids);
-    };
-
-    loadOwnerScope();
-  }, [user?.id]);
-
-  const loadData = async (nextFilters: PerformanceFilters) => {
-    try {
-      setLoading(true);
-      setError('');
-      const data = await performanceService.getDataset(nextFilters, {
-        campaignIds: ownerCampaignIds,
-      });
-      setDataset(data);
-      setFilters(data.filters);
-    } catch (e) {
-      log.error({ err: e }, 'failed to load owner performance dataset');
-      setError('Impossible de charger les performances pour le moment.');
-    } finally {
-      setLoading(false);
+    if (dataset) {
+      setFilters(dataset.filters);
     }
-  };
-
-  useEffect(() => {
-    if (!user?.id) return;
-    loadData(filters);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, ownerCampaignIds.join('|')]);
+  }, [dataset]);
 
   const onFilterChange = (key: keyof PerformanceFilters, value: string) =>
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -449,7 +393,7 @@ export default function OwnerPerformance() {
                     <div className="flex justify-end">
                       <button
                         type="button"
-                        onClick={() => loadData(filters)}
+                        onClick={() => refetchDataset()}
                         className="inline-flex items-center rounded-lg bg-[#76E6AB] px-4 py-2 text-sm font-medium text-[#165f2c] hover:bg-[#64d99b]"
                       >
                         Actualiser la recherche
@@ -537,7 +481,7 @@ export default function OwnerPerformance() {
                     <div className="flex justify-end">
                       <button
                         type="button"
-                        onClick={() => loadData(filters)}
+                        onClick={() => refetchDataset()}
                         className="inline-flex items-center rounded-lg bg-[#76E6AB] px-4 py-2 text-sm font-medium text-[#165f2c] hover:bg-[#64d99b]"
                       >
                         Actualiser la recherche

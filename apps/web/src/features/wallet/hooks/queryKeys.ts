@@ -13,4 +13,11 @@ export const walletKeys = {
 
   /** The user's invoice list. */
   invoices: (userId: string) => [...walletKeys.all, 'invoices', userId] as const,
+
+  /** Owner revenue summary (`revenueService.getRevenueStats`). */
+  revenueStats: (userId: string) => [...walletKeys.all, 'revenueStats', userId] as const,
+
+  /** Owner revenue series for one period bucket (`revenueService.getRevenueByPeriod`). */
+  revenueByPeriod: (userId: string, period: string) =>
+    [...walletKeys.all, 'revenueByPeriod', userId, period] as const,
 };

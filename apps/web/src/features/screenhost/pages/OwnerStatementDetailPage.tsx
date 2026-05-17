@@ -1,10 +1,10 @@
 import { ChevronLeft, Download, Printer } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import logoImage from '@/assets/logo.png';
-import { authService } from '@/features/auth/services/auth.service';
+import { useBusinessProfile } from '@/features/auth/hooks/useBusinessProfile';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
 import { TOODOOH_STATEMENT_EMITTER, OWNER_STATEMENT_FOOTER } from '@/features/screenhost/constants/ownerStatement';
@@ -20,8 +20,18 @@ export default function OwnerStatementDetailPage() {
   const isDisabled = needsApproval && validationStatus === 'pending';
 
   const [detail, setDetail] = useState<OwnerStatementDetail | null>(null);
-  const [recipient, setRecipient] = useState<StatementRecipientDisplay | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const { profile } = useBusinessProfile(user?.id);
+
+  /**
+   * The statement recipient is derived from the business profile: the
+   * default (email-only) shape until the profile query resolves, then the
+   * full company block — mirroring the page's prior default-then-fill flow.
+   */
+  const recipient = useMemo<StatementRecipientDisplay | null>(
+    () => (user ? buildStatementRecipient(profile, user.email) : null),
+    [profile, user],
+  );
 
   useEffect(() => {
     if (!user) {
@@ -38,21 +48,6 @@ export default function OwnerStatementDetailPage() {
       return;
     }
     setDetail(d);
-    setRecipient(buildStatementRecipient(null, user.email));
-    let cancelled = false;
-    (async () => {
-      try {
-        const profile = await authService.getBusinessProfile();
-        if (!cancelled) {
-          setRecipient(buildStatementRecipient(profile, user.email));
-        }
-      } catch {
-        /* garde le destinataire par défaut */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
   }, [user, statementId, navigate]);
 
   const formatMoney = useCallback((n: number) => {

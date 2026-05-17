@@ -7,6 +7,7 @@ describe('authKeys', () => {
     expect(authKeys.all).toEqual(['auth']);
     expect(authKeys.sectors()[0]).toBe('auth');
     expect(authKeys.governorates()[0]).toBe('auth');
+    expect(authKeys.profile('u1')[0]).toBe('auth');
   });
 
   it('builds hierarchical [feature, view] tuples for the reference reads', () => {
@@ -14,8 +15,14 @@ describe('authKeys', () => {
     expect(authKeys.governorates()).toEqual(['auth', 'governorates']);
   });
 
+  it('keys the business profile per user for cache isolation', () => {
+    expect(authKeys.profile('u1')).toEqual(['auth', 'profile', 'u1']);
+    expect(authKeys.profile('u2')).toEqual(['auth', 'profile', 'u2']);
+    expect(authKeys.profile('u1')).not.toEqual(authKeys.profile('u2'));
+  });
+
   it('keeps each view key prefix-matchable by authKeys.all', () => {
-    for (const key of [authKeys.sectors(), authKeys.governorates()]) {
+    for (const key of [authKeys.sectors(), authKeys.governorates(), authKeys.profile('u1')]) {
       expect(key.slice(0, authKeys.all.length)).toEqual(authKeys.all);
     }
   });

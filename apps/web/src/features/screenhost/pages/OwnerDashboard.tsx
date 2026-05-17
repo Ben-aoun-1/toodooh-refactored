@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Plus,
   AlertTriangle,
@@ -16,10 +17,12 @@ import {
   Eye,
   Building2,
 } from 'lucide-react';
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
+import { useBusinessProfile } from '@/features/auth/hooks/useBusinessProfile';
+import { useSectors } from '@/features/auth/hooks/useSectors';
 import { authService } from '@/features/auth/services/auth.service';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { campaignOwnerApprovalService } from '@/features/campaigns/services/campaign-owner-approval.service';
@@ -27,8 +30,11 @@ import AddScreen from '@/features/screenhost/components/AddScreen';
 import GiftCatalog from '@/features/screenhost/components/GiftCatalog';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
 import OwnerNotificationsBell from '@/features/screenhost/components/OwnerNotificationsBell';
-import { screensService, Screen } from '@/features/screens/services/screens.service';
-import { revenueService, RevenueStats } from '@/features/wallet/services/revenue.service';
+import { useScreens } from '@/features/screens/hooks/useScreens';
+import type { Screen } from '@/features/screens/services/screens.service';
+import { walletKeys } from '@/features/wallet/hooks/queryKeys';
+import { useRevenueStats } from '@/features/wallet/hooks/useRevenue';
+import type { RevenueStats } from '@/features/wallet/services/revenue.service';
 import { logger } from '@/lib/logger';
 
 const log = logger.child({ module: 'OwnerDashboard' });
@@ -52,134 +58,85 @@ interface OwnerDashboardNotification {
 /** Mettre à true pour réafficher Mes écrans, Mes revenus et Rewards sur le dashboard */
 const SHOW_OWNER_DASHBOARD_LEGACY_SECTIONS = false;
 
+/** Valeur de repli tant que `useRevenueStats` n'a pas résolu. */
+const EMPTY_REVENUE_STATS: RevenueStats = {
+  totalRevenue: 0,
+  monthlyRevenue: 0,
+  quarterlyRevenue: 0,
+  yearlyRevenue: 0,
+  averagePerScreen: 0,
+  topPerformingScreen: '',
+  growthRate: 0,
+  activeScreens: 0,
+  totalScreens: 0,
+  loyaltyPoints: 0,
+};
+
 export default function OwnerDashboard() {
   const navigate = useNavigate();
-  const { user, profileType, needsApproval, validationStatus } = useAuthStore();
+  const { user, needsApproval, validationStatus } = useAuthStore();
+  const queryClient = useQueryClient();
 
   // Fonction pour déterminer si les fonctionnalités sont désactivées
   const isDisabled = needsApproval && validationStatus === 'pending';
-  const [loading, setLoading] = useState(true);
-  const [screens, setScreens] = useState<Screen[]>([]);
-  const [stats, setStats] = useState<RevenueStats>({
-    totalRevenue: 0,
-    monthlyRevenue: 0,
-    quarterlyRevenue: 0,
-    yearlyRevenue: 0,
-    averagePerScreen: 0,
-    topPerformingScreen: '',
-    growthRate: 0,
-    activeScreens: 0,
-    totalScreens: 0,
-    loyaltyPoints: 0,
-  });
+
   const [_alerts, setAlerts] = useState<Alert[]>([]);
   const [_accountStatus, _setAccountStatus] = useState<'active' | 'pending' | 'suspended'>('active');
-  // TODO(phase-1): typed source [supabase] — see #15
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [profile, setProfile] = useState<any>(null);
-  const [businessSectorName, setBusinessSectorName] = useState<string>('');
   const [showGiftCatalog, setShowGiftCatalog] = useState(false);
   const [showAddScreen, setShowAddScreen] = useState(false);
   const [selectedEstablishment, setSelectedEstablishment] = useState<string | null>(null);
   const [ownerNotifications, setOwnerNotifications] = useState<OwnerDashboardNotification[]>([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(true);
 
-  // ✅ OPTIMISATION : useRef pour éviter les rechargements multiples
-  const hasLoadedData = useRef(false);
+  const { profile, loading: profileLoading, error: profileError } = useBusinessProfile(user?.id);
+  const { data: sectors, isLoading: sectorsLoading, isError: sectorsError } = useSectors();
+  const { screens, loading: screensLoading, isError: screensError } = useScreens();
+  const {
+    stats: revenueStats,
+    loading: revenueLoading,
+    isError: revenueError,
+  } = useRevenueStats(user?.id);
 
-  // ✅ OPTIMISATION : Mémoriser la fonction loadDashboardData avec useCallback
-  const loadDashboardData = useCallback(async () => {
-    try {
-      setLoading(true);
+  const stats = revenueStats ?? EMPTY_REVENUE_STATS;
+  const loading =
+    profileLoading || sectorsLoading || screensLoading || revenueLoading || notificationsLoading;
 
-      // Charger le profil utilisateur
-      const profileData = await authService.getBusinessProfile();
-      setProfile(profileData);
+  const businessSectorName = useMemo(() => {
+    if (!profile?.business_sector_id || !sectors) return '';
+    return sectors.find((s) => s.id === profile.business_sector_id)?.name?.trim() || '';
+  }, [profile, sectors]);
 
+  const handleScreenAdded = () => {
+    queryClient.invalidateQueries({ queryKey: walletKeys.revenueStats(user?.id ?? '') });
+  };
+
+  // Redirige vers la connexion si la session est absente.
+  useEffect(() => {
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+  }, [user, navigate]);
+
+  // Surface l'échec d'un des chargements (parité avec l'ancien toast unique
+  // du `loadDashboardData` séquentiel).
+  useEffect(() => {
+    if (profileError || sectorsError || screensError || revenueError) {
+      toast.error('Erreur lors du chargement des données');
+    }
+  }, [profileError, sectorsError, screensError, revenueError]);
+
+  // Notifications « campagnes en attente » — lecture inline conservée ; sa
+  // migration vers React Query est différée au Commit 7 (features/campaigns/),
+  // qui créera campaignsKeys + le hook propriétaire. Même motif de
+  // consommateur cross-feature laissé inline qu'au Commit 3 (events).
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    void (async () => {
       try {
-        const sectors = await authService.getBusinessSectors();
-        const sid = profileData?.business_sector_id;
-        const found = sectors.find((s) => s.id === sid);
-        setBusinessSectorName(found?.name?.trim() || '');
-      } catch {
-        setBusinessSectorName('');
-      }
-
-      // Charger les écrans depuis la base de données
-      const screensData = await screensService.getScreens();
-      setScreens(screensData);
-
-      // Charger les statistiques de revenus complètes
-      const revenueStats = await revenueService.getRevenueStats();
-
-      // Utiliser directement les statistiques du service
-      setStats(revenueStats);
-
-      // Générer les alertes basées sur les données réelles
-      const generatedAlerts: Alert[] = [];
-
-      // Alerte pour les écrans en maintenance
-      const maintenanceScreens = screensData.filter((screen) => screen.status === 'maintenance');
-      if (maintenanceScreens.length > 0) {
-        generatedAlerts.push({
-          id: 'maintenance',
-          type: 'warning',
-          title: 'Écrans en maintenance',
-          message: `${maintenanceScreens.length} écran(s) sont actuellement en maintenance.`,
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      // Alerte pour les écrans inactifs
-      const inactiveScreens = screensData.filter((screen) => screen.status === 'inactive');
-      if (inactiveScreens.length > 0) {
-        generatedAlerts.push({
-          id: 'inactive',
-          type: 'info',
-          title: 'Écrans inactifs',
-          message: `${inactiveScreens.length} écran(s) sont inactifs et ne génèrent pas de revenus.`,
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      // Alerte pour les écrans indisponibles
-      const unavailableScreens = screensData.filter((screen) => screen.status === 'unavailable');
-      if (unavailableScreens.length > 0) {
-        generatedAlerts.push({
-          id: 'unavailable',
-          type: 'warning',
-          title: 'Écrans indisponibles',
-          message: `${unavailableScreens.length} écran(s) sont temporairement indisponibles.`,
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      // Alerte de succès pour les revenus
-      if (revenueStats.monthlyRevenue > 0) {
-        generatedAlerts.push({
-          id: 'revenue',
-          type: 'success',
-          title: 'Revenus générés',
-          message: `Vos écrans ont généré ${revenueStats.monthlyRevenue.toLocaleString('fr-TN', { style: 'currency', currency: 'TND' })} ce mois-ci.`,
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      // Alerte pour les points fidélité
-      if (revenueStats.loyaltyPoints > 100) {
-        generatedAlerts.push({
-          id: 'loyalty',
-          type: 'info',
-          title: 'Points fidélité disponibles',
-          message: `Vous avez ${revenueStats.loyaltyPoints} points fidélité à échanger dans le catalogue.`,
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      setAlerts(generatedAlerts.slice(0, 5)); // Limiter à 5 alertes
-
-      const currentUser = await authService.getCurrentUser();
-      if (currentUser?.id) {
-        try {
+        const currentUser = await authService.getCurrentUser();
+        if (currentUser?.id) {
           const pendingCampaigns = await campaignOwnerApprovalService.getPendingCampaigns(
             currentUser.id,
           );
@@ -194,40 +151,84 @@ export default function OwnerDashboard() {
               actionLabel: 'Consulter',
               actionPath: '/owner-campaign-approvals',
             }));
-          setOwnerNotifications(mappedNotifications);
-        } catch (notificationError) {
-          log.error(
-            { notificationError },
-            'Erreur chargement notifications dashboard propriétaire',
-          );
+          if (!cancelled) setOwnerNotifications(mappedNotifications);
+        } else if (!cancelled) {
           setOwnerNotifications([]);
         }
-      } else {
-        setOwnerNotifications([]);
+      } catch (notificationError) {
+        log.error({ notificationError }, 'Erreur chargement notifications dashboard propriétaire');
+        if (!cancelled) setOwnerNotifications([]);
+      } finally {
+        if (!cancelled) setNotificationsLoading(false);
       }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
-      hasLoadedData.current = true; // ✅ Marquer comme chargé
-    } catch (_error) {
-      toast.error('Erreur lors du chargement des données');
-    } finally {
-      setLoading(false);
-    }
-  }, []); // ✅ Pas de dépendances - la fonction ne change jamais
-
-  // ✅ OPTIMISATION : useEffect séparé pour l'authentification
+  // Régénère les alertes dérivées (écrans + revenus) une fois les données
+  // chargées. NB : `_alerts` n'est consommé nulle part — état mort conservé
+  // tel quel par fidélité de migration (candidat à une passe dead-code).
   useEffect(() => {
-    if (!user) {
-      navigate('/login');
-      return;
-    }
-  }, [user, navigate]);
+    if (loading) return;
+    const generatedAlerts: Alert[] = [];
 
-  // ✅ OPTIMISATION : useEffect séparé pour le chargement initial des données
-  useEffect(() => {
-    if (user && !hasLoadedData.current) {
-      loadDashboardData();
+    const maintenanceScreens = screens.filter((screen) => screen.status === 'maintenance');
+    if (maintenanceScreens.length > 0) {
+      generatedAlerts.push({
+        id: 'maintenance',
+        type: 'warning',
+        title: 'Écrans en maintenance',
+        message: `${maintenanceScreens.length} écran(s) sont actuellement en maintenance.`,
+        timestamp: new Date().toISOString(),
+      });
     }
-  }, [user, profileType, loadDashboardData]);
+
+    const inactiveScreens = screens.filter((screen) => screen.status === 'inactive');
+    if (inactiveScreens.length > 0) {
+      generatedAlerts.push({
+        id: 'inactive',
+        type: 'info',
+        title: 'Écrans inactifs',
+        message: `${inactiveScreens.length} écran(s) sont inactifs et ne génèrent pas de revenus.`,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const unavailableScreens = screens.filter((screen) => screen.status === 'unavailable');
+    if (unavailableScreens.length > 0) {
+      generatedAlerts.push({
+        id: 'unavailable',
+        type: 'warning',
+        title: 'Écrans indisponibles',
+        message: `${unavailableScreens.length} écran(s) sont temporairement indisponibles.`,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (revenueStats && revenueStats.monthlyRevenue > 0) {
+      generatedAlerts.push({
+        id: 'revenue',
+        type: 'success',
+        title: 'Revenus générés',
+        message: `Vos écrans ont généré ${revenueStats.monthlyRevenue.toLocaleString('fr-TN', { style: 'currency', currency: 'TND' })} ce mois-ci.`,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    if (revenueStats && revenueStats.loyaltyPoints > 100) {
+      generatedAlerts.push({
+        id: 'loyalty',
+        type: 'info',
+        title: 'Points fidélité disponibles',
+        message: `Vous avez ${revenueStats.loyaltyPoints} points fidélité à échanger dans le catalogue.`,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    setAlerts(generatedAlerts.slice(0, 5));
+  }, [loading, screens, revenueStats]);
 
 
 
@@ -1122,7 +1123,7 @@ export default function OwnerDashboard() {
       <AddScreen
         isOpen={showAddScreen}
         onClose={() => setShowAddScreen(false)}
-        onScreenAdded={loadDashboardData}
+        onScreenAdded={handleScreenAdded}
       />
     </div>
   );

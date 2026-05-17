@@ -11,17 +11,17 @@ import {
   Building2,
   UploadCloud,
 } from 'lucide-react';
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { toast } from 'react-hot-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import { authService } from '@/features/auth/services/auth.service';
+import { useBusinessProfile } from '@/features/auth/hooks/useBusinessProfile';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
 import OwnerNotificationsBell from '@/features/screenhost/components/OwnerNotificationsBell';
-import { revenueService, RevenueData, RevenueStats } from '@/features/wallet/services/revenue.service';
+import { useRevenueByPeriod, useRevenueStats } from '@/features/wallet/hooks/useRevenue';
+import { useSaveBankDetails } from '@/features/wallet/hooks/useSaveBankDetails';
 import { getErrorMessage } from '@/lib/errors';
-import { supabase } from '@/lib/supabase';
 
 type TxFilter = 'all' | 'recharges' | 'depenses';
 
@@ -38,10 +38,6 @@ export default function OwnerRevenue() {
   const location = useLocation();
   const { user, needsApproval, validationStatus } = useAuthStore();
   const isDisabled = needsApproval && validationStatus === 'pending';
-  const [loading, setLoading] = useState(true);
-
-  const [revenueStats, setRevenueStats] = useState<RevenueStats | null>(null);
-  const [periodRevenues, setPeriodRevenues] = useState<RevenueData[]>([]);
 
   const [txSearch, setTxSearch] = useState('');
   const [txFilter, setTxFilter] = useState<TxFilter>('all');
@@ -55,27 +51,19 @@ export default function OwnerRevenue() {
   const [bankIban, setBankIban] = useState('');
   const [bankDocFile, setBankDocFile] = useState<File | null>(null);
   const [existingBankDocPath, setExistingBankDocPath] = useState<string | null>(null);
-  const [savingBankDetails, setSavingBankDetails] = useState(false);
 
   const bankFileInputRef = useRef<HTMLInputElement>(null);
-  const hasLoadedData = useRef(false);
 
-  const loadRevenueData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const [stats, periods] = await Promise.all([
-        revenueService.getRevenueStats(),
-        revenueService.getRevenueByPeriod('monthly'),
-      ]);
-      setRevenueStats(stats);
-      setPeriodRevenues(periods);
-      hasLoadedData.current = true;
-    } catch (_error) {
-      toast.error('Erreur lors du chargement des données');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const { stats, loading: statsLoading, isError: statsError } = useRevenueStats(user?.id);
+  const {
+    revenues,
+    loading: periodLoading,
+    isError: periodError,
+  } = useRevenueByPeriod(user?.id, 'monthly');
+  const { profile } = useBusinessProfile(user?.id);
+  const saveBankDetailsMutation = useSaveBankDetails();
+
+  const loading = statsLoading || periodLoading;
 
   useEffect(() => {
     if (!user) {
@@ -84,38 +72,28 @@ export default function OwnerRevenue() {
   }, [user, navigate]);
 
   useEffect(() => {
-    if (user && !hasLoadedData.current) {
-      loadRevenueData();
+    if (statsError || periodError) {
+      toast.error('Erreur lors du chargement des données');
     }
-  }, [user, loadRevenueData]);
+  }, [statsError, periodError]);
 
+  // Pré-remplit le formulaire bancaire à partir du profil chargé.
   useEffect(() => {
-    if (!user || loading) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const profile = await authService.getBusinessProfile();
-        const name = profile?.contact_name?.trim();
-        const bankName = profile?.bank_account_holder?.trim();
-        const bankRibValue = profile?.bank_rib?.trim() || '';
-        const bankIbanValue = profile?.bank_iban?.trim() || '';
-        const bankDocPath = profile?.bank_doc_path?.trim() || null;
-        const effectiveName = bankName || name || '';
-        if (!cancelled && effectiveName) {
-          setRegisteredPaymentLabel(`RIB ${effectiveName}`);
-          setBankFullName((prev) => prev || effectiveName);
-          setBankRib(bankRibValue);
-          setBankIban(bankIbanValue);
-          setExistingBankDocPath(bankDocPath);
-        }
-      } catch {
-        /* garde le libellé par défaut */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [user, loading]);
+    if (!profile) return;
+    const name = profile.contact_name?.trim();
+    const bankName = profile.bank_account_holder?.trim();
+    const bankRibValue = profile.bank_rib?.trim() || '';
+    const bankIbanValue = profile.bank_iban?.trim() || '';
+    const bankDocPath = profile.bank_doc_path?.trim() || null;
+    const effectiveName = bankName || name || '';
+    if (effectiveName) {
+      setRegisteredPaymentLabel(`RIB ${effectiveName}`);
+      setBankFullName((prev) => prev || effectiveName);
+      setBankRib(bankRibValue);
+      setBankIban(bankIbanValue);
+      setExistingBankDocPath(bankDocPath);
+    }
+  }, [profile]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -150,52 +128,25 @@ export default function OwnerRevenue() {
       return;
     }
 
-    setSavingBankDetails(true);
-    try {
-      let uploadedPath = existingBankDocPath;
-      let signedUrl: string | undefined;
-
-      if (bankDocFile) {
-        const maxBytes = 5 * 1024 * 1024;
-        if (bankDocFile.size > maxBytes) {
-          toast.error('Le fichier ne doit pas dépasser 5 Mo');
-          return;
-        }
-
-        const ext = bankDocFile.name.split('.').pop() || 'pdf';
-        const path = `bank_${user.id}_${Date.now()}.${ext}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('registres')
-          .upload(path, bankDocFile);
-        if (uploadError) throw uploadError;
-
-        const { data: signedData, error: signedError } = await supabase.storage
-          .from('registres')
-          .createSignedUrl(path, 604800);
-        if (signedError || !signedData?.signedUrl)
-          throw signedError || new Error('URL signée introuvable');
-
-        uploadedPath = path;
-        signedUrl = signedData.signedUrl;
+    if (bankDocFile) {
+      const maxBytes = 5 * 1024 * 1024;
+      if (bankDocFile.size > maxBytes) {
+        toast.error('Le fichier ne doit pas dépasser 5 Mo');
+        return;
       }
+    }
 
-      const payload: Record<string, unknown> = {
-        bank_account_holder: name,
-        bank_rib: rib,
-        bank_iban: iban,
-        bank_details_updated_at: new Date().toISOString(),
-      };
-      if (uploadedPath) payload.bank_doc_path = uploadedPath;
-      if (signedUrl) payload.bank_doc_url = signedUrl;
+    try {
+      const { bankDocPath } = await saveBankDetailsMutation.mutateAsync({
+        userId: user.id,
+        name,
+        rib,
+        iban,
+        bankDocFile,
+        existingBankDocPath,
+      });
 
-      const { error: updateError } = await supabase
-        .from('business_profiles')
-        .update(payload)
-        .eq('user_id', user.id);
-      if (updateError) throw updateError;
-
-      setExistingBankDocPath(uploadedPath);
+      setExistingBankDocPath(bankDocPath);
       setRegisteredPaymentLabel(`RIB ${name}`);
       setShowBankDetailsModal(false);
       setBankDocFile(null);
@@ -205,13 +156,11 @@ export default function OwnerRevenue() {
       toast.error(
         getErrorMessage(error) || 'Erreur lors de la sauvegarde des coordonnées bancaires',
       );
-    } finally {
-      setSavingBankDetails(false);
     }
   };
 
   const transactions: OwnerTransactionRow[] = useMemo(() => {
-    const sorted = [...periodRevenues].sort(
+    const sorted = [...revenues].sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
     );
     return sorted.map((r, index) => ({
@@ -221,7 +170,7 @@ export default function OwnerRevenue() {
       date: r.date,
       paymentMode: index === 0 ? 'Virement' : '',
     }));
-  }, [periodRevenues]);
+  }, [revenues]);
 
   const filteredTransactions = useMemo(() => {
     const q = txSearch.trim().toLowerCase();
@@ -266,7 +215,7 @@ export default function OwnerRevenue() {
     });
   };
 
-  const currentBalance = revenueStats?.totalRevenue ?? 0;
+  const currentBalance = stats?.totalRevenue ?? 0;
 
   if (loading) {
     return (
@@ -708,10 +657,10 @@ export default function OwnerRevenue() {
               <button
                 type="button"
                 onClick={() => void handleSaveBankDetails()}
-                disabled={savingBankDetails}
+                disabled={saveBankDetailsMutation.isPending}
                 className="inline-flex items-center justify-center px-5 py-2.5 rounded-xl bg-emerald-200 hover:bg-emerald-100 text-emerald-950 text-sm font-semibold transition-colors min-w-[120px] sm:min-w-[200px]"
               >
-                {savingBankDetails ? 'Enregistrement...' : 'Valider le mode de paiement'}
+                {saveBankDetailsMutation.isPending ? 'Enregistrement...' : 'Valider le mode de paiement'}
               </button>
             </div>
           </div>
