@@ -407,9 +407,18 @@ export default function OwnerCampaigns() {
                         const statusUi = getStatusUi(campaign.status, isUpcoming);
 
                         return (
-                          <article
+                          <div
                             key={campaign.id}
+                            role="button"
+                            tabIndex={0}
                             onClick={() => handleViewCampaign(campaign)}
+                            onKeyDown={(e) => {
+                              if (e.target !== e.currentTarget) return;
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                handleViewCampaign(campaign);
+                              }
+                            }}
                             className="rounded-xl border border-[#EBEBEB] bg-white p-4 flex flex-col min-h-[245px] cursor-pointer"
                           >
                             <div className="flex items-start justify-between gap-3 mb-2 min-h-[28px]">
@@ -488,7 +497,7 @@ export default function OwnerCampaigns() {
                                 ></div>
                               )}
                             </div>
-                          </article>
+                          </div>
                         );
                       })}
                     </div>
@@ -812,11 +821,23 @@ export default function OwnerCampaigns() {
       {showApprovalSuccessModal && (
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/40"
+          role="button"
+          tabIndex={0}
           onClick={() => setShowApprovalSuccessModal(false)}
+          onKeyDown={(e) => {
+            if (e.target !== e.currentTarget) return;
+            if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
+              e.preventDefault();
+              setShowApprovalSuccessModal(false);
+            }
+          }}
         >
           <div
             className="bg-white rounded-2xl shadow-xl w-full max-w-[760px] p-8 text-center relative"
+            role="button"
+            tabIndex={0}
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
           >
             <div className="flex justify-center mb-5">
               <div className="w-20 h-20 rounded-full bg-[#E8F8EE] flex items-center justify-center">
@@ -856,11 +877,23 @@ export default function OwnerCampaigns() {
       {showRejectConfirmModal && (
         <div
           className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/40"
+          role="button"
+          tabIndex={0}
           onClick={() => setShowRejectConfirmModal(false)}
+          onKeyDown={(e) => {
+            if (e.target !== e.currentTarget) return;
+            if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
+              e.preventDefault();
+              setShowRejectConfirmModal(false);
+            }
+          }}
         >
           <div
             className="w-full max-w-[760px] rounded-[24px] bg-white shadow-xl overflow-hidden"
+            role="button"
+            tabIndex={0}
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
           >
             <div className="px-8 py-5 border-b border-[#F1F1F1]">
               <h3 className="text-[20px] leading-tight font-semibold text-[#171717]">

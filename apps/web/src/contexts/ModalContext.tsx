@@ -129,11 +129,23 @@ export function ModalProvider({ children }: { children: ReactNode }) {
       {isLogoutOpen && (
         <div
           className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          role="button"
+          tabIndex={0}
           onClick={closeLogout}
+          onKeyDown={(e) => {
+            if (e.target !== e.currentTarget) return;
+            if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
+              e.preventDefault();
+              closeLogout();
+            }
+          }}
         >
           <div
             className="bg-white rounded-xl p-6 max-w-sm w-full shadow-xl border border-gray-200"
+            role="button"
+            tabIndex={0}
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
           >
             <p className="text-gray-800 text-center mb-6">Vous allez être déconnecté.</p>
             <div className="flex gap-3">

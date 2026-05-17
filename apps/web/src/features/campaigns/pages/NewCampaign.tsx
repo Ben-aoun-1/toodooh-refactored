@@ -73,7 +73,6 @@ const log = logger.child({ module: 'NewCampaign' });
 const ARIANE_ICONS = [ariane1, ariane2, ariane3, ariane4, ariane5, ariane6] as const;
 const ARIANE_ICONS_DONE = [ariane1s, ariane2s, ariane3s, ariane4s, ariane5s, ariane6s] as const;
 
-
 const center = {
   lat: 36.8065,
   lng: 10.1815, // Tunis center coordinates
@@ -91,7 +90,7 @@ export default function NewCampaign() {
   const eventFromState = location.state?.event as SpecialEvent | undefined;
   const isEventCampaign = Boolean(
     (location.pathname === '/new-event-campaign' && eventFromState) ||
-      (editMode && campaignToEdit?.event_id),
+    (editMode && campaignToEdit?.event_id),
   );
   const campaignType: 'standard' | 'event' = isEventCampaign ? 'event' : 'standard';
 
@@ -156,15 +155,12 @@ export default function NewCampaign() {
       setState((prev) => ({
         ...prev,
         categories:
-          typeof next === 'function'
-            ? (next as (p: string[]) => string[])(prev.categories)
-            : next,
+          typeof next === 'function' ? (next as (p: string[]) => string[])(prev.categories) : next,
       })),
     [setState],
   );
   const setDiffusionType = useCallback(
-    (value: 'toodooh' | 'parc_tv') =>
-      setState((prev) => ({ ...prev, diffusionType: value })),
+    (value: 'toodooh' | 'parc_tv') => setState((prev) => ({ ...prev, diffusionType: value })),
     [setState],
   );
   const setSelectedParcIds = useCallback(
@@ -210,9 +206,7 @@ export default function NewCampaign() {
       setState((prev) => ({
         ...prev,
         adjustedBudget:
-          typeof next === 'function'
-            ? (next as (p: number) => number)(prev.adjustedBudget)
-            : next,
+          typeof next === 'function' ? (next as (p: number) => number)(prev.adjustedBudget) : next,
       })),
     [setState],
   );
@@ -283,14 +277,8 @@ export default function NewCampaign() {
   // `calculatedImpressions` is read directly via `state.calculatedImpressions`
   // where needed; it was previously destructured but never referenced
   // top-level after Commit 11's Step 6 extraction.
-  const startDate = useMemo(
-    () => parseCampaignUiDate(state.startDate),
-    [state.startDate],
-  );
-  const endDate = useMemo(
-    () => parseCampaignUiDate(state.endDate),
-    [state.endDate],
-  );
+  const startDate = useMemo(() => parseCampaignUiDate(state.startDate), [state.startDate]);
+  const endDate = useMemo(() => parseCampaignUiDate(state.endDate), [state.endDate]);
 
   // --- Transient/UI-local state (NOT in WizardState) ---
   // selectedLocation: still read by saveCampaignDraft's fallback when no
@@ -522,14 +510,11 @@ export default function NewCampaign() {
   const [myApprovedVideos, setMyApprovedVideos] = useState<ApprovedVideo[]>([]);
   const selectedExistingVideo = useMemo(
     () =>
-      existingVideoId
-        ? (myApprovedVideos.find((v) => v?.id === existingVideoId) ?? null)
-        : null,
+      existingVideoId ? (myApprovedVideos.find((v) => v?.id === existingVideoId) ?? null) : null,
     [existingVideoId, myApprovedVideos],
   );
   const setExistingVideoId = useCallback(
-    (value: string | null) =>
-      setState((prev) => ({ ...prev, existingVideoId: value })),
+    (value: string | null) => setState((prev) => ({ ...prev, existingVideoId: value })),
     [setState],
   );
   const [showPostCartStep, setShowPostCartStep] = useState(false);
@@ -957,11 +942,7 @@ export default function NewCampaign() {
 
   const handleAddToCart = async (): Promise<void> => {
     if (addingToCart) return;
-    if (
-      !canProceedToStep6() ||
-      adjustedBudget <= 0 ||
-      impressionsForCurrentBudget <= 0
-    ) {
+    if (!canProceedToStep6() || adjustedBudget <= 0 || impressionsForCurrentBudget <= 0) {
       toast.error('La campagne doit être supérieure à 0 dinar et à 0 impression.');
       return;
     }
@@ -1024,10 +1005,7 @@ export default function NewCampaign() {
           patch: { status: 'draft', content_validation_status: 'pending' },
         });
       } catch (updateError) {
-        log.error(
-          { error: updateError, campaignId },
-          'failed to update campaign for cart add',
-        );
+        log.error({ error: updateError, campaignId }, 'failed to update campaign for cart add');
         toast.error(getErrorMessage(updateError) || 'Erreur lors de la finalisation');
         return;
       }
@@ -1041,8 +1019,7 @@ export default function NewCampaign() {
             'failed to link event campaign to event',
           );
           toast.error(
-            getErrorMessage(linkError) ||
-              "Erreur lors du lien à l'événement — veuillez réessayer",
+            getErrorMessage(linkError) || "Erreur lors du lien à l'événement — veuillez réessayer",
           );
           return;
         }
@@ -1065,7 +1042,6 @@ export default function NewCampaign() {
   // handleDateChange + validateStep2 (the misnamed dates validator): moved
   //   into Step3.tsx. Step3 owns its own dateErrors/dateTouched and the
   //   cross-field re-validation logic.
-
 
   // Approved-videos mirror (Commit 7b). Seeded from the `useMyApprovedVideos`
   // query and merged with the edit-mode existing video; kept as local state
@@ -1176,9 +1152,7 @@ export default function NewCampaign() {
           endDate={endDate}
           onGoToDashboard={() => navigate('/dashboard')}
           onGoToEvents={() => navigate('/evenements')}
-          onJeMePositionne={(event) =>
-            navigate('/new-event-campaign', { state: { event } })
-          }
+          onJeMePositionne={(event) => navigate('/new-event-campaign', { state: { event } })}
         />
       );
     }
@@ -1225,10 +1199,7 @@ export default function NewCampaign() {
         />
       );
     }
-    if (
-      (currentStep === 4 && !isEventCampaign) ||
-      (currentStep === 1 && isEventCampaign)
-    ) {
+    if ((currentStep === 4 && !isEventCampaign) || (currentStep === 1 && isEventCampaign)) {
       return (
         <Step4
           geographicZones={geographicZones}
@@ -1242,10 +1213,7 @@ export default function NewCampaign() {
         />
       );
     }
-    if (
-      (currentStep === 5 && !isEventCampaign) ||
-      (currentStep === 2 && isEventCampaign)
-    ) {
+    if ((currentStep === 5 && !isEventCampaign) || (currentStep === 2 && isEventCampaign)) {
       return (
         <Step5
           uploadedVideoId={uploadedVideoId}
@@ -1262,10 +1230,7 @@ export default function NewCampaign() {
         />
       );
     }
-    if (
-      (currentStep === 6 && !isEventCampaign) ||
-      (currentStep === 3 && isEventCampaign)
-    ) {
+    if ((currentStep === 6 && !isEventCampaign) || (currentStep === 3 && isEventCampaign)) {
       return (
         <Step6
           wizardState={state}
@@ -1285,11 +1250,7 @@ export default function NewCampaign() {
           onBack={() => wiz.prevStep()}
           onSaveDraft={handleSaveDraft}
           onAddToCart={handleAddToCart}
-          canFinalize={
-            canProceedToStep6() &&
-            adjustedBudget > 0 &&
-            impressionsForCurrentBudget > 0
-          }
+          canFinalize={canProceedToStep6() && adjustedBudget > 0 && impressionsForCurrentBudget > 0}
           addingToCart={addingToCart}
         />
       );
@@ -1358,8 +1319,17 @@ export default function NewCampaign() {
                 <React.Fragment key={step.id}>
                   <div className="flex-1 flex flex-col items-center justify-center min-w-0">
                     <div
+                      role="button"
+                      tabIndex={0}
                       onClick={() => {
                         if (isClickable) wiz.goToStep(step.id);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.target !== e.currentTarget) return;
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          if (isClickable) wiz.goToStep(step.id);
+                        }
                       }}
                       className={`flex flex-col items-center transition-all w-full ${
                         isClickable
@@ -1402,14 +1372,11 @@ export default function NewCampaign() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main Form */}
-        <div className="lg:col-span-3 space-y-6">{renderActiveStep()}
-        </div>
-
+        <div className="lg:col-span-3 space-y-6">{renderActiveStep()}</div>
       </div>
 
       {/* showZoneModal && (<ZoneModal />) — entire modal block removed in
           Commit 9 (setShowZoneModal(true) was never called; unreachable UI). */}
-
     </div>
   );
 }

@@ -232,10 +232,19 @@ export default function GiftCatalog({ isOpen, onClose, userPoints }: GiftCatalog
               {filteredGifts.map((gift) => (
                 <div
                   key={gift.id}
+                  role="button"
+                  tabIndex={0}
                   className={`bg-white rounded-lg border p-6 hover:shadow-lg transition-shadow cursor-pointer ${
                     !gift.available ? 'opacity-60' : ''
                   }`}
                   onClick={() => setSelectedGift(gift)}
+                  onKeyDown={(e) => {
+                    if (e.target !== e.currentTarget) return;
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setSelectedGift(gift);
+                    }
+                  }}
                 >
                   <div className="text-center">
                     <div className="text-4xl mb-4">{gift.image}</div>

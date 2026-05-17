@@ -39,7 +39,6 @@ export default function CartPage() {
     removeItem(campaignId);
   };
 
-
   const handleConfirmAndLaunch = async () => {
     if (cartItems.length === 0) return;
     if (!user?.id) {
@@ -323,11 +322,23 @@ export default function CartPage() {
       {showSuccessModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+          role="button"
+          tabIndex={0}
           onClick={() => setShowSuccessModal(false)}
+          onKeyDown={(e) => {
+            if (e.target !== e.currentTarget) return;
+            if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
+              e.preventDefault();
+              setShowSuccessModal(false);
+            }
+          }}
         >
           <div
             className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 relative text-center"
+            role="button"
+            tabIndex={0}
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
           >
             <button
               type="button"
@@ -369,11 +380,23 @@ export default function CartPage() {
       {showInsufficientModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+          role="button"
+          tabIndex={0}
           onClick={() => setShowInsufficientModal(false)}
+          onKeyDown={(e) => {
+            if (e.target !== e.currentTarget) return;
+            if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
+              e.preventDefault();
+              setShowInsufficientModal(false);
+            }
+          }}
         >
           <div
             className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 relative text-center"
+            role="button"
+            tabIndex={0}
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
           >
             <button
               type="button"

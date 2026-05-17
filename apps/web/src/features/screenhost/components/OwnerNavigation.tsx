@@ -167,7 +167,16 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
         <div className="fixed inset-0 z-50 lg:hidden">
           <div
             className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+            role="button"
+            tabIndex={0}
             onClick={() => setSidebarOpen(false)}
+            onKeyDown={(e) => {
+              if (e.target !== e.currentTarget) return;
+              if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
+                e.preventDefault();
+                setSidebarOpen(false);
+              }
+            }}
           />
           <div className="fixed inset-y-0 left-0 flex w-[272px] flex-col bg-white border-r border-[#E1E4EA] shadow-lg">
             <div className="flex h-[88px] items-center justify-between p-3 border-b border-[#E1E4EA]">
@@ -432,11 +441,23 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
       {showLogoutConfirm && (
         <div
           className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          role="button"
+          tabIndex={0}
           onClick={() => setShowLogoutConfirm(false)}
+          onKeyDown={(e) => {
+            if (e.target !== e.currentTarget) return;
+            if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
+              e.preventDefault();
+              setShowLogoutConfirm(false);
+            }
+          }}
         >
           <div
             className="bg-white rounded-xl p-6 max-w-sm w-full shadow-xl border border-gray-200"
+            role="button"
+            tabIndex={0}
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
           >
             <p className="text-gray-800 text-center mb-6">Vous allez être déconnecté.</p>
             <div className="flex gap-3">
