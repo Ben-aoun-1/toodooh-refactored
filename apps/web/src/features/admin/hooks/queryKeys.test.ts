@@ -15,6 +15,8 @@ describe('adminKeys', () => {
       adminKeys.monitoringStats(),
       adminKeys.monitoringCategories(),
       adminKeys.globalConfiguration(),
+      adminKeys.users(),
+      adminKeys.admins(),
     ]) {
       expect(key[0]).toBe('admin');
       expect(key.slice(0, adminKeys.all.length)).toEqual(adminKeys.all);
@@ -43,5 +45,11 @@ describe('adminKeys', () => {
 
   it('distinguishes the video list by status filter', () => {
     expect(adminKeys.videos('pending')).not.toEqual(adminKeys.videos('approved'));
+  });
+
+  it('gives the user / admin account lists distinct, stable keys', () => {
+    expect(adminKeys.users()).toEqual(['admin', 'users']);
+    expect(adminKeys.admins()).toEqual(['admin', 'admins']);
+    expect(adminKeys.users()).not.toEqual(adminKeys.admins());
   });
 });

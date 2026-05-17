@@ -21,21 +21,25 @@ import { toast } from 'react-hot-toast';
 import { useLocation } from 'react-router-dom';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
-import { adminUserService, AdminUser } from '@/features/admin/services/admin-user.service';
+import { useUserMutations, useUsers } from '@/features/admin/hooks/useUsers';
+import { type AdminUser } from '@/features/admin/services/admin-user.service';
 import { useAdminStore } from '@/features/admin/stores/admin.store';
 import { getErrorMessage } from '@/lib/errors';
-import { logger } from '@/lib/logger';
-import { supabase } from '@/lib/supabase';
-
-const log = logger.child({ module: 'UserManagement' });
-
-// Utiliser AdminUser du service
 
 export default function UserManagement() {
   const { admin } = useAdminStore();
   const location = useLocation();
-  const [users, setUsers] = useState<AdminUser[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { users, loading, isError: usersError } = useUsers();
+  const {
+    approveUser,
+    rejectUser,
+    deleteUser,
+    bulkApprove,
+    bulkReject,
+    bulkDelete,
+    uploadUserDocument,
+    saveAgentCode,
+  } = useUserMutations();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>(
     'all',
@@ -139,21 +143,8 @@ export default function UserManagement() {
 
     setBulkActionLoading(true);
     try {
-      const { error } = await supabase
-        .from('business_profiles')
-        .update({
-          status: 'approved',
-          verification_status: 'approved',
-          onboarding_completed: true,
-          validated_at: new Date().toISOString(),
-          validated_by: admin?.id || 'admin',
-        })
-        .in('id', Array.from(selectedUsers));
-
-      if (error) throw error;
-
+      await bulkApprove.mutateAsync({ userIds: Array.from(selectedUsers), adminId: admin?.id });
       toast.success(`✅ ${selectedUsers.size} utilisateur(s) approuvé(s) avec succès`);
-      await loadUsers();
       clearSelection();
     } catch (error) {
       toast.error(`❌ Erreur lors de l'approbation: ${getErrorMessage(error)}`);
@@ -175,20 +166,8 @@ export default function UserManagement() {
 
     setBulkActionLoading(true);
     try {
-      const { error } = await supabase
-        .from('business_profiles')
-        .update({
-          status: 'rejected',
-          verification_status: 'rejected',
-          validated_at: new Date().toISOString(),
-          validated_by: admin?.id || 'admin',
-        })
-        .in('id', Array.from(selectedUsers));
-
-      if (error) throw error;
-
+      await bulkReject.mutateAsync({ userIds: Array.from(selectedUsers), adminId: admin?.id });
       toast.success(`✅ ${selectedUsers.size} utilisateur(s) rejeté(s) avec succès`);
-      await loadUsers();
       clearSelection();
     } catch (error) {
       toast.error(`❌ Erreur lors du rejet: ${getErrorMessage(error)}`);
@@ -215,37 +194,13 @@ export default function UserManagement() {
 
     setBulkActionLoading(true);
     try {
-      const userIds = Array.from(selectedUsers);
-
-      let successCount = 0;
-      let errorCount = 0;
-
-      // Supprimer chaque utilisateur individuellement avec la fonction complète
-      for (let i = 0; i < userIds.length; i++) {
-        const userId = userIds[i];
-
-        try {
-          const success = await adminUserService.deleteUser(userId);
-          if (success) {
-            successCount++;
-          } else {
-            errorCount++;
-            log.error(`❌ Échec de la suppression de l'utilisateur ${i + 1}/${userIds.length}`);
-          }
-        } catch (error) {
-          log.error({ error }, `❌ Erreur lors de la suppression de l'utilisateur ${userId}`);
-          errorCount++;
-        }
-      }
-
+      const { successCount, errorCount } = await bulkDelete.mutateAsync(Array.from(selectedUsers));
       if (successCount > 0) {
         toast.success(`✅ ${successCount} utilisateur(s) supprimé(s) avec succès`);
       }
       if (errorCount > 0) {
         toast.error(`❌ ${errorCount} utilisateur(s) n'ont pas pu être supprimés`);
       }
-
-      await loadUsers();
       clearSelection();
     } catch (error) {
       toast.error(`❌ Erreur lors de la suppression: ${getErrorMessage(error)}`);
@@ -254,24 +209,11 @@ export default function UserManagement() {
     }
   };
 
-  // Charger les utilisateurs
-  const loadUsers = async () => {
-    try {
-      setLoading(true);
-
-      const usersData = await adminUserService.getUsers();
-
-      setUsers(usersData);
-    } catch (error) {
-      toast.error(`Erreur lors du chargement des utilisateurs: ${getErrorMessage(error)}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    loadUsers();
-  }, []);
+    if (usersError) {
+      toast.error('Erreur lors du chargement des utilisateurs');
+    }
+  }, [usersError]);
 
   useEffect(() => {
     setAgentCodeInput(selectedUser?.agent_toodooh || '');
@@ -293,20 +235,8 @@ export default function UserManagement() {
 
   const handleApprove = async (userId: string) => {
     try {
-      const success = await adminUserService.approveUser(userId, admin?.id);
+      const success = await approveUser.mutateAsync({ userId, adminId: admin?.id });
       if (success) {
-        setUsers(
-          users.map((user) =>
-            user.id === userId
-              ? {
-                  ...user,
-                  status: 'approved' as const,
-                  validated_by: admin?.id,
-                  validated_at: new Date().toISOString(),
-                }
-              : user,
-          ),
-        );
         toast.success('Utilisateur approuvé avec succès');
       } else {
         toast.error("Erreur lors de l'approbation");
@@ -318,20 +248,8 @@ export default function UserManagement() {
 
   const handleReject = async (userId: string) => {
     try {
-      const success = await adminUserService.rejectUser(userId, admin?.id);
+      const success = await rejectUser.mutateAsync({ userId, adminId: admin?.id });
       if (success) {
-        setUsers(
-          users.map((user) =>
-            user.id === userId
-              ? {
-                  ...user,
-                  status: 'rejected' as const,
-                  validated_by: admin?.id,
-                  validated_at: new Date().toISOString(),
-                }
-              : user,
-          ),
-        );
         toast.success('Utilisateur rejeté');
       } else {
         toast.error('Erreur lors du rejet');
@@ -346,10 +264,8 @@ export default function UserManagement() {
 
     setDeleting(true);
     try {
-      const success = await adminUserService.deleteUser(userToDelete.id);
+      const success = await deleteUser.mutateAsync(userToDelete.id);
       if (success) {
-        // Supprimer l'utilisateur de la liste locale
-        setUsers(users.filter((user) => user.id !== userToDelete.id));
         toast.success('Utilisateur supprimé définitivement');
         setShowDeleteModal(false);
         setUserToDelete(null);
@@ -376,52 +292,19 @@ export default function UserManagement() {
 
     setUploadingDocument(true);
     try {
-      const ext = documentFile.name.split('.').pop();
+      const result = await uploadUserDocument.mutateAsync({
+        authUserId,
+        isIndividualOwner: userProfileType === 'individual_owner',
+        file: documentFile,
+      });
 
-      // Déterminer le type de document selon le profil
-      const isIndividualOwner = userProfileType === 'individual_owner';
-      const filePrefix = isIndividualOwner ? 'cin' : 'rne';
-      const filePath = `${filePrefix}_${authUserId}_admin_${Date.now()}.${ext}`;
-
-      // Upload vers le bucket registres
-      const { error: uploadError } = await supabase.storage
-        .from('registres')
-        .upload(filePath, documentFile);
-
-      if (uploadError) {
-        throw uploadError;
-      }
-
-      // Créer une URL signée
-      const { data: signedData, error: signedError } = await supabase.storage
-        .from('registres')
-        .createSignedUrl(filePath, 604800); // 7 jours
-
-      if (signedError || !signedData) {
-        throw signedError || new Error("Impossible de créer l'URL signée");
-      }
-
-      // Mettre à jour le profil avec l'URL du document
-      const updateField = isIndividualOwner ? 'cin_doc_url' : 'registration_doc_url';
-
-      const { error: updateError } = await supabase
-        .from('business_profiles')
-        .update({ [updateField]: signedData.signedUrl })
-        .eq('user_id', authUserId);
-
-      if (updateError) {
-        throw updateError;
-      }
-
-      // Recharger les utilisateurs pour rafraîchir l'affichage
-      const usersData = await adminUserService.getUsers();
-      setUsers(usersData);
-
-      // Mettre à jour l'utilisateur sélectionné
-      const updatedUser = usersData.find((u) => u.user_id === authUserId);
-      if (updatedUser) {
-        setSelectedUser(updatedUser);
-      }
+      // Rafraîchit la modale ouverte sur l'utilisateur concerné.
+      setSelectedUser((prev) => {
+        if (!prev) return prev;
+        return result.updateField === 'cin_doc_url'
+          ? { ...prev, cin_doc_url: result.signedUrl }
+          : { ...prev, registration_doc_url: result.signedUrl };
+      });
 
       setDocumentFile(null);
       toast.success('✅ Document uploadé avec succès !');
@@ -512,23 +395,8 @@ export default function UserManagement() {
 
     setSavingAgentCode(true);
     try {
-      const { error } = await supabase
-        .from('business_profiles')
-        .update({
-          agent_toodooh: value,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', selectedUser.id);
+      await saveAgentCode.mutateAsync({ profileId: selectedUser.id, code: value });
 
-      if (error) throw error;
-
-      setUsers((prev) =>
-        prev.map((user) =>
-          user.id === selectedUser.id
-            ? { ...user, agent_toodooh: value, updated_at: new Date().toISOString() }
-            : user,
-        ),
-      );
       setSelectedUser((prev) =>
         prev ? { ...prev, agent_toodooh: value, updated_at: new Date().toISOString() } : prev,
       );

@@ -14,6 +14,7 @@ import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
+import { useAdminMutations, useAdmins } from '@/features/admin/hooks/useAdmins';
 import { adminService } from '@/features/admin/services/admin.service';
 import { useAdminStore } from '@/features/admin/stores/admin.store';
 import { AdminProfile } from '@/features/admin/types/admin';
@@ -21,8 +22,8 @@ import { AdminProfile } from '@/features/admin/types/admin';
 export default function AdminManagement() {
   const { admin } = useAdminStore();
   const navigate = useNavigate();
-  const [admins, setAdmins] = useState<AdminProfile[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { admins, loading, isError: adminsError } = useAdmins();
+  const { deleteAdmin, reactivateAdmin } = useAdminMutations();
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<'all' | 'superadmin' | 'admin' | 'moderator'>('all');
   const [selectedAdmin, setSelectedAdmin] = useState<AdminProfile | null>(null);
@@ -33,20 +34,10 @@ export default function AdminManagement() {
   const [adminToReactivate, setAdminToReactivate] = useState<AdminProfile | null>(null);
 
   useEffect(() => {
-    loadAdmins();
-  }, []);
-
-  const loadAdmins = async () => {
-    try {
-      setLoading(true);
-      const data = await adminService.getAdmins();
-      setAdmins(data);
-    } catch (_error) {
+    if (adminsError) {
       toast.error('Erreur lors du chargement des administrateurs');
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [adminsError]);
 
   // Filtrage
   const filteredAdmins = admins.filter((a) => {
@@ -72,11 +63,10 @@ export default function AdminManagement() {
     if (!adminToDeactivate) return;
 
     try {
-      await adminService.deleteAdmin(adminToDeactivate.id);
+      await deleteAdmin.mutateAsync(adminToDeactivate.id);
       toast.success('Administrateur désactivé avec succès');
       setShowDeactivateModal(false);
       setAdminToDeactivate(null);
-      loadAdmins();
 
       // Log l'activité
       if (admin) {
@@ -102,11 +92,10 @@ export default function AdminManagement() {
     if (!adminToReactivate) return;
 
     try {
-      await adminService.reactivateAdmin(adminToReactivate.id);
+      await reactivateAdmin.mutateAsync(adminToReactivate.id);
       toast.success('Administrateur réactivé avec succès');
       setShowReactivateModal(false);
       setAdminToReactivate(null);
-      loadAdmins();
 
       // Log l'activité
       if (admin) {

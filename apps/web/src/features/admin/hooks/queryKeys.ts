@@ -31,4 +31,9 @@ export const adminKeys = {
   monitoringCategories: () => [...adminKeys.all, 'monitoringCategories'] as const,
 
   globalConfiguration: () => [...adminKeys.all, 'globalConfiguration'] as const,
+
+  /** End-user list for UserManagement (`adminUserService.getUsers`). */
+  users: () => [...adminKeys.all, 'users'] as const,
+  /** Admin-account list for AdminManagement (`adminService.getAdmins`). */
+  admins: () => [...adminKeys.all, 'admins'] as const,
 };

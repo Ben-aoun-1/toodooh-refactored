@@ -4,6 +4,7 @@ import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
+import { useAdminMutations } from '@/features/admin/hooks/useAdmins';
 import { adminService } from '@/features/admin/services/admin.service';
 import { useAdminStore } from '@/features/admin/stores/admin.store';
 import { getErrorMessage } from '@/lib/errors';
@@ -20,6 +21,7 @@ interface AdminFormData {
 export default function CreateAdmin() {
   const { admin } = useAdminStore();
   const navigate = useNavigate();
+  const { createAdmin } = useAdminMutations();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<AdminFormData>({
     email: '',
@@ -74,8 +76,8 @@ export default function CreateAdmin() {
 
     setLoading(true);
     try {
-      await adminService.createAdmin(
-        {
+      await createAdmin.mutateAsync({
+        adminData: {
           email: formData.email,
           password: formData.password,
           first_name: formData.first_name,
@@ -83,8 +85,8 @@ export default function CreateAdmin() {
           role: formData.role,
           permissions: [],
         },
-        admin.id,
-      );
+        createdBy: admin.id,
+      });
 
       toast.success(
         `${formData.role === 'admin' ? 'Administrateur' : 'Modérateur'} créé avec succès !`,
