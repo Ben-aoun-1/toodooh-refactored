@@ -67,6 +67,13 @@ export function useOwnerProfileMutations(userId: string | undefined) {
       authService.updatePasswordWithOld(currentPassword, newPassword),
   });
 
+  // MyAccount's optional password change (Commit 5c2) — `updatePassword`
+  // takes no old-password argument, distinct from `updatePasswordWithOld`.
+  // No profile-row write, so no invalidation.
+  const updatePassword = useMutation({
+    mutationFn: (password: string) => authService.updatePassword(password),
+  });
+
   // handleDeactivateAccount — sets is_active=false then logs out; the page
   // handler runs the password re-auth check before calling this.
   const deactivateAccount = useMutation({
@@ -151,6 +158,7 @@ export function useOwnerProfileMutations(userId: string | undefined) {
     updateProfile,
     updateBusinessProfile,
     updatePasswordWithOld,
+    updatePassword,
     deactivateAccount,
     uploadLogo,
     uploadDocument,

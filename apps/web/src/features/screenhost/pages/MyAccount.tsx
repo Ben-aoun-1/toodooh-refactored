@@ -16,13 +16,14 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
-import { authService } from '@/features/auth/services/auth.service';
+import { useBusinessProfile } from '@/features/auth/hooks/useBusinessProfile';
+import { useGovernorates } from '@/features/auth/hooks/useGovernorates';
+import { useOwnerProfileMutations } from '@/features/auth/hooks/useOwnerProfileMutations';
+import { useSectors } from '@/features/auth/hooks/useSectors';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
-import type { BusinessSector, Governorate, BusinessProfile } from '@/features/auth/types/auth';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
 import { getErrorMessage } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { supabase } from '@/lib/supabase';
 
 const log = logger.child({ module: 'MyAccount' });
 
@@ -37,15 +38,15 @@ export default function MyAccount() {
   const navigate = useNavigate();
   const { user, profileType, needsApproval, validationStatus, refreshUserStatus } = useAuthStore();
   const isDisabled = needsApproval && validationStatus === 'pending';
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [sectors, setSectors] = useState<BusinessSector[]>([]);
-  const [governorates, setGovernorates] = useState<Governorate[]>([]);
   const [currentStep, setCurrentStep] = useState(1);
-  const [profile, setProfile] = useState<BusinessProfile | null>(null);
   const [documentFile, setDocumentFile] = useState<File | null>(null);
-  const [uploadingDocument, setUploadingDocument] = useState(false);
+
+  const { profile, loading } = useBusinessProfile(user?.id);
+  const { data: sectors = [] } = useSectors();
+  const { data: governorates = [] } = useGovernorates();
+  const profileMutations = useOwnerProfileMutations(user?.id);
 
   // Données du formulaire
   const [formData, setFormData] = useState({
@@ -76,64 +77,35 @@ export default function MyAccount() {
   });
 
   useEffect(() => {
-    const checkAuth = async () => {
-      if (!user) {
-        navigate('/login');
-        return;
-      }
-
-      setLoading(false);
-      await loadProfileData();
-      await loadReferenceData();
-    };
-
-    checkAuth();
+    if (!user) {
+      navigate('/login');
+    }
   }, [user, navigate]);
 
-  const loadProfileData = async () => {
-    try {
-      const profileData = await authService.getBusinessProfile();
-      setProfile(profileData);
-
-      // Pré-remplir le formulaire avec les données existantes
-      setFormData({
-        firstName: profileData?.contact_name?.split(' ')[0] || '',
-        lastName: profileData?.contact_name?.split(' ').slice(1).join(' ') || '',
-        email: user?.email || '',
-        phone: profileData?.contact_phone || '',
-        password: '',
-        confirmPassword: '',
-        businessName: profileData?.business_name || '',
-        taxNumber: profileData?.tax_number || '',
-        businessSectorId: profileData?.business_sector_id || '',
-        businessType:
-          (profileData?.business_type as 'local' | 'national' | 'agency' | 'event_organizer') ||
-          'local',
-        streetAddress: profileData?.street_address || '',
-        city: profileData?.city || '',
-        postalCode: profileData?.postal_code || '',
-        governorateId: profileData?.governorate_id || '',
-        registrationDocUrl: profileData?.registration_doc_url || '',
-        formule: profileData?.formule || '',
-        termsAccepted: true,
-      });
-    } catch (_error) {
-      toast.error('Erreur lors du chargement du profil');
-    }
-  };
-
-  const loadReferenceData = async () => {
-    try {
-      const [sectorsData, governoratesData] = await Promise.all([
-        authService.getBusinessSectors(),
-        authService.getGovernorates(),
-      ]);
-      setSectors(sectorsData);
-      setGovernorates(governoratesData);
-    } catch (error) {
-      log.error({ error }, 'Erreur lors du chargement des données de référence');
-    }
-  };
+  // Pré-remplit le formulaire avec le profil chargé.
+  useEffect(() => {
+    if (!profile) return;
+    setFormData({
+      firstName: profile.contact_name?.split(' ')[0] || '',
+      lastName: profile.contact_name?.split(' ').slice(1).join(' ') || '',
+      email: user?.email || '',
+      phone: profile.contact_phone || '',
+      password: '',
+      confirmPassword: '',
+      businessName: profile.business_name || '',
+      taxNumber: profile.tax_number || '',
+      businessSectorId: profile.business_sector_id || '',
+      businessType:
+        (profile.business_type as 'local' | 'national' | 'agency' | 'event_organizer') || 'local',
+      streetAddress: profile.street_address || '',
+      city: profile.city || '',
+      postalCode: profile.postal_code || '',
+      governorateId: profile.governorate_id || '',
+      registrationDocUrl: profile.registration_doc_url || '',
+      formule: profile.formule || '',
+      termsAccepted: true,
+    });
+  }, [profile, user]);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({
@@ -161,54 +133,15 @@ export default function MyAccount() {
       return;
     }
 
-    setUploadingDocument(true);
     try {
-      const ext = documentFile.name.split('.').pop();
-
-      // Déterminer le type de document selon le profil
-      const isIndividualOwner = profileType === 'individual_owner';
-      const filePrefix = isIndividualOwner ? 'cin' : 'rne';
-      const filePath = `${filePrefix}_${user.id}_${Date.now()}.${ext}`;
-
-      // Upload vers le bucket registres
-      const { error: uploadError } = await supabase.storage
-        .from('registres')
-        .upload(filePath, documentFile);
-
-      if (uploadError) {
-        throw uploadError;
-      }
-
-      // Créer une URL signée
-      const { data: signedData, error: signedError } = await supabase.storage
-        .from('registres')
-        .createSignedUrl(filePath, 604800); // 7 jours
-
-      if (signedError || !signedData) {
-        throw signedError || new Error("Impossible de créer l'URL signée");
-      }
-
-      // Mettre à jour le profil avec l'URL du document
-      const updateField = isIndividualOwner ? 'cin_doc_url' : 'registration_doc_url';
-
-      const { error: updateError } = await supabase
-        .from('business_profiles')
-        .update({ [updateField]: signedData.signedUrl })
-        .eq('user_id', user.id);
-
-      if (updateError) {
-        throw updateError;
-      }
-
-      // Recharger le profil
-      await loadProfileData();
-
+      await profileMutations.uploadDocument.mutateAsync({
+        file: documentFile,
+        isIndividualOwner: profileType === 'individual_owner',
+      });
       setDocumentFile(null);
       toast.success('✅ Document uploadé avec succès !');
     } catch (error) {
       toast.error(`❌ Erreur lors de l'upload: ${getErrorMessage(error) || 'Erreur inconnue'}`);
-    } finally {
-      setUploadingDocument(false);
     }
   };
 
@@ -238,12 +171,12 @@ export default function MyAccount() {
         registration_doc_url: formData.registrationDocUrl,
       };
 
-      await authService.updateBusinessProfile(updateData);
+      await profileMutations.updateBusinessProfile.mutateAsync(updateData);
 
       // Mettre à jour le mot de passe si fourni
       if (formData.password) {
         try {
-          await authService.updatePassword(formData.password);
+          await profileMutations.updatePassword.mutateAsync(formData.password);
         } catch (passwordError) {
           throw new Error(
             `Erreur lors de la mise à jour du mot de passe: ${passwordError instanceof Error ? passwordError.message : 'Erreur inconnue'}`,
@@ -253,8 +186,7 @@ export default function MyAccount() {
 
       toast.success('Profil mis à jour avec succès');
 
-      // Rafraîchir l'affichage sans rechargement complet de la page
-      await loadProfileData();
+      // Rafraîchir le statut de session (la mutation invalide déjà le profil).
       await refreshUserStatus();
 
       // Demander confirmation avant de quitter
@@ -708,10 +640,10 @@ export default function MyAccount() {
                                       <button
                                         type="button"
                                         onClick={handleUploadDocument}
-                                        disabled={uploadingDocument}
+                                        disabled={profileMutations.uploadDocument.isPending}
                                         className="px-4 py-3 bg-[#00B3A6] text-white rounded-lg hover:bg-[#008C82] transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                                       >
-                                        {uploadingDocument ? 'Upload...' : 'Uploader'}
+                                        {profileMutations.uploadDocument.isPending ? 'Upload...' : 'Uploader'}
                                       </button>
                                       <button
                                         type="button"
@@ -799,10 +731,10 @@ export default function MyAccount() {
                                       <button
                                         type="button"
                                         onClick={handleUploadDocument}
-                                        disabled={uploadingDocument}
+                                        disabled={profileMutations.uploadDocument.isPending}
                                         className="px-4 py-3 bg-[#00B3A6] text-white rounded-lg hover:bg-[#008C82] transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                                       >
-                                        {uploadingDocument ? 'Upload...' : 'Uploader'}
+                                        {profileMutations.uploadDocument.isPending ? 'Upload...' : 'Uploader'}
                                       </button>
                                       <button
                                         type="button"
