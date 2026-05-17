@@ -15,7 +15,7 @@ import {
   Info,
   Bell,
 } from 'lucide-react';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
@@ -23,14 +23,14 @@ import { useAuthStore } from '@/features/auth/stores/auth.store';
 import AddScreen from '@/features/screenhost/components/AddScreen';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
 import ScreenCalendar from '@/features/screenhost/components/ScreenCalendar';
-import {
-  screensService,
+import { useOwnerScreensData } from '@/features/screens/hooks/useOwnerScreensData';
+import { useOwnerScreensMutations } from '@/features/screens/hooks/useOwnerScreensMutations';
+import type {
   Screen,
   ScreenStatus,
   UnavailabilityPeriod,
 } from '@/features/screens/services/screens.service';
 import { logger } from '@/lib/logger';
-import { supabase } from '@/lib/supabase';
 
 const log = logger.child({ module: 'OwnerScreens' });
 
@@ -44,9 +44,12 @@ interface _RevenueStats {
 
 export default function OwnerScreens() {
   const navigate = useNavigate();
-  const { user, profileType, needsApproval, validationStatus } = useAuthStore();
+  const { user, needsApproval, validationStatus } = useAuthStore();
   const isDisabled = needsApproval && validationStatus === 'pending';
-  const [loading, setLoading] = useState(true);
+  const ownerScreensQuery = useOwnerScreensData();
+  const { toggleAutoAccept, removeUnavailabilityPeriod: removePeriodMutation } =
+    useOwnerScreensMutations();
+  const loading = ownerScreensQuery.loading;
   const [screens, setScreens] = useState<Screen[]>([]);
   const [selectedScreen, setSelectedScreen] = useState<Screen | null>(null);
   const [showAddScreenModal, setShowAddScreenModal] = useState(false);
@@ -59,62 +62,31 @@ export default function OwnerScreens() {
   const [screenAutoAccept, setScreenAutoAccept] = useState<Map<string, boolean>>(new Map());
   const [updatingScreen, setUpdatingScreen] = useState<string | null>(null);
 
-  // ✅ OPTIMISATION : Éviter les rechargements multiples
-  const hasLoadedData = useRef(false);
-
-  // ✅ OPTIMISATION : Mémoriser loadScreensData avec useCallback
-  const loadScreensData = useCallback(async () => {
-    try {
-      const [screensData, unavailabilityData] = await Promise.all([
-        screensService.getScreens(),
-        screensService.getUnavailabilityPeriods(),
-      ]);
-
-      if (screensData && screensData.length > 0) {
-        screensData.forEach((_screen, _index) => {});
-      }
-
-      setScreens(screensData);
-      setUnavailabilityPeriods(unavailabilityData);
-
-      // Charger les configurations auto_accept pour chaque écran
-      const autoAcceptMap = new Map<string, boolean>();
-      for (const screen of screensData) {
-        const { data: configs, error } = await supabase
-          .from('screen_configurations')
-          .select('auto_accept_campaigns')
-          .eq('screen_id', screen.id);
-
-        // Si erreur ou pas de config, utiliser false par défaut
-        if (error || !configs || configs.length === 0) {
-          autoAcceptMap.set(screen.id, false);
-        } else {
-          autoAcceptMap.set(screen.id, configs[0]?.auto_accept_campaigns || false);
-        }
-      }
-      setScreenAutoAccept(autoAcceptMap);
-
-      setLoading(false);
-      hasLoadedData.current = true; // ✅ Marquer comme chargé
-    } catch (_error) {
-      toast.error('Erreur lors du chargement des écrans');
-      setLoading(false);
+  // Local state mirrors seeded from the useOwnerScreensData React Query
+  // composite. INTENTIONAL Step-10 per-page exception to the invalidate-only
+  // policy: handleStatusChange / handleUnavailabilityAdded /
+  // updateScreenStatusInDatabase / the checkExpiredUnavailability interval are
+  // local-only (unpersisted) edits left untouched per Step 10 scope, so they
+  // need mutable local state. Persistent mutations invalidate screensKeys →
+  // the query refetches → this effect re-seeds the mirrors.
+  useEffect(() => {
+    if (ownerScreensQuery.data) {
+      setScreens(ownerScreensQuery.data.screens);
+      setUnavailabilityPeriods(ownerScreensQuery.data.unavailabilityPeriods);
+      setScreenAutoAccept(ownerScreensQuery.data.autoAccept);
     }
-  }, []); // ✅ Pas de dépendances
+  }, [ownerScreensQuery.data]);
 
-  // ✅ OPTIMISATION : useEffect séparé pour l'authentification
+  useEffect(() => {
+    if (ownerScreensQuery.isError) toast.error('Erreur lors du chargement des écrans');
+  }, [ownerScreensQuery.isError]);
+
+  // useEffect séparé pour l'authentification
   useEffect(() => {
     if (!user) {
       navigate('/login');
     }
   }, [user, navigate]);
-
-  // ✅ OPTIMISATION : useEffect séparé pour le chargement initial
-  useEffect(() => {
-    if (user && !hasLoadedData.current) {
-      loadScreensData();
-    }
-  }, [user, profileType, loadScreensData]);
 
   // ✅ OPTIMISATION : useEffect pour le popup calendrier (inchangé)
   useEffect(() => {
@@ -179,57 +151,9 @@ export default function OwnerScreens() {
     try {
       setUpdatingScreen(screenId);
       const newValue = !currentValue;
-
-      // Vérifier si la configuration existe (sans .single() pour éviter l'erreur 406)
-      const { data: existingConfigs, error: checkError } = await supabase
-        .from('screen_configurations')
-        .select('id')
-        .eq('screen_id', screenId)
-        .limit(1);
-
-      if (checkError) {
-        throw checkError;
-      }
-
-      const exists = existingConfigs && existingConfigs.length > 0;
-
-      if (exists) {
-        // Mettre à jour la configuration existante
-        const { error: updateError } = await supabase
-          .from('screen_configurations')
-          .update({ auto_accept_campaigns: newValue })
-          .eq('screen_id', screenId);
-
-        if (updateError) {
-          throw updateError;
-        }
-      } else {
-        // Créer une nouvelle configuration avec seulement les champs nécessaires
-        const { error: insertError } = await supabase.from('screen_configurations').insert({
-          screen_id: screenId,
-          auto_accept_campaigns: newValue,
-          brightness_level: 100,
-          volume_level: 50,
-          auto_brightness: true,
-          auto_volume: true,
-          timezone: 'Africa/Tunis',
-          language: 'fr',
-          refresh_rate: 60,
-          maintenance_mode: false,
-        });
-
-        if (insertError) {
-          throw insertError;
-        }
-      }
-
-      // Mettre à jour l'état local
-      setScreenAutoAccept((prev) => {
-        const newMap = new Map(prev);
-        newMap.set(screenId, newValue);
-        return newMap;
-      });
-
+      // La mutation upsert screen_configurations puis invalide screensKeys
+      // → la query refetch → l'effet de synchronisation re-seede screenAutoAccept.
+      await toggleAutoAccept.mutateAsync({ screenId, newValue });
       toast.success(
         newValue ? 'Acceptation automatique activée' : 'Acceptation automatique désactivée',
       );
@@ -296,12 +220,8 @@ export default function OwnerScreens() {
 
   const removeUnavailabilityPeriod = async (periodId: string) => {
     try {
-      // Supprimer en base de données
-      await screensService.deleteUnavailabilityPeriod(periodId);
-
-      // Mettre à jour l'état local
-      setUnavailabilityPeriods((prev) => prev.filter((p) => p.id !== periodId));
-
+      // La mutation supprime puis invalide screensKeys → refetch → re-seed.
+      await removePeriodMutation.mutateAsync(periodId);
       toast.success("Période d'indisponibilité supprimée");
     } catch (_error) {
       toast.error('Erreur lors de la suppression de la période');
@@ -1041,7 +961,7 @@ export default function OwnerScreens() {
         isOpen={showAddScreenModal}
         onClose={() => setShowAddScreenModal(false)}
         onScreenAdded={() => {
-          loadScreensData(); // Recharger la liste des écrans
+          // useCreateScreen invalide screensKeys → la query refetch toute seule.
           setShowAddScreenModal(false);
         }}
       />

@@ -11,10 +11,10 @@ import {
 import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 
-import {
+import { useCreateUnavailabilityPeriod } from '@/features/screens/hooks/useCreateUnavailabilityPeriod';
+import type {
   UnavailabilityPeriod,
   Screen as ScreenType,
-  screensService,
 } from '@/features/screens/services/screens.service';
 
 interface ScreenCalendarProps {
@@ -28,6 +28,7 @@ export default function ScreenCalendar({
   onUnavailabilityAdded,
   onClose,
 }: ScreenCalendarProps) {
+  const createPeriod = useCreateUnavailabilityPeriod();
   const [selectedScreens, setSelectedScreens] = useState<string[]>([]);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -277,8 +278,8 @@ export default function ScreenCalendar({
         const screen = screens.find((s) => s.id === screenId);
         if (screen) {
 
-          // Créer la période en base de données
-          const newPeriod = await screensService.createUnavailabilityPeriod({
+          // Créer la période via React Query (invalide screensKeys → refetch parent).
+          const newPeriod = await createPeriod.mutateAsync({
             screen_id: screenId,
             start_date: startDate,
             end_date: endDate,

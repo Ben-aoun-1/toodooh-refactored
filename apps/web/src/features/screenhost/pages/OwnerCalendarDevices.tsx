@@ -1,11 +1,16 @@
 import { Calendar, ChevronLeft, ChevronRight, Megaphone, Users, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
 import OwnerNotificationsBell from '@/features/screenhost/components/OwnerNotificationsBell';
-import { screensService, Screen, UnavailabilityPeriod } from '@/features/screens/services/screens.service';
+import {
+  useCalendarAvailability,
+  type CalendarAvailabilityBatch,
+} from '@/features/screens/hooks/useCalendarAvailability';
+import { useCalendarDevicesData } from '@/features/screens/hooks/useCalendarDevicesData';
+import type { Screen, UnavailabilityPeriod } from '@/features/screens/services/screens.service';
 
 type EstablishmentStatus = 'active' | 'inactive' | 'maintenance' | 'unavailable';
 
@@ -34,34 +39,14 @@ export default function OwnerCalendarDevices() {
   const { user, needsApproval, validationStatus } = useAuthStore();
   const isDisabled = needsApproval && validationStatus === 'pending';
 
-  const [loading, setLoading] = useState(true);
-  const [screens, setScreens] = useState<Screen[]>([]);
-  const [periods, setPeriods] = useState<UnavailabilityPeriod[]>([]);
+  const { screens, periods, loading } = useCalendarDevicesData(user?.id);
+  const applyCalendarAvailability = useCalendarAvailability();
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
   const [selectedEstablishment, setSelectedEstablishment] = useState<string>('all');
   const [selectedDates, setSelectedDates] = useState<string[]>([]);
   const [processingAvailability, setProcessingAvailability] = useState<
     null | 'available' | 'unavailable'
   >(null);
-
-  useEffect(() => {
-    const load = async () => {
-      if (!user?.id) return;
-      setLoading(true);
-      try {
-        await screensService.checkUnavailabilityStatus();
-        const [screensData, periodData] = await Promise.all([
-          screensService.getScreens(),
-          screensService.getUnavailabilityPeriods(),
-        ]);
-        setScreens(screensData || []);
-        setPeriods(periodData || []);
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, [user?.id]);
 
   const establishments = useMemo(() => {
     const byLocation = new Map<
@@ -193,6 +178,11 @@ export default function OwnerCalendarDevices() {
 
     try {
       setProcessingAvailability(target);
+
+      // Le calcul du batch reste ici (dérivé de l'état client : dates/écrans
+      // sélectionnés) ; la mutation useCalendarAvailability exécute les écritures
+      // puis invalide screensKeys → la query refetch.
+      let batch: CalendarAvailabilityBatch;
       if (target === 'unavailable') {
         const toCreate = filteredScreens.flatMap((screen) =>
           selectedDates
@@ -206,23 +196,12 @@ export default function OwnerCalendarDevices() {
               reason: 'Indisponibilité planifiée depuis calendrier',
             })),
         );
-
-        const createdPeriods = await Promise.all(
-          toCreate.map((payload) => screensService.createUnavailabilityPeriod(payload)),
-        );
-        if (createdPeriods.length > 0) setPeriods((prev) => [...prev, ...createdPeriods]);
-
-        await Promise.all(
-          filteredScreens.map((screen) =>
-            screensService.updateScreen(screen.id, { status: 'unavailable' }),
-          ),
-        );
-        setScreens((prev) =>
-          prev.map((screen) =>
-            filteredScreenIds.has(screen.id) ? { ...screen, status: 'unavailable' } : screen,
-          ),
-        );
-        toast.success('Établissement mis en indisponible pour les dates sélectionnées');
+        batch = {
+          toCreate,
+          screensToSetUnavailable: filteredScreens.map((s) => s.id),
+          periodsToDelete: [],
+          screenIdsToActivate: [],
+        };
       } else {
         const selectedDateMillis = new Set(
           selectedDates.map((d) => normalizeDateOnly(d).getTime()),
@@ -238,14 +217,6 @@ export default function OwnerCalendarDevices() {
           return false;
         });
 
-        if (periodsToDelete.length > 0) {
-          await Promise.all(
-            periodsToDelete.map((p) => screensService.deleteUnavailabilityPeriod(p.id)),
-          );
-          const deletedIds = new Set(periodsToDelete.map((p) => p.id));
-          setPeriods((prev) => prev.filter((p) => !deletedIds.has(p.id)));
-        }
-
         const deletedByScreen = new Set(periodsToDelete.map((p) => p.screen_id));
         const remainingPeriods = periods.filter((p) => !periodsToDelete.some((x) => x.id === p.id));
         const screenIdsToActivate = filteredScreens
@@ -259,20 +230,20 @@ export default function OwnerCalendarDevices() {
           })
           .map((s) => s.id);
 
-        if (screenIdsToActivate.length > 0) {
-          await Promise.all(
-            screenIdsToActivate.map((id) => screensService.updateScreen(id, { status: 'active' })),
-          );
-          const activateSet = new Set(screenIdsToActivate);
-          setScreens((prev) =>
-            prev.map((screen) =>
-              activateSet.has(screen.id) ? { ...screen, status: 'active' } : screen,
-            ),
-          );
-        }
-
-        toast.success('Établissement remis disponible pour les dates sélectionnées');
+        batch = {
+          toCreate: [],
+          screensToSetUnavailable: [],
+          periodsToDelete: periodsToDelete.map((p) => p.id),
+          screenIdsToActivate,
+        };
       }
+
+      await applyCalendarAvailability.mutateAsync(batch);
+      toast.success(
+        target === 'unavailable'
+          ? 'Établissement mis en indisponible pour les dates sélectionnées'
+          : 'Établissement remis disponible pour les dates sélectionnées',
+      );
       setSelectedDates([]);
     } catch (_error) {
       toast.error('Erreur lors de la mise à jour des disponibilités');

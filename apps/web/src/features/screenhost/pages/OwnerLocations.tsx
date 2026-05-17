@@ -13,14 +13,15 @@ import {
   CheckCircle,
   XCircle,
 } from 'lucide-react';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import LocationsMap from '@/features/screenhost/components/LocationsMap';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
-import { screensService, Screen } from '@/features/screens/services/screens.service';
+import { useScreens } from '@/features/screens/hooks/useScreens';
+import type { Screen } from '@/features/screens/services/screens.service';
 
 interface LocationStats {
   totalLocations: number;
@@ -32,47 +33,23 @@ interface LocationStats {
 
 export default function OwnerLocations() {
   const navigate = useNavigate();
-  const { user, profileType, needsApproval, validationStatus } = useAuthStore();
+  const { user, needsApproval, validationStatus } = useAuthStore();
   const isDisabled = needsApproval && validationStatus === 'pending';
-  const [loading, setLoading] = useState(true);
-  const [screens, setScreens] = useState<Screen[]>([]);
+  const { screens, loading, isError } = useScreens();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'map' | 'list'>('map');
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
 
-  // ✅ OPTIMISATION : Éviter les rechargements multiples
-  const hasLoadedData = useRef(false);
-
-  // ✅ OPTIMISATION : Mémoriser loadScreensData avec useCallback
-  const loadScreensData = useCallback(async () => {
-    try {
-      setLoading(true);
-
-      const screensData = await screensService.getScreens();
-
-      setScreens(screensData);
-      setLoading(false);
-      hasLoadedData.current = true; // ✅ Marquer comme chargé
-    } catch (_error) {
-      toast.error('Erreur lors du chargement des emplacements');
-      setLoading(false);
-    }
-  }, []); // ✅ Pas de dépendances
-
-  // ✅ OPTIMISATION : useEffect séparé pour l'authentification
   useEffect(() => {
     if (!user) {
       navigate('/login');
     }
   }, [user, navigate]);
 
-  // ✅ OPTIMISATION : useEffect séparé pour le chargement initial
   useEffect(() => {
-    if (user && !hasLoadedData.current) {
-      loadScreensData();
-    }
-  }, [user, profileType, loadScreensData]);
+    if (isError) toast.error('Erreur lors du chargement des emplacements');
+  }, [isError]);
 
   const getStatusColor = (status: string) => {
     switch (status) {

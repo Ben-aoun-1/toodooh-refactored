@@ -2,7 +2,8 @@ import { Plus, X, Save, Info } from 'lucide-react';
 import React, { useState } from 'react';
 import { toast } from 'react-hot-toast';
 
-import { screensService, CreateScreenData } from '@/features/screens/services/screens.service';
+import { useCreateScreen } from '@/features/screens/hooks/useCreateScreen';
+import type { CreateScreenData } from '@/features/screens/services/screens.service';
 import { isErrorWithCode } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 
@@ -15,6 +16,7 @@ interface AddScreenProps {
 }
 
 export default function AddScreen({ isOpen, onClose, onScreenAdded }: AddScreenProps) {
+  const createScreen = useCreateScreen();
   const [formData, setFormData] = useState({
     name: '',
     location: '',
@@ -112,8 +114,8 @@ export default function AddScreen({ isOpen, onClose, onScreenAdded }: AddScreenP
         screenData.resolution_height = height;
       }
 
-      // Créer l'écran via le service
-      await screensService.createScreen(screenData);
+      // Créer l'écran via React Query (invalide screensKeys → refetch).
+      await createScreen.mutateAsync(screenData);
 
       toast.success('Écran ajouté avec succès !');
 
