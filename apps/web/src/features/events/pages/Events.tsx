@@ -4,36 +4,11 @@ import { useNavigate } from 'react-router-dom';
 
 import matchImg from '@/assets/match.png';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
-import { eventsService } from '@/features/events/services/events.service';
-import type { SpecialEvent } from '@/features/events/types/event';
-import { supabase } from '@/lib/supabase';
-
-/** Forme campagne attendue par la page d’édition (comme MyCampaigns). */
-export interface CampaignForEdit {
-  id: string;
-  name: string;
-  client: string;
-  client_id?: string;
-  category: string;
-  startDate: Date;
-  endDate: Date;
-  start_date: string;
-  end_date: string;
-  status: string;
-  views: number;
-  budget: number;
-  location_lat?: number;
-  location_lng?: number;
-  location_radius?: number;
-  video_id?: string;
-  event_id?: string;
-  content_validation_status?: string;
-  created_at?: string;
-  user_id?: string;
-}
+import { useAllEvents } from '@/features/events/hooks/useAllEvents';
+import { useMyEventCampaigns } from '@/features/events/hooks/useMyEventCampaigns';
+import type { CampaignForEdit, SpecialEvent } from '@/features/events/types/event';
 
 const PAGE_SIZE = 6;
-const FETCH_SIZE = 500;
 
 const typeConfig: Record<string, { bg: string; text: string; label: string }> = {
   sport: { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Sport' },
@@ -154,96 +129,13 @@ function EventCard({
 
 export default function Events() {
   const user = useAuthStore((s) => s.user);
-  const [allEvents, setAllEvents] = useState<SpecialEvent[]>([]);
-  const [myEventCampaignsEvents, setMyEventCampaignsEvents] = useState<SpecialEvent[]>([]);
-  const [eventToCampaign, setEventToCampaign] = useState<Map<string, CampaignForEdit>>(new Map());
-  const [loadingMyEvents, setLoadingMyEvents] = useState(true);
-  const [loading, setLoading] = useState(true);
+  const { events: allEvents, loading } = useAllEvents();
+  const { myEventCampaignsEvents, eventToCampaign, loadingMyEvents } = useMyEventCampaigns(
+    user?.id,
+  );
   const [search, setSearch] = useState('');
   const [eventType, setEventType] = useState('');
   const [page, setPage] = useState(1);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoadingMyEvents(true);
-    async function load() {
-      try {
-        const [events, links] = await Promise.all([
-          eventsService.getMyEventCampaignsEvents(),
-          eventsService.getMyEventCampaignLinks(),
-        ]);
-        if (cancelled) return;
-        setMyEventCampaignsEvents(events);
-        const campaignIds = [...new Set(links.map((l) => l.campaign_id))];
-        if (campaignIds.length === 0 || !user?.id) {
-          setEventToCampaign(new Map());
-          return;
-        }
-        const { data: campaignsData, error } = await supabase
-          .from('campaigns')
-          .select('*, client:clients(id, name)')
-          .in('id', campaignIds)
-          .eq('user_id', user.id);
-        if (cancelled) return;
-        if (error || !campaignsData?.length) {
-          setEventToCampaign(new Map());
-          return;
-        }
-        const byId = new Map<string, CampaignForEdit>();
-        campaignsData.forEach((c) => {
-          const camp: CampaignForEdit = {
-            id: c.id,
-            name: c.name,
-            client: c.client?.name || 'N/A',
-            client_id: c.client_id,
-            category: c.category,
-            startDate: new Date(c.start_date),
-            endDate: new Date(c.end_date),
-            start_date: c.start_date,
-            end_date: c.end_date,
-            status: c.status,
-            views: c.views || 0,
-            budget: parseFloat(c.budget) || 0,
-            location_lat: c.location_lat,
-            location_lng: c.location_lng,
-            location_radius: c.location_radius,
-            video_id: c.video_id,
-            event_id: c.event_id ?? undefined,
-            content_validation_status: c.content_validation_status,
-            created_at: c.created_at,
-            user_id: c.user_id,
-          };
-          byId.set(c.id, camp);
-        });
-        const eventToCamp = new Map<string, CampaignForEdit>();
-        links.forEach(({ event_id, campaign_id }) => {
-          const camp = byId.get(campaign_id);
-          if (camp) eventToCamp.set(event_id, camp);
-        });
-        setEventToCampaign(eventToCamp);
-      } finally {
-        if (!cancelled) setLoadingMyEvents(false);
-      }
-    }
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.id]);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    eventsService.getAllEvents(1, FETCH_SIZE).then(({ events: list }) => {
-      if (!cancelled) {
-        setAllEvents(list);
-      }
-      setLoading(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const filteredEvents = useMemo(() => {
     return allEvents.filter((ev) => {

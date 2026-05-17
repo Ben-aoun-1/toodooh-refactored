@@ -102,3 +102,27 @@ export interface EventCampaign {
   linked_at: string;
   linked_by?: string;
 }
+
+/** Forme campagne attendue par la page d'édition (comme MyCampaigns). */
+export interface CampaignForEdit {
+  id: string;
+  name: string;
+  client: string;
+  client_id?: string;
+  category: string;
+  startDate: Date;
+  endDate: Date;
+  start_date: string;
+  end_date: string;
+  status: string;
+  views: number;
+  budget: number;
+  location_lat?: number;
+  location_lng?: number;
+  location_radius?: number;
+  video_id?: string;
+  event_id?: string;
+  content_validation_status?: string;
+  created_at?: string;
+  user_id?: string;
+}
