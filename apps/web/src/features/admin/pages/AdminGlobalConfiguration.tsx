@@ -1,10 +1,13 @@
 import { Loader2, Save } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
 import {
-  globalConfigurationService,
+  useGlobalConfiguration,
+  useUpdateConfiguration,
+} from '@/features/admin/hooks/useGlobalConfiguration';
+import {
   type GlobalConfigurationRow,
   type GlobalConfigurationValueType,
   validateValueForKey,
@@ -21,31 +24,27 @@ function stepForRow(row: GlobalConfigurationRow): string | undefined {
 }
 
 export default function AdminGlobalConfiguration() {
-  const [rows, setRows] = useState<GlobalConfigurationRow[]>([]);
+  const { rows, loading, isError } = useGlobalConfiguration();
+  const updateConfiguration = useUpdateConfiguration();
   const [draft, setDraft] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await globalConfigurationService.list();
-      setRows(data);
-      const next: Record<string, string> = {};
-      data.forEach((r) => {
-        next[r.key] = r.value_text;
-      });
-      setDraft(next);
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Chargement impossible');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  // Seed the editable draft from the loaded rows (guarded on `loading` so the
+  // `query.data ?? []` placeholder does not churn the effect).
+  useEffect(() => {
+    if (loading) return;
+    const next: Record<string, string> = {};
+    rows.forEach((r) => {
+      next[r.key] = r.value_text;
+    });
+    setDraft(next);
+  }, [loading, rows]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    if (isError) {
+      toast.error('Chargement impossible');
+    }
+  }, [isError]);
 
   const handleChange = (key: string, value: string) => {
     setDraft((prev) => ({ ...prev, [key]: value }));
@@ -70,10 +69,9 @@ export default function AdminGlobalConfiguration() {
           return;
         }
 
-        await globalConfigurationService.updateValue(row.key, v.valueText);
+        await updateConfiguration.mutateAsync({ key: row.key, valueText: v.valueText });
       }
       toast.success('Configuration enregistrée');
-      await load();
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Enregistrement impossible');
     } finally {

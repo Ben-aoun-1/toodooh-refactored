@@ -4,19 +4,14 @@ import { toast } from 'react-hot-toast';
 import { useLocation } from 'react-router-dom';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
-import { adminVideoService } from '@/features/admin/services/admin-video.service';
+import { useVideoMutations, useVideos, useVideoStats } from '@/features/admin/hooks/useVideos';
 import { useAdminStore } from '@/features/admin/stores/admin.store';
-import { Video, VideoValidationStats } from '@/features/admin/types/video';
+import type { Video } from '@/features/admin/types/video';
 import { getErrorMessage } from '@/lib/errors';
-import { logger } from '@/lib/logger';
-
-const log = logger.child({ module: 'VideoManagement' });
 
 export default function VideoManagement() {
   const { admin } = useAdminStore();
   const location = useLocation();
-  const [videos, setVideos] = useState<Video[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>(
     'all',
@@ -34,39 +29,22 @@ export default function VideoManagement() {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
-  const [stats, setStats] = useState<VideoValidationStats>({
+
+  const { videos, loading, isError: videosError } = useVideos(statusFilter);
+  const { stats: videoStats } = useVideoStats();
+  const { approveVideo, rejectVideo } = useVideoMutations();
+  const stats = videoStats ?? {
     total_videos: 0,
     pending_videos: 0,
     approved_videos: 0,
     rejected_videos: 0,
-  });
+  };
 
-  // Charger les vidéos et statistiques
   useEffect(() => {
-    loadVideos();
-    loadStats();
-  }, [statusFilter]);
-
-  const loadVideos = async () => {
-    try {
-      setLoading(true);
-      const videosData = await adminVideoService.getVideos(statusFilter);
-      setVideos(videosData);
-    } catch (error) {
-      toast.error(`Erreur lors du chargement des vidéos: ${getErrorMessage(error)}`);
-    } finally {
-      setLoading(false);
+    if (videosError) {
+      toast.error('Erreur lors du chargement des vidéos');
     }
-  };
-
-  const loadStats = async () => {
-    try {
-      const statsData = await adminVideoService.getValidationStats();
-      setStats(statsData);
-    } catch (error) {
-      log.error({ error }, 'Error loading stats');
-    }
-  };
+  }, [videosError]);
 
   const filteredVideos = videos.filter((video) => {
     const matchesSearch =
@@ -95,13 +73,10 @@ export default function VideoManagement() {
     }
 
     try {
-      const success = await adminVideoService.approveVideo(videoId, admin.id);
+      const success = await approveVideo.mutateAsync({ videoId, adminId: admin.id });
 
       if (success) {
         toast.success('Vidéo approuvée avec succès');
-        // Recharger les vidéos pour avoir les données à jour
-        await loadVideos();
-        await loadStats();
       } else {
         toast.error("Erreur lors de l'approbation de la vidéo");
       }
@@ -117,13 +92,10 @@ export default function VideoManagement() {
     }
 
     try {
-      const success = await adminVideoService.rejectVideo(videoId, admin.id);
+      const success = await rejectVideo.mutateAsync({ videoId, adminId: admin.id });
 
       if (success) {
         toast.success('Vidéo rejetée avec succès');
-        // Recharger les vidéos pour avoir les données à jour
-        await loadVideos();
-        await loadStats();
       } else {
         toast.error('Erreur lors du rejet de la vidéo');
       }

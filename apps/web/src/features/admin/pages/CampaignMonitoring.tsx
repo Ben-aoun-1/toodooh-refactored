@@ -25,26 +25,27 @@ import { toast } from 'react-hot-toast';
 import { useLocation } from 'react-router-dom';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
+import {
+  useMonitoringCampaigns,
+  useMonitoringCategories,
+  useMonitoringGlobalStats,
+  useStopCampaign,
+} from '@/features/admin/hooks/useCampaignMonitoring';
 import { adminCampaignMonitoringService } from '@/features/admin/services/admin-campaign-monitoring.service';
 import { useAdminStore } from '@/features/admin/stores/admin.store';
 import {
   CampaignMonitoringData,
-  CampaignGlobalStats,
-  CampaignByCategory,
   CampaignLocation,
   CampaignImpressionProgress,
 } from '@/features/admin/types/campaign-monitoring';
 import { getErrorMessage } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { supabase } from '@/lib/supabase';
 
 const log = logger.child({ module: 'CampaignMonitoring' });
 
 export default function CampaignMonitoring() {
   const { admin } = useAdminStore();
   const location = useLocation();
-  const [campaigns, setCampaigns] = useState<CampaignMonitoringData[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<
     'all' | 'active' | 'pending' | 'completed' | 'paused'
@@ -63,8 +64,11 @@ export default function CampaignMonitoring() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
 
-  // Statistiques
-  const [stats, setStats] = useState<CampaignGlobalStats>({
+  const { campaigns, loading } = useMonitoringCampaigns(!!admin);
+  const { stats: monitoringStats } = useMonitoringGlobalStats(!!admin);
+  const { categories: categoriesData } = useMonitoringCategories(!!admin);
+  const stopCampaign = useStopCampaign();
+  const stats = monitoringStats ?? {
     total_campaigns: 0,
     active_campaigns: 0,
     pending_campaigns: 0,
@@ -74,8 +78,7 @@ export default function CampaignMonitoring() {
     active_budget: 0,
     total_views: 0,
     avg_budget: 0,
-  });
-  const [categoriesData, setCategoriesData] = useState<CampaignByCategory[]>([]);
+  };
 
   // Détecter le filtre depuis l'URL
   useEffect(() => {
@@ -90,34 +93,6 @@ export default function CampaignMonitoring() {
       setStatusFilter(status);
     }
   }, [location.search]);
-
-  useEffect(() => {
-    if (admin) loadData();
-  }, [admin]);
-
-  const loadData = async () => {
-    try {
-      setLoading(true);
-
-      // Charger la liste des campagnes en priorité (affichage rapide).
-      const campaignsData = await adminCampaignMonitoringService.getCampaignsWithScreens();
-      setCampaigns(campaignsData);
-    } catch (_error) {
-      toast.error('Erreur lors du chargement des campagnes');
-    } finally {
-      setLoading(false);
-    }
-
-    // Charger stats et catégories en arrière-plan (sans bloquer le rendu principal)
-    Promise.allSettled([
-      adminCampaignMonitoringService.getGlobalStats(),
-      adminCampaignMonitoringService.getCampaignsByCategory(),
-    ]).then((results) => {
-      const [statsResult, categoriesResult] = results;
-      if (statsResult.status === 'fulfilled') setStats(statsResult.value);
-      if (categoriesResult.status === 'fulfilled') setCategoriesData(categoriesResult.value);
-    });
-  };
 
   // Filtrage des campagnes
   const filteredCampaigns = campaigns.filter((campaign) => {
@@ -189,29 +164,11 @@ export default function CampaignMonitoring() {
     }
 
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error('Non authentifié');
-
-      // Arrêter immédiatement la campagne
-      let { error } = await supabase
-        .from('campaigns')
-        .update({
-          status: 'paused',
-          validation_notes: `⚠️ ARRÊT D'URGENCE par ${admin.full_name}\nRaison: ${stopReason}\nDate: ${new Date().toLocaleString('fr-FR')}`,
-        })
-        .eq('id', campaignToStop.campaign_id);
-
-      if (error?.code === 'PGRST204' && String(error?.message || '').includes('validation_notes')) {
-        const { error: fallbackError } = await supabase
-          .from('campaigns')
-          .update({ status: 'paused' })
-          .eq('id', campaignToStop.campaign_id);
-        error = fallbackError;
-      }
-
-      if (error) throw error;
+      await stopCampaign.mutateAsync({
+        campaignId: campaignToStop.campaign_id,
+        adminFullName: admin.full_name,
+        reason: stopReason,
+      });
 
       toast.success('Campagne arrêtée immédiatement !', {
         icon: '⚠️',
@@ -221,7 +178,6 @@ export default function CampaignMonitoring() {
       setShowStopModal(false);
       setCampaignToStop(null);
       setStopReason('');
-      loadData();
     } catch (error) {
       toast.error(getErrorMessage(error) || "Erreur lors de l'arrêt de la campagne");
     }

@@ -17,22 +17,20 @@ import { toast } from 'react-hot-toast';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
 import {
+  useRecharges,
+  useRechargeStats,
+  useRechargeAdvertisers,
+  useRechargeMutations,
+} from '@/features/admin/hooks/useRecharges';
+import {
   adminRechargesService,
   type AdminRecharge,
-  type RechargeStats,
 } from '@/features/admin/services/admin-recharges.service';
 import { useAdminStore } from '@/features/admin/stores/admin.store';
 import { getErrorMessage, isErrorWithCode } from '@/lib/errors';
-import { logger } from '@/lib/logger';
-import { supabase } from '@/lib/supabase';
-
-const log = logger.child({ module: 'RechargeManagement' });
 
 export default function RechargeManagement() {
   const { admin } = useAdminStore();
-  const [recharges, setRecharges] = useState<AdminRecharge[]>([]);
-  const [stats, setStats] = useState<RechargeStats | null>(null);
-  const [loading, setLoading] = useState(true);
   const [selectedRecharge, setSelectedRecharge] = useState<AdminRecharge | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showValidateModal, setShowValidateModal] = useState(false);
@@ -49,109 +47,60 @@ export default function RechargeManagement() {
     description: '',
     auto_validate: true,
   });
-  const [advertisers, setAdvertisers] = useState<
-    Array<{ user_id: string; business_name: string; email: string }>
-  >([]);
-
   // Filtres et pagination
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalRecharges, setTotalRecharges] = useState(0);
   const [itemsPerPage, setItemsPerPage] = useState(20);
 
+  const {
+    recharges,
+    total: totalRecharges,
+    loading,
+    error: rechargesError,
+  } = useRecharges({
+    status: statusFilter,
+    search: searchTerm,
+    page: currentPage,
+    perPage: itemsPerPage,
+  });
+  const { stats } = useRechargeStats();
+  const { advertisers } = useRechargeAdvertisers();
+  const { approveRecharge, rejectRecharge, createRecharge } = useRechargeMutations();
+
+  // Distingue "table absente" d'une erreur générique, comme l'ancien loadData.
   useEffect(() => {
-    loadData();
-    loadAdvertisers();
-  }, [statusFilter, searchTerm, currentPage, itemsPerPage]);
-
-  const loadAdvertisers = async () => {
-    try {
-      // Récupérer la liste des annonceurs
-      const { data, error } = await supabase
-        .from('business_profiles')
-        .select('user_id, business_name, email')
-        .eq('profile_type', 'advertiser')
-        .eq('status', 'approved')
-        .order('business_name');
-
-      if (error) throw error;
-
-      setAdvertisers(data || []);
-    } catch (error) {
-      log.error({ error }, 'Erreur chargement annonceurs');
-    }
-  };
-
-  const loadData = async () => {
-    try {
-      setLoading(true);
-
-      // Charger les recharges
-      const { data, total } = await adminRechargesService.getRecharges(
-        {
-          status: statusFilter,
-          search: searchTerm,
-        },
-        currentPage,
-        itemsPerPage,
+    if (!rechargesError) return;
+    const err = isErrorWithCode(rechargesError) ? rechargesError : null;
+    if (
+      err?.code === 'PGRST204' ||
+      err?.code === 'PGRST205' ||
+      err?.message?.includes('does not exist')
+    ) {
+      toast.error(
+        "La table recharges n'existe pas encore. Veuillez exécuter create_recharges_table.sql",
+        { duration: 5000 },
       );
-
-      setRecharges(data);
-      setTotalRecharges(total);
-
-      // Charger les stats
-      const statsData = await adminRechargesService.getRechargeStats();
-      setStats(statsData);
-    } catch (error) {
-      const _err = isErrorWithCode(error) ? error : null;
-      log.error({ error }, '❌ Erreur chargement données');
-      log.error({ message: _err?.message, code: _err?.code }, '❌ Détails');
-
-      // Si la table n'existe pas encore
-      if (
-        _err?.code === 'PGRST204' ||
-        _err?.code === 'PGRST205' ||
-        _err?.message?.includes('does not exist')
-      ) {
-        toast.error(
-          "La table recharges n'existe pas encore. Veuillez exécuter create_recharges_table.sql",
-          {
-            duration: 5000,
-          },
-        );
-      } else {
-        toast.error('Erreur lors du chargement des données');
-      }
-
-      // Initialiser avec des données vides
-      setRecharges([]);
-      setTotalRecharges(0);
-      setStats({
-        total_recharges: 0,
-        pending_count: 0,
-        completed_count: 0,
-        failed_count: 0,
-        total_amount: 0,
-        pending_amount: 0,
-        completed_amount: 0,
-      });
-    } finally {
-      setLoading(false);
+    } else {
+      toast.error('Erreur lors du chargement des données');
     }
-  };
+  }, [rechargesError]);
 
   const handleApprove = async () => {
     if (!selectedRecharge || !admin) return;
 
     try {
-      await adminRechargesService.approveRecharge(selectedRecharge.id, admin.id, validationNotes);
+      await approveRecharge.mutateAsync({
+        rechargeId: selectedRecharge.id,
+        adminId: admin.id,
+        advertiserUserId: selectedRecharge.user_id,
+        notes: validationNotes,
+      });
 
       toast.success('Recharge validée avec succès !');
       setShowValidateModal(false);
       setValidationNotes('');
       setSelectedRecharge(null);
-      loadData();
     } catch (_error) {
       toast.error('Erreur lors de la validation');
     }
@@ -164,13 +113,16 @@ export default function RechargeManagement() {
     }
 
     try {
-      await adminRechargesService.rejectRecharge(selectedRecharge.id, admin.id, rejectReason);
+      await rejectRecharge.mutateAsync({
+        rechargeId: selectedRecharge.id,
+        adminId: admin.id,
+        reason: rejectReason,
+      });
 
       toast.success('Recharge rejetée');
       setShowRejectModal(false);
       setRejectReason('');
       setSelectedRecharge(null);
-      loadData();
     } catch (_error) {
       toast.error('Erreur lors du rejet');
     }
@@ -190,27 +142,15 @@ export default function RechargeManagement() {
     }
 
     try {
-      const amount = parseFloat(newRecharge.amount);
-
-      // Créer la recharge
-      const { error } = await supabase
-        .from('recharges')
-        .insert({
-          user_id: newRecharge.user_id,
-          amount: amount,
-          payment_method: newRecharge.payment_method,
-          status: newRecharge.auto_validate ? 'completed' : 'pending',
-          description: newRecharge.description || `Recharge manuelle par ${admin.full_name}`,
-          validated_by: newRecharge.auto_validate ? admin.id : null,
-          validated_at: newRecharge.auto_validate ? new Date().toISOString() : null,
-          validation_notes: newRecharge.auto_validate
-            ? 'Validation automatique lors de la création'
-            : null,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
+      await createRecharge.mutateAsync({
+        userId: newRecharge.user_id,
+        amount: parseFloat(newRecharge.amount),
+        paymentMethod: newRecharge.payment_method,
+        description: newRecharge.description,
+        autoValidate: newRecharge.auto_validate,
+        adminId: admin.id,
+        adminFullName: admin.full_name,
+      });
 
       toast.success(
         newRecharge.auto_validate
@@ -227,7 +167,6 @@ export default function RechargeManagement() {
         auto_validate: true,
       });
       setShowCreateModal(false);
-      loadData();
     } catch (error) {
       toast.error(getErrorMessage(error) || 'Erreur lors de la création de la recharge');
     }
