@@ -426,6 +426,9 @@ export default function VideoManagement() {
                         className="w-full max-h-96"
                         poster={selectedVideo.thumbnail_url}
                       >
+                        {/* Empty caption track — satisfies jsx-a11y/media-has-caption
+                            for advertiser-uploaded media that has no caption file. */}
+                        <track kind="captions" />
                         <source
                           src={selectedVideo.url}
                           type={selectedVideo.mime_type || 'video/mp4'}

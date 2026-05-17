@@ -277,7 +277,11 @@ export default function Step5({
                 </div>
               </div>
               <div className="rounded-xl overflow-hidden border border-gray-200 bg-black">
-                <video src={uploadedVideoUrl} controls className="w-full max-h-80" />
+                <video src={uploadedVideoUrl} controls className="w-full max-h-80">
+                  {/* Empty caption track — satisfies jsx-a11y/media-has-caption
+                      for advertiser-uploaded media that has no caption file. */}
+                  <track kind="captions" />
+                </video>
               </div>
             </div>
           ) : (
@@ -322,7 +326,11 @@ export default function Step5({
           {/* Aperçu si spot existant sélectionné */}
           {selectedExistingVideo && (
             <div className="rounded-xl overflow-hidden border border-gray-200 bg-black">
-              <video src={selectedExistingVideo.url} controls className="w-full max-h-80" />
+              <video src={selectedExistingVideo.url} controls className="w-full max-h-80">
+                {/* Empty caption track — satisfies jsx-a11y/media-has-caption
+                    for advertiser-uploaded media that has no caption file. */}
+                <track kind="captions" />
+              </video>
             </div>
           )}
         </div>

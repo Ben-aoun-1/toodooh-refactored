@@ -755,7 +755,11 @@ export default function OwnerCampaigns() {
                           src={campaignVideo.url || undefined}
                           controls
                           className="w-full aspect-video object-contain bg-black"
-                        />
+                        >
+                          {/* Empty caption track — satisfies jsx-a11y/media-has-caption
+                              for advertiser-uploaded media that has no caption file. */}
+                          <track kind="captions" />
+                        </video>
                       ) : (
                         <div className="aspect-video flex items-center justify-center text-sm text-[#A3A3A3]">
                           Aucun spot

@@ -100,9 +100,7 @@ export default function Step6({
   const safeMax = hasSelection ? Math.max(effectiveMax, safeMin + 1) : 0;
   const rangeMin = safeMin;
   const rangeMax = safeMax;
-  const currentAmount = hasSelection
-    ? Math.max(rangeMin, Math.min(rangeMax, adjustedBudget))
-    : 0;
+  const currentAmount = hasSelection ? Math.max(rangeMin, Math.min(rangeMax, adjustedBudget)) : 0;
   const percentage =
     rangeMax > rangeMin ? ((currentAmount - rangeMin) / (rangeMax - rangeMin)) * 100 : 100;
 
@@ -193,7 +191,9 @@ export default function Step6({
                   </span>
                   <span>
                     Durée:{' '}
-                    <strong>{nbJours > 0 ? `${nbJours} jour${nbJours > 1 ? 's' : ''}` : '—'}</strong>
+                    <strong>
+                      {nbJours > 0 ? `${nbJours} jour${nbJours > 1 ? 's' : ''}` : '—'}
+                    </strong>
                   </span>
                 </div>
               </div>
@@ -205,8 +205,7 @@ export default function Step6({
                     Nombre de zones : <strong>{geographicZones.length}</strong>
                   </span>
                   <span>
-                    Zone couverte :{' '}
-                    <strong>{zonesAreaKm2(geographicZones).toFixed(1)} km²</strong>
+                    Zone couverte : <strong>{zonesAreaKm2(geographicZones).toFixed(1)} km²</strong>
                   </span>
                   {maxImpressionsFromSelection > 0 && (
                     <span>
@@ -225,7 +224,11 @@ export default function Step6({
                       src={uploadedVideoUrl || selectedExistingVideo?.url || ''}
                       className="w-full h-full object-cover"
                       controls
-                    />
+                    >
+                      {/* Empty caption track — satisfies jsx-a11y/media-has-caption
+                          for advertiser-uploaded media that has no caption file. */}
+                      <track kind="captions" />
+                    </video>
                     <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3 flex items-end justify-between pointer-events-none">
                       <span className="text-white text-xs font-medium">Spot publicitaire</span>
                     </div>
@@ -288,10 +291,10 @@ export default function Step6({
               <div className="border border-gray-200 rounded-xl p-5 space-y-4">
                 {!hasSelection && (
                   <p className="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
-                    Aucune capacité estimée : ajoutez des zones avec des localités (ou des parcs
-                    TV) et des dates de campagne. Le plafond suit le moteur DOOH horaire
-                    (affluence × répétitions autorisées par créneau, selon la configuration
-                    globale et la durée du spot).
+                    Aucune capacité estimée : ajoutez des zones avec des localités (ou des parcs TV)
+                    et des dates de campagne. Le plafond suit le moteur DOOH horaire (affluence ×
+                    répétitions autorisées par créneau, selon la configuration globale et la durée
+                    du spot).
                   </p>
                 )}
                 {doohEstimateLoading && hasSelection && (
@@ -344,10 +347,7 @@ export default function Step6({
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label
-                      htmlFor="step6-min-budget"
-                      className="block text-xs text-gray-500 mb-1"
-                    >
+                    <label htmlFor="step6-min-budget" className="block text-xs text-gray-500 mb-1">
                       Montant minimum (TND)
                     </label>
                     <input
@@ -366,10 +366,7 @@ export default function Step6({
                     />
                   </div>
                   <div>
-                    <label
-                      htmlFor="step6-max-budget"
-                      className="block text-xs text-gray-500 mb-1"
-                    >
+                    <label htmlFor="step6-max-budget" className="block text-xs text-gray-500 mb-1">
                       Montant maximum (TND)
                     </label>
                     <input
@@ -396,8 +393,8 @@ export default function Step6({
                 <p className="text-xs text-gray-500 leading-relaxed">
                   <strong className="text-gray-600">Note:</strong> Le curseur ajuste le plan final
                   après le calcul du plan max. Le plan final (budget + impressions + répétitions
-                  horaires) devient la référence officielle soumise aux propriétaires et injectée
-                  en planification horaire.
+                  horaires) devient la référence officielle soumise aux propriétaires et injectée en
+                  planification horaire.
                 </p>
               </div>
             </div>

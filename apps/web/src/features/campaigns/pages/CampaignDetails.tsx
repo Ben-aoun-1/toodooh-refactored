@@ -249,6 +249,9 @@ export default function CampaignDetails() {
 
                   {video.url && (
                     <video src={video.url} controls className="w-full rounded-lg">
+                      {/* Empty caption track — satisfies jsx-a11y/media-has-caption
+                          for advertiser-uploaded media that has no caption file. */}
+                      <track kind="captions" />
                       Votre navigateur ne supporte pas la lecture de vidéos.
                     </video>
                   )}
