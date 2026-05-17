@@ -11,16 +11,17 @@ describe('advertiserKeys', () => {
     expect(advertiserKeys.profile('u1')[0]).toBe('advertiser');
     expect(advertiserKeys.globalConfig()[0]).toBe('advertiser');
     expect(advertiserKeys.clients('u1')[0]).toBe('advertiser');
+    expect(advertiserKeys.notifications('u1')[0]).toBe('advertiser');
+  });
+
+  it('keys the notification feed per user', () => {
+    expect(advertiserKeys.notifications('u1')).toEqual(['advertiser', 'notifications', 'u1']);
+    expect(advertiserKeys.notifications('u1')).not.toEqual(advertiserKeys.notifications('u2'));
   });
 
   it('builds hierarchical [feature, view, ...args] tuples', () => {
     expect(advertiserKeys.dashboardStats('u1')).toEqual(['advertiser', 'dashboardStats', 'u1']);
-    expect(advertiserKeys.lastCampaigns('u1', 5)).toEqual([
-      'advertiser',
-      'lastCampaigns',
-      'u1',
-      5,
-    ]);
+    expect(advertiserKeys.lastCampaigns('u1', 5)).toEqual(['advertiser', 'lastCampaigns', 'u1', 5]);
     expect(advertiserKeys.featuredEvents(3)).toEqual(['advertiser', 'featuredEvents', 3]);
     expect(advertiserKeys.profile('u1')).toEqual(['advertiser', 'profile', 'u1']);
     expect(advertiserKeys.globalConfig()).toEqual(['advertiser', 'globalConfig']);

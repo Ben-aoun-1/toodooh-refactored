@@ -17,4 +17,7 @@ export const screenhostKeys = {
   /** OwnerCampaigns composite: every campaign touching the owner's parc. */
   campaignsOverview: (userId: string) =>
     [...screenhostKeys.all, 'campaignsOverview', userId] as const,
+
+  /** The owner notification-bell feed (Commit 8 — D5). */
+  notifications: (userId: string) => [...screenhostKeys.all, 'notifications', userId] as const,
 };

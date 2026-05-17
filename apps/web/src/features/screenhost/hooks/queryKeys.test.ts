@@ -19,8 +19,18 @@ describe('screenhostKeys', () => {
     );
   });
 
-  it('keeps the overview key prefix-matchable by screenhostKeys.all', () => {
-    const key = screenhostKeys.campaignsOverview('u1');
-    expect(key.slice(0, screenhostKeys.all.length)).toEqual(screenhostKeys.all);
+  it('keys the notification feed per user', () => {
+    expect(screenhostKeys.notifications('u1')).toEqual(['screenhost', 'notifications', 'u1']);
+    expect(screenhostKeys.notifications('u1')).not.toEqual(screenhostKeys.notifications('u2'));
+    expect(screenhostKeys.notifications('u1')).not.toEqual(screenhostKeys.campaignsOverview('u1'));
+  });
+
+  it('keeps every view key prefix-matchable by screenhostKeys.all', () => {
+    for (const key of [
+      screenhostKeys.campaignsOverview('u1'),
+      screenhostKeys.notifications('u1'),
+    ]) {
+      expect(key.slice(0, screenhostKeys.all.length)).toEqual(screenhostKeys.all);
+    }
   });
 });

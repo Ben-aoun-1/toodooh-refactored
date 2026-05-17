@@ -2,41 +2,7 @@ import { Bell, CalendarDays, FileText, Settings, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { campaignOwnerApprovalService } from '@/features/campaigns/services/campaign-owner-approval.service';
-import { logger } from '@/lib/logger';
-import { supabase } from '@/lib/supabase';
-
-const log = logger.child({ module: 'OwnerNotificationsBell' });
-
-type OwnerNotificationKind =
-  | 'campaign_validated_reminder'
-  | 'event_validated_reminder'
-  | 'campaign_validation_received'
-  | 'campaign_started'
-  | 'campaign_ended'
-  | 'bank_coordinates_validated';
-
-type OwnerNotification = {
-  id: string;
-  kind: OwnerNotificationKind;
-  title: string;
-  timestamp: Date;
-  actionLabel: string;
-  action: () => void;
-};
-
-type NotificationPrefs = {
-  notify_news_updates: boolean;
-  notify_reminders_events: boolean;
-  notify_promotions_offers: boolean;
-  verification_status: string | null;
-};
-
-const toDate = (value?: string | null) => {
-  if (!value) return null;
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d;
-};
+import { useOwnerNotifications } from '@/features/screenhost/hooks/useOwnerNotifications';
 
 const relativeTime = (date: Date) => {
   const diff = Math.max(0, Date.now() - date.getTime());
@@ -49,32 +15,22 @@ const relativeTime = (date: Date) => {
   return `il y a ${days} j`;
 };
 
-const isWithinHours = (target: Date, fromNow: number, toNow: number) => {
-  const diffHours = (target.getTime() - Date.now()) / (1000 * 60 * 60);
-  return diffHours >= fromNow && diffHours <= toNow;
-};
-
 export default function OwnerNotificationsBell({ userId }: { userId?: string }) {
   const navigate = useNavigate();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [items, setItems] = useState<OwnerNotification[]>([]);
-  const [readIds, setReadIds] = useState<Set<string>>(new Set());
-  const notificationScope = 'owner' as const;
   const autoOpenedRef = useRef(false);
-  const [_prefs, setPrefs] = useState<NotificationPrefs>({
-    notify_news_updates: false,
-    notify_reminders_events: true,
-    notify_promotions_offers: false,
-    verification_status: null,
-  });
 
+  // Feed + mark-read via React Query (Commit 8 — D5). Optimistic-with-rollback
+  // mutation; the 60 s poll is the hook's `refetchInterval`.
+  const { items, readIds, loading, refetch, markRead, markAllRead } = useOwnerNotifications(userId);
+
+  const readIdSet = useMemo(() => new Set(readIds), [readIds]);
   const unreadCount = useMemo(
-    () => items.filter((n) => !readIds.has(n.id)).length,
-    [items, readIds],
+    () => items.filter((n) => !readIdSet.has(n.id)).length,
+    [items, readIdSet],
   );
-  const visibleItems = useMemo(() => items.filter((n) => !readIds.has(n.id)), [items, readIds]);
+  const visibleItems = useMemo(() => items.filter((n) => !readIdSet.has(n.id)), [items, readIdSet]);
 
   useEffect(() => {
     const onClickOutside = (e: MouseEvent) => {
@@ -87,224 +43,6 @@ export default function OwnerNotificationsBell({ userId }: { userId?: string }) 
     return () => document.removeEventListener('mousedown', onClickOutside);
   }, []);
 
-  const loadNotifications = async () => {
-    if (!userId) return;
-    setLoading(true);
-    try {
-      const [{ data: profile }, { data: reads }] = await Promise.all([
-        supabase
-          .from('business_profiles')
-          .select(
-            'notify_news_updates, notify_reminders_events, notify_promotions_offers, verification_status',
-          )
-          .eq('user_id', userId)
-          .single(),
-        supabase
-          .from('user_notification_reads')
-          .select('notification_id')
-          .eq('user_id', userId)
-          .eq('scope', notificationScope),
-      ]);
-
-      const mergedPrefs: NotificationPrefs = {
-        notify_news_updates: profile?.notify_news_updates ?? false,
-        notify_reminders_events: profile?.notify_reminders_events ?? true,
-        notify_promotions_offers: profile?.notify_promotions_offers ?? false,
-        verification_status: profile?.verification_status ?? null,
-      };
-      setPrefs(mergedPrefs);
-
-      const [ownerLocations, ownerScreens, ownerApprovals, pendingCampaigns] = await Promise.all([
-        supabase.from('locations').select('id').eq('owner_id', userId),
-        supabase.from('screens').select('id, name').eq('owner_id', userId),
-        supabase
-          .from('campaign_owner_approvals')
-          .select('campaign_id, status, created_at, updated_at')
-          .eq('owner_id', userId),
-        campaignOwnerApprovalService.getPendingCampaigns(userId),
-      ]);
-
-      const locationIds = (ownerLocations.data || []).map((r: { id: string }) => r.id);
-      const screenIds = (ownerScreens.data || []).map((r: { id: string }) => r.id);
-
-      const [campaignLocations, campaignScreens] = await Promise.all([
-        locationIds.length
-          ? supabase.from('campaign_locations').select('campaign_id').in('location_id', locationIds)
-          : Promise.resolve({ data: [] as Array<{ campaign_id: string }> }),
-        screenIds.length
-          ? supabase.from('campaign_screens').select('campaign_id').in('screen_id', screenIds)
-          : Promise.resolve({ data: [] as Array<{ campaign_id: string }> }),
-      ]);
-
-      const campaignIds = Array.from(
-        new Set(
-          [
-            ...((ownerApprovals.data || []) as Array<{ campaign_id: string }>).map(
-              (r) => r.campaign_id,
-            ),
-            ...((campaignLocations.data || []) as Array<{ campaign_id: string }>).map(
-              (r) => r.campaign_id,
-            ),
-            ...((campaignScreens.data || []) as Array<{ campaign_id: string }>).map(
-              (r) => r.campaign_id,
-            ),
-          ].filter(Boolean),
-        ),
-      );
-
-      const campaignsRes =
-        campaignIds.length > 0
-          ? await supabase
-              .from('campaigns')
-              .select('id, name, start_date, end_date, status, event_id, created_at, updated_at')
-              .in('id', campaignIds)
-          // TODO(phase-1): typed source [supabase] — see #15
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          : { data: [] as any[] };
-
-      const campaigns = campaignsRes.data || [];
-      // TODO(phase-1): typed source [internal] — see #15
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const campaignById = new Map<string, any>(campaigns.map((c) => [c.id, c]));
-      const approvals = (ownerApprovals.data || []) as Array<{
-        campaign_id: string;
-        status: string;
-        created_at: string;
-        updated_at: string;
-      }>;
-
-      const generated: OwnerNotification[] = [];
-
-      // 1) Réception campagne pour validation
-      (pendingCampaigns || [])
-        .filter((c) => (c.approval_status || 'pending') === 'pending')
-        .forEach((pending) => {
-          const c = campaignById.get(pending.campaign_id) || pending;
-          const ref = approvals.find((a) => a.campaign_id === pending.campaign_id);
-          generated.push({
-            id: `pending-${pending.campaign_id}`,
-            kind: 'campaign_validation_received',
-            title: `Réception campagne pour validation : ${c.name || 'Campagne'}`,
-            timestamp:
-              toDate(ref?.updated_at) ||
-              toDate(ref?.created_at) ||
-              // TODO(phase-1): typed source [supabase] — see #15
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              toDate((c as any)?.campaign_start_date) ||
-              new Date(),
-            actionLabel: 'Consulter la campagne',
-            action: () => navigate('/owner-campaign-approvals'),
-          });
-        });
-
-      // 2/3/4/5) Rappels + début/fin
-      campaigns.forEach((c) => {
-        const start = toDate(c.start_date);
-        const end = toDate(c.end_date);
-        if (!start || !end) return;
-
-        // Rappel campagne validée J-1
-        if (!c.event_id && isWithinHours(start, 0, 30)) {
-          generated.push({
-            id: `reminder-campaign-${c.id}`,
-            kind: 'campaign_validated_reminder',
-            title: `Rappel campagne validée (à venir) (J-1) : ${c.name || 'Campagne'}`,
-            timestamp: start,
-            actionLabel: 'Consulter la campagne',
-            action: () => navigate('/owner-campaign-approvals'),
-          });
-        }
-
-        // Rappel événement validé H-4
-        if (c.event_id && isWithinHours(start, 0, 4)) {
-          generated.push({
-            id: `reminder-event-${c.id}`,
-            kind: 'event_validated_reminder',
-            title: `Rappel événement validé (à venir) (H-4) : ${c.name || 'Campagne événement'}`,
-            timestamp: start,
-            actionLabel: 'Consulter la campagne',
-            action: () => navigate('/owner-campaign-approvals'),
-          });
-        }
-
-        const now = Date.now();
-        const startMs = start.getTime();
-        const endMs = end.getTime();
-
-        // Début campagne (sur les 24h qui suivent le début)
-        if (now >= startMs && now - startMs <= 24 * 60 * 60 * 1000) {
-          generated.push({
-            id: `start-${c.id}`,
-            kind: 'campaign_started',
-            title: `Début campagne : ${c.name || 'Campagne'}`,
-            timestamp: start,
-            actionLabel: 'Consulter la campagne',
-            action: () => navigate(`/owner-campaigns?openCampaignId=${c.id}`),
-          });
-        }
-
-        // Fin campagne (sur les 24h suivant la fin)
-        if (now >= endMs && now - endMs <= 24 * 60 * 60 * 1000) {
-          generated.push({
-            id: `end-${c.id}`,
-            kind: 'campaign_ended',
-            title: `Fin campagne : ${c.name || 'Campagne'}`,
-            timestamp: end,
-            actionLabel: 'Consulter la campagne',
-            action: () => navigate(`/owner-campaigns?openCampaignId=${c.id}`),
-          });
-        }
-      });
-
-      // 6) Validation coordonnées bancaires (proxy via profile vérifié)
-      if (mergedPrefs.verification_status === 'verified') {
-        generated.push({
-          id: 'bank-coordinates-validated',
-          kind: 'bank_coordinates_validated',
-          title: 'Validation coordonnées bancaires',
-          timestamp: new Date(),
-          actionLabel: 'Ouvrir les paramètres',
-          action: () => navigate('/owner-settings?tab=entreprise&sub=informations'),
-        });
-      }
-
-      const visible = generated
-        .filter((item) => {
-          if (item.kind === 'campaign_validation_received')
-            return mergedPrefs.notify_reminders_events;
-          if (item.kind === 'bank_coordinates_validated') return mergedPrefs.notify_news_updates;
-          if (
-            item.kind === 'campaign_validated_reminder' ||
-            item.kind === 'event_validated_reminder' ||
-            item.kind === 'campaign_started' ||
-            item.kind === 'campaign_ended'
-          ) {
-            return mergedPrefs.notify_reminders_events;
-          }
-          return true;
-        })
-        .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
-        .slice(0, 12);
-
-      setItems(visible);
-      setReadIds(new Set((reads || []).map((r: { notification_id: string }) => r.notification_id)));
-    } catch (error) {
-      log.error({ error }, 'Erreur chargement notifications propriétaire');
-      setItems([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!userId) return;
-    void loadNotifications();
-    const intervalId = window.setInterval(() => {
-      void loadNotifications();
-    }, 60000);
-    return () => window.clearInterval(intervalId);
-  }, [userId]);
-
   useEffect(() => {
     if (unreadCount > 0 && !open && !autoOpenedRef.current) {
       setOpen(true);
@@ -315,47 +53,10 @@ export default function OwnerNotificationsBell({ userId }: { userId?: string }) 
     }
   }, [unreadCount, open]);
 
-  const handleOpen = async () => {
+  const handleOpen = () => {
     const next = !open;
     setOpen(next);
-    if (next) await loadNotifications();
-  };
-
-  const markRead = async (id: string) => {
-    if (!userId) return;
-    setReadIds((prev) => new Set(prev).add(id));
-    const { error } = await supabase.from('user_notification_reads').upsert(
-      {
-        user_id: userId,
-        scope: notificationScope,
-        notification_id: id,
-        read_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id,scope,notification_id' },
-    );
-    if (error) {
-      log.error({ error }, 'Erreur marquage notification lue (proprio)');
-    }
-  };
-
-  const markAllRead = async () => {
-    if (!userId || items.length === 0) return;
-    const ids = items.map((item) => item.id);
-    setReadIds(new Set(ids));
-    const rows = ids.map((id) => ({
-      user_id: userId,
-      scope: notificationScope,
-      notification_id: id,
-      read_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    }));
-    const { error } = await supabase
-      .from('user_notification_reads')
-      .upsert(rows, { onConflict: 'user_id,scope,notification_id' });
-    if (error) {
-      log.error({ error }, 'Erreur marquage toutes notifications lues (proprio)');
-    }
+    if (next) refetch();
   };
 
   return (
@@ -396,7 +97,7 @@ export default function OwnerNotificationsBell({ userId }: { userId?: string }) 
               <div className="px-5 py-8 text-sm text-gray-500">Aucune notification à afficher.</div>
             ) : (
               visibleItems.map((item) => {
-                const isRead = readIds.has(item.id);
+                const isRead = readIdSet.has(item.id);
                 return (
                   <div key={item.id} className="px-5 py-4 border-b border-gray-100">
                     <div className="flex items-start gap-3">
@@ -421,7 +122,7 @@ export default function OwnerNotificationsBell({ userId }: { userId?: string }) 
                           {!isRead ? (
                             <button
                               type="button"
-                              onClick={() => void markRead(item.id)}
+                              onClick={() => markRead(item.id)}
                               className="h-10 px-4 rounded-xl border border-gray-200 bg-white text-sm leading-none text-[#5C5C5C] font-medium hover:bg-gray-50"
                             >
                               Marquer comme lu
@@ -430,9 +131,9 @@ export default function OwnerNotificationsBell({ userId }: { userId?: string }) 
                           <button
                             type="button"
                             onClick={() => {
-                              void markRead(item.id);
+                              markRead(item.id);
                               setOpen(false);
-                              item.action();
+                              navigate(item.actionPath);
                             }}
                             className="h-10 px-4 rounded-xl bg-[#9AE2B0] text-sm leading-none text-[#101010] font-semibold hover:bg-[#85D99E]"
                           >

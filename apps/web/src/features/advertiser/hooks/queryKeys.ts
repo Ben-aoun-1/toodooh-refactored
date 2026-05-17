@@ -33,4 +33,7 @@ export const advertiserKeys = {
   globalConfig: () => [...advertiserKeys.all, 'globalConfig'] as const,
 
   clients: (userId: string) => [...advertiserKeys.all, 'clients', userId] as const,
+
+  /** The advertiser notification-bell feed (Commit 8 — D5). */
+  notifications: (userId: string) => [...advertiserKeys.all, 'notifications', userId] as const,
 };
