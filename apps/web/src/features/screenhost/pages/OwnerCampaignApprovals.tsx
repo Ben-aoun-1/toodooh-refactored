@@ -110,7 +110,7 @@ export default function OwnerCampaignApprovals() {
     return (
       <div className="min-h-screen bg-gray-50/80 flex items-center justify-center">
         <div className="text-center rounded-2xl bg-white border border-gray-200 px-8 py-7 shadow-sm">
-          <RefreshCw className="h-8 w-8 animate-spin text-[#00B3A6] mx-auto mb-3" />
+          <RefreshCw className="h-8 w-8 animate-spin text-brand-primary mx-auto mb-3" />
           <p className="text-sm font-medium text-gray-700">Chargement des campagnes...</p>
         </div>
       </div>
@@ -233,7 +233,7 @@ export default function OwnerCampaignApprovals() {
                             </h3>
                             <div className="flex flex-wrap gap-4 text-sm text-gray-600">
                               <div className="flex items-center">
-                                <Calendar className="h-4 w-4 mr-2 text-[#00B3A6]" />
+                                <Calendar className="h-4 w-4 mr-2 text-brand-primary" />
                                 <span>
                                   Du {formatDate(campaign.campaign_start_date)} au{' '}
                                   {formatDate(campaign.campaign_end_date)}
@@ -274,7 +274,7 @@ export default function OwnerCampaignApprovals() {
                             ).map((name, index) => (
                               <span
                                 key={index}
-                                className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-[#00B3A6]/10 text-[#00B3A6] border border-[#00B3A6]/20"
+                                className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-brand-primary/10 text-brand-primary border border-brand-primary/20"
                               >
                                 <Monitor className="h-3 w-3 mr-1" />
                                 {name || 'Écran'}

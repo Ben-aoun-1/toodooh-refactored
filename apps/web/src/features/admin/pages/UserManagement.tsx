@@ -415,7 +415,7 @@ export default function UserManagement() {
       <AdminLayout title="Gestion des Utilisateurs" subtitle="Validez et gérez les inscriptions">
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[#00B3A6] mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-brand-primary mx-auto mb-4"></div>
             <p className="text-gray-600">Chargement des utilisateurs...</p>
           </div>
         </div>
@@ -437,7 +437,7 @@ export default function UserManagement() {
                 placeholder="Rechercher par nom, entreprise, téléphone ou ville..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
               />
             </div>
           </div>
@@ -447,7 +447,7 @@ export default function UserManagement() {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
             >
               <option value="all">Tous les statuts</option>
               <option value="pending">En attente</option>
@@ -461,7 +461,7 @@ export default function UserManagement() {
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value as typeof typeFilter)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
             >
               <option value="all">Tous les types</option>
               <option value="individual_owner">Propriétaire Individuel</option>
@@ -597,7 +597,7 @@ export default function UserManagement() {
                       paginatedUsers.every((user) => selectedUsers.has(user.id))
                     }
                     onChange={handleSelectAll}
-                    className="h-4 w-4 text-[#00B3A6] focus:ring-[#00B3A6] border-gray-300 rounded"
+                    className="h-4 w-4 text-brand-primary focus:ring-brand-primary border-gray-300 rounded"
                   />
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -628,12 +628,12 @@ export default function UserManagement() {
                       type="checkbox"
                       checked={selectedUsers.has(user.id)}
                       onChange={() => handleSelectUser(user.id)}
-                      className="h-4 w-4 text-[#00B3A6] focus:ring-[#00B3A6] border-gray-300 rounded"
+                      className="h-4 w-4 text-brand-primary focus:ring-brand-primary border-gray-300 rounded"
                     />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      <div className="h-10 w-10 bg-[#00B3A6] rounded-full flex items-center justify-center">
+                      <div className="h-10 w-10 bg-brand-primary rounded-full flex items-center justify-center">
                         <span className="text-white text-sm font-medium">
                           {user.contact_name.charAt(0).toUpperCase()}
                         </span>
@@ -659,7 +659,7 @@ export default function UserManagement() {
                           setDocumentFile(null); // Réinitialiser le fichier
                           setAgentCodeInput(user.agent_toodooh || '');
                         }}
-                        className="text-[#00B3A6] hover:text-[#00B3A6]/80"
+                        className="text-brand-primary hover:text-brand-primary/80"
                         title="Voir détails"
                       >
                         <Eye className="h-4 w-4" />
@@ -745,7 +745,7 @@ export default function UserManagement() {
                       onClick={() => setCurrentPage(idx + 1)}
                       className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
                         currentPage === idx + 1
-                          ? 'z-10 bg-[#00B3A6] border-[#00B3A6] text-white'
+                          ? 'z-10 bg-brand-primary border-brand-primary text-white'
                           : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
                       }`}
                     >
@@ -777,7 +777,7 @@ export default function UserManagement() {
             <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full">
               <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                 <div className="sm:flex sm:items-start">
-                  <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-[#00B3A6] sm:mx-0 sm:h-10 sm:w-10">
+                  <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-brand-primary sm:mx-0 sm:h-10 sm:w-10">
                     <Users className="h-6 w-6 text-white" />
                   </div>
                   <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
@@ -791,7 +791,7 @@ export default function UserManagement() {
                       <div className="space-y-4">
                         <div className="bg-gray-50 p-4 rounded-lg">
                           <h4 className="font-semibold text-gray-900 mb-3 flex items-center">
-                            <User className="h-5 w-5 mr-2 text-[#00B3A6]" />
+                            <User className="h-5 w-5 mr-2 text-brand-primary" />
                             Informations personnelles
                           </h4>
                           <div className="space-y-2 text-sm">
@@ -805,7 +805,7 @@ export default function UserManagement() {
                               <span className="text-gray-600">Email:</span>
                               <a
                                 href={`mailto:${selectedUser.email}`}
-                                className="font-medium text-[#00B3A6] hover:text-[#008C82] flex items-center"
+                                className="font-medium text-brand-primary hover:text-[#008C82] flex items-center"
                               >
                                 <Mail className="h-3 w-3 mr-1" />
                                 {selectedUser.email}
@@ -826,7 +826,7 @@ export default function UserManagement() {
 
                         <div className="bg-gray-50 p-4 rounded-lg">
                           <h4 className="font-semibold text-gray-900 mb-3 flex items-center">
-                            <Building className="h-5 w-5 mr-2 text-[#00B3A6]" />
+                            <Building className="h-5 w-5 mr-2 text-brand-primary" />
                             Informations entreprise
                           </h4>
                           <div className="space-y-2 text-sm">
@@ -867,7 +867,7 @@ export default function UserManagement() {
                                       href={selectedUser.cin_doc_url}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="flex items-center text-[#00B3A6] hover:text-[#008C82] font-medium transition-colors"
+                                      className="flex items-center text-brand-primary hover:text-[#008C82] font-medium transition-colors"
                                     >
                                       <FileText className="h-4 w-4 mr-1" />
                                       Voir le document
@@ -891,7 +891,7 @@ export default function UserManagement() {
                                             setDocumentFile(e.target.files[0]);
                                           }
                                         }}
-                                        className="text-xs file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-[#00B3A6] file:text-white hover:file:bg-[#008C82] cursor-pointer"
+                                        className="text-xs file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-brand-primary file:text-white hover:file:bg-[#008C82] cursor-pointer"
                                       />
                                       {documentFile && (
                                         <button
@@ -902,7 +902,7 @@ export default function UserManagement() {
                                             )
                                           }
                                           disabled={uploadingDocument}
-                                          className="px-3 py-1 bg-[#00B3A6] text-white rounded text-xs font-semibold hover:bg-[#008C82] transition-colors disabled:opacity-50"
+                                          className="px-3 py-1 bg-brand-primary text-white rounded text-xs font-semibold hover:bg-[#008C82] transition-colors disabled:opacity-50"
                                         >
                                           {uploadingDocument ? 'Upload...' : 'Uploader'}
                                         </button>
@@ -941,7 +941,7 @@ export default function UserManagement() {
                                       href={selectedUser.registration_doc_url}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="flex items-center text-[#00B3A6] hover:text-[#008C82] font-medium transition-colors"
+                                      className="flex items-center text-brand-primary hover:text-[#008C82] font-medium transition-colors"
                                     >
                                       <FileText className="h-4 w-4 mr-1" />
                                       Voir le document
@@ -965,7 +965,7 @@ export default function UserManagement() {
                                             setDocumentFile(e.target.files[0]);
                                           }
                                         }}
-                                        className="text-xs file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-[#00B3A6] file:text-white hover:file:bg-[#008C82] cursor-pointer"
+                                        className="text-xs file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-brand-primary file:text-white hover:file:bg-[#008C82] cursor-pointer"
                                       />
                                       {documentFile && (
                                         <button
@@ -976,7 +976,7 @@ export default function UserManagement() {
                                             )
                                           }
                                           disabled={uploadingDocument}
-                                          className="px-3 py-1 bg-[#00B3A6] text-white rounded text-xs font-semibold hover:bg-[#008C82] transition-colors disabled:opacity-50"
+                                          className="px-3 py-1 bg-brand-primary text-white rounded text-xs font-semibold hover:bg-[#008C82] transition-colors disabled:opacity-50"
                                         >
                                           {uploadingDocument ? 'Upload...' : 'Uploader'}
                                         </button>
@@ -1015,7 +1015,7 @@ export default function UserManagement() {
                                       href={selectedUser.registration_doc_url}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="flex items-center text-[#00B3A6] hover:text-[#008C82] font-medium transition-colors"
+                                      className="flex items-center text-brand-primary hover:text-[#008C82] font-medium transition-colors"
                                     >
                                       <FileText className="h-4 w-4 mr-1" />
                                       Voir le document
@@ -1039,7 +1039,7 @@ export default function UserManagement() {
                                             setDocumentFile(e.target.files[0]);
                                           }
                                         }}
-                                        className="text-xs file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-[#00B3A6] file:text-white hover:file:bg-[#008C82] cursor-pointer"
+                                        className="text-xs file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-brand-primary file:text-white hover:file:bg-[#008C82] cursor-pointer"
                                       />
                                       {documentFile && (
                                         <button
@@ -1050,7 +1050,7 @@ export default function UserManagement() {
                                             )
                                           }
                                           disabled={uploadingDocument}
-                                          className="px-3 py-1 bg-[#00B3A6] text-white rounded text-xs font-semibold hover:bg-[#008C82] transition-colors disabled:opacity-50"
+                                          className="px-3 py-1 bg-brand-primary text-white rounded text-xs font-semibold hover:bg-[#008C82] transition-colors disabled:opacity-50"
                                         >
                                           {uploadingDocument ? 'Upload...' : 'Uploader'}
                                         </button>
@@ -1085,12 +1085,12 @@ export default function UserManagement() {
                                       value={agentCodeInput}
                                       onChange={(e) => setAgentCodeInput(e.target.value)}
                                       placeholder="Saisir le code agent"
-                                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent text-sm"
+                                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent text-sm"
                                     />
                                     <button
                                       onClick={handleSaveAgentCode}
                                       disabled={savingAgentCode}
-                                      className="px-3 py-2 bg-[#00B3A6] text-white rounded-lg text-sm font-medium hover:bg-[#008C82] transition-colors disabled:opacity-50"
+                                      className="px-3 py-2 bg-brand-primary text-white rounded-lg text-sm font-medium hover:bg-[#008C82] transition-colors disabled:opacity-50"
                                     >
                                       {savingAgentCode ? 'Enregistrement...' : 'Enregistrer'}
                                     </button>
@@ -1106,7 +1106,7 @@ export default function UserManagement() {
                       <div className="space-y-4">
                         <div className="bg-gray-50 p-4 rounded-lg">
                           <h4 className="font-semibold text-gray-900 mb-3 flex items-center">
-                            <MapPin className="h-5 w-5 mr-2 text-[#00B3A6]" />
+                            <MapPin className="h-5 w-5 mr-2 text-brand-primary" />
                             Adresse complète
                           </h4>
                           <div className="space-y-2 text-sm">
@@ -1131,7 +1131,7 @@ export default function UserManagement() {
 
                         <div className="bg-gray-50 p-4 rounded-lg">
                           <h4 className="font-semibold text-gray-900 mb-3 flex items-center">
-                            <Clock className="h-5 w-5 mr-2 text-[#00B3A6]" />
+                            <Clock className="h-5 w-5 mr-2 text-brand-primary" />
                             Statut et historique
                           </h4>
                           <div className="space-y-2 text-sm">
@@ -1245,7 +1245,7 @@ export default function UserManagement() {
               <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
                 <button
                   onClick={() => setShowDetailsModal(false)}
-                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-[#00B3A6] text-base font-medium text-white hover:bg-[#00B3A6]/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#00B3A6] sm:ml-3 sm:w-auto sm:text-sm"
+                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-brand-primary text-base font-medium text-white hover:bg-brand-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary sm:ml-3 sm:w-auto sm:text-sm"
                 >
                   Fermer
                 </button>

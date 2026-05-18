@@ -276,7 +276,7 @@ export default function OwnerCampaigns() {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[#00B3A6] mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-brand-primary mx-auto mb-4"></div>
           <p className="text-gray-600">Chargement...</p>
         </div>
       </div>
@@ -616,7 +616,7 @@ export default function OwnerCampaigns() {
                         <button
                           onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
                           disabled={currentPage === 1}
-                          className="p-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:border-[#00B3A6] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                          className="p-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:border-brand-primary disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                         >
                           <ChevronLeft className="h-5 w-5" />
                         </button>
@@ -626,7 +626,7 @@ export default function OwnerCampaigns() {
                         <button
                           onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
                           disabled={currentPage === totalPages}
-                          className="p-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:border-[#00B3A6] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                          className="p-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:border-brand-primary disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                         >
                           <ChevronRight className="h-5 w-5" />
                         </button>

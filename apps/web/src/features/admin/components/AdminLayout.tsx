@@ -50,7 +50,7 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[#00B3A6] mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-brand-primary mx-auto mb-4"></div>
           <p className="text-gray-600">Chargement...</p>
         </div>
       </div>
@@ -94,7 +94,7 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
                   </p>
                   <p className="text-xs text-gray-500 capitalize">{admin.role}</p>
                 </div>
-                <div className="h-8 w-8 bg-[#00B3A6] rounded-full flex items-center justify-center">
+                <div className="h-8 w-8 bg-brand-primary rounded-full flex items-center justify-center">
                   <span className="text-white text-sm font-medium">
                     {admin.first_name.charAt(0)}
                     {admin.last_name.charAt(0)}
@@ -117,7 +117,7 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
             {/* Logo sidebar */}
             <div className="flex items-center justify-between h-16 px-6 border-b border-gray-200">
               <div className="flex items-center">
-                <Shield className="h-8 w-8 text-[#00B3A6]" />
+                <Shield className="h-8 w-8 text-brand-primary" />
                 <span className="ml-2 text-lg font-semibold text-gray-900">Admin Panel</span>
               </div>
               <button
@@ -134,8 +134,8 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
                 onClick={() => navigate('/admin-dashboard')}
                 className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
                   location.pathname === '/admin-dashboard'
-                    ? 'bg-[#00B3A6] text-white shadow-lg shadow-[#00B3A6]/25'
-                    : 'text-gray-700 hover:bg-gray-100 hover:text-[#00B3A6]'
+                    ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/25'
+                    : 'text-gray-700 hover:bg-gray-100 hover:text-brand-primary'
                 }`}
               >
                 <LayoutDashboard className="mr-3 h-5 w-5" />
@@ -146,8 +146,8 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
                 onClick={() => navigate('/admin-users')}
                 className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
                   location.pathname === '/admin-users'
-                    ? 'bg-[#00B3A6] text-white shadow-lg shadow-[#00B3A6]/25'
-                    : 'text-gray-700 hover:bg-gray-100 hover:text-[#00B3A6]'
+                    ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/25'
+                    : 'text-gray-700 hover:bg-gray-100 hover:text-brand-primary'
                 }`}
               >
                 <Users className="mr-3 h-5 w-5" />
@@ -158,8 +158,8 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
                 onClick={() => navigate('/admin-videos')}
                 className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
                   location.pathname === '/admin-videos'
-                    ? 'bg-[#00B3A6] text-white shadow-lg shadow-[#00B3A6]/25'
-                    : 'text-gray-700 hover:bg-gray-100 hover:text-[#00B3A6]'
+                    ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/25'
+                    : 'text-gray-700 hover:bg-gray-100 hover:text-brand-primary'
                 }`}
               >
                 <Video className="mr-3 h-5 w-5" />
@@ -173,8 +173,8 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
                     onClick={() => navigate('/admin-campaigns')}
                     className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
                       location.pathname === '/admin-campaigns'
-                        ? 'bg-[#00B3A6] text-white shadow-lg shadow-[#00B3A6]/25'
-                        : 'text-gray-700 hover:bg-gray-100 hover:text-[#00B3A6]'
+                        ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/25'
+                        : 'text-gray-700 hover:bg-gray-100 hover:text-brand-primary'
                     }`}
                   >
                     <Megaphone className="mr-3 h-5 w-5" />
@@ -184,8 +184,8 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
                     onClick={() => navigate('/admin-zones')}
                     className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
                       location.pathname === '/admin-zones'
-                        ? 'bg-[#00B3A6] text-white shadow-lg shadow-[#00B3A6]/25'
-                        : 'text-gray-700 hover:bg-gray-100 hover:text-[#00B3A6]'
+                        ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/25'
+                        : 'text-gray-700 hover:bg-gray-100 hover:text-brand-primary'
                     }`}
                   >
                     <MapPin className="mr-3 h-5 w-5" />
@@ -195,8 +195,8 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
                     onClick={() => navigate('/admin-screens')}
                     className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
                       location.pathname === '/admin-screens'
-                        ? 'bg-[#00B3A6] text-white shadow-lg shadow-[#00B3A6]/25'
-                        : 'text-gray-700 hover:bg-gray-100 hover:text-[#00B3A6]'
+                        ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/25'
+                        : 'text-gray-700 hover:bg-gray-100 hover:text-brand-primary'
                     }`}
                   >
                     <Monitor className="mr-3 h-5 w-5" />
@@ -206,8 +206,8 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
                     onClick={() => navigate('/admin-recharges')}
                     className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
                       location.pathname === '/admin-recharges'
-                        ? 'bg-[#00B3A6] text-white shadow-lg shadow-[#00B3A6]/25'
-                        : 'text-gray-700 hover:bg-gray-100 hover:text-[#00B3A6]'
+                        ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/25'
+                        : 'text-gray-700 hover:bg-gray-100 hover:text-brand-primary'
                     }`}
                   >
                     <DollarSign className="mr-3 h-5 w-5" />
@@ -223,8 +223,8 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
                     onClick={() => navigate('/admin-events')}
                     className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
                       location.pathname === '/admin-events'
-                        ? 'bg-[#00B3A6] text-white shadow-lg shadow-[#00B3A6]/25'
-                        : 'text-gray-700 hover:bg-gray-100 hover:text-[#00B3A6]'
+                        ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/25'
+                        : 'text-gray-700 hover:bg-gray-100 hover:text-brand-primary'
                     }`}
                   >
                     <Calendar className="mr-3 h-5 w-5" />
@@ -235,8 +235,8 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
                     onClick={() => navigate('/admin-management')}
                     className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
                       location.pathname === '/admin-management'
-                        ? 'bg-[#00B3A6] text-white shadow-lg shadow-[#00B3A6]/25'
-                        : 'text-gray-700 hover:bg-gray-100 hover:text-[#00B3A6]'
+                        ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/25'
+                        : 'text-gray-700 hover:bg-gray-100 hover:text-brand-primary'
                     }`}
                   >
                     <Shield className="mr-3 h-5 w-5" />
@@ -247,8 +247,8 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
                     onClick={() => navigate('/admin-create')}
                     className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
                       location.pathname === '/admin-create'
-                        ? 'bg-[#00B3A6] text-white shadow-lg shadow-[#00B3A6]/25'
-                        : 'text-gray-700 hover:bg-gray-100 hover:text-[#00B3A6]'
+                        ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/25'
+                        : 'text-gray-700 hover:bg-gray-100 hover:text-brand-primary'
                     }`}
                   >
                     <UserPlus className="mr-3 h-5 w-5" />
@@ -258,13 +258,13 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
               )}
 
               {/* Masqué : Statistiques */}
-              {/* <button className="group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 text-gray-700 hover:bg-gray-100 hover:text-[#00B3A6]">
+              {/* <button className="group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 text-gray-700 hover:bg-gray-100 hover:text-brand-primary">
                 <BarChart3 className="mr-3 h-5 w-5" />
                 Statistiques
               </button> */}
 
               {/* Masqué : Rapports */}
-              {/* <button className="group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 text-gray-700 hover:bg-gray-100 hover:text-[#00B3A6]">
+              {/* <button className="group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 text-gray-700 hover:bg-gray-100 hover:text-brand-primary">
                 <FileText className="mr-3 h-5 w-5" />
                 Rapports
               </button> */}
@@ -274,8 +274,8 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
                   onClick={() => navigate('/admin-global-config')}
                   className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
                     location.pathname === '/admin-global-config'
-                      ? 'bg-[#00B3A6] text-white shadow-lg shadow-[#00B3A6]/25'
-                      : 'text-gray-700 hover:bg-gray-100 hover:text-[#00B3A6]'
+                      ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/25'
+                      : 'text-gray-700 hover:bg-gray-100 hover:text-brand-primary'
                   }`}
                 >
                   <Sliders className="mr-3 h-5 w-5" />
@@ -287,7 +287,7 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
             {/* Profil en bas */}
             <div className="p-4 border-t border-gray-200">
               <div className="flex items-center space-x-3 p-3 rounded-lg bg-gray-50">
-                <div className="h-10 w-10 bg-[#00B3A6] rounded-full flex items-center justify-center">
+                <div className="h-10 w-10 bg-brand-primary rounded-full flex items-center justify-center">
                   <span className="text-white text-sm font-medium">
                     {admin.first_name.charAt(0)}
                     {admin.last_name.charAt(0)}

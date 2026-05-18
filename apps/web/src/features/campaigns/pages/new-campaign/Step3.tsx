@@ -14,11 +14,7 @@ interface Step3Props {
 
 type DateField = 'start' | 'end';
 
-function validateDate(
-  dateType: DateField,
-  date: Date | null,
-  otherDate: Date | null,
-): string {
+function validateDate(dateType: DateField, date: Date | null, otherDate: Date | null): string {
   if (!date) {
     return dateType === 'start'
       ? 'La date de début est obligatoire'
@@ -81,11 +77,7 @@ export default function Step3({
     // Validate this field against the OTHER field's current value
     // (the new value isn't in props yet — props sync after the parent
     //  re-renders — so we pass the previous other-side explicitly).
-    const thisError = validateDate(
-      dateType,
-      date,
-      dateType === 'start' ? endDate : startDate,
-    );
+    const thisError = validateDate(dateType, date, dateType === 'start' ? endDate : startDate);
     setDateErrors((prev) => ({ ...prev, [dateType]: thisError }));
 
     // Cross-field: re-validate the OTHER date against this new date.
@@ -118,7 +110,7 @@ export default function Step3({
       <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center space-x-3">
-            <div className="p-2 rounded-lg bg-gradient-to-r from-[#00B3A6] to-[#00D4C4]">
+            <div className="p-2 rounded-lg bg-gradient-to-r from-brand-primary to-[#00D4C4]">
               <Calendar className="h-5 w-5 text-white" />
             </div>
             <div>
@@ -146,7 +138,7 @@ export default function Step3({
                 startDate={startDate}
                 endDate={endDate}
                 minDate={today}
-                className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent transition-all ${
+                className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-transparent transition-all ${
                   dateTouched.start && dateErrors.start
                     ? 'border-red-300 bg-red-50'
                     : 'border-gray-300'
@@ -177,10 +169,8 @@ export default function Step3({
                 startDate={startDate}
                 endDate={endDate}
                 minDate={startDate || today}
-                className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent transition-all ${
-                  dateTouched.end && dateErrors.end
-                    ? 'border-red-300 bg-red-50'
-                    : 'border-gray-300'
+                className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-transparent transition-all ${
+                  dateTouched.end && dateErrors.end ? 'border-red-300 bg-red-50' : 'border-gray-300'
                 }`}
                 placeholderText="Sélectionnez une date"
                 dateFormat="dd/MM/yyyy"
@@ -195,9 +185,9 @@ export default function Step3({
           </div>
 
           {durationDays > 0 && (
-            <div className="bg-gradient-to-r from-[#00B3A6]/10 to-[#00D4C4]/10 rounded-xl p-4 border border-[#00B3A6]/20">
+            <div className="bg-gradient-to-r from-brand-primary/10 to-[#00D4C4]/10 rounded-xl p-4 border border-brand-primary/20">
               <div className="flex items-center space-x-2 mb-2">
-                <Clock className="h-5 w-5 text-[#00B3A6]" />
+                <Clock className="h-5 w-5 text-brand-primary" />
                 <span className="font-medium text-[#00263A]">Durée de la campagne</span>
               </div>
               <p className="text-[#00263A]">
@@ -224,7 +214,7 @@ export default function Step3({
           className={`px-6 py-3 rounded-xl font-semibold transition-all flex items-center space-x-2 shadow-lg ${
             nextDisabled
               ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : 'bg-gradient-to-r from-[#00B3A6] to-[#00D4C4] text-white hover:from-[#00A396] hover:to-[#00C4B4]'
+              : 'bg-gradient-to-r from-brand-primary to-[#00D4C4] text-white hover:from-[#00A396] hover:to-[#00C4B4]'
           }`}
         >
           <span>Suivant</span>

@@ -43,7 +43,7 @@ export default function ResetPasswordForm() {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full pl-11 pr-4 py-3 bg-white border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#00B3A6]/30 focus:border-[#00B3A6] transition-all text-sm text-gray-900 placeholder-gray-400"
+            className="w-full pl-11 pr-4 py-3 bg-white border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary/30 focus:border-brand-primary transition-all text-sm text-gray-900 placeholder-gray-400"
             placeholder="contact@entreprise.com"
           />
         </div>

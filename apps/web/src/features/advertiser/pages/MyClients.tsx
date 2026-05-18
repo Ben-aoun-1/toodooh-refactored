@@ -159,8 +159,8 @@ export default function MyClients() {
       {/* Header visuel */}
       <div className="bg-white rounded-xl p-8 shadow-lg border border-gray-200">
         <div className="flex items-center space-x-4">
-          <div className="p-4 rounded-xl bg-[#00B3A6]/10 border border-[#00B3A6]/20 flex items-center justify-center">
-            <Users className="h-10 w-10 text-[#00B3A6]" />
+          <div className="p-4 rounded-xl bg-brand-primary/10 border border-brand-primary/20 flex items-center justify-center">
+            <Users className="h-10 w-10 text-brand-primary" />
           </div>
           <div>
             <h1 className="text-3xl font-bold mb-2 text-gray-900">Mes clients</h1>
@@ -172,7 +172,7 @@ export default function MyClients() {
       {/* Cartes statistiques */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl p-6 flex flex-col items-center shadow-lg border border-gray-200">
-          <Users className="h-8 w-8 text-[#00B3A6] mb-2" />
+          <Users className="h-8 w-8 text-brand-primary mb-2" />
           <div className="text-2xl font-bold text-gray-900">{totalClients}</div>
           <div className="text-sm text-gray-500">Clients</div>
         </div>
@@ -191,13 +191,13 @@ export default function MyClients() {
             placeholder="Rechercher un client..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent transition-all text-gray-700 bg-white shadow"
+            className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-brand-primary focus:border-transparent transition-all text-gray-700 bg-white shadow"
           />
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
         </div>
         <button
           onClick={() => setShowAddModal(true)}
-          className="inline-flex items-center px-5 py-3 bg-[#00B3A6] text-white rounded-xl font-semibold shadow hover:bg-[#00B3A6]/90 transition-all"
+          className="inline-flex items-center px-5 py-3 bg-brand-primary text-white rounded-xl font-semibold shadow hover:bg-brand-primary/90 transition-all"
         >
           <PlusCircle className="h-5 w-5 mr-2" /> Ajouter un client
         </button>
@@ -207,7 +207,7 @@ export default function MyClients() {
       <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
         {loading ? (
           <div className="flex justify-center py-12">
-            <Loader2 className="animate-spin h-8 w-8 text-[#00B3A6]" />
+            <Loader2 className="animate-spin h-8 w-8 text-brand-primary" />
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center py-12 text-gray-500">
@@ -244,7 +244,7 @@ export default function MyClients() {
                   <tr key={client.id} className="hover:bg-gray-50 transition">
                     <td className="px-4 py-3 font-semibold text-gray-900 whitespace-nowrap min-w-[120px]">
                       <span className="inline-flex items-center gap-2">
-                        <User className="h-4 w-4 text-[#00B3A6]" />{' '}
+                        <User className="h-4 w-4 text-brand-primary" />{' '}
                         <span className="truncate max-w-[120px]">{client.name}</span>
                       </span>
                     </td>
@@ -273,7 +273,7 @@ export default function MyClients() {
                       <div className="inline-flex items-center gap-2">
                         <button
                           onClick={() => openViewModal(client)}
-                          className="p-2 rounded-full bg-[#00B3A6] text-white shadow hover:bg-[#00B3A6]/90 transition-all"
+                          className="p-2 rounded-full bg-brand-primary text-white shadow hover:bg-brand-primary/90 transition-all"
                           title="Voir"
                         >
                           <Eye className="h-5 w-5" />
@@ -329,7 +329,7 @@ export default function MyClients() {
                   value={formData.name}
                   onChange={handleInputChange}
                   required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6] transition-all text-gray-900"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-brand-primary transition-all text-gray-900"
                   placeholder="Nom du client"
                   id="name"
                 />
@@ -347,7 +347,7 @@ export default function MyClients() {
                   value={formData.contact_email}
                   onChange={handleInputChange}
                   required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6] transition-all text-gray-900"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-brand-primary transition-all text-gray-900"
                   placeholder="email@exemple.com"
                   id="contact-email"
                 />
@@ -365,7 +365,7 @@ export default function MyClients() {
                   value={formData.contact_phone}
                   onChange={handleInputChange}
                   required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6] transition-all text-gray-900"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-brand-primary transition-all text-gray-900"
                   placeholder="+216 XX XXX XXX"
                   id="contact-phone"
                 />
@@ -379,7 +379,7 @@ export default function MyClients() {
                   name="societe"
                   value={formData.societe}
                   onChange={handleInputChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6] transition-all text-gray-900"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-brand-primary transition-all text-gray-900"
                   placeholder="Nom de la société"
                   id="societe"
                 />
@@ -397,7 +397,7 @@ export default function MyClients() {
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-[#00B3A6] text-white rounded-xl hover:bg-[#00B3A6]/90 transition-all flex items-center space-x-2"
+                  className="px-6 py-2 bg-brand-primary text-white rounded-xl hover:bg-brand-primary/90 transition-all flex items-center space-x-2"
                 >
                   <Save className="h-4 w-4" />
                   <span>Ajouter</span>
@@ -423,21 +423,21 @@ export default function MyClients() {
             </div>
             <div className="p-6 space-y-4">
               <div className="flex items-center space-x-3">
-                <User className="h-5 w-5 text-[#00B3A6]" />
+                <User className="h-5 w-5 text-brand-primary" />
                 <div>
                   <p className="text-sm text-gray-600">Nom complet</p>
                   <p className="font-semibold text-gray-900">{selectedClient.name}</p>
                 </div>
               </div>
               <div className="flex items-center space-x-3">
-                <Mail className="h-5 w-5 text-[#00B3A6]" />
+                <Mail className="h-5 w-5 text-brand-primary" />
                 <div>
                   <p className="text-sm text-gray-600">Email</p>
                   <p className="font-semibold text-gray-900">{selectedClient.contact_email}</p>
                 </div>
               </div>
               <div className="flex items-center space-x-3">
-                <Phone className="h-5 w-5 text-[#00B3A6]" />
+                <Phone className="h-5 w-5 text-brand-primary" />
                 <div>
                   <p className="text-sm text-gray-600">Téléphone</p>
                   <p className="font-semibold text-gray-900">{selectedClient.contact_phone}</p>
@@ -445,7 +445,7 @@ export default function MyClients() {
               </div>
               {selectedClient.societe && (
                 <div className="flex items-center space-x-3">
-                  <Building2 className="h-5 w-5 text-[#00B3A6]" />
+                  <Building2 className="h-5 w-5 text-brand-primary" />
                   <div>
                     <p className="text-sm text-gray-600">Société</p>
                     <p className="font-semibold text-gray-900">{selectedClient.societe}</p>
@@ -491,7 +491,7 @@ export default function MyClients() {
                   value={formData.name}
                   onChange={handleInputChange}
                   required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6] transition-all text-gray-900"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-brand-primary transition-all text-gray-900"
                   id="name-2"
                 />
               </div>
@@ -508,7 +508,7 @@ export default function MyClients() {
                   value={formData.contact_email}
                   onChange={handleInputChange}
                   required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6] transition-all text-gray-900"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-brand-primary transition-all text-gray-900"
                   id="contact-email-2"
                 />
               </div>
@@ -525,7 +525,7 @@ export default function MyClients() {
                   value={formData.contact_phone}
                   onChange={handleInputChange}
                   required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6] transition-all text-gray-900"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-brand-primary transition-all text-gray-900"
                   id="contact-phone-2"
                 />
               </div>
@@ -538,7 +538,7 @@ export default function MyClients() {
                   name="societe"
                   value={formData.societe}
                   onChange={handleInputChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6] transition-all text-gray-900"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-brand-primary transition-all text-gray-900"
                   id="societe-2"
                 />
               </div>
@@ -556,7 +556,7 @@ export default function MyClients() {
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-[#00B3A6] text-white rounded-xl hover:bg-[#00B3A6]/90 transition-all flex items-center space-x-2"
+                  className="px-6 py-2 bg-brand-primary text-white rounded-xl hover:bg-brand-primary/90 transition-all flex items-center space-x-2"
                 >
                   <Save className="h-4 w-4" />
                   <span>Modifier</span>

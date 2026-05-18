@@ -78,7 +78,7 @@ export default function PostCartStep({
 
           {loadingRecommendedEvents ? (
             <div className="flex justify-center py-10">
-              <div className="animate-spin rounded-full h-10 w-10 border-2 border-[#00B3A6] border-t-transparent" />
+              <div className="animate-spin rounded-full h-10 w-10 border-2 border-brand-primary border-t-transparent" />
             </div>
           ) : recommendedEventsInPeriod.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

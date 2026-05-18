@@ -247,7 +247,7 @@ export default function CampaignMonitoring() {
         subtitle="Suivez toutes les campagnes en temps réel"
       >
         <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[#00B3A6]"></div>
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-brand-primary"></div>
         </div>
       </AdminLayout>
     );
@@ -267,7 +267,7 @@ export default function CampaignMonitoring() {
               <p className="text-3xl font-bold text-gray-900 mt-2">{stats.total_campaigns}</p>
               <p className="text-xs text-gray-500 mt-1">{stats.active_campaigns} actives</p>
             </div>
-            <BarChart3 className="h-12 w-12 text-[#00B3A6]" />
+            <BarChart3 className="h-12 w-12 text-brand-primary" />
           </div>
         </div>
 
@@ -326,7 +326,7 @@ export default function CampaignMonitoring() {
               placeholder="Rechercher une campagne..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00B3A6]"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary"
             />
           </div>
 
@@ -338,7 +338,7 @@ export default function CampaignMonitoring() {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00B3A6] appearance-none"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary appearance-none"
             >
               <option value="all">Tous les statuts</option>
               <option value="active">Active</option>
@@ -356,7 +356,7 @@ export default function CampaignMonitoring() {
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00B3A6] appearance-none"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary appearance-none"
             >
               <option value="all">Toutes catégories</option>
               {categoriesData.map((cat) => (
@@ -443,7 +443,7 @@ export default function CampaignMonitoring() {
                       {/* Voir détails */}
                       <button
                         onClick={() => handleViewDetails(campaign)}
-                        className="text-[#00B3A6] hover:text-[#008C82]"
+                        className="text-brand-primary hover:text-[#008C82]"
                         title="Voir détails"
                       >
                         <Eye className="h-5 w-5" />
@@ -514,7 +514,7 @@ export default function CampaignMonitoring() {
                       onClick={() => setCurrentPage(i + 1)}
                       className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
                         currentPage === i + 1
-                          ? 'z-10 bg-[#00B3A6] border-[#00B3A6] text-white'
+                          ? 'z-10 bg-brand-primary border-brand-primary text-white'
                           : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
                       }`}
                     >
@@ -554,7 +554,7 @@ export default function CampaignMonitoring() {
             <div className="p-6 space-y-6">
               {/* Métriques clés */}
               <div className="grid grid-cols-4 gap-4">
-                <div className="bg-gradient-to-br from-[#00B3A6] to-[#008C82] rounded-lg p-4 text-white">
+                <div className="bg-gradient-to-br from-brand-primary to-[#008C82] rounded-lg p-4 text-white">
                   <div className="flex items-center justify-between mb-2">
                     <DollarSign className="h-8 w-8 opacity-80" />
                     <span className="text-xs opacity-80">Budget</span>
@@ -610,7 +610,7 @@ export default function CampaignMonitoring() {
               {/* Informations générales */}
               <div>
                 <h4 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
-                  <BarChart3 className="h-5 w-5 mr-2 text-[#00B3A6]" />
+                  <BarChart3 className="h-5 w-5 mr-2 text-brand-primary" />
                   Informations Générales
                 </h4>
                 <div className="bg-gray-50 rounded-lg p-4">
@@ -681,7 +681,7 @@ export default function CampaignMonitoring() {
               {/* Progression impressions */}
               <div>
                 <h4 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
-                  <TrendingUp className="h-5 w-5 mr-2 text-[#00B3A6]" />
+                  <TrendingUp className="h-5 w-5 mr-2 text-brand-primary" />
                   Progression des impressions
                 </h4>
                 <div className="bg-gray-50 rounded-lg p-4">
@@ -702,7 +702,7 @@ export default function CampaignMonitoring() {
                     </div>
                     <div className="bg-white rounded-lg border border-gray-200 p-3">
                       <p className="text-xs text-gray-500">Taux de réalisation</p>
-                      <p className="text-xl font-bold text-[#00B3A6] mt-1">
+                      <p className="text-xl font-bold text-brand-primary mt-1">
                         {(selectedCampaignImpressionProgress?.completion_rate || 0).toFixed(1)}%
                       </p>
                     </div>
@@ -721,7 +721,7 @@ export default function CampaignMonitoring() {
                     </div>
                     <div className="h-3 w-full rounded-full bg-gray-200 overflow-hidden">
                       <div
-                        className="h-full bg-gradient-to-r from-[#00B3A6] to-[#008C82] transition-all duration-500"
+                        className="h-full bg-gradient-to-r from-brand-primary to-[#008C82] transition-all duration-500"
                         style={{
                           width: `${Math.min(100, Math.max(0, selectedCampaignImpressionProgress?.completion_rate || 0))}%`,
                         }}
@@ -735,13 +735,13 @@ export default function CampaignMonitoring() {
               {selectedCampaign.video_filename && (
                 <div>
                   <h4 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
-                    <FileVideo className="h-5 w-5 mr-2 text-[#00B3A6]" />
+                    <FileVideo className="h-5 w-5 mr-2 text-brand-primary" />
                     Contenu Vidéo
                   </h4>
                   <div className="bg-gray-50 p-4 rounded-lg flex items-center justify-between">
                     <div className="flex items-center">
                       <div className="bg-white p-3 rounded-lg mr-4">
-                        <FileVideo className="h-8 w-8 text-[#00B3A6]" />
+                        <FileVideo className="h-8 w-8 text-brand-primary" />
                       </div>
                       <div>
                         <p className="text-sm text-gray-900 font-medium">
@@ -757,7 +757,7 @@ export default function CampaignMonitoring() {
                         href={selectedCampaign.video_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="px-4 py-2 bg-[#00B3A6] text-white rounded-lg hover:bg-[#008C82] transition-colors flex items-center"
+                        className="px-4 py-2 bg-brand-primary text-white rounded-lg hover:bg-[#008C82] transition-colors flex items-center"
                       >
                         <Play className="h-4 w-4 mr-2" />
                         Voir la vidéo
@@ -770,7 +770,7 @@ export default function CampaignMonitoring() {
               {/* Localités associées */}
               <div>
                 <h4 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
-                  <MapPin className="h-5 w-5 mr-2 text-[#00B3A6]" />
+                  <MapPin className="h-5 w-5 mr-2 text-brand-primary" />
                   Localités Associées ({selectedCampaignLocations.length})
                 </h4>
                 {selectedCampaignLocations.length > 0 ? (
@@ -782,8 +782,8 @@ export default function CampaignMonitoring() {
                       >
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex items-start">
-                            <div className="bg-[#00B3A6] bg-opacity-10 p-2 rounded-lg mr-3">
-                              <MapPin className="h-5 w-5 text-[#00B3A6]" />
+                            <div className="bg-brand-primary bg-opacity-10 p-2 rounded-lg mr-3">
+                              <MapPin className="h-5 w-5 text-brand-primary" />
                             </div>
                             <div>
                               <p className="text-sm font-semibold text-gray-900">

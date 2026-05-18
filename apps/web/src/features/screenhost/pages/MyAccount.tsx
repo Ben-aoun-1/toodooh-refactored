@@ -226,7 +226,7 @@ export default function MyAccount() {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[#00B3A6] mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-brand-primary mx-auto mb-4"></div>
           <p className="text-gray-600">Chargement du profil...</p>
         </div>
       </div>
@@ -252,7 +252,7 @@ export default function MyAccount() {
                   </button>
                   <div>
                     <h1 className="text-2xl font-bold text-gray-900 flex items-center">
-                      <User className="h-6 w-6 text-[#00B3A6] mr-2" />
+                      <User className="h-6 w-6 text-brand-primary mr-2" />
                       Mon Compte
                     </h1>
                     <p className="text-sm text-gray-600 mt-1">
@@ -275,7 +275,7 @@ export default function MyAccount() {
                         <div
                           className={`flex items-center justify-center w-10 h-10 rounded-full ${
                             currentStep >= step.id
-                              ? 'bg-[#00B3A6] text-white'
+                              ? 'bg-brand-primary text-white'
                               : 'bg-gray-100 text-gray-400'
                           }`}
                         >
@@ -284,7 +284,7 @@ export default function MyAccount() {
                         {index < steps.length - 1 && (
                           <div
                             className={`w-16 h-1 mx-2 ${
-                              currentStep > step.id ? 'bg-[#00B3A6]' : 'bg-gray-200'
+                              currentStep > step.id ? 'bg-brand-primary' : 'bg-gray-200'
                             }`}
                           />
                         )}
@@ -296,7 +296,7 @@ export default function MyAccount() {
                       <span
                         key={step.id}
                         className={`text-xs ${
-                          currentStep >= step.id ? 'text-[#00B3A6]' : 'text-gray-500'
+                          currentStep >= step.id ? 'text-brand-primary' : 'text-gray-500'
                         }`}
                       >
                         {step.title}
@@ -326,7 +326,7 @@ export default function MyAccount() {
                           type="text"
                           value={formData.firstName}
                           onChange={(e) => handleInputChange('firstName', e.target.value)}
-                          className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6]"
+                          className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
                           placeholder="Votre prénom"
                           required
                           id="first-name"
@@ -343,7 +343,7 @@ export default function MyAccount() {
                           type="text"
                           value={formData.lastName}
                           onChange={(e) => handleInputChange('lastName', e.target.value)}
-                          className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6]"
+                          className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
                           placeholder="Votre nom"
                           required
                           id="last-name"
@@ -378,7 +378,7 @@ export default function MyAccount() {
                           type="tel"
                           value={formData.phone}
                           onChange={(e) => handleInputChange('phone', e.target.value)}
-                          className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6]"
+                          className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
                           placeholder="+216 XX XXX XXX"
                           required
                           id="phone"
@@ -406,7 +406,7 @@ export default function MyAccount() {
                           type="text"
                           value={formData.businessName}
                           onChange={(e) => handleInputChange('businessName', e.target.value)}
-                          className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6]"
+                          className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
                           placeholder="Nom de votre entreprise"
                           required
                           id="business-name"
@@ -424,7 +424,7 @@ export default function MyAccount() {
                           value={formData.businessType}
                           onChange={(e) => handleInputChange('businessType', e.target.value)}
                           disabled={isFieldDisabled('businessType')}
-                          className={`w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6] ${
+                          className={`w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary ${
                             isFieldDisabled('businessType')
                               ? 'bg-gray-50 text-gray-500 cursor-not-allowed'
                               : 'bg-white'
@@ -453,7 +453,7 @@ export default function MyAccount() {
                         <select
                           value={formData.businessSectorId}
                           onChange={(e) => handleInputChange('businessSectorId', e.target.value)}
-                          className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6]"
+                          className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
                           required
                           id="business-sector-id"
                         >
@@ -478,7 +478,7 @@ export default function MyAccount() {
                           value={formData.taxNumber}
                           onChange={(e) => handleInputChange('taxNumber', e.target.value)}
                           disabled={isFieldDisabled('taxNumber')}
-                          className={`w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6] ${
+                          className={`w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary ${
                             isFieldDisabled('taxNumber')
                               ? 'bg-gray-50 text-gray-500 cursor-not-allowed'
                               : 'bg-white'
@@ -539,7 +539,7 @@ export default function MyAccount() {
                           type="text"
                           value={formData.streetAddress}
                           onChange={(e) => handleInputChange('streetAddress', e.target.value)}
-                          className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6]"
+                          className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
                           placeholder="Adresse complète"
                           required
                           id="street-address"
@@ -558,7 +558,7 @@ export default function MyAccount() {
                             type="text"
                             value={formData.city}
                             onChange={(e) => handleInputChange('city', e.target.value)}
-                            className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6]"
+                            className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
                             placeholder="Ville"
                             required
                             id="city"
@@ -576,7 +576,7 @@ export default function MyAccount() {
                             type="text"
                             value={formData.postalCode}
                             onChange={(e) => handleInputChange('postalCode', e.target.value)}
-                            className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6]"
+                            className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
                             placeholder="XXXX"
                             required
                             id="postal-code"
@@ -593,7 +593,7 @@ export default function MyAccount() {
                           <select
                             value={formData.governorateId}
                             onChange={(e) => handleInputChange('governorateId', e.target.value)}
-                            className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6]"
+                            className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
                             required
                             id="governorate-id"
                           >
@@ -616,7 +616,7 @@ export default function MyAccount() {
                     {/* Documents légaux */}
                     <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200">
                       <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center">
-                        <FileText className="h-6 w-6 text-[#00B3A6] mr-2" />
+                        <FileText className="h-6 w-6 text-brand-primary mr-2" />
                         Documents légaux
                       </h3>
 
@@ -660,8 +660,8 @@ export default function MyAccount() {
                               <div className="space-y-3">
                                 <div className="flex items-center space-x-3">
                                   <label className="flex-1">
-                                    <div className="flex items-center justify-center px-4 py-3 border-2 border-dashed border-[#00B3A6] rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                                      <Upload className="h-5 w-5 text-[#00B3A6] mr-2" />
+                                    <div className="flex items-center justify-center px-4 py-3 border-2 border-dashed border-brand-primary rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                                      <Upload className="h-5 w-5 text-brand-primary mr-2" />
                                       <span className="text-sm font-medium text-gray-700">
                                         {documentFile
                                           ? documentFile.name
@@ -690,7 +690,7 @@ export default function MyAccount() {
                                         type="button"
                                         onClick={handleUploadDocument}
                                         disabled={profileMutations.uploadDocument.isPending}
-                                        className="px-4 py-3 bg-[#00B3A6] text-white rounded-lg hover:bg-[#008C82] transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                                        className="px-4 py-3 bg-brand-primary text-white rounded-lg hover:bg-[#008C82] transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                                       >
                                         {profileMutations.uploadDocument.isPending
                                           ? 'Upload...'
@@ -753,8 +753,8 @@ export default function MyAccount() {
                               <div className="space-y-3">
                                 <div className="flex items-center space-x-3">
                                   <label className="flex-1">
-                                    <div className="flex items-center justify-center px-4 py-3 border-2 border-dashed border-[#00B3A6] rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                                      <Upload className="h-5 w-5 text-[#00B3A6] mr-2" />
+                                    <div className="flex items-center justify-center px-4 py-3 border-2 border-dashed border-brand-primary rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                                      <Upload className="h-5 w-5 text-brand-primary mr-2" />
                                       <span className="text-sm font-medium text-gray-700">
                                         {documentFile
                                           ? documentFile.name
@@ -783,7 +783,7 @@ export default function MyAccount() {
                                         type="button"
                                         onClick={handleUploadDocument}
                                         disabled={profileMutations.uploadDocument.isPending}
-                                        className="px-4 py-3 bg-[#00B3A6] text-white rounded-lg hover:bg-[#008C82] transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                                        className="px-4 py-3 bg-brand-primary text-white rounded-lg hover:bg-[#008C82] transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                                       >
                                         {profileMutations.uploadDocument.isPending
                                           ? 'Upload...'
@@ -812,7 +812,7 @@ export default function MyAccount() {
                     {/* Changement de mot de passe */}
                     <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200">
                       <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center">
-                        <Lock className="h-6 w-6 text-[#00B3A6] mr-2" />
+                        <Lock className="h-6 w-6 text-brand-primary mr-2" />
                         Sécurité
                       </h3>
                       <div className="space-y-6">
@@ -828,7 +828,7 @@ export default function MyAccount() {
                               type={showPassword ? 'text' : 'password'}
                               value={formData.password}
                               onChange={(e) => handleInputChange('password', e.target.value)}
-                              className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6] pr-12"
+                              className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary pr-12"
                               placeholder="Laissez vide pour conserver le mot de passe actuel"
                               id="password"
                             />
@@ -858,7 +858,7 @@ export default function MyAccount() {
                               type="password"
                               value={formData.confirmPassword}
                               onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
-                              className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6]"
+                              className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
                               placeholder="Confirmer le nouveau mot de passe"
                               id="confirm-password"
                             />
@@ -884,7 +884,7 @@ export default function MyAccount() {
                     <button
                       type="button"
                       onClick={nextStep}
-                      className="px-6 py-3 bg-[#00B3A6] text-white rounded-lg hover:bg-[#00B3A6]/90 transition-colors"
+                      className="px-6 py-3 bg-brand-primary text-white rounded-lg hover:bg-brand-primary/90 transition-colors"
                     >
                       Suivant
                     </button>
@@ -893,7 +893,7 @@ export default function MyAccount() {
                       type="button"
                       onClick={handleSubmit}
                       disabled={saving}
-                      className="px-6 py-3 bg-[#00B3A6] text-white rounded-lg hover:bg-[#00B3A6]/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
+                      className="px-6 py-3 bg-brand-primary text-white rounded-lg hover:bg-brand-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
                     >
                       <Save className="h-5 w-5" />
                       <span>{saving ? 'Sauvegarde...' : 'Sauvegarder'}</span>

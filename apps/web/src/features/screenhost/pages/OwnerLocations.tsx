@@ -136,7 +136,7 @@ export default function OwnerLocations() {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[#00B3A6] mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-brand-primary mx-auto mb-4"></div>
           <p className="text-gray-600">Chargement des emplacements...</p>
         </div>
       </div>
@@ -155,7 +155,7 @@ export default function OwnerLocations() {
               <div className="flex justify-between items-center h-16">
                 <div className="flex items-center space-x-4">
                   <h1 className="text-2xl font-bold text-white">Mes Emplacements</h1>
-                  <span className="px-3 py-1 text-sm font-medium bg-[#00B3A6]/20 backdrop-blur-sm text-[#00B3A6] border border-[#00B3A6]/30 rounded-full">
+                  <span className="px-3 py-1 text-sm font-medium bg-brand-primary/20 backdrop-blur-sm text-brand-primary border border-brand-primary/30 rounded-full">
                     {stats.totalLocations} emplacement{stats.totalLocations > 1 ? 's' : ''}
                   </span>
                 </div>
@@ -183,8 +183,8 @@ export default function OwnerLocations() {
                       <p className="text-white/60 text-sm">Emplacements</p>
                       <p className="text-2xl font-bold text-white">{stats.totalLocations}</p>
                     </div>
-                    <div className="p-3 bg-[#00B3A6]/20 rounded-lg">
-                      <MapPin className="h-6 w-6 text-[#00B3A6]" />
+                    <div className="p-3 bg-brand-primary/20 rounded-lg">
+                      <MapPin className="h-6 w-6 text-brand-primary" />
                     </div>
                   </div>
                 </div>
@@ -238,7 +238,7 @@ export default function OwnerLocations() {
                     onClick={() => setViewMode('map')}
                     className={`px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 ${
                       viewMode === 'map'
-                        ? 'bg-[#00B3A6] text-white'
+                        ? 'bg-brand-primary text-white'
                         : 'bg-white/10 text-white hover:bg-white/20'
                     }`}
                   >
@@ -250,7 +250,7 @@ export default function OwnerLocations() {
                     onClick={() => setViewMode('list')}
                     className={`px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 ${
                       viewMode === 'list'
-                        ? 'bg-[#00B3A6] text-white'
+                        ? 'bg-brand-primary text-white'
                         : 'bg-white/10 text-white hover:bg-white/20'
                     }`}
                   >
@@ -261,7 +261,7 @@ export default function OwnerLocations() {
 
                 <button
                   onClick={() => navigate('/owner-screens')}
-                  className="px-4 py-2 bg-[#00B3A6] text-white rounded-lg hover:bg-[#00B3A6]/80 transition-colors flex items-center space-x-2"
+                  className="px-4 py-2 bg-brand-primary text-white rounded-lg hover:bg-brand-primary/80 transition-colors flex items-center space-x-2"
                 >
                   <Plus className="h-4 w-4" />
                   <span>Gérer les Écrans</span>
@@ -279,7 +279,7 @@ export default function OwnerLocations() {
                         placeholder="Rechercher un emplacement..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                        className="w-full pl-10 pr-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                       />
                     </div>
                   </div>
@@ -288,7 +288,7 @@ export default function OwnerLocations() {
                     <select
                       value={statusFilter}
                       onChange={(e) => setStatusFilter(e.target.value)}
-                      className="px-4 py-2 bg-[#00263A] border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                      className="px-4 py-2 bg-[#00263A] border border-white/20 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                     >
                       <option value="all" className="bg-[#00263A] text-white">
                         Tous les statuts
@@ -334,12 +334,12 @@ export default function OwnerLocations() {
                   {filteredLocations.map(([location, locationScreens]) => (
                     <div
                       key={location}
-                      className="bg-white/10 backdrop-blur-sm rounded-xl shadow-2xl border border-white/20 p-6 hover:shadow-[#00B3A6]/25 transition-all duration-300"
+                      className="bg-white/10 backdrop-blur-sm rounded-xl shadow-2xl border border-white/20 p-6 hover:shadow-brand-primary/25 transition-all duration-300"
                     >
                       <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center space-x-3">
-                          <div className="p-2 bg-[#00B3A6]/20 rounded-lg">
-                            <MapPin className="h-5 w-5 text-[#00B3A6]" />
+                          <div className="p-2 bg-brand-primary/20 rounded-lg">
+                            <MapPin className="h-5 w-5 text-brand-primary" />
                           </div>
                           <div>
                             <h3 className="text-xl font-bold text-white">{location}</h3>

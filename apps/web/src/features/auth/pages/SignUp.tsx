@@ -74,7 +74,7 @@ export default function SignUp() {
                         isActive
                           ? 'font-semibold text-gray-900'
                           : isDone
-                            ? 'font-medium text-[#00B3A6]'
+                            ? 'font-medium text-brand-primary'
                             : 'text-gray-400'
                       }`}
                     >

@@ -148,7 +148,7 @@ export default function ContactPage() {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[#00B3A6] mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-brand-primary mx-auto mb-4"></div>
           <p className="text-gray-600">Chargement...</p>
         </div>
       </div>
@@ -168,12 +168,12 @@ export default function ContactPage() {
                 <div className="flex items-center space-x-4">
                   <div>
                     <h1 className="text-2xl font-bold text-gray-900 flex items-center">
-                      <MessageCircle className="h-6 w-6 text-[#00B3A6] mr-2" />
+                      <MessageCircle className="h-6 w-6 text-brand-primary mr-2" />
                       Nous Contacter
                     </h1>
                     <p className="text-sm text-gray-600 mt-1">Support et assistance technique</p>
                   </div>
-                  <span className="px-3 py-1 text-sm font-medium bg-[#00B3A6]/10 text-[#00B3A6] border border-[#00B3A6]/20 rounded-full">
+                  <span className="px-3 py-1 text-sm font-medium bg-brand-primary/10 text-brand-primary border border-brand-primary/20 rounded-full">
                     Support 24/7
                   </span>
                 </div>
@@ -195,7 +195,7 @@ export default function ContactPage() {
                 <div className="lg:col-span-1">
                   <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200">
                     <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center">
-                      <MessageCircle className="h-5 w-5 text-[#00B3A6] mr-2" />
+                      <MessageCircle className="h-5 w-5 text-brand-primary mr-2" />
                       Informations de contact
                     </h2>
 
@@ -204,8 +204,8 @@ export default function ContactPage() {
                         const Icon = info.icon;
                         return (
                           <div key={index} className="flex items-start space-x-3">
-                            <div className="p-2 bg-[#00B3A6]/10 rounded-lg">
-                              <Icon className="h-5 w-5 text-[#00B3A6]" />
+                            <div className="p-2 bg-brand-primary/10 rounded-lg">
+                              <Icon className="h-5 w-5 text-brand-primary" />
                             </div>
                             <div>
                               <h3 className="text-gray-900 font-medium">{info.title}</h3>
@@ -240,7 +240,7 @@ export default function ContactPage() {
                 <div className="lg:col-span-2">
                   <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200">
                     <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center">
-                      <Send className="h-5 w-5 text-[#00B3A6] mr-2" />
+                      <Send className="h-5 w-5 text-brand-primary mr-2" />
                       Envoyer un message
                     </h2>
 
@@ -259,7 +259,7 @@ export default function ContactPage() {
                             name="name"
                             value={formData.name}
                             onChange={handleInputChange}
-                            className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6]"
+                            className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
                             placeholder="Votre nom ou raison sociale"
                             required
                           />
@@ -278,7 +278,7 @@ export default function ContactPage() {
                             name="email"
                             value={formData.email}
                             onChange={handleInputChange}
-                            className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6]"
+                            className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
                             placeholder="votre@email.com"
                             required
                           />
@@ -298,7 +298,7 @@ export default function ContactPage() {
                           name="subject"
                           value={formData.subject}
                           onChange={handleInputChange}
-                          className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6]"
+                          className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
                           placeholder="Sujet de votre message"
                           required
                         />
@@ -316,7 +316,7 @@ export default function ContactPage() {
                           name="priority"
                           value={formData.priority}
                           onChange={handleInputChange}
-                          className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6]"
+                          className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
                         >
                           <option value="low">Basse</option>
                           <option value="medium">Moyenne</option>
@@ -337,7 +337,7 @@ export default function ContactPage() {
                           value={formData.message}
                           onChange={handleInputChange}
                           rows={6}
-                          className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6] resize-none"
+                          className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary resize-none"
                           placeholder="Décrivez votre demande en détail..."
                           required
                         />
@@ -352,7 +352,7 @@ export default function ContactPage() {
                         <button
                           type="submit"
                           disabled={sending}
-                          className="flex items-center space-x-2 px-6 py-3 bg-[#00B3A6] text-white rounded-lg font-medium hover:bg-[#00B3A6]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="flex items-center space-x-2 px-6 py-3 bg-brand-primary text-white rounded-lg font-medium hover:bg-brand-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {sending ? (
                             <>

@@ -166,7 +166,7 @@ export default function AdminManagement() {
           </p>
           <button
             onClick={() => navigate('/admin-dashboard')}
-            className="px-6 py-2 bg-[#00B3A6] text-white rounded-lg hover:bg-[#008C82] transition-colors"
+            className="px-6 py-2 bg-brand-primary text-white rounded-lg hover:bg-[#008C82] transition-colors"
           >
             Retour au Dashboard
           </button>
@@ -179,7 +179,7 @@ export default function AdminManagement() {
     return (
       <AdminLayout title="Gestion des Admins" subtitle="Liste des administrateurs et modérateurs">
         <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[#00B3A6]"></div>
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-brand-primary"></div>
         </div>
       </AdminLayout>
     );
@@ -249,7 +249,7 @@ export default function AdminManagement() {
               placeholder="Rechercher un administrateur..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00B3A6]"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary"
             />
           </div>
 
@@ -257,7 +257,7 @@ export default function AdminManagement() {
             <select
               value={roleFilter}
               onChange={(e) => setRoleFilter(e.target.value as typeof roleFilter)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00B3A6]"
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary"
             >
               <option value="all">Tous les rôles</option>
               <option value="superadmin">Super Admin</option>
@@ -267,7 +267,7 @@ export default function AdminManagement() {
 
             <button
               onClick={() => navigate('/admin-create')}
-              className="px-4 py-2 bg-[#00B3A6] text-white rounded-lg hover:bg-[#008C82] transition-colors flex items-center"
+              className="px-4 py-2 bg-brand-primary text-white rounded-lg hover:bg-[#008C82] transition-colors flex items-center"
             >
               <UserPlus className="h-5 w-5 mr-2" />
               Créer Admin
@@ -310,7 +310,7 @@ export default function AdminManagement() {
                 <tr key={adminProfile.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      <div className="h-10 w-10 bg-[#00B3A6] rounded-full flex items-center justify-center">
+                      <div className="h-10 w-10 bg-brand-primary rounded-full flex items-center justify-center">
                         <span className="text-white text-sm font-medium">
                           {adminProfile.first_name.charAt(0)}
                           {adminProfile.last_name.charAt(0)}
@@ -343,7 +343,7 @@ export default function AdminManagement() {
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <button
                       onClick={() => handleViewDetails(adminProfile)}
-                      className="text-[#00B3A6] hover:text-[#008C82] mr-3"
+                      className="text-brand-primary hover:text-[#008C82] mr-3"
                       title="Voir détails"
                     >
                       <Eye className="h-5 w-5" />
@@ -397,7 +397,7 @@ export default function AdminManagement() {
               {/* Informations personnelles */}
               <div>
                 <h4 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
-                  <User className="h-5 w-5 mr-2 text-[#00B3A6]" />
+                  <User className="h-5 w-5 mr-2 text-brand-primary" />
                   Informations Personnelles
                 </h4>
                 <div className="bg-gray-50 rounded-lg p-4">
@@ -433,7 +433,7 @@ export default function AdminManagement() {
               {/* Informations de connexion */}
               <div>
                 <h4 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
-                  <Calendar className="h-5 w-5 mr-2 text-[#00B3A6]" />
+                  <Calendar className="h-5 w-5 mr-2 text-brand-primary" />
                   Informations de Connexion
                 </h4>
                 <div className="bg-gray-50 rounded-lg p-4">

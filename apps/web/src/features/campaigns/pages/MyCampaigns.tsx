@@ -601,7 +601,7 @@ export default function MyCampaigns() {
       {loading ? (
         <div className="flex items-center justify-center py-16">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[#00B3A6] mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-brand-primary mx-auto mb-4"></div>
             <p className="text-gray-600">Chargement des campagnes...</p>
           </div>
         </div>
@@ -618,7 +618,7 @@ export default function MyCampaigns() {
           </p>
           <button
             onClick={() => navigate('/new-campaign')}
-            className="px-6 py-3 bg-[#00B3A6] text-white rounded-lg hover:bg-[#008C82] transition-colors inline-flex items-center"
+            className="px-6 py-3 bg-brand-primary text-white rounded-lg hover:bg-[#008C82] transition-colors inline-flex items-center"
           >
             <Plus className="h-5 w-5 mr-2" />
             Créer une campagne
@@ -1077,7 +1077,7 @@ export default function MyCampaigns() {
             <button
               onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
               disabled={currentPage === 1}
-              className="p-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:border-[#00B3A6] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+              className="p-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:border-brand-primary disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
             >
               <ChevronLeft className="h-5 w-5" />
             </button>
@@ -1087,7 +1087,7 @@ export default function MyCampaigns() {
             <button
               onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
               disabled={currentPage === totalPages}
-              className="p-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:border-[#00B3A6] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+              className="p-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:border-brand-primary disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
             >
               <ChevronRight className="h-5 w-5" />
             </button>

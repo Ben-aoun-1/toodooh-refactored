@@ -286,7 +286,7 @@ export default function EventManagement() {
       <AdminLayout title="Gestion des Événements" subtitle="Créez et gérez les événements spéciaux">
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[#00B3A6] mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-brand-primary mx-auto mb-4"></div>
             <p className="text-gray-600">Chargement des événements...</p>
           </div>
         </div>
@@ -366,7 +366,7 @@ export default function EventManagement() {
               resetForm();
               setShowCreateModal(true);
             }}
-            className="inline-flex items-center px-4 py-2 bg-[#00B3A6] text-white rounded-lg hover:bg-[#00B3A6]/90 transition-colors"
+            className="inline-flex items-center px-4 py-2 bg-brand-primary text-white rounded-lg hover:bg-brand-primary/90 transition-colors"
           >
             <Plus className="h-5 w-5 mr-2" />
             Nouvel événement
@@ -382,7 +382,7 @@ export default function EventManagement() {
               placeholder="Rechercher par nom, ville ou lieu..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
             />
           </div>
 
@@ -390,7 +390,7 @@ export default function EventManagement() {
           <div className="relative">
             <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
             <select
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
             >
@@ -409,7 +409,7 @@ export default function EventManagement() {
           <div className="relative">
             <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
             <select
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
             >
@@ -588,7 +588,7 @@ export default function EventManagement() {
                       onClick={() => setCurrentPage(idx + 1)}
                       className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
                         currentPage === idx + 1
-                          ? 'z-10 bg-[#00B3A6] border-[#00B3A6] text-white'
+                          ? 'z-10 bg-brand-primary border-brand-primary text-white'
                           : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
                       }`}
                     >
@@ -721,7 +721,7 @@ function EventImageUpload({
           accept="image/*"
           onChange={handleFileChange}
           disabled={disabled || uploading}
-          className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-[#00B3A6] file:text-white hover:file:bg-[#00B3A6]/90"
+          className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-brand-primary file:text-white hover:file:bg-brand-primary/90"
         />
         {uploading && <p className="text-xs text-gray-500">Upload en cours...</p>}
         {imageUrl && (
@@ -798,7 +798,7 @@ function EventFormModal({
                     required
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                     id="name"
                   />
                 </div>
@@ -815,7 +815,7 @@ function EventFormModal({
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                     id="description"
                   />
                 </div>
@@ -844,7 +844,7 @@ function EventFormModal({
                         event_type: e.target.value as CreateEventDTO['event_type'],
                       })
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                     id="event-type"
                   >
                     <option value="concert">Concert</option>
@@ -875,7 +875,7 @@ function EventFormModal({
                         category: e.target.value as CreateEventDTO['category'],
                       })
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                     id="category"
                   >
                     <option value="commercial">Commercial</option>
@@ -898,7 +898,7 @@ function EventFormModal({
                     required
                     value={formData.start_date}
                     onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                     id="start-date"
                   />
                 </div>
@@ -916,7 +916,7 @@ function EventFormModal({
                     required
                     value={formData.end_date}
                     onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                     id="end-date"
                   />
                 </div>
@@ -931,7 +931,7 @@ function EventFormModal({
                     required
                     value={formData.city}
                     onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                     id="city"
                   />
                 </div>
@@ -949,7 +949,7 @@ function EventFormModal({
                     required
                     value={formData.location}
                     onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                     placeholder="Ex: Stade de France, Zénith de Paris..."
                     id="location"
                   />
@@ -964,7 +964,7 @@ function EventFormModal({
                     type="text"
                     value={formData.address}
                     onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                     id="address"
                   />
                 </div>
@@ -986,7 +986,7 @@ function EventFormModal({
                         expected_attendance: e.target.value ? parseInt(e.target.value) : undefined,
                       })
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                     placeholder="Nombre de personnes"
                     id="expected-attendance"
                   />
@@ -1008,7 +1008,7 @@ function EventFormModal({
                     onChange={(e) =>
                       setFormData({ ...formData, priority_level: parseInt(e.target.value) })
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                     id="priority-level"
                   />
                 </div>
@@ -1020,7 +1020,7 @@ function EventFormModal({
                       type="checkbox"
                       checked={formData.is_active}
                       onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                      className="h-4 w-4 text-[#00B3A6] focus:ring-[#00B3A6] border-gray-300 rounded"
+                      className="h-4 w-4 text-brand-primary focus:ring-brand-primary border-gray-300 rounded"
                     />
                     <span className="ml-2 text-sm text-gray-700">Actif</span>
                   </label>
@@ -1029,7 +1029,7 @@ function EventFormModal({
                       type="checkbox"
                       checked={formData.is_featured}
                       onChange={(e) => setFormData({ ...formData, is_featured: e.target.checked })}
-                      className="h-4 w-4 text-[#00B3A6] focus:ring-[#00B3A6] border-gray-300 rounded"
+                      className="h-4 w-4 text-brand-primary focus:ring-brand-primary border-gray-300 rounded"
                     />
                     <span className="ml-2 text-sm text-gray-700">Mettre en avant</span>
                   </label>
@@ -1040,14 +1040,14 @@ function EventFormModal({
             <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2">
               <button
                 type="submit"
-                className="w-full inline-flex justify-center items-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-[#00B3A6] text-base font-medium text-white hover:bg-[#00B3A6]/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#00B3A6] sm:w-auto sm:text-sm"
+                className="w-full inline-flex justify-center items-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-brand-primary text-base font-medium text-white hover:bg-brand-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary sm:w-auto sm:text-sm"
               >
                 {isEdit ? 'Modifier' : 'Créer'}
               </button>
               <button
                 type="button"
                 onClick={onClose}
-                className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#00B3A6] sm:mt-0 sm:w-auto sm:text-sm"
+                className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary sm:mt-0 sm:w-auto sm:text-sm"
               >
                 Annuler
               </button>
@@ -1161,7 +1161,7 @@ function EventDetailsModal({ event, onClose }: EventDetailsModalProps) {
         <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
           <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
             <div className="sm:flex sm:items-start">
-              <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-[#00B3A6] sm:mx-0 sm:h-10 sm:w-10">
+              <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-brand-primary sm:mx-0 sm:h-10 sm:w-10">
                 <Calendar className="h-6 w-6 text-white" />
               </div>
               <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
@@ -1257,7 +1257,7 @@ function EventDetailsModal({ event, onClose }: EventDetailsModalProps) {
           <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
             <button
               onClick={onClose}
-              className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-[#00B3A6] text-base font-medium text-white hover:bg-[#00B3A6]/90 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm"
+              className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-brand-primary text-base font-medium text-white hover:bg-brand-primary/90 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm"
             >
               Fermer
             </button>

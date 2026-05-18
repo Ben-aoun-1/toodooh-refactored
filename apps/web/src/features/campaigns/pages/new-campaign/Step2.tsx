@@ -101,8 +101,7 @@ export default function Step2({
   const nextDisabled =
     diffusionType === 'parc_tv'
       ? selectedParcIds.length === 0
-      : selectedCategories.length === 0 ||
-        (shouldShowClientField && !client.trim());
+      : selectedCategories.length === 0 || (shouldShowClientField && !client.trim());
 
   return (
     <div className="space-y-6">
@@ -116,7 +115,7 @@ export default function Step2({
             <>
               {loadingParcs ? (
                 <div className="flex justify-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#00B3A6]" />
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-primary" />
                 </div>
               ) : availableParcs.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
@@ -184,13 +183,13 @@ export default function Step2({
                         onClick={() => handleCategoriesToggle(category)}
                         className={`flex items-center gap-3 w-full px-4 py-3 rounded-lg border-2 text-left transition-all ${
                           isSelected
-                            ? 'border-[#00B3A6] bg-[#00B3A6]/5'
+                            ? 'border-brand-primary bg-brand-primary/5'
                             : 'border-gray-200 bg-white hover:border-gray-300'
                         }`}
                       >
                         <div
                           className={`flex-shrink-0 w-5 h-5 rounded flex items-center justify-center ${
-                            isSelected ? 'bg-[#00B3A6]' : 'border-2 border-gray-300 bg-white'
+                            isSelected ? 'bg-brand-primary' : 'border-2 border-gray-300 bg-white'
                           }`}
                         >
                           {isSelected && (
@@ -234,7 +233,7 @@ export default function Step2({
                     value={client}
                     onChange={(e) => setClient(e.target.value)}
                     onBlur={() => setTouched((t) => ({ ...t, client: true }))}
-                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent transition-all ${
+                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-transparent transition-all ${
                       touched.client && errors.client
                         ? 'border-red-300 bg-red-50'
                         : 'border-gray-300'
@@ -270,7 +269,7 @@ export default function Step2({
           className={`px-6 py-3 rounded-xl font-semibold transition-all flex items-center space-x-2 shadow-lg ${
             nextDisabled
               ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : 'bg-gradient-to-r from-[#00B3A6] to-[#00D4C4] text-white hover:from-[#00A396] hover:to-[#00C4B4]'
+              : 'bg-gradient-to-r from-brand-primary to-[#00D4C4] text-white hover:from-[#00A396] hover:to-[#00C4B4]'
           }`}
         >
           <span>Suivant</span>

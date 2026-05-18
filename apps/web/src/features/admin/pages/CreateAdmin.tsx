@@ -128,7 +128,7 @@ export default function CreateAdmin() {
           </p>
           <button
             onClick={() => navigate('/admin-dashboard')}
-            className="px-6 py-2 bg-[#00B3A6] text-white rounded-lg hover:bg-[#008C82] transition-colors"
+            className="px-6 py-2 bg-brand-primary text-white rounded-lg hover:bg-[#008C82] transition-colors"
           >
             Retour au Dashboard
           </button>
@@ -170,18 +170,18 @@ export default function CreateAdmin() {
                   onClick={() => setFormData({ ...formData, role: 'admin' })}
                   className={`p-4 border-2 rounded-lg transition-all ${
                     formData.role === 'admin'
-                      ? 'border-[#00B3A6] bg-[#00B3A6] bg-opacity-10'
+                      ? 'border-brand-primary bg-brand-primary bg-opacity-10'
                       : 'border-gray-300 hover:border-gray-400'
                   }`}
                 >
                   <Shield
                     className={`h-8 w-8 mx-auto mb-2 ${
-                      formData.role === 'admin' ? 'text-[#00B3A6]' : 'text-gray-400'
+                      formData.role === 'admin' ? 'text-brand-primary' : 'text-gray-400'
                     }`}
                   />
                   <p
                     className={`font-semibold ${
-                      formData.role === 'admin' ? 'text-[#00B3A6]' : 'text-gray-700'
+                      formData.role === 'admin' ? 'text-brand-primary' : 'text-gray-700'
                     }`}
                   >
                     Administrateur
@@ -194,18 +194,18 @@ export default function CreateAdmin() {
                   onClick={() => setFormData({ ...formData, role: 'moderator' })}
                   className={`p-4 border-2 rounded-lg transition-all ${
                     formData.role === 'moderator'
-                      ? 'border-[#00B3A6] bg-[#00B3A6] bg-opacity-10'
+                      ? 'border-brand-primary bg-brand-primary bg-opacity-10'
                       : 'border-gray-300 hover:border-gray-400'
                   }`}
                 >
                   <User
                     className={`h-8 w-8 mx-auto mb-2 ${
-                      formData.role === 'moderator' ? 'text-[#00B3A6]' : 'text-gray-400'
+                      formData.role === 'moderator' ? 'text-brand-primary' : 'text-gray-400'
                     }`}
                   />
                   <p
                     className={`font-semibold ${
-                      formData.role === 'moderator' ? 'text-[#00B3A6]' : 'text-gray-700'
+                      formData.role === 'moderator' ? 'text-brand-primary' : 'text-gray-700'
                     }`}
                   >
                     Modérateur
@@ -232,7 +232,7 @@ export default function CreateAdmin() {
                     value={formData.first_name}
                     onChange={handleChange}
                     placeholder="Prénom"
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                     required
                     id="first-name"
                   />
@@ -251,7 +251,7 @@ export default function CreateAdmin() {
                     value={formData.last_name}
                     onChange={handleChange}
                     placeholder="Nom"
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                     required
                     id="last-name"
                   />
@@ -272,7 +272,7 @@ export default function CreateAdmin() {
                   value={formData.email}
                   onChange={handleChange}
                   placeholder="admin@example.com"
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                   required
                   id="email"
                 />
@@ -292,7 +292,7 @@ export default function CreateAdmin() {
                   value={formData.password}
                   onChange={handleChange}
                   placeholder="Minimum 6 caractères"
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                   required
                   id="password"
                 />
@@ -316,7 +316,7 @@ export default function CreateAdmin() {
                   value={formData.confirmPassword}
                   onChange={handleChange}
                   placeholder="Confirmer le mot de passe"
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                   required
                   id="confirm-password"
                 />
@@ -349,7 +349,7 @@ export default function CreateAdmin() {
               <button
                 type="submit"
                 disabled={loading}
-                className="px-6 py-3 bg-[#00B3A6] text-white rounded-lg hover:bg-[#008C82] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                className="px-6 py-3 bg-brand-primary text-white rounded-lg hover:bg-[#008C82] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
               >
                 {loading ? (
                   <>

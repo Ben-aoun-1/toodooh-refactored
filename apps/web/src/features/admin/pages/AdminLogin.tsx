@@ -67,7 +67,7 @@ export default function AdminLogin() {
                   required
                   value={formData.email}
                   onChange={handleInputChange}
-                  className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6] transition-all text-gray-900 placeholder-gray-400"
+                  className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-brand-primary transition-all text-gray-900 placeholder-gray-400"
                   placeholder="admin@toodooh.com"
                 />
               </div>
@@ -86,7 +86,7 @@ export default function AdminLogin() {
                   required
                   value={formData.password}
                   onChange={handleInputChange}
-                  className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6] transition-all text-gray-900 placeholder-gray-400 pr-12"
+                  className="w-full px-4 py-3 bg-white border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-brand-primary transition-all text-gray-900 placeholder-gray-400 pr-12"
                   placeholder="••••••••"
                 />
                 <button
@@ -107,7 +107,7 @@ export default function AdminLogin() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full px-5 py-3 bg-[#00B3A6] text-white font-semibold text-base rounded-xl hover:shadow-lg hover:shadow-[#00B3A6]/25 transform hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center"
+                className="w-full px-5 py-3 bg-brand-primary text-white font-semibold text-base rounded-xl hover:shadow-lg hover:shadow-brand-primary/25 transform hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center"
               >
                 {loading ? (
                   <div className="flex items-center">

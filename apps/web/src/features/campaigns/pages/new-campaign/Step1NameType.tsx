@@ -66,7 +66,7 @@ export default function Step1NameType({
               value={campaignName}
               onChange={(e) => setCampaignName(e.target.value)}
               onBlur={() => setTouched({ campaignName: true })}
-              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent transition-all ${
+              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent transition-all ${
                 touched.campaignName && errors.campaignName
                   ? 'border-red-300 bg-red-50'
                   : 'border-gray-300'
@@ -92,12 +92,12 @@ export default function Step1NameType({
                 onClick={() => setDiffusionType('toodooh')}
                 className={`relative text-left p-5 rounded-xl border-2 transition-all ${
                   diffusionType === 'toodooh'
-                    ? 'border-[#00B3A6] bg-[#00B3A6]/5'
+                    ? 'border-brand-primary bg-brand-primary/5'
                     : 'border-gray-200 bg-white hover:border-gray-300'
                 }`}
               >
                 {diffusionType === 'toodooh' ? (
-                  <div className="absolute top-4 right-4 w-6 h-6 rounded-full bg-[#00B3A6] flex items-center justify-center">
+                  <div className="absolute top-4 right-4 w-6 h-6 rounded-full bg-brand-primary flex items-center justify-center">
                     <CheckCircle className="h-4 w-4 text-white" />
                   </div>
                 ) : (
@@ -135,7 +135,7 @@ export default function Step1NameType({
           className={`px-6 py-3 rounded-xl font-semibold transition-all flex items-center space-x-2 shadow-lg ${
             nextDisabled
               ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : 'bg-gradient-to-r from-[#00B3A6] to-[#00D4C4] text-white hover:from-[#00A396] hover:to-[#00C4B4]'
+              : 'bg-gradient-to-r from-brand-primary to-[#00D4C4] text-white hover:from-[#00A396] hover:to-[#00C4B4]'
           }`}
         >
           <span>Suivant</span>

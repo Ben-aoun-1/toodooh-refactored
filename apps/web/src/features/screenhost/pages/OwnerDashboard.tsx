@@ -77,7 +77,9 @@ export default function OwnerDashboard() {
   const isDisabled = needsApproval && validationStatus === 'pending';
 
   const [_alerts, setAlerts] = useState<Alert[]>([]);
-  const [_accountStatus, _setAccountStatus] = useState<'active' | 'pending' | 'suspended'>('active');
+  const [_accountStatus, _setAccountStatus] = useState<'active' | 'pending' | 'suspended'>(
+    'active',
+  );
   const [showGiftCatalog, setShowGiftCatalog] = useState(false);
   const [showAddScreen, setShowAddScreen] = useState(false);
   const [selectedEstablishment, setSelectedEstablishment] = useState<string | null>(null);
@@ -204,11 +206,6 @@ export default function OwnerDashboard() {
     setAlerts(generatedAlerts.slice(0, 5));
   }, [loading, screens, revenueStats]);
 
-
-
-
-
-
   // Fonctions de redirection pour les widgets
   const handleNavigateToScreens = () => {
     navigate('/owner-calendar-devices');
@@ -220,7 +217,6 @@ export default function OwnerDashboard() {
     toast.success('Redirection vers la page des revenus');
   };
 
-
   const handleNavigateToGiftCatalog = () => {
     setShowGiftCatalog(true);
   };
@@ -229,12 +225,10 @@ export default function OwnerDashboard() {
     navigate('/owner-calendar-devices');
   };
 
-
   const handleViewDetailedRevenue = () => {
     // Rediriger vers /owner-revenue en mode tableau
     navigate('/owner-revenue?viewMode=table');
   };
-
 
   const formatDuration = (totalSeconds: number) => {
     const n = Number(totalSeconds) || 0;
@@ -347,7 +341,7 @@ export default function OwnerDashboard() {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[#00B3A6] mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-brand-primary mx-auto mb-4"></div>
           <p className="text-gray-600">Chargement...</p>
         </div>
       </div>
@@ -823,7 +817,7 @@ export default function OwnerDashboard() {
                   {/* Section Mes Écrans */}
                   <div className="mb-8">
                     <h3 className="text-2xl font-bold text-gray-900 mb-4 flex items-center">
-                      <Monitor className="h-6 w-6 text-[#00B3A6] mr-2" />
+                      <Monitor className="h-6 w-6 text-brand-primary mr-2" />
                       Mes Écrans
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
@@ -838,7 +832,7 @@ export default function OwnerDashboard() {
                         }`}
                       >
                         <div className="flex items-center justify-center mb-4">
-                          <div className="p-4 rounded-xl bg-gradient-to-br from-[#00B3A6] to-[#00B3A6]/80 shadow-lg group-hover:scale-110 transition-transform">
+                          <div className="p-4 rounded-xl bg-gradient-to-br from-brand-primary to-brand-primary/80 shadow-lg group-hover:scale-110 transition-transform">
                             <Plus className="h-8 w-8 text-white" />
                           </div>
                         </div>
@@ -880,11 +874,11 @@ export default function OwnerDashboard() {
                         <div className="flex items-center justify-between">
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-gray-600 mb-1">Écrans Actifs</p>
-                            <p className="text-3xl font-bold text-gray-900 group-hover:text-[#00B3A6] transition-colors">
+                            <p className="text-3xl font-bold text-gray-900 group-hover:text-brand-primary transition-colors">
                               {stats.activeScreens}/{stats.totalScreens}
                             </p>
                           </div>
-                          <div className="p-3 rounded-xl bg-gradient-to-br from-[#00B3A6] to-[#00B3A6]/80 shadow-lg group-hover:scale-110 transition-transform flex-shrink-0 ml-3">
+                          <div className="p-3 rounded-xl bg-gradient-to-br from-brand-primary to-brand-primary/80 shadow-lg group-hover:scale-110 transition-transform flex-shrink-0 ml-3">
                             <Monitor className="h-6 w-6 text-white" />
                           </div>
                         </div>
@@ -950,7 +944,7 @@ export default function OwnerDashboard() {
                   {/* Section Mes Revenus */}
                   <div className="mb-8">
                     <h3 className="text-2xl font-bold text-gray-900 mb-4 flex items-center">
-                      <DollarSign className="h-6 w-6 text-[#00B3A6] mr-2" />
+                      <DollarSign className="h-6 w-6 text-brand-primary mr-2" />
                       Mes Revenus
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -969,7 +963,7 @@ export default function OwnerDashboard() {
                             <p className="text-sm font-medium text-gray-600 mb-1">
                               Revenus du Mois
                             </p>
-                            <p className="text-2xl font-bold text-gray-900 group-hover:text-[#00B3A6] transition-colors truncate">
+                            <p className="text-2xl font-bold text-gray-900 group-hover:text-brand-primary transition-colors truncate">
                               {stats.monthlyRevenue.toLocaleString('fr-TN', {
                                 style: 'currency',
                                 currency: 'TND',
@@ -979,7 +973,7 @@ export default function OwnerDashboard() {
                               Cliquer pour voir les détails &gt;
                             </p>
                           </div>
-                          <div className="p-3 rounded-xl bg-gradient-to-br from-[#00263A] to-[#00B3A6] shadow-lg group-hover:scale-110 transition-transform flex-shrink-0 ml-3">
+                          <div className="p-3 rounded-xl bg-gradient-to-br from-[#00263A] to-brand-primary shadow-lg group-hover:scale-110 transition-transform flex-shrink-0 ml-3">
                             <DollarSign className="h-6 w-6 text-white" />
                           </div>
                         </div>
@@ -998,7 +992,7 @@ export default function OwnerDashboard() {
                         <div className="flex items-center justify-between">
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-gray-600 mb-1">Revenus Totaux</p>
-                            <p className="text-2xl font-bold text-gray-900 group-hover:text-[#00B3A6] transition-colors truncate">
+                            <p className="text-2xl font-bold text-gray-900 group-hover:text-brand-primary transition-colors truncate">
                               {stats.totalRevenue.toLocaleString('fr-TN', {
                                 style: 'currency',
                                 currency: 'TND',
@@ -1008,7 +1002,7 @@ export default function OwnerDashboard() {
                               Cliquer pour voir l'historique &gt;
                             </p>
                           </div>
-                          <div className="p-3 rounded-xl bg-gradient-to-br from-[#00263A] to-[#00B3A6] shadow-lg group-hover:scale-110 transition-transform flex-shrink-0 ml-3">
+                          <div className="p-3 rounded-xl bg-gradient-to-br from-[#00263A] to-brand-primary shadow-lg group-hover:scale-110 transition-transform flex-shrink-0 ml-3">
                             <TrendingUp className="h-6 w-6 text-white" />
                           </div>
                         </div>
@@ -1025,7 +1019,7 @@ export default function OwnerDashboard() {
                         }`}
                       >
                         <div className="flex items-center justify-center mb-4">
-                          <div className="p-4 rounded-xl bg-gradient-to-br from-[#00B3A6] to-[#00B3A6]/80 shadow-lg group-hover:scale-110 transition-transform">
+                          <div className="p-4 rounded-xl bg-gradient-to-br from-brand-primary to-brand-primary/80 shadow-lg group-hover:scale-110 transition-transform">
                             <BarChart3 className="h-8 w-8 text-white" />
                           </div>
                         </div>
@@ -1039,7 +1033,7 @@ export default function OwnerDashboard() {
                   {/* Section Rewards */}
                   <div className="mb-8">
                     <h3 className="text-2xl font-bold text-gray-900 mb-4 flex items-center">
-                      <Gift className="h-6 w-6 text-[#00B3A6] mr-2" />
+                      <Gift className="h-6 w-6 text-brand-primary mr-2" />
                       Rewards
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1053,11 +1047,11 @@ export default function OwnerDashboard() {
                             <p className="text-sm font-medium text-gray-600 mb-1">
                               Points Fidélité
                             </p>
-                            <p className="text-3xl font-bold text-gray-900 group-hover:text-[#00B3A6] transition-colors">
+                            <p className="text-3xl font-bold text-gray-900 group-hover:text-brand-primary transition-colors">
                               {stats.loyaltyPoints}
                             </p>
                           </div>
-                          <div className="p-3 rounded-xl bg-gradient-to-br from-[#00B3A6] to-[#00B3A6]/80 shadow-lg group-hover:scale-110 transition-transform flex-shrink-0 ml-3">
+                          <div className="p-3 rounded-xl bg-gradient-to-br from-brand-primary to-brand-primary/80 shadow-lg group-hover:scale-110 transition-transform flex-shrink-0 ml-3">
                             <Star className="h-6 w-6 text-white" />
                           </div>
                         </div>
@@ -1069,7 +1063,7 @@ export default function OwnerDashboard() {
                         className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 border border-gray-200 cursor-pointer group text-left"
                       >
                         <div className="flex items-center justify-center mb-4">
-                          <div className="p-4 rounded-xl bg-gradient-to-br from-[#00B3A6] to-[#00B3A6]/80 shadow-lg group-hover:scale-110 transition-transform">
+                          <div className="p-4 rounded-xl bg-gradient-to-br from-brand-primary to-brand-primary/80 shadow-lg group-hover:scale-110 transition-transform">
                             <Gift className="h-8 w-8 text-white" />
                           </div>
                         </div>

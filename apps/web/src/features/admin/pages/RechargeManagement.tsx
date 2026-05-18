@@ -205,7 +205,7 @@ export default function RechargeManagement() {
       <AdminLayout>
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#00B3A6] mx-auto"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-primary mx-auto"></div>
             <p className="mt-4 text-gray-600">Chargement...</p>
           </div>
         </div>
@@ -257,7 +257,7 @@ export default function RechargeManagement() {
             </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-[#00B3A6]">
+          <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-brand-primary">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600 mb-1">Montant Total</p>
@@ -265,7 +265,7 @@ export default function RechargeManagement() {
                   {adminRechargesService.formatAmount(stats.total_amount)}
                 </p>
               </div>
-              <TrendingUp className="h-10 w-10 text-[#00B3A6]" />
+              <TrendingUp className="h-10 w-10 text-brand-primary" />
             </div>
           </div>
         </div>
@@ -277,7 +277,7 @@ export default function RechargeManagement() {
           <h3 className="text-lg font-semibold text-gray-900">Filtres</h3>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center space-x-2 px-4 py-2 bg-[#00B3A6] text-white rounded-lg hover:bg-[#00A095] transition-colors"
+            className="flex items-center space-x-2 px-4 py-2 bg-brand-primary text-white rounded-lg hover:bg-[#00A095] transition-colors"
           >
             <Plus className="h-5 w-5" />
             <span>Nouvelle recharge</span>
@@ -296,7 +296,7 @@ export default function RechargeManagement() {
                 setStatusFilter(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
               id="status-filter"
             >
               <option value="all">Tous les statuts</option>
@@ -321,7 +321,7 @@ export default function RechargeManagement() {
                 setCurrentPage(1);
               }}
               placeholder="Rechercher une référence..."
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
               id="search-term"
             />
           </div>
@@ -370,7 +370,7 @@ export default function RechargeManagement() {
                     <div className="text-xs text-gray-500">{recharge.user_email}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-bold text-[#00B3A6]">
+                    <div className="text-sm font-bold text-brand-primary">
                       {adminRechargesService.formatAmount(recharge.amount)}
                     </div>
                   </td>
@@ -541,7 +541,7 @@ export default function RechargeManagement() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <span className="text-sm font-medium text-gray-600">Montant</span>
-                    <p className="text-2xl font-bold text-[#00B3A6]">
+                    <p className="text-2xl font-bold text-brand-primary">
                       {adminRechargesService.formatAmount(selectedRecharge.amount)}
                     </p>
                   </div>
@@ -654,7 +654,7 @@ export default function RechargeManagement() {
                   onChange={(e) => setValidationNotes(e.target.value)}
                   rows={3}
                   placeholder="Ajouter des notes de validation..."
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                   id="validation-notes"
                 />
               </div>
@@ -763,7 +763,7 @@ export default function RechargeManagement() {
                   <select
                     value={newRecharge.user_id}
                     onChange={(e) => setNewRecharge({ ...newRecharge, user_id: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                     required
                     id="user-id"
                   >
@@ -788,7 +788,7 @@ export default function RechargeManagement() {
                     value={newRecharge.amount}
                     onChange={(e) => setNewRecharge({ ...newRecharge, amount: e.target.value })}
                     placeholder="Ex: 500.00"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                     required
                     id="amount"
                   />
@@ -810,7 +810,7 @@ export default function RechargeManagement() {
                         payment_method: e.target.value as 'card' | 'bank' | 'cash',
                       })
                     }
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                     id="payment-method"
                   >
                     <option value="bank">Virement bancaire</option>
@@ -834,7 +834,7 @@ export default function RechargeManagement() {
                     }
                     rows={3}
                     placeholder="Ajouter une description..."
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                     id="description"
                   />
                 </div>
@@ -848,7 +848,7 @@ export default function RechargeManagement() {
                     onChange={(e) =>
                       setNewRecharge({ ...newRecharge, auto_validate: e.target.checked })
                     }
-                    className="h-4 w-4 text-[#00B3A6] focus:ring-[#00B3A6] border-gray-300 rounded"
+                    className="h-4 w-4 text-brand-primary focus:ring-brand-primary border-gray-300 rounded"
                   />
                   <label htmlFor="auto_validate" className="text-sm text-gray-700">
                     <span className="font-medium">Valider automatiquement</span>
@@ -897,7 +897,7 @@ export default function RechargeManagement() {
                     !newRecharge.amount ||
                     parseFloat(newRecharge.amount) <= 0
                   }
-                  className="px-6 py-2 bg-[#00B3A6] text-white rounded-lg hover:bg-[#00A095] transition-colors flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-6 py-2 bg-brand-primary text-white rounded-lg hover:bg-[#00A095] transition-colors flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Plus className="h-5 w-5" />
                   <span>Créer la recharge</span>

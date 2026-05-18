@@ -56,7 +56,7 @@ export default function LoginForm() {
             required
             value={formData.email}
             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-            className="w-full pl-11 pr-4 py-3 bg-white border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#00B3A6]/30 focus:border-[#00B3A6] transition-all text-sm text-gray-900 placeholder-gray-400"
+            className="w-full pl-11 pr-4 py-3 bg-white border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary/30 focus:border-brand-primary transition-all text-sm text-gray-900 placeholder-gray-400"
             placeholder="contact@entreprise.com"
           />
         </div>
@@ -77,7 +77,7 @@ export default function LoginForm() {
             required
             value={formData.password}
             onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-            className="w-full pl-11 pr-11 py-3 bg-white border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#00B3A6]/30 focus:border-[#00B3A6] transition-all text-sm text-gray-900 placeholder-gray-400"
+            className="w-full pl-11 pr-11 py-3 bg-white border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary/30 focus:border-brand-primary transition-all text-sm text-gray-900 placeholder-gray-400"
             placeholder="••••••••••"
           />
           <button
@@ -99,7 +99,7 @@ export default function LoginForm() {
             type="checkbox"
             checked={rememberMe}
             onChange={(e) => setRememberMe(e.target.checked)}
-            className="h-4 w-4 text-[#00B3A6] focus:ring-[#00B3A6] border-gray-300 rounded"
+            className="h-4 w-4 text-brand-primary focus:ring-brand-primary border-gray-300 rounded"
           />
           <label htmlFor="remember-me" className="text-sm text-gray-600">
             Se souvenir de moi

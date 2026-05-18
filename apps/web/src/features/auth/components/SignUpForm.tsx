@@ -541,7 +541,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
 
   /* ── render helpers ── */
   const inputClass =
-    'w-full px-4 py-3 bg-white border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#00B3A6]/30 focus:border-[#00B3A6] transition-all text-sm text-gray-900 placeholder-gray-400';
+    'w-full px-4 py-3 bg-white border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary/30 focus:border-brand-primary transition-all text-sm text-gray-900 placeholder-gray-400';
   const labelClass = 'block text-sm font-medium text-gray-700 mb-1.5';
 
   /* ═══════ Step 0: Profile selection ═══════ */
@@ -813,7 +813,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
         <p className="text-xs text-gray-500">Doit contenir au moins</p>
         <div className="flex items-center gap-1.5">
           <div
-            className={`w-4 h-4 rounded-full flex items-center justify-center ${pwHasUpper ? 'bg-[#00B3A6]' : 'bg-gray-200'}`}
+            className={`w-4 h-4 rounded-full flex items-center justify-center ${pwHasUpper ? 'bg-brand-primary' : 'bg-gray-200'}`}
           >
             {pwHasUpper && (
               <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
@@ -833,7 +833,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
         </div>
         <div className="flex items-center gap-1.5">
           <div
-            className={`w-4 h-4 rounded-full flex items-center justify-center ${pwHasDigit ? 'bg-[#00B3A6]' : 'bg-gray-200'}`}
+            className={`w-4 h-4 rounded-full flex items-center justify-center ${pwHasDigit ? 'bg-brand-primary' : 'bg-gray-200'}`}
           >
             {pwHasDigit && (
               <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
@@ -853,7 +853,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
         </div>
         <div className="flex items-center gap-1.5">
           <div
-            className={`w-4 h-4 rounded-full flex items-center justify-center ${pwHasMinLen ? 'bg-[#00B3A6]' : 'bg-gray-200'}`}
+            className={`w-4 h-4 rounded-full flex items-center justify-center ${pwHasMinLen ? 'bg-brand-primary' : 'bg-gray-200'}`}
           >
             {pwHasMinLen && (
               <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
@@ -1583,7 +1583,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
               setAddBankLater(e.target.checked);
               if (e.target.checked) setBankDocFile(null);
             }}
-            className="h-5 w-5 text-[#00B3A6] focus:ring-[#00B3A6] border-gray-300 rounded mt-0.5 flex-shrink-0"
+            className="h-5 w-5 text-brand-primary focus:ring-brand-primary border-gray-300 rounded mt-0.5 flex-shrink-0"
           />
           <div>
             <p className="text-sm font-semibold text-gray-900">
@@ -1638,7 +1638,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             type="checkbox"
             checked={formData.terms_accepted}
             onChange={(e) => setFormData({ ...formData, terms_accepted: e.target.checked })}
-            className="h-5 w-5 text-[#00B3A6] focus:ring-[#00B3A6] border-gray-300 rounded mt-0.5 flex-shrink-0"
+            className="h-5 w-5 text-brand-primary focus:ring-brand-primary border-gray-300 rounded mt-0.5 flex-shrink-0"
           />
           <span className="text-sm text-gray-700">
             J&apos;accepte{' '}
@@ -1652,7 +1652,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             type="checkbox"
             checked={ownerCertificationAccepted}
             onChange={(e) => setOwnerCertificationAccepted(e.target.checked)}
-            className="h-5 w-5 text-[#00B3A6] focus:ring-[#00B3A6] border-gray-300 rounded mt-0.5 flex-shrink-0"
+            className="h-5 w-5 text-brand-primary focus:ring-brand-primary border-gray-300 rounded mt-0.5 flex-shrink-0"
           />
           <span className="text-sm text-gray-500">
             En validant mon inscription, je certifie être autorisé(e) à inscrire cet établissement
@@ -1782,7 +1782,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
               setAddDocumentLater(e.target.checked);
               if (e.target.checked) setDocumentFile(null);
             }}
-            className="h-5 w-5 text-[#00B3A6] focus:ring-[#00B3A6] border-gray-300 rounded mt-0.5 flex-shrink-0"
+            className="h-5 w-5 text-brand-primary focus:ring-brand-primary border-gray-300 rounded mt-0.5 flex-shrink-0"
           />
           <div>
             <p className="text-sm font-semibold text-gray-900">
@@ -1862,7 +1862,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             type="checkbox"
             checked={formData.terms_accepted}
             onChange={(e) => setFormData({ ...formData, terms_accepted: e.target.checked })}
-            className="h-5 w-5 text-[#00B3A6] focus:ring-[#00B3A6] border-gray-300 rounded mt-0.5 flex-shrink-0"
+            className="h-5 w-5 text-brand-primary focus:ring-brand-primary border-gray-300 rounded mt-0.5 flex-shrink-0"
           />
           <span className="text-sm text-gray-700">
             J&apos;accepte{' '}
@@ -1874,7 +1874,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
         <label className="flex items-start cursor-pointer gap-3">
           <input
             type="checkbox"
-            className="h-5 w-5 text-[#00B3A6] focus:ring-[#00B3A6] border-gray-300 rounded mt-0.5 flex-shrink-0"
+            className="h-5 w-5 text-brand-primary focus:ring-brand-primary border-gray-300 rounded mt-0.5 flex-shrink-0"
           />
           <span className="text-sm text-gray-500">
             En validant mon inscription, je certifie être autorisé(e) à inscrire cette entreprise

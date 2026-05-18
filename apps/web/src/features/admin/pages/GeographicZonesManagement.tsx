@@ -262,7 +262,7 @@ export default function GeographicZonesManagement() {
             </select>
             <button
               onClick={() => handleOpenModal()}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-[#00B3A6] text-white rounded-xl hover:bg-[#00B3A6]/90 transition-colors font-medium"
+              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-brand-primary text-white rounded-xl hover:bg-brand-primary/90 transition-colors font-medium"
             >
               <Plus className="w-5 h-5" />
               Ajouter une zone
@@ -387,7 +387,7 @@ export default function GeographicZonesManagement() {
                           </button>
                           <button
                             onClick={() => handleOpenModal(zone)}
-                            className="text-[#00B3A6] hover:text-[#00B3A6]/80"
+                            className="text-brand-primary hover:text-brand-primary/80"
                             title="Modifier"
                           >
                             <Edit className="w-4 h-4" />
@@ -439,7 +439,7 @@ export default function GeographicZonesManagement() {
                       value={zoneName}
                       onChange={(e) => setZoneName(e.target.value)}
                       placeholder="Ex: Centre-ville Tunis"
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                       id="zone-name"
                     />
                   </div>
@@ -455,7 +455,7 @@ export default function GeographicZonesManagement() {
                       onChange={(e) => setZoneDescription(e.target.value)}
                       placeholder="Description de la zone..."
                       rows={3}
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                       id="zone-description"
                     />
                   </div>
@@ -500,7 +500,7 @@ export default function GeographicZonesManagement() {
                       id="zone-is-hot"
                       checked={zoneIsHot}
                       onChange={(e) => setZoneIsHot(e.target.checked)}
-                      className="rounded border-gray-300 text-[#00B3A6] focus:ring-[#00B3A6]"
+                      className="rounded border-gray-300 text-brand-primary focus:ring-brand-primary"
                     />
                     <label
                       htmlFor="zone-is-hot"
@@ -522,7 +522,7 @@ export default function GeographicZonesManagement() {
                       value={zoneCountry}
                       onChange={(e) => setZoneCountry(e.target.value)}
                       placeholder="Ex: Tunisie"
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                       id="zone-country"
                     />
                   </div>
@@ -538,7 +538,7 @@ export default function GeographicZonesManagement() {
                       value={zoneRegion}
                       onChange={(e) => setZoneRegion(e.target.value)}
                       placeholder="Ex: Tunis, Cap Bon"
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                       id="zone-region"
                     />
                   </div>
@@ -556,7 +556,7 @@ export default function GeographicZonesManagement() {
                       min="100"
                       max="50000"
                       step="100"
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#00B3A6]"
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-brand-primary"
                       style={{
                         background: `linear-gradient(to right, #00B3A6 0%, #00B3A6 ${((radius - 100) / (50000 - 100)) * 100}%, #e5e7eb ${((radius - 100) / (50000 - 100)) * 100}%, #e5e7eb 100%)`,
                       }}
@@ -661,7 +661,7 @@ export default function GeographicZonesManagement() {
                 </button>
                 <button
                   onClick={handleSave}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-[#00B3A6] text-white rounded-xl hover:bg-[#00B3A6]/90 transition-colors font-medium"
+                  className="flex items-center gap-2 px-6 py-2.5 bg-brand-primary text-white rounded-xl hover:bg-brand-primary/90 transition-colors font-medium"
                 >
                   <Save className="w-5 h-5" />
                   {editingZone ? 'Enregistrer les modifications' : 'Créer la zone'}

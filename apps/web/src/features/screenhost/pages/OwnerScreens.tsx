@@ -164,7 +164,11 @@ export default function OwnerScreens() {
     }
   };
 
-  const handleStatusChange = async (screenId: string, newStatus: ScreenStatus, _reason?: string) => {
+  const handleStatusChange = async (
+    screenId: string,
+    newStatus: ScreenStatus,
+    _reason?: string,
+  ) => {
     try {
       // Appeler le service pour mettre à jour en base de données
 
@@ -343,7 +347,7 @@ export default function OwnerScreens() {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[#00B3A6] mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-brand-primary mx-auto mb-4"></div>
           <p className="text-gray-600">Chargement...</p>
         </div>
       </div>
@@ -365,7 +369,7 @@ export default function OwnerScreens() {
                     <h1 className="text-2xl font-bold text-gray-900">Mes Écrans</h1>
                     <p className="text-sm text-gray-600 mt-1">Gérez et suivez vos écrans</p>
                   </div>
-                  <span className="px-3 py-1 text-sm font-medium bg-[#00B3A6]/10 text-[#00B3A6] border border-[#00B3A6]/20 rounded-full">
+                  <span className="px-3 py-1 text-sm font-medium bg-brand-primary/10 text-brand-primary border border-brand-primary/20 rounded-full">
                     {screens.length} écran{screens.length > 1 ? 's' : ''}
                   </span>
                 </div>
@@ -397,7 +401,7 @@ export default function OwnerScreens() {
 
                 <button
                   onClick={() => setShowAddScreenModal(true)}
-                  className="px-4 py-2 bg-[#00B3A6] text-gray-900 rounded-lg hover:bg-[#00B3A6]/80 transition-colors flex items-center space-x-2"
+                  className="px-4 py-2 bg-brand-primary text-gray-900 rounded-lg hover:bg-brand-primary/80 transition-colors flex items-center space-x-2"
                 >
                   <Plus className="h-4 w-4" />
                   <span>Ajouter un écran</span>
@@ -415,7 +419,7 @@ export default function OwnerScreens() {
                         placeholder="Rechercher un écran..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6]"
+                        className="w-full pl-10 pr-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
                       />
                     </div>
                   </div>
@@ -427,7 +431,7 @@ export default function OwnerScreens() {
                         onClick={() => setStatusFilter('all')}
                         className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                           statusFilter === 'all'
-                            ? 'bg-[#00B3A6] text-gray-900'
+                            ? 'bg-brand-primary text-gray-900'
                             : 'bg-white/10 text-gray-700 hover:bg-gray-100'
                         }`}
                       >
@@ -482,7 +486,7 @@ export default function OwnerScreens() {
                     <select
                       value={sortBy}
                       onChange={(e) => setSortBy(e.target.value)}
-                      className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6]"
+                      className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
                     >
                       <option value="name" className="bg-white text-gray-900">
                         Trier par nom
@@ -645,8 +649,8 @@ export default function OwnerScreens() {
                             )
                           }
                           disabled={updatingScreen === screen.id}
-                          className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:ring-offset-2 ${
-                            screenAutoAccept.get(screen.id) ? 'bg-[#00B3A6]' : 'bg-gray-200'
+                          className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2 ${
+                            screenAutoAccept.get(screen.id) ? 'bg-brand-primary' : 'bg-gray-200'
                           } ${updatingScreen === screen.id ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                           <span
@@ -662,7 +666,7 @@ export default function OwnerScreens() {
                     <div className="flex space-x-2">
                       <button
                         onClick={() => setSelectedScreen(screen)}
-                        className="flex-1 px-3 py-2 bg-[#00B3A6]/20 text-[#00B3A6] rounded-lg hover:bg-[#00B3A6]/30 transition-colors text-sm font-medium flex items-center justify-center"
+                        className="flex-1 px-3 py-2 bg-brand-primary/20 text-brand-primary rounded-lg hover:bg-brand-primary/30 transition-colors text-sm font-medium flex items-center justify-center"
                       >
                         <Eye className="h-4 w-4 mr-1" />
                         Détails
@@ -714,7 +718,7 @@ export default function OwnerScreens() {
             {/* Header */}
             <div className="flex items-center justify-between p-6 border-b">
               <div className="flex items-center space-x-3">
-                <Monitor className="h-6 w-6 text-[#00B3A6]" />
+                <Monitor className="h-6 w-6 text-brand-primary" />
                 <h2 className="text-xl font-bold text-gray-900">{selectedScreen.name}</h2>
               </div>
               <button
@@ -882,7 +886,7 @@ export default function OwnerScreens() {
             {/* Header */}
             <div className="flex items-center justify-between p-6 border-b">
               <div className="flex items-center space-x-3">
-                <Wrench className="h-6 w-6 text-[#00B3A6]" />
+                <Wrench className="h-6 w-6 text-brand-primary" />
                 <h2 className="text-xl font-bold text-gray-900">Changer le statut de l'écran</h2>
               </div>
               <button

@@ -125,7 +125,6 @@ export default function GiftCatalogPage() {
         return;
       }
 
-
       setLoading(false);
     };
 
@@ -166,7 +165,7 @@ export default function GiftCatalogPage() {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[#00B3A6] mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-brand-primary mx-auto mb-4"></div>
           <p className="text-gray-600">Chargement du catalogue...</p>
         </div>
       </div>
@@ -186,14 +185,14 @@ export default function GiftCatalogPage() {
                 <div className="flex items-center space-x-4">
                   <div>
                     <h1 className="text-2xl font-bold text-gray-900 flex items-center">
-                      <Gift className="h-6 w-6 text-[#00B3A6] mr-2" />
+                      <Gift className="h-6 w-6 text-brand-primary mr-2" />
                       Catalogue Cadeaux
                     </h1>
                     <p className="text-sm text-gray-600 mt-1">
                       Échangez vos points contre des récompenses
                     </p>
                   </div>
-                  <span className="px-3 py-1 text-sm font-medium bg-[#00B3A6]/10 text-[#00B3A6] border border-[#00B3A6]/20 rounded-full">
+                  <span className="px-3 py-1 text-sm font-medium bg-brand-primary/10 text-brand-primary border border-brand-primary/20 rounded-full">
                     {filteredItems.length} cadeau{filteredItems.length > 1 ? 'x' : ''}
                   </span>
                 </div>
@@ -235,7 +234,7 @@ export default function GiftCatalogPage() {
                         placeholder="Rechercher un cadeau..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6]"
+                        className="w-full pl-10 pr-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
                       />
                     </div>
 
@@ -257,7 +256,7 @@ export default function GiftCatalogPage() {
                       <select
                         value={sortBy}
                         onChange={(e) => setSortBy(e.target.value as 'points' | 'name' | 'popular')}
-                        className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-[#00B3A6]"
+                        className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
                       >
                         <option value="popular">Plus populaires</option>
                         <option value="points">Points croissants</option>
@@ -276,7 +275,7 @@ export default function GiftCatalogPage() {
                             onClick={() => setSelectedCategory(category.id)}
                             className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
                               selectedCategory === category.id
-                                ? 'bg-[#00B3A6] text-white'
+                                ? 'bg-brand-primary text-white'
                                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                             }`}
                           >
@@ -297,7 +296,7 @@ export default function GiftCatalogPage() {
                     className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 flex flex-col h-full shadow-lg"
                   >
                     {/* Image du cadeau */}
-                    <div className="relative h-48 bg-gradient-to-br from-[#00B3A6]/10 to-[#00B3A6]/5 flex items-center justify-center">
+                    <div className="relative h-48 bg-gradient-to-br from-brand-primary/10 to-brand-primary/5 flex items-center justify-center">
                       <div className="text-6xl">{item.image}</div>
                       {!item.available && (
                         <div className="absolute top-2 left-2 bg-yellow-500 text-white text-xs px-2 py-1 rounded-full font-medium">
@@ -330,7 +329,7 @@ export default function GiftCatalogPage() {
                           disabled={userPoints < item.pointsRequired || !item.available}
                           className={`w-full flex items-center justify-center space-x-2 px-3 py-2 rounded-lg font-medium transition-colors text-sm ${
                             userPoints >= item.pointsRequired && item.available
-                              ? 'bg-[#00B3A6] text-white hover:bg-[#00B3A6]/90'
+                              ? 'bg-brand-primary text-white hover:bg-brand-primary/90'
                               : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                           }`}
                         >

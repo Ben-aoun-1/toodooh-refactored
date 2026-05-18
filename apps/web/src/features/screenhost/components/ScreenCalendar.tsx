@@ -370,7 +370,7 @@ export default function ScreenCalendar({
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b">
           <div className="flex items-center space-x-3">
-            <Calendar className="h-6 w-6 text-[#00B3A6]" />
+            <Calendar className="h-6 w-6 text-brand-primary" />
             <h2 className="text-xl font-bold text-gray-900">Calendrier des Indisponibilités</h2>
           </div>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
@@ -384,7 +384,7 @@ export default function ScreenCalendar({
             onClick={() => setViewMode('calendar')}
             className={`px-4 py-2 rounded-lg transition-colors ${
               viewMode === 'calendar'
-                ? 'bg-[#00B3A6] text-white'
+                ? 'bg-brand-primary text-white'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
@@ -395,7 +395,7 @@ export default function ScreenCalendar({
             onClick={() => setViewMode('form')}
             className={`px-4 py-2 rounded-lg transition-colors ${
               viewMode === 'form'
-                ? 'bg-[#00B3A6] text-white'
+                ? 'bg-brand-primary text-white'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
@@ -447,7 +447,7 @@ export default function ScreenCalendar({
                       className={`min-h-[80px] p-2 rounded-lg border transition-colors ${
                         day.isCurrentMonth
                           ? day.isToday
-                            ? 'bg-[#00B3A6]/20 border-[#00B3A6] text-gray-900'
+                            ? 'bg-brand-primary/20 border-brand-primary text-gray-900'
                             : day.hasUnavailability
                               ? 'bg-red-100 border-red-300 text-gray-900'
                               : 'bg-white border-gray-200 text-gray-900 hover:bg-gray-50'
@@ -484,7 +484,7 @@ export default function ScreenCalendar({
             {/* Légende */}
             <div className="flex items-center space-x-6 text-sm">
               <div className="flex items-center space-x-2">
-                <div className="w-4 h-4 bg-[#00B3A6]/20 border border-[#00B3A6] rounded"></div>
+                <div className="w-4 h-4 bg-brand-primary/20 border border-brand-primary rounded"></div>
                 <span className="text-gray-700">Aujourd'hui</span>
               </div>
               <div className="flex items-center space-x-2">
@@ -514,7 +514,7 @@ export default function ScreenCalendar({
                     aria-label={`Sélectionner l'écran ${screen.name}`}
                     className={`flex items-center p-3 rounded-lg border cursor-pointer transition-colors ${
                       selectedScreens.includes(screen.id)
-                        ? 'bg-[#00B3A6]/10 border-[#00B3A6]'
+                        ? 'bg-brand-primary/10 border-brand-primary'
                         : 'bg-white border-gray-200 hover:bg-gray-50'
                     }`}
                   >
@@ -528,7 +528,7 @@ export default function ScreenCalendar({
                       <div
                         className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
                           selectedScreens.includes(screen.id)
-                            ? 'bg-[#00B3A6] border-[#00B3A6]'
+                            ? 'bg-brand-primary border-brand-primary'
                             : 'border-gray-300'
                         }`}
                       >
@@ -566,7 +566,7 @@ export default function ScreenCalendar({
                       value={startDate}
                       onChange={(e) => setStartDate(e.target.value)}
                       min={new Date().toISOString().split('T')[0]}
-                      className={`w-full px-3 py-2 bg-white border rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent ${
+                      className={`w-full px-3 py-2 bg-white border rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent ${
                         startDate && startDate < new Date().toISOString().split('T')[0]
                           ? 'border-red-500'
                           : 'border-gray-300'
@@ -591,7 +591,7 @@ export default function ScreenCalendar({
                       value={endDate}
                       onChange={(e) => setEndDate(e.target.value)}
                       min={startDate || new Date().toISOString().split('T')[0]}
-                      className={`w-full px-3 py-2 bg-white border rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent ${
+                      className={`w-full px-3 py-2 bg-white border rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent ${
                         startDate && endDate && endDate < startDate
                           ? 'border-red-500'
                           : 'border-gray-300'
@@ -621,7 +621,7 @@ export default function ScreenCalendar({
                       type="time"
                       value={startTime}
                       onChange={(e) => setStartTime(e.target.value)}
-                      className={`w-full px-3 py-2 bg-white border rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent ${
+                      className={`w-full px-3 py-2 bg-white border rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent ${
                         startDate === new Date().toISOString().split('T')[0] &&
                         startTime &&
                         startTime < new Date().toTimeString().split(' ')[0].substring(0, 5)
@@ -651,7 +651,7 @@ export default function ScreenCalendar({
                       value={endTime}
                       onChange={(e) => setEndTime(e.target.value)}
                       min={startDate === endDate ? startTime : undefined}
-                      className={`w-full px-3 py-2 bg-white border rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent ${
+                      className={`w-full px-3 py-2 bg-white border rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent ${
                         startDate &&
                         endDate &&
                         startDate === endDate &&
@@ -693,7 +693,7 @@ export default function ScreenCalendar({
                   onChange={(e) => setReason(e.target.value)}
                   placeholder="Ex: Maintenance préventive, Panne technique, Événement privé..."
                   rows={3}
-                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                   id="reason"
                 />
                 {!reason.trim() && (
@@ -732,7 +732,7 @@ export default function ScreenCalendar({
                 disabled={!isFormValid}
                 className={`px-6 py-2 rounded-lg transition-colors flex items-center space-x-2 ${
                   isFormValid
-                    ? 'bg-[#00B3A6] text-white hover:bg-[#00B3A6]/90'
+                    ? 'bg-brand-primary text-white hover:bg-brand-primary/90'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}
               >

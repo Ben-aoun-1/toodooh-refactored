@@ -222,7 +222,7 @@ export default function Step5({
               id="step5-existing-video"
               value={selectedExistingVideo?.id ?? ''}
               onChange={(e) => handleSelectExistingVideo(e.target.value)}
-              className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl bg-gray-50 text-gray-700 focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent cursor-pointer"
+              className="w-full px-4 py-3 text-sm border border-gray-300 rounded-xl bg-gray-50 text-gray-700 focus:ring-2 focus:ring-brand-primary focus:border-transparent cursor-pointer"
             >
               <option value="">Sélectionner un spot existant</option>
               {myApprovedVideos.map((video) => (
@@ -236,13 +236,13 @@ export default function Step5({
           {/* Zone upload — ou uploadez un nouveau spot */}
           {uploading ? (
             <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center bg-gray-50/50">
-              <div className="animate-spin rounded-full h-10 w-10 border-2 border-[#00B3A6] border-t-transparent mx-auto mb-3" />
+              <div className="animate-spin rounded-full h-10 w-10 border-2 border-brand-primary border-t-transparent mx-auto mb-3" />
               <p className="text-sm font-medium text-gray-700">Upload en cours...</p>
               {uploadProgress && (
                 <div className="max-w-xs mx-auto mt-2">
                   <div className="w-full bg-gray-200 rounded-full h-1.5">
                     <div
-                      className="bg-[#00B3A6] h-1.5 rounded-full transition-all"
+                      className="bg-brand-primary h-1.5 rounded-full transition-all"
                       style={{ width: `${uploadProgress.progress}%` }}
                     />
                   </div>
@@ -270,7 +270,7 @@ export default function Step5({
                       setUploadedVideoUrl('');
                       setUploadedVideoId('');
                     }}
-                    className="text-sm text-[#00B3A6] hover:underline font-medium"
+                    className="text-sm text-brand-primary hover:underline font-medium"
                   >
                     Changer
                   </button>
@@ -286,12 +286,12 @@ export default function Step5({
             </div>
           ) : (
             <label
-              className="block border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-[#00B3A6]/50 hover:bg-gray-50/50 transition-colors cursor-pointer"
+              className="block border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-brand-primary/50 hover:bg-gray-50/50 transition-colors cursor-pointer"
               aria-label="Uploader un nouveau spot publicitaire"
             >
               <div className="flex flex-col items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-[#00B3A6]/15 flex items-center justify-center">
-                  <Upload className="w-6 h-6 text-[#00B3A6]" />
+                <div className="w-12 h-12 rounded-full bg-brand-primary/15 flex items-center justify-center">
+                  <Upload className="w-6 h-6 text-brand-primary" />
                 </div>
                 <p className="font-bold text-gray-900">Ou uploadez un nouveau spot</p>
                 <p className="text-sm text-gray-500">Formats acceptés : MP4, MOV (max 100MB)</p>
@@ -352,7 +352,7 @@ export default function Step5({
           className={`px-6 py-3 rounded-xl font-semibold transition-all flex items-center space-x-2 shadow-lg ${
             nextDisabled
               ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : 'bg-gradient-to-r from-[#00B3A6] to-[#00D4C4] text-white hover:from-[#00A396] hover:to-[#00C4B4]'
+              : 'bg-gradient-to-r from-brand-primary to-[#00D4C4] text-white hover:from-[#00A396] hover:to-[#00C4B4]'
           }`}
         >
           <span>Suivant</span>

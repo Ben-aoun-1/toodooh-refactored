@@ -67,7 +67,7 @@ export default function UpdatePasswordForm() {
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full pl-10 pr-12 py-3 bg-white/10 border border-white/20 rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent transition-all duration-200 text-white placeholder-white/50 backdrop-blur-sm"
+            className="w-full pl-10 pr-12 py-3 bg-white/10 border border-white/20 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-transparent transition-all duration-200 text-white placeholder-white/50 backdrop-blur-sm"
             placeholder="••••••••"
           />
           <button
@@ -83,7 +83,7 @@ export default function UpdatePasswordForm() {
         <div className="mt-3 space-y-2">
           <div className="flex items-center text-xs">
             <CheckCircle
-              className={`w-4 h-4 mr-2 ${passwordValidation.minLength ? 'text-[#00B3A6]' : 'text-white/40'}`}
+              className={`w-4 h-4 mr-2 ${passwordValidation.minLength ? 'text-brand-primary' : 'text-white/40'}`}
             />
             <span className={passwordValidation.minLength ? 'text-white' : 'text-white/60'}>
               Au moins 8 caractères
@@ -91,7 +91,7 @@ export default function UpdatePasswordForm() {
           </div>
           <div className="flex items-center text-xs">
             <CheckCircle
-              className={`w-4 h-4 mr-2 ${passwordValidation.hasUpperCase ? 'text-[#00B3A6]' : 'text-white/40'}`}
+              className={`w-4 h-4 mr-2 ${passwordValidation.hasUpperCase ? 'text-brand-primary' : 'text-white/40'}`}
             />
             <span className={passwordValidation.hasUpperCase ? 'text-white' : 'text-white/60'}>
               Une lettre majuscule
@@ -99,7 +99,7 @@ export default function UpdatePasswordForm() {
           </div>
           <div className="flex items-center text-xs">
             <CheckCircle
-              className={`w-4 h-4 mr-2 ${passwordValidation.hasLowerCase ? 'text-[#00B3A6]' : 'text-white/40'}`}
+              className={`w-4 h-4 mr-2 ${passwordValidation.hasLowerCase ? 'text-brand-primary' : 'text-white/40'}`}
             />
             <span className={passwordValidation.hasLowerCase ? 'text-white' : 'text-white/60'}>
               Une lettre minuscule
@@ -107,7 +107,7 @@ export default function UpdatePasswordForm() {
           </div>
           <div className="flex items-center text-xs">
             <CheckCircle
-              className={`w-4 h-4 mr-2 ${passwordValidation.hasNumber ? 'text-[#00B3A6]' : 'text-white/40'}`}
+              className={`w-4 h-4 mr-2 ${passwordValidation.hasNumber ? 'text-brand-primary' : 'text-white/40'}`}
             />
             <span className={passwordValidation.hasNumber ? 'text-white' : 'text-white/60'}>
               Un chiffre
@@ -128,7 +128,7 @@ export default function UpdatePasswordForm() {
             required
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent transition-all duration-200 text-white placeholder-white/50 backdrop-blur-sm"
+            className="w-full pl-10 pr-4 py-3 bg-white/10 border border-white/20 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-transparent transition-all duration-200 text-white placeholder-white/50 backdrop-blur-sm"
             placeholder="••••••••"
           />
         </div>
@@ -141,7 +141,7 @@ export default function UpdatePasswordForm() {
         <button
           type="submit"
           disabled={loading || !validatePassword(password) || password !== confirmPassword}
-          className="w-full px-5 py-3 bg-gradient-to-r from-[#00B3A6] to-[#00B3A6]/80 text-white font-semibold text-base rounded-xl hover:shadow-lg hover:shadow-[#00B3A6]/25 transform hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center"
+          className="w-full px-5 py-3 bg-gradient-to-r from-brand-primary to-brand-primary/80 text-white font-semibold text-base rounded-xl hover:shadow-lg hover:shadow-brand-primary/25 transform hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center"
         >
           {loading ? (
             <div className="flex items-center">

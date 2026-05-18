@@ -47,7 +47,7 @@ export default function CampaignDetails() {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[#00B3A6] mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-brand-primary mx-auto mb-4"></div>
           <p className="text-gray-600">Chargement de la campagne...</p>
         </div>
       </div>
@@ -63,7 +63,7 @@ export default function CampaignDetails() {
           <p className="text-gray-600 mb-4">Cette campagne n'existe pas ou a été supprimée</p>
           <button
             onClick={() => navigate('/my-campaigns')}
-            className="px-4 py-2 bg-[#00B3A6] text-white rounded-lg hover:bg-[#008C82] transition-colors"
+            className="px-4 py-2 bg-brand-primary text-white rounded-lg hover:bg-[#008C82] transition-colors"
           >
             Retour à mes campagnes
           </button>
@@ -82,7 +82,7 @@ export default function CampaignDetails() {
         <div className="mb-6">
           <button
             onClick={() => navigate('/my-campaigns')}
-            className="flex items-center text-gray-600 hover:text-[#00B3A6] transition-colors mb-4"
+            className="flex items-center text-gray-600 hover:text-brand-primary transition-colors mb-4"
           >
             <ArrowLeft className="h-5 w-5 mr-2" />
             Retour à mes campagnes
@@ -107,7 +107,7 @@ export default function CampaignDetails() {
             {campaign.status !== 'active' && (
               <button
                 onClick={() => navigate(`/edit-campaign/${campaign.id}`, { state: { campaign } })}
-                className="px-4 py-2 bg-[#00B3A6] text-white rounded-lg hover:bg-[#008C82] transition-colors"
+                className="px-4 py-2 bg-brand-primary text-white rounded-lg hover:bg-[#008C82] transition-colors"
               >
                 Modifier la campagne
               </button>
@@ -126,7 +126,7 @@ export default function CampaignDetails() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {campaign.client && (
                   <div className="flex items-start space-x-3">
-                    <Building className="h-5 w-5 text-[#00B3A6] mt-1" />
+                    <Building className="h-5 w-5 text-brand-primary mt-1" />
                     <div>
                       <p className="text-sm text-gray-500">Client</p>
                       <p className="font-medium text-gray-900">{campaign.client}</p>
@@ -135,7 +135,7 @@ export default function CampaignDetails() {
                 )}
 
                 <div className="flex items-start space-x-3">
-                  <BarChart3 className="h-5 w-5 text-[#00B3A6] mt-1" />
+                  <BarChart3 className="h-5 w-5 text-brand-primary mt-1" />
                   <div>
                     <p className="text-sm text-gray-500">Catégories</p>
                     <div className="flex flex-wrap gap-1.5 mt-1">
@@ -156,7 +156,7 @@ export default function CampaignDetails() {
                 </div>
 
                 <div className="flex items-start space-x-3">
-                  <Calendar className="h-5 w-5 text-[#00B3A6] mt-1" />
+                  <Calendar className="h-5 w-5 text-brand-primary mt-1" />
                   <div>
                     <p className="text-sm text-gray-500">Date de début</p>
                     <p className="font-medium text-gray-900">
@@ -166,7 +166,7 @@ export default function CampaignDetails() {
                 </div>
 
                 <div className="flex items-start space-x-3">
-                  <Calendar className="h-5 w-5 text-[#00B3A6] mt-1" />
+                  <Calendar className="h-5 w-5 text-brand-primary mt-1" />
                   <div>
                     <p className="text-sm text-gray-500">Date de fin</p>
                     <p className="font-medium text-gray-900">
@@ -176,7 +176,7 @@ export default function CampaignDetails() {
                 </div>
 
                 <div className="flex items-start space-x-3">
-                  <Clock className="h-5 w-5 text-[#00B3A6] mt-1" />
+                  <Clock className="h-5 w-5 text-brand-primary mt-1" />
                   <div>
                     <p className="text-sm text-gray-500">Durée</p>
                     <p className="font-medium text-gray-900">
@@ -199,7 +199,7 @@ export default function CampaignDetails() {
                 <h2 className="text-xl font-bold text-gray-900 mb-4">Zone géographique</h2>
 
                 <div className="flex items-start space-x-3">
-                  <MapPin className="h-5 w-5 text-[#00B3A6] mt-1" />
+                  <MapPin className="h-5 w-5 text-brand-primary mt-1" />
                   <div>
                     <p className="text-sm text-gray-500">Zones sélectionnées</p>
                     <div className="flex flex-wrap gap-1.5 mt-1">
@@ -239,7 +239,7 @@ export default function CampaignDetails() {
 
                 <div className="space-y-3">
                   <div className="flex items-start space-x-3">
-                    <Film className="h-5 w-5 text-[#00B3A6] mt-1" />
+                    <Film className="h-5 w-5 text-brand-primary mt-1" />
                     <div>
                       <p className="text-sm text-gray-500">Fichier vidéo</p>
                       <p className="font-medium text-gray-900">{video.filename}</p>
@@ -285,9 +285,9 @@ export default function CampaignDetails() {
             <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm text-gray-600">Budget total</span>
-                <DollarSign className="h-5 w-5 text-[#00B3A6]" />
+                <DollarSign className="h-5 w-5 text-brand-primary" />
               </div>
-              <p className="text-3xl font-bold text-[#00B3A6]">
+              <p className="text-3xl font-bold text-brand-primary">
                 {campaign.budget.toLocaleString()} TND
               </p>
             </div>
@@ -296,7 +296,7 @@ export default function CampaignDetails() {
             <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm text-gray-600">Impressions validées</span>
-                <Eye className="h-5 w-5 text-[#00B3A6]" />
+                <Eye className="h-5 w-5 text-brand-primary" />
               </div>
               <p className="text-3xl font-bold text-gray-900">
                 {(campaign.validated_impressions || 0).toLocaleString('fr-FR')}

@@ -43,7 +43,7 @@ export default function AdminDashboard() {
       <AdminLayout title="Tableau de Bord">
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[#00B3A6] mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-brand-primary mx-auto mb-4"></div>
             <p className="text-gray-600">Chargement des statistiques...</p>
           </div>
         </div>
@@ -56,7 +56,7 @@ export default function AdminDashboard() {
       <AdminLayout title="Administration">
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[#00B3A6] mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-brand-primary mx-auto mb-4"></div>
             <p className="text-gray-600">Chargement...</p>
           </div>
         </div>
@@ -141,7 +141,7 @@ export default function AdminDashboard() {
           <div className="grid grid-cols-2 gap-4">
             <button
               onClick={() => navigate('/admin-users')}
-              className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-md hover:border-[#00B3A6] transition-all cursor-pointer text-left w-full"
+              className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-md hover:border-brand-primary transition-all cursor-pointer text-left w-full"
             >
               <div className="flex items-center justify-between">
                 <div>
@@ -225,7 +225,7 @@ export default function AdminDashboard() {
                     {occupancyStats?.occupancy_rate || 0}%
                   </p>
                 </div>
-                <Activity className="h-8 w-8 text-[#00B3A6]" />
+                <Activity className="h-8 w-8 text-brand-primary" />
               </div>
             </div>
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
@@ -250,7 +250,7 @@ export default function AdminDashboard() {
           <div className="grid grid-cols-2 gap-4">
             <button
               onClick={() => navigate('/admin-campaigns')}
-              className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-md hover:border-[#00B3A6] transition-all cursor-pointer text-left w-full"
+              className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-md hover:border-brand-primary transition-all cursor-pointer text-left w-full"
             >
               <div className="flex items-center justify-between">
                 <div>
@@ -306,7 +306,7 @@ export default function AdminDashboard() {
           <div className="grid grid-cols-2 gap-4">
             <button
               onClick={() => navigate('/admin-videos')}
-              className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-md hover:border-[#00B3A6] transition-all cursor-pointer text-left w-full"
+              className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-md hover:border-brand-primary transition-all cursor-pointer text-left w-full"
             >
               <div className="flex items-center justify-between">
                 <div>
@@ -334,7 +334,7 @@ export default function AdminDashboard() {
             </button>
             <button
               onClick={() => navigate('/admin-events')}
-              className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-md hover:border-[#00B3A6] transition-all cursor-pointer text-left w-full"
+              className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-md hover:border-brand-primary transition-all cursor-pointer text-left w-full"
             >
               <div className="flex items-center justify-between">
                 <div>
@@ -368,7 +368,7 @@ export default function AdminDashboard() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <button
               onClick={() => navigate('/admin-recharges')}
-              className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-md hover:border-[#00B3A6] transition-all cursor-pointer text-left w-full"
+              className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-md hover:border-brand-primary transition-all cursor-pointer text-left w-full"
             >
               <div className="flex items-center justify-between">
                 <div>
@@ -406,9 +406,9 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Montant total</p>
-                  <p className="text-2xl font-bold text-[#00B3A6]">-</p>
+                  <p className="text-2xl font-bold text-brand-primary">-</p>
                 </div>
-                <TrendingUp className="h-8 w-8 text-[#00B3A6]" />
+                <TrendingUp className="h-8 w-8 text-brand-primary" />
               </div>
             </div>
           </div>
@@ -501,13 +501,13 @@ export default function AdminDashboard() {
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <h4 className="text-sm font-semibold text-gray-900 mb-4 flex items-center">
-            <Monitor className="h-5 w-5 mr-2 text-[#00B3A6]" />
+            <Monitor className="h-5 w-5 mr-2 text-brand-primary" />
             Performance Écrans
           </h4>
           <div className="space-y-3">
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-600">Taux d'occupation</span>
-              <span className="font-semibold text-[#00B3A6]">
+              <span className="font-semibold text-brand-primary">
                 {occupancyStats?.occupancy_rate || 0}%
               </span>
             </div>
@@ -554,4 +554,3 @@ export default function AdminDashboard() {
     </AdminLayout>
   );
 }
-

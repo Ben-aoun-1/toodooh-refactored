@@ -147,7 +147,7 @@ export default function AffluenceModal({ location, onClose }: AffluenceModalProp
         <div className="flex-1 overflow-y-auto p-5">
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <div className="h-10 w-10 animate-spin rounded-full border-b-2 border-[#00B3A6]" />
+              <div className="h-10 w-10 animate-spin rounded-full border-b-2 border-brand-primary" />
             </div>
           ) : (
             <div className="space-y-4">
@@ -159,7 +159,7 @@ export default function AffluenceModal({ location, onClose }: AffluenceModalProp
                 {!editing ? (
                   <button
                     onClick={() => setEditing(true)}
-                    className="inline-flex items-center gap-2 rounded-lg bg-[#00B3A6] px-4 py-2 text-sm font-medium text-white hover:bg-[#008C82]"
+                    className="inline-flex items-center gap-2 rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-white hover:bg-[#008C82]"
                   >
                     <Edit className="h-4 w-4" />
                     Modifier
@@ -213,7 +213,7 @@ export default function AffluenceModal({ location, onClose }: AffluenceModalProp
                               value={valueByCell.get(`${day.id}:${hour}`) ?? 0}
                               disabled={!editing}
                               onChange={(e) => updateRowValue(day.id, hour, Number(e.target.value))}
-                              className="w-24 rounded-lg border border-gray-300 px-2 py-1 text-center focus:border-[#00B3A6] focus:outline-none focus:ring-2 focus:ring-[#00B3A6]/20 disabled:bg-gray-50"
+                              className="w-24 rounded-lg border border-gray-300 px-2 py-1 text-center focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20 disabled:bg-gray-50"
                             />
                           </td>
                         ))}

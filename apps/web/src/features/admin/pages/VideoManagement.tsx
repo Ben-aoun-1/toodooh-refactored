@@ -150,7 +150,7 @@ export default function VideoManagement() {
       <AdminLayout title="Gestion des Vidéos" subtitle="Validez et gérez les vidéos des campagnes">
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[#00B3A6] mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-brand-primary mx-auto mb-4"></div>
             <p className="text-gray-600">Chargement des vidéos...</p>
           </div>
         </div>
@@ -204,7 +204,7 @@ export default function VideoManagement() {
                 placeholder="Rechercher par nom de fichier ou annonceur..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
               />
             </div>
           </div>
@@ -214,7 +214,7 @@ export default function VideoManagement() {
             <div className="relative">
               <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
               <select
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
               >
@@ -259,7 +259,7 @@ export default function VideoManagement() {
                 <tr key={video.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      <div className="h-10 w-10 bg-[#00B3A6] rounded flex items-center justify-center">
+                      <div className="h-10 w-10 bg-brand-primary rounded flex items-center justify-center">
                         <FileVideo className="h-5 w-5 text-white" />
                       </div>
                       <div className="ml-4">
@@ -379,7 +379,7 @@ export default function VideoManagement() {
                       onClick={() => setCurrentPage(idx + 1)}
                       className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
                         currentPage === idx + 1
-                          ? 'z-10 bg-[#00B3A6] border-[#00B3A6] text-white'
+                          ? 'z-10 bg-brand-primary border-brand-primary text-white'
                           : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
                       }`}
                     >
@@ -411,7 +411,7 @@ export default function VideoManagement() {
             <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
               <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                 <div className="sm:flex sm:items-start">
-                  <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-[#00B3A6] sm:mx-0 sm:h-10 sm:w-10">
+                  <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-brand-primary sm:mx-0 sm:h-10 sm:w-10">
                     <VideoIcon className="h-6 w-6 text-white" />
                   </div>
                   <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
@@ -510,7 +510,7 @@ export default function VideoManagement() {
                 )}
                 <button
                   onClick={() => setShowDetailsModal(false)}
-                  className="w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#00B3A6] sm:w-auto sm:text-sm"
+                  className="w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary sm:w-auto sm:text-sm"
                 >
                   Fermer
                 </button>

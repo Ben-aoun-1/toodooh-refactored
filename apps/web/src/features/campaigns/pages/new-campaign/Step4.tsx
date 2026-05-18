@@ -188,8 +188,7 @@ export default function Step4({
 
   const handleNext = () => {
     const hasZones =
-      geographicZones.length > 0 &&
-      geographicZones.some((z) => (z.locations || []).length > 0);
+      geographicZones.length > 0 && geographicZones.some((z) => (z.locations || []).length > 0);
     if (!hasZones) {
       toast.error('Sélectionnez au moins une zone géographique');
       return;
@@ -224,7 +223,7 @@ export default function Step4({
               <select
                 value={zoneFilterCountry}
                 onChange={(e) => setZoneFilterCountry(e.target.value)}
-                className="min-w-[240px] px-3 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent bg-white"
+                className="min-w-[240px] px-3 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-transparent bg-white"
                 aria-label="Filtrer par pays"
               >
                 <option value="">Pays</option>
@@ -233,7 +232,7 @@ export default function Step4({
               <select
                 value={zoneFilterRegion}
                 onChange={(e) => setZoneFilterRegion(e.target.value)}
-                className="min-w-[240px] px-3 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent bg-white"
+                className="min-w-[240px] px-3 py-2 text-sm border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-transparent bg-white"
                 aria-label="Filtrer par région"
               >
                 <option value="">Région</option>
@@ -255,12 +254,10 @@ export default function Step4({
               <div className="h-[384px] overflow-y-auto space-y-3">
                 {loadingPredefinedZones ? (
                   <div className="flex items-center justify-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-2 border-[#00B3A6] border-t-transparent" />
+                    <div className="animate-spin rounded-full h-8 w-8 border-2 border-brand-primary border-t-transparent" />
                   </div>
                 ) : filteredPredefinedZones.length === 0 ? (
-                  <p className="text-sm text-gray-500 text-center py-8">
-                    Aucune zone prédéfinie
-                  </p>
+                  <p className="text-sm text-gray-500 text-center py-8">Aucune zone prédéfinie</p>
                 ) : (
                   filteredPredefinedZones.map((zone) => {
                     const selected = isPredefinedZoneSelected(zone);
@@ -272,15 +269,14 @@ export default function Step4({
                         onClick={() => handleTogglePredefinedZone(zone)}
                         className={`w-full text-left rounded-xl border-2 transition-all overflow-hidden ${
                           selected
-                            ? 'border-[#00B3A6] bg-[#00B3A6]/5 shadow-md'
+                            ? 'border-brand-primary bg-brand-primary/5 shadow-md'
                             : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
                         }`}
                       >
                         <div className="relative h-20 bg-gray-200">
                           <img
                             src={
-                              zone.image_url ||
-                              `https://picsum.photos/seed/zone-${zone.id}/400/200`
+                              zone.image_url || `https://picsum.photos/seed/zone-${zone.id}/400/200`
                             }
                             alt=""
                             className="w-full h-full object-cover"
@@ -288,13 +284,11 @@ export default function Step4({
                           <div
                             className={`absolute top-3 left-3 w-6 h-6 rounded-md border-2 flex items-center justify-center ${
                               selected
-                                ? 'bg-[#00B3A6] border-[#00B3A6]'
+                                ? 'bg-brand-primary border-brand-primary'
                                 : 'bg-white border-gray-300'
                             }`}
                           >
-                            {selected && (
-                              <Check className="w-4 h-4 text-white" strokeWidth={3} />
-                            )}
+                            {selected && <Check className="w-4 h-4 text-white" strokeWidth={3} />}
                           </div>
                           {zone.is_hot && (
                             <span className="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-white border border-red-200 text-red-600 shadow-sm">
@@ -330,7 +324,7 @@ export default function Step4({
           <div className="flex-1 bg-white p-4">
             {loadingMapLocations ? (
               <div className="h-[384px] flex items-center justify-center rounded-xl border border-gray-200">
-                <div className="animate-spin rounded-full h-10 w-10 border-2 border-[#00B3A6] border-t-transparent" />
+                <div className="animate-spin rounded-full h-10 w-10 border-2 border-brand-primary border-t-transparent" />
               </div>
             ) : (
               <div className="h-[384px] rounded-xl overflow-hidden shadow-lg border border-gray-200">
@@ -398,8 +392,7 @@ export default function Step4({
                       return null;
                     const inZone = geographicZones.some(
                       (z) =>
-                        distanceKm(z.location.lat, z.location.lng, c.lat, c.lng) <=
-                        z.radius / 1000,
+                        distanceKm(z.location.lat, z.location.lng, c.lat, c.lng) <= z.radius / 1000,
                     );
                     const colorHex = inZone ? '#10b981' : '#6b7280';
                     return (
@@ -427,9 +420,7 @@ export default function Step4({
                               ({loc.screen_count ?? 0} écran
                               {(loc.screen_count ?? 0) > 1 ? 's' : ''})
                             </span>
-                            {inZone && (
-                              <span className="text-green-600 ml-2">✓ dans une zone</span>
-                            )}
+                            {inZone && <span className="text-green-600 ml-2">✓ dans une zone</span>}
                             {!inZone && <span className="text-gray-500 ml-2">Hors zone</span>}
                           </div>
                         </Popup>
@@ -449,8 +440,8 @@ export default function Step4({
               <div className="flex items-center gap-2 flex-wrap">
                 <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
                 <span className="text-sm font-medium text-gray-900">
-                  {geographicZones.length} zone{geographicZones.length > 1 ? 's' : ''}{' '}
-                  sélectionnée{geographicZones.length > 1 ? 's' : ''}
+                  {geographicZones.length} zone{geographicZones.length > 1 ? 's' : ''} sélectionnée
+                  {geographicZones.length > 1 ? 's' : ''}
                   {' · '}
                   {totalAreaKm2.toFixed(1)} km²
                 </span>
@@ -494,7 +485,7 @@ export default function Step4({
           className={`px-6 py-3 rounded-xl font-semibold transition-all flex items-center space-x-2 shadow-lg ${
             nextDisabled
               ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : 'bg-gradient-to-r from-[#00B3A6] to-[#00D4C4] text-white hover:from-[#00A396] hover:to-[#00C4B4]'
+              : 'bg-gradient-to-r from-brand-primary to-[#00D4C4] text-white hover:from-[#00A396] hover:to-[#00C4B4]'
           }`}
         >
           <span>Suivant</span>

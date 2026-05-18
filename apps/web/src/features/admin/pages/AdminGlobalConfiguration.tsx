@@ -86,7 +86,7 @@ export default function AdminGlobalConfiguration() {
     >
       {loading ? (
         <div className="flex justify-center py-16">
-          <Loader2 className="h-10 w-10 animate-spin text-[#00B3A6]" />
+          <Loader2 className="h-10 w-10 animate-spin text-brand-primary" />
         </div>
       ) : (
         <div className="space-y-6">
@@ -95,7 +95,7 @@ export default function AdminGlobalConfiguration() {
               type="button"
               onClick={handleSave}
               disabled={saving}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#00B3A6] text-white text-sm font-medium hover:opacity-90 disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-primary text-white text-sm font-medium hover:opacity-90 disabled:opacity-50"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               Enregistrer
@@ -124,7 +124,7 @@ export default function AdminGlobalConfiguration() {
                         step={stepForRow(row)}
                         value={draft[row.key] ?? ''}
                         onChange={(e) => handleChange(row.key, e.target.value)}
-                        className="w-full max-w-[200px] px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#00B3A6] focus:border-transparent"
+                        className="w-full max-w-[200px] px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                       />
                     </td>
                     <td className="px-4 py-3 text-gray-600 align-top">{row.value_type}</td>

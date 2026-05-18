@@ -7,10 +7,16 @@ import logoImage from '@/assets/logo.png';
 import { useBusinessProfile } from '@/features/auth/hooks/useBusinessProfile';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
-import { TOODOOH_STATEMENT_EMITTER, OWNER_STATEMENT_FOOTER } from '@/features/screenhost/constants/ownerStatement';
+import {
+  TOODOOH_STATEMENT_EMITTER,
+  OWNER_STATEMENT_FOOTER,
+} from '@/features/screenhost/constants/ownerStatement';
 import { getOwnerStatementDetail } from '@/features/screenhost/data/ownerStatementDetails';
 import { exportService } from '@/features/screenhost/services/export.service';
-import type { OwnerStatementDetail, StatementRecipientDisplay } from '@/features/screenhost/types/ownerStatement';
+import type {
+  OwnerStatementDetail,
+  StatementRecipientDisplay,
+} from '@/features/screenhost/types/ownerStatement';
 import { buildStatementRecipient } from '@/features/screenhost/utils/statementRecipient';
 
 export default function OwnerStatementDetailPage() {
@@ -85,7 +91,7 @@ export default function OwnerStatementDetailPage() {
   if (!user || !detail || !recipient) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#00B3A6]" />
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-primary" />
       </div>
     );
   }
