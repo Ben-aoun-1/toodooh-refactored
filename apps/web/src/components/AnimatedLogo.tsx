@@ -1,6 +1,5 @@
 import { motion, easeInOut } from 'framer-motion';
 
-
 // Logo SVG inspiré du logo en haut à gauche de l'image fournie
 // Les crochets sont animés (ouverture/fermeture)
 
@@ -40,7 +39,7 @@ export default function AnimatedLogo({
       {/* Crochet gauche - plus large pour englober le texte */}
       <motion.path
         d="M20 25 V8 H120"
-        stroke="#00B3A6"
+        stroke="#76E6AB"
         strokeWidth={6}
         strokeLinecap="round"
         variants={bracketVariants}
@@ -62,7 +61,7 @@ export default function AnimatedLogo({
       {/* Crochet droit - plus large pour englober le texte */}
       <motion.path
         d="M260 55 V72 H160"
-        stroke="#00B3A6"
+        stroke="#76E6AB"
         strokeWidth={6}
         strokeLinecap="round"
         variants={bracketVariants}

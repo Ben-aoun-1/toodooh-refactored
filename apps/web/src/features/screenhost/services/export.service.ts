@@ -51,7 +51,7 @@ class ExportService {
 
     // En-tête
     doc.setFontSize(20);
-    doc.setTextColor(0, 179, 166); // #00B3A6
+    doc.setTextColor(118, 230, 171);
     doc.text('Toodooh - Rapport de Revenus', pageWidth / 2, 20, { align: 'center' });
 
     doc.setFontSize(12);
@@ -76,7 +76,7 @@ class ExportService {
         startY: 50,
         styles: {
           head: {
-            fillColor: [0, 179, 166],
+            fillColor: [118, 230, 171],
             textColor: 255,
             fontSize: 10,
           },
@@ -107,7 +107,7 @@ class ExportService {
         startY: 50,
         styles: {
           head: {
-            fillColor: [0, 179, 166],
+            fillColor: [118, 230, 171],
             textColor: 255,
             fontSize: 10,
           },
@@ -129,7 +129,7 @@ class ExportService {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const finalY = (doc as any).lastAutoTable.finalY + 20;
     doc.setFontSize(14);
-    doc.setTextColor(0, 179, 166);
+    doc.setTextColor(118, 230, 171);
     doc.text('Résumé', 20, finalY);
 
     doc.setFontSize(10);

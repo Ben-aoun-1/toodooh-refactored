@@ -1923,7 +1923,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             onClick={addFleetEstablishment}
             disabled={!isFleetDraftValid()}
             className="py-3.5 rounded-xl font-semibold text-sm text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ background: '#00B3A6' }}
+            style={{ background: '#76E6AB' }}
           >
             Ajouter
           </button>

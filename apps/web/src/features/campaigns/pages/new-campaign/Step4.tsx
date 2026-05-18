@@ -359,9 +359,9 @@ export default function Step4({
                         center={[zone.location!.lat, zone.location!.lng]}
                         radius={zone.radius}
                         pathOptions={{
-                          fillColor: '#00B3A6',
+                          fillColor: '#76E6AB',
                           fillOpacity: 0.2,
-                          color: '#00B3A6',
+                          color: '#76E6AB',
                           weight: 2,
                         }}
                       />

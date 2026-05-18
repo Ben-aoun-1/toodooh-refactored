@@ -558,7 +558,7 @@ export default function GeographicZonesManagement() {
                       step="100"
                       className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-brand-primary"
                       style={{
-                        background: `linear-gradient(to right, #00B3A6 0%, #00B3A6 ${((radius - 100) / (50000 - 100)) * 100}%, #e5e7eb ${((radius - 100) / (50000 - 100)) * 100}%, #e5e7eb 100%)`,
+                        background: `linear-gradient(to right, #76E6AB 0%, #76E6AB ${((radius - 100) / (50000 - 100)) * 100}%, #e5e7eb ${((radius - 100) / (50000 - 100)) * 100}%, #e5e7eb 100%)`,
                       }}
                       id="radius"
                     />
@@ -626,9 +626,9 @@ export default function GeographicZonesManagement() {
                         center={[loc.lat, loc.lng]}
                         radius={radius}
                         pathOptions={{
-                          fillColor: '#00B3A6',
+                          fillColor: '#76E6AB',
                           fillOpacity: 0.2,
-                          color: '#00B3A6',
+                          color: '#76E6AB',
                           weight: 2,
                         }}
                       />
