@@ -78,6 +78,24 @@ const center = {
   lng: 10.1815, // Tunis center coordinates
 };
 
+// Mapping des catégories français → anglais (enum) et inverse. Tables de
+// correspondance statiques — hissées au scope module pour une identité stable
+// (évite de re-déclencher les hooks qui les lisent).
+const categoryMapping: { [key: string]: string } = {
+  'Publicité commerciale': 'commercial',
+  'Événement culturel': 'cultural',
+  Promotion: 'promotional',
+  'Promotion spéciale': 'promotional',
+  Institutionnel: 'institutional',
+  'Annonce institutionnelle': 'institutional',
+};
+const categoryReverseMapping: { [key: string]: string } = {
+  commercial: 'Publicité commerciale',
+  cultural: 'Événement culturel',
+  promotional: 'Promotion spéciale',
+  institutional: 'Annonce institutionnelle',
+};
+
 export default function NewCampaign() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -582,6 +600,14 @@ export default function NewCampaign() {
     return () => {
       cancelled = true;
     };
+    // Intentional omission: allSelectedLocations / effectiveScreenIds /
+    // estimateLocationIds / freshLocationsForEstimate / unavailabilityPeriods
+    // are identity-unstable arrays. Each is represented here by its stable
+    // serialized `*Key` memo (effectiveScreenIdsKey, unavailabilityPeriodsKey,
+    // wizardLocationsAffluenceKey, freshLocationsScheduleKey,
+    // estimateLocationIdsKey). Depending on the raw arrays re-introduces the
+    // render loops those Key memos exist to prevent.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     startDate,
     endDate,
@@ -607,21 +633,8 @@ export default function NewCampaign() {
   // verification (Commit 9 methodology) surfaced it; the ~175-line JSX
   // block was deleted alongside the state slots.
 
-  // Mapping des catégories français → anglais (enum)
-  const categoryMapping: { [key: string]: string } = {
-    'Publicité commerciale': 'commercial',
-    'Événement culturel': 'cultural',
-    Promotion: 'promotional',
-    'Promotion spéciale': 'promotional',
-    Institutionnel: 'institutional',
-    'Annonce institutionnelle': 'institutional',
-  };
-  const categoryReverseMapping: { [key: string]: string } = {
-    commercial: 'Publicité commerciale',
-    cultural: 'Événement culturel',
-    promotional: 'Promotion spéciale',
-    institutional: 'Annonce institutionnelle',
-  };
+  // categoryMapping / categoryReverseMapping : hissés au scope module (voir
+  // en-tête de fichier) — identité stable, plus besoin de suppression deps.
 
   // Campagne événement : pré-remplir avec la 1ère catégorie une fois les
   // secteurs chargés (Commit 7a — derive-from-query seed; CF-16(c): guarded on
@@ -645,9 +658,6 @@ export default function NewCampaign() {
     if (!editMode || editModeCategories.length === 0) return;
     const displayNames = editModeCategories.map((c) => categoryReverseMapping[c] || c);
     setState((prev) => ({ ...prev, categories: displayNames }));
-    // categoryReverseMapping is a component-local const (defined above), stable
-    // by reference between renders within a session; setState is stable.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editMode, editModeCategories, setState]);
 
   const categoryChoices = useMemo(() => {
@@ -800,7 +810,7 @@ export default function NewCampaign() {
       impressions: totalImpressions,
       totalDays,
     };
-  }, [startDate, endDate, effectiveScreenIdsKey, doohMaxImpressions]);
+  }, [startDate, endDate, effectiveScreenIds.length, doohMaxImpressions]);
 
   /** Impressions correspondant au budget curseur (plafonnées au max de la sélection) — source de vérité affichage validation */
   const impressionsForCurrentBudget = useMemo(() => {
@@ -828,7 +838,7 @@ export default function NewCampaign() {
     } else {
       setCalculatedImpressions(0);
     }
-  }, [adjustedBudget, calculateBudgetAndImpressions.impressions, cpmTnd]);
+  }, [adjustedBudget, calculateBudgetAndImpressions, cpmTnd, setCalculatedImpressions]);
 
   // Recentrer le curseur uniquement quand la plage change (impressions / CPM / min-max perso), pas quand l'utilisateur déplace le slider
   useEffect(() => {
@@ -854,7 +864,13 @@ export default function NewCampaign() {
         });
       }
     }
-  }, [calculateBudgetAndImpressions.impressions, customMinBudget, customMaxBudget, cpmTnd]);
+  }, [
+    calculateBudgetAndImpressions.impressions,
+    customMinBudget,
+    customMaxBudget,
+    cpmTnd,
+    setAdjustedBudget,
+  ]);
 
   // Le budget ajusté est maintenant géré par le pourcentage, donc on n'a plus besoin de cette logique
 

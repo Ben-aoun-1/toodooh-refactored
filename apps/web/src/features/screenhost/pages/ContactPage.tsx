@@ -45,7 +45,6 @@ export default function ContactPage() {
         return;
       }
 
-
       // Pré-remplir le formulaire avec les données utilisateur
       setFormData((prev) => ({
         ...prev,
@@ -57,7 +56,7 @@ export default function ContactPage() {
     };
 
     checkAuth();
-  }, [user, navigate]);
+  }, [user, navigate, contactName]);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,

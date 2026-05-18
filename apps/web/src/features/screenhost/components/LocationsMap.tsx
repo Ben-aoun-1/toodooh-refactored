@@ -59,11 +59,12 @@ interface LocationsMapProps {
   onScreenClick?: (screen: Screen) => void;
 }
 
+// Coordonnées par défaut pour Tunis — constante, hissée au scope module pour
+// une identité stable (utilisée comme dépendance d'effet).
+const defaultCenter: [number, number] = [36.8065, 10.1815];
+
 export default function LocationsMap({ screens, onScreenClick }: LocationsMapProps) {
   const mapRef = useRef<L.Map | null>(null);
-
-  // Coordonnées par défaut pour Tunis
-  const defaultCenter: [number, number] = [36.8065, 10.1815];
 
   // Grouper les écrans par emplacement
   const locations = screens.reduce(
