@@ -166,7 +166,7 @@ export default function AdminManagement() {
           </p>
           <button
             onClick={() => navigate('/admin-dashboard')}
-            className="px-6 py-2 bg-brand-primary text-white rounded-lg hover:bg-brand-primary/90 transition-colors"
+            className="px-6 py-2 bg-brand-primary text-brand-deep rounded-lg hover:bg-brand-primary/90 transition-colors"
           >
             Retour au Dashboard
           </button>
@@ -267,7 +267,7 @@ export default function AdminManagement() {
 
             <button
               onClick={() => navigate('/admin-create')}
-              className="px-4 py-2 bg-brand-primary text-white rounded-lg hover:bg-brand-primary/90 transition-colors flex items-center"
+              className="px-4 py-2 bg-brand-primary text-brand-deep rounded-lg hover:bg-brand-primary/90 transition-colors flex items-center"
             >
               <UserPlus className="h-5 w-5 mr-2" />
               Créer Admin

@@ -192,7 +192,7 @@ export default function LocationsMap({ screens, onScreenClick }: LocationsMapPro
                   <div className="p-3 min-w-[250px]">
                     <div className="flex items-center space-x-3 mb-3">
                       <div className="p-2 bg-brand-primary/20 rounded-lg">
-                        <div className="w-6 h-6 bg-brand-primary rounded flex items-center justify-center text-white text-xs font-bold">
+                        <div className="w-6 h-6 bg-brand-primary rounded flex items-center justify-center text-brand-deep text-xs font-bold">
                           📺
                         </div>
                       </div>

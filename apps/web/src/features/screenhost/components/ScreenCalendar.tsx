@@ -384,7 +384,7 @@ export default function ScreenCalendar({
             onClick={() => setViewMode('calendar')}
             className={`px-4 py-2 rounded-lg transition-colors ${
               viewMode === 'calendar'
-                ? 'bg-brand-primary text-white'
+                ? 'bg-brand-primary text-brand-deep'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
@@ -395,7 +395,7 @@ export default function ScreenCalendar({
             onClick={() => setViewMode('form')}
             className={`px-4 py-2 rounded-lg transition-colors ${
               viewMode === 'form'
-                ? 'bg-brand-primary text-white'
+                ? 'bg-brand-primary text-brand-deep'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
@@ -732,7 +732,7 @@ export default function ScreenCalendar({
                 disabled={!isFormValid}
                 className={`px-6 py-2 rounded-lg transition-colors flex items-center space-x-2 ${
                   isFormValid
-                    ? 'bg-brand-primary text-white hover:bg-brand-primary/90'
+                    ? 'bg-brand-primary text-brand-deep hover:bg-brand-primary/90'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}
               >

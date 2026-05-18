@@ -275,7 +275,7 @@ export default function GiftCatalogPage() {
                             onClick={() => setSelectedCategory(category.id)}
                             className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
                               selectedCategory === category.id
-                                ? 'bg-brand-primary text-white'
+                                ? 'bg-brand-primary text-brand-deep'
                                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                             }`}
                           >
@@ -329,7 +329,7 @@ export default function GiftCatalogPage() {
                           disabled={userPoints < item.pointsRequired || !item.available}
                           className={`w-full flex items-center justify-center space-x-2 px-3 py-2 rounded-lg font-medium transition-colors text-sm ${
                             userPoints >= item.pointsRequired && item.available
-                              ? 'bg-brand-primary text-white hover:bg-brand-primary/90'
+                              ? 'bg-brand-primary text-brand-deep hover:bg-brand-primary/90'
                               : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                           }`}
                         >

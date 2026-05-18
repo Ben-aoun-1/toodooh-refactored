@@ -238,7 +238,7 @@ export default function OwnerLocations() {
                     onClick={() => setViewMode('map')}
                     className={`px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 ${
                       viewMode === 'map'
-                        ? 'bg-brand-primary text-white'
+                        ? 'bg-brand-primary text-brand-deep'
                         : 'bg-white/10 text-white hover:bg-white/20'
                     }`}
                   >
@@ -250,7 +250,7 @@ export default function OwnerLocations() {
                     onClick={() => setViewMode('list')}
                     className={`px-4 py-2 rounded-lg transition-colors flex items-center space-x-2 ${
                       viewMode === 'list'
-                        ? 'bg-brand-primary text-white'
+                        ? 'bg-brand-primary text-brand-deep'
                         : 'bg-white/10 text-white hover:bg-white/20'
                     }`}
                   >
@@ -261,7 +261,7 @@ export default function OwnerLocations() {
 
                 <button
                   onClick={() => navigate('/owner-screens')}
-                  className="px-4 py-2 bg-brand-primary text-white rounded-lg hover:bg-brand-primary/80 transition-colors flex items-center space-x-2"
+                  className="px-4 py-2 bg-brand-primary text-brand-deep rounded-lg hover:bg-brand-primary/80 transition-colors flex items-center space-x-2"
                 >
                   <Plus className="h-4 w-4" />
                   <span>Gérer les Écrans</span>

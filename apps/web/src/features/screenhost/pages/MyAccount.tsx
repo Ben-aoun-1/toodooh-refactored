@@ -275,7 +275,7 @@ export default function MyAccount() {
                         <div
                           className={`flex items-center justify-center w-10 h-10 rounded-full ${
                             currentStep >= step.id
-                              ? 'bg-brand-primary text-white'
+                              ? 'bg-brand-primary text-brand-deep'
                               : 'bg-gray-100 text-gray-400'
                           }`}
                         >
@@ -690,7 +690,7 @@ export default function MyAccount() {
                                         type="button"
                                         onClick={handleUploadDocument}
                                         disabled={profileMutations.uploadDocument.isPending}
-                                        className="px-4 py-3 bg-brand-primary text-white rounded-lg hover:bg-brand-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                                        className="px-4 py-3 bg-brand-primary text-brand-deep rounded-lg hover:bg-brand-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                                       >
                                         {profileMutations.uploadDocument.isPending
                                           ? 'Upload...'
@@ -783,7 +783,7 @@ export default function MyAccount() {
                                         type="button"
                                         onClick={handleUploadDocument}
                                         disabled={profileMutations.uploadDocument.isPending}
-                                        className="px-4 py-3 bg-brand-primary text-white rounded-lg hover:bg-brand-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                                        className="px-4 py-3 bg-brand-primary text-brand-deep rounded-lg hover:bg-brand-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                                       >
                                         {profileMutations.uploadDocument.isPending
                                           ? 'Upload...'
@@ -884,7 +884,7 @@ export default function MyAccount() {
                     <button
                       type="button"
                       onClick={nextStep}
-                      className="px-6 py-3 bg-brand-primary text-white rounded-lg hover:bg-brand-primary/90 transition-colors"
+                      className="px-6 py-3 bg-brand-primary text-brand-deep rounded-lg hover:bg-brand-primary/90 transition-colors"
                     >
                       Suivant
                     </button>
@@ -893,7 +893,7 @@ export default function MyAccount() {
                       type="button"
                       onClick={handleSubmit}
                       disabled={saving}
-                      className="px-6 py-3 bg-brand-primary text-white rounded-lg hover:bg-brand-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
+                      className="px-6 py-3 bg-brand-primary text-brand-deep rounded-lg hover:bg-brand-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
                     >
                       <Save className="h-5 w-5" />
                       <span>{saving ? 'Sauvegarde...' : 'Sauvegarder'}</span>

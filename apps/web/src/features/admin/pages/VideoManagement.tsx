@@ -379,7 +379,7 @@ export default function VideoManagement() {
                       onClick={() => setCurrentPage(idx + 1)}
                       className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
                         currentPage === idx + 1
-                          ? 'z-10 bg-brand-primary border-brand-primary text-white'
+                          ? 'z-10 bg-brand-primary border-brand-primary text-brand-deep'
                           : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
                       }`}
                     >

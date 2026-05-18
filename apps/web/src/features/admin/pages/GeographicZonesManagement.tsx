@@ -262,7 +262,7 @@ export default function GeographicZonesManagement() {
             </select>
             <button
               onClick={() => handleOpenModal()}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-brand-primary text-white rounded-xl hover:bg-brand-primary/90 transition-colors font-medium"
+              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-brand-primary text-brand-deep rounded-xl hover:bg-brand-primary/90 transition-colors font-medium"
             >
               <Plus className="w-5 h-5" />
               Ajouter une zone
@@ -661,7 +661,7 @@ export default function GeographicZonesManagement() {
                 </button>
                 <button
                   onClick={handleSave}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-brand-primary text-white rounded-xl hover:bg-brand-primary/90 transition-colors font-medium"
+                  className="flex items-center gap-2 px-6 py-2.5 bg-brand-primary text-brand-deep rounded-xl hover:bg-brand-primary/90 transition-colors font-medium"
                 >
                   <Save className="w-5 h-5" />
                   {editingZone ? 'Enregistrer les modifications' : 'Créer la zone'}

@@ -197,7 +197,7 @@ export default function MyClients() {
         </div>
         <button
           onClick={() => setShowAddModal(true)}
-          className="inline-flex items-center px-5 py-3 bg-brand-primary text-white rounded-xl font-semibold shadow hover:bg-brand-primary/90 transition-all"
+          className="inline-flex items-center px-5 py-3 bg-brand-primary text-brand-deep rounded-xl font-semibold shadow hover:bg-brand-primary/90 transition-all"
         >
           <PlusCircle className="h-5 w-5 mr-2" /> Ajouter un client
         </button>
@@ -273,7 +273,7 @@ export default function MyClients() {
                       <div className="inline-flex items-center gap-2">
                         <button
                           onClick={() => openViewModal(client)}
-                          className="p-2 rounded-full bg-brand-primary text-white shadow hover:bg-brand-primary/90 transition-all"
+                          className="p-2 rounded-full bg-brand-primary text-brand-deep shadow hover:bg-brand-primary/90 transition-all"
                           title="Voir"
                         >
                           <Eye className="h-5 w-5" />
@@ -397,7 +397,7 @@ export default function MyClients() {
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-brand-primary text-white rounded-xl hover:bg-brand-primary/90 transition-all flex items-center space-x-2"
+                  className="px-6 py-2 bg-brand-primary text-brand-deep rounded-xl hover:bg-brand-primary/90 transition-all flex items-center space-x-2"
                 >
                   <Save className="h-4 w-4" />
                   <span>Ajouter</span>
@@ -556,7 +556,7 @@ export default function MyClients() {
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-brand-primary text-white rounded-xl hover:bg-brand-primary/90 transition-all flex items-center space-x-2"
+                  className="px-6 py-2 bg-brand-primary text-brand-deep rounded-xl hover:bg-brand-primary/90 transition-all flex items-center space-x-2"
                 >
                   <Save className="h-4 w-4" />
                   <span>Modifier</span>

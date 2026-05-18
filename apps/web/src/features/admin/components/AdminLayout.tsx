@@ -134,7 +134,7 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
                 onClick={() => navigate('/admin-dashboard')}
                 className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
                   location.pathname === '/admin-dashboard'
-                    ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/25'
+                    ? 'bg-brand-primary text-brand-deep shadow-lg shadow-brand-primary/25'
                     : 'text-gray-700 hover:bg-gray-100 hover:text-brand-primary'
                 }`}
               >
@@ -146,7 +146,7 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
                 onClick={() => navigate('/admin-users')}
                 className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
                   location.pathname === '/admin-users'
-                    ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/25'
+                    ? 'bg-brand-primary text-brand-deep shadow-lg shadow-brand-primary/25'
                     : 'text-gray-700 hover:bg-gray-100 hover:text-brand-primary'
                 }`}
               >
@@ -158,7 +158,7 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
                 onClick={() => navigate('/admin-videos')}
                 className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
                   location.pathname === '/admin-videos'
-                    ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/25'
+                    ? 'bg-brand-primary text-brand-deep shadow-lg shadow-brand-primary/25'
                     : 'text-gray-700 hover:bg-gray-100 hover:text-brand-primary'
                 }`}
               >
@@ -173,7 +173,7 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
                     onClick={() => navigate('/admin-campaigns')}
                     className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
                       location.pathname === '/admin-campaigns'
-                        ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/25'
+                        ? 'bg-brand-primary text-brand-deep shadow-lg shadow-brand-primary/25'
                         : 'text-gray-700 hover:bg-gray-100 hover:text-brand-primary'
                     }`}
                   >
@@ -184,7 +184,7 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
                     onClick={() => navigate('/admin-zones')}
                     className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
                       location.pathname === '/admin-zones'
-                        ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/25'
+                        ? 'bg-brand-primary text-brand-deep shadow-lg shadow-brand-primary/25'
                         : 'text-gray-700 hover:bg-gray-100 hover:text-brand-primary'
                     }`}
                   >
@@ -195,7 +195,7 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
                     onClick={() => navigate('/admin-screens')}
                     className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
                       location.pathname === '/admin-screens'
-                        ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/25'
+                        ? 'bg-brand-primary text-brand-deep shadow-lg shadow-brand-primary/25'
                         : 'text-gray-700 hover:bg-gray-100 hover:text-brand-primary'
                     }`}
                   >
@@ -206,7 +206,7 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
                     onClick={() => navigate('/admin-recharges')}
                     className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
                       location.pathname === '/admin-recharges'
-                        ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/25'
+                        ? 'bg-brand-primary text-brand-deep shadow-lg shadow-brand-primary/25'
                         : 'text-gray-700 hover:bg-gray-100 hover:text-brand-primary'
                     }`}
                   >
@@ -223,7 +223,7 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
                     onClick={() => navigate('/admin-events')}
                     className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
                       location.pathname === '/admin-events'
-                        ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/25'
+                        ? 'bg-brand-primary text-brand-deep shadow-lg shadow-brand-primary/25'
                         : 'text-gray-700 hover:bg-gray-100 hover:text-brand-primary'
                     }`}
                   >
@@ -235,7 +235,7 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
                     onClick={() => navigate('/admin-management')}
                     className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
                       location.pathname === '/admin-management'
-                        ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/25'
+                        ? 'bg-brand-primary text-brand-deep shadow-lg shadow-brand-primary/25'
                         : 'text-gray-700 hover:bg-gray-100 hover:text-brand-primary'
                     }`}
                   >
@@ -247,7 +247,7 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
                     onClick={() => navigate('/admin-create')}
                     className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
                       location.pathname === '/admin-create'
-                        ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/25'
+                        ? 'bg-brand-primary text-brand-deep shadow-lg shadow-brand-primary/25'
                         : 'text-gray-700 hover:bg-gray-100 hover:text-brand-primary'
                     }`}
                   >
@@ -274,7 +274,7 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
                   onClick={() => navigate('/admin-global-config')}
                   className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
                     location.pathname === '/admin-global-config'
-                      ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/25'
+                      ? 'bg-brand-primary text-brand-deep shadow-lg shadow-brand-primary/25'
                       : 'text-gray-700 hover:bg-gray-100 hover:text-brand-primary'
                   }`}
                 >

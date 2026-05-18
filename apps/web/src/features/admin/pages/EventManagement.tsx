@@ -366,7 +366,7 @@ export default function EventManagement() {
               resetForm();
               setShowCreateModal(true);
             }}
-            className="inline-flex items-center px-4 py-2 bg-brand-primary text-white rounded-lg hover:bg-brand-primary/90 transition-colors"
+            className="inline-flex items-center px-4 py-2 bg-brand-primary text-brand-deep rounded-lg hover:bg-brand-primary/90 transition-colors"
           >
             <Plus className="h-5 w-5 mr-2" />
             Nouvel événement
@@ -588,7 +588,7 @@ export default function EventManagement() {
                       onClick={() => setCurrentPage(idx + 1)}
                       className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
                         currentPage === idx + 1
-                          ? 'z-10 bg-brand-primary border-brand-primary text-white'
+                          ? 'z-10 bg-brand-primary border-brand-primary text-brand-deep'
                           : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
                       }`}
                     >
@@ -1040,7 +1040,7 @@ function EventFormModal({
             <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2">
               <button
                 type="submit"
-                className="w-full inline-flex justify-center items-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-brand-primary text-base font-medium text-white hover:bg-brand-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary sm:w-auto sm:text-sm"
+                className="w-full inline-flex justify-center items-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-brand-primary text-base font-medium text-brand-deep hover:bg-brand-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary sm:w-auto sm:text-sm"
               >
                 {isEdit ? 'Modifier' : 'Créer'}
               </button>
@@ -1257,7 +1257,7 @@ function EventDetailsModal({ event, onClose }: EventDetailsModalProps) {
           <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
             <button
               onClick={onClose}
-              className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-brand-primary text-base font-medium text-white hover:bg-brand-primary/90 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm"
+              className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-brand-primary text-base font-medium text-brand-deep hover:bg-brand-primary/90 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm"
             >
               Fermer
             </button>

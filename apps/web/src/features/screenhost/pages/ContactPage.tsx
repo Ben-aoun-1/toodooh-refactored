@@ -352,7 +352,7 @@ export default function ContactPage() {
                         <button
                           type="submit"
                           disabled={sending}
-                          className="flex items-center space-x-2 px-6 py-3 bg-brand-primary text-white rounded-lg font-medium hover:bg-brand-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="flex items-center space-x-2 px-6 py-3 bg-brand-primary text-brand-deep rounded-lg font-medium hover:bg-brand-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {sending ? (
                             <>

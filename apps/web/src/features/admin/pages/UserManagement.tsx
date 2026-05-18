@@ -745,7 +745,7 @@ export default function UserManagement() {
                       onClick={() => setCurrentPage(idx + 1)}
                       className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
                         currentPage === idx + 1
-                          ? 'z-10 bg-brand-primary border-brand-primary text-white'
+                          ? 'z-10 bg-brand-primary border-brand-primary text-brand-deep'
                           : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
                       }`}
                     >
@@ -902,7 +902,7 @@ export default function UserManagement() {
                                             )
                                           }
                                           disabled={uploadingDocument}
-                                          className="px-3 py-1 bg-brand-primary text-white rounded text-xs font-semibold hover:bg-brand-primary/90 transition-colors disabled:opacity-50"
+                                          className="px-3 py-1 bg-brand-primary text-brand-deep rounded text-xs font-semibold hover:bg-brand-primary/90 transition-colors disabled:opacity-50"
                                         >
                                           {uploadingDocument ? 'Upload...' : 'Uploader'}
                                         </button>
@@ -976,7 +976,7 @@ export default function UserManagement() {
                                             )
                                           }
                                           disabled={uploadingDocument}
-                                          className="px-3 py-1 bg-brand-primary text-white rounded text-xs font-semibold hover:bg-brand-primary/90 transition-colors disabled:opacity-50"
+                                          className="px-3 py-1 bg-brand-primary text-brand-deep rounded text-xs font-semibold hover:bg-brand-primary/90 transition-colors disabled:opacity-50"
                                         >
                                           {uploadingDocument ? 'Upload...' : 'Uploader'}
                                         </button>
@@ -1050,7 +1050,7 @@ export default function UserManagement() {
                                             )
                                           }
                                           disabled={uploadingDocument}
-                                          className="px-3 py-1 bg-brand-primary text-white rounded text-xs font-semibold hover:bg-brand-primary/90 transition-colors disabled:opacity-50"
+                                          className="px-3 py-1 bg-brand-primary text-brand-deep rounded text-xs font-semibold hover:bg-brand-primary/90 transition-colors disabled:opacity-50"
                                         >
                                           {uploadingDocument ? 'Upload...' : 'Uploader'}
                                         </button>
@@ -1090,7 +1090,7 @@ export default function UserManagement() {
                                     <button
                                       onClick={handleSaveAgentCode}
                                       disabled={savingAgentCode}
-                                      className="px-3 py-2 bg-brand-primary text-white rounded-lg text-sm font-medium hover:bg-brand-primary/90 transition-colors disabled:opacity-50"
+                                      className="px-3 py-2 bg-brand-primary text-brand-deep rounded-lg text-sm font-medium hover:bg-brand-primary/90 transition-colors disabled:opacity-50"
                                     >
                                       {savingAgentCode ? 'Enregistrement...' : 'Enregistrer'}
                                     </button>
@@ -1245,7 +1245,7 @@ export default function UserManagement() {
               <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
                 <button
                   onClick={() => setShowDetailsModal(false)}
-                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-brand-primary text-base font-medium text-white hover:bg-brand-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary sm:ml-3 sm:w-auto sm:text-sm"
+                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-brand-primary text-base font-medium text-brand-deep hover:bg-brand-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary sm:ml-3 sm:w-auto sm:text-sm"
                 >
                   Fermer
                 </button>

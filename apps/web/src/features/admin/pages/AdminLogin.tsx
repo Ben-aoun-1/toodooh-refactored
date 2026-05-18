@@ -107,7 +107,7 @@ export default function AdminLogin() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full px-5 py-3 bg-brand-primary text-white font-semibold text-base rounded-xl hover:shadow-lg hover:shadow-brand-primary/25 transform hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center"
+                className="w-full px-5 py-3 bg-brand-primary text-brand-deep font-semibold text-base rounded-xl hover:shadow-lg hover:shadow-brand-primary/25 transform hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center"
               >
                 {loading ? (
                   <div className="flex items-center">
