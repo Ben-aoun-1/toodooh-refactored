@@ -991,7 +991,11 @@ export default function UserProfile() {
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        documentFile ? setDocumentFile(null) : handleRemoveDocument();
+                        if (documentFile) {
+                          setDocumentFile(null);
+                        } else {
+                          handleRemoveDocument();
+                        }
                       }}
                       className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 flex-shrink-0"
                       title="Supprimer"

@@ -663,90 +663,80 @@ export default function NewCampaign() {
   }, [campaignCategories, state.categories]);
 
   const saveCampaignDraft = async (videoId?: string, _isVideoValidated: boolean = false) => {
-    try {
-      // Validation des champs obligatoires
-      if (!state.campaignName || state.campaignName.trim() === '') {
-        throw new Error('Le nom de la campagne est obligatoire');
-      }
-
-      if (diffusionType !== 'parc_tv' && !state.categories.length) {
-        throw new Error('Sélectionnez au moins une catégorie');
-      }
-
-      if (!startDate || !endDate) {
-        throw new Error('Les dates de début et fin sont obligatoires');
-      }
-
-      const mappedCategories =
-        diffusionType === 'parc_tv'
-          ? ['parc']
-          : state.categories.map((c) => categoryMapping[c] || c);
-      const primaryCategory = mappedCategories[0] || 'parc';
-
-      // TOUJOURS créer en draft d'abord
-      // La vérification du solde et de la vidéo se fera lors de "Créer maintenant"
-      const campaignStatus = 'draft';
-
-      // Récupérer les IDs des localités sélectionnées (une localité = une audience, pas de doublon écran)
-      const selectedLocationIds = geographicZones.flatMap((zone) =>
-        (zone.locations || []).map((loc) => loc.id),
-      );
-
-      // Calculer la position centrale moyenne de toutes les zones
-      const avgLat =
-        geographicZones.length > 0
-          ? geographicZones.reduce((sum, zone) => sum + zone.location.lat, 0) /
-            geographicZones.length
-          : selectedLocation.lat;
-      const avgLng =
-        geographicZones.length > 0
-          ? geographicZones.reduce((sum, zone) => sum + zone.location.lng, 0) /
-            geographicZones.length
-          : selectedLocation.lng;
-
-      // Utiliser le rayon maximum de toutes les zones
-      const maxRadius =
-        geographicZones.length > 0
-          ? Math.max(...geographicZones.map((zone) => zone.radius))
-          : radius;
-
-      // Calculer le budget à utiliser : utiliser adjustedBudget si disponible, sinon calculer à partir des impressions
-      const budgetToSave = adjustedBudget;
-      const maxImpSave = calculateBudgetAndImpressions.impressions;
-      const linkedImpSave =
-        maxImpSave > 0 && adjustedBudget > 0
-          ? Math.min(Math.round((adjustedBudget / cpmTnd) * 1000), maxImpSave)
-          : 0;
-
-      const campaign = await saveDraft.mutateAsync({
-        data: {
-          name: state.campaignName,
-          category: primaryCategory,
-          categories: mappedCategories,
-          start_date: toLocalDateOnlyString(startDate),
-          end_date: toLocalDateOnlyString(endDate),
-          budget: Number(budgetToSave) || 0,
-          views: Math.max(0, linkedImpSave),
-          status: campaignStatus,
-          video_id: videoId || uploadedVideoId || undefined,
-          event_id: isEventCampaign ? (eventFromState?.id ?? campaignToEdit?.event_id) : undefined,
-          location_lat: avgLat,
-          location_lng: avgLng,
-          location_radius: maxRadius,
-          location_ids: selectedLocationIds.length > 0 ? selectedLocationIds : undefined,
-          screen_ids: undefined,
-        },
-        campaignId: draftCampaignId || undefined,
-      });
-
-      if (!draftCampaignId) {
-        setDraftCampaignId(campaign.id);
-      }
-
-      return campaign;
-    } catch (error) {
-      throw error;
+    // Validation des champs obligatoires
+    if (!state.campaignName || state.campaignName.trim() === '') {
+      throw new Error('Le nom de la campagne est obligatoire');
     }
+
+    if (diffusionType !== 'parc_tv' && !state.categories.length) {
+      throw new Error('Sélectionnez au moins une catégorie');
+    }
+
+    if (!startDate || !endDate) {
+      throw new Error('Les dates de début et fin sont obligatoires');
+    }
+
+    const mappedCategories =
+      diffusionType === 'parc_tv' ? ['parc'] : state.categories.map((c) => categoryMapping[c] || c);
+    const primaryCategory = mappedCategories[0] || 'parc';
+
+    // TOUJOURS créer en draft d'abord
+    // La vérification du solde et de la vidéo se fera lors de "Créer maintenant"
+    const campaignStatus = 'draft';
+
+    // Récupérer les IDs des localités sélectionnées (une localité = une audience, pas de doublon écran)
+    const selectedLocationIds = geographicZones.flatMap((zone) =>
+      (zone.locations || []).map((loc) => loc.id),
+    );
+
+    // Calculer la position centrale moyenne de toutes les zones
+    const avgLat =
+      geographicZones.length > 0
+        ? geographicZones.reduce((sum, zone) => sum + zone.location.lat, 0) / geographicZones.length
+        : selectedLocation.lat;
+    const avgLng =
+      geographicZones.length > 0
+        ? geographicZones.reduce((sum, zone) => sum + zone.location.lng, 0) / geographicZones.length
+        : selectedLocation.lng;
+
+    // Utiliser le rayon maximum de toutes les zones
+    const maxRadius =
+      geographicZones.length > 0 ? Math.max(...geographicZones.map((zone) => zone.radius)) : radius;
+
+    // Calculer le budget à utiliser : utiliser adjustedBudget si disponible, sinon calculer à partir des impressions
+    const budgetToSave = adjustedBudget;
+    const maxImpSave = calculateBudgetAndImpressions.impressions;
+    const linkedImpSave =
+      maxImpSave > 0 && adjustedBudget > 0
+        ? Math.min(Math.round((adjustedBudget / cpmTnd) * 1000), maxImpSave)
+        : 0;
+
+    const campaign = await saveDraft.mutateAsync({
+      data: {
+        name: state.campaignName,
+        category: primaryCategory,
+        categories: mappedCategories,
+        start_date: toLocalDateOnlyString(startDate),
+        end_date: toLocalDateOnlyString(endDate),
+        budget: Number(budgetToSave) || 0,
+        views: Math.max(0, linkedImpSave),
+        status: campaignStatus,
+        video_id: videoId || uploadedVideoId || undefined,
+        event_id: isEventCampaign ? (eventFromState?.id ?? campaignToEdit?.event_id) : undefined,
+        location_lat: avgLat,
+        location_lng: avgLng,
+        location_radius: maxRadius,
+        location_ids: selectedLocationIds.length > 0 ? selectedLocationIds : undefined,
+        screen_ids: undefined,
+      },
+      campaignId: draftCampaignId || undefined,
+    });
+
+    if (!draftCampaignId) {
+      setDraftCampaignId(campaign.id);
+    }
+
+    return campaign;
   };
 
   // handleVideoUpload + handleSelectExistingVideo + MAX_VIDEO_DURATION_SECONDS:

@@ -1265,7 +1265,11 @@ export default function OwnerSettings() {
                               type="button"
                               onClick={(ev) => {
                                 ev.stopPropagation();
-                                documentFile ? setDocumentFile(null) : handleRemoveDocument();
+                                if (documentFile) {
+                                  setDocumentFile(null);
+                                } else {
+                                  handleRemoveDocument();
+                                }
                               }}
                               className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 flex-shrink-0"
                               title="Supprimer"

@@ -47,74 +47,70 @@ class AdminRechargesService {
     page: number = 1,
     perPage: number = 20,
   ): Promise<{ data: AdminRecharge[]; total: number }> {
-    try {
-      let query = supabase
-        .from('recharges')
-        .select('*', { count: 'exact' })
-        .order('created_at', { ascending: false });
+    let query = supabase
+      .from('recharges')
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false });
 
-      // Filtrer par statut
-      if (filters?.status && filters.status !== 'all') {
-        query = query.eq('status', filters.status);
-      }
-
-      // Filtrer par utilisateur
-      if (filters?.userId) {
-        query = query.eq('user_id', filters.userId);
-      }
-
-      // Recherche par référence
-      if (filters?.search) {
-        query = query.ilike('reference', `%${filters.search}%`);
-      }
-
-      // Pagination
-      const start = (page - 1) * perPage;
-      const end = start + perPage - 1;
-      query = query.range(start, end);
-
-      const { data: recharges, error, count } = await query;
-
-      if (error) throw error;
-
-      // Enrichir avec les données utilisateur
-      const enrichedRecharges = await Promise.all(
-        (recharges || []).map(async (recharge) => {
-          // Récupérer les infos utilisateur
-          const { data: profile } = await supabase
-            .from('business_profiles')
-            .select('business_name, contact_name, email')
-            .eq('user_id', recharge.user_id)
-            .single();
-
-          // Récupérer le validateur si existant
-          let validatorName = null;
-          if (recharge.validated_by) {
-            const { data: validator } = await supabase
-              .from('admin_profiles')
-              .select('full_name')
-              .eq('id', recharge.validated_by)
-              .single();
-            validatorName = validator?.full_name;
-          }
-
-          return {
-            ...recharge,
-            business_name: profile?.business_name || 'N/A',
-            user_name: profile?.contact_name || 'N/A',
-            user_email: profile?.email || 'N/A',
-            validator_name: validatorName,
-          } as AdminRecharge;
-        }),
-      );
-
-      return {
-        data: enrichedRecharges,
-        total: count || 0,
-      };
-    } catch (error) {
-      throw error;
+    // Filtrer par statut
+    if (filters?.status && filters.status !== 'all') {
+      query = query.eq('status', filters.status);
     }
+
+    // Filtrer par utilisateur
+    if (filters?.userId) {
+      query = query.eq('user_id', filters.userId);
+    }
+
+    // Recherche par référence
+    if (filters?.search) {
+      query = query.ilike('reference', `%${filters.search}%`);
+    }
+
+    // Pagination
+    const start = (page - 1) * perPage;
+    const end = start + perPage - 1;
+    query = query.range(start, end);
+
+    const { data: recharges, error, count } = await query;
+
+    if (error) throw error;
+
+    // Enrichir avec les données utilisateur
+    const enrichedRecharges = await Promise.all(
+      (recharges || []).map(async (recharge) => {
+        // Récupérer les infos utilisateur
+        const { data: profile } = await supabase
+          .from('business_profiles')
+          .select('business_name, contact_name, email')
+          .eq('user_id', recharge.user_id)
+          .single();
+
+        // Récupérer le validateur si existant
+        let validatorName = null;
+        if (recharge.validated_by) {
+          const { data: validator } = await supabase
+            .from('admin_profiles')
+            .select('full_name')
+            .eq('id', recharge.validated_by)
+            .single();
+          validatorName = validator?.full_name;
+        }
+
+        return {
+          ...recharge,
+          business_name: profile?.business_name || 'N/A',
+          user_name: profile?.contact_name || 'N/A',
+          user_email: profile?.email || 'N/A',
+          validator_name: validatorName,
+        } as AdminRecharge;
+      }),
+    );
+
+    return {
+      data: enrichedRecharges,
+      total: count || 0,
+    };
   }
 
   /**
@@ -161,66 +157,54 @@ class AdminRechargesService {
    * Valider une recharge (approuver)
    */
   async approveRecharge(rechargeId: string, adminId: string, notes?: string): Promise<void> {
-    try {
-      const { error } = await supabase
-        .from('recharges')
-        .update({
-          status: 'completed',
-          validated_by: adminId,
-          validated_at: new Date().toISOString(),
-          validation_notes: notes || "Recharge validée par l'administrateur",
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', rechargeId);
+    const { error } = await supabase
+      .from('recharges')
+      .update({
+        status: 'completed',
+        validated_by: adminId,
+        validated_at: new Date().toISOString(),
+        validation_notes: notes || "Recharge validée par l'administrateur",
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', rechargeId);
 
-      if (error) throw error;
-    } catch (error) {
-      throw error;
-    }
+    if (error) throw error;
   }
 
   /**
    * Rejeter une recharge
    */
   async rejectRecharge(rechargeId: string, adminId: string, reason: string): Promise<void> {
-    try {
-      const { error } = await supabase
-        .from('recharges')
-        .update({
-          status: 'failed',
-          validated_by: adminId,
-          validated_at: new Date().toISOString(),
-          validation_notes: reason,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', rechargeId);
+    const { error } = await supabase
+      .from('recharges')
+      .update({
+        status: 'failed',
+        validated_by: adminId,
+        validated_at: new Date().toISOString(),
+        validation_notes: reason,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', rechargeId);
 
-      if (error) throw error;
-    } catch (error) {
-      throw error;
-    }
+    if (error) throw error;
   }
 
   /**
    * Annuler une recharge
    */
   async cancelRecharge(rechargeId: string, adminId: string, reason: string): Promise<void> {
-    try {
-      const { error } = await supabase
-        .from('recharges')
-        .update({
-          status: 'cancelled',
-          validated_by: adminId,
-          validated_at: new Date().toISOString(),
-          validation_notes: reason,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', rechargeId);
+    const { error } = await supabase
+      .from('recharges')
+      .update({
+        status: 'cancelled',
+        validated_by: adminId,
+        validated_at: new Date().toISOString(),
+        validation_notes: reason,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', rechargeId);
 
-      if (error) throw error;
-    } catch (error) {
-      throw error;
-    }
+    if (error) throw error;
   }
 
   /**

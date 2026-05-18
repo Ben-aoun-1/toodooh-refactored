@@ -35,65 +35,61 @@ export interface AdminUser {
 export const adminUserService = {
   // Récupérer tous les utilisateurs
   async getUsers(): Promise<AdminUser[]> {
-    try {
-      // Récupérer les données de business_profiles (en excluant les admins)
-      const { data, error } = await supabase
-        .from('business_profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
+    // Récupérer les données de business_profiles (en excluant les admins)
+    const { data, error } = await supabase
+      .from('business_profiles')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-      if (error) {
-        throw new Error(`Erreur Supabase: ${error.message}`);
-      }
-
-      // Debug: Logger les données récupérées pour vérifier la colonne formule
-
-      // Filtrer les utilisateurs qui sont aussi des admins
-      const userIds = (data || []).map((u) => u.user_id);
-      const { data: adminProfiles } = await supabase
-        .from('admin_profiles')
-        .select('user_id')
-        .in('user_id', userIds);
-
-      const adminUserIds = new Set((adminProfiles || []).map((a) => a.user_id));
-
-      // Filtrer les admins de la liste
-      const filteredData = (data || []).filter((u) => !adminUserIds.has(u.user_id));
-
-      // Transformer les données pour correspondre à l'interface AdminUser
-      const transformedUsers: AdminUser[] = filteredData.map((user) => ({
-        id: user.id,
-        user_id: user.user_id,
-        email: user.email || 'N/A', // L'email est maintenant dans business_profiles
-        business_name: user.business_name || user.company_name || 'N/A',
-        contact_name: user.contact_name || user.first_name + ' ' + user.last_name || 'N/A',
-        contact_phone: user.contact_phone || user.phone || 'N/A',
-        street_address: user.street_address || user.address || 'N/A',
-        city: user.city || 'N/A',
-        postal_code: user.postal_code || user.zip_code || 'N/A',
-        profile_type: user.profile_type || 'advertiser',
-        status: user.status || ('pending' as const),
-        created_at: user.created_at,
-        updated_at: user.updated_at,
-        validation_notes: user.validation_notes,
-        validated_by: user.validated_by,
-        validated_at: user.validated_at,
-        verification_status: user.verification_status,
-        business_type: user.business_type,
-        tax_number: user.tax_number,
-        registration_doc_url: user.registration_doc_url,
-        zone: user.zone, // Zone géographique pour les propriétaires
-        cin: user.cin, // Numéro CIN pour les propriétaires individuels
-        cin_doc_url: user.cin_doc_url, // Document CIN pour les propriétaires individuels
-        formule: user.formule, // Formule choisie par le propriétaire
-        agent_toodooh: user.agent_toodooh, // Agent Toodooh pour les propriétaires
-        number_of_screens: user.number_of_screens, // Nombre d'écrans pour les propriétaires
-      }));
-
-      return transformedUsers;
-    } catch (error) {
-      throw error;
+    if (error) {
+      throw new Error(`Erreur Supabase: ${error.message}`);
     }
+
+    // Debug: Logger les données récupérées pour vérifier la colonne formule
+
+    // Filtrer les utilisateurs qui sont aussi des admins
+    const userIds = (data || []).map((u) => u.user_id);
+    const { data: adminProfiles } = await supabase
+      .from('admin_profiles')
+      .select('user_id')
+      .in('user_id', userIds);
+
+    const adminUserIds = new Set((adminProfiles || []).map((a) => a.user_id));
+
+    // Filtrer les admins de la liste
+    const filteredData = (data || []).filter((u) => !adminUserIds.has(u.user_id));
+
+    // Transformer les données pour correspondre à l'interface AdminUser
+    const transformedUsers: AdminUser[] = filteredData.map((user) => ({
+      id: user.id,
+      user_id: user.user_id,
+      email: user.email || 'N/A', // L'email est maintenant dans business_profiles
+      business_name: user.business_name || user.company_name || 'N/A',
+      contact_name: user.contact_name || user.first_name + ' ' + user.last_name || 'N/A',
+      contact_phone: user.contact_phone || user.phone || 'N/A',
+      street_address: user.street_address || user.address || 'N/A',
+      city: user.city || 'N/A',
+      postal_code: user.postal_code || user.zip_code || 'N/A',
+      profile_type: user.profile_type || 'advertiser',
+      status: user.status || ('pending' as const),
+      created_at: user.created_at,
+      updated_at: user.updated_at,
+      validation_notes: user.validation_notes,
+      validated_by: user.validated_by,
+      validated_at: user.validated_at,
+      verification_status: user.verification_status,
+      business_type: user.business_type,
+      tax_number: user.tax_number,
+      registration_doc_url: user.registration_doc_url,
+      zone: user.zone, // Zone géographique pour les propriétaires
+      cin: user.cin, // Numéro CIN pour les propriétaires individuels
+      cin_doc_url: user.cin_doc_url, // Document CIN pour les propriétaires individuels
+      formule: user.formule, // Formule choisie par le propriétaire
+      agent_toodooh: user.agent_toodooh, // Agent Toodooh pour les propriétaires
+      number_of_screens: user.number_of_screens, // Nombre d'écrans pour les propriétaires
+    }));
+
+    return transformedUsers;
   },
 
   // Données de test en cas d'erreur
@@ -316,28 +312,19 @@ export const adminUserService = {
 
       // Supprimer les écrans
       {
-        const { error } = await supabase
-          .from('screens')
-          .delete()
-          .eq('owner_id', authUserId);
+        const { error } = await supabase.from('screens').delete().eq('owner_id', authUserId);
         if (error) cascadeErrors.push({ table: 'screens', error });
       }
 
       // Supprimer les emplacements
       {
-        const { error } = await supabase
-          .from('locations')
-          .delete()
-          .eq('owner_id', authUserId);
+        const { error } = await supabase.from('locations').delete().eq('owner_id', authUserId);
         if (error) cascadeErrors.push({ table: 'locations', error });
       }
 
       // Supprimer les clients
       {
-        const { error } = await supabase
-          .from('clients')
-          .delete()
-          .eq('advertiser_id', authUserId);
+        const { error } = await supabase.from('clients').delete().eq('advertiser_id', authUserId);
         if (error) cascadeErrors.push({ table: 'clients', error });
       }
 
@@ -345,10 +332,7 @@ export const adminUserService = {
       // not be live yet — swallow "Could not find" errors at this level, but
       // still collect real errors into cascadeErrors.
       try {
-        const { error } = await supabase
-          .from('recharges')
-          .delete()
-          .eq('user_id', authUserId);
+        const { error } = await supabase.from('recharges').delete().eq('user_id', authUserId);
         if (error && !error.message.includes('Could not find')) {
           cascadeErrors.push({ table: 'recharges', error });
         }

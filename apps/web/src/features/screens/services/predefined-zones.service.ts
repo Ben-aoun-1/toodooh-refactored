@@ -21,27 +21,22 @@ export interface PredefinedZone {
 
 export const predefinedZonesService = {
   async getAll(): Promise<PredefinedZone[]> {
-    try {
-      const { data, error } = await supabase
-        .from('predefined_zones')
-        .select('*')
-        .eq('is_active', true)
-        .order('name', { ascending: true });
+    const { data, error } = await supabase
+      .from('predefined_zones')
+      .select('*')
+      .eq('is_active', true)
+      .order('name', { ascending: true });
 
-      if (error) {
-        log.error({ error }, '❌ Erreur lors de la récupération des zones prédéfinies');
-        log.error(
-          { message: error.message, details: error.details, hint: error.hint, code: error.code },
-          'Détails',
-        );
-        throw error;
-      }
-
-
-      return data || [];
-    } catch (error) {
+    if (error) {
+      log.error({ error }, '❌ Erreur lors de la récupération des zones prédéfinies');
+      log.error(
+        { message: error.message, details: error.details, hint: error.hint, code: error.code },
+        'Détails',
+      );
       throw error;
     }
+
+    return data || [];
   },
 
   async getById(id: string): Promise<PredefinedZone | null> {
@@ -62,17 +57,13 @@ export const predefinedZonesService = {
 
   // Méthodes admin pour gérer les zones
   async getAllForAdmin(): Promise<PredefinedZone[]> {
-    try {
-      const { data, error } = await supabase
-        .from('predefined_zones')
-        .select('*')
-        .order('created_at', { ascending: false });
+    const { data, error } = await supabase
+      .from('predefined_zones')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      return data || [];
-    } catch (error) {
-      throw error;
-    }
+    if (error) throw error;
+    return data || [];
   },
 
   async create(zone: {
@@ -87,23 +78,19 @@ export const predefinedZonesService = {
     country?: string | null;
     region?: string | null;
   }): Promise<PredefinedZone> {
-    try {
-      const { data, error } = await supabase
-        .from('predefined_zones')
-        .insert([
-          {
-            ...zone,
-            is_active: zone.is_active !== undefined ? zone.is_active : true,
-          },
-        ])
-        .select()
-        .single();
+    const { data, error } = await supabase
+      .from('predefined_zones')
+      .insert([
+        {
+          ...zone,
+          is_active: zone.is_active !== undefined ? zone.is_active : true,
+        },
+      ])
+      .select()
+      .single();
 
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      throw error;
-    }
+    if (error) throw error;
+    return data;
   },
 
   async update(
@@ -121,45 +108,33 @@ export const predefinedZonesService = {
       region?: string | null;
     },
   ): Promise<PredefinedZone> {
-    try {
-      const { data, error } = await supabase
-        .from('predefined_zones')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
+    const { data, error } = await supabase
+      .from('predefined_zones')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
 
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      throw error;
-    }
+    if (error) throw error;
+    return data;
   },
 
   async delete(id: string): Promise<void> {
-    try {
-      const { error } = await supabase.from('predefined_zones').delete().eq('id', id);
+    const { error } = await supabase.from('predefined_zones').delete().eq('id', id);
 
-      if (error) throw error;
-    } catch (error) {
-      throw error;
-    }
+    if (error) throw error;
   },
 
   async toggleActive(id: string, isActive: boolean): Promise<PredefinedZone> {
-    try {
-      const { data, error } = await supabase
-        .from('predefined_zones')
-        .update({ is_active: isActive })
-        .eq('id', id)
-        .select()
-        .single();
+    const { data, error } = await supabase
+      .from('predefined_zones')
+      .update({ is_active: isActive })
+      .eq('id', id)
+      .select()
+      .single();
 
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      throw error;
-    }
+    if (error) throw error;
+    return data;
   },
 
   /** Upload une image pour une zone (bucket zone-images). Retourne l'URL publique. */

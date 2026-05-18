@@ -787,25 +787,21 @@ export const authService = {
     const user = await this.getCurrentUser();
     if (!user) throw new Error('Utilisateur non connecté');
 
-    try {
-      // 1. Essayer de récupérer le profil normalement
-      const { data: profile, error } = await supabase
-        .from('business_profiles')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+    // 1. Essayer de récupérer le profil normalement
+    const { data: profile, error } = await supabase
+      .from('business_profiles')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-      if (error) {
-        if (error.code === 'PGRST116') return null;
-        return null;
-      }
-
-      return profile;
-    } catch (error) {
-      throw error;
+    if (error) {
+      if (error.code === 'PGRST116') return null;
+      return null;
     }
+
+    return profile;
   },
 
   /** Met à jour le profil (responsable, entreprise, adresse, etc.). Seuls les champs fournis sont mis à jour. */

@@ -1011,8 +1011,9 @@ export default function MyCampaigns() {
                                       type="button"
                                       onClick={() => {
                                         setOpenActionRowId(null);
-                                        canEditCampaign(campaign.status) &&
+                                        if (canEditCampaign(campaign.status)) {
                                           handleEditCampaign(campaign);
+                                        }
                                       }}
                                       disabled={!canEditCampaign(campaign.status)}
                                       className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-50 ${canEditCampaign(campaign.status) ? 'text-gray-700' : 'text-gray-400 cursor-not-allowed'}`}

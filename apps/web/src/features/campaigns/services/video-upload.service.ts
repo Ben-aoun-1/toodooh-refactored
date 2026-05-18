@@ -165,17 +165,13 @@ export const videoUploadService = {
 
   // Supprimer une vidéo
   async deleteVideo(path: string): Promise<boolean> {
-    try {
-      const { error } = await supabase.storage.from('media').remove([path]);
+    const { error } = await supabase.storage.from('media').remove([path]);
 
-      if (error) {
-        throw error;
-      }
-
-      return true;
-    } catch (error) {
+    if (error) {
       throw error;
     }
+
+    return true;
   },
 
   // Récupérer l'URL d'une vidéo
@@ -194,47 +190,43 @@ export const videoUploadService = {
     filename: string,
     fileSize?: number,
     durationSeconds?: number | null,
-  // TODO(phase-1): typed source [supabase] — see #15
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    // TODO(phase-1): typed source [supabase] — see #15
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<any> {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error('Utilisateur non connecté');
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) throw new Error('Utilisateur non connecté');
 
-      const insertRow: Record<string, unknown> = {
-        url: videoUrl,
-        filename: filename,
-        file_size: fileSize,
-        uploaded_by: user.id,
-        validation_status: 'pending',
-      };
-      if (durationSeconds != null && Number.isFinite(durationSeconds) && durationSeconds > 0) {
-        insertRow.duration_seconds = durationSeconds;
-      }
+    const insertRow: Record<string, unknown> = {
+      url: videoUrl,
+      filename: filename,
+      file_size: fileSize,
+      uploaded_by: user.id,
+      validation_status: 'pending',
+    };
+    if (durationSeconds != null && Number.isFinite(durationSeconds) && durationSeconds > 0) {
+      insertRow.duration_seconds = durationSeconds;
+    }
 
-      let { data, error } = await supabase.from('videos').insert(insertRow).select().single();
+    let { data, error } = await supabase.from('videos').insert(insertRow).select().single();
 
-      if (
-        error &&
-        insertRow.duration_seconds != null &&
-        (error.code === '42703' || String(error.message).includes('duration_seconds'))
-      ) {
-        const { duration_seconds: _d, ...withoutDuration } = insertRow;
-        const retry = await supabase.from('videos').insert(withoutDuration).select().single();
-        data = retry.data;
-        error = retry.error;
-      }
+    if (
+      error &&
+      insertRow.duration_seconds != null &&
+      (error.code === '42703' || String(error.message).includes('duration_seconds'))
+    ) {
+      const { duration_seconds: _d, ...withoutDuration } = insertRow;
+      const retry = await supabase.from('videos').insert(withoutDuration).select().single();
+      data = retry.data;
+      error = retry.error;
+    }
 
-      if (error) {
-        throw error;
-      }
-
-      return data;
-    } catch (error) {
+    if (error) {
       throw error;
     }
+
+    return data;
   },
 
   /** Met à jour `duration_seconds` (ligne déjà créée). */

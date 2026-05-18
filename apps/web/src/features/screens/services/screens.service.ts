@@ -152,162 +152,138 @@ export interface UpdateConfigurationData {
 class ScreensService {
   // Récupérer tous les écrans de l'utilisateur connecté
   async getScreens(): Promise<Screen[]> {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        return [];
-      }
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return [];
+    }
 
-      // Récupérer UNIQUEMENT les écrans du propriétaire connecté
-      const { data, error } = await supabase
-        .from('screens')
-        .select('*')
-        .eq('owner_id', user.id) // Filtrer par propriétaire
-        .order('created_at', { ascending: false });
+    // Récupérer UNIQUEMENT les écrans du propriétaire connecté
+    const { data, error } = await supabase
+      .from('screens')
+      .select('*')
+      .eq('owner_id', user.id) // Filtrer par propriétaire
+      .order('created_at', { ascending: false });
 
-      if (error) {
-        log.error({ error }, '❌ Erreur Supabase');
-        log.error(
-          { message: error.message, details: error.details, hint: error.hint, code: error.code },
-          "Détails de l'erreur",
-        );
-        throw error;
-      }
-
-      if (data && data.length > 0) {
-        data.forEach((_screen, _index) => {});
-      }
-
-      return data || [];
-    } catch (error) {
+    if (error) {
+      log.error({ error }, '❌ Erreur Supabase');
+      log.error(
+        { message: error.message, details: error.details, hint: error.hint, code: error.code },
+        "Détails de l'erreur",
+      );
       throw error;
     }
+
+    if (data && data.length > 0) {
+      data.forEach((_screen, _index) => {});
+    }
+
+    return data || [];
   }
 
   // Récupérer un écran par ID
   async getScreenById(id: string): Promise<Screen | null> {
-    try {
-      const { data, error } = await supabase.from('screens').select('*').eq('id', id).single();
+    const { data, error } = await supabase.from('screens').select('*').eq('id', id).single();
 
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      throw error;
-    }
+    if (error) throw error;
+    return data;
   }
 
   // Créer un nouvel écran (la localité liée est garantie côté DB)
   async createScreen(screenData: CreateScreenData): Promise<Screen> {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error('Utilisateur non connecté');
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) throw new Error('Utilisateur non connecté');
 
-      let coordinatesPoint: string | null = null;
-      if (screenData.coordinates) {
-        // TODO(phase-1): typed source [supabase] — see #15
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const lng = (screenData.coordinates as any).x ?? (screenData.coordinates as any).lng;
-        // TODO(phase-1): typed source [supabase] — see #15
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const lat = (screenData.coordinates as any).y ?? (screenData.coordinates as any).lat;
-        if (lng != null && lat != null) {
-          coordinatesPoint = `(${lng},${lat})`;
-        }
-      }
-
+    let coordinatesPoint: string | null = null;
+    if (screenData.coordinates) {
       // TODO(phase-1): typed source [supabase] — see #15
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const insertData: any = {
-        owner_id: user.id,
-        name: screenData.name,
-        location: screenData.location,
-        address: screenData.address,
-        screen_type: screenData.screen_type || 'led',
-        resolution_width: screenData.resolution_width || 1920,
-        resolution_height: screenData.resolution_height || 1080,
-        screen_size_inches: screenData.screen_size_inches || 55.0,
-        orientation: screenData.orientation || 'landscape',
-        status: 'active',
-        is_online: false,
-        monthly_revenue: 0,
-        total_revenue: 0,
-        loyalty_points: 0,
-        installation_date: new Date().toISOString().split('T')[0],
-      };
-
-      if (coordinatesPoint) {
-        insertData.coordinates = coordinatesPoint;
+      const lng = (screenData.coordinates as any).x ?? (screenData.coordinates as any).lng;
+      // TODO(phase-1): typed source [supabase] — see #15
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const lat = (screenData.coordinates as any).y ?? (screenData.coordinates as any).lat;
+      if (lng != null && lat != null) {
+        coordinatesPoint = `(${lng},${lat})`;
       }
+    }
 
-      const { data, error } = await supabase.from('screens').insert(insertData).select().single();
+    // TODO(phase-1): typed source [supabase] — see #15
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const insertData: any = {
+      owner_id: user.id,
+      name: screenData.name,
+      location: screenData.location,
+      address: screenData.address,
+      screen_type: screenData.screen_type || 'led',
+      resolution_width: screenData.resolution_width || 1920,
+      resolution_height: screenData.resolution_height || 1080,
+      screen_size_inches: screenData.screen_size_inches || 55.0,
+      orientation: screenData.orientation || 'landscape',
+      status: 'active',
+      is_online: false,
+      monthly_revenue: 0,
+      total_revenue: 0,
+      loyalty_points: 0,
+      installation_date: new Date().toISOString().split('T')[0],
+    };
 
-      if (error) {
-        log.error({ error }, '❌ Erreur Supabase lors de la création');
-        log.error(
-          { message: error.message, details: error.details, hint: error.hint, code: error.code },
-          "Détails de l'erreur",
-        );
-        throw error;
-      }
+    if (coordinatesPoint) {
+      insertData.coordinates = coordinatesPoint;
+    }
 
-      if (!data.location_id) {
-        throw new Error(
-          'Écran créé sans location_id. Vérifiez la migration SQL de liaison auto location_id.',
-        );
-      }
+    const { data, error } = await supabase.from('screens').insert(insertData).select().single();
 
-      return data;
-    } catch (error) {
+    if (error) {
+      log.error({ error }, '❌ Erreur Supabase lors de la création');
+      log.error(
+        { message: error.message, details: error.details, hint: error.hint, code: error.code },
+        "Détails de l'erreur",
+      );
       throw error;
     }
+
+    if (!data.location_id) {
+      throw new Error(
+        'Écran créé sans location_id. Vérifiez la migration SQL de liaison auto location_id.',
+      );
+    }
+
+    return data;
   }
 
   // Mettre à jour un écran
   async updateScreen(id: string, updateData: UpdateScreenData): Promise<Screen> {
-    try {
-      const { data, error } = await supabase
-        .from('screens')
-        .update(updateData)
-        .eq('id', id)
-        .select()
-        .single();
+    const { data, error } = await supabase
+      .from('screens')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
 
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      throw error;
-    }
+    if (error) throw error;
+    return data;
   }
 
   // Supprimer un écran
   async deleteScreen(id: string): Promise<void> {
-    try {
-      const { error } = await supabase.from('screens').delete().eq('id', id);
+    const { error } = await supabase.from('screens').delete().eq('id', id);
 
-      if (error) throw error;
-    } catch (error) {
-      throw error;
-    }
+    if (error) throw error;
   }
 
   // Récupérer la configuration d'un écran
   async getScreenConfiguration(screenId: string): Promise<ScreenConfiguration | null> {
-    try {
-      const { data, error } = await supabase
-        .from('screen_configurations')
-        .select('*')
-        .eq('screen_id', screenId)
-        .single();
+    const { data, error } = await supabase
+      .from('screen_configurations')
+      .select('*')
+      .eq('screen_id', screenId)
+      .single();
 
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      throw error;
-    }
+    if (error) throw error;
+    return data;
   }
 
   // Mettre à jour la configuration d'un écran
@@ -315,193 +291,153 @@ class ScreensService {
     screenId: string,
     configData: UpdateConfigurationData,
   ): Promise<ScreenConfiguration> {
-    try {
-      const { data, error } = await supabase
-        .from('screen_configurations')
-        .update(configData)
-        .eq('screen_id', screenId)
-        .select()
-        .single();
+    const { data, error } = await supabase
+      .from('screen_configurations')
+      .update(configData)
+      .eq('screen_id', screenId)
+      .select()
+      .single();
 
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      throw error;
-    }
+    if (error) throw error;
+    return data;
   }
 
   // Récupérer les périodes d'indisponibilité d'un écran
   async getUnavailabilityPeriods(screenId?: string): Promise<UnavailabilityPeriod[]> {
-    try {
-      let query = supabase
-        .from('screen_unavailability_periods')
-        .select('*')
-        .order('start_date', { ascending: true });
+    let query = supabase
+      .from('screen_unavailability_periods')
+      .select('*')
+      .order('start_date', { ascending: true });
 
-      if (screenId) {
-        query = query.eq('screen_id', screenId);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return data || [];
-    } catch (error) {
-      throw error;
+    if (screenId) {
+      query = query.eq('screen_id', screenId);
     }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
   }
 
   // Créer une période d'indisponibilité
   async createUnavailabilityPeriod(
     unavailabilityData: CreateUnavailabilityData,
   ): Promise<UnavailabilityPeriod> {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error('Utilisateur non connecté');
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) throw new Error('Utilisateur non connecté');
 
-      const { data, error } = await supabase
-        .from('screen_unavailability_periods')
-        .insert({
-          ...unavailabilityData,
-          created_by: user.id,
-        })
-        .select()
-        .single();
+    const { data, error } = await supabase
+      .from('screen_unavailability_periods')
+      .insert({
+        ...unavailabilityData,
+        created_by: user.id,
+      })
+      .select()
+      .single();
 
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      throw error;
-    }
+    if (error) throw error;
+    return data;
   }
 
   // Supprimer une période d'indisponibilité
   async deleteUnavailabilityPeriod(id: string): Promise<void> {
-    try {
-      const { error } = await supabase.from('screen_unavailability_periods').delete().eq('id', id);
+    const { error } = await supabase.from('screen_unavailability_periods').delete().eq('id', id);
 
-      if (error) throw error;
-    } catch (error) {
-      throw error;
-    }
+    if (error) throw error;
   }
 
   // Récupérer les statistiques d'un écran
   async getScreenStatistics(screenId: string, days: number = 30): Promise<ScreenStatistics[]> {
-    try {
-      const { data, error } = await supabase
-        .from('screen_statistics')
-        .select('*')
-        .eq('screen_id', screenId)
-        .gte('date', new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
-        .order('date', { ascending: true });
+    const { data, error } = await supabase
+      .from('screen_statistics')
+      .select('*')
+      .eq('screen_id', screenId)
+      .gte('date', new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
+      .order('date', { ascending: true });
 
-      if (error) throw error;
-      return data || [];
-    } catch (error) {
-      throw error;
-    }
+    if (error) throw error;
+    return data || [];
   }
 
   // Récupérer les alertes d'un écran
   async getScreenAlerts(screenId?: string, resolved?: boolean): Promise<ScreenAlert[]> {
-    try {
-      let query = supabase
-        .from('screen_alerts')
-        .select('*')
-        .order('created_at', { ascending: false });
+    let query = supabase
+      .from('screen_alerts')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-      if (screenId) {
-        query = query.eq('screen_id', screenId);
-      }
-
-      if (resolved !== undefined) {
-        query = query.eq('is_resolved', resolved);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return data || [];
-    } catch (error) {
-      throw error;
+    if (screenId) {
+      query = query.eq('screen_id', screenId);
     }
+
+    if (resolved !== undefined) {
+      query = query.eq('is_resolved', resolved);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
   }
 
   // Marquer une alerte comme résolue
   async resolveAlert(id: string): Promise<ScreenAlert> {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error('Utilisateur non connecté');
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) throw new Error('Utilisateur non connecté');
 
-      const { data, error } = await supabase
-        .from('screen_alerts')
-        .update({
-          is_resolved: true,
-          resolved_at: new Date().toISOString(),
-          resolved_by: user.id,
-        })
-        .eq('id', id)
-        .select()
-        .single();
+    const { data, error } = await supabase
+      .from('screen_alerts')
+      .update({
+        is_resolved: true,
+        resolved_at: new Date().toISOString(),
+        resolved_by: user.id,
+      })
+      .eq('id', id)
+      .select()
+      .single();
 
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      throw error;
-    }
+    if (error) throw error;
+    return data;
   }
 
   // Récupérer les logs d'activité d'un écran
   async getScreenActivityLogs(screenId: string, limit: number = 50): Promise<ScreenActivityLog[]> {
-    try {
-      const { data, error } = await supabase
-        .from('screen_activity_logs')
-        .select('*')
-        .eq('screen_id', screenId)
-        .order('created_at', { ascending: false })
-        .limit(limit);
+    const { data, error } = await supabase
+      .from('screen_activity_logs')
+      .select('*')
+      .eq('screen_id', screenId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
 
-      if (error) throw error;
-      return data || [];
-    } catch (error) {
-      throw error;
-    }
+    if (error) throw error;
+    return data || [];
   }
 
   // Créer un log d'activité
   // TODO(phase-1): typed source [supabase] — see #15
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async createActivityLog(screenId: string, action: string, details?: any): Promise<void> {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-      const { error } = await supabase.from('screen_activity_logs').insert({
-        screen_id: screenId,
-        action,
-        details,
-        performed_by: user?.id,
-      });
+    const { error } = await supabase.from('screen_activity_logs').insert({
+      screen_id: screenId,
+      action,
+      details,
+      performed_by: user?.id,
+    });
 
-      if (error) throw error;
-    } catch (error) {
-      throw error;
-    }
+    if (error) throw error;
   }
 
   // Vérifier et mettre à jour les statuts d'indisponibilité
   async checkUnavailabilityStatus(): Promise<void> {
-    try {
-      const { error } = await supabase.rpc('check_unavailability_status');
+    const { error } = await supabase.rpc('check_unavailability_status');
 
-      if (error) throw error;
-    } catch (error) {
-      throw error;
-    }
+    if (error) throw error;
   }
 
   // Récupérer les statistiques globales
@@ -513,34 +449,30 @@ class ScreensService {
     totalLoyaltyPoints: number;
     alertsCount: number;
   }> {
-    try {
-      const { data: screens } = await supabase
-        .from('screens')
-        .select('status, total_revenue, monthly_revenue, loyalty_points');
+    const { data: screens } = await supabase
+      .from('screens')
+      .select('status, total_revenue, monthly_revenue, loyalty_points');
 
-      const { data: alerts } = await supabase
-        .from('screen_alerts')
-        .select('id')
-        .eq('is_resolved', false);
+    const { data: alerts } = await supabase
+      .from('screen_alerts')
+      .select('id')
+      .eq('is_resolved', false);
 
-      const totalScreens = screens?.length || 0;
-      const activeScreens = screens?.filter((s) => s.status === 'active').length || 0;
-      const totalRevenue = screens?.reduce((sum, s) => sum + (s.total_revenue || 0), 0) || 0;
-      const monthlyRevenue = screens?.reduce((sum, s) => sum + (s.monthly_revenue || 0), 0) || 0;
-      const totalLoyaltyPoints = screens?.reduce((sum, s) => sum + (s.loyalty_points || 0), 0) || 0;
-      const alertsCount = alerts?.length || 0;
+    const totalScreens = screens?.length || 0;
+    const activeScreens = screens?.filter((s) => s.status === 'active').length || 0;
+    const totalRevenue = screens?.reduce((sum, s) => sum + (s.total_revenue || 0), 0) || 0;
+    const monthlyRevenue = screens?.reduce((sum, s) => sum + (s.monthly_revenue || 0), 0) || 0;
+    const totalLoyaltyPoints = screens?.reduce((sum, s) => sum + (s.loyalty_points || 0), 0) || 0;
+    const alertsCount = alerts?.length || 0;
 
-      return {
-        totalScreens,
-        activeScreens,
-        totalRevenue,
-        monthlyRevenue,
-        totalLoyaltyPoints,
-        alertsCount,
-      };
-    } catch (error) {
-      throw error;
-    }
+    return {
+      totalScreens,
+      activeScreens,
+      totalRevenue,
+      monthlyRevenue,
+      totalLoyaltyPoints,
+      alertsCount,
+    };
   }
 }
 

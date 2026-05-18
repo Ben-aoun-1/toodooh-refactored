@@ -17,85 +17,80 @@ class AdminCampaignMonitoringService {
    * Récupérer les statistiques globales des campagnes
    */
   async getGlobalStats(): Promise<CampaignGlobalStats> {
-    try {
-      // Essayer avec RPC d'abord
-      const { data, error } = await supabase.rpc('get_campaigns_global_stats');
+    // Essayer avec RPC d'abord
+    const { data, error } = await supabase.rpc('get_campaigns_global_stats');
 
-      if (error) {
-        log.warn(
-          { message: error.message },
-          '⚠️ RPC get_campaigns_global_stats failed, using fallback',
-        );
+    if (error) {
+      log.warn(
+        { message: error.message },
+        '⚠️ RPC get_campaigns_global_stats failed, using fallback',
+      );
 
-        // Fallback: requête directe
-        const { data: campaigns, error: fallbackError } = await supabase
-          .from('campaigns')
-          .select('status, budget, views');
+      // Fallback: requête directe
+      const { data: campaigns, error: fallbackError } = await supabase
+        .from('campaigns')
+        .select('status, budget, views');
 
-        if (fallbackError) throw fallbackError;
+      if (fallbackError) throw fallbackError;
 
-        const stats: CampaignGlobalStats = {
-          total_campaigns: campaigns?.length || 0,
-          active_campaigns: campaigns?.filter((c) => c.status === 'active').length || 0,
-          pending_campaigns: campaigns?.filter((c) => c.status === 'pending').length || 0,
-          completed_campaigns: campaigns?.filter((c) => c.status === 'completed').length || 0,
-          paused_campaigns: campaigns?.filter((c) => c.status === 'paused').length || 0,
-          total_budget: campaigns?.reduce((sum, c) => sum + (parseFloat(c.budget) || 0), 0) || 0,
-          active_budget:
-            campaigns
-              ?.filter((c) => c.status === 'active')
-              .reduce((sum, c) => sum + (parseFloat(c.budget) || 0), 0) || 0,
-          total_views: campaigns?.reduce((sum, c) => sum + (c.views || 0), 0) || 0,
-          avg_budget: campaigns?.length
-            ? campaigns.reduce((sum, c) => sum + (parseFloat(c.budget) || 0), 0) / campaigns.length
-            : 0,
-        };
+      const stats: CampaignGlobalStats = {
+        total_campaigns: campaigns?.length || 0,
+        active_campaigns: campaigns?.filter((c) => c.status === 'active').length || 0,
+        pending_campaigns: campaigns?.filter((c) => c.status === 'pending').length || 0,
+        completed_campaigns: campaigns?.filter((c) => c.status === 'completed').length || 0,
+        paused_campaigns: campaigns?.filter((c) => c.status === 'paused').length || 0,
+        total_budget: campaigns?.reduce((sum, c) => sum + (parseFloat(c.budget) || 0), 0) || 0,
+        active_budget:
+          campaigns
+            ?.filter((c) => c.status === 'active')
+            .reduce((sum, c) => sum + (parseFloat(c.budget) || 0), 0) || 0,
+        total_views: campaigns?.reduce((sum, c) => sum + (c.views || 0), 0) || 0,
+        avg_budget: campaigns?.length
+          ? campaigns.reduce((sum, c) => sum + (parseFloat(c.budget) || 0), 0) / campaigns.length
+          : 0,
+      };
 
-        return stats;
-      }
-
-      return data as CampaignGlobalStats;
-    } catch (error) {
-      throw error;
+      return stats;
     }
+
+    return data as CampaignGlobalStats;
   }
 
   /**
    * Récupérer toutes les campagnes avec leurs écrans
    */
   async getCampaignsWithScreens(): Promise<CampaignMonitoringData[]> {
-    try {
-      // Priorité à la vue (plus légère que la RPC complète)
-      const { data: viewData, error: viewError } = await supabase
-        .from('admin_campaigns_monitoring')
-        .select('*')
-        .order('created_at', { ascending: false });
+    // Priorité à la vue (plus légère que la RPC complète)
+    const { data: viewData, error: viewError } = await supabase
+      .from('admin_campaigns_monitoring')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-      if (!viewError && viewData) {
-        return viewData.map((row) => ({
-          ...row,
-          screens_list: [],
-        })) as CampaignMonitoringData[];
-      }
+    if (!viewError && viewData) {
+      return viewData.map((row) => ({
+        ...row,
+        screens_list: [],
+      })) as CampaignMonitoringData[];
+    }
 
-      log.warn('⚠️ View admin_campaigns_monitoring failed, trying RPC/direct fallback');
+    log.warn('⚠️ View admin_campaigns_monitoring failed, trying RPC/direct fallback');
 
-      // Fallback 1: RPC (on retire la liste lourde des écrans)
-      const { data: rpcData, error: rpcError } = await supabase.rpc('get_campaigns_with_screens');
-      if (!rpcError && rpcData) {
-        // TODO(phase-1): typed source [supabase] — see #15
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        return (rpcData as any[]).map((row) => ({
-          ...row,
-          screens_list: [],
-        })) as CampaignMonitoringData[];
-      }
+    // Fallback 1: RPC (on retire la liste lourde des écrans)
+    const { data: rpcData, error: rpcError } = await supabase.rpc('get_campaigns_with_screens');
+    if (!rpcError && rpcData) {
+      // TODO(phase-1): typed source [supabase] — see #15
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return (rpcData as any[]).map((row) => ({
+        ...row,
+        screens_list: [],
+      })) as CampaignMonitoringData[];
+    }
 
-      // Fallback 2: requête directe consolidée (sans N+1)
-      const { data: campaigns, error: directError } = await supabase
-        .from('campaigns')
-        .select(
-          `
+    // Fallback 2: requête directe consolidée (sans N+1)
+    const { data: campaigns, error: directError } = await supabase
+      .from('campaigns')
+      .select(
+        `
           id,
           name,
           user_id,
@@ -110,206 +105,183 @@ class AdminCampaignMonitoringService {
           video_id,
           created_at
         `,
-        )
-        .order('created_at', { ascending: false });
+      )
+      .order('created_at', { ascending: false });
 
-      if (directError) throw directError;
+    if (directError) throw directError;
 
-      const campaignRows = campaigns || [];
-      const advertiserIds = [...new Set(campaignRows.map((c) => c.user_id).filter(Boolean))];
-      const clientIds = [...new Set(campaignRows.map((c) => c.client_id).filter(Boolean))];
-      const videoIds = [...new Set(campaignRows.map((c) => c.video_id).filter(Boolean))];
-      const campaignIds = campaignRows.map((c) => c.id);
+    const campaignRows = campaigns || [];
+    const advertiserIds = [...new Set(campaignRows.map((c) => c.user_id).filter(Boolean))];
+    const clientIds = [...new Set(campaignRows.map((c) => c.client_id).filter(Boolean))];
+    const videoIds = [...new Set(campaignRows.map((c) => c.video_id).filter(Boolean))];
+    const campaignIds = campaignRows.map((c) => c.id);
 
-      const [
-        { data: profilesData },
-        { data: clientsData },
-        { data: videosData },
-        { data: campaignScreensData },
-      ] = await Promise.all([
-        advertiserIds.length
-          ? supabase
-              .from('business_profiles')
-              .select('user_id, business_name, contact_name, email')
-              .in('user_id', advertiserIds)
-          // TODO(phase-1): typed source [supabase] — see #15
+    const [
+      { data: profilesData },
+      { data: clientsData },
+      { data: videosData },
+      { data: campaignScreensData },
+    ] = await Promise.all([
+      advertiserIds.length
+        ? supabase
+            .from('business_profiles')
+            .select('user_id, business_name, contact_name, email')
+            .in('user_id', advertiserIds)
+        : // TODO(phase-1): typed source [supabase] — see #15
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          : Promise.resolve({ data: [] as any[] }),
-        clientIds.length
-          ? supabase.from('clients').select('id, name').in('id', clientIds)
-          // TODO(phase-1): typed source [supabase] — see #15
+          Promise.resolve({ data: [] as any[] }),
+      clientIds.length
+        ? supabase.from('clients').select('id, name').in('id', clientIds)
+        : // TODO(phase-1): typed source [supabase] — see #15
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          : Promise.resolve({ data: [] as any[] }),
-        videoIds.length
-          ? supabase.from('videos').select('id, url, filename').in('id', videoIds)
-          // TODO(phase-1): typed source [supabase] — see #15
+          Promise.resolve({ data: [] as any[] }),
+      videoIds.length
+        ? supabase.from('videos').select('id, url, filename').in('id', videoIds)
+        : // TODO(phase-1): typed source [supabase] — see #15
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          : Promise.resolve({ data: [] as any[] }),
-        campaignIds.length
-          ? supabase.from('campaign_screens').select('campaign_id').in('campaign_id', campaignIds)
-          // TODO(phase-1): typed source [supabase] — see #15
+          Promise.resolve({ data: [] as any[] }),
+      campaignIds.length
+        ? supabase.from('campaign_screens').select('campaign_id').in('campaign_id', campaignIds)
+        : // TODO(phase-1): typed source [supabase] — see #15
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          : Promise.resolve({ data: [] as any[] }),
-      ]);
+          Promise.resolve({ data: [] as any[] }),
+    ]);
 
-      const profileMap = new Map((profilesData || []).map((p) => [p.user_id, p]));
-      const clientMap = new Map((clientsData || []).map((c) => [c.id, c]));
-      const videoMap = new Map((videosData || []).map((v) => [v.id, v]));
-      const screensCountMap = new Map<string, number>();
-      (campaignScreensData || []).forEach((r) => {
-        const id = String(r.campaign_id);
-        screensCountMap.set(id, (screensCountMap.get(id) || 0) + 1);
-      });
+    const profileMap = new Map((profilesData || []).map((p) => [p.user_id, p]));
+    const clientMap = new Map((clientsData || []).map((c) => [c.id, c]));
+    const videoMap = new Map((videosData || []).map((v) => [v.id, v]));
+    const screensCountMap = new Map<string, number>();
+    (campaignScreensData || []).forEach((r) => {
+      const id = String(r.campaign_id);
+      screensCountMap.set(id, (screensCountMap.get(id) || 0) + 1);
+    });
 
-      return campaignRows.map((campaign) => {
-        const profile = profileMap.get(campaign.user_id);
-        const client = campaign.client_id ? clientMap.get(campaign.client_id) : null;
-        const video = campaign.video_id ? videoMap.get(campaign.video_id) : null;
+    return campaignRows.map((campaign) => {
+      const profile = profileMap.get(campaign.user_id);
+      const client = campaign.client_id ? clientMap.get(campaign.client_id) : null;
+      const video = campaign.video_id ? videoMap.get(campaign.video_id) : null;
 
-        return {
-          campaign_id: campaign.id,
-          campaign_name: campaign.name,
-          advertiser_id: campaign.user_id,
-          advertiser_name: profile?.business_name || profile?.contact_name || 'N/A',
-          advertiser_email: profile?.email || 'N/A',
-          client_id: campaign.client_id,
-          client_name: client?.name || 'N/A',
-          category: campaign.category,
-          status: campaign.status,
-          budget: parseFloat(campaign.budget) || 0,
-          views: campaign.views || 0,
-          start_date: campaign.start_date,
-          end_date: campaign.end_date,
-          content_validation_status: campaign.content_validation_status || 'pending',
-          video_url: video?.url,
-          video_filename: video?.filename,
-          screens_count: screensCountMap.get(String(campaign.id)) || 0,
-          screens_list: [],
-          created_at: campaign.created_at,
-        } as CampaignMonitoringData;
-      });
-    } catch (error) {
-      throw error;
-    }
+      return {
+        campaign_id: campaign.id,
+        campaign_name: campaign.name,
+        advertiser_id: campaign.user_id,
+        advertiser_name: profile?.business_name || profile?.contact_name || 'N/A',
+        advertiser_email: profile?.email || 'N/A',
+        client_id: campaign.client_id,
+        client_name: client?.name || 'N/A',
+        category: campaign.category,
+        status: campaign.status,
+        budget: parseFloat(campaign.budget) || 0,
+        views: campaign.views || 0,
+        start_date: campaign.start_date,
+        end_date: campaign.end_date,
+        content_validation_status: campaign.content_validation_status || 'pending',
+        video_url: video?.url,
+        video_filename: video?.filename,
+        screens_count: screensCountMap.get(String(campaign.id)) || 0,
+        screens_list: [],
+        created_at: campaign.created_at,
+      } as CampaignMonitoringData;
+    });
   }
 
   /**
    * Récupérer les campagnes par statut
    */
   async getCampaignsByStatus(status: string): Promise<CampaignMonitoringData[]> {
-    try {
-      const { data, error } = await supabase.rpc('get_campaigns_by_status', { p_status: status });
+    const { data, error } = await supabase.rpc('get_campaigns_by_status', { p_status: status });
 
-      if (error) {
-        log.warn({ message: error.message }, '⚠️ RPC failed, using direct query');
+    if (error) {
+      log.warn({ message: error.message }, '⚠️ RPC failed, using direct query');
 
-        const { data: campaigns, error: fallbackError } = await supabase
-          .from('campaigns')
-          .select('*')
-          .eq('status', status)
-          .order('created_at', { ascending: false });
+      const { data: campaigns, error: fallbackError } = await supabase
+        .from('campaigns')
+        .select('*')
+        .eq('status', status)
+        .order('created_at', { ascending: false });
 
-        if (fallbackError) throw fallbackError;
+      if (fallbackError) throw fallbackError;
 
-        // TODO(phase-1): typed source [supabase] — see #15
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        return campaigns as any;
-      }
-
-      return data as CampaignMonitoringData[];
-    } catch (error) {
-      throw error;
+      // TODO(phase-1): typed source [supabase] — see #15
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return campaigns as any;
     }
+
+    return data as CampaignMonitoringData[];
   }
 
   /**
    * Récupérer les campagnes par catégorie
    */
   async getCampaignsByCategory(): Promise<CampaignByCategory[]> {
-    try {
-      const { data, error } = await supabase.rpc('get_campaigns_by_category');
+    const { data, error } = await supabase.rpc('get_campaigns_by_category');
 
-      if (error) {
-        log.warn({ message: error.message }, '⚠️ RPC failed, using fallback');
+    if (error) {
+      log.warn({ message: error.message }, '⚠️ RPC failed, using fallback');
 
-        const { data: campaigns, error: fallbackError } = await supabase
-          .from('campaigns')
-          .select('category, budget, views');
+      const { data: campaigns, error: fallbackError } = await supabase
+        .from('campaigns')
+        .select('category, budget, views');
 
-        if (fallbackError) throw fallbackError;
+      if (fallbackError) throw fallbackError;
 
-        // Grouper par catégorie
-        const grouped = campaigns?.reduce(
-          (acc, c) => {
-            const cat = c.category || 'other';
-            if (!acc[cat]) {
-              acc[cat] = { category: cat, count: 0, total_budget: 0, total_views: 0 };
-            }
-            acc[cat].count++;
-            acc[cat].total_budget += parseFloat(c.budget) || 0;
-            acc[cat].total_views += c.views || 0;
-            return acc;
-          },
-          {} as Record<string, CampaignByCategory>,
-        );
+      // Grouper par catégorie
+      const grouped = campaigns?.reduce(
+        (acc, c) => {
+          const cat = c.category || 'other';
+          if (!acc[cat]) {
+            acc[cat] = { category: cat, count: 0, total_budget: 0, total_views: 0 };
+          }
+          acc[cat].count++;
+          acc[cat].total_budget += parseFloat(c.budget) || 0;
+          acc[cat].total_views += c.views || 0;
+          return acc;
+        },
+        {} as Record<string, CampaignByCategory>,
+      );
 
-        return Object.values(grouped || {});
-      }
-
-      return data as CampaignByCategory[];
-    } catch (error) {
-      throw error;
+      return Object.values(grouped || {});
     }
+
+    return data as CampaignByCategory[];
   }
 
   /**
    * Récupérer les top annonceurs
    */
   async getTopAdvertisers(limit: number = 10): Promise<TopAdvertiser[]> {
-    try {
-      const { data, error } = await supabase.rpc('get_top_advertisers', { limit_count: limit });
+    const { data, error } = await supabase.rpc('get_top_advertisers', { limit_count: limit });
 
-      if (error) {
-        log.warn({ message: error.message }, '⚠️ RPC failed, using fallback');
-        return [];
-      }
-
-      return data as TopAdvertiser[];
-    } catch (error) {
-      throw error;
+    if (error) {
+      log.warn({ message: error.message }, '⚠️ RPC failed, using fallback');
+      return [];
     }
+
+    return data as TopAdvertiser[];
   }
 
   /**
    * Récupérer les écrans les plus utilisés
    */
   async getMostUsedScreens(limit: number = 10): Promise<MostUsedScreen[]> {
-    try {
-      const { data, error } = await supabase.rpc('get_most_used_screens', { limit_count: limit });
+    const { data, error } = await supabase.rpc('get_most_used_screens', { limit_count: limit });
 
-      if (error) {
-        log.warn({ message: error.message }, '⚠️ RPC failed, using fallback');
-        return [];
-      }
-
-      return data as MostUsedScreen[];
-    } catch (error) {
-      throw error;
+    if (error) {
+      log.warn({ message: error.message }, '⚠️ RPC failed, using fallback');
+      return [];
     }
+
+    return data as MostUsedScreen[];
   }
 
   /**
    * Récupérer les détails d'une campagne spécifique avec tous ses écrans
    */
   async getCampaignDetails(campaignId: string): Promise<CampaignMonitoringData | null> {
-    try {
-      const campaigns = await this.getCampaignsWithScreens();
-      const campaign = campaigns.find((c) => c.campaign_id === campaignId);
+    const campaigns = await this.getCampaignsWithScreens();
+    const campaign = campaigns.find((c) => c.campaign_id === campaignId);
 
-      return campaign || null;
-    } catch (error) {
-      throw error;
-    }
+    return campaign || null;
   }
 
   /**
@@ -353,17 +325,15 @@ class AdminCampaignMonitoringService {
       if (locationsError) throw locationsError;
       if (screensError) throw screensError;
 
-      const ownerIds = [
-        ...new Set((locationsData || []).map((l) => l.owner_id).filter(Boolean)),
-      ];
+      const ownerIds = [...new Set((locationsData || []).map((l) => l.owner_id).filter(Boolean))];
       const { data: ownersData } = ownerIds.length
         ? await supabase
             .from('business_profiles')
             .select('user_id, business_name, contact_name')
             .in('user_id', ownerIds)
-        // TODO(phase-1): typed source [supabase] — see #15
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        : { data: [] as any[] };
+        : // TODO(phase-1): typed source [supabase] — see #15
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          { data: [] as any[] };
 
       const ownerMap = new Map(
         (ownersData || []).map((o) => [o.user_id, o.business_name || o.contact_name || 'N/A']),

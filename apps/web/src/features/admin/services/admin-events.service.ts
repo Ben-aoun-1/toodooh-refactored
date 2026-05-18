@@ -7,44 +7,36 @@ const log = logger.child({ module: 'admin-events.service' });
 export const adminEventsService = {
   // Récupérer tous les événements
   async getEvents(): Promise<SpecialEvent[]> {
-    try {
-      const { data, error } = await supabase
-        .from('admin_events_view')
-        .select('*')
-        .order('start_date', { ascending: false });
+    const { data, error } = await supabase
+      .from('admin_events_view')
+      .select('*')
+      .order('start_date', { ascending: false });
 
-      if (error) {
-        throw new Error(`Erreur Supabase: ${error.message}`);
-      }
-
-      return data || [];
-    } catch (error) {
-      throw error;
+    if (error) {
+      throw new Error(`Erreur Supabase: ${error.message}`);
     }
+
+    return data || [];
   },
 
   // Créer un nouvel événement
   async createEvent(eventData: CreateEventDTO, adminId: string): Promise<SpecialEvent | null> {
-    try {
-      const { data, error } = await supabase
-        .from('special_events')
-        .insert([
-          {
-            ...eventData,
-            created_by: adminId,
-          },
-        ])
-        .select()
-        .single();
+    const { data, error } = await supabase
+      .from('special_events')
+      .insert([
+        {
+          ...eventData,
+          created_by: adminId,
+        },
+      ])
+      .select()
+      .single();
 
-      if (error) {
-        throw new Error(`Erreur lors de la création: ${error.message}`);
-      }
-
-      return data;
-    } catch (error) {
-      throw error;
+    if (error) {
+      throw new Error(`Erreur lors de la création: ${error.message}`);
     }
+
+    return data;
   },
 
   // Mettre à jour un événement
