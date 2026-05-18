@@ -89,38 +89,7 @@
   color: #ef4444 !important;
 }
 
-.btn-leviosa {
-  @apply px-4 py-2 rounded-lg font-semibold shadow-lg transition-all duration-200 bg-gradient-to-r from-leviosaYellow via-leviosaBlue to-leviosaPurple text-white border-none hover:opacity-90 hover:scale-105 backdrop-blur-md;
-}
-
-.input-leviosa {
-  @apply w-full px-4 py-2 rounded-lg border border-leviosaBlue bg-white/60 text-leviosaBlue placeholder-leviosaPurple shadow-md focus:outline-none focus:ring-2 focus:ring-leviosaYellow focus:border-leviosaYellow transition-all duration-200 backdrop-blur-md;
-}
-
-.card-leviosa {
-  @apply bg-white/70 backdrop-blur-lg rounded-2xl shadow-xl p-6 border border-white/30;
-}
-
-.modal-leviosa {
-  @apply bg-white/90 backdrop-blur-2xl rounded-2xl shadow-2xl p-8 border border-white/40;
-}
-
-.surface-leviosa {
-  @apply bg-white/80 backdrop-blur-md shadow-md border-b border-leviosaYellow/40;
-}
-
-.tag-leviosa {
-  @apply inline-block rounded-full px-3 py-1 text-xs font-semibold bg-gradient-to-r from-leviosaYellow via-leviosaBlue to-leviosaPurple text-white shadow;
-}
-
 @layer utilities {
-  .select-leviosa {
-    @apply input-leviosa appearance-none pr-8;
-    background-image: url("data:image/svg+xml;utf8,<svg fill='none' stroke='%23662D8C' stroke-width='2' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'><path stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7'></path></svg>");
-    background-repeat: no-repeat;
-    background-position: right;
-    background-size: 1.5em 1.5em;
-  }
   .fade-in {
     animation: fadeIn 0.7s ease-in;
   }

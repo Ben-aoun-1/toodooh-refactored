@@ -4,14 +4,13 @@ export default {
   theme: {
     extend: {
       colors: {
-        leviosaYellow: '#FFE259',
-        leviosaBlue: '#2E3192',
-        leviosaPurple: '#662D8C',
-        leviosaPink: '#FF4E7B',
-        leviosaCyan: '#00B6C9',
-      },
-      backgroundImage: {
-        'leviosa-gradient': 'linear-gradient(135deg, #FFE259 0%, #2E3192 50%, #662D8C 100%)',
+        // TOODOOH brand palette (per brand guidelines). Semantic token names —
+        // see docs/superpowers/plans/2026-05-18-step-12-brand-token.md §1 (D-A).
+        brand: {
+          primary: '#76E6AB', // Algae Green — primary accent
+          deep: '#204B43', // Plantation — dark forest green
+          accent: '#9195F8', // Portage — periwinkle accent
+        },
       },
     },
   },
