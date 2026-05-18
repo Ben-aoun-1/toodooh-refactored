@@ -110,7 +110,7 @@ export default function Step3({
       <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center space-x-3">
-            <div className="p-2 rounded-lg bg-gradient-to-r from-brand-primary to-[#00D4C4]">
+            <div className="p-2 rounded-lg bg-gradient-to-r from-brand-primary to-brand-deep">
               <Calendar className="h-5 w-5 text-white" />
             </div>
             <div>
@@ -185,7 +185,7 @@ export default function Step3({
           </div>
 
           {durationDays > 0 && (
-            <div className="bg-gradient-to-r from-brand-primary/10 to-[#00D4C4]/10 rounded-xl p-4 border border-brand-primary/20">
+            <div className="bg-gradient-to-r from-brand-primary/10 to-brand-deep/10 rounded-xl p-4 border border-brand-primary/20">
               <div className="flex items-center space-x-2 mb-2">
                 <Clock className="h-5 w-5 text-brand-primary" />
                 <span className="font-medium text-[#00263A]">Durée de la campagne</span>
@@ -214,7 +214,7 @@ export default function Step3({
           className={`px-6 py-3 rounded-xl font-semibold transition-all flex items-center space-x-2 shadow-lg ${
             nextDisabled
               ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : 'bg-gradient-to-r from-brand-primary to-[#00D4C4] text-white hover:from-[#00A396] hover:to-[#00C4B4]'
+              : 'bg-gradient-to-r from-brand-primary to-brand-deep text-white hover:from-brand-primary/90 hover:to-brand-deep'
           }`}
         >
           <span>Suivant</span>

@@ -618,7 +618,7 @@ export default function MyCampaigns() {
           </p>
           <button
             onClick={() => navigate('/new-campaign')}
-            className="px-6 py-3 bg-brand-primary text-white rounded-lg hover:bg-[#008C82] transition-colors inline-flex items-center"
+            className="px-6 py-3 bg-brand-primary text-white rounded-lg hover:bg-brand-primary/90 transition-colors inline-flex items-center"
           >
             <Plus className="h-5 w-5 mr-2" />
             Créer une campagne

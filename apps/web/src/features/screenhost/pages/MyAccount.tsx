@@ -690,7 +690,7 @@ export default function MyAccount() {
                                         type="button"
                                         onClick={handleUploadDocument}
                                         disabled={profileMutations.uploadDocument.isPending}
-                                        className="px-4 py-3 bg-brand-primary text-white rounded-lg hover:bg-[#008C82] transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                                        className="px-4 py-3 bg-brand-primary text-white rounded-lg hover:bg-brand-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                                       >
                                         {profileMutations.uploadDocument.isPending
                                           ? 'Upload...'
@@ -783,7 +783,7 @@ export default function MyAccount() {
                                         type="button"
                                         onClick={handleUploadDocument}
                                         disabled={profileMutations.uploadDocument.isPending}
-                                        className="px-4 py-3 bg-brand-primary text-white rounded-lg hover:bg-[#008C82] transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                                        className="px-4 py-3 bg-brand-primary text-white rounded-lg hover:bg-brand-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                                       >
                                         {profileMutations.uploadDocument.isPending
                                           ? 'Upload...'

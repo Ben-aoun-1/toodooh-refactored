@@ -443,7 +443,7 @@ export default function CampaignMonitoring() {
                       {/* Voir détails */}
                       <button
                         onClick={() => handleViewDetails(campaign)}
-                        className="text-brand-primary hover:text-[#008C82]"
+                        className="text-brand-primary hover:text-brand-primary/90"
                         title="Voir détails"
                       >
                         <Eye className="h-5 w-5" />
@@ -554,7 +554,7 @@ export default function CampaignMonitoring() {
             <div className="p-6 space-y-6">
               {/* Métriques clés */}
               <div className="grid grid-cols-4 gap-4">
-                <div className="bg-gradient-to-br from-brand-primary to-[#008C82] rounded-lg p-4 text-white">
+                <div className="bg-gradient-to-br from-brand-primary to-brand-deep rounded-lg p-4 text-white">
                   <div className="flex items-center justify-between mb-2">
                     <DollarSign className="h-8 w-8 opacity-80" />
                     <span className="text-xs opacity-80">Budget</span>
@@ -721,7 +721,7 @@ export default function CampaignMonitoring() {
                     </div>
                     <div className="h-3 w-full rounded-full bg-gray-200 overflow-hidden">
                       <div
-                        className="h-full bg-gradient-to-r from-brand-primary to-[#008C82] transition-all duration-500"
+                        className="h-full bg-gradient-to-r from-brand-primary to-brand-deep transition-all duration-500"
                         style={{
                           width: `${Math.min(100, Math.max(0, selectedCampaignImpressionProgress?.completion_rate || 0))}%`,
                         }}
@@ -757,7 +757,7 @@ export default function CampaignMonitoring() {
                         href={selectedCampaign.video_url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="px-4 py-2 bg-brand-primary text-white rounded-lg hover:bg-[#008C82] transition-colors flex items-center"
+                        className="px-4 py-2 bg-brand-primary text-white rounded-lg hover:bg-brand-primary/90 transition-colors flex items-center"
                       >
                         <Play className="h-4 w-4 mr-2" />
                         Voir la vidéo

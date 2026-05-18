@@ -159,7 +159,7 @@ export default function AffluenceModal({ location, onClose }: AffluenceModalProp
                 {!editing ? (
                   <button
                     onClick={() => setEditing(true)}
-                    className="inline-flex items-center gap-2 rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-white hover:bg-[#008C82]"
+                    className="inline-flex items-center gap-2 rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-white hover:bg-brand-primary/90"
                   >
                     <Edit className="h-4 w-4" />
                     Modifier

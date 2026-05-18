@@ -805,7 +805,7 @@ export default function UserManagement() {
                               <span className="text-gray-600">Email:</span>
                               <a
                                 href={`mailto:${selectedUser.email}`}
-                                className="font-medium text-brand-primary hover:text-[#008C82] flex items-center"
+                                className="font-medium text-brand-primary hover:text-brand-primary/90 flex items-center"
                               >
                                 <Mail className="h-3 w-3 mr-1" />
                                 {selectedUser.email}
@@ -867,7 +867,7 @@ export default function UserManagement() {
                                       href={selectedUser.cin_doc_url}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="flex items-center text-brand-primary hover:text-[#008C82] font-medium transition-colors"
+                                      className="flex items-center text-brand-primary hover:text-brand-primary/90 font-medium transition-colors"
                                     >
                                       <FileText className="h-4 w-4 mr-1" />
                                       Voir le document
@@ -891,7 +891,7 @@ export default function UserManagement() {
                                             setDocumentFile(e.target.files[0]);
                                           }
                                         }}
-                                        className="text-xs file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-brand-primary file:text-white hover:file:bg-[#008C82] cursor-pointer"
+                                        className="text-xs file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-brand-primary file:text-white hover:file:bg-brand-primary/90 cursor-pointer"
                                       />
                                       {documentFile && (
                                         <button
@@ -902,7 +902,7 @@ export default function UserManagement() {
                                             )
                                           }
                                           disabled={uploadingDocument}
-                                          className="px-3 py-1 bg-brand-primary text-white rounded text-xs font-semibold hover:bg-[#008C82] transition-colors disabled:opacity-50"
+                                          className="px-3 py-1 bg-brand-primary text-white rounded text-xs font-semibold hover:bg-brand-primary/90 transition-colors disabled:opacity-50"
                                         >
                                           {uploadingDocument ? 'Upload...' : 'Uploader'}
                                         </button>
@@ -941,7 +941,7 @@ export default function UserManagement() {
                                       href={selectedUser.registration_doc_url}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="flex items-center text-brand-primary hover:text-[#008C82] font-medium transition-colors"
+                                      className="flex items-center text-brand-primary hover:text-brand-primary/90 font-medium transition-colors"
                                     >
                                       <FileText className="h-4 w-4 mr-1" />
                                       Voir le document
@@ -965,7 +965,7 @@ export default function UserManagement() {
                                             setDocumentFile(e.target.files[0]);
                                           }
                                         }}
-                                        className="text-xs file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-brand-primary file:text-white hover:file:bg-[#008C82] cursor-pointer"
+                                        className="text-xs file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-brand-primary file:text-white hover:file:bg-brand-primary/90 cursor-pointer"
                                       />
                                       {documentFile && (
                                         <button
@@ -976,7 +976,7 @@ export default function UserManagement() {
                                             )
                                           }
                                           disabled={uploadingDocument}
-                                          className="px-3 py-1 bg-brand-primary text-white rounded text-xs font-semibold hover:bg-[#008C82] transition-colors disabled:opacity-50"
+                                          className="px-3 py-1 bg-brand-primary text-white rounded text-xs font-semibold hover:bg-brand-primary/90 transition-colors disabled:opacity-50"
                                         >
                                           {uploadingDocument ? 'Upload...' : 'Uploader'}
                                         </button>
@@ -1015,7 +1015,7 @@ export default function UserManagement() {
                                       href={selectedUser.registration_doc_url}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="flex items-center text-brand-primary hover:text-[#008C82] font-medium transition-colors"
+                                      className="flex items-center text-brand-primary hover:text-brand-primary/90 font-medium transition-colors"
                                     >
                                       <FileText className="h-4 w-4 mr-1" />
                                       Voir le document
@@ -1039,7 +1039,7 @@ export default function UserManagement() {
                                             setDocumentFile(e.target.files[0]);
                                           }
                                         }}
-                                        className="text-xs file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-brand-primary file:text-white hover:file:bg-[#008C82] cursor-pointer"
+                                        className="text-xs file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-brand-primary file:text-white hover:file:bg-brand-primary/90 cursor-pointer"
                                       />
                                       {documentFile && (
                                         <button
@@ -1050,7 +1050,7 @@ export default function UserManagement() {
                                             )
                                           }
                                           disabled={uploadingDocument}
-                                          className="px-3 py-1 bg-brand-primary text-white rounded text-xs font-semibold hover:bg-[#008C82] transition-colors disabled:opacity-50"
+                                          className="px-3 py-1 bg-brand-primary text-white rounded text-xs font-semibold hover:bg-brand-primary/90 transition-colors disabled:opacity-50"
                                         >
                                           {uploadingDocument ? 'Upload...' : 'Uploader'}
                                         </button>
@@ -1090,7 +1090,7 @@ export default function UserManagement() {
                                     <button
                                       onClick={handleSaveAgentCode}
                                       disabled={savingAgentCode}
-                                      className="px-3 py-2 bg-brand-primary text-white rounded-lg text-sm font-medium hover:bg-[#008C82] transition-colors disabled:opacity-50"
+                                      className="px-3 py-2 bg-brand-primary text-white rounded-lg text-sm font-medium hover:bg-brand-primary/90 transition-colors disabled:opacity-50"
                                     >
                                       {savingAgentCode ? 'Enregistrement...' : 'Enregistrer'}
                                     </button>
