@@ -1,0 +1,37 @@
+-- Au cas où une migration partielle aurait omis des lignes (ex. « Autre » ou le début de liste)
+INSERT INTO business_sectors (name) VALUES
+  ('Agriculture et agroalimentaire'),
+  ('Automobile et mobilité'),
+  ('Banque, assurance et finance'),
+  ('Bâtiment, construction et immobilier'),
+  ('Beauté, bien-être et cosmétique'),
+  ('Commerce, retail et distribution'),
+  ('Communication, marketing, média et publicité'),
+  ('Conseil et services aux entreprises'),
+  ('Culture, divertissement et création'),
+  ('Éducation et formation'),
+  ('Énergie, environnement et développement durable'),
+  ('Hôtellerie, restauration et cafés'),
+  ('Industrie et fabrication'),
+  ('Informatique, technologie et télécommunications'),
+  ('Logistique, transport et livraison'),
+  ('Mode, textile et accessoires'),
+  ('Maison, décoration et ameublement'),
+  ('Santé, médical et pharmacie'),
+  ('Secteur public, institutions et collectivités'),
+  ('Services juridiques, comptables et administratifs'),
+  ('Sport, fitness et loisirs'),
+  ('Tourisme, voyage et événementiel'),
+  ('Associations, ONG et organisations internationales'),
+  ('Autre')
+ON CONFLICT (name) DO NOTHING;
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'business_sectors' AND column_name = 'display_order'
+  ) THEN
+    UPDATE business_sectors SET display_order = 24 WHERE name = 'Autre';
+  END IF;
+END $$;

@@ -1,0 +1,27 @@
+-- Secteurs d'activité finaux pour annonceurs / agences (noms uniques, INSERT idempotent)
+INSERT INTO business_sectors (name) VALUES
+  ('Agriculture et agroalimentaire'),
+  ('Automobile et mobilité'),
+  ('Banque, assurance et finance'),
+  ('Bâtiment, construction et immobilier'),
+  ('Beauté, bien-être et cosmétique'),
+  ('Commerce, retail et distribution'),
+  ('Communication, marketing, média et publicité'),
+  ('Conseil et services aux entreprises'),
+  ('Culture, divertissement et création'),
+  ('Éducation et formation'),
+  ('Énergie, environnement et développement durable'),
+  ('Hôtellerie, restauration et cafés'),
+  ('Industrie et fabrication'),
+  ('Informatique, technologie et télécommunications'),
+  ('Logistique, transport et livraison'),
+  ('Mode, textile et accessoires'),
+  ('Maison, décoration et ameublement'),
+  ('Santé, médical et pharmacie'),
+  ('Secteur public, institutions et collectivités'),
+  ('Services juridiques, comptables et administratifs'),
+  ('Sport, fitness et loisirs'),
+  ('Tourisme, voyage et événementiel'),
+  ('Associations, ONG et organisations internationales'),
+  ('Autre')
+ON CONFLICT (name) DO NOTHING;
