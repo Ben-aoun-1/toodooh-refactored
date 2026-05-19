@@ -123,9 +123,6 @@ importers:
         specifier: ^4.5.2
         version: 4.5.7(@types/react@18.3.28)(immer@11.1.8)(react@18.3.1)
     devDependencies:
-      '@eslint/js':
-        specifier: ^9.9.1
-        version: 9.39.4
       '@tanstack/react-query-devtools':
         specifier: ^5.100.10
         version: 5.100.10(@tanstack/react-query@5.100.10(react@18.3.1))(react@18.3.1)
@@ -144,18 +141,6 @@ importers:
       autoprefixer:
         specifier: ^10.4.18
         version: 10.5.0(postcss@8.5.14)
-      eslint:
-        specifier: ^9.9.1
-        version: 9.39.4(jiti@1.21.7)
-      eslint-plugin-react-hooks:
-        specifier: ^5.1.0-rc.0
-        version: 5.2.0(eslint@9.39.4(jiti@1.21.7))
-      eslint-plugin-react-refresh:
-        specifier: ^0.4.11
-        version: 0.4.26(eslint@9.39.4(jiti@1.21.7))
-      globals:
-        specifier: ^15.9.0
-        version: 15.15.0
       postcss:
         specifier: ^8.4.35
         version: 8.5.14
@@ -165,12 +150,6 @@ importers:
       tailwindcss:
         specifier: ^3.4.1
         version: 3.4.19(yaml@2.9.0)
-      typescript:
-        specifier: ^5.5.3
-        version: 5.9.3
-      typescript-eslint:
-        specifier: ^8.3.0
-        version: 8.59.2(eslint@9.39.4(jiti@1.21.7))(typescript@5.9.3)
       vite:
         specifier: ^7.0.0
         version: 7.3.3(jiti@1.21.7)(yaml@2.9.0)
@@ -1569,11 +1548,6 @@ packages:
     engines: {node: '>=10'}
     peerDependencies:
       eslint: ^3.0.0 || ^4.0.0 || ^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0-0 || ^9.0.0
-
-  eslint-plugin-react-refresh@0.4.26:
-    resolution: {integrity: sha512-1RETEylht2O6FM/MvgnyvT+8K21wLqDNg4qD51Zj3guhjt433XbnnkVttHMyaVyAFD03QSV4LPS5iE3VQmO7XQ==}
-    peerDependencies:
-      eslint: '>=8.40'
 
   eslint-plugin-unused-imports@4.4.1:
     resolution: {integrity: sha512-oZGYUz1X3sRMGUB+0cZyK2VcvRX5lm/vB56PgNNcU+7ficUCKm66oZWKUubXWnOuPjQ8PvmXtCViXBMONPe7tQ==}
@@ -4473,10 +4447,6 @@ snapshots:
       string.prototype.includes: 2.0.1
 
   eslint-plugin-react-hooks@5.2.0(eslint@9.39.4(jiti@1.21.7)):
-    dependencies:
-      eslint: 9.39.4(jiti@1.21.7)
-
-  eslint-plugin-react-refresh@0.4.26(eslint@9.39.4(jiti@1.21.7)):
     dependencies:
       eslint: 9.39.4(jiti@1.21.7)
 
