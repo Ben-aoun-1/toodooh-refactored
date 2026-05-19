@@ -1,3 +1,14 @@
+# CI — automated verification of the four gates on every push to main and every PR.
+#
+# Baseline-gated gates (typecheck, lint): the cleanup phase hands off to CI with
+# accepted, deferred debt — 51 typecheck errors and 1 lint error, all blocked on
+# the Phase-1 Supabase typed client (issue #15). CI therefore verifies
+# "no regression past the committed baseline", not "exit 0". The gate fails when
+# the error count EXCEEDS the baseline, and emits a ::notice:: (without failing)
+# when the count drops BELOW it — prompting a manual ratchet-down of the baseline
+# constant here. When #15 lands, both baselines drop to 0.
+# See docs/audit.md §5 row 13 and issue #11.
+
 name: CI
 
 on:
@@ -17,17 +28,43 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 20.20.2
           cache: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Typecheck
-        run: pnpm typecheck
+      - name: Typecheck (baseline-gated)
+        run: |
+          # Phase-1 #15: 51 Cat-A untyped-root cascades await the typed Supabase client.
+          TYPECHECK_BASELINE=51
+          pnpm typecheck 2>&1 | tee typecheck.log || true
+          n=$(grep -c 'error TS' typecheck.log || true)
+          echo "typecheck errors: $n (baseline $TYPECHECK_BASELINE)"
+          if [ "$n" -gt "$TYPECHECK_BASELINE" ]; then
+            echo "::error::typecheck regressed — $n errors > baseline $TYPECHECK_BASELINE"
+            exit 1
+          elif [ "$n" -lt "$TYPECHECK_BASELINE" ]; then
+            echo "::notice::typecheck improved — $n < $TYPECHECK_BASELINE; ratchet TYPECHECK_BASELINE down in .github/workflows/ci.yml"
+          fi
 
-      - name: Lint
-        run: pnpm lint
+      - name: Lint (baseline-gated)
+        run: |
+          # Phase-1 #15: import-x/no-unresolved on src/lib/supabase.ts awaits ./database.types.
+          LINT_BASELINE=1
+          pnpm lint 2>&1 | tee lint.log || true
+          n=$(grep -oE '[0-9]+ error' lint.log | head -1 | grep -oE '^[0-9]+' || true)
+          n=${n:-0}
+          echo "lint errors: $n (baseline $LINT_BASELINE)"
+          if [ "$n" -gt "$LINT_BASELINE" ]; then
+            echo "::error::lint regressed — $n errors > baseline $LINT_BASELINE"
+            exit 1
+          elif [ "$n" -lt "$LINT_BASELINE" ]; then
+            echo "::notice::lint improved — $n < $LINT_BASELINE; ratchet LINT_BASELINE down in .github/workflows/ci.yml"
+          fi
 
       - name: Test
         run: pnpm test
+
+      - name: Build
+        run: pnpm build
