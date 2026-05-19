@@ -20,8 +20,9 @@ Only monorepo tooling and docs live at the repo root — see `CLAUDE.md` for the
 
 ## Local development
 
-Requirements: **Node 20 LTS** (`.nvmrc`) and **pnpm 9** (pinned via `packageManager`;
-`corepack enable` will provision it).
+Requirements: **Node 20.20.2 exact** (pinned identically in `.nvmrc`, the CI
+workflow, and `CLAUDE.md` — keep the three in parity) and **pnpm 9** (pinned via
+`packageManager`; `corepack enable` will provision it).
 
 ```bash
 pnpm install        # install all workspace dependencies
@@ -33,4 +34,9 @@ pnpm format         # prettier --write
 ```
 
 A git pre-commit hook (Husky + lint-staged) runs Prettier and ESLint on staged files.
-CI (`.github/workflows/ci.yml`) runs typecheck, lint and test on every push and PR.
+CI (`.github/workflows/ci.yml`) runs **four gates** on every push and PR — typecheck,
+lint, test, build — and is **green on `main`**. Typecheck and lint are _baseline-gated_:
+they carry accepted, Phase-1-deferred debt (51 typecheck errors, 1 lint error — both
+blocked on the Supabase typed client, issue #15), so CI fails only on a regression
+_past_ that committed baseline, not on the baseline itself. See `docs/audit.md` §4
+"Step 13" for the mechanism.

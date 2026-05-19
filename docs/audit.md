@@ -31,7 +31,7 @@ complementary and orthogonal — none subsumes the others; each should cross-ref
 
 ## 2. Snapshot
 
-_As of commit `d7e52ff` (post-Step-13 CI; code metrics unchanged since Step-12 `40d65c4` — Step 13 is infrastructure-only)._
+_As of commit `3db8aec` (post-Step-14, **cleanup phase complete**; code metrics unchanged since Step-12 `40d65c4` — Steps 13–14 are infrastructure-only). CI **green** on `main`. devDependencies: `apps/web` carries 11 (Step 14 hoisted 6 duplicates to root, removed 1 dead); root carries 14._
 
 | Metric                             | Value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -502,10 +502,18 @@ pass once the Phase-1 backend migration provides typed sources for the 131 TODO(
 
 ### Duplicate devDependencies
 
-`apps/web/package.json` carries devDeps that duplicate root-level ones (`eslint`, `@eslint/js`,
-`eslint-plugin-react-hooks`, `eslint-plugin-react-refresh`, `globals`, `typescript-eslint`,
-`typescript`); `eslint-plugin-react-refresh` is unused (root ESLint config doesn't load it).
-→ **Step 14 · #13**
+**Resolved in Step 14.** `apps/web/package.json` carried 6 devDeps duplicating root-level
+ones (`@eslint/js`, `eslint`, `eslint-plugin-react-hooks`, `globals`, `typescript`,
+`typescript-eslint`) — a Step-8 partial-migration artifact. All 6 hoisted to root-only;
+`eslint-plugin-react-refresh` (unused — confirmed 0 consumers) removed. `apps/web` devDeps
+`18 → 11`. See §4 "Step 14". → **#13** ☑
+
+### Transitive dependency deprecation warnings
+
+`pnpm install` emits 4 deprecation warnings — `deep-diff`, `node-domexception`, `popper.js`,
+`tar` — all **transitive subdependencies**, pre-existing, none introduced or removable by
+cleanup-phase work. No Step-14 action. Deferred to Phase 1, where dependency-tree pressure
+(security / compatibility) may warrant deliberate work.
 
 ### Frontend authorization model
 
@@ -1010,6 +1018,8 @@ per commit.
 
 - **Step 13 — Get CI green** — `.github/workflows/ci.yml`'s `verify` job now runs all **four gates** on every push to `main` and every PR, and `main` is **green** for the first time since the workflow landed. The cleanup-phase no-UI-change contract resumed — Step 13 is infrastructure-only, no source touched (gates flat: typecheck **51**, lint **1**, test **160**, build main gzip **139.80**). The crux: two of the four gates carry **accepted, deferred baselines** — 51 typecheck errors (Cat-A untyped-root cascades) and 1 lint error (`import-x/no-unresolved` on `supabase.ts`), both blocked on the Phase-1 Supabase typed client (#15). A naïve "make `tsc` exit 0" is impossible (`@ts-ignore` is forbidden; the 51 genuinely need the typed client). So CI verifies **"no regression past the committed baseline", not "exit 0"**: the Typecheck and Lint steps are **baseline-gated** — each runs the tool, counts errors, **fails only when the count exceeds the inline baseline** (`TYPECHECK_BASELINE=51` / `LINT_BASELINE=1`, both commented with the #15 reference), and emits a non-failing `::notice::` when the count drops _below_ baseline (prompting a manual ratchet-down of the constant; CI never self-commits). When #15 lands, both baselines ratchet to 0. Test and Build run plain (exit-0). Also: Node pinned `20 → 20.20.2` exact (`.nvmrc` parity); the build gate was added (it had been absent — the build gate verifies _compilation_, not runtime correctness, which needs deployment infrastructure). `tsc`'s 51 errors still surface as GitHub annotations — informational only, the run is green. → Issue #11. Commits `407c68f` (plan), `d7e52ff` (ci.yml gate rewrite), plus this audit refresh + #11 close-out. Methodology: _baseline-as-ceiling CI gating_ (a cleanup phase handing off to CI before all debt is cleared gates on the committed baseline, not zero) and a _CI-diagnosis discipline_ note (confirm a CI run's `headSha` matches the commit under diagnosis before reading its log — a mid-step recovery was drafted against the wrong run's log) — both recorded in the Step-8 notes file.
 
+- **Step 14 — Hoist duplicate devDependencies to root** — the cleanup phase's **final step**. `apps/web/package.json` `devDependencies` went **18 → 11**: 6 exact duplicates of root devDeps (`@eslint/js`, `eslint`, `eslint-plugin-react-hooks`, `globals`, `typescript`, `typescript-eslint`) removed — root keeps them — and 1 dead dep (`eslint-plugin-react-refresh`, confirmed 0 consumers, not loaded by the ESLint flat config) removed outright. Root `package.json` untouched. The 6 duplicates carried apparent version drift (`apps/web` ranges older than root — a Step-8 partial-migration artifact: the monorepo restructure added the root tooling without pruning the pre-monorepo `apps/web` copies), but `pnpm-lock.yaml` had already deduped both importers to one resolved version each — so removing the `apps/web` declarations changed **zero** resolved versions. Verified: the lockfile regen was **30 deletions / 0 additions / 0 version-node changes** (the `apps/web` importer block lost 7 entries; `eslint-plugin-react-refresh@0.4.26` left the tree). `apps/web` tooling (`tsc`/`eslint`/`vitest`) now resolves the hoisted deps from root via pnpm's upward `node_modules` resolution — confirmed, all gates flat (typecheck **51**, lint **1**, test **160**, build main gzip **139.80**) and CI green. Cleanup-phase no-UI-change contract held. → Issue #13. Commits `d9f59bd` (plan), `3db8aec` (hoist + lockfile), plus this audit refresh + #13 close-out. Methodology: a **CF-18 Axis-3 worked example at the dependency layer** — declared versions vs lockfile-resolved versions diverge when a partial migration leaves stale declarations; the lockfile is the source of truth for actual versions. Recorded in the Step-8 notes file.
+
 - **TBD-C — `@/*` path alias + 517-import sweep (issue #24).** `tsconfig.app.json` + `vite.config.ts` add `@/*` → `./src/*` mapping (commit `412912e`). A ts-morph codemod rewrites 517 cross-directory imports across 114 files (commit `5ecd223`, with the codemod script preserved at `apps/web/scripts/codemod-add-path-aliases.ts` as audit record; ts-morph itself uninstalled post-sweep — the script's ts-morph import carries an `eslint-disable-next-line` annotation documenting the intentional absence). Closure doc this commit. Refined alias rule: resolved-target-different-directory → alias. ESLint resolver picks up tsconfig paths automatically. Lint baseline: 358 → 357 (TBD-C net −1, from NewCampaign `import-x/order` cleared by alias work; codemod script's ts-morph import suppressed via `eslint-disable` annotation, not counted in baseline). NewCampaign chunk gzip 25.76 → 26.04 (+0.28, within ±0.5 tolerance). → Issue #24. Commits `412912e` (config), `fee386d` (notes), `5ecd223` (sweep), plus this audit refresh + #24 close-out.
 
 ---
@@ -1040,7 +1050,7 @@ plan → execute cycle.
 | 11  | `jsx-a11y` + `exhaustive-deps` cleanup                                                                                                                         | many `.tsx` files; 2 ts-morph codemod scripts                                                                                                                                                              | 0 `jsx-a11y/*` errors; 0 `exhaustive-deps` warnings; `no-useless-catch` (71) + `no-unused-expressions` (3) absorbed as Commit 5b. Lint `346 → 1` (floor = the Phase-1 `import-x/no-unresolved`, #15). Plan `0debf0e` + commits `cf93647`, `baa560d`, `c8ff011`, `24427b7`, `5f8dbae` (direct to `main`, no merge commit). See §4 "Step 11".                                                  | #9    | ☑      |
 | 12  | Tailwind `brand` token: replace hardcoded `#00B3A6` + brand refresh                                                                                            | `tailwind.config.js`; ~740 brand-colour sites                                                                                                                                                              | semantic `brand-primary`/`brand-deep`/`brand-accent` tokens; 0 hardcoded `#00B3A6`; legacy teal replaced by the new TOODOOH palette; mid-rebrand `#76E6AB` + mint shade-family consolidated; `text-brand-deep` contrast pass. 10-commit chain `4299c9c`…`40d65c4` (direct to `main`). Documented exception to the no-UI-change contract. See §4 "Step 12".                                   | #10   | ☑      |
 | 13  | Get CI green                                                                                                                                                   | `.github/workflows/ci.yml`                                                                                                                                                                                 | CI green on `main` — `verify` job runs 4 gates (typecheck + lint baseline-gated for the #15-deferred 51/1 debt; test + build plain); Node pinned 20.20.2; build gate added. 3-commit chain `407c68f`/`d7e52ff`/audit-refresh. See §4 "Step 13".                                                                                                                                              | #11   | ☑      |
-| 14  | Hoist duplicate devDependencies to root                                                                                                                        | `apps/web/package.json`, root `package.json`                                                                                                                                                               | `pnpm install` resolves cleanly; no duplicate devDeps across workspaces (`eslint-plugin-react-refresh` removed if unused)                                                                                                                                                                                                                                                                    | #13   | ☐      |
+| 14  | Hoist duplicate devDependencies to root                                                                                                                        | `apps/web/package.json`, root `package.json`                                                                                                                                                               | `apps/web` devDeps `18 → 11` — 6 duplicates hoisted to root-only, dead `eslint-plugin-react-refresh` removed; `pnpm-lock.yaml` regen = 30 deletions / 0 version changes; `pnpm install` clean. 3-commit chain `d9f59bd`/`3db8aec`/audit-refresh. See §4 "Step 14".                                                                                                                           | #13   | ☑      |
 
 ---
 
@@ -1055,3 +1065,150 @@ When a roadmap step lands:
 
 The milestone is **Frontend cleanup phase**; all step issues carry the `cleanup` label plus an
 `area:*` label.
+
+---
+
+## 7. Cleanup phase — closing summary
+
+_All 14 roadmap rows are ☑ as of `3db8aec` (2026-05-19). This section closes the
+cleanup phase. (Section numbering: these phase-exit sections are §7–§10 — the natural
+continuation of §1–§6; the Step-14 brief sketched them as "§10–§13", corrected here to
+avoid a numbering gap.)_
+
+### 7.1 — What the 14 steps accomplished
+
+The codebase **entered** cleanup as an inherited single-package Supabase frontend with
+no monorepo structure, no test suite, no CI, a typing/lint baseline in the hundreds, a
+flat `pages/`+`components/`+`services/` layout, ~447+ hardcoded brand-colour sites,
+God-component pages (`Dashboard.tsx` 2635 lines, `NewCampaign.tsx` 4030 lines), a
+~950-line auth service, and `console.*` / `window.location.reload()` / dual-auth-store
+anti-patterns throughout.
+
+It **exits** cleanup with: a pnpm monorepo (`apps/web` + room for `apps/api` /
+`apps/player-api` / `packages/shared`); a feature-folder layout
+(`src/features/<domain|role>/`); React Query for server state + Zustand for client
+state; 160 passing tests across 21 suites; **CI green on `main`** (4 gates,
+baseline-gated); brand colours on semantic Tailwind tokens; `Dashboard.tsx` retired and
+`NewCampaign.tsx` decomposed 4030 → ~1600 lines; the DOOH pricing IP isolated as a pure,
+portable module. typecheck **51** and lint **1** remain — both accepted, both blocked on
+the Phase-1 Supabase typed client (#15), both ratchet to 0 when it lands.
+
+The work is **structural preparation for backend replacement**, not feature work.
+
+### 7.2 — What the cleanup phase did NOT do
+
+It did not touch the Supabase backend, deploy to any environment, redesign the UI
+(Step 12 re-skinned to locked brand colours but changed no layout/flow), or write
+product features. Known residue — simulated revenue data, missing-persistence clusters,
+the storage-service abstraction — is filed as TBDs (§8), not fixed. All of that is
+Phase-1 scope.
+
+### 7.3 — The two contracts that held
+
+- **No user-facing UI/UX change** — held in 13 of 14 steps. Step 12 (brand refresh) was
+  the single _documented_ exception: the brand-colour change _was_ the deliverable,
+  applied uniformly per the locked brand guidelines.
+- **No gate regression** — held throughout. typecheck, lint, test, build counts moved
+  only monotonically toward their floor; every commit ended green.
+
+### 7.4 — Methodology: CF-1…CF-18 + the Step-13 notes
+
+The carry-forward rules (`CF-1…CF-18`) and the Step-13 CI-gating notes accumulated in
+the **Step-8 notes file** (`docs/superpowers/plans/2026-05-15-step-8-notes.md`) — that
+file is their canonical home and the operating manual for structurally-similar Phase-1
+work. Headline rules: CF-1…CF-9 inventory/pause/halt/commit discipline · CF-10 drift
+verification at session boundaries · CF-11…CF-16 per-step methodology growth (sed/AST
+sweeps, query-key factories, invalidation graphs) · **CF-17** couple the conversion
+strategy to the available verification capability (Step 11) · **CF-18** token-tokenization
+inventory walks three axes (neighbourhood / representation / source-target) across two
+phases (inventory / fix) — five worked examples, extended at Step 14 to the dependency
+layer · **Step-13 notes** baseline-as-ceiling CI gating, `headSha`-verification before
+CI diagnosis, output-parse fragility.
+
+### 7.5 — Per-step record
+
+Each row's full record is in §4 "Already resolved"; one line each here (numbering per
+the §5 roadmap):
+
+| Step    | Outcome                                                                       | Issue    |
+| ------- | ----------------------------------------------------------------------------- | -------- |
+| 1       | Cleanup audit & roadmap (this doc)                                            | —        |
+| 2a / 2b | Duplicate pages + duplicate services deleted                                  | #1 / #14 |
+| 3       | Auth-state layer consolidated onto a `persist`'d Zustand store                | #2       |
+| 4       | DOOH engine's pure math decoupled from Supabase + v3.0 pricing module written | #12      |
+| 5       | Pino logger + `console.*` purge (901 calls)                                   | #7       |
+| 6       | Typing pass — 265 `no-explicit-any` → 0, regression cycle                     | #8       |
+| 7       | `Dashboard.tsx` retired, `NewCampaign.tsx` 4030 → 1624 lines                  | #3       |
+| 8       | `src/` restructured into `features/<domain\|role>/` (142 files)               | #4       |
+| 9       | `window.location.reload()` removed                                            | #5       |
+| 10      | React Query introduced for server state (15-commit chain)                     | #6       |
+| 11      | `jsx-a11y` + `exhaustive-deps` cleanup; lint `346 → 1`                        | #9       |
+| 12      | Brand-token migration + brand refresh (~740 sites)                            | #10      |
+| 13      | CI green on `main` via baseline-gating                                        | #11      |
+| 14      | Duplicate devDependencies hoisted to root                                     | #13      |
+
+### 7.6 — The operating pattern
+
+The phase was disciplined by a repeated shape: **inventory-first plan-writing** per step
+→ **mechanical-vs-judgment classification** → **halt-on-finding** (scope is surfaced,
+never improvised) → **per-commit four-gate verification** → **CF-9 pause summary before
+push** → **visual-QA pause** where the change is rendered. Steps 12 and 13 hit
+halt-and-resolve cycles (leviosa `@apply` transitivity, the mint shade-family, the
+mid-rebrand discovery, the `headSha` mis-diagnosis); each surfaced at the right boundary
+and **none shipped broken**. The recurring lesson — captured as CF-18's source/target
+axis and the Step-12 partial-migration meta-note — is that an inherited codebase carries
+residue from incomplete prior work, so inventory must surface both declared-state and
+actual-state.
+
+---
+
+## 8. TBD follow-ups — standing list (Phase-1 prerequisites & candidates)
+
+Cleanup-phase follow-ups filed as GitHub issues. `TBD-A…TBD-J` are closed (resolved or
+folded into a step); the open standing list:
+
+| TBD   | Issue | Summary                                                                                       | Disposition                                                           |
+| ----- | ----- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| TBD-K | #32   | Storage service abstraction — 9 files call `supabase.storage` directly                        | Phase 1 — storage-layer scope (new backend)                           |
+| TBD-L | #33   | Campaign-relationships service — consolidate the campaign↔screen↔location↔approval join logic | Phase 1 candidate                                                     |
+| TBD-O | #34   | `OwnerScreens` missing-persistence cluster — 3 bounded instances                              | Phase 1 — needs the new backend's optimistic-update story             |
+| TBD-P | #35   | Consolidate advertiser `useUserProfile` + owner `useBusinessProfile` onto one auth-owned hook | Phase 1 candidate                                                     |
+| TBD-Q | #36   | `OwnerDashboard._alerts` — dead state (set, never rendered)                                   | Easy (~30 min) — landable pre-Phase-1                                 |
+| TBD-R | #37   | Simulated revenue data in `revenueService` — production data-integrity issue                  | **ELEVATED** — Phase-1 prerequisite; CEO/CTO conversation queued (§9) |
+| TBD-S | #38   | `CampaignDetails.loadCampaign` — dead fetch (result discarded)                                | Easy (~30 min) — landable pre-Phase-1                                 |
+| TBD-T | #39   | Backdrop a11y excellence pass — proper modal-dialog semantics                                 | Phase 1 — component-library work                                      |
+
+---
+
+## 9. Pre-Phase-1 prerequisites
+
+1. **Supabase documentation work.** Document the current schema, RLS policies, auth
+   provider config, and storage bucket structure as the reference the Phase-1 backend
+   must replicate. ~half a day, unhurried (no live users → no emergency). Not a roadmap
+   step; a prerequisite for Phase-1 architecture work to begin.
+2. **TBD-R conversation (CEO/CTO).** Simulated revenue data is elevated — screenhosts
+   seeing fabricated earnings is a customer-trust issue that must be settled before
+   launch. The conversation was deferred "until cleanup closes"; that condition is now
+   met.
+3. **Easy-TBD sweep (optional).** TBD-Q (#36) + TBD-S (#38) are ~30-minute dead-code
+   removals. They could land as a small pre-Phase-1 commit to clear obvious dead code
+   before architecture work begins — defensible either to do or to defer.
+
+---
+
+## 10. Phase 1 entry conditions
+
+The cleanup→Phase-1 transition is reached when:
+
+- ✓ All 14 cleanup-phase roadmap rows ☑ (this commit)
+- ✓ CI green on `main` (Step 13)
+- ✓ Brand identity locked and applied (Step 12)
+- ✓ Codebase structurally fit for backend replacement (every prior step contributed)
+- ☐ Phase-1 prerequisites underway — Supabase docs, the TBD-R conversation, the optional
+  easy-TBD sweep (§9)
+
+Phase 1 (backend migration off Supabase, auth rewrite, the Supabase typed client that
+clears the typecheck-51 / lint-1 baselines) is a **fresh brainstorm → spec → plan
+cycle**. Its commits are larger, riskier, and less mechanically classifiable than
+cleanup-phase commits — the cleanup-phase operating pattern (§7.6) is a strong default
+but should be revisited for Phase-1's risk profile when Phase 1 begins.

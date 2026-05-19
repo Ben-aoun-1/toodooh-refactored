@@ -1,5 +1,10 @@
 # Handoff folder README
 
+> **Note (cleanup-phase exit, 2026-05-19):** this README documents the handoff
+> state at project pickup and is preserved as a historical record. The cleanup
+> phase is now **complete** — see `docs/audit.md` §10 for the cleanup-phase exit
+> state and current project status.
+
 This folder contains everything needed to continue the TOODOOH platform migration from a new Claude project.
 
 ## What to read, in order
@@ -10,7 +15,7 @@ This folder contains everything needed to continue the TOODOOH platform migratio
 
 3. **The repo's root `CLAUDE.md`** — engineering rules for Claude Code. Not in this folder; lives at the monorepo root. Authoritative on coding standards, commit conventions, and forbidden patterns.
 
-4. **`03-cleanup-roadmap.md`** — the 15-step cleanup plan. Steps 1–3 are done. Step 4 is next. Read the rationale for each step, not just the headers — the *why* matters for the *how*.
+4. **`03-cleanup-roadmap.md`** — the cleanup plan. _Historical:_ as planned it was a 15-step roadmap; the audit's renumbering consolidated it to **14 rows, all now ☑ (completed 2026-05-19)**. See `docs/audit.md` §5 for the row-by-row status and §10 for the closing summary. Read the rationale for each step, not just the headers — the *why* matters for the *how*.
 
 5. **`01-initial-audit.md`** — the audit I produced at the very beginning of this project, before any cleanup work. Long, detailed, and the foundation everything else rests on. Note: two findings have been corrected by direct inspection — see section 7 of `00-PROJECT_HANDOFF.md`.
 
