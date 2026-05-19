@@ -338,6 +338,38 @@ Regardless of phase:
 
 ---
 
+## Part 4 — Operational notes from P0a + P0b
+
+The Supabase prerequisite work (P0a extraction + P0b schema inventory, 8 commits) ran on this same methodology and produced a set of operational refinements. They are grouped thematically below. The dominant rule it surfaced — CF-18, the source/target axis — earned its own document: `docs/handoff/cf-18-source-target-axis.md`. The two CF-18-specific items from this work (the Leviosa→Toodooh rebrand instance, and the enumeration-discipline refinement) live there, not here.
+
+### Inventory discipline
+
+- **Canonical source is not complete source.** The "official" `supabase/migrations/` folder was not the whole schema — money-adjacent tables, the admin cluster, and several core tables lived only in ~167 ad-hoc root SQL scripts. When inventorying inherited state, grep across *every* artifact set, not just the formally-organised one. (This is CF-18 instance 3; the operational takeaway is the grep-everything habit.)
+- **Negative-claim verification — the two-step check.** To claim "X does not exist", verify *both* (a) references to X exist (proving the concept is real and known — e.g. the frontend uses it), and (b) no `CREATE`/DDL for X exists in any artifact set (proving it is genuinely undeclared, not just hard to find). Used to establish that `factures`, `external_api_keys`, the `notifications` table, and the `media` bucket are live-DB-only.
+- **Close absent items as findings, not perpetual gaps.** When inventory proves an expected concept is genuinely absent from all artifacts, document it explicitly with reasoning ("not in legacy schema — Phase 1 greenfield, or live-DB-only") and move it *out* of the open gap list. A `[GAP]` marker should mean "unread", never "read and confirmed absent". Leaving confirmed-absent items as gaps makes the gap list lie.
+- **Migrations win over assumed names.** Frontend code and handoff docs referred to `event_campaign_links`; the actual table is `event_campaigns`. The inventory documents the schema *as it exists*, not as upstream documents assumed it. When naming diverges, the migration/DDL is authoritative.
+
+### External resources
+
+- **Non-destructive read for external git state.** When reading a repository you are not authoring in, use `git ls-tree -r`, `git show <commit>:<path>`, `git cat-file` — never `git checkout`. A checkout moves HEAD and the working tree of a repo that may serve other purposes. The P0a source mirror at `~/Desktop/toodooh-web/` was read this way and left untouched (HEAD `1aa76cd`) across the entire P0a+P0b arc. This served the "do not touch the source repo" instruction better than the literal `git checkout` the prompt had specified — the right move was a deviation, surfaced as a finding.
+
+### Honest reporting — bidirectional
+
+- **Verification catches architect-side errors too.** At a P0b Session 1 CF-9 boundary, the executor's column count (41) disagreed with the architect's stated expectation (44). Surfaced as a predicted-vs-actual delta; the architect's figure was the miscount. Honest reporting runs in both directions — the executor pushing back on an architect figure is the discipline working, not insubordination. Same shape as the Step-13 `headSha` mis-diagnosis correction.
+- **Estimate drift is a finding, not an embarrassment.** The root-script triage estimated 30–60 in-scope; the real count was 73. Surfaced with the reason (the previous developer's RLS-fix-script accumulation), *not* hidden by quietly tightening the triage criteria to fit the original estimate. When an estimate derived from a heuristic (filename patterns, declared counts) misses, report the gap and the cause.
+
+### Security findings
+
+- **Surface security-class findings explicitly — every time.** The `itstrategix.tn` domain in the Supabase `[auth]` config was already a known issue (handoff §8 predicted it). The CLAUDE.md "halt and tell" discipline still fired and surfaced it explicitly in the CF-9. Security findings get surfaced regardless of whether they are new — "already known" is not a reason to bury one.
+
+### Process
+
+- **Bootstrap-reads enforcement transfers to fresh sessions.** The "confirm required reads complete before starting work" instruction produced correct halt behaviour in context-free fresh sessions throughout P0a/P0b — including a halt when two required documents were missing. The discipline is a working bootstrap artifact, not aspirational text.
+- **Operational environment — Node version.** This machine's default `node` is v24; the repo pins `engines.node >=20 <21`. `pnpm` and the husky/lint-staged commit hooks reject v24. Prepend `export PATH="$HOME/.nvm/versions/node/v20.20.2/bin:$PATH"` before any gate command or `git commit`. (Also recorded in project memory.)
+- **Split large scopes at clean break points.** P0b Session 4 was scoped as 8 areas plus a closeout — too large for one quality session. It was halted mid-session at a clean break point and split into Commit 1a / Commit 1b / Commit 2, each a coherent slice. Honest reporting of context-window pressure, acted on before quality degraded, beats pushing through.
+
+---
+
 ## Quick reference
 
 - **The discipline:** Plan, inventory, classify, execute, verify, pause, approve, push, watch.

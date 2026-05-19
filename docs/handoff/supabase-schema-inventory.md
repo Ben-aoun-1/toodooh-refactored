@@ -2,12 +2,12 @@
 
 **Source:** Legacy SQL artifacts under `docs/handoff/legacy-migrations/` (extracted in
 Step P0a from `github.com/toodooh-source/toodooh` at `df0ef04`)
-**Date generated:** May 2026 (cleanup phase exit); expanded P0b Session 1
+**Date generated:** May 2026 (cleanup phase exit); built out across P0b Sessions 1–4; P0b closed
 **Purpose:** Reference document for Phase 1's self-hosted Node + Postgres backend to replicate
 
 This document is a working inventory of what the migration history reveals about the existing Supabase project. It is the foundation for Phase 1's schema migration to Drizzle (per `docs/handoff/00-PROJECT_HANDOFF.md`).
 
-**Status: ~98% complete** — every artifact-readable table, subsystem, RPC, storage bucket, and the auth config are inventoried. The only residue is three tables whose `CREATE` lives outside the migration history (`admin_permissions`, `admin_roles`, `factures`, `external_api_keys`) — Phase-1 live-DB discovery items, not artifact gaps. See §8.
+**Status: COMPLETE (P0b closed) — ~98% of the legacy schema, which is 100% of what the artifacts can yield.** Every artifact-readable table, subsystem, RPC, storage bucket, and the auth config are inventoried. The only residue is four tables whose `CREATE` lives outside the migration history (`admin_permissions`, `admin_roles`, `factures`, `external_api_keys`) — Phase-1 live-DB discovery items, not artifact gaps. See §8.
 
 > **Important architectural note from handoff doc:** Phase 1's schema migration carries one mandatory simplification — collapse the dual identity model (`admin_profiles` as sibling of `auth.users`) into one `users` table with a role enum (`advertiser | owner | admin | superadmin`). The current schema's dual-identity model is the root cause of frontend auth complexity and most RLS rewrites. **Do not preserve this in Phase 1.** This inventory documents what exists; Phase 1 redesigns rather than ports.
 
@@ -592,32 +592,14 @@ The **backup-tree copy** of the same migration (`legacy-migrations/backup-tree/2
 
 ---
 
-## 12. Methodology notes from P0a + P0b Sessions 1, 3 & 4
+## 12. Methodology — see the dedicated documents
 
-Deferred-corrections carried forward from Step P0a (folded in here per the P0b plan):
+The methodology surfaced during P0a + P0b is consolidated outside this inventory, so this document stays focused on schema:
 
-1. **Canonical source isn't complete source.** The formal `migrations/` folder is not the complete schema record — money-adjacent schema (balance, invoicing, recharges) and the entire admin-tables cluster live in ad-hoc root-scripts. Inventory must grep across *all* artifact sets.
-2. **Non-destructive read for external git state.** Read other repos with `git ls-tree -r` / `git show <commit>:<path>`, never `git checkout` — preserves the working state of repos serving other purposes.
-3. **Bootstrap-reads enforcement works in fresh sessions.** The "confirm reads complete before starting" discipline produced correct halt behaviour in a context-free session.
-4. **CF-18 instance — Leviosa→Toodooh rebrand** (DB-project-naming layer): a partial rename, old and new names coexisting at different layers (§11).
-5. **Estimate-vs-reality breach** — the root-script triage estimate (~30–60 in-scope) came in at 73; an upward discovery (RLS-fix-script accumulation), surfaced with reasoning rather than tightening criteria to fit.
-6. **Operational note — Node version.** This machine's default `node` is v24; the repo pins `>=20 <21`. Run gate commands and commits under `~/.nvm/versions/node/v20.20.2/bin`.
+- **`docs/handoff/cf-18-source-target-axis.md`** — the source/target axis rule: an inherited codebase carries residue from incomplete prior work, so inventory must surface both declared-state and actual-state. Nine distinct worked instances accumulated across the cleanup phase and P0a/P0b — seven of them (instances 3–9) from this prerequisite track: the ad-hoc-root-script schema, the Leviosa→Toodooh rebrand, the triage estimate, the unreliable filename chronology, the twin validation columns, the `campaign_locations` column-set replacement, and the `campaign_media`→`videos` cardinality change. The per-table sections of this document are themselves a CF-18-disciplined inventory.
+- **`docs/handoff/methodology-and-prompt-format.md` Part 4** — the operational notes from P0a + P0b (grep-everything, negative-claim verification, close-absent-as-finding, migrations-win-over-assumed-names, non-destructive external reads, bidirectional honest reporting, security-finding surfacing, the Node-version operational note, split-large-scopes).
 
-### CF-18 (source/target axis) — now 9 distinct instances
-
-CF-18 — that an inherited codebase carries residue from incomplete prior work, so inventory must surface both declared-state and actual-state — has recurred enough to be the dominant carry-forward rule. Distinct worked examples to date:
-
-1. **Step 12** — brand-color migration: canonical-old hex and hand-migrated-new hex coexisting (site level).
-2. **Step 14** — monorepo restructure: root tooling vs workspace duplicates (`package.json` level).
-3. **P0a** — canonical migration source vs ad-hoc root scripts (SQL-artifact level).
-4. **P0a** — Leviosa→Toodooh rebrand in backup-tree vs main migrations (DB-project-naming level).
-5. **P0a** — 73-vs-30–60 triage estimate (planning-vs-reality level).
-6. **P0b** — filename chronology vs dependency reality (migration-tooling level).
-7. **P0b** — twin validation columns `verification_status` / `status` (column-definition level).
-8. **P0b Session 3** — `campaign_locations` schema replacement (§3.3): `…20250320000017` does `DROP TABLE … CASCADE` then recreates the table with a different column set (`latitude/longitude/radius` → `location_id`). A column-set-level migration where the old and new shapes are an explicit source/target pair. Adjacent same-axis observations from Session 3, not separately numbered: campaign targeting carries **four** parallel representations (§3.1), `campaigns.category` coexists with the `campaign_categories` junction (§3.6), and `screens.location` text coexists with `screens.location_id` (§3.8).
-9. **P0b Session 4** — video model 1:N → 1:1 migration (§3.9): the legacy `campaign_media` table (many media rows per campaign) is superseded by the `videos` table + `campaigns.video_id` FK (one video per campaign) — a *record-cardinality* change on the representation axis, distinct from instance 8's column-set replacement. `campaign_media` is not dropped, so both models coexist; the `migrate_to_one_video_per_campaign` root-script is the data migration between them. This is a new layer-axis combination (cardinality, not columns), so it warrants its own instance number rather than a same-axis observation under instance 8.
-
-Whether to extract CF-18 into a standalone reference document (`docs/handoff/cf-18-source-target-axis.md`) is a **P0b-closeout** consideration — not done here.
+The "chronology is unreliable" caveat that governs this document's ordering is stated in §1; CF-18 instance 6 is its general form.
 
 ---
 
@@ -635,6 +617,6 @@ Whether to extract CF-18 into a standalone reference document (`docs/handoff/cf-
 
 ## Document status
 
-**Current state:** ~98% complete. Every artifact-readable schema element is inventoried — core identity tables, campaign cluster, geographic + screen-affluence model, financial layer, video subsystem, special events, `global_configuration`, reference tables, storage buckets, auth config, and RPC bodies. Residue is three live-DB-only tables (§8), not artifact gaps.
+**Current state: P0b closed.** Every artifact-readable schema element is inventoried — core identity tables, campaign cluster, geographic + screen-affluence model, financial layer, video subsystem, special events, `global_configuration`, reference tables, storage buckets, auth config, and RPC bodies. Residue is four live-DB-only tables (§8), not artifact gaps — they are confirmed against the live database (or redesigned) when Phase 1 begins. P0b commits: `fba93b9`, `e171272`, `bd58b55`, `84517d5`, plus this closeout.
 
-**Use case:** working reference for Phase 1's schema design. Each Phase 1 backend module consults the relevant section when designing its Drizzle schema and Fastify routes. Gaps close as P0b Sessions 2–3 proceed.
+**Use case:** working reference for Phase 1's schema design. Each Phase 1 backend module consults the relevant section when designing its Drizzle schema and Fastify routes.

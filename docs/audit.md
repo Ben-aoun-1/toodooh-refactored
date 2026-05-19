@@ -1182,10 +1182,11 @@ folded into a step); the open standing list:
 
 ## 9. Pre-Phase-1 prerequisites
 
-1. **Supabase documentation work.** Document the current schema, RLS policies, auth
-   provider config, and storage bucket structure as the reference the Phase-1 backend
-   must replicate. ~half a day, unhurried (no live users → no emergency). Not a roadmap
-   step; a prerequisite for Phase-1 architecture work to begin.
+1. ~~**Supabase documentation work.**~~ **☑ Done** — completed as the **P0a + P0b**
+   prerequisite track (see §11). The current schema, RLS policies, auth provider config,
+   storage buckets, RPC bodies, and the v3-pricing `global_configuration` are inventoried
+   in `docs/handoff/supabase-schema-inventory.md` (~98% — 100% of what the legacy
+   artifacts can yield).
 2. **TBD-R conversation (CEO/CTO).** Simulated revenue data is elevated — screenhosts
    seeing fabricated earnings is a customer-trust issue that must be settled before
    launch. The conversation was deferred "until cleanup closes"; that condition is now
@@ -1204,11 +1205,51 @@ The cleanup→Phase-1 transition is reached when:
 - ✓ CI green on `main` (Step 13)
 - ✓ Brand identity locked and applied (Step 12)
 - ✓ Codebase structurally fit for backend replacement (every prior step contributed)
-- ☐ Phase-1 prerequisites underway — Supabase docs, the TBD-R conversation, the optional
-  easy-TBD sweep (§9)
+- ✓ **Supabase documentation prerequisite complete** — P0a + P0b (§11); the schema
+  reference Phase 1 must replicate now exists
+- ☐ Remaining §9 prerequisites — the TBD-R conversation, the optional easy-TBD sweep
 
 Phase 1 (backend migration off Supabase, auth rewrite, the Supabase typed client that
 clears the typecheck-51 / lint-1 baselines) is a **fresh brainstorm → spec → plan
 cycle**. Its commits are larger, riskier, and less mechanically classifiable than
 cleanup-phase commits — the cleanup-phase operating pattern (§7.6) is a strong default
 but should be revisited for Phase-1's risk profile when Phase 1 begins.
+
+---
+
+## 11. P0a + P0b — Supabase prerequisite work
+
+The §9 "Supabase documentation work" prerequisite ran as a two-step track between the
+cleanup-phase close and the Phase-1 architecture conversation. It used the same operating
+pattern as the cleanup phase (§7.6) — inventory-first, halt-on-finding, CF-9 pause
+summaries, per-commit four-gate verification, CI-green on every push.
+
+**P0a — extraction.** Brought the previous developer's SQL artifacts into the repo as
+historical reference (not runnable migrations). Source: `github.com/toodooh-source/toodooh`
+at `df0ef04`, read non-destructively (`git show`, no checkout). Landed under
+`docs/handoff/legacy-migrations/` — 74 formal migrations, 22 backup-tree migrations,
+5 backfill scripts, 73 triaged root scripts (of 167; the rest were diagnostics/data-only).
+Commits `3781fb2` (methodology + inventory reference docs), `6b1eef2` (the SQL artifacts).
+
+**P0b — schema inventory.** Built `docs/handoff/supabase-schema-inventory.md` from those
+artifacts: per-table schemas with origin migration, RLS by policy generation, RPC bodies,
+seeds, 9 legacy-migration defects, the Leviosa→Toodooh reconciliation, and Phase-1 choice
+points. Ran across four working sessions:
+
+| Commit    | Scope                                                                 |
+| --------- | --------------------------------------------------------------------- |
+| `fba93b9` | `business_profiles`, admin-tables cluster, `auth.users`, defects 1–6  |
+| `e171272` | campaign tables cluster, geographic data model, reference tables      |
+| `bd58b55` | financial tables, video subsystem (Session 4 areas A+B)               |
+| `84517d5` | screen-affluence, events, `global_configuration`, storage, RPCs, auth |
+| (this)    | P0b closeout — methodology consolidation, CF-18 reference doc         |
+
+**Outcome.** The inventory is ~98% complete — 100% of what the legacy artifacts can
+yield; four tables (`admin_permissions`, `admin_roles`, `factures`, `external_api_keys`)
+have no `CREATE` in any artifact and are Phase-1 live-DB discovery items. The dominant
+methodology rule, **CF-18 (the source/target axis)**, was extracted to its own reference,
+`docs/handoff/cf-18-source-target-axis.md`; the broader operational notes were appended to
+`docs/handoff/methodology-and-prompt-format.md` Part 4.
+
+**The prerequisite phase is complete.** Next is the Phase-1 architecture conversation —
+a fresh brainstorm → spec → plan cycle.
