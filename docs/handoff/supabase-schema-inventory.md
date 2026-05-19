@@ -7,7 +7,7 @@ Step P0a from `github.com/toodooh-source/toodooh` at `df0ef04`)
 
 This document is a working inventory of what the migration history reveals about the existing Supabase project. It is the foundation for Phase 1's schema migration to Drizzle (per `docs/handoff/00-PROJECT_HANDOFF.md`).
 
-**Status: PARTIAL (~80%)** — `business_profiles`, the admin-tables cluster, the campaign tables cluster, the geographic data model, and reference tables are inventoried; financial tables and most RPC function bodies remain. Marked as `[GAP]` where additional migration files need to be read. See §8 for the gap list.
+**Status: PARTIAL (~88%)** — `business_profiles`, the admin-tables cluster, the campaign tables cluster, the geographic data model, reference tables, financial tables, and the video subsystem are inventoried; the screen-affluence and events subsystems, `global_configuration`, notifications, storage-policy completeness, auth config, and some RPC bodies remain (Commit 1b). Marked as `[GAP]` where additional migration files need to be read. See §8 for the gap list.
 
 > **Important architectural note from handoff doc:** Phase 1's schema migration carries one mandatory simplification — collapse the dual identity model (`admin_profiles` as sibling of `auth.users`) into one `users` table with a role enum (`advertiser | owner | admin | superadmin`). The current schema's dual-identity model is the root cause of frontend auth complexity and most RLS rewrites. **Do not preserve this in Phase 1.** This inventory documents what exists; Phase 1 redesigns rather than ports.
 
@@ -246,21 +246,128 @@ Functions in `20250101000006`: `check_unavailability_status()` (reconciles unava
 
 **`location_affluence_schedule`** — created `…20250320000017`: `id uuid PK`, `location_id uuid NOT NULL FK locations(id) ON DELETE CASCADE`, `day_of_week smallint NOT NULL CHECK (1..7)`, `hour smallint NOT NULL CHECK (0..23)`, `estimated_impressions integer NOT NULL DEFAULT 0`, `created_at`, `updated_at`, `UNIQUE(location_id, day_of_week, hour)`. Index `idx_location_affluence_schedule_location_id`. RLS: a `FOR ALL` owner-scoped policy, then refined by `…20260404230000` (authenticated SELECT), `…20260404290000` (repair grants), `…20260405232000` (admin write policy). This is the per-location-per-hour-per-day impression table the DOOH engine consumes.
 
-**`calculate_campaign_cost(uuid)`** — SECURITY DEFINER RPC (`…20250320000017`): computes campaign cost at CPM 2.5, preferring `campaign_locations` × `location_affluence_schedule`, falling back to `campaign_screens` × `screen_affluence_config`, then to `campaigns.budget`. (`screen_affluence_config` is a separate screen-affluence subsystem defined in root-scripts — `[GAP]`, later session.)
+**`calculate_campaign_cost(uuid)`** — SECURITY DEFINER RPC (`…20250320000017`): computes campaign cost at CPM 2.5, preferring `campaign_locations` × `location_affluence_schedule`, falling back to `campaign_screens` × `screen_affluence_config`, then to `campaigns.budget`. **Re-defined divergently in `create_balance_system`** — see §7 Defect 8. (`screen_affluence_config` is a separate screen-affluence subsystem defined in root-scripts — `[GAP]`, Commit 1b.)
+
+### 3.9 Video subsystem — `videos`
+
+The current campaign-creative model. Created by root `simplified_video_system` (the canonical end-state of ~8 churning video scripts — `recreate_video_system_correctly`, `migrate_to_one_video_per_campaign`, `fix_video_*`, etc.).
+
+| Column | Type | Default / constraint |
+|---|---|---|
+| `id` | `uuid` | PK, `gen_random_uuid()` |
+| `url` | `text` | NOT NULL |
+| `filename` | `text` | NOT NULL |
+| `file_size` | `bigint` | CHECK `valid_file_size` (`> 0`) |
+| `duration` | `integer` | CHECK `valid_duration` (`> 0`) |
+| `thumbnail_url` | `text` | — |
+| `validation_status` | `varchar(20)` | DEFAULT `'pending'`, CHECK `pending \| approved \| rejected` |
+| `validated_by` | `uuid` | FK `admin_profiles(id)` ON DELETE SET NULL |
+| `validated_at` | `timestamptz` | — |
+| `validation_notes` | `text` | — |
+| `uploaded_by` | `uuid` | NOT NULL FK `auth.users(id)` ON DELETE CASCADE |
+| `created_at` / `updated_at` | `timestamptz` | DEFAULT `now()` |
+| `duration_seconds` | `double precision` | — (added by formal migration `…20260404220000_videos_duration_seconds`, "for the DOOH engine") |
+
+*Note:* `duration` (`integer`, seconds) and `duration_seconds` (`double precision`) coexist — a minor twin; Phase 1 keeps one.
+
+Indexes: `idx_videos_validation_status`, `idx_videos_uploaded_by`. RLS: own-row SELECT/INSERT/UPDATE + admin SELECT/UPDATE. Functions `get_video_validation_stats()`, `get_campaigns_using_video(uuid)`. View `admin_videos_view` (video + uploader + validator + campaign count).
+
+**`campaigns` integration:** `simplified_video_system` adds `campaigns.video_id uuid FK videos(id) ON DELETE SET NULL` and `campaigns.content_validation_status varchar(20)` CHECK(`pending|approved|rejected`); index `idx_campaigns_video_id`. A trigger propagates a video's validation result to every campaign using it:
+
+```sql
+CREATE OR REPLACE FUNCTION update_campaigns_on_video_validation()
+RETURNS TRIGGER AS $$
+BEGIN
+    UPDATE campaigns
+    SET content_validation_status = NEW.validation_status
+    WHERE video_id = NEW.id;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_update_campaigns_validation
+    AFTER UPDATE OF validation_status ON videos
+    FOR EACH ROW
+    WHEN (OLD.validation_status IS DISTINCT FROM NEW.validation_status)
+    EXECUTE FUNCTION update_campaigns_on_video_validation();
+```
+
+**1:N → 1:1 model migration.** The legacy `campaign_media` table (§3.2, created `empty_hall`) modelled creatives as *many media rows per campaign*. The `videos` table + `campaigns.video_id` FK replace it with *one video per campaign* — a record-cardinality change (CF-18 instance 9, §12). `campaign_media` is not dropped; both models coexist in the schema, and the `migrate_to_one_video_per_campaign` root-script name confirms a data migration between them.
 
 ---
 
 ## 4. Financial tables
 
-> Not yet inventoried in depth — P0b Session 4 scope.
+Inventoried in P0b Session 4 (area A). The financial layer is **prepaid**: advertisers recharge a balance, campaigns debit against it. There is **no money in formal migrations** — all of it lives in root-scripts.
 
-### `recharges`
+### 4.1 `recharges`
 
-Wallet recharge requests. From root `create_recharges_table`. Fields (partial): `id`, `user_id`, `amount`, `payment_method` (`card | bank | cash`), `status` (`pending | completed | rejected`), `description`, `created_at`. Full schema `[GAP]`.
+Wallet recharge requests. Created by root `create_recharges_table`.
 
-### Balance / invoicing / monitoring subsystems
+| Column | Type | Default / constraint |
+|---|---|---|
+| `id` | `uuid` | PK, `gen_random_uuid()` |
+| `user_id` | `uuid` | NOT NULL FK `auth.users(id)` ON DELETE CASCADE |
+| `amount` | `numeric(10,2)` | NOT NULL, CHECK `> 0` |
+| `payment_method` | `text` | NOT NULL DEFAULT `'card'`, CHECK `card \| bank \| cash` |
+| `status` | `text` | NOT NULL DEFAULT `'pending'`, CHECK `completed \| pending \| failed \| cancelled` |
+| `reference` | `text` | UNIQUE (auto `RCH-YYYY-NNNNNN`) |
+| `description` | `text` | — |
+| `transaction_id` | `text` | — |
+| `validated_by` | `uuid` | FK `admin_profiles(id)` |
+| `validated_at` | `timestamptz` | — |
+| `validation_notes` | `text` | — |
+| `created_at` / `updated_at` | `timestamptz` | DEFAULT `now()` |
 
-Defined in root-scripts `create_balance_system`, `create_automatic_invoicing_system`, `create_campaign_monitoring_system`, `create_monthly_invoices_view`, `create_platform_stats_functions` — none in formal migrations. Full schemas `[GAP]` — P0b Session 4.
+> *Correction:* a prior version of this inventory listed the status set as `pending | completed | rejected`. The actual CHECK (`create_recharges_table.sql:11`) is **`completed | pending | failed | cancelled`**.
+
+Indexes: `idx_recharges_user_id`, `idx_recharges_status`, `idx_recharges_created_at` (DESC). Trigger `trigger_set_recharge_reference` → `set_recharge_reference()` / `generate_recharge_reference()` auto-assigns `reference` on INSERT. RLS: own-row SELECT/INSERT + admin SELECT/UPDATE (via `admin_profiles … is_active = true`). View `recharges_stats` — per-user recharge aggregates.
+
+### 4.2 Balance computation — no ledger
+
+**There is no balance or wallet table.** A user's balance is a *computed function* — `get_user_balance(uuid)` from `create_balance_system`:
+
+```sql
+CREATE OR REPLACE FUNCTION get_user_balance(p_user_id UUID)
+RETURNS NUMERIC AS $$
+DECLARE
+  total_recharges NUMERIC;
+  total_spent NUMERIC;
+  balance NUMERIC;
+BEGIN
+  SELECT COALESCE(SUM(amount), 0) INTO total_recharges
+  FROM recharges WHERE user_id = p_user_id AND status = 'completed';
+
+  SELECT COALESCE(SUM(budget), 0) INTO total_spent
+  FROM campaigns WHERE user_id = p_user_id AND status IN ('active', 'completed');
+
+  balance := total_recharges - total_spent;
+  RETURN balance;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+```
+
+Balance = `SUM(completed recharges) − SUM(budget of active/completed campaigns)`. There is **no transactions/ledger table and no audit trail** — every balance read recomputes from `recharges` and `campaigns`. Related: `check_sufficient_balance(user, campaign)`, `check_campaign_balance(campaign)` (returns JSON with `available_balance` / `campaign_cost` / `balance_after`), and trigger `verify_balance_before_campaign_activation` on `campaigns` (BEFORE UPDATE) — if balance is insufficient when a campaign moves to `pending`/`active`, it forces `status` back to `'draft'` and writes a `validation_notes` message. View `user_balance_info` joins the computed balance with profile data.
+
+> **⚠️ Phase 1 choice point — financial ledger.** The computed-balance model has no transaction history, no audit trail, and recomputes on every read. Phase 1 should introduce a proper append-only `transactions` ledger from day one (money-adjacent — see CLAUDE.md rule 10). This inventory documents what exists; the decision is deferred to the Phase 1 architecture conversation.
+
+### 4.3 `factures` (invoices)
+
+Advertiser-side invoices. **`create_automatic_invoicing_system` only `ALTER`s `factures`** (`:122`, adds `campaign_id`) — it never `CREATE`s it. The creation source is untracked → `[GAP]`. This is the **third instance** of the "core table not formally migrated" pattern (after the `admin_*` cluster, §2.4, and `campaign_screens`, §3.4).
+
+Observed columns (from the `INSERT` in `generate_invoice_for_campaign` + the `ALTER`): `id`, `numero` (UNIQUE, auto `INV-YYYY-NNNNNN`), `user_id`, `campaign_id uuid FK campaigns(id) ON DELETE SET NULL`, `montant numeric`, `statut text` (`en_attente | payee`), `date_emission`, `date_echeance` (emission + 30 days), `description`, `created_at`. Index `idx_factures_campaign_id`. View `factures_with_campaigns`.
+
+Functions: `generate_invoice_for_campaign(uuid)` (idempotent — one invoice per campaign); trigger `auto_generate_invoice_on_campaign_active` on `campaigns` (AFTER INSERT/UPDATE OF status) auto-creates an invoice when a campaign goes `active`. `get_monthly_invoice_last_month(uuid)` / `get_user_invoices_with_monthly(uuid)` synthesize **dynamic, unstored** consolidated monthly invoices (`statut = 'payee'`, prepaid model — the debit already happened).
+
+### 4.4 Cost calculation
+
+`calculate_campaign_cost(uuid)` estimates campaign cost at a fixed **CPM of 2.5 TND**. It is **defined twice with divergent logic** — see §7 Defect 8. Both forms multiply estimated impressions by CPM, falling back to `campaigns.budget`.
+
+### 4.5 Not present in the legacy schema
+
+The earlier gap list named `bank_details` / RIB, `payment_methods` (table), and `monthly_statements` / `versements` (screenhost payouts). **None exist in any legacy artifact** — `payment_method` is only a `recharges` column, and monthly invoices are synthesized dynamically (§4.3), not stored. These are **Phase 1 greenfield** (or live-DB-only and undiscoverable from artifacts). The screenhost-payout side in particular appears never to have been built.
+
+> The `create_campaign_monitoring_system` and `create_platform_stats_functions` root-scripts (campaign monitoring / platform stats) remain `[GAP]` — deferred to Commit 1b.
 
 ---
 
@@ -290,11 +397,13 @@ Known RPCs / functions:
 - `calculate_campaign_cost(uuid)` — SECURITY DEFINER campaign-cost estimator at CPM 2.5 (§3.8).
 - `check_unavailability_status()`, `create_screen_with_config(...)` — screen lifecycle helpers (`20250101000006`, §3.8).
 - `get_my_event_campaigns_events()` — SECURITY DEFINER; returns the events a user's campaigns are linked to (`…20250320000005`).
-- `upsert_location_affluence_schedule`, and the event/financial RPCs — `[GAP]`, P0b Session 4.
+- `get_user_balance`, `calculate_campaign_cost`, `check_sufficient_balance`, `check_campaign_balance`, `generate_invoice_for_campaign`, `get_monthly_invoice_last_month` — financial RPCs, see §4.
+- `get_video_validation_stats`, `get_campaigns_using_video` — video RPCs, see §3.9.
+- `upsert_location_affluence_schedule`, and the event/stats RPCs — `[GAP]`, Commit 1b.
 
 Triggers: `update_business_profiles_updated_at`, `trg_fill_business_profile_email`, `update_admin_profiles_updated_at`, `update_admin_roles_updated_at`, `update_admin_permissions_updated_at`, `update_screens_updated_at`, `update_unavailability_updated_at`, `update_configurations_updated_at`, `update_locations_updated_at`, `update_campaign_hourly_location_plan_updated_at`, `trigger_check_expired_campaign`, `trigger_update_predefined_zones_updated_at`.
 
-`[GAP]` — full RPC inventory for financial/event/video functions requires P0b Session 4.
+`[GAP]` — RPC bodies for the event / stats functions and `upsert_location_affluence_schedule` remain — Commit 1b.
 
 ---
 
@@ -330,27 +439,33 @@ Defects in the *legacy* migration set, surfaced during P0b Session 1. They are n
 
 *What:* the admin-management RLS policy on `predefined_zones` can never match. *Where:* `backup-tree/20250120000002_create_predefined_zones.sql` — the policy `"Admins can manage predefined zones"` uses `USING (EXISTS (SELECT 1 FROM business_profiles WHERE user_id = auth.uid() AND profile_type = 'admin'))`. *Why it matters:* the `profile_type` enum is `advertiser | individual_owner | fleet_owner` — there is **no `'admin'` value**. The predicate is unsatisfiable, so no one can manage `predefined_zones` through this policy (admin status lives in `is_admin` / `admin_profiles`, not `profile_type`). The zones are effectively read-only after seeding. *Phase 1:* admin authorization is a middleware role check; the dead-predicate class cannot recur.
 
+### Defect 8 — `calculate_campaign_cost(uuid)` defined twice, divergently
+
+*What:* the cost-calculation RPC has two `CREATE OR REPLACE FUNCTION` definitions with different logic. *Where:* `migrations/20250320000017_locations_and_affluence_schedule.sql:91` defines it **location-based** — preferring `campaign_locations × location_affluence_schedule`, falling back to `campaign_screens × screen_affluence_config`, then `campaigns.budget`. `root-scripts/create_balance_system.sql:35` re-defines it **screen-based only** — `campaign_screens × screen_affluence_config`, falling back to `campaigns.budget` (no location branch). Both have signature `calculate_campaign_cost(uuid)`, so the second to run silently replaces the first. *Why it matters:* the campaign-cost math — and therefore the balance check that gates campaign activation (§4.2) — is **non-deterministic from the artifacts**; production behaviour depends on script run order. Money-adjacent. *Phase 1:* one canonical implementation. The underlying location-based-vs-screen-based costing model is itself a Phase 1 design choice point (§9).
+
 ---
 
 ## 8. Gaps requiring additional inventory work
 
 Closed by P0b Session 1: `business_profiles` (full), `admin_profiles` / `admin_activities` (full), `auth.users` extension. Closed by **Session 3**: the campaign tables cluster (`campaigns`, `campaign_media`, `campaign_locations`, `campaign_screens`, `campaign_hourly_location_plan`, `campaign_categories`, `clients`), the geographic data model (`screens` + 5 satellite tables, `locations`, `location_affluence_schedule`), and reference tables (`business_sectors`, `governorates`, `owner_business_sectors`, `company_size_options`, `predefined_zones`) including seeds.
 
-Remaining gaps:
+Closed by **Session 4 (areas A+B — Commit 1a)**: `recharges`, the balance-computation architecture, `factures`/invoicing, the `videos` subsystem. Confirmed **not present** in any artifact (moved to §4.5, no longer gaps): `bank_details`/RIB, `payment_methods` table, `monthly_statements`/`versements`.
+
+Remaining gaps — **Commit 1b (Session 4 areas C–H):**
 
 - `admin_permissions`, `admin_roles` — **creation migration unknown** (only `ALTER`/seed scripts found; see §2.4)
-- `recharges` (full schema and lifecycle), balance / invoicing / monitoring subsystems (root-scripts `create_balance_system`, `create_automatic_invoicing_system`, `create_campaign_monitoring_system`, `create_monthly_invoices_view`, `create_platform_stats_functions`)
-- `videos` / `campaign_videos` subsystem (root-scripts — supersedes the legacy `campaign_media`, §3.2)
-- `screen_affluence_config` and the screen-affluence subsystem (root-scripts `create_screen_affluence_*`)
-- `special_events`, `event_campaigns` / `event_campaign_links` (referenced by `campaigns.event_id` and the event RPCs)
-- `notifications`, `global_configuration` (formal migrations `…20260404120000`+)
-- `monthly_statements` / `versements`, `invoices` / `factures`, `bank_details` / `payment_methods`
-- `zone-images` / `event-images` bucket policies
-- Full RPC function bodies for financial/event functions; `update_expired_campaigns`, `upsert_location_affluence_schedule` bodies
+- `factures` — **creation migration unknown** (only `ALTER`ed; see §4.3)
+- `screen_affluence_config` and the screen-affluence subsystem (root-scripts `create_screen_affluence_*`, `create_complete_screen_affluence_system`, `create_trigger_auto_affluence_config`)
+- `special_events`, `event_campaigns` / `event_campaign_links` (root `create_special_events_system` + event RPCs)
+- `notifications` — no table found in artifacts so far; confirm in Commit 1b
+- `global_configuration` (formal migrations `20260404120000`+)
+- `create_campaign_monitoring_system`, `create_platform_stats_functions` (monitoring / platform stats)
+- `zone-images` / `event-images` / `media` bucket-policy completeness; auth provider configuration
+- Full RPC function bodies for event/stats functions; `update_expired_campaigns`, `upsert_location_affluence_schedule` bodies
 
-Additional work: complete per-table RLS inventory for the remaining tables, seed data extraction, auth provider config, realtime subscription patterns.
+Additional work: complete per-table RLS inventory for the remaining tables, seed data extraction, realtime subscription patterns.
 
-**Estimated work to close gaps:** one more focused session (P0b Session 4) — financial tables, the video and screen-affluence subsystems, events, and remaining RPC bodies.
+**Estimated work to close gaps:** Commit 1b (one session, areas C–H), then Commit 2 (P0b closeout).
 
 ---
 
@@ -368,6 +483,8 @@ Current: `auth.users` + `business_profiles` + `admin_profiles` for what should b
 - **Pick one validation column** — resolve the `verification_status` / `status` duplication (§2.2).
 - **Pick one campaign-targeting model** — resolve the four parallel representations (`location_lat/lng/radius`, `campaign_locations`, `campaign_screens`, `campaign_hourly_location_plan`; §3.1), and the `campaigns.category` / `campaign_categories` single-vs-multi duplication (§3.6).
 - **PostGIS POINT in two tables** — `screens.coordinates` and `locations.coordinates` both use `POINT` with GIST indexes; see below.
+- **Financial ledger** — the legacy schema has no transactions/ledger table; balance is recomputed on every read (§4.2). Phase 1 should build an append-only `transactions` ledger with an audit trail from day one. Money-adjacent — see CLAUDE.md rule 10.
+- **Cost calculation model** — `calculate_campaign_cost` exists in a location-based and a screen-based form (§7 Defect 8). Phase 1 picks one costing model; this determines the canonical campaign-targeting representation too.
 
 ### PostGIS dependency
 
@@ -404,7 +521,7 @@ The **backup-tree copy** of the same migration (`legacy-migrations/backup-tree/2
 
 ---
 
-## 12. Methodology notes from P0a + P0b Sessions 1 & 3
+## 12. Methodology notes from P0a + P0b Sessions 1, 3 & 4
 
 Deferred-corrections carried forward from Step P0a (folded in here per the P0b plan):
 
@@ -415,7 +532,7 @@ Deferred-corrections carried forward from Step P0a (folded in here per the P0b p
 5. **Estimate-vs-reality breach** — the root-script triage estimate (~30–60 in-scope) came in at 73; an upward discovery (RLS-fix-script accumulation), surfaced with reasoning rather than tightening criteria to fit.
 6. **Operational note — Node version.** This machine's default `node` is v24; the repo pins `>=20 <21`. Run gate commands and commits under `~/.nvm/versions/node/v20.20.2/bin`.
 
-### CF-18 (source/target axis) — now 8 distinct instances
+### CF-18 (source/target axis) — now 9 distinct instances
 
 CF-18 — that an inherited codebase carries residue from incomplete prior work, so inventory must surface both declared-state and actual-state — has recurred enough to be the dominant carry-forward rule. Distinct worked examples to date:
 
@@ -427,6 +544,7 @@ CF-18 — that an inherited codebase carries residue from incomplete prior work,
 6. **P0b** — filename chronology vs dependency reality (migration-tooling level).
 7. **P0b** — twin validation columns `verification_status` / `status` (column-definition level).
 8. **P0b Session 3** — `campaign_locations` schema replacement (§3.3): `…20250320000017` does `DROP TABLE … CASCADE` then recreates the table with a different column set (`latitude/longitude/radius` → `location_id`). A column-set-level migration where the old and new shapes are an explicit source/target pair. Adjacent same-axis observations from Session 3, not separately numbered: campaign targeting carries **four** parallel representations (§3.1), `campaigns.category` coexists with the `campaign_categories` junction (§3.6), and `screens.location` text coexists with `screens.location_id` (§3.8).
+9. **P0b Session 4** — video model 1:N → 1:1 migration (§3.9): the legacy `campaign_media` table (many media rows per campaign) is superseded by the `videos` table + `campaigns.video_id` FK (one video per campaign) — a *record-cardinality* change on the representation axis, distinct from instance 8's column-set replacement. `campaign_media` is not dropped, so both models coexist; the `migrate_to_one_video_per_campaign` root-script is the data migration between them. This is a new layer-axis combination (cardinality, not columns), so it warrants its own instance number rather than a same-axis observation under instance 8.
 
 Whether to extract CF-18 into a standalone reference document (`docs/handoff/cf-18-source-target-axis.md`) is a **P0b-closeout** consideration — not done here.
 
@@ -440,12 +558,12 @@ Whether to extract CF-18 into a standalone reference document (`docs/handoff/cf-
 4. **Seed data** — `INSERT` statements for reference tables → JSON/CSV for Phase 1 seeds.
 5. **Halt-on-finding** — surface anything that doesn't fit prior expectation rather than improvising interpretation.
 
-**Remaining:** P0b Session 4 — financial tables, the `videos` and `screen_affluence` subsystems, special events, and remaining RPC bodies.
+**Remaining:** P0b Session 4 Commit 1b — screen-affluence subsystem, special events, `global_configuration`, notifications, storage-policy completeness, auth config, remaining RPC bodies; then Commit 2 (closeout).
 
 ---
 
 ## Document status
 
-**Current state:** `business_profiles`, the admin-tables cluster, `auth.users`, the campaign tables cluster, the geographic data model, and reference tables are fully inventoried; financial tables, the video / screen-affluence / events subsystems, and most RPC bodies remain (§8). Roughly **80%** complete.
+**Current state:** `business_profiles`, the admin-tables cluster, `auth.users`, the campaign tables cluster, the geographic data model, reference tables, financial tables, and the video subsystem are fully inventoried; the screen-affluence and events subsystems, `global_configuration`, notifications, storage-policy completeness, auth config, and some RPC bodies remain (§8). Roughly **88%** complete.
 
 **Use case:** working reference for Phase 1's schema design. Each Phase 1 backend module consults the relevant section when designing its Drizzle schema and Fastify routes. Gaps close as P0b Sessions 2–3 proceed.
