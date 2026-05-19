@@ -7,7 +7,7 @@ Step P0a from `github.com/toodooh-source/toodooh` at `df0ef04`)
 
 This document is a working inventory of what the migration history reveals about the existing Supabase project. It is the foundation for Phase 1's schema migration to Drizzle (per `docs/handoff/00-PROJECT_HANDOFF.md`).
 
-**Status: PARTIAL** — `business_profiles`, the admin-tables cluster, storage buckets, and known RPCs are inventoried; campaign/geo/financial tables remain. Marked as `[GAP]` where additional migration files need to be read. See §8 for the gap list.
+**Status: PARTIAL (~80%)** — `business_profiles`, the admin-tables cluster, the campaign tables cluster, the geographic data model, and reference tables are inventoried; financial tables and most RPC function bodies remain. Marked as `[GAP]` where additional migration files need to be read. See §8 for the gap list.
 
 > **Important architectural note from handoff doc:** Phase 1's schema migration carries one mandatory simplification — collapse the dual identity model (`admin_profiles` as sibling of `auth.users`) into one `users` table with a role enum (`advertiser | owner | admin | superadmin`). The current schema's dual-identity model is the root cause of frontend auth complexity and most RLS rewrites. **Do not preserve this in Phase 1.** This inventory documents what exists; Phase 1 redesigns rather than ports.
 
@@ -154,35 +154,105 @@ The rich definition matches the columns the frontend's TypeScript types expect, 
 
 ### 2.5 Reference tables
 
-`business_sectors`, `governorates` created in `wispy_leaf` (`id uuid PK`, `name text NOT NULL UNIQUE`; RLS = authenticated SELECT `true`). Seeds: 10 sectors, 24 governorates (Tunisian). `owner_business_sectors`, `company_size_options` — `[GAP]`, deferred to a later P0b session.
+All inventoried in P0b Session 3.
+
+**`business_sectors`** — created `wispy_leaf` (`id uuid PK gen_random_uuid()`, `name text NOT NULL UNIQUE`). `…20250403100000_business_sectors_display_order` adds `display_order integer`. RLS: `authenticated` SELECT `true` (wispy_leaf) + `anon` SELECT `true` (`…20250403110000`, for the signup form). Seeds accreted across migrations: 10 generic sectors (`wispy_leaf`), 24 advertiser sectors (`…20250403000000_advertiser_business_sectors`), `'Agence de Publicité'` at `display_order 0` (`…20250403100000`), 4 owner sectors (`Restaurant`, `Salon de the`, `Cafe populaire`, `Salle de sport` — `…20250403130000`). The table is a flat shared list; advertiser/owner distinction is layered on by `owner_business_sectors`.
+
+**`governorates`** — created `wispy_leaf` (`id uuid PK`, `name text NOT NULL UNIQUE`). RLS: `authenticated` + `anon` SELECT `true`. Seed: **24 Tunisian governorates** — Tunis, Ariana, Ben Arous, Manouba, Nabeul, Zaghouan, Bizerte, Béja, Jendouba, Le Kef, Siliana, Sousse, Monastir, Mahdia, Sfax, Kairouan, Kasserine, Sidi Bouzid, Gabès, Medenine, Tataouine, Gafsa, Tozeur, Kebili.
+
+**`owner_business_sectors`** (`…20250403130000_create_owner_business_sectors`) — `id uuid PK`, `business_sector_id uuid NOT NULL UNIQUE FK business_sectors(id) ON DELETE CASCADE`, `name text NOT NULL UNIQUE`, `display_order integer NOT NULL UNIQUE CHECK (> 0)`. RLS: `authenticated` + `anon` SELECT `true`. A curated owner-facing view onto `business_sectors`.
+
+**`company_size_options`** (`…20250403140000_create_company_size_options`) — `id uuid PK`, `value text NOT NULL UNIQUE`, `display_order integer NOT NULL UNIQUE CHECK (> 0)`. RLS: `authenticated` + `anon` SELECT `true`. Seed: 5 rows — `0 - 10`, `10 - 50`, `50 - 100`, `100 - 500`, `500 et plus`.
+
+**`predefined_zones`** — created by the **backup-only** migration `backup-tree/20250120000002_create_predefined_zones`. `id uuid PK`, `name varchar(255) NOT NULL UNIQUE`, `description text`, `latitude numeric(10,8) NOT NULL`, `longitude numeric(11,8) NOT NULL`, `radius integer NOT NULL DEFAULT 1000`, `is_active boolean DEFAULT true`, `created_at`, `updated_at`; constraints `valid_latitude` / `valid_longitude` / `valid_radius`; partial index on `is_active`, index on `name`; trigger `trigger_update_predefined_zones_updated_at`. `…20250330000001_predefined_zones_image_hot_country_region` later adds `image_url text`, `is_hot boolean DEFAULT false`, `country varchar(100) DEFAULT 'Tunisie'`, `region varchar(150)`. Seed: 8 Tunis-area zones (Ariana, Tunis Centre, Lac, La Marsa, Sidi Bou Said, Carthage, Menzah, El Manar). RLS — see §7 Defect 7 (the admin-management policy is dead).
 
 ---
 
-## 3. Campaign & advertising tables
+## 3. Campaign tables & geographic data model
 
-> Not yet inventoried in depth — P0b Session 2 scope. Summary below is from the cleanup-phase pass.
+Inventoried in P0b Session 3. Enums (both created in `20250313112340_empty_hall`):
+`campaign_status` = `draft | pending | active | paused | completed | rejected`;
+`campaign_category` = `commercial | cultural | promotional | institutional` — plus `parc` added by `…20250320000009_add_parc_campaign_category` (`ALTER TYPE … ADD VALUE`).
 
-### `campaigns`
+### 3.1 `campaigns`
 
-Created `20250313112340_empty_hall`. Columns: `id`, `name`, `client_id`, `category` enum (`commercial | cultural | promotional | institutional`), `start_date`, `end_date`, `status` enum (`draft | pending | active | paused | completed | rejected`), `budget` numeric(10,2), `views`, `user_id`, `created_at`. Constraints: `valid_dates`, `valid_budget`. Indexes: `user_id`, `client_id`, `status`. Subsequent additions `[GAP]`.
+Created `20250313112340_empty_hall`.
 
-### `campaign_media`, `campaign_locations`, `campaign_screens`, `campaign_hourly_location_plan`
+| Column | Type | Default / constraint | Origin |
+|---|---|---|---|
+| `id` | `uuid` | PK, `gen_random_uuid()` | empty_hall |
+| `name` | `text` | NOT NULL | empty_hall |
+| `client_id` | `uuid` | FK `clients(id)` ON DELETE CASCADE | empty_hall |
+| `category` | `campaign_category` enum | NOT NULL | empty_hall |
+| `start_date` | `timestamptz` | NOT NULL | empty_hall |
+| `end_date` | `timestamptz` | NOT NULL, CHECK `valid_dates` (`end > start`) | empty_hall |
+| `status` | `campaign_status` enum | NOT NULL DEFAULT `'draft'` | empty_hall |
+| `budget` | `numeric(10,2)` | NOT NULL DEFAULT 0, CHECK `valid_budget` (`>= 0`) | empty_hall |
+| `views` | `integer` | NOT NULL DEFAULT 0 | empty_hall |
+| `created_at` | `timestamptz` | DEFAULT `now()` | empty_hall |
+| `user_id` | `uuid` | FK `auth.users(id)` ON DELETE CASCADE | empty_hall |
+| `publication_schedule` | `jsonb` | — (hourly impression/repetition data) | `…20250101000009_add_publication_schedule_to_campaigns` |
+| `event_id` | `uuid` | FK `special_events(id)` ON DELETE SET NULL | `…20250320000005_campaigns_event_id_and_mes_events` |
+| `location_lat` | `numeric` | CHECK `valid_location_lat` (NULL or −90..90) | root `add_location_columns_to_campaigns` |
+| `location_lng` | `numeric` | CHECK `valid_location_lng` (NULL or −180..180) | root `add_location_columns_to_campaigns` |
+| `location_radius` | `numeric` | CHECK `valid_location_radius` (NULL or `> 0`) | root `add_location_columns_to_campaigns` |
 
-Junction / per-relationship tables. `campaign_media` and `campaign_locations` created in `empty_hall` (`campaign_locations` originally lat/lng/radius; replaced later by a `location_id` reference). `campaign_screens` and `campaign_hourly_location_plan` full schemas `[GAP]`.
+**Indexes:** `idx_campaigns_user_id`, `idx_campaigns_client_id`, `idx_campaigns_status` (empty_hall); `idx_campaigns_location` partial index on `(location_lat, location_lng, location_radius)` (root `add_location_columns_to_campaigns`).
+**Triggers:** `trigger_check_expired_campaign` BEFORE UPDATE → `check_and_complete_expired_campaign()` auto-sets `status = 'completed'` when an `active`/`paused` campaign's `end_date` has passed (`…20250131000000`). The same migration adds the batch function `update_expired_campaigns()`.
+**RLS:** 4 own-row policies (`auth.uid() = user_id`, empty_hall); 2 admin policies (`mute_snowflake`) using the recursive `is_admin` sub-query on `business_profiles` (§7 Defect 3).
 
-### `clients`
+**⚠️ Phase 1 choice point — campaign targeting has four parallel representations:** the `location_lat/lng/radius` columns above, the `campaign_locations` junction (§3.3), the `campaign_screens` junction (§3.4), and the `campaign_hourly_location_plan` table (§3.5). They accreted as the targeting model evolved (free radius → location → screen → hourly plan); none was retired. Phase 1 must pick one canonical targeting model. The document only describes the coexistence.
 
-Advertiser's own clients table. Created `20250313112340_empty_hall`. `valid_email` CHECK constraint.
+### 3.2 `campaign_media`
 
-### `locations`, `screens`, `location_affluence_schedule`
+Created `empty_hall`: `id uuid PK`, `campaign_id uuid FK campaigns(id) ON DELETE CASCADE`, `url text NOT NULL`, `filename text NOT NULL`, `created_at timestamptz`. Index `idx_campaign_media_campaign_id`. RLS: 3 policies (view/insert/delete) gated on the owning campaign. This is the **legacy** campaign-video table; a later `videos` / `campaign_videos` subsystem (root-scripts `recreate_video_system_correctly`, `simplified_video_system`, `migrate_to_one_video_per_campaign`, `fix_video_*`) supersedes it — `[GAP]`, deferred to a later session.
 
-Geographic data model. `locations` uses PostGIS POINT. `screens` linked via `location_id`. `location_affluence_schedule` stores per-location-per-hour-per-day impression estimates (DOOH calculation input). Full schemas `[GAP]`.
+### 3.3 `campaign_locations` — schema replaced
+
+**Original** (`empty_hall`): `id uuid PK`, `campaign_id uuid FK`, `latitude numeric`, `longitude numeric`, `radius numeric`, `created_at`; constraints `valid_latitude/longitude/radius`; 4 RLS policies; index `idx_campaign_locations_campaign_id`.
+
+**Replaced** by `…20250320000017_locations_and_affluence_schedule` — which runs `DROP TABLE IF EXISTS campaign_locations CASCADE` and recreates it as a pure junction: `campaign_id uuid FK campaigns(id) ON DELETE CASCADE`, `location_id uuid FK locations(id) ON DELETE CASCADE`, `created_at`, `PRIMARY KEY (campaign_id, location_id)`. 2 indexes; 3 own-campaign RLS policies. The `CASCADE` drop destroys all original rows and the old RLS. This is a CF-18 source/target instance at the column-set level — see §12.
+
+### 3.4 `campaign_screens`
+
+Created by **root-script** `create_campaign_screens_table` (not a formal migration): `id uuid PK`, `campaign_id uuid FK campaigns(id) ON DELETE CASCADE`, `screen_id uuid FK screens(id) ON DELETE CASCADE`, `created_at`, `UNIQUE(campaign_id, screen_id)`. Indexes `idx_campaign_screens_campaign_id`, `idx_campaign_screens_screen_id`. RLS: 3 own-campaign policies + 1 admin (`FOR ALL` via `admin_profiles … is_active = true`). The script also defines a `campaign_screens_details` view. A later migration (`…20260405220000`) calls this table "legacy" — it predates the location-based targeting model.
+
+### 3.5 `campaign_hourly_location_plan`
+
+Created `…20260405153000_create_campaign_hourly_location_plan` (formal): `id uuid PK`, `campaign_id uuid FK campaigns(id) ON DELETE CASCADE`, `location_id uuid FK locations(id) ON DELETE CASCADE`, `diffusion_date date NOT NULL`, `diffusion_hour smallint NOT NULL CHECK (0..23)`, `planned_repetitions_per_hour integer NOT NULL DEFAULT 0 CHECK (>= 0)`, `planned_impressions integer NOT NULL DEFAULT 0 CHECK (>= 0)`, `created_at`, `updated_at`, `UNIQUE (campaign_id, location_id, diffusion_date, diffusion_hour)`. Indexes `idx_chlp_campaign_id`, `idx_chlp_location_date_hour`, `idx_chlp_date_hour`. Trigger `update_campaign_hourly_location_plan_updated_at`. The "final hourly plan post-cursor" — one row per campaign/location/date/hour. RLS: own-campaign SELECT/INSERT/UPDATE, then refined across 4 follow-on migrations — `…20260405204000` (owner-write + strict checks), `…211500` (allow screen-targeted campaigns), `…213000` (pure-location RLS), `…220000` (compat with legacy `campaign_screens`).
+
+### 3.6 `campaign_categories`
+
+Created `…20250320000007_campaign_categories`: a junction — `campaign_id uuid NOT NULL FK campaigns(id) ON DELETE CASCADE`, `category campaign_category NOT NULL`, `PRIMARY KEY (campaign_id, category)`. RLS: 3 own-campaign policies. Back-filled from `campaigns.category` on creation. **Note:** this multi-category junction coexists with the single-valued `campaigns.category` column — another partial-migration twin (a Phase 1 choice point, like the §2.2 validation columns).
+
+### 3.7 `clients`
+
+Advertiser's own clients table. Created `empty_hall`: `id uuid PK`, `name text NOT NULL`, `contact_email text` (CHECK `valid_email`), `contact_phone text`, `address text`, `created_at`, `user_id uuid FK auth.users(id) ON DELETE CASCADE`. Index `idx_clients_user_id`. RLS: 4 own-row policies.
+
+### 3.8 Geographic data model
+
+**`screens`** — created `20250101000006_create_screens_tables` (dependency-neutral; references only `auth.users`, so its true position is ambiguous). Columns: `id uuid PK`, `owner_id uuid NOT NULL FK auth.users(id) ON DELETE CASCADE`, `name varchar(255) NOT NULL`, `location varchar(500) NOT NULL`, `address text`, `coordinates POINT`, `screen_type varchar(50) DEFAULT 'led' CHECK (led|lcd|projector|other)`, `resolution_width integer`, `resolution_height integer`, `screen_size_inches decimal(5,2)`, `orientation varchar(20) DEFAULT 'landscape' CHECK (landscape|portrait|square)`, `status varchar(20) DEFAULT 'active' CHECK (active|inactive|maintenance|unavailable)`, `is_online boolean DEFAULT true`, `last_heartbeat timestamptz`, `installation_date date`, `warranty_expiry_date date`, `monthly_revenue decimal(10,2) DEFAULT 0`, `total_revenue decimal(10,2) DEFAULT 0`, `loyalty_points integer DEFAULT 0`, `created_at`, `updated_at`. `…20250320000017` adds `location_id uuid FK locations(id) ON DELETE SET NULL`. Indexes: `idx_screens_owner_id`, `idx_screens_status`, `idx_screens_location` GIST on `coordinates`, `idx_screens_location_id`. Trigger `update_screens_updated_at`. RLS: 4 owner-scoped policies (`auth.uid() = owner_id`). The `monthly_revenue` / `total_revenue` columns relate to TBD-R (simulated revenue) — see §10. *Note:* `screens.location` (free-text varchar) and `screens.location_id` (FK) are a twin — a Phase 1 choice point.
+
+**Screen satellite tables** (all created in `20250101000006`, all RLS owner-scoped via a join to `screens`):
+- `screen_unavailability_periods` — `id`, `screen_id FK`, `start_date`, `end_date`, `start_time`, `end_time`, `reason`, `status (pending|active|completed|cancelled)`, `created_by FK auth.users`, timestamps; constraints `no_overlapping_periods` UNIQUE, `valid_date_range`, `valid_time_range`. (This is the `unavailability_periods` table named in earlier gap lists.)
+- `screen_configurations` — per-screen device config (`brightness_level`, `volume_level`, `auto_brightness`, `auto_volume`, `timezone`, `language`, `refresh_rate`, `power_schedule jsonb`, `maintenance_mode`); `UNIQUE(screen_id)`.
+- `screen_statistics` — per-screen-per-day playback stats; `UNIQUE(screen_id, date)`.
+- `screen_alerts` — `alert_type`, `severity`, `title`, `message`, `is_resolved`, `resolved_at`, `resolved_by`.
+- `screen_activity_logs` — `action`, `details jsonb`, `performed_by`; INSERT policy is open (`WITH CHECK (true)`).
+
+Functions in `20250101000006`: `check_unavailability_status()` (reconciles unavailability windows ↔ `screens.status`), `create_screen_with_config()` (inserts a screen plus default config + stats rows).
+
+**`locations`** — created `…20250320000017`: `id uuid PK`, `owner_id uuid NOT NULL FK auth.users(id) ON DELETE CASCADE`, `name varchar(255) NOT NULL`, `address text`, `coordinates POINT`, `created_at`, `updated_at`. `…20250303120000_locations_signup_fields` (reconstructed-late — filename-dated before `locations` exists) adds `city varchar(255)`, `zone text`, `governorate_id uuid FK governorates(id) ON DELETE SET NULL`, `screen_count integer`, `room_count integer`, `postal_code varchar(32)`. Indexes: `idx_locations_owner_id`, `idx_locations_coordinates` GIST. Trigger `update_locations_updated_at`. RLS: 4 owner-scoped policies. A location groups several screens (`screens.location_id`) and is the audience unit for affluence/CPM.
+
+**`location_affluence_schedule`** — created `…20250320000017`: `id uuid PK`, `location_id uuid NOT NULL FK locations(id) ON DELETE CASCADE`, `day_of_week smallint NOT NULL CHECK (1..7)`, `hour smallint NOT NULL CHECK (0..23)`, `estimated_impressions integer NOT NULL DEFAULT 0`, `created_at`, `updated_at`, `UNIQUE(location_id, day_of_week, hour)`. Index `idx_location_affluence_schedule_location_id`. RLS: a `FOR ALL` owner-scoped policy, then refined by `…20260404230000` (authenticated SELECT), `…20260404290000` (repair grants), `…20260405232000` (admin write policy). This is the per-location-per-hour-per-day impression table the DOOH engine consumes.
+
+**`calculate_campaign_cost(uuid)`** — SECURITY DEFINER RPC (`…20250320000017`): computes campaign cost at CPM 2.5, preferring `campaign_locations` × `location_affluence_schedule`, falling back to `campaign_screens` × `screen_affluence_config`, then to `campaigns.budget`. (`screen_affluence_config` is a separate screen-affluence subsystem defined in root-scripts — `[GAP]`, later session.)
 
 ---
 
 ## 4. Financial tables
 
-> Not yet inventoried in depth — P0b Session 3 scope.
+> Not yet inventoried in depth — P0b Session 4 scope.
 
 ### `recharges`
 
@@ -190,7 +260,7 @@ Wallet recharge requests. From root `create_recharges_table`. Fields (partial): 
 
 ### Balance / invoicing / monitoring subsystems
 
-Defined in root-scripts `create_balance_system`, `create_automatic_invoicing_system`, `create_campaign_monitoring_system`, `create_monthly_invoices_view`, `create_platform_stats_functions` — none in formal migrations. Full schemas `[GAP]` — P0b Session 3.
+Defined in root-scripts `create_balance_system`, `create_automatic_invoicing_system`, `create_campaign_monitoring_system`, `create_monthly_invoices_view`, `create_platform_stats_functions` — none in formal migrations. Full schemas `[GAP]` — P0b Session 4.
 
 ---
 
@@ -215,12 +285,16 @@ Known RPCs / functions:
 - `create_default_business_profile(uuid, text)` — SECURITY DEFINER; inserts a placeholder profile derived from the email.
 - `is_admin_user(uuid)` — SECURITY DEFINER; dual-identity bridge (§2.4).
 - `fill_business_profile_email()` — SECURITY DEFINER trigger function; back-fills `business_profiles.email` from `auth.users`.
-- `update_updated_at_column()` — generic `updated_at` trigger function (defined in `wispy_leaf`, re-defined in `admin_database_queries`).
-- `update_expired_campaigns`, `upsert_location_affluence_schedule` — `[GAP]`, later sessions.
+- `update_updated_at_column()` — generic `updated_at` trigger function (defined in `wispy_leaf`, re-defined in `admin_database_queries` and `20250101000006`).
+- `update_expired_campaigns()` — batch: sets `active`/`paused` campaigns to `completed` once `end_date` passes (`…20250131000000`); `check_and_complete_expired_campaign()` is its per-row trigger form.
+- `calculate_campaign_cost(uuid)` — SECURITY DEFINER campaign-cost estimator at CPM 2.5 (§3.8).
+- `check_unavailability_status()`, `create_screen_with_config(...)` — screen lifecycle helpers (`20250101000006`, §3.8).
+- `get_my_event_campaigns_events()` — SECURITY DEFINER; returns the events a user's campaigns are linked to (`…20250320000005`).
+- `upsert_location_affluence_schedule`, and the event/financial RPCs — `[GAP]`, P0b Session 4.
 
-Triggers: `update_business_profiles_updated_at`, `trg_fill_business_profile_email`, `update_admin_profiles_updated_at`, `update_admin_roles_updated_at`, `update_admin_permissions_updated_at`.
+Triggers: `update_business_profiles_updated_at`, `trg_fill_business_profile_email`, `update_admin_profiles_updated_at`, `update_admin_roles_updated_at`, `update_admin_permissions_updated_at`, `update_screens_updated_at`, `update_unavailability_updated_at`, `update_configurations_updated_at`, `update_locations_updated_at`, `update_campaign_hourly_location_plan_updated_at`, `trigger_check_expired_campaign`, `trigger_update_predefined_zones_updated_at`.
 
-`[GAP]` — full RPC inventory (campaign/geo/financial functions) requires P0b Sessions 2–3.
+`[GAP]` — full RPC inventory for financial/event/video functions requires P0b Session 4.
 
 ---
 
@@ -252,29 +326,31 @@ Defects in the *legacy* migration set, surfaced during P0b Session 1. They are n
 
 *What:* a second UNIQUE constraint is added to an already-unique column. *Where:* `wispy_leaf` declares `tax_number text NOT NULL UNIQUE` inline; `add_unique_constraints_signup.sql` adds `business_profiles_tax_number_unique UNIQUE (tax_number)`. *Why it matters:* two unique indexes on one column — wasted writes/storage, and confusing for anyone reading `pg_constraint`. *Phase 1:* one uniqueness declaration.
 
+### Defect 7 — Dead `predefined_zones` admin RLS policy
+
+*What:* the admin-management RLS policy on `predefined_zones` can never match. *Where:* `backup-tree/20250120000002_create_predefined_zones.sql` — the policy `"Admins can manage predefined zones"` uses `USING (EXISTS (SELECT 1 FROM business_profiles WHERE user_id = auth.uid() AND profile_type = 'admin'))`. *Why it matters:* the `profile_type` enum is `advertiser | individual_owner | fleet_owner` — there is **no `'admin'` value**. The predicate is unsatisfiable, so no one can manage `predefined_zones` through this policy (admin status lives in `is_admin` / `admin_profiles`, not `profile_type`). The zones are effectively read-only after seeding. *Phase 1:* admin authorization is a middleware role check; the dead-predicate class cannot recur.
+
 ---
 
 ## 8. Gaps requiring additional inventory work
 
-Closed by P0b Session 1: `business_profiles` (full), `admin_profiles` / `admin_activities` (full), `auth.users` extension, `business_sectors` / `governorates`.
+Closed by P0b Session 1: `business_profiles` (full), `admin_profiles` / `admin_activities` (full), `auth.users` extension. Closed by **Session 3**: the campaign tables cluster (`campaigns`, `campaign_media`, `campaign_locations`, `campaign_screens`, `campaign_hourly_location_plan`, `campaign_categories`, `clients`), the geographic data model (`screens` + 5 satellite tables, `locations`, `location_affluence_schedule`), and reference tables (`business_sectors`, `governorates`, `owner_business_sectors`, `company_size_options`, `predefined_zones`) including seeds.
 
 Remaining gaps:
 
 - `admin_permissions`, `admin_roles` — **creation migration unknown** (only `ALTER`/seed scripts found; see §2.4)
-- `recharges` (full schema and lifecycle), balance / invoicing / monitoring subsystems
-- `campaigns` later additions; `campaign_screens`, `campaign_hourly_location_plan` (full columns)
-- `clients`, `campaign_media`, `campaign_locations` (cumulative schema)
-- `locations`, `screens`, `location_affluence_schedule` (full schemas)
-- `special_events`, `event_campaign_links`
-- `notifications`, `unavailability_periods`, `global_configuration`
+- `recharges` (full schema and lifecycle), balance / invoicing / monitoring subsystems (root-scripts `create_balance_system`, `create_automatic_invoicing_system`, `create_campaign_monitoring_system`, `create_monthly_invoices_view`, `create_platform_stats_functions`)
+- `videos` / `campaign_videos` subsystem (root-scripts — supersedes the legacy `campaign_media`, §3.2)
+- `screen_affluence_config` and the screen-affluence subsystem (root-scripts `create_screen_affluence_*`)
+- `special_events`, `event_campaigns` / `event_campaign_links` (referenced by `campaigns.event_id` and the event RPCs)
+- `notifications`, `global_configuration` (formal migrations `…20260404120000`+)
 - `monthly_statements` / `versements`, `invoices` / `factures`, `bank_details` / `payment_methods`
-- `owner_business_sectors`, `company_size_options`, `predefined_zones` (+ seeds)
-- `zone-images` / `event-images` bucket policies; DOOH-specific config tables
-- Full RPC function bodies for campaign/geo/financial functions
+- `zone-images` / `event-images` bucket policies
+- Full RPC function bodies for financial/event functions; `update_expired_campaigns`, `upsert_location_affluence_schedule` bodies
 
 Additional work: complete per-table RLS inventory for the remaining tables, seed data extraction, auth provider config, realtime subscription patterns.
 
-**Estimated work to close gaps:** P0b Sessions 2–3 (campaign + geo + reference tables, then financial + RPCs + remaining).
+**Estimated work to close gaps:** one more focused session (P0b Session 4) — financial tables, the video and screen-affluence subsystems, events, and remaining RPC bodies.
 
 ---
 
@@ -290,10 +366,12 @@ Current: `auth.users` + `business_profiles` + `admin_profiles` for what should b
 - **Rewrite:** `auth.users` + `business_profiles` + `admin_profiles` → single `users` table. All RLS policies → Fastify route-level authorization (stateful sessions, not RLS).
 - **Functions:** trigger functions port; business-logic RPCs become Fastify endpoints.
 - **Pick one validation column** — resolve the `verification_status` / `status` duplication (§2.2).
+- **Pick one campaign-targeting model** — resolve the four parallel representations (`location_lat/lng/radius`, `campaign_locations`, `campaign_screens`, `campaign_hourly_location_plan`; §3.1), and the `campaigns.category` / `campaign_categories` single-vs-multi duplication (§3.6).
+- **PostGIS POINT in two tables** — `screens.coordinates` and `locations.coordinates` both use `POINT` with GIST indexes; see below.
 
 ### PostGIS dependency
 
-`locations.coordinates` uses POINT. Phase 1 Postgres needs `CREATE EXTENSION postgis;`. Drizzle has limited PostGIS support; may need raw SQL for spatial queries.
+`locations.coordinates` and `screens.coordinates` both use `POINT`, each with a GIST index (`idx_locations_coordinates`, `idx_screens_location`). Phase 1 Postgres needs `CREATE EXTENSION postgis;`. Drizzle has limited PostGIS support; may need raw SQL for spatial queries. The legacy `campaign_locations` (pre-replacement) and `campaigns.location_lat/lng` used plain `numeric` lat/lng instead — Phase 1 should standardize on one spatial representation.
 
 ### Storage migration
 
@@ -326,7 +404,7 @@ The **backup-tree copy** of the same migration (`legacy-migrations/backup-tree/2
 
 ---
 
-## 12. Methodology notes from P0a + P0b Session 1
+## 12. Methodology notes from P0a + P0b Sessions 1 & 3
 
 Deferred-corrections carried forward from Step P0a (folded in here per the P0b plan):
 
@@ -337,7 +415,7 @@ Deferred-corrections carried forward from Step P0a (folded in here per the P0b p
 5. **Estimate-vs-reality breach** — the root-script triage estimate (~30–60 in-scope) came in at 73; an upward discovery (RLS-fix-script accumulation), surfaced with reasoning rather than tightening criteria to fit.
 6. **Operational note — Node version.** This machine's default `node` is v24; the repo pins `>=20 <21`. Run gate commands and commits under `~/.nvm/versions/node/v20.20.2/bin`.
 
-### CF-18 (source/target axis) — now 7 distinct instances
+### CF-18 (source/target axis) — now 8 distinct instances
 
 CF-18 — that an inherited codebase carries residue from incomplete prior work, so inventory must surface both declared-state and actual-state — has recurred enough to be the dominant carry-forward rule. Distinct worked examples to date:
 
@@ -348,6 +426,7 @@ CF-18 — that an inherited codebase carries residue from incomplete prior work,
 5. **P0a** — 73-vs-30–60 triage estimate (planning-vs-reality level).
 6. **P0b** — filename chronology vs dependency reality (migration-tooling level).
 7. **P0b** — twin validation columns `verification_status` / `status` (column-definition level).
+8. **P0b Session 3** — `campaign_locations` schema replacement (§3.3): `…20250320000017` does `DROP TABLE … CASCADE` then recreates the table with a different column set (`latitude/longitude/radius` → `location_id`). A column-set-level migration where the old and new shapes are an explicit source/target pair. Adjacent same-axis observations from Session 3, not separately numbered: campaign targeting carries **four** parallel representations (§3.1), `campaigns.category` coexists with the `campaign_categories` junction (§3.6), and `screens.location` text coexists with `screens.location_id` (§3.8).
 
 Whether to extract CF-18 into a standalone reference document (`docs/handoff/cf-18-source-target-axis.md`) is a **P0b-closeout** consideration — not done here.
 
@@ -361,12 +440,12 @@ Whether to extract CF-18 into a standalone reference document (`docs/handoff/cf-
 4. **Seed data** — `INSERT` statements for reference tables → JSON/CSV for Phase 1 seeds.
 5. **Halt-on-finding** — surface anything that doesn't fit prior expectation rather than improvising interpretation.
 
-**Remaining:** P0b Session 2 (campaign + geo + reference tables), Session 3 (financial + RPCs + remaining gaps).
+**Remaining:** P0b Session 4 — financial tables, the `videos` and `screen_affluence` subsystems, special events, and remaining RPC bodies.
 
 ---
 
 ## Document status
 
-**Current state:** `business_profiles`, the admin-tables cluster, `auth.users`, and reference tables are fully inventoried; campaign / geo / financial tables and most RPC bodies remain (§8). Roughly 55–60% complete.
+**Current state:** `business_profiles`, the admin-tables cluster, `auth.users`, the campaign tables cluster, the geographic data model, and reference tables are fully inventoried; financial tables, the video / screen-affluence / events subsystems, and most RPC bodies remain (§8). Roughly **80%** complete.
 
 **Use case:** working reference for Phase 1's schema design. Each Phase 1 backend module consults the relevant section when designing its Drizzle schema and Fastify routes. Gaps close as P0b Sessions 2–3 proceed.
