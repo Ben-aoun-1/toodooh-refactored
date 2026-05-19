@@ -224,7 +224,7 @@ export function ModalProvider({ children }: { children: ReactNode }) {
                 <select
                   value={supportObjective}
                   onChange={(e) => setSupportObjective(e.target.value)}
-                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 focus:ring-2 focus:ring-[#97d8a5] focus:border-[#97d8a5] appearance-none cursor-pointer"
+                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 focus:ring-2 focus:ring-brand-primary focus:border-brand-primary appearance-none cursor-pointer"
                   style={{
                     backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
                     backgroundRepeat: 'no-repeat',
@@ -254,7 +254,7 @@ export function ModalProvider({ children }: { children: ReactNode }) {
                     type="text"
                     value={supportOtherDetail}
                     onChange={(e) => setSupportOtherDetail(e.target.value)}
-                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#97d8a5] focus:border-[#97d8a5]"
+                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
                     placeholder="Veuillez préciser dans la description"
                     id="support-other-detail"
                   />
@@ -271,7 +271,7 @@ export function ModalProvider({ children }: { children: ReactNode }) {
                   rows={3}
                   value={supportMessage}
                   onChange={(e) => setSupportMessage(e.target.value)}
-                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#97d8a5] focus:border-[#97d8a5] resize-none"
+                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-brand-primary focus:border-brand-primary resize-none"
                   placeholder="Votre Message ici.."
                   id="support-message"
                 />
@@ -287,7 +287,7 @@ export function ModalProvider({ children }: { children: ReactNode }) {
                 <button
                   type="submit"
                   className="flex-1 px-4 py-2.5 rounded-xl font-medium text-black transition-opacity hover:opacity-90"
-                  style={{ background: '#97d8a5' }}
+                  style={{ background: '#76E6AB' }}
                 >
                   Envoyer
                 </button>
@@ -352,7 +352,7 @@ export function ModalProvider({ children }: { children: ReactNode }) {
                 <select
                   value={appointmentObjective}
                   onChange={(e) => setAppointmentObjective(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-900 focus:ring-2 focus:ring-[#97d8a5] focus:border-[#97d8a5] appearance-none cursor-pointer"
+                  className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-900 focus:ring-2 focus:ring-brand-primary focus:border-brand-primary appearance-none cursor-pointer"
                   style={{
                     backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
                     backgroundRepeat: 'no-repeat',
@@ -382,7 +382,7 @@ export function ModalProvider({ children }: { children: ReactNode }) {
                     type="text"
                     value={appointmentOtherDetail}
                     onChange={(e) => setAppointmentOtherDetail(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#97d8a5] focus:border-[#97d8a5] text-sm"
+                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-brand-primary focus:border-brand-primary text-sm"
                     placeholder="Veuillez préciser dans la description"
                     id="appointment-other-detail"
                   />
@@ -459,8 +459,8 @@ export function ModalProvider({ children }: { children: ReactNode }) {
                                 : isDateUnavailable(cell.date)
                                   ? 'bg-red-100 text-red-700 cursor-not-allowed'
                                   : selected
-                                    ? 'bg-[#97d8a5] text-black'
-                                    : 'bg-[#E6F7ED] text-gray-900 hover:bg-[#97d8a5]/80'
+                                    ? 'bg-brand-primary text-black'
+                                    : 'bg-[#E6F7ED] text-gray-900 hover:bg-brand-primary/80'
                           }`}
                         >
                           {cell.day}
@@ -481,7 +481,7 @@ export function ModalProvider({ children }: { children: ReactNode }) {
                   rows={2}
                   value={appointmentMessage}
                   onChange={(e) => setAppointmentMessage(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#97d8a5] focus:border-[#97d8a5] resize-none text-sm"
+                  className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-brand-primary focus:border-brand-primary resize-none text-sm"
                   placeholder="Votre Message ici.."
                   id="appointment-message"
                 />
@@ -497,7 +497,7 @@ export function ModalProvider({ children }: { children: ReactNode }) {
                 <button
                   type="submit"
                   className="flex-1 px-4 py-2.5 rounded-xl font-medium text-black transition-opacity hover:opacity-90"
-                  style={{ background: '#97d8a5' }}
+                  style={{ background: '#76E6AB' }}
                 >
                   Prendre rendez-vous
                 </button>

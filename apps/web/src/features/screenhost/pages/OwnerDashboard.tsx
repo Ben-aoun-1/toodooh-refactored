@@ -502,7 +502,7 @@ export default function OwnerDashboard() {
                   <button
                     type="button"
                     onClick={() => navigate('/owner-calendar-devices')}
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#9ae2b0] hover:bg-[#85d99e] text-gray-900 text-sm font-medium transition-colors"
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-brand-primary hover:bg-brand-primary/90 text-gray-900 text-sm font-medium transition-colors"
                   >
                     <Calendar className="h-4 w-4" />
                     Piloter mon calendrier de diffusion

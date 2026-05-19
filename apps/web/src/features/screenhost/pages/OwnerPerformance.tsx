@@ -310,7 +310,7 @@ export default function OwnerPerformance() {
                   <button
                     type="button"
                     onClick={() => navigate('/owner-calendar-devices')}
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-[#9AE2B0] hover:bg-[#85D99E] text-[#101010] text-sm font-semibold transition-colors"
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-brand-primary hover:bg-brand-primary/90 text-[#101010] text-sm font-semibold transition-colors"
                   >
                     <Calendar className="h-4 w-4" />
                     Piloter mon calendrier de diffusion
@@ -406,7 +406,7 @@ export default function OwnerPerformance() {
                       <button
                         type="button"
                         onClick={() => refetchDataset()}
-                        className="inline-flex items-center rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-[#165f2c] hover:bg-[#64d99b]"
+                        className="inline-flex items-center rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-[#165f2c] hover:bg-brand-primary/90"
                       >
                         Actualiser la recherche
                       </button>
@@ -512,7 +512,7 @@ export default function OwnerPerformance() {
                       <button
                         type="button"
                         onClick={() => refetchDataset()}
-                        className="inline-flex items-center rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-[#165f2c] hover:bg-[#64d99b]"
+                        className="inline-flex items-center rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-[#165f2c] hover:bg-brand-primary/90"
                       >
                         Actualiser la recherche
                       </button>
@@ -792,7 +792,7 @@ export default function OwnerPerformance() {
 
                   <button
                     type="button"
-                    className="rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-[#165f2c] hover:bg-[#64d99b]"
+                    className="rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-[#165f2c] hover:bg-brand-primary/90"
                   >
                     Générer rapport de la recherche
                   </button>
@@ -906,7 +906,7 @@ export default function OwnerPerformance() {
                     </div>
                     <button
                       type="button"
-                      className="mt-4 rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-[#165f2c] hover:bg-[#64d99b]"
+                      className="mt-4 rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-[#165f2c] hover:bg-brand-primary/90"
                     >
                       Générer rapport global
                     </button>

@@ -202,7 +202,7 @@ export default function OwnerCampaignApprovals() {
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       placeholder="Rechercher une campagne ou un écran"
-                      className="w-full h-10 rounded-xl border border-gray-200 pl-9 pr-3 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#97d8a5] focus:border-[#97d8a5]"
+                      className="w-full h-10 rounded-xl border border-gray-200 pl-9 pr-3 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
                     />
                   </div>
                 </div>

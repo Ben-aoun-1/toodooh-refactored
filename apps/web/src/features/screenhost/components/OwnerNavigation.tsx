@@ -536,7 +536,7 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
                 <select
                   value={supportObjective}
                   onChange={(e) => setSupportObjective(e.target.value)}
-                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 focus:ring-2 focus:ring-[#97d8a5] focus:border-[#97d8a5] appearance-none cursor-pointer"
+                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 focus:ring-2 focus:ring-brand-primary focus:border-brand-primary appearance-none cursor-pointer"
                   style={{
                     backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
                     backgroundRepeat: 'no-repeat',
@@ -566,7 +566,7 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
                     type="text"
                     value={supportOtherDetail}
                     onChange={(e) => setSupportOtherDetail(e.target.value)}
-                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#97d8a5] focus:border-[#97d8a5]"
+                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
                     placeholder="Veuillez préciser dans la description"
                     id="support-other-detail"
                   />
@@ -583,7 +583,7 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
                   rows={3}
                   value={supportMessage}
                   onChange={(e) => setSupportMessage(e.target.value)}
-                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-[#97d8a5] focus:border-[#97d8a5] resize-none"
+                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-brand-primary focus:border-brand-primary resize-none"
                   placeholder="Votre Message ici.."
                   id="support-message"
                 />
@@ -599,7 +599,7 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
                 <button
                   type="submit"
                   className="flex-1 px-4 py-2.5 rounded-xl font-medium text-black transition-opacity hover:opacity-90"
-                  style={{ background: '#97d8a5' }}
+                  style={{ background: '#76E6AB' }}
                 >
                   Envoyer
                 </button>

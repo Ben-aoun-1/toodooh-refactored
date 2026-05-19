@@ -766,7 +766,7 @@ export default function OwnerSettings() {
                         <button
                           type="submit"
                           className="px-5 py-2.5 rounded-xl font-medium text-white hover:opacity-90"
-                          style={{ background: '#97d6a2' }}
+                          style={{ background: '#76E6AB' }}
                         >
                           Enregistrer
                         </button>
@@ -852,7 +852,7 @@ export default function OwnerSettings() {
                                   onClick={handleLogoUpload}
                                   disabled={profileMutations.uploadLogo.isPending}
                                   className="self-start px-3 py-2 rounded-lg text-sm font-medium text-gray-900 disabled:opacity-50 hover:opacity-90"
-                                  style={{ background: '#97d6a2' }}
+                                  style={{ background: '#76E6AB' }}
                                 >
                                   {profileMutations.uploadLogo.isPending
                                     ? 'Envoi...'
@@ -1021,7 +1021,7 @@ export default function OwnerSettings() {
                           <button
                             type="submit"
                             className="px-5 py-2.5 rounded-xl font-medium text-white hover:opacity-90"
-                            style={{ background: '#97d6a2' }}
+                            style={{ background: '#76E6AB' }}
                           >
                             Enregistrer
                           </button>
@@ -1196,7 +1196,7 @@ export default function OwnerSettings() {
                           <button
                             type="submit"
                             className="px-5 py-2.5 rounded-xl font-medium text-white hover:opacity-90"
-                            style={{ background: '#97d6a2' }}
+                            style={{ background: '#76E6AB' }}
                           >
                             Enregistrer
                           </button>
@@ -1292,7 +1292,7 @@ export default function OwnerSettings() {
                             onClick={handleUploadDocument}
                             disabled={!documentFile || profileMutations.uploadDocument.isPending}
                             className="px-5 py-2.5 rounded-xl font-medium text-gray-900 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-                            style={{ background: '#97d6a2' }}
+                            style={{ background: '#76E6AB' }}
                           >
                             {profileMutations.uploadDocument.isPending
                               ? 'Enregistrement...'
@@ -1434,7 +1434,7 @@ export default function OwnerSettings() {
                             type="submit"
                             disabled={saveBankDetailsMutation.isPending}
                             className="px-5 py-2.5 rounded-xl font-medium text-gray-900 hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
-                            style={{ background: '#97d6a2' }}
+                            style={{ background: '#76E6AB' }}
                           >
                             {saveBankDetailsMutation.isPending
                               ? 'Enregistrement...'
@@ -1479,8 +1479,10 @@ export default function OwnerSettings() {
                                 notify_news_updates: !p.notify_news_updates,
                               }))
                             }
-                            className={`flex-shrink-0 w-11 h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[#97d6a2] ${
-                              notificationsForm.notify_news_updates ? 'bg-[#97d6a2]' : 'bg-gray-200'
+                            className={`flex-shrink-0 w-11 h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-brand-primary ${
+                              notificationsForm.notify_news_updates
+                                ? 'bg-brand-primary'
+                                : 'bg-gray-200'
                             }`}
                           >
                             <span
@@ -1511,9 +1513,9 @@ export default function OwnerSettings() {
                                 notify_reminders_events: !p.notify_reminders_events,
                               }))
                             }
-                            className={`flex-shrink-0 w-11 h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[#97d6a2] ${
+                            className={`flex-shrink-0 w-11 h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-brand-primary ${
                               notificationsForm.notify_reminders_events
-                                ? 'bg-[#97d6a2]'
+                                ? 'bg-brand-primary'
                                 : 'bg-gray-200'
                             }`}
                           >
@@ -1545,9 +1547,9 @@ export default function OwnerSettings() {
                                 notify_promotions_offers: !p.notify_promotions_offers,
                               }))
                             }
-                            className={`flex-shrink-0 w-11 h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[#97d6a2] ${
+                            className={`flex-shrink-0 w-11 h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-brand-primary ${
                               notificationsForm.notify_promotions_offers
-                                ? 'bg-[#97d6a2]'
+                                ? 'bg-brand-primary'
                                 : 'bg-gray-200'
                             }`}
                           >
@@ -1588,7 +1590,7 @@ export default function OwnerSettings() {
                         <button
                           type="submit"
                           className="px-5 py-2.5 rounded-xl font-medium text-gray-900 hover:opacity-90"
-                          style={{ background: '#97d6a2' }}
+                          style={{ background: '#76E6AB' }}
                         >
                           Enregistrer
                         </button>
@@ -1715,7 +1717,7 @@ export default function OwnerSettings() {
                               <span
                                 className={
                                   passwordRequirements.uppercase
-                                    ? 'text-[#97d6a2]'
+                                    ? 'text-brand-primary'
                                     : 'text-gray-300'
                                 }
                               >
@@ -1726,7 +1728,9 @@ export default function OwnerSettings() {
                             <li className="flex items-center gap-2">
                               <span
                                 className={
-                                  passwordRequirements.digit ? 'text-[#97d6a2]' : 'text-gray-300'
+                                  passwordRequirements.digit
+                                    ? 'text-brand-primary'
+                                    : 'text-gray-300'
                                 }
                               >
                                 <Check className="h-4 w-4" strokeWidth={2.5} />
@@ -1737,7 +1741,7 @@ export default function OwnerSettings() {
                               <span
                                 className={
                                   passwordRequirements.minLength
-                                    ? 'text-[#97d6a2]'
+                                    ? 'text-brand-primary'
                                     : 'text-gray-300'
                                 }
                               >
@@ -1764,7 +1768,7 @@ export default function OwnerSettings() {
                           <button
                             type="submit"
                             className="px-5 py-2.5 rounded-xl font-medium text-white hover:opacity-90"
-                            style={{ background: '#97d6a2' }}
+                            style={{ background: '#76E6AB' }}
                           >
                             Enregistrer
                           </button>

@@ -108,7 +108,7 @@ export default function AdvertiserNotificationsBell({ userId, emphasized = false
                 return (
                   <div key={item.id} className="px-5 py-4 border-b border-gray-100">
                     <div className="flex items-start gap-3">
-                      <div className="relative mt-0.5 h-10 w-10 rounded-full border border-[#97D6A2] text-[#2A7A47] flex items-center justify-center">
+                      <div className="relative mt-0.5 h-10 w-10 rounded-full border border-brand-primary text-[#2A7A47] flex items-center justify-center">
                         {item.kind === 'account_approved' ? (
                           <CheckCircle2 className="h-4 w-4" />
                         ) : (
@@ -142,7 +142,7 @@ export default function AdvertiserNotificationsBell({ userId, emphasized = false
                               setOpen(false);
                               navigate(item.actionPath);
                             }}
-                            className="h-10 px-4 rounded-xl bg-[#9AE2B0] text-sm leading-none text-[#101010] font-semibold hover:bg-[#85D99E]"
+                            className="h-10 px-4 rounded-xl bg-brand-primary text-sm leading-none text-[#101010] font-semibold hover:bg-brand-primary/90"
                           >
                             {item.actionLabel}
                           </button>

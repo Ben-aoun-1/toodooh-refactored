@@ -34,7 +34,7 @@ export default function BalanceCard({ balance, loading, isDisabled }: BalanceCar
               navigate('/my-recharges');
             }}
             disabled={isDisabled}
-            className="px-5 py-3 rounded-lg bg-[#9ae2b0] hover:bg-[#85d99e] text-gray-900 font-semibold text-base transition-colors disabled:opacity-50"
+            className="px-5 py-3 rounded-lg bg-brand-primary hover:bg-brand-primary/90 text-gray-900 font-semibold text-base transition-colors disabled:opacity-50"
           >
             Recharger
           </button>
@@ -68,7 +68,7 @@ export default function BalanceCard({ balance, loading, isDisabled }: BalanceCar
             navigate('/new-campaign');
           }}
           disabled={isDisabled}
-          className="w-full px-4 py-3 rounded-lg bg-[#9ae2b0] hover:bg-[#85d99e] text-gray-900 font-medium text-sm transition-colors disabled:opacity-50"
+          className="w-full px-4 py-3 rounded-lg bg-brand-primary hover:bg-brand-primary/90 text-gray-900 font-medium text-sm transition-colors disabled:opacity-50"
         >
           Lancer une nouvelle campagne
         </button>

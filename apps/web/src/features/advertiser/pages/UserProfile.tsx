@@ -578,7 +578,7 @@ export default function UserProfile() {
                 <button
                   type="submit"
                   className="px-5 py-2.5 rounded-xl font-medium text-black hover:opacity-90"
-                  style={{ background: '#97d6a2' }}
+                  style={{ background: '#76E6AB' }}
                 >
                   Enregistrer
                 </button>
@@ -661,7 +661,7 @@ export default function UserProfile() {
                             onClick={handleLogoUpload}
                             disabled={uploadingLogo}
                             className="self-start px-3 py-2 rounded-lg text-sm font-medium text-black disabled:opacity-50 hover:opacity-90"
-                            style={{ background: '#97d6a2' }}
+                            style={{ background: '#76E6AB' }}
                           >
                             {uploadingLogo ? 'Envoi...' : 'Enregistrer le logo'}
                           </button>
@@ -781,7 +781,7 @@ export default function UserProfile() {
                     <button
                       type="submit"
                       className="px-5 py-2.5 rounded-xl font-medium text-black hover:opacity-90"
-                      style={{ background: '#97d6a2' }}
+                      style={{ background: '#76E6AB' }}
                     >
                       Enregistrer
                     </button>
@@ -931,7 +931,7 @@ export default function UserProfile() {
                   <button
                     type="submit"
                     className="px-5 py-2.5 rounded-xl font-medium text-black hover:opacity-90"
-                    style={{ background: '#97d6a2' }}
+                    style={{ background: '#76E6AB' }}
                   >
                     Enregistrer
                   </button>
@@ -1018,7 +1018,7 @@ export default function UserProfile() {
                     onClick={handleUploadDocument}
                     disabled={!documentFile || uploadingDocument}
                     className="px-5 py-2.5 rounded-xl font-medium text-black hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-                    style={{ background: '#97d6a2' }}
+                    style={{ background: '#76E6AB' }}
                   >
                     {uploadingDocument ? 'Enregistrement...' : 'Enregistrer'}
                   </button>
@@ -1063,8 +1063,8 @@ export default function UserProfile() {
                         notify_news_updates: !p.notify_news_updates,
                       }))
                     }
-                    className={`flex-shrink-0 w-11 h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[#97d6a2] ${
-                      notificationsForm.notify_news_updates ? 'bg-[#97d6a2]' : 'bg-gray-200'
+                    className={`flex-shrink-0 w-11 h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-brand-primary ${
+                      notificationsForm.notify_news_updates ? 'bg-brand-primary' : 'bg-gray-200'
                     }`}
                   >
                     <span
@@ -1094,8 +1094,8 @@ export default function UserProfile() {
                         notify_reminders_events: !p.notify_reminders_events,
                       }))
                     }
-                    className={`flex-shrink-0 w-11 h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[#97d6a2] ${
-                      notificationsForm.notify_reminders_events ? 'bg-[#97d6a2]' : 'bg-gray-200'
+                    className={`flex-shrink-0 w-11 h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-brand-primary ${
+                      notificationsForm.notify_reminders_events ? 'bg-brand-primary' : 'bg-gray-200'
                     }`}
                   >
                     <span
@@ -1125,8 +1125,10 @@ export default function UserProfile() {
                         notify_promotions_offers: !p.notify_promotions_offers,
                       }))
                     }
-                    className={`flex-shrink-0 w-11 h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[#97d6a2] ${
-                      notificationsForm.notify_promotions_offers ? 'bg-[#97d6a2]' : 'bg-gray-200'
+                    className={`flex-shrink-0 w-11 h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-brand-primary ${
+                      notificationsForm.notify_promotions_offers
+                        ? 'bg-brand-primary'
+                        : 'bg-gray-200'
                     }`}
                   >
                     <span
@@ -1164,7 +1166,7 @@ export default function UserProfile() {
                 <button
                   type="submit"
                   className="px-5 py-2.5 rounded-xl font-medium text-black hover:opacity-90"
-                  style={{ background: '#97d6a2' }}
+                  style={{ background: '#76E6AB' }}
                 >
                   Enregistrer
                 </button>
@@ -1284,7 +1286,7 @@ export default function UserProfile() {
                     <li className="flex items-center gap-2">
                       <span
                         className={
-                          passwordRequirements.uppercase ? 'text-[#97d6a2]' : 'text-gray-300'
+                          passwordRequirements.uppercase ? 'text-brand-primary' : 'text-gray-300'
                         }
                       >
                         <Check className="h-4 w-4" strokeWidth={2.5} />
@@ -1293,7 +1295,9 @@ export default function UserProfile() {
                     </li>
                     <li className="flex items-center gap-2">
                       <span
-                        className={passwordRequirements.digit ? 'text-[#97d6a2]' : 'text-gray-300'}
+                        className={
+                          passwordRequirements.digit ? 'text-brand-primary' : 'text-gray-300'
+                        }
                       >
                         <Check className="h-4 w-4" strokeWidth={2.5} />
                       </span>
@@ -1302,7 +1306,7 @@ export default function UserProfile() {
                     <li className="flex items-center gap-2">
                       <span
                         className={
-                          passwordRequirements.minLength ? 'text-[#97d6a2]' : 'text-gray-300'
+                          passwordRequirements.minLength ? 'text-brand-primary' : 'text-gray-300'
                         }
                       >
                         <Check className="h-4 w-4" strokeWidth={2.5} />
@@ -1321,7 +1325,7 @@ export default function UserProfile() {
                   <button
                     type="submit"
                     className="px-5 py-2.5 rounded-xl font-medium text-black hover:opacity-90"
-                    style={{ background: '#97d6a2' }}
+                    style={{ background: '#76E6AB' }}
                   >
                     Enregistrer
                   </button>

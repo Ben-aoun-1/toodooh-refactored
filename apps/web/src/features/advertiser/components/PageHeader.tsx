@@ -153,7 +153,7 @@ export default function PageHeader({
             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg font-medium text-sm whitespace-nowrap ${
               emphasized
                 ? 'bg-brand-primary hover:opacity-90 text-gray-900'
-                : 'bg-[#9ae2b0] hover:bg-[#85d99e] text-gray-900'
+                : 'bg-brand-primary hover:bg-brand-primary/90 text-gray-900'
             }`}
             onClick={onContactClick}
           >
