@@ -53,7 +53,7 @@ export default function ResetPasswordForm() {
       <button
         type="submit"
         disabled={loading}
-        className="w-full py-3.5 rounded-xl font-semibold text-base text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full py-3.5 rounded-xl font-semibold text-base text-brand-deep transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         style={{ background: '#76E6AB' }}
       >
         {loading ? (

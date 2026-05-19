@@ -436,7 +436,7 @@ export default function Step6({
               onClick={() => {
                 void onAddToCart();
               }}
-              className="flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm text-white shadow-lg transition-all hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm text-brand-deep shadow-lg transition-all hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
               style={{ background: '#76E6AB' }}
             >
               <span>{addingToCart ? 'Ajout en cours...' : 'Ajouter au panier'}</span>

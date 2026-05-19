@@ -445,7 +445,7 @@ export default function MyRecharges() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="flex-1 py-3 px-6 rounded-xl font-semibold text-white transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 py-3 px-6 rounded-xl font-semibold text-brand-deep transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{ background: '#76E6AB' }}
                 >
                   {submitting ? 'Envoi en cours...' : 'Confirmer'}

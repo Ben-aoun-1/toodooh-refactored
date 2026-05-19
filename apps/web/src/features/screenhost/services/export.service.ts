@@ -77,7 +77,7 @@ class ExportService {
         styles: {
           head: {
             fillColor: [118, 230, 171],
-            textColor: 255,
+            textColor: [32, 75, 67],
             fontSize: 10,
           },
           body: {
@@ -108,7 +108,7 @@ class ExportService {
         styles: {
           head: {
             fillColor: [118, 230, 171],
-            textColor: 255,
+            textColor: [32, 75, 67],
             fontSize: 10,
           },
           body: {

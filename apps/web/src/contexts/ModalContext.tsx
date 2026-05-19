@@ -162,7 +162,7 @@ export function ModalProvider({ children }: { children: ReactNode }) {
                   closeLogout();
                   await handleLogout();
                 }}
-                className="flex-1 py-2.5 px-4 rounded-xl font-medium text-white transition-colors hover:opacity-90"
+                className="flex-1 py-2.5 px-4 rounded-xl font-medium text-brand-deep transition-colors hover:opacity-90"
                 style={{ background: '#76E6AB' }}
               >
                 Se déconnecter

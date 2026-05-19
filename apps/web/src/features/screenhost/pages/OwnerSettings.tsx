@@ -765,7 +765,7 @@ export default function OwnerSettings() {
                         </button>
                         <button
                           type="submit"
-                          className="px-5 py-2.5 rounded-xl font-medium text-white hover:opacity-90"
+                          className="px-5 py-2.5 rounded-xl font-medium text-brand-deep hover:opacity-90"
                           style={{ background: '#76E6AB' }}
                         >
                           Enregistrer
@@ -1020,7 +1020,7 @@ export default function OwnerSettings() {
                           </button>
                           <button
                             type="submit"
-                            className="px-5 py-2.5 rounded-xl font-medium text-white hover:opacity-90"
+                            className="px-5 py-2.5 rounded-xl font-medium text-brand-deep hover:opacity-90"
                             style={{ background: '#76E6AB' }}
                           >
                             Enregistrer
@@ -1195,7 +1195,7 @@ export default function OwnerSettings() {
                           </button>
                           <button
                             type="submit"
-                            className="px-5 py-2.5 rounded-xl font-medium text-white hover:opacity-90"
+                            className="px-5 py-2.5 rounded-xl font-medium text-brand-deep hover:opacity-90"
                             style={{ background: '#76E6AB' }}
                           >
                             Enregistrer
@@ -1767,7 +1767,7 @@ export default function OwnerSettings() {
                           </button>
                           <button
                             type="submit"
-                            className="px-5 py-2.5 rounded-xl font-medium text-white hover:opacity-90"
+                            className="px-5 py-2.5 rounded-xl font-medium text-brand-deep hover:opacity-90"
                             style={{ background: '#76E6AB' }}
                           >
                             Enregistrer

@@ -1922,7 +1922,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             type="button"
             onClick={addFleetEstablishment}
             disabled={!isFleetDraftValid()}
-            className="py-3.5 rounded-xl font-semibold text-sm text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            className="py-3.5 rounded-xl font-semibold text-sm text-brand-deep transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             style={{ background: '#76E6AB' }}
           >
             Ajouter
@@ -1931,7 +1931,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             type="button"
             onClick={goNext}
             disabled={!canGoNext()}
-            className="py-3.5 rounded-xl font-semibold text-sm text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            className="py-3.5 rounded-xl font-semibold text-sm text-brand-deep transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             style={{ background: '#76E6AB' }}
           >
             Suivant
@@ -1955,7 +1955,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
               type="button"
               onClick={goNext}
               disabled={!canGoNext()}
-              className="flex-1 py-3.5 rounded-xl font-semibold text-sm text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex-1 py-3.5 rounded-xl font-semibold text-sm text-brand-deep transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               style={{ background: '#76E6AB' }}
             >
               Suivant
@@ -1967,7 +1967,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
               disabled={
                 loading || !formData.terms_accepted || (isOwner && !ownerCertificationAccepted)
               }
-              className="flex-1 py-3.5 rounded-xl font-semibold text-sm text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex-1 py-3.5 rounded-xl font-semibold text-sm text-brand-deep transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               style={{ background: '#76E6AB' }}
             >
               {loading ? (
