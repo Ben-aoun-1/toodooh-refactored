@@ -210,7 +210,7 @@ export default function MyRecharges() {
                 placeholder="Rechercher.."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#76E6AB]/40 focus:border-[#76E6AB] transition-all w-44"
+                className="pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-primary/40 focus:border-brand-primary transition-all w-44"
               />
             </div>
             <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
@@ -368,7 +368,7 @@ export default function MyRecharges() {
                   type="number"
                   value={newRecharge.amount}
                   onChange={(e) => setNewRecharge({ ...newRecharge, amount: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB]/40 focus:border-[#76E6AB] transition-all"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary/40 focus:border-brand-primary transition-all"
                   placeholder="Entrez le montant"
                   min="10"
                   step="0.01"
@@ -390,7 +390,7 @@ export default function MyRecharges() {
                   onChange={(e) =>
                     setNewRecharge({ ...newRecharge, payment_method: e.target.value })
                   }
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB]/40 focus:border-[#76E6AB] transition-all"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary/40 focus:border-brand-primary transition-all"
                   required
                   id="payment-method"
                 >
@@ -411,7 +411,7 @@ export default function MyRecharges() {
                   value={newRecharge.description}
                   onChange={(e) => setNewRecharge({ ...newRecharge, description: e.target.value })}
                   rows={3}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB]/40 focus:border-[#76E6AB] transition-all resize-none"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary/40 focus:border-brand-primary transition-all resize-none"
                   placeholder="Description de la recharge"
                   id="description"
                 ></textarea>

@@ -297,7 +297,7 @@ export default function OwnerCampaignApprovals() {
                             <button
                               onClick={() => handleApprove(campaign.campaign_id)}
                               disabled={processingId === campaign.campaign_id}
-                              className="inline-flex items-center h-10 px-4 rounded-xl text-sm font-medium text-[#171717] bg-[#76E6AB] hover:bg-[#63d89a] disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="inline-flex items-center h-10 px-4 rounded-xl text-sm font-medium text-[#171717] bg-brand-primary hover:bg-[#63d89a] disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               {processingId === campaign.campaign_id ? (
                                 <>

@@ -554,7 +554,7 @@ export default function OwnerDashboard() {
                           }
                           className={`rounded-xl border bg-white p-4 shadow-sm flex items-center justify-between gap-3 text-left transition-colors ${
                             isSelected
-                              ? 'border-[#76E6AB] ring-1 ring-[#76E6AB]/60'
+                              ? 'border-brand-primary ring-1 ring-brand-primary/60'
                               : 'border-gray-200 hover:border-gray-300'
                           }`}
                         >

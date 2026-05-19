@@ -593,7 +593,7 @@ export default function OwnerSettings() {
       <div className="min-h-screen bg-gray-50 flex">
         <OwnerNavigation isDisabled={isDisabled} />
         <div className="flex-1 flex items-center justify-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-2 border-[#76E6AB] border-t-transparent" />
+          <div className="animate-spin rounded-full h-12 w-12 border-2 border-brand-primary border-t-transparent" />
         </div>
       </div>
     );
@@ -609,7 +609,7 @@ export default function OwnerSettings() {
   }
 
   const inputClass =
-    'w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB] bg-white';
+    'w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-brand-primary bg-white';
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -633,7 +633,7 @@ export default function OwnerSettings() {
                       onClick={() => setActiveTab(tab.id)}
                       className={`pb-4 text-sm font-medium transition-colors border-b-2 -mb-px ${
                         activeTab === tab.id
-                          ? 'text-gray-900 border-[#76E6AB]'
+                          ? 'text-gray-900 border-brand-primary'
                           : 'text-gray-500 border-transparent hover:text-gray-700'
                       }`}
                     >

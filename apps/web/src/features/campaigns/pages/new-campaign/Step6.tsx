@@ -128,12 +128,12 @@ export default function Step6({
                   <p className="text-xs font-medium text-gray-500 mb-2">Type de la campagne</p>
                   <div className="flex gap-2">
                     <span
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium ${diffusionType === 'toodooh' ? 'border-[#76E6AB] bg-[#76E6AB]/5 text-gray-900' : 'border-gray-200 text-gray-400'}`}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium ${diffusionType === 'toodooh' ? 'border-brand-primary bg-brand-primary/5 text-gray-900' : 'border-gray-200 text-gray-400'}`}
                     >
                       <Target className="h-3.5 w-3.5" /> Réseau Toodooh
                     </span>
                     <span
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium ${diffusionType === 'parc_tv' ? 'border-[#76E6AB] bg-[#76E6AB]/5 text-gray-900' : 'border-gray-200 text-gray-400'}`}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium ${diffusionType === 'parc_tv' ? 'border-brand-primary bg-brand-primary/5 text-gray-900' : 'border-gray-200 text-gray-400'}`}
                     >
                       <Monitor className="h-3.5 w-3.5" /> Parc TV
                     </span>
@@ -153,13 +153,13 @@ export default function Step6({
                         .map((p) => (
                           <span
                             key={p.ownerId}
-                            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[#76E6AB] bg-[#76E6AB]/5 text-xs font-medium text-gray-900"
+                            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-brand-primary bg-brand-primary/5 text-xs font-medium text-gray-900"
                           >
                             {p.logo && (
                               <img src={p.logo} alt="" className="w-5 h-5 object-contain" />
                             )}
                             {p.name}
-                            <Check className="h-3 w-3 text-[#76E6AB]" />
+                            <Check className="h-3 w-3 text-brand-primary" />
                           </span>
                         ))
                     ) : (
@@ -339,7 +339,7 @@ export default function Step6({
                     );
                     setAdjustedBudget(v);
                   }}
-                  className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#76E6AB]"
+                  className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-brand-primary"
                   style={{
                     background: `linear-gradient(to right, #76E6AB 0%, #76E6AB ${percentage}%, #e5e7eb ${percentage}%, #e5e7eb 100%)`,
                   }}
@@ -362,7 +362,7 @@ export default function Step6({
                       placeholder={`Min: ${rangeMin.toFixed(2)} TND`}
                       min={0}
                       step={50}
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#76E6AB]/40 focus:border-[#76E6AB]"
+                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-primary/40 focus:border-brand-primary"
                     />
                   </div>
                   <div>
@@ -381,7 +381,7 @@ export default function Step6({
                       placeholder={`Max: ${rangeMax.toFixed(2)} TND`}
                       min={0}
                       step={50}
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#76E6AB]/40 focus:border-[#76E6AB]"
+                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-primary/40 focus:border-brand-primary"
                     />
                   </div>
                 </div>

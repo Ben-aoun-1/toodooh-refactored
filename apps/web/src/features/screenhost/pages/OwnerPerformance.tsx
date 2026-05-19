@@ -406,7 +406,7 @@ export default function OwnerPerformance() {
                       <button
                         type="button"
                         onClick={() => refetchDataset()}
-                        className="inline-flex items-center rounded-lg bg-[#76E6AB] px-4 py-2 text-sm font-medium text-[#165f2c] hover:bg-[#64d99b]"
+                        className="inline-flex items-center rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-[#165f2c] hover:bg-[#64d99b]"
                       >
                         Actualiser la recherche
                       </button>
@@ -512,7 +512,7 @@ export default function OwnerPerformance() {
                       <button
                         type="button"
                         onClick={() => refetchDataset()}
-                        className="inline-flex items-center rounded-lg bg-[#76E6AB] px-4 py-2 text-sm font-medium text-[#165f2c] hover:bg-[#64d99b]"
+                        className="inline-flex items-center rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-[#165f2c] hover:bg-[#64d99b]"
                       >
                         Actualiser la recherche
                       </button>
@@ -792,7 +792,7 @@ export default function OwnerPerformance() {
 
                   <button
                     type="button"
-                    className="rounded-lg bg-[#76E6AB] px-4 py-2 text-sm font-medium text-[#165f2c] hover:bg-[#64d99b]"
+                    className="rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-[#165f2c] hover:bg-[#64d99b]"
                   >
                     Générer rapport de la recherche
                   </button>
@@ -873,28 +873,28 @@ export default function OwnerPerformance() {
                       Indicateurs de performance complémentaires
                     </p>
                     <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-                      <div className="rounded-xl border border-[#76E6AB] bg-white p-4">
+                      <div className="rounded-xl border border-brand-primary bg-white p-4">
                         <p className="text-xs font-semibold text-gray-900">Durée moyenne</p>
                         <p className="mt-2 text-2xl font-medium">
                           {formatInt(dataset?.detailedMetrics.averageDurationDays || 0)} jours
                         </p>
                         <p className="mt-2 text-sm text-gray-500">Campagne en 2026</p>
                       </div>
-                      <div className="rounded-xl border border-[#76E6AB] bg-white p-4">
+                      <div className="rounded-xl border border-brand-primary bg-white p-4">
                         <p className="text-xs font-semibold text-gray-900">Impressions touchés</p>
                         <p className="mt-2 text-2xl font-medium">
                           {formatInt(dataset?.kpis.impressions || 0)}
                         </p>
                         <p className="mt-2 text-sm text-gray-500">Personnes</p>
                       </div>
-                      <div className="rounded-xl border border-[#76E6AB] bg-white p-4">
+                      <div className="rounded-xl border border-brand-primary bg-white p-4">
                         <p className="text-xs font-semibold text-gray-900">Revenu total</p>
                         <p className="mt-2 text-2xl font-medium">
                           {formatCurrency(dataset?.detailedMetrics.totalBudget || 0)}
                         </p>
                         <p className="mt-2 text-sm text-gray-500">En 2026</p>
                       </div>
-                      <div className="rounded-xl border border-[#76E6AB] bg-white p-4">
+                      <div className="rounded-xl border border-brand-primary bg-white p-4">
                         <p className="text-xs font-semibold text-gray-900">
                           Taux d&apos;occupation
                         </p>
@@ -906,7 +906,7 @@ export default function OwnerPerformance() {
                     </div>
                     <button
                       type="button"
-                      className="mt-4 rounded-lg bg-[#76E6AB] px-4 py-2 text-sm font-medium text-[#165f2c] hover:bg-[#64d99b]"
+                      className="mt-4 rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-[#165f2c] hover:bg-[#64d99b]"
                     >
                       Générer rapport global
                     </button>

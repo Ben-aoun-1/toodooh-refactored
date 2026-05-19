@@ -48,7 +48,7 @@ export default function BalanceCard({ balance, loading, isDisabled }: BalanceCar
         </div>
       </div>
       {/* Carte Prêt à démarrer */}
-      <div className="rounded-xl border border-[#76E6AB]/50 bg-[#f6faf8] p-5 shadow-lg flex flex-col items-center text-center">
+      <div className="rounded-xl border border-brand-primary/50 bg-[#f6faf8] p-5 shadow-lg flex flex-col items-center text-center">
         <div className="w-14 h-14 flex items-center justify-center mb-3">
           <img src={smart3Icon} alt="" className="h-14 w-auto object-contain" />
         </div>

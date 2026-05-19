@@ -133,7 +133,7 @@ export default function Step2({
                         onClick={() => handleParcToggle(parc.ownerId)}
                         className={`relative flex items-center gap-3 w-full px-4 py-4 rounded-xl border-2 text-left transition-all ${
                           isSelected
-                            ? 'border-[#76E6AB] bg-[#76E6AB]/5'
+                            ? 'border-brand-primary bg-brand-primary/5'
                             : 'border-gray-200 bg-white hover:border-gray-300'
                         }`}
                       >
@@ -151,7 +151,7 @@ export default function Step2({
                         <span className="text-sm font-medium text-gray-900">{parc.name}</span>
                         <div
                           className={`absolute top-3 right-3 w-5 h-5 rounded flex items-center justify-center flex-shrink-0 ${
-                            isSelected ? 'bg-[#76E6AB]' : 'border-2 border-gray-300 bg-white'
+                            isSelected ? 'bg-brand-primary' : 'border-2 border-gray-300 bg-white'
                           }`}
                         >
                           {isSelected && (

@@ -34,7 +34,7 @@ export default function InsightsCard() {
         {INSIGHTS.map(({ icon: Icon, title, body }) => (
           <div
             key={title}
-            className="flex min-w-0 flex-1 flex-row items-start gap-3 rounded-xl border border-[#76E6AB] bg-white p-4"
+            className="flex min-w-0 flex-1 flex-row items-start gap-3 rounded-xl border border-brand-primary bg-white p-4"
             style={{ boxShadow: '0px 1px 2px rgba(10, 13, 20, 0.0313726)' }}
           >
             <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-[#DCF0E9]">

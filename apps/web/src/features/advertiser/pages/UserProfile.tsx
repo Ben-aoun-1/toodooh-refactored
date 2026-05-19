@@ -427,7 +427,7 @@ export default function UserProfile() {
   if (loading) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-2 border-[#76E6AB] border-t-transparent mx-auto" />
+        <div className="animate-spin rounded-full h-12 w-12 border-2 border-brand-primary border-t-transparent mx-auto" />
       </div>
     );
   }
@@ -448,7 +448,7 @@ export default function UserProfile() {
               onClick={() => setActiveTab(tab.id)}
               className={`pb-4 text-sm font-medium transition-colors border-b-2 -mb-px ${
                 activeTab === tab.id
-                  ? 'text-gray-900 border-[#76E6AB]'
+                  ? 'text-gray-900 border-brand-primary'
                   : 'text-gray-500 border-transparent hover:text-gray-700'
               }`}
             >
@@ -495,7 +495,7 @@ export default function UserProfile() {
                     onChange={(e) =>
                       setResponsableForm((p) => ({ ...p, last_name: e.target.value }))
                     }
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB]"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
                     placeholder="Nom"
                     id="last-name"
                   />
@@ -513,7 +513,7 @@ export default function UserProfile() {
                     onChange={(e) =>
                       setResponsableForm((p) => ({ ...p, first_name: e.target.value }))
                     }
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB]"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
                     placeholder="Prénom"
                     id="first-name"
                   />
@@ -531,7 +531,7 @@ export default function UserProfile() {
                     onChange={(e) =>
                       setResponsableForm((p) => ({ ...p, fonction: e.target.value }))
                     }
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB]"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
                     placeholder="Ex: UI UX Designer"
                     id="fonction"
                   />
@@ -562,7 +562,7 @@ export default function UserProfile() {
                     onChange={(e) =>
                       setResponsableForm((p) => ({ ...p, contact_phone: e.target.value }))
                     }
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB]"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
                     placeholder="+216 52 44 1144"
                     id="contact-phone"
                   />
@@ -684,7 +684,7 @@ export default function UserProfile() {
                         onChange={(e) =>
                           setEntrepriseForm((p) => ({ ...p, business_name: e.target.value }))
                         }
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB]"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
                         placeholder="Raison sociale"
                         id="business-name"
                       />
@@ -702,7 +702,7 @@ export default function UserProfile() {
                         onChange={(e) =>
                           setEntrepriseForm((p) => ({ ...p, tax_number: e.target.value }))
                         }
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB]"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
                         placeholder="Matricule fiscal"
                         id="tax-number"
                       />
@@ -732,7 +732,7 @@ export default function UserProfile() {
                           onChange={(e) =>
                             setEntrepriseForm((p) => ({ ...p, business_sector_id: e.target.value }))
                           }
-                          className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB] bg-white"
+                          className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-brand-primary bg-white"
                         >
                           <option value="">Sélectionner</option>
                           {sectorsForAdvertiserProfile(
@@ -758,7 +758,7 @@ export default function UserProfile() {
                         onChange={(e) =>
                           setEntrepriseForm((p) => ({ ...p, company_size: e.target.value }))
                         }
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB] bg-white"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-brand-primary bg-white"
                         id="company-size"
                       >
                         <option value="">Sélectionner</option>
@@ -805,7 +805,7 @@ export default function UserProfile() {
                     onChange={(e) =>
                       setAdresseForm((p) => ({ ...p, street_address: e.target.value }))
                     }
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB]"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
                     placeholder="Ex: Barista's Ain Zaghouen"
                     id="street-address"
                   />
@@ -821,7 +821,7 @@ export default function UserProfile() {
                         list="ville-list"
                         value={adresseForm.city}
                         onChange={(e) => setAdresseForm((p) => ({ ...p, city: e.target.value }))}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB] pr-10"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-brand-primary pr-10"
                         placeholder="Ex: Tunis"
                         id="city"
                       />
@@ -874,7 +874,7 @@ export default function UserProfile() {
                       onChange={(e) =>
                         setAdresseForm((p) => ({ ...p, postal_code: e.target.value }))
                       }
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB]"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
                       placeholder="Ex: 2045"
                       maxLength={10}
                       id="postal-code"
@@ -894,7 +894,7 @@ export default function UserProfile() {
                       onChange={(e) =>
                         setAdresseForm((p) => ({ ...p, governorate_id: e.target.value }))
                       }
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB] bg-white appearance-none pr-10"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-brand-primary bg-white appearance-none pr-10"
                       id="governorate-id"
                     >
                       <option value="">Sélectionner</option>
@@ -1229,7 +1229,7 @@ export default function UserProfile() {
                       onChange={(e) =>
                         setPasswordData((p) => ({ ...p, currentPassword: e.target.value }))
                       }
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB] pr-10"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-brand-primary pr-10"
                       placeholder="Mot de passe actuel"
                       id="current-password"
                     />
@@ -1255,7 +1255,7 @@ export default function UserProfile() {
                     onChange={(e) =>
                       setPasswordData((p) => ({ ...p, newPassword: e.target.value }))
                     }
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB]"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
                     placeholder="Nouveau mot de passe"
                     id="new-password"
                   />
@@ -1273,7 +1273,7 @@ export default function UserProfile() {
                     onChange={(e) =>
                       setPasswordData((p) => ({ ...p, confirmPassword: e.target.value }))
                     }
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#76E6AB] focus:border-[#76E6AB]"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
                     placeholder="Confirmer le nouveau mot de passe"
                     id="confirm-password"
                   />

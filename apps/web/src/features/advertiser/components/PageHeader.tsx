@@ -45,17 +45,31 @@ export default function PageHeader({
           </button>
           {pathname === '/my-campaigns' ? (
             <>
-              <img src={headerCampagnesIcon} alt="" className="h-12 w-12 flex-shrink-0 object-contain" />
+              <img
+                src={headerCampagnesIcon}
+                alt=""
+                className="h-12 w-12 flex-shrink-0 object-contain"
+              />
               <div className="min-w-0">
-                <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">Mes campagnes</h1>
-                <p className="text-xs text-gray-500 truncate hidden sm:block">Gérez vos campagnes actives</p>
+                <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">
+                  Mes campagnes
+                </h1>
+                <p className="text-xs text-gray-500 truncate hidden sm:block">
+                  Gérez vos campagnes actives
+                </p>
               </div>
             </>
           ) : pathname === '/evenements' ? (
             <>
-              <img src={headerAgendaIcon} alt="" className="h-12 w-12 flex-shrink-0 object-contain" />
+              <img
+                src={headerAgendaIcon}
+                alt=""
+                className="h-12 w-12 flex-shrink-0 object-contain"
+              />
               <div className="min-w-0">
-                <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">Événements</h1>
+                <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">
+                  Événements
+                </h1>
                 <p className="text-xs text-gray-500 truncate hidden sm:block">
                   Profitez des pics d&apos;audience des événements pour amplifier votre impact
                 </p>
@@ -63,9 +77,15 @@ export default function PageHeader({
             </>
           ) : pathname === '/my-recharges' ? (
             <>
-              <img src={headerFinanceIcon} alt="" className="h-12 w-12 flex-shrink-0 object-contain" />
+              <img
+                src={headerFinanceIcon}
+                alt=""
+                className="h-12 w-12 flex-shrink-0 object-contain"
+              />
               <div className="min-w-0">
-                <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">Mes Finances</h1>
+                <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">
+                  Mes Finances
+                </h1>
                 <p className="text-xs text-gray-500 truncate hidden sm:block">
                   Gérez votre solde et consultez l&apos;historique de vos transactions
                 </p>
@@ -73,18 +93,32 @@ export default function PageHeader({
             </>
           ) : pathname === '/my-invoices' ? (
             <>
-              <img src={headerFinanceIcon} alt="" className="h-12 w-12 flex-shrink-0 object-contain" />
+              <img
+                src={headerFinanceIcon}
+                alt=""
+                className="h-12 w-12 flex-shrink-0 object-contain"
+              />
               <div className="min-w-0 flex items-center gap-1.5">
-                <span className="text-base sm:text-lg font-bold text-gray-400 truncate">Mes Finances</span>
+                <span className="text-base sm:text-lg font-bold text-gray-400 truncate">
+                  Mes Finances
+                </span>
                 <ChevronRight className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">Mes factures</h1>
+                <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">
+                  Mes factures
+                </h1>
               </div>
             </>
           ) : pathname === '/profile' ? (
             <>
-              <img src={headerParamsIcon} alt="" className="h-12 w-12 flex-shrink-0 object-contain" />
+              <img
+                src={headerParamsIcon}
+                alt=""
+                className="h-12 w-12 flex-shrink-0 object-contain"
+              />
               <div className="min-w-0">
-                <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">Paramètres</h1>
+                <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">
+                  Paramètres
+                </h1>
                 <p className="text-xs text-gray-500 truncate hidden sm:block">
                   Gérez vos préférences et configurez différentes options.
                 </p>
@@ -118,7 +152,7 @@ export default function PageHeader({
             type="button"
             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg font-medium text-sm whitespace-nowrap ${
               emphasized
-                ? 'bg-[#76E6AB] hover:opacity-90 text-gray-900'
+                ? 'bg-brand-primary hover:opacity-90 text-gray-900'
                 : 'bg-[#9ae2b0] hover:bg-[#85d99e] text-gray-900'
             }`}
             onClick={onContactClick}

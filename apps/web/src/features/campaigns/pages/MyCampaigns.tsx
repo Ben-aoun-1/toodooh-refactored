@@ -354,7 +354,7 @@ export default function MyCampaigns() {
               key={w.label}
               type="button"
               onClick={() => setFilters((f) => ({ ...f, status: w.value }))}
-              className={`box-border flex min-h-[92px] flex-1 min-w-[100px] flex-shrink-0 flex-col items-start justify-start p-4 gap-2 text-left transition-all ${w.bg} ${w.border} ${w.rounded} ${isSelected ? 'ring-2 ring-[#76E6AB] ring-offset-2' : 'hover:opacity-95'}`}
+              className={`box-border flex min-h-[92px] flex-1 min-w-[100px] flex-shrink-0 flex-col items-start justify-start p-4 gap-2 text-left transition-all ${w.bg} ${w.border} ${w.rounded} ${isSelected ? 'ring-2 ring-brand-primary ring-offset-2' : 'hover:opacity-95'}`}
               style={i === 0 ? { boxShadow: '0px 1px 2px rgba(10, 13, 20, 0.0313726)' } : {}}
             >
               <span
@@ -380,7 +380,7 @@ export default function MyCampaigns() {
           </div>
           <button
             onClick={() => navigate('/new-campaign')}
-            className="bg-[#76E6AB] text-[#171717] rounded-lg px-5 py-2.5 font-medium hover:opacity-90 transition-opacity flex items-center gap-2"
+            className="bg-brand-primary text-[#171717] rounded-lg px-5 py-2.5 font-medium hover:opacity-90 transition-opacity flex items-center gap-2"
           >
             <Plus className="h-5 w-5" />
             <span>Lancer une nouvelle campagne</span>
@@ -420,7 +420,7 @@ export default function MyCampaigns() {
               <input
                 type="text"
                 placeholder="Rechercher.."
-                className="w-full h-full pl-9 pr-3 py-2.5 text-sm border border-[#EBEBEB] rounded-md bg-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#76E6AB]/30 focus:border-[#76E6AB]"
+                className="w-full h-full pl-9 pr-3 py-2.5 text-sm border border-[#EBEBEB] rounded-md bg-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-primary/30 focus:border-brand-primary"
                 onChange={(e) => setFilters({ ...filters, client: e.target.value })}
               />
             </div>
@@ -489,7 +489,7 @@ export default function MyCampaigns() {
                   Type
                 </label>
                 <select
-                  className="w-full h-10 px-3 text-sm border border-[#EBEBEB] rounded-md bg-white text-[#171717] focus:outline-none focus:ring-2 focus:ring-[#76E6AB]/30 focus:border-[#76E6AB] transition-colors"
+                  className="w-full h-10 px-3 text-sm border border-[#EBEBEB] rounded-md bg-white text-[#171717] focus:outline-none focus:ring-2 focus:ring-brand-primary/30 focus:border-brand-primary transition-colors"
                   value={filters.campaignType}
                   onChange={(e) =>
                     setFilters({
@@ -512,7 +512,7 @@ export default function MyCampaigns() {
                   Catégorie
                 </label>
                 <select
-                  className="w-full h-10 px-3 text-sm border border-[#EBEBEB] rounded-md bg-white text-[#171717] focus:outline-none focus:ring-2 focus:ring-[#76E6AB]/30 focus:border-[#76E6AB] transition-colors"
+                  className="w-full h-10 px-3 text-sm border border-[#EBEBEB] rounded-md bg-white text-[#171717] focus:outline-none focus:ring-2 focus:ring-brand-primary/30 focus:border-brand-primary transition-colors"
                   value={filters.category}
                   onChange={(e) => setFilters({ ...filters, category: e.target.value })}
                   id="category"
@@ -530,7 +530,7 @@ export default function MyCampaigns() {
                   Statut
                 </label>
                 <select
-                  className="w-full h-10 px-3 text-sm border border-[#EBEBEB] rounded-md bg-white text-[#171717] focus:outline-none focus:ring-2 focus:ring-[#76E6AB]/30 focus:border-[#76E6AB] transition-colors"
+                  className="w-full h-10 px-3 text-sm border border-[#EBEBEB] rounded-md bg-white text-[#171717] focus:outline-none focus:ring-2 focus:ring-brand-primary/30 focus:border-brand-primary transition-colors"
                   value={filters.status}
                   onChange={(e) => setFilters({ ...filters, status: e.target.value })}
                   id="status"
@@ -553,7 +553,7 @@ export default function MyCampaigns() {
                 <DatePicker
                   selected={filters.startDate}
                   onChange={(date: Date | null) => setFilters({ ...filters, startDate: date })}
-                  className="w-full h-10 px-3 text-sm border border-[#EBEBEB] rounded-md bg-white text-[#171717] focus:outline-none focus:ring-2 focus:ring-[#76E6AB]/30 focus:border-[#76E6AB]"
+                  className="w-full h-10 px-3 text-sm border border-[#EBEBEB] rounded-md bg-white text-[#171717] focus:outline-none focus:ring-2 focus:ring-brand-primary/30 focus:border-brand-primary"
                   dateFormat="dd/MM/yyyy"
                   placeholderText="Sélectionner"
                   id="start-date"
@@ -569,7 +569,7 @@ export default function MyCampaigns() {
                 <DatePicker
                   selected={filters.endDate}
                   onChange={(date: Date | null) => setFilters({ ...filters, endDate: date })}
-                  className="w-full h-10 px-3 text-sm border border-[#EBEBEB] rounded-md bg-white text-[#171717] focus:outline-none focus:ring-2 focus:ring-[#76E6AB]/30 focus:border-[#76E6AB]"
+                  className="w-full h-10 px-3 text-sm border border-[#EBEBEB] rounded-md bg-white text-[#171717] focus:outline-none focus:ring-2 focus:ring-brand-primary/30 focus:border-brand-primary"
                   dateFormat="dd/MM/yyyy"
                   placeholderText="Sélectionner"
                   id="end-date"
@@ -1236,7 +1236,7 @@ export default function MyCampaigns() {
                     </span>
                     <div className="flex gap-2">
                       <div
-                        className="flex-1 flex items-center gap-2 p-1.5 rounded-lg bg-white border border-[#76E6AB]"
+                        className="flex-1 flex items-center gap-2 p-1.5 rounded-lg bg-white border border-brand-primary"
                         style={{ boxShadow: '0px 1px 2px rgba(10, 13, 20, 0.0313726)' }}
                       >
                         <div className="w-8 h-8 rounded-lg bg-[#DCF0E9] flex items-center justify-center shrink-0">
@@ -1268,7 +1268,7 @@ export default function MyCampaigns() {
                       {categories.map((cat: string, i: number) => (
                         <span
                           key={i}
-                          className="inline-flex items-center px-2 py-1 rounded bg-white border border-[#76E6AB] text-xs text-[#171717]"
+                          className="inline-flex items-center px-2 py-1 rounded bg-white border border-brand-primary text-xs text-[#171717]"
                           style={{ boxShadow: '0px 1px 2px rgba(10, 13, 20, 0.0313726)' }}
                         >
                           {cat}
@@ -1323,7 +1323,7 @@ export default function MyCampaigns() {
                         zones.map((zone: string) => (
                           <span
                             key={zone}
-                            className="inline-flex items-center px-2 py-1 rounded bg-white border border-[#76E6AB]"
+                            className="inline-flex items-center px-2 py-1 rounded bg-white border border-brand-primary"
                           >
                             {zone}
                           </span>

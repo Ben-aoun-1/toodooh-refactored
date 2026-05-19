@@ -373,7 +373,7 @@ export default function OwnerCampaigns() {
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
                       placeholder="Rechercher.."
-                      className="w-full h-10 pl-9 pr-3 rounded-md border border-[#EBEBEB] text-sm focus:outline-none focus:ring-2 focus:ring-[#76E6AB]/30"
+                      className="w-full h-10 pl-9 pr-3 rounded-md border border-[#EBEBEB] text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/30"
                     />
                   </div>
                   <button
@@ -454,7 +454,7 @@ export default function OwnerCampaigns() {
                             <div className="grid grid-cols-2 gap-6 mb-4 w-full">
                               <div>
                                 <div className="inline-flex items-center gap-1 text-[11px] uppercase tracking-wide text-[#7A7A7A]">
-                                  <DollarSign className="h-3.5 w-3.5 text-[#76E6AB]" />
+                                  <DollarSign className="h-3.5 w-3.5 text-brand-primary" />
                                   Revenu
                                 </div>
                                 <p className="text-base font-semibold text-[#171717]">
@@ -706,8 +706,8 @@ export default function OwnerCampaigns() {
                   <div className="border-b border-[#EFEFEF] pb-3">
                     <p className="text-xs uppercase text-[#A3A3A3] mb-2">Type de la campagne</p>
                     <div className="grid grid-cols-2 gap-2">
-                      <div className="flex items-center gap-2 rounded-lg p-2 border border-[#76E6AB] bg-white">
-                        <div className="w-8 h-8 rounded-lg bg-[#E8F8EE] border border-[#76E6AB] flex items-center justify-center">
+                      <div className="flex items-center gap-2 rounded-lg p-2 border border-brand-primary bg-white">
+                        <div className="w-8 h-8 rounded-lg bg-[#E8F8EE] border border-brand-primary flex items-center justify-center">
                           <Crosshair className="h-4 w-4 text-[#142522]" />
                         </div>
                         <span className="text-sm text-[#171717]">Réseau Toodooh</span>
@@ -723,7 +723,7 @@ export default function OwnerCampaigns() {
 
                   <div className="border-b border-[#EFEFEF] pb-3">
                     <p className="text-xs uppercase text-[#A3A3A3] mb-2">Etablissements</p>
-                    <div className="inline-flex items-center justify-center h-7 min-w-7 px-2 rounded border border-[#76E6AB] bg-[#E8F8EE] text-[#1FC16B] text-sm font-semibold">
+                    <div className="inline-flex items-center justify-center h-7 min-w-7 px-2 rounded border border-brand-primary bg-[#E8F8EE] text-[#1FC16B] text-sm font-semibold">
                       {selectedCampaign.ownerLocationsCount}
                     </div>
                   </div>
@@ -793,7 +793,7 @@ export default function OwnerCampaigns() {
                         type="button"
                         onClick={handleApproveSelectedCampaign}
                         disabled={processingDecision !== null}
-                        className="h-10 rounded-lg border border-[#76E6AB] bg-[#E8F8EE] text-[#1FC16B] font-medium hover:opacity-90 disabled:opacity-60 inline-flex items-center justify-center gap-2"
+                        className="h-10 rounded-lg border border-brand-primary bg-[#E8F8EE] text-[#1FC16B] font-medium hover:opacity-90 disabled:opacity-60 inline-flex items-center justify-center gap-2"
                       >
                         {processingDecision === 'accept' && (
                           <Loader2 className="h-4 w-4 animate-spin" />
