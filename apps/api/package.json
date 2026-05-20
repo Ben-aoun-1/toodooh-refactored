@@ -12,6 +12,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "migrate": "tsx --env-file-if-exists=.env scripts/migrate.ts",
+    "promote": "tsx --env-file-if-exists=.env scripts/promote-to-admin.ts",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
