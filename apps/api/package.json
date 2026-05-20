@@ -1,0 +1,23 @@
+{
+  "name": "@toodooh/api",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "echo \"no tests yet — added in Phase 1a Commit 2\" && exit 0"
+  },
+  "dependencies": {
+    "fastify": "5.8.5"
+  },
+  "devDependencies": {
+    "@types/node": "20.19.41",
+    "tsx": "4.22.3",
+    "typescript": "5.7.2"
+  }
+}
