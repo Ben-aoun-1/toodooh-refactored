@@ -11,6 +11,7 @@ const buildApp = (nodeEnv: 'development' | 'production') => {
       PORT: 4000,
       HOST: '0.0.0.0',
       LOG_LEVEL: 'error',
+      DATABASE_URL: 'postgresql://test:test@localhost:5432/test_db',
     }),
   );
   app.setNotFoundHandler(buildNotFoundHandler());

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import Fastify, { type FastifyInstance } from 'fastify';
 
+import { db, sql } from './db/client.js';
 import { env } from './env.js';
 import { buildErrorHandler, buildNotFoundHandler } from './error-handler.js';
 import { buildLoggerConfig } from './logger.js';
@@ -12,6 +13,11 @@ const app: FastifyInstance = Fastify({
   genReqId: () => randomUUID(),
   requestIdHeader: 'x-request-id',
   requestIdLogLabel: 'requestId',
+});
+
+app.decorate('db', db);
+app.addHook('onClose', async () => {
+  await sql.end();
 });
 
 app.setErrorHandler(buildErrorHandler(env));
