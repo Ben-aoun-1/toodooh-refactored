@@ -1022,6 +1022,8 @@ per commit.
 
 - **TBD-C — `@/*` path alias + 517-import sweep (issue #24).** `tsconfig.app.json` + `vite.config.ts` add `@/*` → `./src/*` mapping (commit `412912e`). A ts-morph codemod rewrites 517 cross-directory imports across 114 files (commit `5ecd223`, with the codemod script preserved at `apps/web/scripts/codemod-add-path-aliases.ts` as audit record; ts-morph itself uninstalled post-sweep — the script's ts-morph import carries an `eslint-disable-next-line` annotation documenting the intentional absence). Closure doc this commit. Refined alias rule: resolved-target-different-directory → alias. ESLint resolver picks up tsconfig paths automatically. Lint baseline: 358 → 357 (TBD-C net −1, from NewCampaign `import-x/order` cleared by alias work; codemod script's ts-morph import suppressed via `eslint-disable` annotation, not counted in baseline). NewCampaign chunk gzip 25.76 → 26.04 (+0.28, within ±0.5 tolerance). → Issue #24. Commits `412912e` (config), `fee386d` (notes), `5ecd223` (sweep), plus this audit refresh + #24 close-out.
 
+- **Phase 1a — Backend foundation** — `apps/api/` scaffold + env validation + pino logger + `/health` + error handler + Drizzle + local Postgres via Docker + migration runner. The first feature-building phase (cleanup phase + P0a/P0b were preparation); `apps/api/` stands up from an empty workspace slot to a bootable Fastify service with a validated DB connection. Three implementation commits: `d723ae6` (scaffold — Fastify v5, exact-pinned toolchain), `326d39b` (env validation via zod + pino logger + `/health` + shaped error/not-found handlers), `4a5289a` (Drizzle client + Dockerized Postgres 16/PostGIS 3.4 + migration runner installing the `postgis` extension + `/health` DB-ping with `ok`/`degraded`). Gate floors **post-Phase-1a**: root typecheck **51** / lint **1** / test **170** / build `apps/web` **139.80 kB** gzip; `apps/api` per-package typecheck **0** / lint **0** / test **10** / build success. Carry-forwards: **CF-19** promoted (exact-pin discipline), **CF-20** promoted (test-tooling tsconfig split), **CF-21** parked candidate (eager-singleton env shim) — see §7.4. Plan docs: `2026-05-20-phase-1a-commit-1-api-scaffold.md` (`d0dbc22`), `2026-05-20-phase-1a-commit-2-env-logger-health-errors.md` (`7e8d4f4`), `2026-05-20-phase-1a-commit-3-drizzle-postgres-docker.md` (`56c26d7`). Plan docs' §9 sections are the canonical CF-19/20/21 write-up home. Phase 1a was direct feature work, not a tracked-issue fix (no `→ Issue`). Commits `d723ae6`, `326d39b`, `4a5289a`, plus the three plan-doc commits above and this audit refresh.
+
 ---
 
 ## 5. Roadmap
@@ -1111,7 +1113,7 @@ Phase-1 scope.
 - **No gate regression** — held throughout. typecheck, lint, test, build counts moved
   only monotonically toward their floor; every commit ended green.
 
-### 7.4 — Methodology: CF-1…CF-18 + the Step-13 notes
+### 7.4 — Methodology: CF-1…CF-21 + the Step-13 notes
 
 The carry-forward rules (`CF-1…CF-18`) and the Step-13 CI-gating notes accumulated in
 the **Step-8 notes file** (`docs/superpowers/plans/2026-05-15-step-8-notes.md`) — that
@@ -1124,6 +1126,30 @@ inventory walks three axes (neighbourhood / representation / source-target) acro
 phases (inventory / fix) — five worked examples, extended at Step 14 to the dependency
 layer · **Step-13 notes** baseline-as-ceiling CI gating, `headSha`-verification before
 CI diagnosis, output-parse fragility.
+
+Phase 1a added three more (their canonical write-ups live in the **Phase-1a plan docs'
+§9 sections**, the same "audit summarizes, canonical home elsewhere" precedent this
+section uses for the Step-8 notes file):
+
+- **CF-19** — exact-pin discipline for every `apps/api/package.json` dependency and
+  devDependency (no caret, no tilde; floating versions are a CF-18 source/target drift
+  vector). Three worked examples across Phase-1a Commits 1.1, 2.1, 3.1. Canonical
+  write-up in the three Phase-1a plan docs' §9
+  (`2026-05-20-phase-1a-commit-1-api-scaffold.md` `d0dbc22`,
+  `2026-05-20-phase-1a-commit-2-env-logger-health-errors.md` `7e8d4f4`,
+  `2026-05-20-phase-1a-commit-3-drizzle-postgres-docker.md` `56c26d7`).
+- **CF-20** — test-tooling tsconfig split: the test-side `tsconfig.test.json` extends the
+  build `tsconfig.json` and adds test-adjacent paths (`tests/`, `scripts/`, app-root
+  config files) to its `include`, while the build tsconfig stays `rootDir`-strict for
+  `tsc` emit. Two worked examples (Commit 2.1 introduction, Commit 3.1 refinement
+  extending `include` to `scripts/` + `drizzle.config.ts`). Canonical write-up in the
+  Commit 2.1 + 3.1 plan docs' §9.
+- **CF-21** (parked candidate) — an eager-validated env singleton (validates
+  `process.env` at module load) is shimmed in tests via Vitest `test.env` injection
+  rather than made lazy, preserving fast-fail-at-boot. Single worked instance
+  (Commit 3.1); promotion threshold is a second instance, expected when Phase 1b
+  introduces `AUTH_SECRET` or equivalent. Canonical write-up in the Commit 3.1 plan
+  doc's §9.
 
 ### 7.5 — Per-step record
 
@@ -1159,6 +1185,24 @@ and **none shipped broken**. The recurring lesson — captured as CF-18's source
 axis and the Step-12 partial-migration meta-note — is that an inherited codebase carries
 residue from incomplete prior work, so inventory must surface both declared-state and
 actual-state.
+
+Phase 1a (the first feature-building phase) added two plan-quality learnings — both
+caught at execution by gates rather than at plan time, so both feed back into how
+Phase-1b plans should inventory (canonical detail in
+`2026-05-20-phase-1a-commit-2-env-logger-health-errors.md` §22):
+
+- **Plan §2 inventory must verify ESM NodeNext relative-import resolver behavior, not
+  assume it.** ESLint's default node resolver cannot follow NodeNext `./foo.js`→`./foo.ts`
+  relative imports without a TypeScript resolver pointing at the appropriate tsconfig.
+  Worked example: Commit 2.1 deviation #1 — a root `eslint.config.js` scoped resolver
+  block was added in-commit when 7 `import-x/no-unresolved` errors surfaced on all
+  `./*.js` relative imports across `apps/api/src` + `tests`.
+- **Fastify's two error pathways need shape-coverage in every commit introducing shaped
+  errors.** Exceptions thrown by handlers route through `setErrorHandler`; requests
+  matching no registered route route through `setNotFoundHandler`. A shaped-error commit
+  must wire and Gate-4-assert both. Worked example: Commit 2.1 deviation #2 —
+  `buildNotFoundHandler` was added in-commit when Gate 4's `/missing` assertion failed
+  because the plan only wired `setErrorHandler`.
 
 ---
 
@@ -1253,3 +1297,19 @@ methodology rule, **CF-18 (the source/target axis)**, was extracted to its own r
 
 **The prerequisite phase is complete.** Next is the Phase-1 architecture conversation —
 a fresh brainstorm → spec → plan cycle.
+
+---
+
+## 12. Phase 1a — Backend foundation
+
+Phase 1a is the first feature-building phase after the cleanup phase and the P0a/P0b
+Supabase prerequisite track. Three commits open `apps/api/` from an empty workspace slot
+through Drizzle/Postgres/Docker integration: `d723ae6` (Fastify scaffold), `326d39b`
+(env validation + pino + `/health` + error/not-found handlers), `4a5289a` (Drizzle +
+Dockerized Postgres 16/PostGIS 3.4 + migration runner + `/health` DB-ping). See the §4
+"Already resolved" Phase 1a row for full detail, gate floors, and plan-doc references.
+It used the same operating pattern as the cleanup phase (§7.6) — inventory-first plans,
+halt-on-finding, CF-9 pause summaries, per-commit gate verification, CI-green on every
+push — with larger commit scopes and an added boot/DB-verification gate per the Phase-1
+risk profile (§10). Closes 2026-05-20. **Phase 1b opens next:** the `users` table +
+better-auth + the screenhost signup endpoint.
