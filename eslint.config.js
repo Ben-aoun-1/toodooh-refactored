@@ -79,6 +79,20 @@ export default tseslint.config(
     },
   },
 
+  // TypeScript-aware import resolution for the Fastify API package — maps NodeNext-style
+  // ./foo.js relative imports to ./foo.ts source files. No React plugins; backend code
+  // uses tsconfig.test.json so resolution covers both src/ and tests/.
+  {
+    files: ['apps/api/**/*.ts'],
+    settings: {
+      'import-x/resolver-next': [
+        createTypeScriptImportResolver({
+          project: 'apps/api/tsconfig.test.json',
+        }),
+      ],
+    },
+  },
+
   // Tooling, scripts and tests may use console.
   {
     files: [

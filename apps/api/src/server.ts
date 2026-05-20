@@ -1,9 +1,21 @@
+import { randomUUID } from 'node:crypto';
+
 import Fastify, { type FastifyInstance } from 'fastify';
 
-const PORT = 4000;
-const HOST = '0.0.0.0';
+import { env } from './env.js';
+import { buildErrorHandler, buildNotFoundHandler } from './error-handler.js';
+import { buildLoggerConfig } from './logger.js';
+import { healthRoute } from './routes/health.js';
 
-const app: FastifyInstance = Fastify();
+const app: FastifyInstance = Fastify({
+  logger: buildLoggerConfig(env),
+  genReqId: () => randomUUID(),
+  requestIdHeader: 'x-request-id',
+  requestIdLogLabel: 'requestId',
+});
+
+app.setErrorHandler(buildErrorHandler(env));
+app.setNotFoundHandler(buildNotFoundHandler());
 
 const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
   app.log.info({ signal }, 'shutdown signal received');
@@ -24,7 +36,8 @@ process.on('SIGTERM', () => {
 
 const start = async (): Promise<void> => {
   try {
-    await app.listen({ port: PORT, host: HOST });
+    await app.register(healthRoute);
+    await app.listen({ port: env.PORT, host: env.HOST });
   } catch (err) {
     app.log.error(err);
     process.exit(1);
