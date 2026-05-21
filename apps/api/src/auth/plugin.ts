@@ -12,6 +12,12 @@ export const authPlugin: FastifyPluginAsync = async (app) => {
     url: '/auth/*',
     handler: async (request, reply) => {
       const url = new URL(request.url, `http://${request.headers.host ?? 'localhost'}`);
+      // /api/signup is the only validated signup path (Commit 3 Q3); block the
+      // raw endpoint. Privilege is already safe via input:false — this guards
+      // format/data integrity. Other /auth/* routes pass through.
+      if (request.method === 'POST' && url.pathname === '/auth/sign-up/email') {
+        return reply.status(404).send({ error: 'Not Found', message: 'Use POST /api/signup' });
+      }
       const req = new Request(url.toString(), {
         method: request.method,
         headers: fromNodeHeaders(request.headers),

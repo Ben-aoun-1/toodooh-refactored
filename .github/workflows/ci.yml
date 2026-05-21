@@ -19,6 +19,26 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    # Phase 1b Commit 3: integration tests (apps/api/tests/signup.test.ts) need a
+    # real Postgres. AUTH_SECRET is a throwaway CI value; BETTER_AUTH_URL uses its
+    # env default. The web/api unit suites ignore DATABASE_URL.
+    env:
+      DATABASE_URL: postgresql://toodooh:toodooh@localhost:5432/toodooh_test
+      AUTH_SECRET: ci-auth-secret-at-least-32-characters-long
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: toodooh
+          POSTGRES_PASSWORD: toodooh
+          POSTGRES_DB: toodooh_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U toodooh -d toodooh_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
 
@@ -62,6 +82,9 @@ jobs:
           elif [ "$n" -lt "$LINT_BASELINE" ]; then
             echo "::notice::lint improved — $n < $LINT_BASELINE; ratchet LINT_BASELINE down in .github/workflows/ci.yml"
           fi
+
+      - name: Migrate (integration DB)
+        run: pnpm --filter @toodooh/api migrate
 
       - name: Test
         run: pnpm test

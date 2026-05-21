@@ -9,6 +9,9 @@ const EnvSchema = z.object({
   AUTH_SECRET: z
     .string()
     .min(32, 'AUTH_SECRET must be at least 32 characters for cryptographic security'),
+  // Base URL for better-auth verification links. Dev default avoids a test-env
+  // shim; production overrides to https://api.too-dooh.com (Phase 1g).
+  BETTER_AUTH_URL: z.url().default('http://localhost:4000'),
 });
 
 export type Env = z.infer<typeof EnvSchema> & {

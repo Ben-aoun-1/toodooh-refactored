@@ -29,6 +29,8 @@ export const sendVerificationEmailStub = async (args: VerificationEmailArgs): Pr
 
 export const auth = betterAuth({
   secret: env.AUTH_SECRET,
+  // Well-formed verification URLs (Commit 3 Q8); prod overrides via env.
+  baseURL: env.BETTER_AUTH_URL,
   // Honor the locked /auth/* mount (default is /api/auth — would 404).
   basePath: '/auth',
   database: drizzleAdapter(db, {
@@ -56,6 +58,13 @@ export const auth = betterAuth({
     additionalFields: {
       role: { type: 'string', required: false, input: false, defaultValue: 'advertiser' },
       status: { type: 'string', required: false, input: false, defaultValue: 'pending' },
+      // Commit 3 — business profile fields, client-settable, written atomically
+      // with the user row by signUpEmail. /api/signup's zod schema is the
+      // authority on presence/format; required:false avoids coupling other
+      // better-auth flows to these.
+      businessName: { type: 'string', required: false, input: true },
+      contactPhone: { type: 'string', required: false, input: true },
+      taxNumber: { type: 'string', required: false, input: true },
     },
   },
   advanced: {

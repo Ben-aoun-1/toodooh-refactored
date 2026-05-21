@@ -8,6 +8,7 @@ import { env } from './env.js';
 import { buildErrorHandler, buildNotFoundHandler } from './error-handler.js';
 import { buildLoggerConfig } from './logger.js';
 import { healthRoute } from './routes/health.js';
+import { apiRoutes } from './routes/index.js';
 
 const app: FastifyInstance = Fastify({
   logger: buildLoggerConfig(env),
@@ -44,6 +45,7 @@ process.on('SIGTERM', () => {
 const start = async (): Promise<void> => {
   try {
     await app.register(authPlugin);
+    await app.register(apiRoutes);
     await app.register(healthRoute);
     await app.listen({ port: env.PORT, host: env.HOST });
   } catch (err) {
