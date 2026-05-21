@@ -8,6 +8,9 @@ export default defineConfig({
     // import it need DATABASE_URL present. Real DB tests mock the client.
     env: {
       DATABASE_URL: 'postgresql://test:test@localhost:5432/test_db',
+      // The eager env singleton also requires AUTH_SECRET (>=32) at import;
+      // auth.test.ts imports auth.ts -> env.ts. (CF-21 shim, extended.)
+      AUTH_SECRET: 'test-auth-secret-at-least-32-characters-long',
     },
   },
 });

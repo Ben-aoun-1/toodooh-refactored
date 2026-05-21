@@ -16,6 +16,7 @@
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
+    "better-auth": "1.6.11",
     "drizzle-orm": "0.45.2",
     "fastify": "5.8.5",
     "pino": "10.3.1",

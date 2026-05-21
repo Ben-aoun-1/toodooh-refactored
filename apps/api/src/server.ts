@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import Fastify, { type FastifyInstance } from 'fastify';
 
+import { authPlugin } from './auth/plugin.js';
 import { db, sql } from './db/client.js';
 import { env } from './env.js';
 import { buildErrorHandler, buildNotFoundHandler } from './error-handler.js';
@@ -42,6 +43,7 @@ process.on('SIGTERM', () => {
 
 const start = async (): Promise<void> => {
   try {
+    await app.register(authPlugin);
     await app.register(healthRoute);
     await app.listen({ port: env.PORT, host: env.HOST });
   } catch (err) {

@@ -6,6 +6,9 @@ const EnvSchema = z.object({
   HOST: z.string().default('0.0.0.0'),
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).optional(),
   DATABASE_URL: z.string().min(1),
+  AUTH_SECRET: z
+    .string()
+    .min(32, 'AUTH_SECRET must be at least 32 characters for cryptographic security'),
 });
 
 export type Env = z.infer<typeof EnvSchema> & {

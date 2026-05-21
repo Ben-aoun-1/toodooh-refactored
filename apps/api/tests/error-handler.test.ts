@@ -12,6 +12,7 @@ const buildApp = (nodeEnv: 'development' | 'production') => {
       HOST: '0.0.0.0',
       LOG_LEVEL: 'error',
       DATABASE_URL: 'postgresql://test:test@localhost:5432/test_db',
+      AUTH_SECRET: 'test-auth-secret-at-least-32-characters-long',
     }),
   );
   app.setNotFoundHandler(buildNotFoundHandler());
