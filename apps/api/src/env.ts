@@ -20,6 +20,13 @@ const EnvSchema = z.object({
   SMTP_USER: z.email(),
   SMTP_PASSWORD: z.string().min(8),
   SMTP_FROM: z.email(),
+  // MinIO / S3-compatible object storage (Commit 2). ENDPOINT/ACCESS_KEY/SECRET_KEY
+  // required (fast-fail at boot); BUCKET/REGION default. forcePathStyle is set in code.
+  STORAGE_ENDPOINT: z.url(),
+  STORAGE_ACCESS_KEY: z.string().min(1),
+  STORAGE_SECRET_KEY: z.string().min(1),
+  STORAGE_BUCKET: z.string().min(1).default('toodooh-documents'),
+  STORAGE_REGION: z.string().min(1).default('us-east-1'),
 });
 
 export type Env = z.infer<typeof EnvSchema> & {

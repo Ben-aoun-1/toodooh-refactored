@@ -15,6 +15,11 @@ export default defineConfig({
       SMTP_USER: process.env['SMTP_USER'] ?? 'ci@too-dooh.com',
       SMTP_PASSWORD: process.env['SMTP_PASSWORD'] ?? 'ci-smtp-password',
       SMTP_FROM: process.env['SMTP_FROM'] ?? 'no-reply@too-dooh.com',
+      // STORAGE_* required vars (BUCKET/REGION default in env.ts). The S3 client is
+      // unit-mocked; only the integration suite connects to a real MinIO.
+      STORAGE_ENDPOINT: process.env['STORAGE_ENDPOINT'] ?? 'http://localhost:9000',
+      STORAGE_ACCESS_KEY: process.env['STORAGE_ACCESS_KEY'] ?? 'minioadmin',
+      STORAGE_SECRET_KEY: process.env['STORAGE_SECRET_KEY'] ?? 'minioadmin',
     },
   },
 });
