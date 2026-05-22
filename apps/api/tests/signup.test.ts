@@ -2,14 +2,22 @@ import { eq } from 'drizzle-orm';
 import Fastify from 'fastify';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { auth } from '../src/auth/auth.js';
+import { auth, emailSender } from '../src/auth/auth.js';
 import { authPlugin } from '../src/auth/plugin.js';
 import { db, sql } from '../src/db/client.js';
 import { accounts, users } from '../src/db/schema.js';
-import { logger } from '../src/logger.js';
 import { apiRoutes } from '../src/routes/index.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
+
+// nodemailer mocked → the verification hook "sends" without a real SMTP
+// connection (Q1: no external network in CI).
+const { sendMailMock } = vi.hoisted(() => ({
+  sendMailMock: vi.fn().mockResolvedValue({ messageId: 'test-msg-id' }),
+}));
+vi.mock('nodemailer', () => ({
+  default: { createTransport: vi.fn(() => ({ sendMail: sendMailMock })) },
+}));
 
 // Integration suite — requires a real Postgres (DATABASE_URL env). The only
 // DB-writing test file; beforeEach truncates for isolation.
@@ -24,13 +32,6 @@ const validPayload = {
   contact_phone: '+21612345678',
   tax_number: '1234567ABC',
 };
-
-interface StubArg {
-  verificationUrl: string;
-  token: string;
-}
-const isStubArg = (v: unknown): v is StubArg =>
-  typeof v === 'object' && v !== null && 'verificationUrl' in v && 'token' in v;
 
 describe('POST /api/signup', () => {
   let app: ReturnType<typeof buildApp>;
@@ -67,7 +68,7 @@ describe('POST /api/signup', () => {
     expect(body.message).toContain('verify');
   });
 
-  it('valid payload → writes user (+business fields, defaults) + account + verification', async () => {
+  it('valid payload → writes user (+business fields, defaults) + account', async () => {
     await app.inject({ method: 'POST', url: '/api/signup', payload: validPayload });
     const u = await db.select().from(users).where(eq(users.email, 'owner@example.com'));
     expect(u).toHaveLength(1);
@@ -83,22 +84,30 @@ describe('POST /api/signup', () => {
       .where(eq(accounts.userId, created?.id ?? ''));
     expect(a).toHaveLength(1);
     expect(a[0]?.providerId).toBe('credential');
-    // NOTE: better-auth 1.6.11 email-verification uses a stateless signed JWT,
-    // NOT a verifications-table row — the token is asserted in the stub test
-    // below. The verifications table remains in the schema for other flows
-    // (e.g. password reset) and adapter completeness.
   });
 
-  it('(Q8) fires the verification stub with a well-formed URL', async () => {
-    const infoSpy = vi.spyOn(logger, 'info');
+  it('(Q8) attempts a verification email with the well-formed JWT link', async () => {
+    const sendSpy = vi.spyOn(emailSender, 'send');
     await app.inject({ method: 'POST', url: '/api/signup', payload: validPayload });
     await vi.waitFor(() => {
-      expect(infoSpy.mock.calls.some((c) => isStubArg(c[0]))).toBe(true);
+      expect(sendSpy).toHaveBeenCalled();
     });
-    const arg = infoSpy.mock.calls.map((c) => c[0]).find(isStubArg);
-    if (!isStubArg(arg)) throw new Error('verification stub was not called');
-    expect(arg.verificationUrl).toMatch(/^http:\/\/localhost:4000\/auth\/verify-email\?token=/);
-    expect(arg.token.length).toBeGreaterThan(0);
+    const arg = sendSpy.mock.calls[0]?.[0];
+    expect(arg?.to).toBe('owner@example.com');
+    expect(arg?.subject).toContain('Vérifiez');
+    expect(arg?.html).toContain('http://localhost:4000/auth/verify-email?token=');
+  });
+
+  it('signup still succeeds (201) when the email send fails (no orphan rollback)', async () => {
+    vi.spyOn(emailSender, 'send').mockResolvedValueOnce({ error: 'smtp down' });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      payload: { ...validPayload, email: 'failmail@example.com', tax_number: '5550001QQ' },
+    });
+    expect(res.statusCode).toBe(201);
+    const u = await db.select().from(users).where(eq(users.email, 'failmail@example.com'));
+    expect(u).toHaveLength(1); // user persisted; orphan rollback did NOT fire
   });
 
   it('duplicate email → 201 generic, no second user row (anti-enumeration)', async () => {

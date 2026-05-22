@@ -10,6 +10,11 @@ export default defineConfig({
     env: {
       DATABASE_URL: process.env['DATABASE_URL'] ?? 'postgresql://test:test@localhost:5432/test_db',
       AUTH_SECRET: process.env['AUTH_SECRET'] ?? 'test-auth-secret-at-least-32-characters-long',
+      // Required SMTP vars (HOST/PORT/SECURE default in env.ts). nodemailer is
+      // mocked in tests, so these are never used to connect.
+      SMTP_USER: process.env['SMTP_USER'] ?? 'ci@too-dooh.com',
+      SMTP_PASSWORD: process.env['SMTP_PASSWORD'] ?? 'ci-smtp-password',
+      SMTP_FROM: process.env['SMTP_FROM'] ?? 'no-reply@too-dooh.com',
     },
   },
 });

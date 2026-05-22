@@ -3,28 +3,44 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 
 import { db } from '../db/client.js';
 import { accounts, sessions, users, verifications } from '../db/schema.js';
+import { SmtpEmailSender } from '../email/smtp-sender.js';
+import {
+  verificationEmailPlainText,
+  verificationEmailSubject,
+  verificationEmailTemplate,
+} from '../email/template.js';
 import { env } from '../env.js';
 import { logger } from '../logger.js';
 
-interface VerificationEmailArgs {
-  user: { id: string; email: string };
+// Exported for test spying. Per-send transport (no pool — Decision 2).
+export const emailSender = new SmtpEmailSender(env);
+
+// better-auth invokes this as sendVerificationEmail({ user, url, token }, request)
+// on signup and AWAITS it (sign-up.mjs:243). It MUST NOT throw: a throw would
+// fail signUpEmail and trip Commit 3's orphan-rollback, deleting the new user.
+// So every error is swallowed here (Decision 8 / Commit 4 Q2).
+const sendVerificationEmail = async (args: {
+  user: { id: string; email: string; name?: string; role?: string };
   url: string;
   token: string;
-}
-
-// Commit 4 replaces this body with the OVH SMTP send; the signature stays so
-// the swap is body-only. better-auth invokes it as
-// sendVerificationEmail({ user, url, token }, request) on signup.
-export const sendVerificationEmailStub = async (args: VerificationEmailArgs): Promise<void> => {
-  logger.info(
-    {
-      userId: args.user.id,
-      email: args.user.email,
-      verificationUrl: args.url,
-      token: args.token,
-    },
-    'Verification email stub — Commit 4 replaces with OVH SMTP send',
-  );
+}): Promise<void> => {
+  const { user, url } = args;
+  const role = user.role ?? 'advertiser';
+  try {
+    const result = await emailSender.send({
+      to: user.email,
+      subject: verificationEmailSubject,
+      html: verificationEmailTemplate({ name: user.name ?? '', verificationUrl: url, role }),
+      text: verificationEmailPlainText({ name: user.name ?? '', verificationUrl: url, role }),
+    });
+    if ('error' in result) {
+      logger.error({ to: user.email, error: result.error }, 'verification email failed');
+    } else {
+      logger.info({ to: user.email, messageId: result.messageId }, 'verification email sent');
+    }
+  } catch (err) {
+    logger.error({ to: user.email, err }, 'verification email threw (swallowed)');
+  }
 };
 
 export const auth = betterAuth({
@@ -49,7 +65,7 @@ export const auth = betterAuth({
   },
   emailVerification: {
     sendOnSignUp: true,
-    sendVerificationEmail: sendVerificationEmailStub,
+    sendVerificationEmail,
   },
   user: {
     // role/status are server-controlled: input:false drops them from the

@@ -12,6 +12,14 @@ const EnvSchema = z.object({
   // Base URL for better-auth verification links. Dev default avoids a test-env
   // shim; production overrides to https://api.too-dooh.com (Phase 1g).
   BETTER_AUTH_URL: z.url().default('http://localhost:4000'),
+  // SMTP (OVH) — verification email send (Commit 4). HOST/PORT/SECURE default;
+  // USER/PASSWORD/FROM required (fast-fail at boot).
+  SMTP_HOST: z.string().default('smtp.mail.ovh.net'),
+  SMTP_PORT: z.coerce.number().int().positive().default(465),
+  SMTP_SECURE: z.stringbool().default(true),
+  SMTP_USER: z.email(),
+  SMTP_PASSWORD: z.string().min(8),
+  SMTP_FROM: z.email(),
 });
 
 export type Env = z.infer<typeof EnvSchema> & {

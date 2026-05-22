@@ -1,11 +1,10 @@
 import Fastify from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { auth, sendVerificationEmailStub } from '../src/auth/auth.js';
+import { auth } from '../src/auth/auth.js';
 import { authPlugin } from '../src/auth/plugin.js';
-import { logger } from '../src/logger.js';
 
-// All tests here are DB-free: better-auth construction, the email stub, and
+// All tests here are DB-free: better-auth construction, plugin registration, and
 // get-session-without-cookie do not query the database (CI has no Postgres).
 
 const buildAuthApp = () => {
@@ -25,25 +24,6 @@ describe('better-auth integration', () => {
   it('constructs the auth instance with a request handler', () => {
     expect(auth).toBeDefined();
     expect(typeof auth.handler).toBe('function');
-  });
-
-  it('email-verification stub logs the verification url and token', async () => {
-    const infoSpy = vi.spyOn(logger, 'info').mockImplementation(() => logger);
-    await sendVerificationEmailStub({
-      user: { id: 'user-1', email: 'a@b.com' },
-      url: 'https://app.test/verify?token=tok123',
-      token: 'tok123',
-    });
-    expect(infoSpy).toHaveBeenCalledTimes(1);
-    expect(infoSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: 'user-1',
-        email: 'a@b.com',
-        verificationUrl: 'https://app.test/verify?token=tok123',
-        token: 'tok123',
-      }),
-      expect.any(String),
-    );
   });
 
   it('registers the auth plugin without throwing', async () => {
