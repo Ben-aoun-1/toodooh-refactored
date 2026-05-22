@@ -1024,6 +1024,8 @@ per commit.
 
 - **Phase 1a — Backend foundation** — `apps/api/` scaffold + env validation + pino logger + `/health` + error handler + Drizzle + local Postgres via Docker + migration runner. The first feature-building phase (cleanup phase + P0a/P0b were preparation); `apps/api/` stands up from an empty workspace slot to a bootable Fastify service with a validated DB connection. Three implementation commits: `d723ae6` (scaffold — Fastify v5, exact-pinned toolchain), `326d39b` (env validation via zod + pino logger + `/health` + shaped error/not-found handlers), `4a5289a` (Drizzle client + Dockerized Postgres 16/PostGIS 3.4 + migration runner installing the `postgis` extension + `/health` DB-ping with `ok`/`degraded`). Gate floors **post-Phase-1a**: root typecheck **51** / lint **1** / test **170** / build `apps/web` **139.80 kB** gzip; `apps/api` per-package typecheck **0** / lint **0** / test **10** / build success. Carry-forwards: **CF-19** promoted (exact-pin discipline), **CF-20** promoted (test-tooling tsconfig split), **CF-21** parked candidate (eager-singleton env shim) — see §7.4. Plan docs: `2026-05-20-phase-1a-commit-1-api-scaffold.md` (`d0dbc22`), `2026-05-20-phase-1a-commit-2-env-logger-health-errors.md` (`7e8d4f4`), `2026-05-20-phase-1a-commit-3-drizzle-postgres-docker.md` (`56c26d7`). Plan docs' §9 sections are the canonical CF-19/20/21 write-up home. Phase 1a was direct feature work, not a tracked-issue fix (no `→ Issue`). Commits `d723ae6`, `326d39b`, `4a5289a`, plus the three plan-doc commits above and this audit refresh.
 
+- **Phase 1b — Auth foundation** — the single `users` table + better-auth integration + signup endpoint + OVH SMTP email verification. Six commits across four units: `d59bf75` (single `users` table — the dual-identity collapse — + `promote-to-admin` script + initial migration), `1648159` (better-auth integration — `accounts`/`sessions`/`verifications` tables + Fastify catch-all `/auth/*` plugin + `AUTH_SECRET` env + `role`/`status` `input:false` to block signup self-elevation), `927d61b` (`POST /api/signup` wrapping `auth.api.signUpEmail` server-side — anti-enumeration on duplicate email, `tax_number` 409 pre-check, business fields registered as additionalFields, orphan-rollback for better-auth's non-atomic signup — plus the first real-Postgres integration tests + a CI Postgres service container), `249fc87`→`4ab1229` (OVH SMTP email send via nodemailer + an `EmailSender` abstraction + a brand-aligned, role-aware French verification template; `249fc87` failed CI on a lockfile-sync miss — `pnpm-lock.yaml` dropped from `git add` against §10 policy, caught by `pnpm install --frozen-lockfile` — fixed forward at `4ab1229`, `main` not rewritten). Real send verified end-to-end (OVH-to-OVH + OVH-to-Gmail, spf/dkim/dmarc pass, JWT verification flips `email_verified`); Gmail spam-landing is new-domain reputation, not auth (domain warm-up carried to Phase 1g, along with the production `BETTER_AUTH_URL` and the Phase-1e verification `callbackURL`). Gate floors **post-Phase-1b**: root typecheck **51** / lint **1** / test **200** / build `apps/web` **139.80 kB** gzip; `apps/api` per-package typecheck **0** / lint **0** / test **40** / build success. Carry-forwards: **CF-21 promoted** (eager-singleton env shim, + the CF-21a/b runtime-shim-vs-typed-literal sub-pattern), **CF-22 promoted** (literal-vs-spirit surface-and-ratify), **CF-23 promoted** (two-layer library verification) — see §7.4. Plan docs: `d907e05`, `367c73d`, `9c9faf2`, `333b68f` (their §9 sections are the canonical CF write-up home). Phase 1b was direct feature work (no `→ Issue`). Closes 2026-05-22. Commits `d59bf75`, `1648159`, `927d61b`, `249fc87`, `4ab1229`, plus the four plan-doc commits above and this audit refresh.
+
 ---
 
 ## 5. Roadmap
@@ -1113,7 +1115,7 @@ Phase-1 scope.
 - **No gate regression** — held throughout. typecheck, lint, test, build counts moved
   only monotonically toward their floor; every commit ended green.
 
-### 7.4 — Methodology: CF-1…CF-21 + the Step-13 notes
+### 7.4 — Methodology: CF-1…CF-23 + the Step-13 notes
 
 The carry-forward rules (`CF-1…CF-18`) and the Step-13 CI-gating notes accumulated in
 the **Step-8 notes file** (`docs/superpowers/plans/2026-05-15-step-8-notes.md`) — that
@@ -1144,12 +1146,44 @@ section uses for the Step-8 notes file):
   `tsc` emit. Two worked examples (Commit 2.1 introduction, Commit 3.1 refinement
   extending `include` to `scripts/` + `drizzle.config.ts`). Canonical write-up in the
   Commit 2.1 + 3.1 plan docs' §9.
-- **CF-21** (parked candidate) — an eager-validated env singleton (validates
-  `process.env` at module load) is shimmed in tests via Vitest `test.env` injection
-  rather than made lazy, preserving fast-fail-at-boot. Single worked instance
-  (Commit 3.1); promotion threshold is a second instance, expected when Phase 1b
-  introduces `AUTH_SECRET` or equivalent. Canonical write-up in the Commit 3.1 plan
-  doc's §9.
+- **CF-21** — parked at Phase 1a (single instance); **PROMOTED at Phase 1b** — full
+  entry in the Phase-1b block below.
+
+Phase 1b promoted three carry-forward rules to formal CFs, each having earned
+worked-example coverage across the phase (canonical write-ups in the **Phase-1b plan
+docs' §9 sections** — same "audit summarizes, canonical home elsewhere" precedent):
+
+- **CF-21 — PROMOTED.** Eager-singleton env shim via test-env injection. When `env` is
+  an eager-validated singleton, every test importing anything that transitively imports
+  `env` must satisfy `env`'s schema at module load — inject required vars via the
+  test-env shim, never by making `env` lazy (lazy `env` defeats fast-fail-at-boot).
+  **Sub-pattern CF-21a/b:** runtime shims (`vitest.config` `test.env`, `parseEnv` test
+  calls) need only the REQUIRED vars (defaults cover the rest); typed `Env` literals
+  (inline `Env` objects in tests) need ALL vars, because TypeScript enforces the full
+  type regardless of runtime defaults. Six worked instances — Phase-1a Commit 3.1 +
+  Phase-1b Commits 2.1 / 3.1 / 4.1.
+- **CF-22 — PROMOTED.** Literal-instruction-vs-spirit conflicts get surfaced via
+  executor judgment with architect ratification: when a literal prompt step would
+  produce work conflicting with the work's actual structure, library invariants, or
+  system constraints, the executor (a) picks the semantically right interpretation or
+  surfaces alternatives, (b) flags the deviation in the CF-9 pause with reasoning,
+  (c) waits for ratification. Surfacing is the load-bearing step — the executor does
+  not unilaterally rescope. Seven worked instances: P0a non-destructive git read,
+  P0b 44→41 column count, P0b §11→§12 structural, Phase-1b Commit 1 four-question UI
+  surfacing, Commit 2 F1 (verifications table missing) + F2 (input:false security),
+  Commit 3 F1 (EMAIL_TAKEN anti-enumeration) + F2 (raw-route bypass) + F3 (atomicity
+  premise), Commit 4 F1 (ethereal CI-network incompatibility) + F2 (hook-never-throw).
+- **CF-23 — PROMOTED.** Verify the integrating library's actual behavior before locking
+  decisions that depend on it — and verify at BOTH layers: plan-write (Context7 / docs /
+  installed-source reading) AND execution-time (integration-test behavior). Plan-write
+  verification is necessary but not sufficient; execution-time behavior catches truths
+  source-reading misses. Four worked instances: Commit 1 (better-auth `users` schema
+  column verification), Commit 2 (account/session/verifications schema + input:false
+  security via source), Commit 3 (`signUpEmail` anti-enumeration + sequential-writes via
+  source, then the JWT-not-row truth via execution-time testing — the two-layer
+  discipline demonstrated cleanly: source said one thing about verification storage,
+  execution revealed a stateless JWT), Commit 4 (hook-await-vs-orphan-rollback
+  cross-commit interaction via source).
 
 ### 7.5 — Per-step record
 
@@ -1203,6 +1237,35 @@ Phase-1b plans should inventory (canonical detail in
   must wire and Gate-4-assert both. Worked example: Commit 2.1 deviation #2 —
   `buildNotFoundHandler` was added in-commit when Gate 4's `/missing` assertion failed
   because the plan only wired `setErrorHandler`.
+
+Phase 1b (the auth foundation) added four operating learnings, three of them caught at
+execution rather than plan time:
+
+- **Cross-commit interaction discipline.** Library hooks called by sequential flows
+  interact with downstream rollback compensations. When implementing a hook callback,
+  verify the calling function's error semantics (throw → upstream rollback fires? log →
+  no rollback?); when implementing rollback compensation, verify which error conditions
+  trigger it; map the cross-product. Worked example: Commit 4's `sendVerificationEmail`
+  hook — better-auth awaits it, so a throw would fail `signUpEmail` and trip Commit 3's
+  `deleteOrphanUser`, deleting the account on an SMTP outage. Fix: the hook never throws
+  (returns a shaped result, logs).
+- **Test-mocking vs network dependence.** Tests depending on external network calls at
+  test time (ethereal account provisioning, third-party API checks) are inherently flaky
+  and CI-restriction-incompatible. Default: module-level mocking for all external
+  integrations; external-network tests are acceptable only for manual verification
+  (boot/smoke tests outside CI). Worked example: Commit 4 dropped ethereal-in-tests for
+  `vi.mock('nodemailer')`.
+- **Fix-forward over force-push; `main` is append-only.** When a pushed commit fails CI,
+  fix forward with an append-only commit rather than rewriting history. The honest record
+  (red commit + green fix) is more trustworthy than a force-pushed-clean history and
+  keeps the safety net visibly working. Worked example: Commit 4's `249fc87` (a
+  lockfile-sync miss caught by `pnpm install --frozen-lockfile`) fixed forward at
+  `4ab1229`.
+- **Dependency change → lockfile in the same commit.** When a commit adds or changes a
+  dependency, the commit MUST include the updated lockfile; the §10 file list is the
+  guard, and dropping a listed file is the failure mode — a pre-push checklist item for
+  any dependency-touching commit. Worked example: Commit 4's `249fc87` omitted
+  `pnpm-lock.yaml` from `git add` despite §10 specifying it.
 
 ---
 
@@ -1313,3 +1376,21 @@ halt-on-finding, CF-9 pause summaries, per-commit gate verification, CI-green on
 push — with larger commit scopes and an added boot/DB-verification gate per the Phase-1
 risk profile (§10). Closes 2026-05-20. **Phase 1b opens next:** the `users` table +
 better-auth + the screenhost signup endpoint.
+
+---
+
+## 13. Phase 1b — Auth foundation
+
+Six commits opening the auth foundation: the single `users` table through OVH SMTP email
+verification. See the §4 "Already resolved" Phase-1b row for full detail, gate floors,
+and plan-doc references. It used the same operating pattern as Phase 1a (§7.6) —
+inventory-first plans, halt-on-finding, CF-9 pause summaries, per-commit gate
+verification, CI-green on every push — extended with real-Postgres integration tests
+(a CI Postgres service container), operator-gated real-send email verification, and the
+fix-forward-over-force-push discipline (the one CI failure, `249fc87`, fixed forward at
+`4ab1229`, `main` not rewritten). Promotes CF-21/22/23 to formal CFs (§7.4) and captures
+four operating learnings (§7.6). Carry-forwards to later phases: production
+`BETTER_AUTH_URL` and OVH→Gmail domain-reputation warm-up (Phase 1g), and the
+verification `callbackURL` redirect target (Phase 1e). Closes 2026-05-22. **Phase 1c
+(onboarding flow** — business-profile columns, reference-table seeds, the onboarding
+endpoint, document upload**) opens next.**
