@@ -68,6 +68,10 @@ export const auth = betterAuth({
     sendVerificationEmail,
   },
   user: {
+    // Map better-auth's logical `name` field to the drizzle `contactName` property
+    // (DB column contact_name) — the adapter resolves fields by drizzle property key
+    // (Commit 3 §2.1). DB column matches the frontend contract wire name.
+    fields: { name: 'contactName' },
     // role/status are server-controlled: input:false drops them from the
     // signup input schema so a payload can't self-elevate to superadmin
     // (Commit 2 Q2). Assignment happens via the promote script / admin APIs.

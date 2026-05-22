@@ -38,7 +38,9 @@ export const users = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     email: text('email').notNull().unique(),
     emailVerified: boolean('email_verified').notNull().default(false),
-    name: text('name').notNull(),
+    // better-auth's logical `name` field maps here via user.fields.name='contactName'
+    // (auth.ts). DB column is contact_name (matches the frontend contract wire name).
+    contactName: text('contact_name').notNull(),
     image: text('image'),
     // toodooh role + moderation
     role: userRole('role').notNull().default('advertiser'),
@@ -73,6 +75,11 @@ export const users = pgTable(
     registrationDocUrl: text('registration_doc_url'), // RNE — Commit 4 upload
     cinDocUrl: text('cin_doc_url'), // CIN — Commit 4 upload
     onboardingCompleted: boolean('onboarding_completed').notNull().default(false),
+    // ── notification preferences (Phase 1c) — columns only this commit; the
+    // notify endpoint is Commit 4. Defaults from the legacy schema (inventory §2.2).
+    notifyNewsUpdates: boolean('notify_news_updates').notNull().default(false),
+    notifyRemindersEvents: boolean('notify_reminders_events').notNull().default(true),
+    notifyPromotionsOffers: boolean('notify_promotions_offers').notNull().default(false),
     // timestamps
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
@@ -89,6 +96,10 @@ export const users = pgTable(
     // postal_code is nullable (onboarding fills it; signup doesn't). A CHECK on
     // a nullable column passes on NULL, so it only constrains supplied values.
     check('users_postal_code_valid', sql`${table.postalCode} ~ '^\\d{4}$'`),
+    // tax_number is nullable (owners have no matricule at signup — audit §7.2). The
+    // lenient CHECK constrains only supplied values (passes on NULL). Route zod still
+    // validates non-null at the edge; this is DB-level defense-in-depth.
+    check('users_tax_number_valid', sql`${table.taxNumber} ~ '^[A-Za-z0-9/]{7,20}$'`),
   ],
 );
 

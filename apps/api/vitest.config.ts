@@ -4,6 +4,10 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts'],
+    // Run test files sequentially: signup.test.ts and profile.test.ts both write the
+    // shared `users` table (signup truncates in beforeEach), so parallel files would
+    // race on the same Postgres. The api suite is small — serializing is cheap.
+    fileParallelism: false,
     // The eager env singleton (src/env.ts) parses at import. Integration tests
     // (signup.test.ts) need a REAL DATABASE_URL, so read process.env first and
     // fall back to the fake for DB-free suites (CF-21 shim, env-aware).

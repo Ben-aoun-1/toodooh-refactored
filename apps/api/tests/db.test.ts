@@ -65,6 +65,14 @@ describe('db schema', () => {
     expect(users.onboardingCompleted).toBeDefined();
   });
 
+  it('users exposes contact_name (renamed from name) + notify_* columns (Commit 3)', () => {
+    expect(users.contactName).toBeDefined();
+    expect((users as unknown as Record<string, unknown>)['name']).toBeUndefined(); // renamed away
+    expect(users.notifyNewsUpdates).toBeDefined();
+    expect(users.notifyRemindersEvents).toBeDefined();
+    expect(users.notifyPromotionsOffers).toBeDefined();
+  });
+
   it('reference tables export their key columns', () => {
     expect(governorates.name).toBeDefined();
     expect(businessSectors.name).toBeDefined();
@@ -116,7 +124,7 @@ describe('reference-table seeds (Postgres)', () => {
           .insert(users)
           .values({
             email: `fk-probe-${Date.now()}@example.com`,
-            name: 'FK Probe',
+            contactName: 'FK Probe',
             governorateId: gov?.id,
             businessSectorId: sector?.id,
           })

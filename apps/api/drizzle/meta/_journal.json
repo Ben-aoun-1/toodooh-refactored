@@ -29,6 +29,13 @@
       "when": 1779440542681,
       "tag": "0003_onboarding_columns_reference_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1779447081000,
+      "tag": "0004_session_guard_profile_business",
+      "breakpoints": true
     }
   ]
 }
