@@ -1,7 +1,11 @@
+import { sql } from 'drizzle-orm';
 import {
   type AnyPgColumn,
   boolean,
+  check,
   index,
+  integer,
+  numeric,
   pgEnum,
   pgTable,
   text,
@@ -51,6 +55,24 @@ export const users = pgTable(
     // column (that plugin uses `phone_number`). If the plugin is adopted
     // later it adds its own columns and coexists with this one.
     phone: text('phone'),
+    // ── onboarding (Phase 1c) — nullable; populated by POST /api/onboarding ──
+    // FKs use callbacks (forward refs); the reference tables are declared
+    // below. ON DELETE SET NULL: a deleted reference row must not cascade-
+    // delete users (plan §2 / §11).
+    businessSectorId: uuid('business_sector_id').references(() => businessSectors.id, {
+      onDelete: 'set null',
+    }),
+    // text + zod enum at Commit 3 (local/national/agency/event_organizer)
+    businessType: text('business_type'),
+    streetAddress: text('street_address'),
+    city: text('city'),
+    postalCode: text('postal_code'),
+    governorateId: uuid('governorate_id').references(() => governorates.id, {
+      onDelete: 'set null',
+    }),
+    registrationDocUrl: text('registration_doc_url'), // RNE — Commit 4 upload
+    cinDocUrl: text('cin_doc_url'), // CIN — Commit 4 upload
+    onboardingCompleted: boolean('onboarding_completed').notNull().default(false),
     // timestamps
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
@@ -58,7 +80,16 @@ export const users = pgTable(
       .defaultNow()
       .$onUpdate(() => new Date()),
   },
-  (table) => [index('users_role_idx').on(table.role), index('users_status_idx').on(table.status)],
+  (table) => [
+    index('users_role_idx').on(table.role),
+    index('users_status_idx').on(table.status),
+    index('users_business_sector_id_idx').on(table.businessSectorId),
+    index('users_governorate_id_idx').on(table.governorateId),
+    index('users_onboarding_completed_idx').on(table.onboardingCompleted),
+    // postal_code is nullable (onboarding fills it; signup doesn't). A CHECK on
+    // a nullable column passes on NULL, so it only constrains supplied values.
+    check('users_postal_code_valid', sql`${table.postalCode} ~ '^\\d{4}$'`),
+  ],
 );
 
 export type User = typeof users.$inferSelect;
@@ -149,3 +180,53 @@ export type Session = typeof sessions.$inferSelect;
 export type NewSession = typeof sessions.$inferInsert;
 export type Verification = typeof verifications.$inferSelect;
 export type NewVerification = typeof verifications.$inferInsert;
+
+// ── reference tables (Phase 1c) ────────────────────────────────────────
+// Seeded by migration 0003 (hand-appended INSERTs, verbatim from the legacy
+// SQL per CF-23). FK targets for the onboarding columns on `users`.
+
+export const governorates = pgTable('governorates', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull().unique(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Single table with an `audience` discriminator ('advertiser' | 'owner') —
+// collapses the legacy partial-migration residue (the dead 10 generic rows +
+// the separate owner_business_sectors view) into the clean target. Validated
+// where written (Commit 3 zod); display_order drives the onboarding picker.
+export const businessSectors = pgTable('business_sectors', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull().unique(),
+  audience: text('audience').notNull(),
+  displayOrder: integer('display_order'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Campaign-targeting reference data grouped here per the architect's scope;
+// full legacy end-state shape (one clean table now beats an ALTER later).
+export const predefinedZones = pgTable('predefined_zones', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull().unique(),
+  description: text('description'),
+  latitude: numeric('latitude', { precision: 10, scale: 8 }).notNull(),
+  longitude: numeric('longitude', { precision: 11, scale: 8 }).notNull(),
+  radius: integer('radius').notNull().default(1000),
+  isActive: boolean('is_active').notNull().default(true),
+  isHot: boolean('is_hot').notNull().default(false),
+  imageUrl: text('image_url'),
+  country: text('country').notNull().default('Tunisie'),
+  region: text('region'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+export type Governorate = typeof governorates.$inferSelect;
+export type NewGovernorate = typeof governorates.$inferInsert;
+export type BusinessSector = typeof businessSectors.$inferSelect;
+export type NewBusinessSector = typeof businessSectors.$inferInsert;
+export type PredefinedZone = typeof predefinedZones.$inferSelect;
+export type NewPredefinedZone = typeof predefinedZones.$inferInsert;
