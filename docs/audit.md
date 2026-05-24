@@ -1026,6 +1026,8 @@ per commit.
 
 - **Phase 1b — Auth foundation** — the single `users` table + better-auth integration + signup endpoint + OVH SMTP email verification. Six commits across four units: `d59bf75` (single `users` table — the dual-identity collapse — + `promote-to-admin` script + initial migration), `1648159` (better-auth integration — `accounts`/`sessions`/`verifications` tables + Fastify catch-all `/auth/*` plugin + `AUTH_SECRET` env + `role`/`status` `input:false` to block signup self-elevation), `927d61b` (`POST /api/signup` wrapping `auth.api.signUpEmail` server-side — anti-enumeration on duplicate email, `tax_number` 409 pre-check, business fields registered as additionalFields, orphan-rollback for better-auth's non-atomic signup — plus the first real-Postgres integration tests + a CI Postgres service container), `249fc87`→`4ab1229` (OVH SMTP email send via nodemailer + an `EmailSender` abstraction + a brand-aligned, role-aware French verification template; `249fc87` failed CI on a lockfile-sync miss — `pnpm-lock.yaml` dropped from `git add` against §10 policy, caught by `pnpm install --frozen-lockfile` — fixed forward at `4ab1229`, `main` not rewritten). Real send verified end-to-end (OVH-to-OVH + OVH-to-Gmail, spf/dkim/dmarc pass, JWT verification flips `email_verified`); Gmail spam-landing is new-domain reputation, not auth (domain warm-up carried to Phase 1g, along with the production `BETTER_AUTH_URL` and the Phase-1e verification `callbackURL`). Gate floors **post-Phase-1b**: root typecheck **51** / lint **1** / test **200** / build `apps/web` **139.80 kB** gzip; `apps/api` per-package typecheck **0** / lint **0** / test **40** / build success. Carry-forwards: **CF-21 promoted** (eager-singleton env shim, + the CF-21a/b runtime-shim-vs-typed-literal sub-pattern), **CF-22 promoted** (literal-vs-spirit surface-and-ratify), **CF-23 promoted** (two-layer library verification) — see §7.4. Plan docs: `d907e05`, `367c73d`, `9c9faf2`, `333b68f` (their §9 sections are the canonical CF write-up home). Phase 1b was direct feature work (no `→ Issue`). Closes 2026-05-22. Commits `d59bf75`, `1648159`, `927d61b`, `249fc87`, `4ab1229`, plus the four plan-doc commits above and this audit refresh.
 
+- **Phase 1c — Onboarding-data + profile edits + document storage** — the screenhost's business-profile data, the profile-edit surface, and document storage. Five feature commits: `9e9d716` (9 onboarding columns on `users` + the `governorates`/`business_sectors`/`predefined_zones` reference tables with legacy-verbatim seeds — migration 0003; the `owner_business_sectors` view folded into `business_sectors.audience='owner'`), `46649d8` (MinIO container + the `StorageProvider` abstraction + S3-compatible client — shaped `{key|error}` results, private bucket + presigned-GET access, columns hold the object KEY not a URL), `a821789` (the reusable `requireAuth` session-guard preHandler + `PATCH /api/profile/business` + migration 0004 — `name`→`contact_name` RENAME, the three `notify_*` columns, lenient `tax_number` CHECK), `ed8d273` (`PATCH /api/profile/{contact,address,notifications}` + `fonction`/`zone` columns — migration 0005), `46a56e9` (`POST`+`GET /api/profile/documents/:type` — RNE/CIN upload+retrieve through the StorageProvider, the first multipart endpoint, new dep `@fastify/multipart` 10.0.0 with the lockfile in the same commit). **Architecture pivot:** the DB-side "Model 1" (minimal signup + a separate onboarding gate) was **abandoned for Option B** (combined-registration wizard; no onboarding gate; profile fields edited via section-scoped PATCH endpoints; Commit 3's endpoint reframed as an _edit_ surface, not a required gate) — the reversal forced by the frontend-contract audit (`faed78d`, `docs/handoff/frontend-backend-contract.md` §7), the first worked CF-24 instance. The Commit-3 guard is the auth foundation every later authenticated endpoint reuses — proven across 7 endpoints in Commits 3-5 (only session _validation_; session _creation_ is the Phase-1d boundary). Gate floors **post-Phase-1c**: root typecheck **51** / lint **1** / test **259** / build `apps/web` **139.80 kB** gzip; `apps/api` per-package typecheck **0** / lint **0** / test **99** / build success (entered post-1b at `apps/api` **40** / root **200**; the +59 is all `apps/api` integration tests — `apps/web` held at 160). Carry-forwards: **CF-24 FORMALIZED** (frontend contract authoritative for endpoint shape; backend conforms except security/integrity exceptions); **CF-19/21/22/23 instances accumulated** across the phase — see §7.4. The `apps/api` suite was **serialized** (`fileParallelism:false`, Commit 3) with shared-pool teardown at a file-level `afterAll` (Commit 4) — §7.6. Plan docs: `9b24404`, `230cfa5`, `27dc500`, `8389783`, `db46f2c` (their §9 sections + `frontend-backend-contract.md` are the canonical CF-24/19/21/22/23 write-up home). Phase 1c was direct feature work (no `→ Issue`). **Phase-1e carry-forwards:** signup-route `tax_number` required→optional (the schema column is already nullable — only the signup zod enforces required); FE phone normalize-at-repoint (un-normalized owner phone would 400 against the backend E.164 validator); FE `updateProfile` single-method splits by section; FE documents add the `type` discriminator + swap `supabase.storage`→this API. Closes 2026-05-24. Commits `9e9d716`, `46649d8`, `a821789`, `ed8d273`, `46a56e9`, plus `faed78d` (the mid-phase contract audit) + the five plan-doc commits above and this audit refresh.
+
 ---
 
 ## 5. Roadmap
@@ -1185,6 +1187,51 @@ docs' §9 sections** — same "audit summarizes, canonical home elsewhere" prece
   execution revealed a stateless JWT), Commit 4 (hook-await-vs-orphan-rollback
   cross-commit interaction via source).
 
+Phase 1c formalized one new CF and accumulated worked instances of four existing
+ones (canonical write-ups in the **Phase-1c plan docs' §9 sections** +
+`docs/handoff/frontend-backend-contract.md` — same "audit summarizes, canonical
+home elsewhere" precedent):
+
+- **CF-24 — FORMALIZED.** The frontend contract is authoritative for endpoint
+  shape, field naming, and flow; the backend conforms, EXCEPT where the backend is
+  deliberately correct on security/integrity grounds (class (b)). Where they
+  differ, the executor surfaces per-case and the architect rules: **(a)
+  backend-conforms** [the default — casing, missing columns, extra collected
+  fields], **(b) frontend-changes** [the security exception — anti-enumeration,
+  password floors, privilege fields], or **load-bearing** [a tension needing an
+  architecture decision]. Canonical home:
+  `docs/handoff/frontend-backend-contract.md` (§1 the rule, §7 the rulings).
+  **First + load-bearing worked instance: the Model-1→Option-B reversal** — the
+  frontend contract (a combined-registration wizard with no separate-onboarding
+  step) overrode an architect decision (Model 1, locked from DB-side docs _before
+  the contract existed_), catching the wrong call BEFORE it propagated into
+  Commits 3+ and a speculative Phase-1e onboarding build. **Greenfield sub-case**
+  (Commit 5 documents): where the FE has no API-level contract — it writes Supabase
+  storage directly, the type implicit in `isIndividualOwner`, no `type` field —
+  CF-24 has nothing to be authoritative about; the endpoint is designed clean and
+  the FE is repointed in Phase 1e.
+- **CF-19 — instances:** AWS SDK `3.1052.0` (`client-s3` + `s3-request-presigner`)
+  - the pinned MinIO image tag (Commit 2); `@fastify/multipart` `10.0.0`
+    (Commit 5). Exact-pin discipline held across the phase, lockfile-in-commit for
+    the one dependency change.
+- **CF-21 — instances:** the five `STORAGE_*` env cascade (Commit 2 — 21a runtime
+  shim + 21b typed-literal); plus the operational corollary that the eager `env`
+  singleton validates ALL vars at import, so running `migrate` / any `tsx` script
+  locally needs the full env block, not just `DATABASE_URL` (recurred Commits 4-5).
+- **CF-22 — instances:** the `tax_number`-already-nullable correction + the
+  vitest-serialize decision (Commit 3); the M1 path-param document discriminator
+  (vs the literal "type field") + the M3 5 MB cap correcting a ~10 MB plan estimate
+  from the verified FE value (Commit 5); the Finding-A/B legacy-seed forks
+  (Commit 1).
+- **CF-23 — instances:** legacy-SQL seed verification incl. Findings A/B
+  (Commit 1); the `forcePathStyle` two-layer config + the live MinIO round-trip
+  (Commit 2); the better-auth `name`→`contactName` mapping + `getSession` +
+  drizzle-adapter resolution at plan-write, then the RENAME + signup round-trip at
+  execution (Commit 3); the `zone`=free-text name-collision catch — `predefined_zones`
+  feeds only the campaign wizard, not the owner address form (Commit 4); the
+  `@fastify/multipart` buffer/limit API + the greenfield FE finding + streaming-layer
+  oversize rejection (Commit 5).
+
 ### 7.5 — Per-step record
 
 Each row's full record is in §4 "Already resolved"; one line each here (numbering per
@@ -1266,6 +1313,28 @@ execution rather than plan time:
   guard, and dropping a listed file is the failure mode — a pre-push checklist item for
   any dependency-touching commit. Worked example: Commit 4's `249fc87` omitted
   `pnpm-lock.yaml` from `git add` despite §10 specifying it.
+
+Phase 1c (onboarding-data + profile edits + document storage) added three operating
+learnings:
+
+- **The `apps/api` test suite is serialized.** `vitest fileParallelism:false`
+  (Commit 3) — users-writing suites race signup's `beforeEach` TRUNCATE under parallel
+  files; shared-pool teardown is a single file-level `afterAll`, not per-describe
+  (Commit 4, where a second profile suite's per-describe `sql.end()` would have closed
+  the pool before the first suite finished). Any new users-writing suite inherits both.
+  A deliberate determinism-over-speed trade for a small suite.
+- **Drive an interactive CLI non-interactively rather than hand-fabricating its
+  output.** Commit 3's `name`→`contact_name` rename: drizzle-kit's rename detection is
+  interactive (a TTY prompt absent in this env). The plan's fallback was to hand-author
+  the `RENAME COLUMN` SQL, but that risks snapshot drift (the generated
+  `meta/*_snapshot.json` would not reflect the hand-edit). Driving the prompt produced
+  a clean `RENAME COLUMN` migration AND an in-sync snapshot — when a tool's correct path
+  is interactive, drive it; don't fabricate its artifacts. (Commits 4-5's migrations
+  were pure `ADD COLUMN` — no rename — so `generate` ran clean non-interactively.)
+- **Estimate-drift surfaced, not absorbed.** The `~N` test-count figures in plan §11
+  are approximate; the enumerated cases are truth. When actual differs — Commit 2
+  (+10 vs +9), Commit 4 (88 vs ~85), Commit 5 (11 vs ~13 cases) — report the gap, never
+  pad to hit the estimate.
 
 ---
 
@@ -1394,3 +1463,46 @@ four operating learnings (§7.6). Carry-forwards to later phases: production
 verification `callbackURL` redirect target (Phase 1e). Closes 2026-05-22. **Phase 1c
 (onboarding flow** — business-profile columns, reference-table seeds, the onboarding
 endpoint, document upload**) opens next.**
+
+---
+
+## 14. Phase 1c — Onboarding-data + profile edits + document storage
+
+Phase 1c is the third feature-building phase: the screenhost's business-profile data, the
+profile-edit surface, and document storage. Five feature commits — `9e9d716` (onboarding
+columns + reference-table seeds), `46649d8` (MinIO + the `StorageProvider`), `a821789`
+(the `requireAuth` session-guard + `PATCH /api/profile/business` + migration 0004),
+`ed8d273` (`PATCH /api/profile/{contact,address,notifications}` + `fonction`/`zone` +
+migration 0005), `46a56e9` (`POST`+`GET /api/profile/documents/:type` +
+`@fastify/multipart`) — plus the mid-phase frontend-contract audit (`faed78d`). See the
+§4 "Already resolved" Phase-1c row for full detail, gate floors, and plan-doc references.
+
+**The architecture pivot.** The phase opened expecting the DB-side "Model 1" — a minimal
+signup followed by a separate onboarding gate (the §13 pointer that closed Phase 1b
+reflects that expectation). The frontend-contract audit (`faed78d`) proved it wrong: the
+frontend is a single combined-registration wizard collecting the entire profile +
+documents before one signup call, with no separate-onboarding step and
+`onboarding_completed` flipped only by admin. Per CF-24 the contract is authoritative, so
+**Model 1 was abandoned for Option B** — no onboarding gate; profile fields are edited via
+section-scoped PATCH endpoints; Commit 3's endpoint became an _edit_ surface, not a
+required gate. The rulings live in `docs/handoff/frontend-backend-contract.md` §7. This is
+the first worked CF-24 instance (§7.4) — the contract catching a wrong architect call
+before it propagated into the dependent endpoints.
+
+It used the same operating pattern as Phases 1a/1b (§7.6) — inventory-first plans,
+halt-on-finding, CF-9 pause summaries, per-commit gate verification, CI-green on every
+push — extended with real-MinIO integration tests alongside real-Postgres (Commit 5
+exercises both services), a serialized test suite, and the
+dependency→lockfile-in-the-same-commit discipline (Commit 5's `@fastify/multipart`).
+Formalizes **CF-24** and accumulates **CF-19/21/22/23** instances (§7.4); captures three
+operating learnings (§7.6). Gate floor moved `apps/api` **40 → 99** / root **200 → 259**.
+
+**Phase-1e carry-forwards:** signup-route `tax_number` required→optional (the schema
+column is already nullable — only the signup zod enforces required); FE phone
+normalize-at-repoint (un-normalized owner phone would 400 against the backend E.164
+validator); FE `updateProfile` single-method splits by section at the repoint; FE
+documents add the `type` discriminator + swap `supabase.storage`→this API. Closes
+2026-05-24. **Phase 1d (sign-in flow) opens next** — its first verification is the
+real-cookie session round-trip through the Commit-3 `requireAuth` guard, closing the
+session-creation boundary Commit 3 deliberately left open (Commit 3 only validated
+sessions; creation is Phase 1d).
