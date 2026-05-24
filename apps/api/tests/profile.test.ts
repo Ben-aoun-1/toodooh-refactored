@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 
 import { auth } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
-import { businessSectors, users } from '../src/db/schema.js';
+import { businessSectors, governorates, users } from '../src/db/schema.js';
 import { profileRoutes } from '../src/routes/profile.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
@@ -45,10 +45,6 @@ describe('PATCH /api/profile/business', () => {
   afterEach(async () => {
     await app.close();
     vi.restoreAllMocks();
-  });
-
-  afterAll(async () => {
-    await sql.end();
   });
 
   const patch = (payload: Record<string, unknown>) =>
@@ -133,4 +129,245 @@ describe('PATCH /api/profile/business', () => {
     expect(row?.role).toBe('advertiser');
     expect(row?.status).toBe('pending');
   });
+});
+
+describe('PATCH /api/profile/contact', () => {
+  let app: ReturnType<typeof buildApp>;
+  let userId: string;
+
+  beforeEach(async () => {
+    await resetAuthTables();
+    const [u] = await db
+      .insert(users)
+      .values({ email: 'contact@example.com', contactName: 'Original Name' })
+      .returning();
+    userId = u?.id ?? '';
+    app = buildApp();
+    await app.register(profileRoutes);
+    await app.ready();
+  });
+
+  afterEach(async () => {
+    await app.close();
+    vi.restoreAllMocks();
+  });
+
+  const patch = (payload: Record<string, unknown>) =>
+    app.inject({ method: 'PATCH', url: '/api/profile/contact', payload });
+
+  it('authenticated → updates supplied fields', async () => {
+    mockSession(userId);
+    const res = await patch({
+      contact_name: 'New Name',
+      contact_phone: '+21612345678',
+      fonction: 'CTO',
+    });
+    expect(res.statusCode).toBe(200);
+    const [row] = await db.select().from(users).where(eq(users.id, userId));
+    expect(row?.contactName).toBe('New Name');
+    expect(row?.contactPhone).toBe('+21612345678');
+    expect(row?.fonction).toBe('CTO');
+  });
+
+  it('partial: only supplied fields change', async () => {
+    await db
+      .update(users)
+      .set({ contactPhone: '+21611111111', fonction: 'CEO' })
+      .where(eq(users.id, userId));
+    mockSession(userId);
+    await patch({ fonction: 'CFO' });
+    const [row] = await db.select().from(users).where(eq(users.id, userId));
+    expect(row?.fonction).toBe('CFO');
+    expect(row?.contactPhone).toBe('+21611111111'); // untouched
+  });
+
+  it('fonction: null clears', async () => {
+    await db.update(users).set({ fonction: 'CTO' }).where(eq(users.id, userId));
+    mockSession(userId);
+    const res = await patch({ fonction: null });
+    expect(res.statusCode).toBe(200);
+    const [row] = await db.select().from(users).where(eq(users.id, userId));
+    expect(row?.fonction).toBeNull();
+  });
+
+  it('bad phone (un-normalized) → 400', async () => {
+    mockSession(userId);
+    const res = await patch({ contact_phone: '12 34' });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('unauthenticated → 401', async () => {
+    vi.spyOn(auth.api, 'getSession').mockResolvedValue(null);
+    const res = await patch({ contact_name: 'X' });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('empty body → 400', async () => {
+    mockSession(userId);
+    const res = await patch({});
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+describe('PATCH /api/profile/address', () => {
+  let app: ReturnType<typeof buildApp>;
+  let userId: string;
+  let governorateId: string;
+
+  beforeEach(async () => {
+    await resetAuthTables();
+    const [u] = await db
+      .insert(users)
+      .values({ email: 'addr@example.com', contactName: 'Addr Owner' })
+      .returning();
+    userId = u?.id ?? '';
+    const [gov] = await db.select({ id: governorates.id }).from(governorates).limit(1);
+    governorateId = gov?.id ?? '';
+    app = buildApp();
+    await app.register(profileRoutes);
+    await app.ready();
+  });
+
+  afterEach(async () => {
+    await app.close();
+    vi.restoreAllMocks();
+  });
+
+  const patch = (payload: Record<string, unknown>) =>
+    app.inject({ method: 'PATCH', url: '/api/profile/address', payload });
+
+  it('authenticated → updates supplied fields', async () => {
+    mockSession(userId);
+    const res = await patch({
+      street_address: '12 Rue de Tunis',
+      city: 'Tunis',
+      postal_code: '1000',
+      governorate_id: governorateId,
+      zone: 'Centre-ville',
+    });
+    expect(res.statusCode).toBe(200);
+    const [row] = await db.select().from(users).where(eq(users.id, userId));
+    expect(row?.streetAddress).toBe('12 Rue de Tunis');
+    expect(row?.city).toBe('Tunis');
+    expect(row?.postalCode).toBe('1000');
+    expect(row?.governorateId).toBe(governorateId);
+    expect(row?.zone).toBe('Centre-ville');
+  });
+
+  it('partial: only supplied fields change', async () => {
+    await db.update(users).set({ city: 'Sfax', postalCode: '3000' }).where(eq(users.id, userId));
+    mockSession(userId);
+    await patch({ city: 'Sousse' });
+    const [row] = await db.select().from(users).where(eq(users.id, userId));
+    expect(row?.city).toBe('Sousse');
+    expect(row?.postalCode).toBe('3000'); // untouched
+  });
+
+  it('zone: null clears', async () => {
+    await db.update(users).set({ zone: 'Lac 2' }).where(eq(users.id, userId));
+    mockSession(userId);
+    const res = await patch({ zone: null });
+    expect(res.statusCode).toBe(200);
+    const [row] = await db.select().from(users).where(eq(users.id, userId));
+    expect(row?.zone).toBeNull();
+  });
+
+  it('bad postal_code (not 4 digits) → 400', async () => {
+    mockSession(userId);
+    const res = await patch({ postal_code: '12345' });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('unknown governorate_id → 400 (FK pre-check)', async () => {
+    mockSession(userId);
+    const res = await patch({ governorate_id: '00000000-0000-0000-0000-000000000000' });
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ fields: { field: string }[] }>().fields[0]?.field).toBe('governorate_id');
+  });
+
+  it('valid governorate_id → stored', async () => {
+    mockSession(userId);
+    const res = await patch({ governorate_id: governorateId });
+    expect(res.statusCode).toBe(200);
+    const [row] = await db.select().from(users).where(eq(users.id, userId));
+    expect(row?.governorateId).toBe(governorateId);
+  });
+
+  it('unauthenticated → 401', async () => {
+    vi.spyOn(auth.api, 'getSession').mockResolvedValue(null);
+    const res = await patch({ city: 'X' });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('empty body → 400', async () => {
+    mockSession(userId);
+    const res = await patch({});
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+describe('PATCH /api/profile/notifications', () => {
+  let app: ReturnType<typeof buildApp>;
+  let userId: string;
+
+  beforeEach(async () => {
+    await resetAuthTables();
+    const [u] = await db
+      .insert(users)
+      .values({ email: 'notif@example.com', contactName: 'Notif Owner' })
+      .returning();
+    userId = u?.id ?? '';
+    app = buildApp();
+    await app.register(profileRoutes);
+    await app.ready();
+  });
+
+  afterEach(async () => {
+    await app.close();
+    vi.restoreAllMocks();
+  });
+
+  const patch = (payload: Record<string, unknown>) =>
+    app.inject({ method: 'PATCH', url: '/api/profile/notifications', payload });
+
+  it('authenticated → toggles supplied booleans', async () => {
+    mockSession(userId);
+    // schema defaults: news=false, reminders=true, promotions=false (Commit 3).
+    const res = await patch({
+      notify_news_updates: true,
+      notify_reminders_events: false,
+      notify_promotions_offers: true,
+    });
+    expect(res.statusCode).toBe(200);
+    const [row] = await db.select().from(users).where(eq(users.id, userId));
+    expect(row?.notifyNewsUpdates).toBe(true);
+    expect(row?.notifyRemindersEvents).toBe(false);
+    expect(row?.notifyPromotionsOffers).toBe(true);
+  });
+
+  it('partial: only supplied flags change', async () => {
+    mockSession(userId);
+    await patch({ notify_news_updates: true });
+    const [row] = await db.select().from(users).where(eq(users.id, userId));
+    expect(row?.notifyNewsUpdates).toBe(true);
+    expect(row?.notifyRemindersEvents).toBe(true); // default untouched
+  });
+
+  it('unauthenticated → 401', async () => {
+    vi.spyOn(auth.api, 'getSession').mockResolvedValue(null);
+    const res = await patch({ notify_news_updates: true });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('empty body → 400', async () => {
+    mockSession(userId);
+    const res = await patch({});
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+// Single file-level teardown — the pool is shared across all describes above
+// (sql.end() must run once, after the last suite, not per-describe).
+afterAll(async () => {
+  await sql.end();
 });

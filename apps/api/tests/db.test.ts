@@ -73,6 +73,11 @@ describe('db schema', () => {
     expect(users.notifyPromotionsOffers).toBeDefined();
   });
 
+  it('users exposes fonction + zone columns (Commit 4)', () => {
+    expect(users.fonction).toBeDefined();
+    expect(users.zone).toBeDefined();
+  });
+
   it('reference tables export their key columns', () => {
     expect(governorates.name).toBeDefined();
     expect(businessSectors.name).toBeDefined();

@@ -53,6 +53,8 @@ export const users = pgTable(
     businessName: text('business_name'),
     taxNumber: text('tax_number').unique(),
     contactPhone: text('contact_phone'),
+    // responsable role/title (owner contact sub-form, CF-23) — nullable, free text
+    fonction: text('fonction'),
     // Generic nullable contact field — NOT better-auth's phoneNumber plugin
     // column (that plugin uses `phone_number`). If the plugin is adopted
     // later it adds its own columns and coexists with this one.
@@ -72,6 +74,8 @@ export const users = pgTable(
     governorateId: uuid('governorate_id').references(() => governorates.id, {
       onDelete: 'set null',
     }),
+    // free-text zone/secteur (owner address sub-form) — NOT a predefined_zones FK (CF-23 §2.1)
+    zone: text('zone'),
     registrationDocUrl: text('registration_doc_url'), // RNE — Commit 4 upload
     cinDocUrl: text('cin_doc_url'), // CIN — Commit 4 upload
     onboardingCompleted: boolean('onboarding_completed').notNull().default(false),

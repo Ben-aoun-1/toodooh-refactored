@@ -36,6 +36,13 @@
       "when": 1779447081000,
       "tag": "0004_session_guard_profile_business",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1779641218205,
+      "tag": "0005_profile_fonction_zone_columns",
+      "breakpoints": true
     }
   ]
 }
