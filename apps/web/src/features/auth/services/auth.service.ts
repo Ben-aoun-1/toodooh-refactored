@@ -857,28 +857,24 @@ export const authService = {
     if (error) throw new Error(error.message || mapAuthError(error));
   },
 
+  // Phase-1f F1: reference reads repointed off Supabase onto the public GET endpoints
+  // (Part-A Commit 3) via the keystone apiClient. The §5.3 audience collapse — advertiser vs owner
+  // sectors are one endpoint with `?audience=`. Owner sectors no longer need the
+  // `business_sector_id → id` remap: the endpoint already returns `{ id, name, ... }`.
   async getBusinessSectors(): Promise<BusinessSector[]> {
-    const { data, error } = await supabase
-      .from('business_sectors')
-      .select('*')
-      .order('display_order', { ascending: true, nullsFirst: false });
-    if (error) throw new Error(mapAuthError(error));
-    return data ?? [];
+    try {
+      return await apiClient.get<BusinessSector[]>('/business-sectors?audience=advertiser');
+    } catch (error) {
+      throw new Error(apiErrorMessage(error));
+    }
   },
 
   async getOwnerBusinessSectors(): Promise<BusinessSector[]> {
-    const { data, error } = await supabase
-      .from('owner_business_sectors')
-      .select('business_sector_id, name, display_order')
-      .order('display_order', { ascending: true });
-    if (error) throw new Error(mapAuthError(error));
-    return (data ?? []).map(
-      (row: { business_sector_id: string; name: string; display_order: number | null }) => ({
-        id: row.business_sector_id,
-        name: row.name,
-        display_order: row.display_order,
-      }),
-    );
+    try {
+      return await apiClient.get<BusinessSector[]>('/business-sectors?audience=owner');
+    } catch (error) {
+      throw new Error(apiErrorMessage(error));
+    }
   },
 
   async getCompanySizeOptions(): Promise<CompanySizeOption[]> {
@@ -931,9 +927,10 @@ export const authService = {
   },
 
   async getGovernorates(): Promise<Governorate[]> {
-    const { data, error } = await supabase.from('governorates').select('*').order('name');
-
-    if (error) throw new Error(mapAuthError(error));
-    return data;
+    try {
+      return await apiClient.get<Governorate[]>('/governorates');
+    } catch (error) {
+      throw new Error(apiErrorMessage(error));
+    }
   },
 };
