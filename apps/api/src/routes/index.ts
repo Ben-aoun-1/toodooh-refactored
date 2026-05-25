@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 
+import { meRoutes } from './me.js';
 import { passwordRoutes } from './password.js';
 import { profileDocumentsRoutes } from './profile-documents.js';
 import { profileRoutes } from './profile.js';
@@ -11,6 +12,7 @@ import { signupRoute } from './signup.js';
 export const apiRoutes: FastifyPluginAsync = async (app) => {
   await app.register(signupRoute);
   await app.register(signinRoutes);
+  await app.register(meRoutes);
   await app.register(profileRoutes);
   await app.register(profileDocumentsRoutes);
   await app.register(passwordRoutes);

@@ -18,6 +18,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "3.1052.0",
     "@aws-sdk/s3-request-presigner": "3.1052.0",
+    "@fastify/cors": "11.2.0",
     "@fastify/multipart": "10.0.0",
     "better-auth": "1.6.11",
     "drizzle-orm": "0.45.2",

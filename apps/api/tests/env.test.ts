@@ -26,6 +26,8 @@ describe('parseEnv', () => {
     // STORAGE defaults (BUCKET/REGION)
     expect(env.STORAGE_BUCKET).toBe('toodooh-documents');
     expect(env.STORAGE_REGION).toBe('us-east-1');
+    // WEB_ORIGIN default (CORS origin + better-auth trustedOrigins)
+    expect(env.WEB_ORIGIN).toBe('http://localhost:5173');
   });
 
   it('uses info LOG_LEVEL when NODE_ENV=production', () => {

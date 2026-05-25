@@ -7,21 +7,13 @@ import { z } from 'zod';
 import { auth } from '../auth/auth.js';
 import { db } from '../db/client.js';
 import { users } from '../db/schema.js';
+import { toProfileType } from '../lib/profile-type.js';
 import { requireAuth } from '../middleware/require-auth.js';
 
 const signinBodySchema = z.object({
   email: z.email('A valid email is required'),
   password: z.string().min(1, 'Password is required'),
 });
-
-// Reconstruct the frontend's profile_type from role + business_type (inverse of the signup
-// mapping; contract §5.2/§7.2). `agency` is NOT a role — it is advertiser + business_type='agency'.
-// admin/superadmin have no FE profile_type (separate admin login, Phase 1f).
-const toProfileType = (role: string, businessType: string | null): string | null => {
-  if (role === 'advertiser') return businessType === 'agency' ? 'agency' : 'advertiser';
-  if (role === 'individual_owner' || role === 'fleet_owner') return role;
-  return null;
-};
 
 // better-auth's signInEmail/signOut set/clear the session cookie via setSessionCookie/
 // deleteSessionCookie; with returnHeaders:true the Set-Cookie comes back on `headers`. Forward
@@ -69,12 +61,10 @@ export const signinRoutes: FastifyPluginAsync = async (app) => {
         });
       }
       request.log.error(err, 'signin failed');
-      return reply
-        .status(500)
-        .send({
-          error: 'INTERNAL_ERROR',
-          message: 'An unexpected error occurred. Please try again.',
-        });
+      return reply.status(500).send({
+        error: 'INTERNAL_ERROR',
+        message: 'An unexpected error occurred. Please try again.',
+      });
     }
 
     forwardSetCookie(reply, result.headers);

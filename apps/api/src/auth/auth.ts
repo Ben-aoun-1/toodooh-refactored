@@ -82,6 +82,10 @@ export const auth = betterAuth({
   baseURL: env.BETTER_AUTH_URL,
   // Honor the locked /auth/* mount (default is /api/auth — would 404).
   basePath: '/auth',
+  // The browser's Origin (forwarded by the same-origin proxy) is WEB_ORIGIN, not
+  // baseURL — without this, cookie-bearing non-GET auth requests 403 INVALID_ORIGIN
+  // (origin-check.mjs). The third origin layer beyond CORS + SameSite.
+  trustedOrigins: [env.WEB_ORIGIN],
   database: drizzleAdapter(db, {
     provider: 'pg',
     schema: {
@@ -129,5 +133,11 @@ export const auth = betterAuth({
   advanced: {
     // Defer ID generation to Postgres (uuid defaultRandom on every table).
     database: { generateId: false },
+    // Pin the origin check explicitly rather than letting it derive from NODE_ENV:
+    // better-auth defaults skipOriginCheck=true when isTest() (create-context.mjs),
+    // which would silently disable a security control in tests and make tested != shipped.
+    // false keeps it ON in every env (prod/dev already had it on) so the suite exercises
+    // prod's real behavior. A security control's state should be explicit, not env-derived.
+    disableOriginCheck: false,
   },
 });

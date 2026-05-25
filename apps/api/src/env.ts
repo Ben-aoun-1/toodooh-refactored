@@ -12,6 +12,10 @@ const EnvSchema = z.object({
   // Base URL for better-auth verification links. Dev default avoids a test-env
   // shim; production overrides to https://api.too-dooh.com (Phase 1g).
   BETTER_AUTH_URL: z.url().default('http://localhost:4000'),
+  // Browser origin allowed to reach the API: @fastify/cors `origin` + better-auth
+  // `trustedOrigins`. Dev = Vite's origin (a same-origin proxy fronts :4000); prod
+  // overrides to the web origin (joins BETTER_AUTH_URL/SMTP/STORAGE at deploy).
+  WEB_ORIGIN: z.url().default('http://localhost:5173'),
   // SMTP (OVH) — verification email send (Commit 4). HOST/PORT/SECURE default;
   // USER/PASSWORD/FROM required (fast-fail at boot).
   SMTP_HOST: z.string().default('smtp.mail.ovh.net'),

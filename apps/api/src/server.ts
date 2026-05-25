@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import cors from '@fastify/cors';
 import Fastify, { type FastifyInstance } from 'fastify';
 
 import { authPlugin } from './auth/plugin.js';
@@ -44,6 +45,10 @@ process.on('SIGTERM', () => {
 
 const start = async (): Promise<void> => {
   try {
+    // Registered first; fastify-plugin-wrapped so it applies app-wide. The same-origin
+    // proxy makes this near-moot for the browser, but it future-proofs non-proxied
+    // callers (player-api). Credentialed → explicit origin, never '*'.
+    await app.register(cors, { origin: env.WEB_ORIGIN, credentials: true });
     await app.register(authPlugin);
     await app.register(apiRoutes);
     await app.register(healthRoute);
