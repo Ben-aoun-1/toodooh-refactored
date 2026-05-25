@@ -202,12 +202,42 @@ CF-22 (the §2.B corrections surfaced, not silently applied). The two modeling p
 Plan (2.0): CF-6, push immediately. Impl (2.1): CF-7 gate-sweep, CF-9 pause, push, CI watch. No
 visual-QA (backend-only). No new deps → lockfile untouched (confirm).
 
-## §11 — Exact file contents
-Deferred to post-ratification: the schema columns (wifi in/out), the terms shape, and the
-agent wire name are **pending §2.B rulings** — once ratified I finalize §11 (zod, the map, the
-post-create update, 0006, the tests with the locked count) in the impl turn. Drafting concrete code
-now would bake in unratified shapes. (This is the one section intentionally held to a contents-sketch
-until the CF-9 rulings land — surfaced per CF-22.)
+## §11 — Exact file contents (finalized — rulings R1–R5 ratified 2026-05-25)
+
+**Rulings folded in:** R1 wifi **DEFERRED** (no columns; tracked: WiFi-at-signup = wizard field +
+column + provisioning consumer, device/owner slice). R2 accept wire `agent_toodooh`→column
+`agent_code` (class-a wire-map — note: opposite mechanism from name→contact_name, which renames the
+*column*; here the column is the cleaner name — same CF-24 principle, different situation). R3
+`terms_accepted_at` timestamptz, server-set `now()` when `terms_accepted===true`; **route REJECTS
+400 if terms not accepted** (backend-enforced, not just the wizard); no version; never trust a client
+timestamp. R4 **wire `name`→`contact_name` lands here** — accept wire `contact_name`, pass as
+signUpEmail's `name` arg (→ contactName column, already renamed in 1c). *R4 wording flag: the prompt's
+mid-sentence "accepts wire name" conflicts with its header "name→contact_name lands HERE" + source
+(`SignUpData.contact_name`) + CF-24; resolved to `contact_name` per the preponderance — surfaced at
+the impl CF-9 for a 1-line flip if `name` was intended.* R5 bundled post-create `db.update`,
+duplicate-safe via better-auth's synthetic non-persisted id.
+
+**Required wire fields:** `email`, `password`(≥12), `contact_name`(1–100), `business_name`(1–200),
+`contact_phone`(E.164), `terms_accepted`(`z.literal(true)`). **Optional:** `tax_number`(lenient when
+present), `profile_type`(enum; omitted→role stays default advertiser), `business_type`,
+`business_sector_id`(uuid), `street_address`, `city`, `postal_code`(`^\d{4}$`), `governorate_id`(uuid),
+`fonction`, `zone`, `agent_toodooh`. Unknown keys (owner-extras) dropped by zod's default strip.
+*Lenient FK/profile fields chosen over required to decouple from the reference-data-GET ordering
+(next commit) and avoid FK-500s on partial data — surfaced at the impl CF-9.*
+
+- **schema.ts** (users): `agentCode: text('agent_code')`, `termsAcceptedAt: timestamp('terms_accepted_at',
+  { withTimezone: true })` — both nullable; modeling comments (agent capture-irreversible; terms
+  server-stamped).
+- **drizzle/0006**: 2 clean ADD COLUMNs.
+- **lib/profile-type.ts**: `PROFILE_TYPES` const + `fromProfileType(pt) → { role, businessTypeOverride? }`
+  (agency→advertiser+bt=agency; owners→same; advertiser→advertiser).
+- **signup.ts**: grown zod (above); tax pre-check guarded `if (tax_number)`; signUpEmail with
+  `name: contact_name`; one post-create `db.update(users).set({ termsAcceptedAt, role?, businessType?,
+  businessSectorId?, streetAddress?, city?, postalCode?, governorateId?, fonction?, zone?, agentCode? })
+  .where(eq(users.id, result.user.id))` (only-provided keys; role/bt from the map).
+- **tests** (signup.test extend → exact count at impl; db.test +2 column asserts): the §4 cases, with
+  case 9 now **terms-not-accepted/omitted → 400** (R3), and case 8 asserting the existing user's
+  role/profile UNCHANGED on duplicate.
 
 ## §12 — Fire instruction
 Ratify §2.B (wifi defer-vs-add · agent wire name · terms shape) + the §2.C design, then I finalize
