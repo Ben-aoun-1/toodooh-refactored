@@ -6,11 +6,15 @@ import {
   SignUpResult,
   CompanySizeOption,
   SupportObjectiveOption,
+  SessionUser,
 } from '@/features/auth/types/auth';
+import { apiClient, ApiError } from '@/lib/api-client';
 import { getAppUrl } from '@/lib/app-url';
-import { getErrorMessage, isErrorWithCode } from '@/lib/errors';
+import { isErrorWithCode } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase';
+
+import { apiErrorMessage } from './auth-errors';
 
 const log = logger.child({ module: 'auth.service' });
 
@@ -243,39 +247,35 @@ export const authService = {
     );
   },
 
-  async getCurrentUser() {
+  /**
+   * The cookie-authenticated self-view (Phase-1f keystone). `GET /api/me` carries the routing
+   * fields the store derives identity from. A 401 is the normal logged-out path → `null` (passes
+   * `skipAuthRedirect` so it does NOT trip the mid-session 401 handler — D6). A non-401 failure
+   * (network/5xx) is rethrown so the store can enter the retry state (D3) rather than silently log
+   * the user out.
+   */
+  async getCurrentUser(): Promise<SessionUser | null> {
     try {
-      const {
-        data: { user },
-        error,
-      } = await supabase.auth.getUser();
-      if (error) {
-        // Ne pas logger les erreurs de session manquante (normal quand pas connecté)
-        if (error.message !== 'Auth session missing!') {
-          log.error({ error }, 'Error getting current user');
-        }
-        return null;
-      }
+      const { user } = await apiClient.get<{ user: SessionUser }>('/me', {
+        skipAuthRedirect: true,
+      });
       return user;
     } catch (error) {
-      // Ne pas logger les erreurs de session manquante
-      if (getErrorMessage(error) !== 'Auth session missing!') {
-        log.error({ error }, 'Error in getCurrentUser');
-      }
-      return null;
+      if (error instanceof ApiError && error.status === 401) return null;
+      throw error;
     }
   },
 
-  async login(email: string, password: string) {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    if (error) throw new Error(mapAuthError(error));
-    // Le store (auth.store.ts) appelle fetchProfileType après login pour
-    // charger le profil et alimenter l'état persisté — plus de fetch ni de
-    // localStorage ici.
-    return data;
+  async login(email: string, password: string): Promise<SessionUser> {
+    try {
+      // The signin response carries the full routing set (role/status/onboarding/profile_type);
+      // the store populates from it directly — no extra /api/me on login (design §2.5).
+      const { user } = await apiClient.post<{ user: SessionUser }>('/signin', { email, password });
+      return user;
+    } catch (error) {
+      // 403 EMAIL_NOT_VERIFIED / 401 INVALID_CREDENTIALS → French toast via the existing form catch.
+      throw new Error(apiErrorMessage(error));
+    }
   },
 
   async signUp(data: SignUpData): Promise<SignUpResult> {
@@ -691,8 +691,11 @@ export const authService = {
   },
 
   async logout() {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw new Error(mapAuthError(error));
+    try {
+      await apiClient.post('/signout');
+    } catch (error) {
+      throw new Error(apiErrorMessage(error));
+    }
   },
 
   async resetPassword(email: string) {
@@ -932,14 +935,5 @@ export const authService = {
 
     if (error) throw new Error(mapAuthError(error));
     return data;
-  },
-
-  // Fonction utilitaire pour créer un profil par défaut
-  async createDefaultProfile(userId: string, email: string) {
-    void userId;
-    void email;
-    throw new Error(
-      'Création de profil par défaut désactivée. Fournissez explicitement les champs requis de business_profiles: profile_type, business_type, business_name, contact_name, contact_phone, street_address, city, postal_code, governorate_id.',
-    );
   },
 };

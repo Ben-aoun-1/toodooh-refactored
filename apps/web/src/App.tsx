@@ -159,13 +159,36 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  const { initialize, initialized, loading } = useAuthStore();
+  const { initialize, initialized, loading, rehydrateError } = useAuthStore();
 
   useEffect(() => {
     if (!initialized && !loading) {
       initialize();
     }
   }, [initialize, initialized, loading]);
+
+  // D3 — rehydration hit a transient error (network/5xx, not a 401). Identity fails closed (no
+  // false-authed app) but we offer a retry instead of a silent logout to /login.
+  if (rehydrateError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="text-center max-w-sm px-6">
+          <p className="text-gray-800 font-medium mb-2">Connexion au serveur impossible</p>
+          <p className="text-gray-600 text-sm mb-4">
+            Veuillez vérifier votre connexion internet, puis réessayer.
+          </p>
+          <button
+            type="button"
+            onClick={() => void initialize()}
+            className="px-5 py-2.5 rounded-xl font-semibold text-sm text-white bg-brand-primary hover:opacity-90 transition-opacity"
+          >
+            Réessayer
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!initialized || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white">

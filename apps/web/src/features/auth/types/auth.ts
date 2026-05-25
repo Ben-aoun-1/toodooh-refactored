@@ -114,3 +114,20 @@ export interface SignUpResult {
   requiresEmailConfirmation?: boolean;
   message?: string;
 }
+
+/**
+ * The session/identity user the backend returns on `POST /api/signin` and `GET /api/me`
+ * (snake_case wire, Phase-1f keystone). The store derives its routing state from this
+ * (`mapRouting`); `/api/me` returns a superset (the full profile) but the store consumes
+ * only this routing subset. `status` is `users.status` (no `verified` — Phase-1f D5).
+ */
+export interface SessionUser {
+  id: string;
+  email: string;
+  role: string;
+  status: 'pending' | 'approved' | 'rejected';
+  onboarding_completed: boolean;
+  business_type: string | null;
+  profile_type: string | null;
+  contact_name: string | null;
+}
