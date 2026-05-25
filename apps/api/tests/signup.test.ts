@@ -5,7 +5,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { auth, emailSender } from '../src/auth/auth.js';
 import { authPlugin } from '../src/auth/plugin.js';
 import { db, sql } from '../src/db/client.js';
-import { accounts, users } from '../src/db/schema.js';
+import { accounts, businessSectors, governorates, users } from '../src/db/schema.js';
 import { apiRoutes } from '../src/routes/index.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
@@ -27,10 +27,11 @@ const buildApp = () => Fastify({ logger: false });
 const validPayload = {
   email: 'owner@example.com',
   password: 'a-strong-passw0rd',
-  name: 'Test Owner',
+  contact_name: 'Test Owner',
   business_name: 'Test Biz',
   contact_phone: '+21612345678',
   tax_number: '1234567ABC',
+  terms_accepted: true,
 };
 
 describe('POST /api/signup', () => {
@@ -200,5 +201,141 @@ describe('POST /api/signup', () => {
     });
     expect(res.statusCode).toBe(500);
     expect(res.json<{ error: string }>().error).toBe('INTERNAL_ERROR');
+  });
+
+  // ── signup-grows (Phase 1e Commit 2) ──
+
+  // Seeded reference rows (not truncated by resetAuthTables) → valid FK ids for full-profile signups.
+  const seedIds = async (): Promise<{ sectorId: string; governorateId: string }> => {
+    const [sector] = await db.select({ id: businessSectors.id }).from(businessSectors).limit(1);
+    const [gov] = await db.select({ id: governorates.id }).from(governorates).limit(1);
+    return { sectorId: sector?.id ?? '', governorateId: gov?.id ?? '' };
+  };
+
+  const fullProfile = async (over: Record<string, unknown> = {}) => {
+    const { sectorId, governorateId } = await seedIds();
+    return {
+      ...validPayload,
+      profile_type: 'advertiser',
+      business_type: 'local',
+      business_sector_id: sectorId,
+      street_address: '12 Rue de Test',
+      city: 'Tunis',
+      postal_code: '1000',
+      governorate_id: governorateId,
+      fonction: 'Gérant',
+      agent_toodooh: 'AGENT-42',
+      ...over,
+    };
+  };
+
+  it('full advertiser signup → 201; profile + agent_code + terms_accepted_at stored', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      payload: await fullProfile(),
+    });
+    expect(res.statusCode).toBe(201);
+    const [u] = await db.select().from(users).where(eq(users.email, 'owner@example.com'));
+    expect(u?.role).toBe('advertiser');
+    expect(u?.businessType).toBe('local');
+    expect(u?.streetAddress).toBe('12 Rue de Test');
+    expect(u?.city).toBe('Tunis');
+    expect(u?.postalCode).toBe('1000');
+    expect(u?.fonction).toBe('Gérant');
+    expect(u?.businessSectorId).toBeTruthy();
+    expect(u?.governorateId).toBeTruthy();
+    expect(u?.agentCode).toBe('AGENT-42'); // wire agent_toodooh → column agent_code
+    expect(u?.termsAcceptedAt).toBeInstanceOf(Date); // server-stamped
+  });
+
+  it('full agency signup → role=advertiser + business_type=agency (the MAP override)', async () => {
+    const payload = await fullProfile({ profile_type: 'agency', business_type: 'local' });
+    await app.inject({ method: 'POST', url: '/api/signup', payload });
+    const [u] = await db.select().from(users).where(eq(users.email, 'owner@example.com'));
+    expect(u?.role).toBe('advertiser'); // agency is NOT a role
+    expect(u?.businessType).toBe('agency'); // override wins over the sent 'local'
+  });
+
+  it('full individual_owner signup → role=individual_owner', async () => {
+    const payload = await fullProfile({ profile_type: 'individual_owner' });
+    await app.inject({ method: 'POST', url: '/api/signup', payload });
+    const [u] = await db.select().from(users).where(eq(users.email, 'owner@example.com'));
+    expect(u?.role).toBe('individual_owner');
+  });
+
+  it('full fleet_owner signup → role=fleet_owner', async () => {
+    const payload = await fullProfile({ profile_type: 'fleet_owner' });
+    await app.inject({ method: 'POST', url: '/api/signup', payload });
+    const [u] = await db.select().from(users).where(eq(users.email, 'owner@example.com'));
+    expect(u?.role).toBe('fleet_owner');
+  });
+
+  it('owner-extras in the body are stripped (no column, no error) → 201', async () => {
+    const payload = await fullProfile({
+      profile_type: 'individual_owner',
+      cin: '12345678',
+      formule: 'revenue_share',
+      number_of_screens: 5,
+      number_of_rooms: 3,
+      company_size: '10-50',
+      fleet_establishments: [{ name: 'X' }],
+    });
+    const res = await app.inject({ method: 'POST', url: '/api/signup', payload });
+    expect(res.statusCode).toBe(201);
+    const [u] = await db.select().from(users).where(eq(users.email, 'owner@example.com'));
+    expect(u?.role).toBe('individual_owner'); // the known fields still applied
+  });
+
+  it('tax_number omitted (owner) → 201 (now optional)', async () => {
+    const payload = await fullProfile({ profile_type: 'individual_owner' });
+    delete (payload as { tax_number?: string }).tax_number;
+    const res = await app.inject({ method: 'POST', url: '/api/signup', payload });
+    expect(res.statusCode).toBe(201);
+    const [u] = await db.select().from(users).where(eq(users.email, 'owner@example.com'));
+    expect(u?.taxNumber).toBeNull();
+  });
+
+  it('terms not accepted → 400 (backend-enforced, not just the wizard)', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      payload: { ...validPayload, terms_accepted: false },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(
+      res.json<{ fields: { field: string }[] }>().fields.some((f) => f.field === 'terms_accepted'),
+    ).toBe(true);
+  });
+
+  it('terms omitted → 400', async () => {
+    const payload = { ...validPayload };
+    delete (payload as { terms_accepted?: boolean }).terms_accepted;
+    const res = await app.inject({ method: 'POST', url: '/api/signup', payload });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('duplicate email → 201 generic AND the existing user role/profile is UNCHANGED (synthetic-id no-op)', async () => {
+    // First: a real owner signup that sets role=individual_owner + agent_code.
+    await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      payload: await fullProfile({ profile_type: 'individual_owner', agent_toodooh: 'FIRST' }),
+    });
+    // Then a duplicate-email signup trying to flip role=fleet_owner + a new agent_code.
+    const res2 = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      payload: await fullProfile({
+        profile_type: 'fleet_owner',
+        agent_toodooh: 'ATTACKER',
+        tax_number: '7654321XYZ',
+      }),
+    });
+    expect(res2.statusCode).toBe(201); // generic
+    const rows = await db.select().from(users).where(eq(users.email, 'owner@example.com'));
+    expect(rows).toHaveLength(1); // still one
+    expect(rows[0]?.role).toBe('individual_owner'); // NOT flipped to fleet_owner
+    expect(rows[0]?.agentCode).toBe('FIRST'); // NOT overwritten by the duplicate
   });
 });

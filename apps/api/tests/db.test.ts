@@ -78,6 +78,11 @@ describe('db schema', () => {
     expect(users.zone).toBeDefined();
   });
 
+  it('users exposes agent_code + terms_accepted_at columns (Phase 1e signup-grows)', () => {
+    expect(users.agentCode).toBeDefined();
+    expect(users.termsAcceptedAt).toBeDefined();
+  });
+
   it('reference tables export their key columns', () => {
     expect(governorates.name).toBeDefined();
     expect(businessSectors.name).toBeDefined();

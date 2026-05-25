@@ -43,6 +43,13 @@
       "when": 1779641218205,
       "tag": "0005_profile_fonction_zone_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1779740528740,
+      "tag": "0006_wooden_pyro",
+      "breakpoints": true
     }
   ]
 }

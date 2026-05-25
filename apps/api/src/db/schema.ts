@@ -84,6 +84,19 @@ export const users = pgTable(
     notifyNewsUpdates: boolean('notify_news_updates').notNull().default(false),
     notifyRemindersEvents: boolean('notify_reminders_events').notNull().default(true),
     notifyPromotionsOffers: boolean('notify_promotions_offers').notNull().default(false),
+    // ── signup-grows (Phase 1e Commit 2) ──
+    // Agent acquisition attribution, captured at signup. Wire name is agent_toodooh (the wizard
+    // field); the column is agent_code. STORE-NEW = capture-irreversible-now (distinct from the
+    // collect-and-ignore owner-extras): acquisition attribution is lost forever if not captured at
+    // signup, so we store it even though the consuming feature is future. Nullable + unvalidated
+    // for now — a typed agents reference table + validation arrive with the agent slice. The agent
+    // TYPE is implied by role (screencaster↔advertiser / screenhost↔owner), so no agent_type column.
+    agentCode: text('agent_code'),
+    // Terms-of-service acceptance: server-set to now() when the wizard's terms_accepted boolean is
+    // true. The signup route REJECTS (400) if terms are not accepted, so this is set on every new
+    // signup. No terms_version (the wizard captures none — inventing one would be fake data); never
+    // store a client-supplied timestamp (the server stamps the time).
+    termsAcceptedAt: timestamp('terms_accepted_at', { withTimezone: true }),
     // timestamps
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
