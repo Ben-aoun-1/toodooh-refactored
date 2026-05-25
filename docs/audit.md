@@ -1030,6 +1030,8 @@ per commit.
 
 - **Phase 1d — Session auth (sign-in/out + password management)** — the session-creation surface completing server-side auth. Two feature commits: `e9ee9a5` (`POST /api/signin` — better-auth `signInEmail` wrapped + shaped to the FE routing response [role/status/`onboarding_completed`/`profile_type` reconstruction], a 403 verify-first branch, generic-401 anti-enumeration; `POST /api/signout`; the **real-cookie round-trip** — sign-in mints a real session cookie, replayed through the Commit-3 `requireAuth` guard to a `PATCH`, closing the session-creation boundary Commit 3 left open with only a mocked session), `aa8121d` (password management — `POST /api/password/{reset-request,reset,change}`: better-auth `requestPasswordReset`/`resetPassword`/`changePassword` wrapped + shaped, a new French reset-email template routed through the existing `EmailSender`/OVH SMTP via a never-throw `sendResetPassword` hook, anti-enumeration on reset-request, and session invalidation on both reset [`revokeSessionsOnPasswordReset`] and change [`revokeOtherSessions` — the current device survives via the refreshed cookie]). With it the session-auth surface is complete server-side: signup → verify → signin → authenticated requests → signout → password reset → change. **The shortest feature phase** — better-auth owned the session machinery; the work was wrap-and-shape, not build. Gate floors **post-Phase-1d**: root typecheck **51** / lint **1** / test **282** / build `apps/web` **139.80 kB** gzip; `apps/api` per-package typecheck **0** / lint **0** / test **122** / build success (entered post-1c at `apps/api` **99** / root **259**; the +23 is all `apps/api` — signin +11, password +12; `apps/web` held at 160). **No new formal CF** (CF-19–24 all already formal); CF-23/24 instances accumulated, CF-21 clean — see §7.4. The strongest CF-23 instance: **the reset-token-is-a-verifications-row finding** — password reset uses a random-token `verifications` row, the OPPOSITE of email-verify's stateless JWT; the Commit-3-class "assume same-as-verification" trap was AVOIDED by source-reading at plan-write, then execution-confirmed (the test reads the row to drive a real reset). Plan docs: `85dc727` (Commit 1), `94a779c` (Commit 2) — their §9 sections + `frontend-backend-contract.md` §3.5/§3.6 are the canonical CF write-up home. Phase 1d was direct feature work (no `→ Issue`). **Phase-1e carry-forwards:** FE signin repoint + routing-field consumption + verify-first (403) + generic-credentials handling; FE password reset/change repoint + 12-char floor convergence + the reset-page `callbackURL` (joining the verification `callbackURL`). Closes 2026-05-25. Commits `e9ee9a5`, `aa8121d`, plus the two plan-doc commits above and this audit refresh.
 
+- **Phase 1e Part A — Backend prerequisites (browser-reachability + signup-grows + reference data)** — the backend half of the frontend-repoint work: making `apps/api` reachable from a browser, growing signup to the full wizard profile, and exposing the reference-data the forms fetch. Opened by the **frontend repoint survey** (`3d84dd8`, `docs/handoff/frontend-repoint-survey.md`) whose §8 **split "Phase 1e = frontend repoint" into Phase 1e = backend prerequisites (this) + Phase 1f = frontend repoint** (pushing admin→1g, deployment→1h — see §16 for the renumbering reconciliation vs the older "1e=frontend" references in §13/§15). Three feature commits: `7a71eb3` (browser-reachable API — `@fastify/cors@11.2.0` + better-auth `trustedOrigins:[WEB_ORIGIN]` + `advanced.disableOriginCheck:false` + a Vite same-origin dev proxy + `WEB_ORIGIN` env; **`GET /api/me`** the cookie-authenticated full self-view the FE store rehydrates from; `toProfileType` extracted to `lib/profile-type.ts`), `a63b50d` (**signup-grows** — `POST /api/signup` accepts the full wizard profile; `profile_type→role(+business_type=agency)` mapped server-side via a duplicate-safe post-create `db.update` [role stays `input:false`]; `tax_number` required→optional; new columns `agent_code` + `terms_accepted_at` [migration 0006]; `name`→`contact_name` wire; owner-extras `.strip()`'d; terms backend-enforced 400-if-not-accepted), `30c28cf` (**reference-data GETs** — public `GET /api/governorates` + `GET /api/business-sectors?audience=advertiser|owner`, the latter consuming the Phase-1c `audience` discriminator [the §5.3 `owner_business_sectors` collapse]; `company_size_options` ruled OUT — fetched but no table + collect-and-ignore field, the dead-infrastructure-avoided call). Gate floors **post-Phase-1e-Part-A**: root typecheck **51** / lint **1** / test **306** / build `apps/web` **139.80 kB** gzip; `apps/api` per-package typecheck **0** / lint **0** / test **146** / build success (entered post-1d at `apps/api` **122** / root **282**; the +24 is all `apps/api` — Commit 1 +8, Commit 2 +10, Commit 3 +6; **`apps/web` held at 160 — Part A is backend-only**, so the long-flat 51/1/139.80 `apps/web` floors are untouched; Phase 1f is the first to move them). **No new formal CF** (CF-19–24 all already formal); **CF-23 taxonomy completed** (four named sub-classes of right-looking-but-wrong source-reads, all caught by execution — see §7.4), **CF-24 instances** (truthful-to-frontend: `/api/me` self-view, signup wire-truthfulness, reference GETs built only for fetched categories), **CF-21 instance** (`WEB_ORIGIN` defaulted-var cascade). Plan docs: `e58a6c8` (Commit 1), `64a582e`+`ab668b0` (Commit 2 plan + rulings-finalize), `615067b` (Commit 3) — their §11 sections + the survey are the canonical write-up home. Phase 1e Part A was direct feature work (no `→ Issue`). **Phase-1f carry-forwards** (the frontend repoint — now substantial; full list §16): `auth.service.ts`→an API client (cookie + `/api/me` identity, `credentials:'include'`, the same-origin proxy); the signin/signup/profile/documents/password repoints; `useSectors`/`useOwnerBusinessSectors`→`?audience=`, `useGovernorates`→`GET /api/governorates`; the advertiser `company_size` dropdown hardcodes (§2.C); the verify-email + reset pages; the 12-char + anti-enum + verify-first FE changes. Closes 2026-05-25. Commits `7a71eb3`, `a63b50d`, `30c28cf`, plus `3d84dd8` (survey) + the four plan-doc commits above and this audit refresh.
+
 ---
 
 ## 5. Roadmap
@@ -1261,6 +1263,40 @@ all already formal; canonical write-ups in the **Phase-1d plan docs' §9 section
   `BETTER_AUTH_URL` from Phase 1b cover the reset email, and the reset link reuses
   better-auth's own `url`.
 
+Phase 1e Part A accumulated instances of three existing CFs — **no new formal CF** (canonical
+write-ups in the **Phase-1e Part-A plan docs' §11 sections** + `frontend-repoint-survey.md`):
+
+- **CF-23 — TAXONOMY COMPLETED.** The better-auth origin-check arc (Commit 1, four CF-9 rounds)
+  closed the set of ways a source-read can be **right-looking but wrong** — and the through-line is
+  that **execution-against-reality caught all four; none would have been caught by re-reading
+  source.** The four named sub-classes:
+  - **(i) assume-same-as-last-similar** — Phase-1b Commit 3's "verification storage is a JWT" then
+    Phase-1d's "reset-token is a `verifications` row, the OPPOSITE" (avoided by reading first).
+  - **(ii) missed-its-scope** — `originCheckMiddleware` is registered at the **router** level
+    (`createRouter` `routerMiddleware`), so it fires on the `/auth/*` handler path but NOT on the
+    custom routes that call `auth.api.*` directly (the source named the middleware; the scope of its
+    registration was missed).
+  - **(iii) misattributed-the-result** — a bogus-origin `POST /api/signin` returning **200** was
+    read as proof of the (ii) bypass, but the real cause was better-auth's **test-env
+    `skipOriginCheck=true`** default (`create-context.mjs`, `isTest()`); only pinning
+    `disableOriginCheck:false` made the test trustworthy and the bypass genuinely provable.
+  - **(iv) intent-right-failure-mode-wrong** — signup-grows' post-create `db.update` (Commit 2): the
+    source-read got the **intent** right (don't touch an existing user on a duplicate) but the
+    **failure-mode** wrong (assumed a graceful no-op; reality = better-auth's synthetic duplicate
+    user has a **non-uuid** id → `where id = <non-uuid>` throws on the Postgres uuid cast → 500). The
+    safety property held throughout (no-op or throw, the existing user is never modified); the fix
+    (re-fetch by email, apply only when the persisted id matches the returned id) made it robust vs
+    working-by-accident.
+- **CF-24 — instances (truthful-to-frontend):** `GET /api/me` is an (a)-class self-view shaped to
+  what the FE store consumes; signup-grows is wire-truthful (`contact_name` zero-map [wire→property→
+  column all align], `agent_toodooh`→`agent_code`, `profile_type` validated-and-mapped not
+  trusted-as-privilege); the reference GETs are built **only** for categories the FE actually fetches
+  (`company_size_options` OUT — fetched but no table + collect-and-ignore field; the
+  dead-infrastructure-avoided call, the WiFi-columns trap's sibling).
+- **CF-21 — instance:** `WEB_ORIGIN` (defaulted) needed no `vitest.config` `test.env` entry (21a —
+  defaults cover it, like `STORAGE_BUCKET`) but DID force the one typed `Env` literal in
+  `error-handler.test.ts` to add it (21b).
+
 ### 7.5 — Per-step record
 
 Each row's full record is in §4 "Already resolved"; one line each here (numbering per
@@ -1398,6 +1434,52 @@ unresolved import) are expected to **change (drop)** as the frontend repoints to
 intended outcome, not a regression — and the moment the `import-x/no-unresolved` lint-1
 floor clears is when the Supabase typed-client prerequisite (#15) finally lands. Recorded
 here so the Phase-1e floor change is not mistaken for a regression.
+
+> **[Post-split clarification — §16]** This note predates the survey's Phase-1e/1f split. The
+> "Phase 1e" it refers to (the first to touch `apps/web`, where the 51/1 floors move) is now
+> **Phase 1f — the frontend repoint**. **Phase 1e Part A was backend-only — `apps/web` held at
+> 51/1/160/139.80**, exactly as the note's "every phase touched `apps/api` only" pattern. The lint-1
+> clear is further refined by survey §2.4: it does NOT clear from the account-layer repoint (the
+> shared `supabase.ts` client + its `database.types` import stay until the last slice / #15), so a
+> still-1 lint floor through 1f is expected.
+
+Phase 1e Part A (backend prerequisites) added four operating learnings:
+
+- **Tested == shipped, especially for security controls.** A suite that disables a control prod
+  enables cannot tell the truth about it. better-auth defaults `skipOriginCheck=true` under
+  `isTest()`, which silently disabled the origin check in tests and produced three contaminated
+  observations across the Commit-1 origin investigation (the CF-23 (iii) misattribution). Pinning
+  `advanced.disableOriginCheck:false` made tests exercise prod's real behavior — only then was the
+  router-vs-`auth.api` boundary genuinely provable. Zero dev/prod impact (both already had the check
+  on); it only flips the test default.
+- **Capture-irreversible-now vs collect-and-ignore.** Two distinct dispositions for fields the FE
+  sends but a feature doesn't yet consume: **STORE** when losing the datum is irreversible
+  (`agent_code` — acquisition attribution captured at signup, even though the agents table/validation
+  is a future slice), vs **`.strip()`** when it's reconstructable later (owner-extras —
+  screens/rooms/company_size/zone/fleet). The test: is the data recoverable after the moment passes?
+- **Server-stamped consent.** `terms_accepted_at` is set server-side to `now()` when the wizard's
+  boolean is true, and the route **rejects (400) if terms are not accepted** — never trust a
+  client-supplied timestamp, never rely on the client alone to enforce acceptance.
+- **Dead-infrastructure-avoided (truthful-to-frontend), and intentionally-plaintext-non-sensitive.**
+  Build endpoints/columns only for what the FE actually fetches/sends AND what's actually stored: the
+  WiFi columns (Commit 2) and the `company_size_options` endpoint (Commit 3) were both NOT built —
+  each would serve nothing (no producer / no consumer / discarded value). Build the reference table or
+  column **with its real consumer**, not ahead of it (the agents-table-later pattern). Distinct from
+  this: the deferred WiFi password is **intentionally plaintext non-sensitive** — a public-venue
+  shared credential needed in cleartext for device provisioning; a future hardening pass must NOT
+  hash/encrypt it (the opposite handling from the account password).
+
+**The CSRF model (proven, Phase 1e Part A) + the money-slice gate.** Custom `/api/*` routes call
+`auth.api.*` directly and **bypass** better-auth's router-level origin check (proven with the check
+forced on: bogus origin → `POST /api/signin` → 200; `/auth/*` cookie POST → 403). So custom-route
+CSRF rests on the **`SameSite=Lax`** session cookie (a forged cross-site POST carries no cookie →
+`requireAuth` 401); `/auth/*` IS origin-checked; `trustedOrigins:[WEB_ORIGIN]` is intent-doc covering
+that surface. Login-CSRF on `/api/signin` is the accepted low-severity residual. **THE MONEY-SLICE
+GATE:** before wallet/recharge/payment ships, its mutating custom routes get an explicit
+`assertOrigin ∈ [WEB_ORIGIN]` preHandler (built with the first money-route consumer, the
+require-auth "build-with-first-consumer" discipline) — defense-in-depth beyond `Lax` for
+money-movement. Recorded here so the money slices inherit the decision rather than rediscover the
+question.
 
 ---
 
@@ -1609,3 +1691,69 @@ Note the **`apps/web` typecheck-floor change** expected as Phase 1e opens (§7.6
 is the first phase to touch `apps/web`, so the long-flat 51/1 baselines are expected to
 move as Supabase is removed — a drop, not a regression. Closes 2026-05-25. **Phase 1e
 (frontend repoint — the largest phase) opens next.**
+
+---
+
+## 16. Phase 1e Part A — Backend prerequisites (browser-reachability + signup-grows + reference data)
+
+Phase 1e Part A is the backend half of the frontend-repoint work — the prerequisites that make
+`apps/web`'s repoint possible. It opened with the **frontend repoint survey** (`3d84dd8`,
+`docs/handoff/frontend-repoint-survey.md`): a read-only architecture map of `apps/web`'s
+Supabase surface that established the repoint shape and surfaced the load-bearing prerequisites
+(no HTTP client in `apps/web`, no CORS on `apps/api`, the better-auth cookie model). See the §4
+"Already resolved" Phase-1e-Part-A row for the full per-commit detail, gate floors, and plan-doc
+references.
+
+**The renumbering (reconciliation of §13/§15's "1e = frontend repoint").** The survey's §8 found that
+the single label "Phase 1e — frontend repoint" actually covered two phases with different work-nature
+and verification models, and **split it: Phase 1e = BACKEND PREREQUISITES (this, Part A — `apps/api`,
+the 1b–1d real-integration rhythm) and Phase 1f = FRONTEND REPOINT (`apps/web`, a new verification
+model)**, pushing admin→1g and deployment→1h. The §15 pointer ("**Phase 1e (frontend repoint — the
+largest phase) opens next**") and the §13/§14/§15 references to "Phase 1e = frontend repoint" all
+predate this split and now read as **Phase 1f**; the §7.6 floor-interpretation note's "Phase 1e is
+the first to touch `apps/web`" is likewise now Phase 1f (Part A was backend-only — `apps/web` held at
+51/1/160/139.80). Per the honest-trail discipline (the §13 Model-1 precedent: clarify, don't rewrite
+the old reference), the older pointers stand and this section is the reconciliation.
+
+It used the same operating pattern as Phases 1a–1d (§7.6) — inventory-first plans, halt-on-finding,
+CF-9 pause summaries, per-commit gate verification, CI-green on every push — with the load-bearing
+work concentrated in **survey-driven scoping** (build to the frontend's reality: the WiFi columns and
+`company_size` endpoint were NOT built because the wizard doesn't collect/store them) and the
+**four-round better-auth origin-check investigation** that completed the CF-23 taxonomy (§7.4). **No
+new formal CF**; accumulates CF-23 (taxonomy completed) / CF-24 (truthful-to-frontend) / CF-21
+instances (§7.4); captures four operating learnings + the proven CSRF model and money-slice gate
+(§7.6). Gate floor moved `apps/api` **122 → 146** / root **282 → 306** (Commit 1 +8, Commit 2 +10,
+Commit 3 +6; `apps/web` untouched — backend-only). Closes 2026-05-25.
+
+**Phase-1f carry-forwards (the frontend repoint — the largest phase):**
+
+- `auth.service.ts` → an **API client** (a `fetch` wrapper with `credentials:'include'` so the
+  httpOnly cookie rides every request; `VITE_API_URL`; identity rehydrated from the cookie via
+  `GET /api/me`, since JS can't read the cookie) + the `auth.store` session-model swap (off
+  Supabase's `onAuthStateChange`/`persistSession` onto the cookie + `/api/me`).
+- **signin** repoint — consume the routing body (role/status/`onboarding_completed`/`profile_type`),
+  the **403 verify-first** branch, generic-credentials handling.
+- **signup wizard** repoint — send the full profile the backend now accepts (`contact_name` wire,
+  `agent_toodooh`, `terms_accepted`, `tax_number` optional, `profile_type` as a non-privileged hint);
+  stop disclosing email-existence (consume the 201-generic); converge the password floor to **12**.
+- **reference fetches** — `useSectors` → `GET /api/business-sectors?audience=advertiser`,
+  `useOwnerBusinessSectors` → `?audience=owner`, `useGovernorates` → `GET /api/governorates`; the
+  advertiser **`company_size`** dropdown **hardcodes** its options (a frontend constant, like the
+  owner `parcCountOptions` — the §2.C ruling, no backend).
+- **profile** repoint — the `updateProfile` single method splits into the four section PATCHes
+  (`/api/profile/{business,contact,address,notifications}`).
+- **documents** repoint — add the `type` discriminator + swap `supabase.storage` →
+  `POST/GET /api/profile/documents/:type`.
+- **password** reset/change repoint + the 12-char convergence (drop the 6-char service guard) + the
+  owner-settings special-char drop.
+- the **`/auth/verify-email` page** (the deferred Phase-1b `callbackURL`) + the **reset page** (the
+  reset-link `callbackURL`), with a post-verify "please sign in" page.
+
+**Phase 1f (frontend repoint — the largest phase) opens next**, on a **new verification model** (§6
+of the survey): the `apps/api` real-integration pattern doesn't transfer to browser code, so 1f gates
+on build + typecheck-ratchet-down + lint-1 + the existing 160 green, **plus** new per-flow
+component/service tests (a deliberate test-floor raise) + a running-both round-trip + **human visual
+QA** at phase close. Expected `apps/web` floor movement: typecheck **51 drops partially** (account-layer
+types resolve as Supabase leaves; campaigns/screens/admin stay on Supabase), while **lint-1 stays
+through 1f** (the shared `supabase.ts` + `database.types` import survive until the last slice / #15) —
+neither is a regression (§7.6 floor note + survey §2.4).
