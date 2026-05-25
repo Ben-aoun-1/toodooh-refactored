@@ -108,6 +108,11 @@ export const auth = betterAuth({
   },
   emailVerification: {
     sendOnSignUp: true,
+    // B′ (Phase-1f F3): resend the verification email on an unverified signin so the verify-page
+    // error CTA ("Connectez-vous pour recevoir un nouveau lien") is a real recovery loop for the
+    // common expired-link case. better-auth rate-limits it, and it is only ever sent to the
+    // account's own address. Changes Phase-1d behavior (then: 403 without resend; now: 403 + resend).
+    sendOnSignIn: true,
     sendVerificationEmail,
   },
   user: {

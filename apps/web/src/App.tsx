@@ -28,6 +28,7 @@ const Login = lazy(() => import('@/features/auth/pages/Login'));
 const SignUp = lazy(() => import('@/features/auth/pages/SignUp'));
 const ResetPassword = lazy(() => import('@/features/auth/pages/ResetPassword'));
 const UpdatePassword = lazy(() => import('@/features/auth/pages/UpdatePassword'));
+const VerifyEmail = lazy(() => import('@/features/auth/pages/VerifyEmail'));
 const OwnerScreens = lazy(() => import('@/features/screenhost/pages/OwnerScreens'));
 const OwnerLocations = lazy(() => import('@/features/screenhost/pages/OwnerLocations'));
 const OwnerRevenue = lazy(() => import('@/features/screenhost/pages/OwnerRevenue'));
@@ -240,6 +241,9 @@ export default function App() {
                 </PublicRoute>
               }
             />
+            {/* Verify-email result (Phase-1f F3): the better-auth callbackURL target. Standalone —
+                the just-verified user is logged out and must always see the result. */}
+            <Route path="/verify-email" element={<VerifyEmail />} />
 
             {/* Routes protégées - Dashboard Annonceur */}
             <Route

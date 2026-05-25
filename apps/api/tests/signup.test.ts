@@ -6,6 +6,7 @@ import { auth, emailSender } from '../src/auth/auth.js';
 import { authPlugin } from '../src/auth/plugin.js';
 import { db, sql } from '../src/db/client.js';
 import { accounts, businessSectors, governorates, users } from '../src/db/schema.js';
+import { env } from '../src/env.js';
 import { apiRoutes } from '../src/routes/index.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
@@ -97,6 +98,10 @@ describe('POST /api/signup', () => {
     expect(arg?.to).toBe('owner@example.com');
     expect(arg?.subject).toContain('Vérifiez');
     expect(arg?.html).toContain('http://localhost:4000/auth/verify-email?token=');
+    // F3: the post-verify redirect target rides the link so better-auth redirects to the FE page.
+    expect(arg?.html).toContain(
+      `callbackURL=${encodeURIComponent(`${env.WEB_ORIGIN}/verify-email`)}`,
+    );
   });
 
   it('signup still succeeds (201) when the email send fails (no orphan rollback)', async () => {

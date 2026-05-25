@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { auth } from '../auth/auth.js';
 import { db } from '../db/client.js';
 import { accounts, users } from '../db/schema.js';
+import { env } from '../env.js';
 import { PROFILE_TYPES, fromProfileType } from '../lib/profile-type.js';
 import { validatePhone } from '../validation/phone.js';
 import { validateTaxNumber } from '../validation/tax-number.js';
@@ -121,6 +122,9 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
           businessName: business_name,
           contactPhone: contact_phone,
           ...(tax_number ? { taxNumber: tax_number } : {}),
+          // Post-verify redirect target (Phase-1f F3). Absolute → passes better-auth's
+          // originCheck (WEB_ORIGIN is trusted); the FE /verify-email page reads ?error=.
+          callbackURL: `${env.WEB_ORIGIN}/verify-email`,
         },
       });
 
