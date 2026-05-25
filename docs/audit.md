@@ -1028,6 +1028,8 @@ per commit.
 
 - **Phase 1c — Onboarding-data + profile edits + document storage** — the screenhost's business-profile data, the profile-edit surface, and document storage. Five feature commits: `9e9d716` (9 onboarding columns on `users` + the `governorates`/`business_sectors`/`predefined_zones` reference tables with legacy-verbatim seeds — migration 0003; the `owner_business_sectors` view folded into `business_sectors.audience='owner'`), `46649d8` (MinIO container + the `StorageProvider` abstraction + S3-compatible client — shaped `{key|error}` results, private bucket + presigned-GET access, columns hold the object KEY not a URL), `a821789` (the reusable `requireAuth` session-guard preHandler + `PATCH /api/profile/business` + migration 0004 — `name`→`contact_name` RENAME, the three `notify_*` columns, lenient `tax_number` CHECK), `ed8d273` (`PATCH /api/profile/{contact,address,notifications}` + `fonction`/`zone` columns — migration 0005), `46a56e9` (`POST`+`GET /api/profile/documents/:type` — RNE/CIN upload+retrieve through the StorageProvider, the first multipart endpoint, new dep `@fastify/multipart` 10.0.0 with the lockfile in the same commit). **Architecture pivot:** the DB-side "Model 1" (minimal signup + a separate onboarding gate) was **abandoned for Option B** (combined-registration wizard; no onboarding gate; profile fields edited via section-scoped PATCH endpoints; Commit 3's endpoint reframed as an _edit_ surface, not a required gate) — the reversal forced by the frontend-contract audit (`faed78d`, `docs/handoff/frontend-backend-contract.md` §7), the first worked CF-24 instance. The Commit-3 guard is the auth foundation every later authenticated endpoint reuses — proven across 7 endpoints in Commits 3-5 (only session _validation_; session _creation_ is the Phase-1d boundary). Gate floors **post-Phase-1c**: root typecheck **51** / lint **1** / test **259** / build `apps/web` **139.80 kB** gzip; `apps/api` per-package typecheck **0** / lint **0** / test **99** / build success (entered post-1b at `apps/api` **40** / root **200**; the +59 is all `apps/api` integration tests — `apps/web` held at 160). Carry-forwards: **CF-24 FORMALIZED** (frontend contract authoritative for endpoint shape; backend conforms except security/integrity exceptions); **CF-19/21/22/23 instances accumulated** across the phase — see §7.4. The `apps/api` suite was **serialized** (`fileParallelism:false`, Commit 3) with shared-pool teardown at a file-level `afterAll` (Commit 4) — §7.6. Plan docs: `9b24404`, `230cfa5`, `27dc500`, `8389783`, `db46f2c` (their §9 sections + `frontend-backend-contract.md` are the canonical CF-24/19/21/22/23 write-up home). Phase 1c was direct feature work (no `→ Issue`). **Phase-1e carry-forwards:** signup-route `tax_number` required→optional (the schema column is already nullable — only the signup zod enforces required); FE phone normalize-at-repoint (un-normalized owner phone would 400 against the backend E.164 validator); FE `updateProfile` single-method splits by section; FE documents add the `type` discriminator + swap `supabase.storage`→this API. Closes 2026-05-24. Commits `9e9d716`, `46649d8`, `a821789`, `ed8d273`, `46a56e9`, plus `faed78d` (the mid-phase contract audit) + the five plan-doc commits above and this audit refresh.
 
+- **Phase 1d — Session auth (sign-in/out + password management)** — the session-creation surface completing server-side auth. Two feature commits: `e9ee9a5` (`POST /api/signin` — better-auth `signInEmail` wrapped + shaped to the FE routing response [role/status/`onboarding_completed`/`profile_type` reconstruction], a 403 verify-first branch, generic-401 anti-enumeration; `POST /api/signout`; the **real-cookie round-trip** — sign-in mints a real session cookie, replayed through the Commit-3 `requireAuth` guard to a `PATCH`, closing the session-creation boundary Commit 3 left open with only a mocked session), `aa8121d` (password management — `POST /api/password/{reset-request,reset,change}`: better-auth `requestPasswordReset`/`resetPassword`/`changePassword` wrapped + shaped, a new French reset-email template routed through the existing `EmailSender`/OVH SMTP via a never-throw `sendResetPassword` hook, anti-enumeration on reset-request, and session invalidation on both reset [`revokeSessionsOnPasswordReset`] and change [`revokeOtherSessions` — the current device survives via the refreshed cookie]). With it the session-auth surface is complete server-side: signup → verify → signin → authenticated requests → signout → password reset → change. **The shortest feature phase** — better-auth owned the session machinery; the work was wrap-and-shape, not build. Gate floors **post-Phase-1d**: root typecheck **51** / lint **1** / test **282** / build `apps/web` **139.80 kB** gzip; `apps/api` per-package typecheck **0** / lint **0** / test **122** / build success (entered post-1c at `apps/api` **99** / root **259**; the +23 is all `apps/api` — signin +11, password +12; `apps/web` held at 160). **No new formal CF** (CF-19–24 all already formal); CF-23/24 instances accumulated, CF-21 clean — see §7.4. The strongest CF-23 instance: **the reset-token-is-a-verifications-row finding** — password reset uses a random-token `verifications` row, the OPPOSITE of email-verify's stateless JWT; the Commit-3-class "assume same-as-verification" trap was AVOIDED by source-reading at plan-write, then execution-confirmed (the test reads the row to drive a real reset). Plan docs: `85dc727` (Commit 1), `94a779c` (Commit 2) — their §9 sections + `frontend-backend-contract.md` §3.5/§3.6 are the canonical CF write-up home. Phase 1d was direct feature work (no `→ Issue`). **Phase-1e carry-forwards:** FE signin repoint + routing-field consumption + verify-first (403) + generic-credentials handling; FE password reset/change repoint + 12-char floor convergence + the reset-page `callbackURL` (joining the verification `callbackURL`). Closes 2026-05-25. Commits `e9ee9a5`, `aa8121d`, plus the two plan-doc commits above and this audit refresh.
+
 ---
 
 ## 5. Roadmap
@@ -1232,6 +1234,33 @@ home elsewhere" precedent):
   `@fastify/multipart` buffer/limit API + the greenfield FE finding + streaming-layer
   oversize rejection (Commit 5).
 
+Phase 1d accumulated worked instances of existing CFs — **no new formal CF** (CF-19–24
+all already formal; canonical write-ups in the **Phase-1d plan docs' §9 sections** +
+`docs/handoff/frontend-backend-contract.md` §3.5/§3.6):
+
+- **CF-23 — instances (the phase's strongest two-layer demonstrations):** (a) the
+  **signin cookie mechanism** — better-auth's `returnHeaders:true` + `headers.getSetCookie()`
+  forwarding verified against installed source at plan-write, then **round-trip-verified
+  with a real cookie** at execution (sign-in → real `Set-Cookie` → replayed through the
+  `requireAuth` guard to a `PATCH` → `request.user` populated); (b) **THE
+  reset-token-is-a-verifications-row finding** — source-reading at plan-write established
+  that password reset stores a random 24-char token in a `verifications` row (`identifier
+'reset-password:<token>'`), the OPPOSITE of email-verify's stateless JWT, and execution
+  then confirmed it (the test reads the row to drive a real reset). (b) is the cleanest
+  demonstration in the project that the CF-23 source-read pre-empts a specific recurring
+  assumption-class error: the exact "assume same-as-verification" surprise that bit
+  Commit 3 (the JWT-not-row truth) was AVOIDED here by reading first.
+- **CF-24 — instances:** signin's response is mixed-class — the shaped routing body
+  (role/status/`onboarding_completed`/`profile_type`) is (a)-class FE-adapts, while the
+  403-verify-first and generic-credentials behaviors are (b)-class FE-consumes; password
+  reset/change are **greenfield** (the FE drives Supabase directly —
+  `resetPasswordForEmail`/`updateUser`/`signInWithPassword`, no API wire), so the
+  endpoints were designed clean and the FE repoints in Phase 1e (the Commit-5 documents
+  greenfield sub-case, recurred).
+- **CF-21 — clean across the phase:** no new env var, no cascade — the `EmailSender`/SMTP/
+  `BETTER_AUTH_URL` from Phase 1b cover the reset email, and the reset link reuses
+  better-auth's own `url`.
+
 ### 7.5 — Per-step record
 
 Each row's full record is in §4 "Already resolved"; one line each here (numbering per
@@ -1335,6 +1364,40 @@ learnings:
   are approximate; the enumerated cases are truth. When actual differs — Commit 2
   (+10 vs +9), Commit 4 (88 vs ~85), Commit 5 (11 vs ~13 cases) — report the gap, never
   pad to hit the estimate.
+
+Phase 1d (session auth) added three operating learnings:
+
+- **Name an inherent boundary, then close it in the phase that makes it testable.**
+  Phase-1c Commit 3 could only test the `requireAuth` guard with a _mocked_ session —
+  session _creation_ did not exist yet — and it honestly flagged the real-cookie
+  round-trip as the deferred boundary rather than faking an end-to-end proof. Phase-1d
+  Commit 1 closed it with a real minted cookie replayed through the guard. Naming the
+  boundary and closing it at the right phase, rather than mocking past it or claiming
+  false coverage, is the pattern.
+- **Anti-enumeration is a cross-endpoint invariant, asserted per-endpoint by symmetry.**
+  The same property — a credential-accepting endpoint must not reveal whether an account
+  exists — recurs at signup (201-generic on duplicate email), signin (identical generic
+  401 for wrong-password vs unknown-email), and reset-request (timing-equalized identical
+  200 + no-send for unknown). Each endpoint earns its own symmetry test (the existing-case
+  body byte-identical to the unknown-case body); the invariant is enforced everywhere
+  credentials are accepted, not assumed from one site.
+- **Security-hook never-throw generalizes to every awaited email hook.** Both
+  `sendVerificationEmail` (Phase 1b Commit 4) and `sendResetPassword` (Phase 1d Commit 2)
+  are awaited by better-auth inside a flow; a throw would break the flow, leak existence
+  (a 500 on reset-request is an enumeration oracle), or cascade (the verification hook
+  into Commit 3's orphan-rollback). The Q2 discipline — try/catch, shaped result, log,
+  never throw — is a standing requirement for any awaited email hook, verified by an
+  SMTP-failure-still-generic test.
+
+**Floor-interpretation note for Phase 1e.** The **root typecheck floor (51) has been flat
+across Phases 1a–1d because every phase touched `apps/api` only**. Phase 1e is the
+**first to touch `apps/web`** — the ~50 pre-existing `apps/web` type errors (react-leaflet
+exports, `AdminActivity`/`AdminProfile` shapes, the `supabase.ts`→`database.types`
+unresolved import) are expected to **change (drop)** as the frontend repoints to
+`apps/api` and Supabase is removed. The 51/1 baselines ratcheting down in Phase 1e is the
+intended outcome, not a regression — and the moment the `import-x/no-unresolved` lint-1
+floor clears is when the Supabase typed-client prerequisite (#15) finally lands. Recorded
+here so the Phase-1e floor change is not mistaken for a regression.
 
 ---
 
@@ -1506,3 +1569,43 @@ documents add the `type` discriminator + swap `supabase.storage`→this API. Clo
 real-cookie session round-trip through the Commit-3 `requireAuth` guard, closing the
 session-creation boundary Commit 3 deliberately left open (Commit 3 only validated
 sessions; creation is Phase 1d).
+
+---
+
+## 15. Phase 1d — Session auth (sign-in/out + password management)
+
+Phase 1d is the fourth feature-building phase and the **shortest** — better-auth owned the
+session machinery, so the work was wrap-and-shape, not build. Two feature commits complete
+the session-creation surface: `e9ee9a5` (`POST /api/signin` + `POST /api/signout`, with the
+real-cookie round-trip) and `aa8121d` (password management — reset-request/reset/change).
+See the §4 "Already resolved" Phase-1d row for full detail, gate floors, and plan-doc
+references.
+
+**The session-auth surface is now complete server-side:** signup → verify → signin →
+authenticated requests → signout → password reset → change. Commit 1's first act was the
+round-trip the §14 pointer named — a real minted session cookie replayed through the
+Commit-3 `requireAuth` guard — closing the session-creation boundary Commit 3 deliberately
+left open (it had validated sessions only, with a mocked session).
+
+It used the same operating pattern as Phases 1a–1c (§7.6) — inventory-first plans,
+halt-on-finding, CF-9 pause summaries, per-commit gate verification, CI-green on every
+push — extended with real-cookie round-trip verification through the auth guard and an
+`emailSender.send` spy for the anti-enumeration symmetry + SMTP-fail-still-generic
+assertions. **No new formal CF** (CF-19–24 all already formal); accumulates **CF-23/24**
+instances and holds **CF-21** clean (§7.4); captures three operating learnings (§7.6).
+Gate floor moved `apps/api` **99 → 122** / root **259 → 282** (signin +11, password +12;
+`apps/web` held at 160).
+
+**Phase-1e carry-forwards** (now substantial — the frontend repoint is the largest phase):
+
+- signup-route `tax_number` required→optional
+- FE phone normalize-at-repoint
+- FE `updateProfile` single-method splits by section
+- FE documents: `type` discriminator + `supabase.storage`→API swap
+- FE signin repoint + routing-field consumption + verify-first (403) + generic-credentials handling
+- FE password reset/change repoint + 12-char floor convergence + the reset-page (the reset link's `callbackURL`, like the verification `callbackURL`)
+
+Note the **`apps/web` typecheck-floor change** expected as Phase 1e opens (§7.6): Phase 1e
+is the first phase to touch `apps/web`, so the long-flat 51/1 baselines are expected to
+move as Supabase is removed — a drop, not a regression. Closes 2026-05-25. **Phase 1e
+(frontend repoint — the largest phase) opens next.**
