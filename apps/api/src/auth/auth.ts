@@ -3,6 +3,11 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 
 import { db } from '../db/client.js';
 import { accounts, sessions, users, verifications } from '../db/schema.js';
+import {
+  resetEmailPlainText,
+  resetEmailSubject,
+  resetEmailTemplate,
+} from '../email/reset-template.js';
 import { SmtpEmailSender } from '../email/smtp-sender.js';
 import {
   verificationEmailPlainText,
@@ -43,6 +48,34 @@ const sendVerificationEmail = async (args: {
   }
 };
 
+// better-auth invokes this as sendResetPassword({ user, url, token }) when
+// requestPasswordReset runs for a KNOWN email, and AWAITS it (password.mjs:72).
+// Like sendVerificationEmail it MUST NOT throw: a throw would fail
+// requestPasswordReset, surfacing a 500 that leaks account existence (the very
+// thing anti-enumeration prevents) and breaking the flow on an SMTP outage. So
+// every error is swallowed here (Decision 8 / Commit 4 Q2).
+const sendResetPassword = async (args: {
+  user: { email: string; name?: string };
+  url: string;
+}): Promise<void> => {
+  const { user, url } = args;
+  try {
+    const result = await emailSender.send({
+      to: user.email,
+      subject: resetEmailSubject,
+      html: resetEmailTemplate({ name: user.name ?? '', resetUrl: url }),
+      text: resetEmailPlainText({ name: user.name ?? '', resetUrl: url }),
+    });
+    if ('error' in result) {
+      logger.error({ to: user.email, error: result.error }, 'reset email failed');
+    } else {
+      logger.info({ to: user.email, messageId: result.messageId }, 'reset email sent');
+    }
+  } catch (err) {
+    logger.error({ to: user.email, err }, 'reset email threw (swallowed)');
+  }
+};
+
 export const auth = betterAuth({
   secret: env.AUTH_SECRET,
   // Well-formed verification URLs (Commit 3 Q8); prod overrides via env.
@@ -62,6 +95,12 @@ export const auth = betterAuth({
     enabled: true,
     requireEmailVerification: true,
     minPasswordLength: 12,
+    // Wires /api/password/reset-request: better-auth emails the reset link only
+    // for a real account (anti-enumeration is built in — password.mjs:50-72).
+    sendResetPassword,
+    // Forgot-password is a compromise scenario: invalidate every session so a
+    // stale/stolen cookie can't outlive the reset. The user re-signs in (M3).
+    revokeSessionsOnPasswordReset: true,
   },
   emailVerification: {
     sendOnSignUp: true,
