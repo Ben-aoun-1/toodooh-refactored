@@ -25,11 +25,16 @@ import type {
   Governorate,
   SignUpData,
   FleetEstablishmentInput,
-  CompanySizeOption,
 } from '@/features/auth/types/auth';
+import { isValidPassword, passwordChecks } from '@/features/auth/utils/password';
 import { getErrorMessage } from '@/lib/errors';
 
 type ProfileType = 'advertiser' | 'agency' | 'individual_owner' | 'fleet_owner';
+
+// Advertiser/agency company-size options — hardcoded (Phase-1f D8): the legacy `company_size_options`
+// seed; `company_size` is backend-stripped, so only the display/value string matters (owners use
+// `parcCountOptions`).
+const COMPANY_SIZE_OPTIONS = ['0 - 10', '10 - 50', '50 - 100', '100 - 500', '500 et plus'];
 
 interface Props {
   currentStep: number;
@@ -134,7 +139,6 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
   const [showConfirmPassword, _setShowConfirmPassword] = useState(false);
   const [sectors, setSectors] = useState<BusinessSector[]>([]);
   const [ownerSectors, setOwnerSectors] = useState<BusinessSector[]>([]);
-  const [companySizeOptions, setCompanySizeOptions] = useState<CompanySizeOption[]>([]);
   const [governorates, setGovernorates] = useState<Governorate[]>([]);
   const [selectedProfileType, setSelectedProfileType] = useState<ProfileType>('advertiser');
   const [documentFile, setDocumentFile] = useState<File | null>(null);
@@ -162,7 +166,6 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
   const [fonction, setFonction] = useState('');
   const [emailConflict, setEmailConflict] = useState<string | null>(null);
   const [phoneConflict, setPhoneConflict] = useState<string | null>(null);
-  const [checkingConflicts, setCheckingConflicts] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState('');
   const [formData, setFormData] = useState<Partial<SignUpData>>({
     email: '',
@@ -195,16 +198,13 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [sectorsData, ownerSectorsData, companySizeData, governoratesData] =
-          await Promise.all([
-            authService.getBusinessSectors(),
-            authService.getOwnerBusinessSectors(),
-            authService.getCompanySizeOptions(),
-            authService.getGovernorates(),
-          ]);
+        const [sectorsData, ownerSectorsData, governoratesData] = await Promise.all([
+          authService.getBusinessSectors(),
+          authService.getOwnerBusinessSectors(),
+          authService.getGovernorates(),
+        ]);
         setSectors(sectorsData);
         setOwnerSectors(ownerSectorsData);
-        setCompanySizeOptions(companySizeData);
         setGovernorates(governoratesData);
       } catch {
         toast.error('Erreur lors du chargement des données');
@@ -262,14 +262,14 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
     }
   }, [selectedProfileType, sectors]);
 
-  const validatePassword = (pw: string) =>
-    pw.length >= 8 && /[A-Z]/.test(pw) && /[a-z]/.test(pw) && /\d/.test(pw);
+  const validatePassword = (pw: string) => isValidPassword(pw);
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const normalizePhone = (value: string) => (value || '').replace(/\s+/g, '').trim();
   const isValidTunisiaPhone = (value: string) => /^\+216\d{8}$/.test(normalizePhone(value));
-  const pwHasUpper = /[A-Z]/.test(formData.password || '');
-  const pwHasDigit = /\d/.test(formData.password || '');
-  const pwHasMinLen = (formData.password || '').length >= 8;
+  const pwChecks = passwordChecks(formData.password || '');
+  const pwHasUpper = pwChecks.upper;
+  const pwHasDigit = pwChecks.digit;
+  const pwHasMinLen = pwChecks.minLen;
   const pwMatch = Boolean(
     formData.password && confirmPassword && formData.password === confirmPassword,
   );
@@ -280,10 +280,13 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
     setFormData((prev) => ({ ...prev, contact_name: fullName }));
   }, [firstName, lastName]);
 
-  const validateUniqueCredentials = async (
+  // Phase-1f F2: format-only (the client-side email-existence oracle is removed — anti-enumeration,
+  // class-b §4.1). Duplicates are handled server-side by the 201-generic signup; the wizard no longer
+  // discloses "email taken" pre-submit. `emailConflict`/`phoneConflict` now carry FORMAT errors only.
+  const validateUniqueCredentials = (
     showToast = true,
     scope: 'both' | 'email' | 'phone' = 'both',
-  ): Promise<boolean> => {
+  ): boolean => {
     const normalizedEmail = String(formData.email || '')
       .trim()
       .toLowerCase();
@@ -304,37 +307,9 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
       return false;
     }
 
-    // L'unicité du téléphone n'est plus bloquante.
-    if (!checkEmail) {
-      setPhoneConflict(null);
-      return true;
-    }
-
-    setCheckingConflicts(true);
-    try {
-      const { emailExists } = await authService.checkSignupConflicts(
-        normalizedEmail,
-        normalizedPhone,
-      );
-      const nextEmailConflict =
-        checkEmail && emailExists ? 'Cette adresse email existe déjà' : null;
-      setEmailConflict(nextEmailConflict);
-      setPhoneConflict(null);
-
-      if (nextEmailConflict) {
-        if (showToast)
-          toast.error(
-            '📧 Cette adresse email est déjà utilisée. Veuillez vous connecter ou utiliser une autre adresse.',
-          );
-        return false;
-      }
-      return true;
-    } catch {
-      if (showToast) toast.error('Impossible de vérifier la disponibilité de l’email. Réessayez.');
-      return false;
-    } finally {
-      setCheckingConflicts(false);
-    }
+    if (checkEmail) setEmailConflict(null);
+    if (checkPhone) setPhoneConflict(null);
+    return true;
   };
 
   /* ── navigation helpers ── */
@@ -356,8 +331,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
           formData.contact_phone &&
           isValidTunisiaPhone(String(formData.contact_phone || '')) &&
           !emailConflict &&
-          !phoneConflict &&
-          !checkingConflicts,
+          !phoneConflict,
         );
       case 2:
         if (selectedProfileType === 'individual_owner') {
@@ -407,12 +381,9 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
   const goNext = () => {
     if (currentStep >= 4 || !canGoNext()) return;
     if (currentStep === 1) {
-      const run = async () => {
-        const available = await validateUniqueCredentials(true);
-        if (!available) return;
-        onStepChange(currentStep + 1);
-      };
-      void run();
+      // Format-only check now (the existence oracle is gone — duplicates are server-side 201-generic).
+      if (!validateUniqueCredentials(true)) return;
+      onStepChange(currentStep + 1);
       return;
     }
     if (selectedProfileType === 'individual_owner' && currentStep === 2) {
@@ -527,10 +498,10 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             ? fleetEstablishments.map(({ id: _id, ...rest }) => rest)
             : undefined,
       };
+      // Signup creates an unverified account (no auto-login) and returns the 201-generic — no logout
+      // needed (there is no session). The user verifies via email, then signs in (Phase-1f F2/D-F2-7).
       await authService.signUp(signupDataWithFile);
-      await new Promise((r) => setTimeout(r, 1000));
-      await authService.logout();
-      toast.success('Inscription réussie ! Veuillez vous connecter.');
+      toast.success('Inscription réussie ! Vérifiez votre email pour activer votre compte.');
       setTimeout(() => navigate('/login'), 2000);
     } catch (error) {
       toast.error(getErrorMessage(error) || 'Une erreur inattendue');
@@ -868,7 +839,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             )}
           </div>
           <span className={`text-xs ${pwHasMinLen ? 'text-gray-700' : 'text-gray-400'}`}>
-            Minimum 8 caractères
+            Minimum 12 caractères
           </span>
         </div>
       </div>
@@ -1129,17 +1100,11 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
                 id="company-size"
               >
                 <option value="">{isOwner ? '12' : 'Sélectionnez la taille'}</option>
-                {isOwner
-                  ? parcCountOptions.map((n) => (
-                      <option key={n} value={n}>
-                        {n}
-                      </option>
-                    ))
-                  : companySizeOptions.map((o) => (
-                      <option key={o.id} value={o.value}>
-                        {o.value}
-                      </option>
-                    ))}
+                {(isOwner ? parcCountOptions : COMPANY_SIZE_OPTIONS).map((v) => (
+                  <option key={v} value={v}>
+                    {v}
+                  </option>
+                ))}
               </select>
             </div>
           </div>

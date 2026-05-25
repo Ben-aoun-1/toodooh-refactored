@@ -3,7 +3,7 @@ import {
   BusinessProfile,
   BusinessSector,
   Governorate,
-  SignUpResult,
+  SignupResponse,
   CompanySizeOption,
   SupportObjectiveOption,
   SessionUser,
@@ -179,74 +179,7 @@ const mapAuthError = (error: any): string => {
   return "❌ Une erreur s'est produite. Veuillez réessayer dans quelques instants. Si le problème persiste, contactez notre support technique.";
 };
 
-/** Crée les lignes `locations` pour un propriétaire de parc après inscription. */
-async function insertFleetEstablishmentsAfterSignup(
-  userId: string,
-  data: SignUpData,
-): Promise<void> {
-  const est = data.fleet_establishments;
-  if (!est?.length || data.profile_type !== 'fleet_owner') return;
-  const rows = est.map((e) => ({
-    owner_id: userId,
-    name: e.name,
-    address: e.street_address,
-    city: e.city,
-    zone: e.zone,
-    governorate_id: e.governorate_id || null,
-    screen_count: e.screen_count,
-    room_count: e.room_count,
-    postal_code: e.postal_code || null,
-  }));
-  const { error } = await supabase.from('locations').insert(rows);
-  if (error) {
-    log.error({ error }, '⚠️ Insertion localités (parc) après inscription');
-  }
-}
-
 export const authService = {
-  async checkSignupConflicts(
-    email: string,
-    contactPhone: string,
-  ): Promise<{ emailExists: boolean; phoneExists: boolean }> {
-    const normalizedEmail = (email || '').trim().toLowerCase();
-    const normalizedPhone = (contactPhone || '').replace(/\s+/g, '').trim();
-
-    const { data, error } = await supabase.rpc('check_signup_conflicts_secure', {
-      p_email: normalizedEmail,
-      p_contact_phone: normalizedPhone,
-    });
-
-    if (error) {
-      throw new Error(error.message || 'Échec de vérification unicité email/téléphone');
-    }
-
-    const first = Array.isArray(data) ? data[0] : data;
-    return {
-      emailExists: Boolean(first?.email_exists),
-      // Contrôle unicité téléphone désactivé volontairement.
-      phoneExists: false,
-    };
-  },
-
-  async ensureBusinessProfileExists(userId: string, email: string): Promise<void> {
-    const { data: existing, error: existingError } = await supabase
-      .from('business_profiles')
-      .select('id')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (existingError) {
-      throw existingError;
-    }
-    if (existing) return;
-    void email;
-    throw new Error(
-      'Profil business introuvable pour ce compte. Vérifiez que les champs obligatoires d’inscription sont bien fournis (type de profil, type business, nom entreprise, contact, adresse, conditions).',
-    );
-  },
-
   /**
    * The cookie-authenticated self-view (Phase-1f keystone). `GET /api/me` carries the routing
    * fields the store derives identity from. A 401 is the normal logged-out path → `null` (passes
@@ -278,416 +211,38 @@ export const authService = {
     }
   },
 
-  async signUp(data: SignUpData): Promise<SignUpResult> {
-    const normalizeSectorName = (name: string) =>
-      (name || '')
-        .trim()
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/\s+/g, ' ');
-
-    let resolvedBusinessSectorId = (data.business_sector_id || '').trim();
-    const requestedProfileType = (data.profile_type || '').trim() as SignUpData['profile_type'];
-
-    const missingFields: string[] = [];
-    const fieldLabels: Record<string, string> = {
-      profile_type: 'type de profil',
-      business_type: 'type business',
-      business_name: "nom de l'entreprise/établissement",
-      contact_name: 'nom complet du responsable',
-      contact_phone: 'téléphone',
-      street_address: 'adresse',
-      city: 'ville',
-      postal_code: 'code postal',
-      governorate_id: 'gouvernorat',
-      terms_accepted: 'acceptation des conditions',
-      agent_toodooh: 'code agent',
-    };
-    const pushMissing = (key: keyof typeof fieldLabels) => {
-      missingFields.push(`${key} (${fieldLabels[key]})`);
-    };
-
-    if (!requestedProfileType) pushMissing('profile_type');
-    if (!data.business_type) pushMissing('business_type');
-    if (!String(data.business_name || '').trim()) pushMissing('business_name');
-    if (!String(data.contact_name || '').trim()) pushMissing('contact_name');
-    if (!String(data.contact_phone || '').trim()) pushMissing('contact_phone');
-    if (!String(data.street_address || '').trim()) pushMissing('street_address');
-    if (!String(data.city || '').trim()) pushMissing('city');
-    if (!String(data.postal_code || '').trim()) pushMissing('postal_code');
-    if (!data.governorate_id) pushMissing('governorate_id');
-    if (!data.terms_accepted) pushMissing('terms_accepted');
-    if (!String(data.agent_toodooh || '').trim()) pushMissing('agent_toodooh');
-    if (missingFields.length > 0) {
-      throw new Error(
-        `Impossible de créer business_profiles: champs manquants -> ${missingFields.join(', ')}`,
-      );
-    }
-
-    // Pré-vérification DB stricte AVANT création auth:
-    // si le profile_type n'est pas accepté par l'enum/check DB, on bloque tout de suite.
-    const { data: profileTypeCheckData, error: profileTypeCheckError } = await supabase.rpc(
-      'validate_signup_profile_type',
-      { p_profile_type: requestedProfileType },
-    );
-    if (profileTypeCheckError) {
-      // Compatibilité ascendante: si la RPC n'existe pas encore,
-      // ne pas bloquer l'inscription (sinon régression annonceur).
-      if (profileTypeCheckError.code === 'PGRST202') {
-        log.warn('⚠️ RPC validate_signup_profile_type absente; précheck ignoré temporairement.');
-      } else {
-        throw new Error(
-          `Impossible de valider la configuration d'inscription (${profileTypeCheckError.code || 'UNKNOWN'}): ${profileTypeCheckError.message}`,
-        );
-      }
-    } else {
-      const profileTypeCheck = Array.isArray(profileTypeCheckData)
-        ? profileTypeCheckData[0]
-        : profileTypeCheckData;
-      if (!profileTypeCheck?.is_valid) {
-        throw new Error(
-          profileTypeCheck?.error_message ||
-            'Configuration base incompatible avec le type de profil demandé.',
-        );
-      }
-    }
-
-    // Agence: s'assurer qu'un secteur valide est toujours renseigné
-    // pour éviter l'échec d'insert business_profiles.
-    if (requestedProfileType === 'agency' && !resolvedBusinessSectorId) {
-      const { data: sectorsRows, error: sectorsError } = await supabase
-        .from('business_sectors')
-        .select('id, name, display_order')
-        .order('display_order', { ascending: true });
-
-      if (sectorsError) {
-        log.error({ sectorsError }, '❌ Impossible de charger business_sectors pour profil agence');
-        throw new Error(
-          'Configuration des secteurs indisponible. Réessayez dans quelques instants.',
-        );
-      }
-
-      const sectors = sectorsRows || [];
-      // TODO(phase-1): typed source [supabase] — see #15
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const target = sectors.find((s: any) => {
-        const n = normalizeSectorName(String(s?.name || ''));
-        return n === 'agence de publicite' || (n.includes('agence') && n.includes('publicit'));
-      });
-
-      // Fallback: premier secteur trié si le libellé attendu n'existe pas.
-      resolvedBusinessSectorId = target?.id || sectors[0]?.id || '';
-      if (!resolvedBusinessSectorId) {
-        throw new Error('Aucun secteur disponible pour créer un compte agence.');
-      }
-    }
-
-    // 1. VÉRIFIER SI L'EMAIL / TÉLÉPHONE EXISTENT DÉJÀ
-    const normalizedEmail = (data.email || '').trim().toLowerCase();
-    const normalizedPhone = (data.contact_phone || '').replace(/\s+/g, '').trim();
-
-    const { emailExists } = await this.checkSignupConflicts(normalizedEmail, normalizedPhone);
-
-    if (emailExists) {
-      throw new Error(
-        '📧 Cette adresse email est déjà associée à un compte existant. Veuillez vous connecter ou utiliser une autre adresse.',
-      );
-    }
-
-    // Vérifier le matricule fiscal (seulement s'il est fourni)
-    // Pour fleet_owner: ne pas bloquer en cas de doublon, on générera un matricule technique.
-    let fleetOwnerTaxNumberConflict = false;
-    if (data.tax_number && data.tax_number.trim() !== '') {
-      const { data: existingTax } = await supabase
-        .from('business_profiles')
-        .select('user_id')
-        .eq('tax_number', data.tax_number)
-        .limit(1);
-
-      if (existingTax && existingTax.length > 0) {
-        if (requestedProfileType === 'fleet_owner') {
-          fleetOwnerTaxNumberConflict = true;
-          log.warn("⚠️ fleet_owner: tax_number déjà utilisé, génération d'un matricule technique.");
-        } else {
-          throw new Error(
-            "🏢 Ce numéro de matricule fiscal est déjà enregistré dans notre système. Si c'est votre entreprise, veuillez vous connecter avec votre compte existant.",
-          );
-        }
-      }
-    }
-
-    // 2. Créer l'utilisateur auth
-    const { data: authData, error: signUpError } = await supabase.auth.signUp({
+  async signUp(data: SignUpData): Promise<SignupResponse> {
+    // Accepted-fields JSON (snake wire, Phase-1f F2). NOT sent: files (registration_doc/
+    // company_logo/bank_doc — documents upload post-signin in F5, the endpoint is requireAuth),
+    // owner-extras (cin/formule/number_of_screens/number_of_rooms/company_size) and
+    // fleet_establishments (the endpoint strips unknowns; the owner slice has no endpoint). Empty
+    // optionals are OMITTED — the endpoint's optionals validate-when-present (min(1)/uuid/^\d{4}$),
+    // so '' would 400. profile_type is a non-privileged hint, mapped server-side (role input:false).
+    const t = (v?: string) => (v && v.trim() ? v.trim() : undefined);
+    const payload = {
       email: data.email,
       password: data.password,
-      options: {
-        emailRedirectTo: getAppUrl('/login'),
-      },
-    });
-
-    if (signUpError) {
-      throw new Error(mapAuthError(signUpError));
-    }
-
-    if (!authData.user) {
-      throw new Error('La création du compte a échoué. Veuillez réessayer.');
-    }
-
-    // Vérifier si l'utilisateur a déjà été créé (identité existante)
-    if (authData.user.identities && authData.user.identities.length === 0) {
-      throw new Error(
-        '📧 Cette adresse email est déjà associée à un compte existant. Si c\'est votre compte, veuillez vous connecter. Si vous avez oublié votre mot de passe, utilisez la fonction "Mot de passe oublié".',
-      );
-    }
-
-    // 3. Attendre un court instant pour que l'utilisateur soit synchronisé dans la base de données
-    await new Promise((resolve) => setTimeout(resolve, 1000)); // Attendre 1 seconde
-
-    // 4. Créer le profil business
-    // Générer un matricule temporaire si vide (pour propriétaires individuels)
-    let taxNumber = data.tax_number;
-    if (
-      !taxNumber ||
-      taxNumber.trim() === '' ||
-      (requestedProfileType === 'fleet_owner' && fleetOwnerTaxNumberConflict)
-    ) {
-      // Générer un matricule temporaire unique basé sur l'ID utilisateur et timestamp
-      taxNumber = `TEMP-${authData.user.id.substring(0, 8)}-${Date.now()}`;
-    }
-
-    const profileType = requestedProfileType;
-
-    const signupData = {
-      user_id: authData.user.id,
-      email: normalizedEmail, // Ajout de l'email pour l'afficher dans l'admin
-      business_name: data.business_name,
-      tax_number: taxNumber,
-      business_sector_id: resolvedBusinessSectorId || data.business_sector_id,
-      business_type: data.business_type || (profileType === 'agency' ? 'agency' : 'local'),
-      profile_type: profileType,
       contact_name: data.contact_name,
-      contact_phone: normalizedPhone,
-      fonction: data.fonction || null,
-      street_address: data.street_address,
-      city: data.city,
-      postal_code: data.postal_code,
-      governorate_id: data.governorate_id,
-      zone: data.zone, // Zone géographique pour les propriétaires
-      cin: data.cin, // CIN pour les propriétaires individuels
-      formule: data.formule, // Formule choisie par le propriétaire
-      agent_toodooh: data.agent_toodooh, // Agent Toodooh pour les propriétaires
-      number_of_screens: data.number_of_screens, // Nombre d'écrans pour les propriétaires
-      number_of_rooms: data.number_of_rooms, // Nombre de salles
-      company_size: data.company_size || null, // Taille entreprise / parc
+      business_name: data.business_name,
+      contact_phone: data.contact_phone,
       terms_accepted: data.terms_accepted,
-      terms_accepted_at: new Date().toISOString(),
-      verification_status: 'pending', // En attente de validation admin
-      onboarding_completed: false,
-      is_admin: false,
+      ...(t(data.tax_number) ? { tax_number: t(data.tax_number) } : {}),
+      ...(data.profile_type ? { profile_type: data.profile_type } : {}),
+      ...(t(data.business_type) ? { business_type: t(data.business_type) } : {}),
+      ...(t(data.business_sector_id) ? { business_sector_id: t(data.business_sector_id) } : {}),
+      ...(t(data.street_address) ? { street_address: t(data.street_address) } : {}),
+      ...(t(data.city) ? { city: t(data.city) } : {}),
+      ...(t(data.postal_code) ? { postal_code: t(data.postal_code) } : {}),
+      ...(t(data.governorate_id) ? { governorate_id: t(data.governorate_id) } : {}),
+      ...(t(data.fonction) ? { fonction: t(data.fonction) } : {}),
+      ...(t(data.zone) ? { zone: t(data.zone) } : {}),
+      ...(t(data.agent_toodooh) ? { agent_toodooh: t(data.agent_toodooh) } : {}),
     };
-
-    // 5. Essayer de créer le profil avec plusieurs stratégies
-    let profileCreated = false;
-    let profileError = null;
-
-    // Stratégie 1: Insertion directe
-    const { error: directInsertError } = await supabase
-      .from('business_profiles')
-      .insert(signupData);
-
-    // 6. IMPORTANT: Fonction pour uploader le document (définie AVANT pour être utilisée partout)
-    const uploadDocument = async () => {
-      if (data.registration_doc) {
-        try {
-          const ext = data.registration_doc.name.split('.').pop();
-
-          // Déterminer le type de document et le nom du fichier
-          const isIndividualOwner = data.profile_type === 'individual_owner';
-          const filePrefix = isIndividualOwner ? 'cin' : 'rne';
-          const filePath = `${filePrefix}_${authData.user.id}_${Date.now()}.${ext}`;
-
-          // Upload vers le bucket registres
-          const { error: uploadError } = await supabase.storage
-            .from('registres')
-            .upload(filePath, data.registration_doc);
-
-          if (uploadError) {
-            log.error({ uploadError }, '⚠️ Erreur upload document (non bloquante)');
-            return;
-          }
-
-          // Créer une URL signée
-          const { data: signedData, error: signedError } = await supabase.storage
-            .from('registres')
-            .createSignedUrl(filePath, 604800); // 7 jours
-
-          if (signedError || !signedData) {
-            log.error({ signedError }, '⚠️ Erreur création URL signée');
-            return;
-          }
-
-          // Mettre à jour le profil avec l'URL du document
-          const updateField = isIndividualOwner ? 'cin_doc_url' : 'registration_doc_url';
-
-          const { error: updateError } = await supabase
-            .from('business_profiles')
-            .update({ [updateField]: signedData.signedUrl })
-            .eq('user_id', authData.user.id);
-
-          if (updateError) {
-            log.error({ updateError }, '⚠️ Erreur sauvegarde URL (non bloquante)');
-          }
-        } catch (fileError) {
-          log.error({ fileError }, "⚠️ Erreur lors de l'upload du document (non bloquante)");
-        }
-      }
-    };
-
-    // 7. Compléter les champs optionnels potentiellement absents après fallback RPC
-    const enrichProfileOptionalFields = async () => {
-      // TODO(phase-1): typed source [internal] — see #15
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const patch: Record<string, any> = {
-        fonction: data.fonction?.trim() || null,
-        company_size: data.company_size || null,
-        number_of_rooms: data.number_of_rooms ?? null,
-      };
-
-      const { error: updateError } = await supabase
-        .from('business_profiles')
-        .update(patch)
-        .eq('user_id', authData.user.id);
-
-      if (updateError) {
-        log.error({ updateError }, '⚠️ Erreur mise à jour des champs optionnels');
-      }
-    };
-
-    // 8. Upload logo entreprise/établissement puis sauvegarde logo_url
-    const uploadCompanyLogo = async () => {
-      if (!data.company_logo) return;
-
-      try {
-        const ext = data.company_logo.name.split('.').pop() || 'png';
-        const filePath = `logo_${authData.user.id}_${Date.now()}.${ext}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('registres')
-          .upload(filePath, data.company_logo);
-        if (uploadError) {
-          log.error({ uploadError }, '⚠️ Erreur upload logo (non bloquante)');
-          return;
-        }
-
-        const { data: signedData, error: signedError } = await supabase.storage
-          .from('registres')
-          .createSignedUrl(filePath, 604800); // 7 jours
-        if (signedError || !signedData) {
-          log.error({ signedError }, '⚠️ Erreur URL logo signée (non bloquante)');
-          return;
-        }
-
-        const { error: updateError } = await supabase
-          .from('business_profiles')
-          .update({ logo_url: signedData.signedUrl })
-          .eq('user_id', authData.user.id);
-        if (updateError) {
-          log.error({ updateError }, '⚠️ Erreur sauvegarde logo_url (non bloquante)');
-        }
-      } catch (logoError) {
-        log.error({ logoError }, '⚠️ Erreur inattendue upload logo (non bloquante)');
-      }
-    };
-
-    // Vérifier le résultat de l'insertion
-    if (!directInsertError) {
-      profileCreated = true;
-    } else {
-      profileError = directInsertError;
-
-      // Stratégie 2: Utiliser la fonction RPC create_business_profile avec
-      // les bons noms de paramètres (p_*) si disponible.
-      try {
-        const { error: rpcError } = await supabase.rpc('create_business_profile', {
-          p_user_id: authData.user.id,
-          p_business_name: signupData.business_name,
-          p_tax_number: signupData.tax_number,
-          p_business_sector_id: signupData.business_sector_id,
-          p_business_type: signupData.business_type,
-          p_profile_type: signupData.profile_type,
-          p_contact_name: signupData.contact_name,
-          p_contact_phone: signupData.contact_phone,
-          p_street_address: signupData.street_address,
-          p_city: signupData.city,
-          p_postal_code: signupData.postal_code,
-          p_governorate_id: signupData.governorate_id,
-          p_terms_accepted: signupData.terms_accepted,
-          p_terms_accepted_at: signupData.terms_accepted_at,
-          p_verification_status: signupData.verification_status,
-          p_onboarding_completed: signupData.onboarding_completed,
-          p_is_admin: signupData.is_admin,
-        });
-        if (!rpcError) {
-          profileCreated = true;
-        }
-      } catch {
-        // Intentional: RPC `create_business_profile` failure leaves
-        // `profileCreated = false`; the `if (!profileCreated)` block below
-        // logs the original `profileError` and throws.
-      }
+    try {
+      return await apiClient.post<SignupResponse>('/signup', payload);
+    } catch (error) {
+      throw new Error(apiErrorMessage(error));
     }
-
-    // Si aucune stratégie n'a fonctionné, bloquer l'inscription et exposer
-    // l'erreur SQL pour identifier précisément le champ/problème manquant.
-    if (!profileCreated) {
-      log.error({ profileError }, '❌ Erreur critique lors de la création du profil');
-      if (profileError) {
-        // TODO(phase-1): typed source [supabase] — see #15
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        log.error({ data: (profileError as any).code }, 'Code erreur');
-        log.error({ message: profileError.message }, 'Message');
-        // TODO(phase-1): typed source [supabase] — see #15
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        log.error({ data: (profileError as any).details }, 'Details');
-        // TODO(phase-1): typed source [supabase] — see #15
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        log.error({ data: (profileError as any).hint }, 'Hint');
-      }
-      // TODO(phase-1): typed source [supabase] — see #15
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const pErr = profileError as any;
-      if (
-        pErr?.code === '22P02' &&
-        String(pErr?.message || '')
-          .toLowerCase()
-          .includes('profile_type') &&
-        String(pErr?.message || '')
-          .toLowerCase()
-          .includes('agency')
-      ) {
-        throw new Error(
-          "Configuration base incomplète: l'enum public.profile_type ne contient pas 'agency'. Appliquez la migration 20260411152000_ensure_agency_profile_type_compat.sql puis réessayez.",
-        );
-      }
-      throw new Error(
-        `Echec création business_profiles (${pErr?.code || 'UNKNOWN'}): ${pErr?.message || 'Erreur inconnue'}${pErr?.details ? ` | details: ${pErr.details}` : ''}${pErr?.hint ? ` | hint: ${pErr.hint}` : ''}`,
-      );
-    }
-
-    // Vérification finale anti-profil manquant
-    await this.ensureBusinessProfileExists(authData.user.id, data.email);
-
-    // Harmoniser les champs optionnels après la création du profil
-    await enrichProfileOptionalFields();
-
-    // Uploader le document avant de retourner
-    await uploadDocument();
-    await uploadCompanyLogo();
-
-    await insertFleetEstablishmentsAfterSignup(authData.user.id, data);
-
-    return authData;
   },
 
   async logout() {

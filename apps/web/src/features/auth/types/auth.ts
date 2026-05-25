@@ -115,6 +115,14 @@ export interface SignUpResult {
   message?: string;
 }
 
+/** The 201 body of POST /api/signup (Phase-1f F2). */
+export interface SignupResponse {
+  userId: string;
+  email: string;
+  verificationRequired: boolean;
+  message: string;
+}
+
 /**
  * The session/identity user the backend returns on `POST /api/signin` and `GET /api/me`
  * (snake_case wire, Phase-1f keystone). The store derives its routing state from this
