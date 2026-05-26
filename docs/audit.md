@@ -1032,6 +1032,8 @@ per commit.
 
 - **Phase 1e Part A — Backend prerequisites (browser-reachability + signup-grows + reference data)** — the backend half of the frontend-repoint work: making `apps/api` reachable from a browser, growing signup to the full wizard profile, and exposing the reference-data the forms fetch. Opened by the **frontend repoint survey** (`3d84dd8`, `docs/handoff/frontend-repoint-survey.md`) whose §8 **split "Phase 1e = frontend repoint" into Phase 1e = backend prerequisites (this) + Phase 1f = frontend repoint** (pushing admin→1g, deployment→1h — see §16 for the renumbering reconciliation vs the older "1e=frontend" references in §13/§15). Three feature commits: `7a71eb3` (browser-reachable API — `@fastify/cors@11.2.0` + better-auth `trustedOrigins:[WEB_ORIGIN]` + `advanced.disableOriginCheck:false` + a Vite same-origin dev proxy + `WEB_ORIGIN` env; **`GET /api/me`** the cookie-authenticated full self-view the FE store rehydrates from; `toProfileType` extracted to `lib/profile-type.ts`), `a63b50d` (**signup-grows** — `POST /api/signup` accepts the full wizard profile; `profile_type→role(+business_type=agency)` mapped server-side via a duplicate-safe post-create `db.update` [role stays `input:false`]; `tax_number` required→optional; new columns `agent_code` + `terms_accepted_at` [migration 0006]; `name`→`contact_name` wire; owner-extras `.strip()`'d; terms backend-enforced 400-if-not-accepted), `30c28cf` (**reference-data GETs** — public `GET /api/governorates` + `GET /api/business-sectors?audience=advertiser|owner`, the latter consuming the Phase-1c `audience` discriminator [the §5.3 `owner_business_sectors` collapse]; `company_size_options` ruled OUT — fetched but no table + collect-and-ignore field, the dead-infrastructure-avoided call). Gate floors **post-Phase-1e-Part-A**: root typecheck **51** / lint **1** / test **306** / build `apps/web` **139.80 kB** gzip; `apps/api` per-package typecheck **0** / lint **0** / test **146** / build success (entered post-1d at `apps/api` **122** / root **282**; the +24 is all `apps/api` — Commit 1 +8, Commit 2 +10, Commit 3 +6; **`apps/web` held at 160 — Part A is backend-only**, so the long-flat 51/1/139.80 `apps/web` floors are untouched; Phase 1f is the first to move them). **No new formal CF** (CF-19–24 all already formal); **CF-23 taxonomy completed** (four named sub-classes of right-looking-but-wrong source-reads, all caught by execution — see §7.4), **CF-24 instances** (truthful-to-frontend: `/api/me` self-view, signup wire-truthfulness, reference GETs built only for fetched categories), **CF-21 instance** (`WEB_ORIGIN` defaulted-var cascade). Plan docs: `e58a6c8` (Commit 1), `64a582e`+`ab668b0` (Commit 2 plan + rulings-finalize), `615067b` (Commit 3) — their §11 sections + the survey are the canonical write-up home. Phase 1e Part A was direct feature work (no `→ Issue`). **Phase-1f carry-forwards** (the frontend repoint — now substantial; full list §16): `auth.service.ts`→an API client (cookie + `/api/me` identity, `credentials:'include'`, the same-origin proxy); the signin/signup/profile/documents/password repoints; `useSectors`/`useOwnerBusinessSectors`→`?audience=`, `useGovernorates`→`GET /api/governorates`; the advertiser `company_size` dropdown hardcodes (§2.C); the verify-email + reset pages; the 12-char + anti-enum + verify-first FE changes. Closes 2026-05-25. Commits `7a71eb3`, `a63b50d`, `30c28cf`, plus `3d84dd8` (survey) + the four plan-doc commits above and this audit refresh.
 
+- **Phase 1f — Frontend repoint (`apps/web` → `apps/api`)** — the largest phase of the project: every user-facing flow rewired off Supabase onto the apps/api backend the four prior phases shipped. Ten commits (keystone + seven per-flow repoints + two cleanup commits), each CI-green; the per-flow arc K → F1 → F2 → F3 → F4a → F4b → F5 → F6 → F7a → F7b. Opened by the **keystone design read** (`5d46b48`, `docs/handoff/phase-1f-keystone-design.md` — the source-driven design of the api-client + the auth-store session model + the 10 D-rulings D1-D10 every per-flow commit consumes). Keystone (`0c9826a`): `lib/api-client.ts` (typed `fetch` singleton, base `/api` via same-origin proxy, `credentials:'include'`, the two-error-shape normalizer `ApiError` with `code` read from `body.error`); `lib/auth-errors.ts` (`apiErrorMessage` code→French, the `mapAuthError` successor); auth-store rewrite (`{id,email}` user shape per D4, `/api/me` rehydration per D3 fetch-authoritative + cushion-only persist, status→`pending|approved|rejected` per D5, the 401-mid-session shared-clear per D6); session methods rewired (`login`→`POST /api/signin` populate-from-response, `logout`→`POST /api/signout`, `getCurrentUser`→`GET /api/me`); `LoginForm` 403 verify-first branch; three anti-enum/Supabase-hack methods deleted (`checkSignupConflicts`, `ensureBusinessProfileExists`, `createDefaultProfile`). The 30 importer files of `useAuthStore` + the 16 of `authService` are untouched by construction — the centralize-first premise (survey §1.4) held. **F1 reference reads** (`2935697`): `useSectors`/`useOwnerBusinessSectors`→`/api/business-sectors?audience=`, `useGovernorates`→`/api/governorates`; advertiser `company_size` hardcoded inline (D8); support_objectives left on Supabase (D8 later-slice); the `owner_business_sectors` no-remap (the endpoint returns `{id,name}` directly). **F2 signup wizard** (`ee67d7d`, the largest single file in the project at ~1940 lines): the wizard sends the grown profile to `POST /api/signup`; the blur-RPC `check_signup_conflicts_secure` (the email-enumeration disclosure) is removed; 12-char password floor with upper/lower/digit (matching the backend); `profile_type` becomes a non-privileged hint; owner-extras collected-but-`.strip()`'d server-side; 201-generic consumed. **F3 verify-email page + callbackURL** (`aa72b37`, **cross-package**): new `apps/web/src/features/auth/pages/VerifyEmail.tsx` consuming better-auth's redirect (`/verify-email?token=...&callbackURL=...&error=...`); apps/api `auth.ts` adds `emailVerification.sendOnSignIn=true` (B′ — the deliberate Phase-1d behavior change: unverified-signin now resends the verification email, enabling the verify-page's error CTA recovery loop); apps/api `signup.ts` passes absolute `callbackURL=${WEB_ORIGIN}/verify-email` to `signUpEmail`; signup.test Q8 extended to assert the verify link carries the callback. **F4a profile advertiser** (`b320f4c`): `UserProfile`'s 4 sub-section saves rewired to the 4 PATCHes (`/api/profile/{contact,business,address,notifications}`); the read-bridge — no `GET /api/profile` exists (it couldn't supply the deferred logo/bank fields anyway), so `getBusinessProfile` reads `/api/me` and maps to `BusinessProfile` (notifications nested→flat, status→verification_status); per-field null handling (`||undefined` for uuid optionals to clear via JSON-drop, `||null` for nullable text fields); the `mapAuthError`→`apiErrorMessage` retarget pattern. **F4b profile owner** (`30c684b`): the parallel OwnerSettings repoint reusing F4a's tested service methods; owner-extras (screens/rooms/company_size) `.strip()`'d functionally — the inputs render and the wire carries them, but slice 1 doesn't persist (forward-compat for the owner slice). **F5 documents** (`c3dfe6d`): the multipart upload moves to `POST /api/profile/documents/:type` (rne|cin discriminator); the GET presigns on-demand and never stores the URL; the upload **flow-position moved** from signup (where the user is unverified+logged-out and can't call `requireAuth`) to post-signin, with both pages exposing the upload control through the section-tab; remove disabled with caption (D-F5-3) — the dead remove-path was severed at F7b. **F6 password domain** (`b5e15cd`): all three flows wired — `/password/reset-request` (anti-enum already correct, no oracle), the new `/update-password` reset-landing page consuming `?token=`/`?error=` via `confirmPasswordReset(token,new)`, and `/password/change` for the with-old change. 12-char convergence (`isValidPassword`/`passwordChecks` from `utils/password.ts`); 6-char service guard dropped (`updatePassword` deleted); owner special-char dropped. **MyAccount no-old password change** removed at source (D-F6-5a — the only way to honor the backend's re-auth requirement). UpdatePasswordForm restyled to the light auth-form pattern. **F7a independent cleanup** (`38c3dab`): the three zero-caller `auth.service` methods removed (`getCompanySizeOptions`, `getSupportObjectivesForAdvertiserAgency`, `getSupportObjectivesForOwners`) + the orphaned `CompanySizeOption` type; MyAccount.tsx (848-line hidden duplicate page) consolidated/deleted — fully covered by OwnerSettings, no nav link to it (`/my-account` was reachable only by URL, the OwnerDashboard CTA was `className="hidden ... aria-hidden"`). **F7b deferred-control wirings + cascade removals** (`737b43f`): the caption-vs-wire fix — the per-flow rulings D-F4-4 (logo) + D-F5-3 (doc-remove) named UX defers but only **captioned** them ("Bientôt disponible" beside still-live buttons + handlers + Supabase chains); F7b actually **severs** the wirings (logo controls statically disabled with placeholder slot; doc-remove dead else-branch gone, local-pick-clear preserved). **Deactivation control disabled** (D-F7-2, new) — pre-K the form re-auth-confirmed via `supabase.auth.signInWithPassword` before destroying the account; post-K the Supabase auth store is no longer the password source so the gate became a broken no-op (rejects every password) — a **class-(b) security finding** closed defensively with a static "coming soon + contact `support@too-dooh.com`" message until the backend `POST /api/account/deactivate` ships. **Cascade** (verify-dead-at-execution): post-wiring re-grep proved updateProfile=0/deactivateAccount=0/signInWithPassword=1 (admin only, Phase-1g out-of-scope) — `authService.updateProfile` + `authService.deactivateAccount` removed; re-grep proved mapAuthError=0 — the 157-line any-typed function removed (its branches were Supabase-error-string heuristics no longer firing; `apiErrorMessage` handles every live error path). Unused supabase imports dropped from UserProfile/useProfileMutations/useOwnerProfileMutations; the auth.service.ts supabase import STAYS (still used by `updateBusinessProfile` for the wallet slice + `getAppointmentObjectives` per D8); OwnerSettings.tsx supabase import STAYS (bank-doc createSignedUrl, wallet/later-slice); `lib/supabase.ts` STAYS (59 later-slice importers — campaigns/screens/admin/wallet/performances/events). Gate floors **post-Phase-1f**: `apps/web` typecheck **36** / lint **1** / test **217** / build **135.73 kB** gzip; `apps/api` per-package typecheck **0** / lint **0** / test **146** / build success (entered post-1e-Part-A at `apps/web` **51/1/160/139.80**, `apps/api` **146**). The full arc: typecheck **51→36** (-15 — account-layer types resolve; the **last-slice ratchet** will clear the remaining 36 when `supabase.ts` + `database.types` go), test **160→217** (+57 — all `apps/web` node-level: api-client, apiErrorMessage, auth-store with mocked fetch, auth.service.reference/profile/password/signup, password utils, errors; **RTL never stood up — the thin-adapter outcome**, §7.6), build **139.80→135.73 kB** (**-4.07 kB net — the repoint made the app SMALLER**: dead Supabase + the MyAccount/F7b removals exceeded the new pages/client added), lint **1** (held — `database.types` only in `lib/supabase.ts`, clears at last-slice). `apps/api` **146 untouched except F3** (cross-package: F3 added `sendOnSignIn=true` + the `callbackURL` wire + extended Q8 in signup.test — no new test files; the apps/api floor held flat). **No new formal CF** (CF-19–24 all already formal); **three CF refinements promoted** (see §7.4): **CF-25 caption-vs-wire** (a defer/disable ruling is satisfied only when the wiring is severed, not when a caption announces it), **the third dead-UI-detection pattern (attribute-gated unreachability)** complementing setter-to-true + CSS-gated, and **CF-23 instances** across the per-flow source-reads. Operating learnings (see §7.6): the thin-adapter outcome (RTL provisioned-but-never-needed), the read-bridge pattern (`/api/me` as the profile read source), truthful-data over convenience (the empty-optional/null→400 lesson recurring across F2/F4), the sendOnSignIn behavior change recorded, the deactivation class-(b) finding, the named owner-extras functional reduction, the F7b orphaned-consumer learning (grep the consumer-name after a handler removal). The keystone + 9 per-flow scoping/plan docs: `5d46b48` (keystone design), `374fae2` (keystone plan), `71245bb` (F1 plan), `5a80aae` (F2 scoping+plan), `6dd1f02` (F3 scoping+plan), `a78568c` (F4 scoping+F4a plan), `aab9fcb` (F4b scoping+plan), `f0d88ca` (F5 scoping+plan), `d13378b` (F6 scoping+plan), `29b2e87` (F7 scoping+F7a plan), `1a42e0d` (F7b plan) — their §-sections are the canonical CF-25 + caption-vs-wire + read-bridge + thin-adapter write-up home. Phase 1f was direct feature work (no `→ Issue`). **Phase-1g carry-forwards** (admin slice — full list §17): the deactivation backend (`POST /api/account/deactivate` + current_password re-auth, mirroring `/password/change`); the logo storage column + endpoint + control re-enable; the document DELETE endpoint + remove-control re-enable; the owner-extras persistence (screens/rooms/company_size columns + un-strip + re-enable the inputs); company_size reference table+endpoint; WiFi-at-signup wizard field + column + provisioning consumer; the money-slice `assertOrigin ∈ [WEB_ORIGIN]` CSRF gate; the inline-`#76E6AB` styling pass (13 legacy files); the `database.types` lint-1 floor clears with the last Supabase removal; strict tax_number matricule; 2FA. Closes 2026-05-26 (CI-green on `737b43f`); Phase 1f's **record** closes with this audit refresh; the **phase itself** closes after the phase-close human visual QA against the three F7b-disabled controls + the F1-F6 repointed flows end-to-end. Commits `0c9826a` (K), `2935697` (F1), `ee67d7d` (F2), `aa72b37` (F3), `b320f4c` (F4a), `30c684b` (F4b), `c3dfe6d` (F5), `b5e15cd` (F6), `38c3dab` (F7a), `737b43f` (F7b), plus the eleven plan/scoping doc commits above and this audit refresh.
+
 ---
 
 ## 5. Roadmap
@@ -1297,6 +1299,62 @@ write-ups in the **Phase-1e Part-A plan docs' §11 sections** + `frontend-repoin
   defaults cover it, like `STORAGE_BUCKET`) but DID force the one typed `Env` literal in
   `error-handler.test.ts` to add it (21b).
 
+Phase 1f promoted one new formal CF and refined two existing patterns; canonical write-ups in the
+**Phase-1f keystone design + per-flow scoping/plan docs** (their §-sections are the home; see §4
+for the doc hashes):
+
+- **CF-25 — PROMOTED — caption-vs-wire.** A defer / disable ruling is satisfied only when the
+  **wiring is severed**, not when a **caption announces** it. Verify the path-cut (the handler,
+  the state, the chain), not the label. Reporting corollary: a CF-9 "disabled" must mean
+  path-severed; if it means "caption added, wiring deferred," say so explicitly. **Three worked
+  instances:** D-F4-4 (logo, F4a/b — captioned-not-wired: the `disabled` attribute + "Bientôt
+  disponible" text rendered correctly while the handlers + `uploadLogo` + Supabase storage
+  chain stayed loaded), D-F5-3 (doc-remove, F5 — captioned-not-wired: the `disabled={!documentFile}`
+  attribute gated the UI correctly but the dead `else { handleRemoveDocument(); }` branch was
+  loaded code with a real Supabase chain), and **the counter-example** D-F6-5a (MyAccount no-old
+  password change, F6 — correctly severed at source: the field + handler + caller deleted in
+  the same commit that pruned its UI text; proves the pattern CAN be done right). Surfaced
+  during F7's source caller-check (`docs/handoff/phase-1f-f7-cleanup-scoping.md` §1.B — the
+  "kept-dead methods" inversion: the methods were LIVE, kept alive by deferred-but-not-wired
+  handlers). F7b severs all three remaining instances in one commit; with the F6 counter-example,
+  the CF is fully demonstrated. Canonical home: the F7 scoping + F7b plan doc.
+- **CF-23 — instances (the per-flow source-reads that refined assumptions).** Phase 1f
+  accumulated four worked CF-23 instances across the per-flow commits, each catching an
+  assumption that source-reading at plan-write avoided as a CF-9 mid-execution surprise:
+  - **the better-auth verify-link mechanism** (F3) — the assumption was "verify-link hits
+    `/auth/verify-email`"; source said the `/auth/*` handler is server-side and **redirects** to
+    the `callbackURL` (`/verify-email` in apps/web), so the FE page is the redirect TARGET, not
+    the `/auth/*` handler. The corollary: the proxy already owns `/auth/*`, so the absolute
+    `callbackURL=${WEB_ORIGIN}/verify-email` is required (without it, better-auth's `originCheck`
+    would reject relative URLs).
+  - **the `sendOnSignIn` config-read** (F3 — the false-promise UI catch) — the assumption was
+    "Phase-1d signin re-sends the verification email on a 403"; source confirmed `sendOnSignIn`
+    was config-`false`, so the Phase-1d behavior was 403-without-resend. F3 deliberately FLIPPED
+    it to `true` (the B′ recovery loop). Caught a UI plan that would have promised resend
+    behavior the backend didn't yet deliver.
+  - **the read-bridge discovery** (F4a) — the assumption was "the FE will GET `/api/profile`";
+    source confirmed no such endpoint exists, and the column set the FE needs (logo, bank,
+    deferred fields) couldn't be supplied by any dedicated endpoint either. The pattern:
+    `getBusinessProfile` reads `/api/me` and maps to `BusinessProfile` (notifications nested→flat,
+    status→verification_status, deferred fields undefined). One transform, one read.
+  - **the F7 caption-vs-wire inversion** (the "kept-dead methods" finding) — the assumption was
+    "F4 left `updateProfile`/`updateBusinessProfile` dead-Supabase, ready for cleanup removal";
+    source caller-check proved both methods were LIVE (5 + 1 callers respectively), kept alive by
+    the captioned-but-not-wired logo/doc-remove handlers and the wallet/MyAccount paths. The
+    cleanup commit reframed: F7a = independently-dead removals, F7b = sever the captioned-defers
+    THEN cascade-remove the now-zero-caller methods.
+- **the third dead-UI-detection pattern: attribute-gated unreachability.** The existing two
+  patterns (see [[dead-ui-detection-patterns]]) — **(a)** setter-to-true verification (the state
+  flips but the consumer never renders) and **(b)** CSS-gated verification (a `className="hidden"`
+  / `display:none` static gate on a conditional-rendering site) — caught the cleanup-phase
+  dead-UI cases. F7 surfaced **(c) attribute-gated unreachability**: controls rendered with the
+  HTML `disabled` attribute but with **loaded handlers** (`onClick`/`onChange`) + state + a dead
+  service chain — visually disabled but the code path is real, just unreachable from the UI in
+  the current state. Found only via the §1.B source caller-check (greping the _methods_ the
+  handlers call), not by the conditional-rendering scans pattern (a) + (b) use. The methodology
+  upshot: when auditing a "disabled" control, grep its handlers; a disabled attribute is a UI
+  state, not a wiring assertion.
+
 ### 7.5 — Per-step record
 
 Each row's full record is in §4 "Already resolved"; one line each here (numbering per
@@ -1480,6 +1538,78 @@ GATE:** before wallet/recharge/payment ships, its mutating custom routes get an 
 require-auth "build-with-first-consumer" discipline) — defense-in-depth beyond `Lax` for
 money-movement. Recorded here so the money slices inherit the decision rather than rediscover the
 question.
+
+Phase 1f (frontend repoint) added seven operating learnings — the largest set of any phase, and the
+first set drawn from `apps/web` work:
+
+- **The thin-adapter outcome — RTL provisioned-but-never-needed.** The keystone's centralize-first
+  premise (survey §1.4: rewrite `auth.service` + `auth.store` once, leave the 30+16 importers
+  untouched) **held across all 7 repoints** (F1 easy / F2 the hardest-file 1940-line wizard / F4
+  split into 4 section saves / F5 multipart / F3 cross-package / F6 cross-page domain). Each
+  per-flow commit was a **localized data-flow change** — a service method body swap + a thin
+  adapter on the response shape — not a consumer rewrite. **Consequence:** the test-floor raise the
+  keystone design ratified (D10) for jsdom + Testing Library never materialized — the thin-adapter
+  architecture **structurally kept the load-bearing logic in the service layer**, which is
+  **node-testable** without a DOM. The 57 new `apps/web` tests are all node-level: api-client +
+  apiErrorMessage + auth-store (mocked fetch + localStorage shim) + the auth.service.reference /
+  profile / password / signup unit suites + utils. RTL would have covered only form-binding
+  (framework behavior, not project behavior). Render-correctness moved to the **phase-close human
+  visual QA** as the gate the assistants can't simulate. _The test infra we planned and didn't
+  stand up — and why._
+- **The read-bridge pattern.** Phase 1f's profile reads consolidate on `GET /api/me` rather than
+  a hypothetical `GET /api/profile` (the keystone D9-style decision recurring through F4): the
+  endpoint that exists (`/api/me`, the cookie-authenticated self-view) is the source; the FE
+  adapter maps it to whatever shape the consumer expects (`BusinessProfile`, with notifications
+  flattened nested→flat, status→verification_status, deferred fields undefined). No dedicated
+  read endpoint per page; one transform per consumer. The pattern transfers: when a feature reads
+  the user's own data, prefer `/api/me`-as-bridge over a per-page GET — the FE adapter is the
+  shape boundary, not a backend route per shape.
+- **Truthful-data over convenience — the empty-optional/null→400 lesson recurring.** F2 signup
+  taught it (omit-empty rather than send `''` against backend uuid optionals — `''` fails
+  `z.uuid()` while undefined is "field absent"); F4 PATCH recurred it per-field (uuid optionals
+  use `||undefined` to JSON-drop, while nullable text fields use `||null` to clear). The
+  JSON-drop guard in `api-client` (drops `undefined` keys before serialization) protects both —
+  but the FE caller still has to express the right shape per field-class. Honest reporting note:
+  the F2 plan caught it once; F4 had to relearn it per-field at scoping. CF-22 surfacing
+  works — the surface caught the lesson before code shipped both times.
+- **The `sendOnSignIn` behavior change recorded for the record.** Phase 1d's signin returned a
+  403 verify-first without re-sending the verification email; Phase 1f F3 flipped
+  `emailVerification.sendOnSignIn=true` (the B′ recovery loop — the verify-page's error CTA is a
+  real recovery path: expired link → signin → 403 + fresh email → click → verified).
+  **Recorded here so future sessions read this as a deliberate behavior change, not a Phase-1d
+  contradiction.** The decision: a re-sender on signin is rate-limited (better-auth's default
+  +the per-account scope), own-address-only (no enumeration vector), and closes a real UX gap
+  (expired verification link with no other recovery path).
+- **The deactivation class-(b) finding.** Pre-K the deactivation form called
+  `supabase.auth.signInWithPassword` for re-auth before destroying the account — a real
+  security gate against accidental/unauthorized destruction. Post-K the Supabase auth store is
+  no longer the password source (users live in apps/api's `users` table), so the gate became a
+  **broken no-op that rejects every password attempt** — a control that LOOKS like it confirms
+  but silently skips the broken gate. F7b's defensive disable (the static "coming soon + contact
+  `support@too-dooh.com`" message) closes the UX honesty gap; the backend slice tracked is **`POST
+/api/account/deactivate` with `current_password` re-auth, mirroring `/password/change`**. The
+  lesson: a re-auth gate's correctness moves with the auth store; a phase that changes the auth
+  store must audit every re-auth call-site for whether the gate is still real.
+- **The named owner-extras functional reduction.** Slice 1 collects `number_of_screens`,
+  `number_of_rooms`, `company_size` from the wizard + the owner-settings form, the wire sends
+  them, the backend `.strip()`s them (Phase 1e Part A — the collect-and-ignore pattern; columns
+  exist neither on `users` nor on a side table). Pre-K the Supabase backend HAD columns for
+  these fields and the FE persisted them. **Phase 1f is a functional reduction vs the legacy:**
+  the FE collects and the wire carries; the backend doesn't persist, and the inputs that
+  display "saved data" (the owner-settings entreprise sub-form) come back empty after a refresh.
+  Recorded as a deliberate reduction, not a regression — the **owner slice** will add columns,
+  un-strip, and re-enable the read path. The forward-compat wire is built; the persistence is
+  the slice's only addition. (Similarly: logo storage, document DELETE, account deactivation,
+  company_size reference table, WiFi-at-signup — see §17.)
+- **The F7b orphaned-consumer learning.** A removal severing a handler can orphan **what the
+  handler used** (`useNavigate` in `UserProfile.tsx` was the sole consumer's import — when
+  `handleDeactivateAccount`'s `navigate('/login')` was removed, the `const navigate = useNavigate()`
+  was suddenly unreferenced). The +1 gate regression escaped the §10 plan-doc inventory because
+  the inventory was "what the commit edits," not "what those edits orphan." **Discipline for
+  future cleanup commits: after each handler removal, `grep -n <consumer-name>` (the variable
+  the handler called) to pre-check whether the variable becomes unreferenced.** Caught at the
+  gate sweep, fixed in-commit; surfaced honestly in CF-9 rather than re-running the gates
+  silently.
 
 ---
 
@@ -1757,3 +1887,180 @@ QA** at phase close. Expected `apps/web` floor movement: typecheck **51 drops pa
 types resolve as Supabase leaves; campaigns/screens/admin stay on Supabase), while **lint-1 stays
 through 1f** (the shared `supabase.ts` + `database.types` import survive until the last slice / #15) —
 neither is a regression (§7.6 floor note + survey §2.4).
+
+---
+
+## 17. Phase 1f — Frontend repoint
+
+Phase 1f is the largest phase of the project: every user-facing flow rewired off Supabase onto the
+apps/api backend the four prior phases shipped. **Ten commits** across the per-flow arc K → F1 → F2
+→ F3 → F4a → F4b → F5 → F6 → F7a → F7b, each CI-green. See the §4 "Already resolved" Phase-1f row
+for full per-commit detail, gate floors, and plan-doc references; this section is the closing
+summary.
+
+The phase opened with the **keystone design read** (`5d46b48`,
+`docs/handoff/phase-1f-keystone-design.md`) — a source-driven design of the api-client + the
+auth-store session model that produced 10 ratified D-rulings (D1-D10) every per-flow commit
+consumes. The **keystone commit** (`0c9826a`) implemented `lib/api-client.ts` (typed fetch
+singleton, base `/api` via same-origin proxy, `credentials:'include'`, the two-error-shape
+normalizer), `lib/auth-errors.ts` (`apiErrorMessage` code→French), and the auth-store rewrite
+(`/api/me` rehydration + the fetch-authoritative + cushion-only persist + the 401-mid-session
+shared-clear). Per the centralize-first premise (survey §1.4), the 30 importers of `useAuthStore`
+
+- the 16 of `authService` were untouched by construction — the per-flow commits became thin
+  adapters.
+
+The seven repoint commits each closed one user flow: **F1** the reference reads (sectors /
+governorates / company_size hardcoded per D8), **F2** the 1940-line signup wizard (the largest
+single file repoint of the project), **F3** the verify-email page + cross-package `callbackURL`
+wiring (the only Phase-1f commit that touched apps/api, adding `sendOnSignIn=true` for the
+unverified-signin recovery loop), **F4a/F4b** the profile-edit surface as 4 section PATCHes
+
+- the `/api/me` read-bridge (advertiser then owner), **F5** the document upload as multipart
+  post-signin with `rne|cin` discriminator, **F6** the password domain (reset-request +
+  reset-landing token-consumption + change). Then the two cleanup commits: **F7a** the
+  independently-dead removals + the 848-line hidden `MyAccount.tsx` consolidation (a duplicate
+  page reachable only by URL — the OwnerDashboard CTA was `className="hidden ... aria-hidden"`),
+  and **F7b** the deferred-control wirings (logo + doc-remove + deactivation actually severed,
+  not just captioned) + the cascade-removal of `updateProfile` + `deactivateAccount` +
+  `mapAuthError` (the 157-line any-typed Supabase-error-string map).
+
+**The thin-adapter outcome (the phase's headline).** The centralize-on-the-keystone premise
+held across **all seven** per-flow repoints — F1 (easy), F2 (the 1940-line wizard, the hardest
+file), F4 (split into 4 saves + the read-bridge), F5 (multipart), F3 (cross-package), F6
+(cross-page domain). Each per-flow commit was a localized data-flow change, not a consumer
+rewrite. **Consequence:** the jsdom + Testing Library infra the keystone design ratified (D10)
+was **provisioned but never needed** — the thin-adapter architecture structurally kept the
+load-bearing logic in the service layer, which is node-testable without a DOM. The 57 new
+`apps/web` tests are all node-level (api-client + apiErrorMessage + auth-store with mocked
+fetch + the auth.service reference/profile/password/signup unit suites + utils). RTL would
+have covered only form-binding (framework behavior), not project behavior. Render correctness
+moved to the **phase-close human visual QA** as the gate the assistants can't simulate.
+
+**The gate arcs (Phase 1f, `apps/web`-only except F3):**
+
+- **Typecheck `51 → 36`** (-15) — account-layer Supabase types resolve as the repoint
+  progresses; the F4a/b read-bridge alone resolves ~12, the F7b cascade resolves the rest. The
+  remaining **36** are pre-existing later-slice errors (react-leaflet typings,
+  AdminActivity/AdminProfile, dooh-location-affluence-engine, the `database.types` propagation
+  through 59 later-slice importers) — they clear at the **last-slice ratchet** when
+  `supabase.ts` + `database.types` finally go.
+- **Lint `1 → 1`** (flat) — the single `import-x/no-unresolved` on `database.types` in
+  `lib/supabase.ts` survives through Phase 1f exactly as survey §2.4 predicted. Clears with the
+  last slice's removal of `supabase.ts`.
+- **Test `160 → 217`** (+57) — all new tests are `apps/web` node-level. The keystone's RTL-raise
+  ambition (D10) was deliberately not exercised (the thin-adapter outcome above made it
+  unnecessary).
+- **Build main `139.80 → 135.73 kB`** gzip (**-4.07 kB net — the repoint made the app SMALLER**).
+  The dead Supabase chunk + the F7a/F7b removals (848-line MyAccount + the 157-line mapAuthError
+  - updateProfile + deactivateAccount + the dead handlers/state) exceeded the new pages (verify-email +
+    reset-landing) + the new api-client + apiErrorMessage. Notable per-chunk: OwnerSettings
+    `44.08 → 39.63 kB` (-4.45 kB) post-F7b; the MyAccount lazy chunk gone post-F7a.
+- **apps/api `146 → 146`** (untouched except F3) — F3 added `sendOnSignIn=true` to `auth.ts`
+  - the absolute `callbackURL` to `signup.ts` + extended an existing test (Q8 in `signup.test`)
+    rather than adding a new test file/case; the floor held flat. CI-verified across every commit.
+
+**Closes 2026-05-26** (CI-green on `737b43f`). Phase 1f's **record** closes with this audit
+refresh; the **phase itself** closes after the phase-close human visual QA (the three F7b-disabled
+controls + the F1-F6 repointed flows end-to-end against `pnpm dev` running both apps).
+
+### 17.1 — Phase-1f carry-forwards (consolidated)
+
+Deferred features — each tracked to its real consumer (the **build-with-first-consumer**
+discipline, §7.6 / require-auth precedent). Most are functional reductions vs the Supabase
+legacy: the FE wire is built, the inputs render, persistence is the missing piece each
+later-slice adds.
+
+- **Account deactivation backend** — `POST /api/account/deactivate` + `current_password` re-auth
+  (mirrors `/password/change`); on success: revoke all sessions + soft-delete (column to add).
+  F7b's defensive disable + the `support@too-dooh.com` static message stays until this slice ships
+  (D-F7-2). Closes the class-(b) UX honesty gap.
+- **Logo storage** — column on `users` + `POST /api/profile/documents/logo` (or a dedicated
+  `/api/profile/logo` endpoint) + the logo-display read-path in `/api/me` + re-enable the
+  F7b-disabled Changer + Supprimer controls in UserProfile + OwnerSettings (D-F4-4).
+- **Owner-extras persistence** — `number_of_screens`, `number_of_rooms`, `company_size` columns
+  (or a side table for company_size with the reference endpoint) + un-`.strip()` the signup
+  acceptedFields + un-`.strip()` the profile PATCH + re-enable the read-path for the
+  owner-settings entreprise sub-form inputs (currently collect-and-ignore — the named
+  functional reduction, §7.6). The owner slice is the natural consumer.
+- **Document DELETE endpoint** — `DELETE /api/profile/documents/:type` + re-enable the F7b-disabled
+  remove control (currently disabled for uploaded docs; replace-by-re-upload is the only path)
+  (D-F5-3).
+- **`company_size_options` reference table + endpoint** — the slice that persists `company_size`
+  (likely the owner slice — see above) also stores the option set somewhere; whether a dedicated
+  `company_size_options` reference table or an enum on `users` is open. The advertiser FE
+  hardcoded inline (D8) until then.
+- **WiFi-at-signup** — wizard already collects WiFi SSID + password (the screenhost establishment
+  fields); the columns + the provisioning consumer (the Android TV APK / `apps/player-api`)
+  ship together as part of the screenhost-onboarding slice. Per Phase 1e Part A's "intentionally
+  plaintext non-sensitive" decision, the WiFi password stays cleartext (public-venue shared
+  credential, needed by the device-provisioning flow).
+- **Money-slice `assertOrigin ∈ [WEB_ORIGIN]` CSRF gate** — defense-in-depth beyond `SameSite=Lax`
+  for the wallet/recharge/payment mutating routes (§7.6 / Phase-1e CSRF model). Built with the
+  first money-route consumer per the build-with-first-consumer discipline.
+- **`support_objectives` + later-slice Supabase callers** — `getAppointmentObjectives` stays on
+  Supabase (D8 leave-on-Supabase, has 2 callers); `performance.service.ts:449` (the second
+  `owner_business_sectors` site flagged since F1) is later-slice and inherits with the
+  performances/dashboards repoint (D-F7-7 OUT). Each cleans at its slice.
+- **The inline-`#76E6AB` styling pass** — ~13 legacy files still carry the inline hex (the
+  Algae-Green new-brand colour, mid-Step-12 rebrand artifact); net-new code uses the
+  `brand-primary` Tailwind token. A small dedicated commit converts them when their feature
+  slices next get touched — tracked but not blocking any user flow.
+- **The `database.types` lint-1 floor** — clears at the LAST Supabase removal (when the 59
+  later-slice importers are repointed and `supabase.ts` itself goes); a future-slice cleanup,
+  Phase-1f close was always going to leave this at 1 (survey §2.4 prediction held).
+- **Strict tax_number matricule validation** — current backend zod is lenient (any
+  non-empty string); the strict matricule format (Tunisian tax-number pattern) waits for the
+  validation slice.
+- **2FA** — a planned post-launch security addition; not Phase 1f scope.
+
+Done in Phase 1f (resolved, not carry-forwards):
+
+- **MyAccount consolidation** — the 848-line hidden duplicate page deleted (F7a). The page was
+  invisibly orphaned (no nav link; URL-only) and fully covered by OwnerSettings. Negative LOC;
+  no user-visible change.
+- **The caption-vs-wire defers** — the D-F4-4 (logo) and D-F5-3 (doc-remove) defers, captioned-
+  but-not-wired through F4/F5, were **severed at the source** in F7b. The disabled controls now
+  match the captions; the dead handlers + state + Supabase chains are gone.
+
+### 17.2 — What's next
+
+**Phase 1f closes the repoint arc (K → F7b), but it does NOT close all frontend work.** A
+frontend design/landing phase precedes admin (1g):
+
+- **Landing page** — a net-new public entry: the unauthenticated visitor's first screen + CTA
+  into signup/login. The asset currently lives as a **standalone local folder** (not a repo);
+  the lean is to **integrate it INTO `apps/web`** as the public root route (`/`), keeping **one
+  origin** — the same-origin-cookie + one-deploy model Phase 1h depends on, not a separate
+  app/deploy. An **adaptation** (reconcile its deps/styling onto `apps/web`'s stack + design
+  tokens), not a transplant.
+- **Figma design-alignment** — recheck design/colours/tokens against the Figma source of truth
+  via the Figma connector; **no functional changes** (gates flat, visual is the check); likely
+  clears the inline-`#76E6AB` styling debt (§17.1) as the design-system alignment. Overlaps
+  the landing integration (integrate + align + tokenize = one effort for the landing page).
+
+The naming of this phase is **not pre-committed** — settle "1f-postscript" vs "1g (landing)"
+vs renumbering admin→1h etc. when the phase opens. Recorded here so the trail shows the
+deliberate design/landing phase between the repoint close and the admin slice, not a jump
+straight to admin.
+
+**Then Phase 1g (admin) opens** after the phase-close human visual QA + the landing/Figma
+phase. The admin slice is the remaining gated surface: admin login, the admin dashboards
+(users + screens + recharges + campaign monitoring + platform stats + events), the admin
+destructive ops (#16 observability), and the deactivation backend tracked above. Admin
+currently still imports `@/lib/supabase` directly (per survey §2.3, deliberately out-of-scope
+through Phases 1a-1f); Phase 1g repoints those callers to apps/api admin endpoints (yet to
+design).
+
+**Phase 1h (deployment)** follows admin — the VPS-gated production rollout. The keystone's
+same-origin proxy mirrors the planned nginx single-origin production layout (see
+`pnpm via corepack` memory + the OVH hosting snapshot memory), so the Phase 1f infrastructure
+choices transfer; Phase 1h adds the nginx config, the systemd units, the production env block,
+and the DNS/TLS termination. The OVH→Gmail domain-reputation warm-up (Phase 1b carry-forward)
+joins this phase.
+
+The cleanup phase's two contracts (no UI/UX change + no gate regression) **do not** transfer to
+Phase 1g/1h — Phase 1g rebuilds the admin surface (UI changes by definition), and Phase 1h is
+infrastructure that may move floors. The phase-1 working pattern transfers: inventory-first
+plans, halt-on-finding, CF-9 pause summaries, per-commit gate verification, CI-green on every
+push, the two-assistant architect/executor/human role separation.
