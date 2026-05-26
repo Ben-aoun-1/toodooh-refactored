@@ -7,6 +7,7 @@ import {
   CompanySizeOption,
   SupportObjectiveOption,
   SessionUser,
+  MeUser,
 } from '@/features/auth/types/auth';
 import { apiClient, ApiError } from '@/lib/api-client';
 import { getAppUrl } from '@/lib/app-url';
@@ -341,25 +342,104 @@ export const authService = {
     }
   },
 
-  async getBusinessProfile(): Promise<BusinessProfile | null> {
-    const user = await this.getCurrentUser();
-    if (!user) throw new Error('Utilisateur non connecté');
-
-    // 1. Essayer de récupérer le profil normalement
-    const { data: profile, error } = await supabase
-      .from('business_profiles')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (error) {
-      if (error.code === 'PGRST116') return null;
-      return null;
+  // Phase-1f F4 — section-scoped profile saves (the forms already save per-section → 1:1 to the
+  // PATCH endpoints). apiClient JSON.stringify DROPS `undefined` keys (so an empty uuid optional is
+  // omitted → unchanged, not a null-400) and SENDS `null` (clears the nullable fonction/zone).
+  // Owner-extras (number_of_screens/rooms/company_size) are accepted here and STRIPPED by the
+  // backend (truthful, like signup).
+  async updateProfileContact(patch: {
+    contact_name?: string;
+    contact_phone?: string;
+    fonction?: string | null;
+  }): Promise<void> {
+    try {
+      await apiClient.patch('/profile/contact', patch);
+    } catch (error) {
+      throw new Error(apiErrorMessage(error));
     }
+  },
 
-    return profile;
+  async updateProfileBusiness(patch: {
+    business_name?: string;
+    tax_number?: string;
+    business_sector_id?: string;
+    business_type?: string;
+    number_of_screens?: number | null;
+    number_of_rooms?: number | null;
+    company_size?: string | null;
+  }): Promise<void> {
+    try {
+      await apiClient.patch('/profile/business', patch);
+    } catch (error) {
+      throw new Error(apiErrorMessage(error));
+    }
+  },
+
+  async updateProfileAddress(patch: {
+    street_address?: string;
+    city?: string;
+    postal_code?: string;
+    governorate_id?: string;
+    zone?: string | null;
+  }): Promise<void> {
+    try {
+      await apiClient.patch('/profile/address', patch);
+    } catch (error) {
+      throw new Error(apiErrorMessage(error));
+    }
+  },
+
+  async updateProfileNotifications(patch: {
+    notify_news_updates?: boolean;
+    notify_reminders_events?: boolean;
+    notify_promotions_offers?: boolean;
+  }): Promise<void> {
+    try {
+      await apiClient.patch('/profile/notifications', patch);
+    } catch (error) {
+      throw new Error(apiErrorMessage(error));
+    }
+  },
+
+  // Phase-1f F4 — the profile READ now comes from GET /api/me (no GET /api/profile; the backend has
+  // no logo/bank columns, so a dedicated endpoint couldn't supply them either). Map the /api/me user
+  // → BusinessProfile: section fields direct, notifications FLATTENED (nested → flat notify_*),
+  // status → verification_status; the deferred fields (logo_url/bank_*/doc-urls) are absent
+  // (undefined) and render empty until their slice. 401 → null (logged out).
+  async getBusinessProfile(): Promise<BusinessProfile | null> {
+    let user: MeUser;
+    try {
+      ({ user } = await apiClient.get<{ user: MeUser }>('/me', { skipAuthRedirect: true }));
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) return null;
+      throw new Error(apiErrorMessage(error));
+    }
+    return {
+      id: user.id,
+      user_id: user.id,
+      business_name: user.business_name ?? '',
+      tax_number: user.tax_number ?? '',
+      business_sector_id: user.business_sector_id ?? '',
+      business_type: (user.business_type as BusinessProfile['business_type']) ?? 'local',
+      profile_type: (user.profile_type as BusinessProfile['profile_type']) ?? 'advertiser',
+      contact_name: user.contact_name ?? '',
+      contact_phone: user.contact_phone ?? '',
+      fonction: user.fonction ?? undefined,
+      street_address: user.street_address ?? '',
+      city: user.city ?? '',
+      postal_code: user.postal_code ?? '',
+      governorate_id: user.governorate_id ?? '',
+      zone: user.zone ?? undefined,
+      notify_news_updates: user.notifications.news_updates ?? false,
+      notify_reminders_events: user.notifications.reminders_events ?? false,
+      notify_promotions_offers: user.notifications.promotions_offers ?? false,
+      verification_status: user.status === 'approved' ? 'verified' : user.status,
+      terms_accepted: true,
+      onboarding_completed: user.onboarding_completed,
+      created_at: '',
+      updated_at: '',
+      is_admin: false,
+    };
   },
 
   /** Met à jour le profil (responsable, entreprise, adresse, etc.). Seuls les champs fournis sont mis à jour. */

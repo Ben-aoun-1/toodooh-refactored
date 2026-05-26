@@ -117,6 +117,22 @@ describe('apiClient', () => {
     expect(err.status).toBe(0);
   });
 
+  it('JSON body DROPS undefined keys but SENDS null (the F4 ||undefined PATCH-strategy guard)', async () => {
+    // Section saves send empty uuid optionals as `undefined` (omitted → unchanged, no null-400) and
+    // nullable fields as `null` (clears). This locks the JSON.stringify mechanism that relies on.
+    fetchMock.mockResolvedValue(makeRes(200, { ok: true }));
+    await apiClient.patch('/profile/business', {
+      business_name: 'X',
+      business_sector_id: undefined,
+      fonction: null,
+    });
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body).toHaveProperty('business_name', 'X');
+    expect(body).not.toHaveProperty('business_sector_id'); // undefined → dropped (no null-400)
+    expect(body).toHaveProperty('fonction', null); // null → sent (clears the nullable field)
+  });
+
   it('fires the unauthorized handler on a 401 — but NOT when skipAuthRedirect is set', async () => {
     const handler = vi.fn();
     apiClient.onUnauthorized(handler);

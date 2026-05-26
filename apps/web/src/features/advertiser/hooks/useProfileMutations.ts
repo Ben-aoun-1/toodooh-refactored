@@ -33,8 +33,31 @@ export function useProfileMutations(userId: string | undefined) {
   const invalidateProfile = () =>
     queryClient.invalidateQueries({ queryKey: advertiserKeys.profile(userId ?? '') });
 
-  // Covers handleSaveResponsable / Entreprise / Adresse / Notifications +
-  // handleLogoRemove + handleRemoveDocument — every plain profile-field write.
+  // Phase-1f F4a — section-scoped saves → the 4 PATCH endpoints (the forms already save per-section).
+  const updateContact = useMutation({
+    mutationFn: (patch: Parameters<typeof authService.updateProfileContact>[0]) =>
+      authService.updateProfileContact(patch),
+    onSuccess: invalidateProfile,
+  });
+  const updateBusiness = useMutation({
+    mutationFn: (patch: Parameters<typeof authService.updateProfileBusiness>[0]) =>
+      authService.updateProfileBusiness(patch),
+    onSuccess: invalidateProfile,
+  });
+  const updateAddress = useMutation({
+    mutationFn: (patch: Parameters<typeof authService.updateProfileAddress>[0]) =>
+      authService.updateProfileAddress(patch),
+    onSuccess: invalidateProfile,
+  });
+  const updateNotifications = useMutation({
+    mutationFn: (patch: Parameters<typeof authService.updateProfileNotifications>[0]) =>
+      authService.updateProfileNotifications(patch),
+    onSuccess: invalidateProfile,
+  });
+
+  // Generic field write — DEAD post-F4a (Supabase removed); kept only for the deferred logo-remove /
+  // document-remove handlers (D9 / F5), which still call it. The 4 section mutations above replace
+  // its profile-field use.
   const updateProfile = useMutation({
     mutationFn: (patch: ProfileUpdate) => authService.updateProfile(patch),
     onSuccess: invalidateProfile,
@@ -95,5 +118,13 @@ export function useProfileMutations(userId: string | undefined) {
     onSuccess: invalidateProfile,
   });
 
-  return { updateProfile, uploadLogo, uploadDocument };
+  return {
+    updateContact,
+    updateBusiness,
+    updateAddress,
+    updateNotifications,
+    updateProfile,
+    uploadLogo,
+    uploadDocument,
+  };
 }

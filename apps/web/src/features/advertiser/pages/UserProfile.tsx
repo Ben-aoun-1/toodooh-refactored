@@ -117,7 +117,15 @@ export default function UserProfile() {
   const { profile, loading } = useUserProfile(user?.id);
   const { data: sectors = [] } = useSectors();
   const { data: governorates = [] } = useGovernorates();
-  const { updateProfile, uploadLogo, uploadDocument } = useProfileMutations(user?.id);
+  const {
+    updateContact,
+    updateBusiness,
+    updateAddress,
+    updateNotifications,
+    updateProfile,
+    uploadLogo,
+    uploadDocument,
+  } = useProfileMutations(user?.id);
   const isAgencyProfile = profile?.profile_type === 'agency';
 
   useEffect(() => {
@@ -198,7 +206,7 @@ export default function UserProfile() {
         [responsableForm.last_name, responsableForm.first_name].filter(Boolean).join(' ').trim() ||
         responsableForm.last_name ||
         responsableForm.first_name;
-      await updateProfile.mutateAsync({
+      await updateContact.mutateAsync({
         contact_name,
         contact_phone: responsableForm.contact_phone,
         fonction: responsableForm.fonction || null,
@@ -216,11 +224,13 @@ export default function UserProfile() {
       return;
     }
     try {
-      await updateProfile.mutateAsync({
+      await updateBusiness.mutateAsync({
         business_name: entrepriseForm.business_name,
         tax_number: entrepriseForm.tax_number,
-        business_sector_id: entrepriseForm.business_sector_id || null,
-        company_size: entrepriseForm.company_size || null,
+        // undefined (not null) when empty: JSON.stringify omits it → the uuid optional is left
+        // unchanged rather than 400'd (null fails z.uuid()). See F4a plan §2.B.
+        business_sector_id: entrepriseForm.business_sector_id || undefined,
+        company_size: entrepriseForm.company_size || undefined,
       });
       toast.success('Informations entreprise enregistrées');
     } catch (err) {
@@ -240,11 +250,11 @@ export default function UserProfile() {
       return;
     }
     try {
-      await updateProfile.mutateAsync({
+      await updateAddress.mutateAsync({
         street_address: adresseForm.street_address,
         city: adresseForm.city,
         postal_code: adresseForm.postal_code,
-        governorate_id: adresseForm.governorate_id || null,
+        governorate_id: adresseForm.governorate_id || undefined,
       });
       toast.success('Adresse enregistrée');
     } catch (err) {
@@ -255,7 +265,7 @@ export default function UserProfile() {
   const handleSaveNotifications = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await updateProfile.mutateAsync({
+      await updateNotifications.mutateAsync({
         notify_news_updates: notificationsForm.notify_news_updates,
         notify_reminders_events: notificationsForm.notify_reminders_events,
         notify_promotions_offers: notificationsForm.notify_promotions_offers,
@@ -637,24 +647,29 @@ export default function UserProfile() {
                         )}
                       </div>
                       <div className="flex flex-col gap-2">
+                        {/* Logo upload disabled (Phase-1f D-F4-4): no backend logo storage yet —
+                            the control is deferred to a later "logo storage" slice. */}
                         <div className="flex gap-2">
-                          <label className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-600 cursor-pointer hover:bg-gray-50">
+                          <label className="px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-400 cursor-not-allowed opacity-60">
                             Changer
                             <input
                               type="file"
                               accept="image/png,image/jpeg,image/webp"
                               className="hidden"
+                              disabled
                               onChange={handleLogoChange}
                             />
                           </label>
                           <button
                             type="button"
                             onClick={handleLogoRemove}
-                            className="px-3 py-2 border border-red-500 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 bg-white"
+                            disabled
+                            className="px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-400 bg-white cursor-not-allowed opacity-60"
                           >
                             Supprimer
                           </button>
                         </div>
+                        <p className="text-xs text-gray-400">Bientôt disponible</p>
                         {logoFile && (
                           <button
                             type="button"

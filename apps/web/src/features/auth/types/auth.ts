@@ -124,6 +124,39 @@ export interface SignupResponse {
 }
 
 /**
+ * The `user` object returned by GET /api/me (Phase-1f F4 — the profile read source). The forms read
+ * a `BusinessProfile`; `getBusinessProfile` maps this → that (notifications flattened, status mapped,
+ * deferred fields — logo/bank/doc-urls — absent: the backend has no such columns).
+ */
+export interface MeUser {
+  id: string;
+  email: string;
+  email_verified: boolean;
+  role: string;
+  status: 'pending' | 'approved' | 'rejected';
+  onboarding_completed: boolean;
+  profile_type: string | null;
+  contact_name: string | null;
+  business_name: string | null;
+  tax_number: string | null;
+  contact_phone: string | null;
+  fonction: string | null;
+  business_sector_id: string | null;
+  business_type: string | null;
+  street_address: string | null;
+  city: string | null;
+  postal_code: string | null;
+  governorate_id: string | null;
+  zone: string | null;
+  documents: { registration: boolean; cin: boolean };
+  notifications: {
+    news_updates: boolean | null;
+    reminders_events: boolean | null;
+    promotions_offers: boolean | null;
+  };
+}
+
+/**
  * The session/identity user the backend returns on `POST /api/signin` and `GET /api/me`
  * (snake_case wire, Phase-1f keystone). The store derives its routing state from this
  * (`mapRouting`); `/api/me` returns a superset (the full profile) but the store consumes
