@@ -27,7 +27,7 @@ interface DocumentInput {
 
 /**
  * Step 10 — write mutations for the owner's `business_profiles` row, used by
- * `OwnerSettings` (Commit 5c1) and reused by `MyAccount` (Commit 5c2).
+ * `OwnerSettings` (Commit 5c1).
  *
  * The owner-side counterpart to the advertiser feature's `useProfileMutations`
  * (TBD-P, Commit 9, tracks consolidating the two). Every mutation that writes

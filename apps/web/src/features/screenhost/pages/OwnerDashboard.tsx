@@ -10,7 +10,6 @@ import {
   CalendarX,
   BarChart3,
   TrendingUp,
-  Settings,
   Star,
   LayoutGrid,
   Megaphone,
@@ -424,14 +423,6 @@ export default function OwnerDashboard() {
                 ) : null}
 
                 <OwnerNotificationsBell userId={user?.id} />
-
-                <button
-                  onClick={() => navigate('/my-account')}
-                  className="hidden p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-600"
-                  aria-hidden
-                >
-                  <Settings className="h-5 w-5" />
-                </button>
               </div>
             </div>
           </header>

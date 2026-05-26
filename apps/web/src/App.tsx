@@ -47,7 +47,6 @@ const OwnerCampaignApprovals = lazy(
 );
 const GiftCatalogPage = lazy(() => import('@/features/screenhost/pages/GiftCatalogPage'));
 const ContactPage = lazy(() => import('@/features/screenhost/pages/ContactPage'));
-const MyAccount = lazy(() => import('@/features/screenhost/pages/MyAccount'));
 const AdminLogin = lazy(() => import('@/features/admin/pages/AdminLogin'));
 const AdminDashboard = lazy(() => import('@/features/admin/pages/AdminDashboard'));
 const UserManagement = lazy(() => import('@/features/admin/pages/UserManagement'));
@@ -475,14 +474,6 @@ export default function App() {
               element={
                 <OwnerRoute>
                   <GiftCatalogPage />
-                </OwnerRoute>
-              }
-            />
-            <Route
-              path="/my-account"
-              element={
-                <OwnerRoute>
-                  <MyAccount />
                 </OwnerRoute>
               }
             />

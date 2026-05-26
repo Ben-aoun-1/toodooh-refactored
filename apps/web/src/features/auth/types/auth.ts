@@ -60,12 +60,6 @@ export interface Governorate {
   name: string;
 }
 
-export interface CompanySizeOption {
-  id: string;
-  value: string;
-  display_order: number;
-}
-
 export interface SupportObjectiveOption {
   id: string;
   label: string;

@@ -4,7 +4,6 @@ import {
   BusinessSector,
   Governorate,
   SignupResponse,
-  CompanySizeOption,
   SupportObjectiveOption,
   SessionUser,
   MeUser,
@@ -517,33 +516,6 @@ export const authService = {
     } catch (error) {
       throw new Error(apiErrorMessage(error));
     }
-  },
-
-  async getCompanySizeOptions(): Promise<CompanySizeOption[]> {
-    const { data, error } = await supabase
-      .from('company_size_options')
-      .select('*')
-      .order('display_order', { ascending: true });
-    if (error) throw new Error(mapAuthError(error));
-    return data ?? [];
-  },
-
-  async getSupportObjectivesForAdvertiserAgency(): Promise<SupportObjectiveOption[]> {
-    const { data, error } = await supabase
-      .from('support_objectives_advertiser_agency')
-      .select('*')
-      .order('display_order', { ascending: true });
-    if (error) throw new Error(mapAuthError(error));
-    return data ?? [];
-  },
-
-  async getSupportObjectivesForOwners(): Promise<SupportObjectiveOption[]> {
-    const { data, error } = await supabase
-      .from('support_objectives_owner')
-      .select('*')
-      .order('display_order', { ascending: true });
-    if (error) throw new Error(mapAuthError(error));
-    return data ?? [];
   },
 
   async getAppointmentObjectives(): Promise<SupportObjectiveOption[]> {
