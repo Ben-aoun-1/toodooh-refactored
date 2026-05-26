@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 
 import {
   AGENCY_BUSINESS_SECTOR_NAME,
@@ -28,7 +28,6 @@ import { authService } from '@/features/auth/services/auth.service';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { isValidPassword, passwordChecks } from '@/features/auth/utils/password';
 import { getErrorMessage } from '@/lib/errors';
-import { supabase } from '@/lib/supabase';
 
 type TabId = 'responsable' | 'entreprise' | 'notifications' | 'confidentialite';
 type EntrepriseSubId = 'informations' | 'adresse' | 'documents';
@@ -69,13 +68,11 @@ const CONFIDENTIALITE_SUB: { id: ConfidentialiteSubId; label: string; icon: Reac
 ];
 
 export default function UserProfile() {
-  const navigate = useNavigate();
   const location = useLocation();
   const [activeTab, setActiveTab] = useState<TabId>('responsable');
   const [entrepriseSub, setEntrepriseSub] = useState<EntrepriseSubId>('informations');
   const [confidentialiteSub, setConfidentialiteSub] = useState<ConfidentialiteSubId>('password');
   const [showPassword, setShowPassword] = useState(false);
-  const [deactivating, setDeactivating] = useState(false);
 
   const [responsableForm, setResponsableForm] = useState({
     last_name: '',
@@ -106,27 +103,15 @@ export default function UserProfile() {
     notify_promotions_offers: false,
   });
 
-  const [logoFile, setLogoFile] = useState<File | null>(null);
-  const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [uploadingDocument, setUploadingDocument] = useState(false);
-  const [deleteConfirmPassword, setDeleteConfirmPassword] = useState('');
-  const [showDeletePassword, setShowDeletePassword] = useState(false);
 
   const user = useAuthStore((s) => s.user);
   const { profile, loading } = useUserProfile(user?.id);
   const { data: sectors = [] } = useSectors();
   const { data: governorates = [] } = useGovernorates();
-  const {
-    updateContact,
-    updateBusiness,
-    updateAddress,
-    updateNotifications,
-    updateProfile,
-    uploadLogo,
-    uploadDocument,
-  } = useProfileMutations(user?.id);
+  const { updateContact, updateBusiness, updateAddress, updateNotifications, uploadDocument } =
+    useProfileMutations(user?.id);
   const isAgencyProfile = profile?.profile_type === 'agency';
 
   useEffect(() => {
@@ -176,7 +161,6 @@ export default function UserProfile() {
         postal_code: profile.postal_code ?? '',
         governorate_id: profile.governorate_id ?? '',
       });
-      if (profile.logo_url) setLogoPreview(profile.logo_url);
       setNotificationsForm({
         notify_news_updates: profile.notify_news_updates ?? false,
         notify_reminders_events: profile.notify_reminders_events ?? true,
@@ -311,74 +295,6 @@ export default function UserProfile() {
     }
   };
 
-  const handleDeactivateAccount = async () => {
-    if (!deleteConfirmPassword.trim()) {
-      toast.error('Veuillez saisir votre mot de passe pour confirmer.');
-      return;
-    }
-    if (!user?.email) {
-      toast.error('Session invalide');
-      return;
-    }
-    setDeactivating(true);
-    try {
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: user.email,
-        password: deleteConfirmPassword,
-      });
-      if (signInError) {
-        toast.error('Mot de passe incorrect');
-        setDeactivating(false);
-        return;
-      }
-      await authService.deactivateAccount();
-      toast.success('Compte désactivé');
-      navigate('/login');
-    } catch (err) {
-      toast.error(getErrorMessage(err) || 'Erreur lors de la désactivation');
-    } finally {
-      setDeactivating(false);
-    }
-  };
-
-  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    if (!/^image\/(jpeg|png|webp)$/i.test(f.type)) {
-      toast.error('Format accepté : PNG ou JPEG');
-      return;
-    }
-    setLogoFile(f);
-    const reader = new FileReader();
-    reader.onload = () => setLogoPreview(reader.result as string);
-    reader.readAsDataURL(f);
-  };
-
-  const handleLogoUpload = async () => {
-    if (!logoFile || !user) return;
-    setUploadingLogo(true);
-    try {
-      await uploadLogo.mutateAsync(logoFile);
-      setLogoFile(null);
-      toast.success('Logo mis à jour');
-    } catch (err) {
-      toast.error(getErrorMessage(err) || 'Erreur upload logo');
-    } finally {
-      setUploadingLogo(false);
-    }
-  };
-
-  const handleLogoRemove = async () => {
-    try {
-      await updateProfile.mutateAsync({ logo_url: null });
-      setLogoPreview(null);
-      setLogoFile(null);
-      toast.success('Logo supprimé');
-    } catch (err) {
-      toast.error(getErrorMessage(err) || 'Erreur');
-    }
-  };
-
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} o`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
@@ -399,19 +315,6 @@ export default function UserProfile() {
       toast.error(getErrorMessage(err) || 'Erreur upload');
     } finally {
       setUploadingDocument(false);
-    }
-  };
-
-  const handleRemoveDocument = async () => {
-    try {
-      await updateProfile.mutateAsync({
-        registration_doc_url: null,
-        registration_doc_path: null,
-      });
-      setDocumentFile(null);
-      toast.success('Document supprimé');
-    } catch (err) {
-      toast.error(getErrorMessage(err) || 'Erreur');
     }
   };
 
@@ -634,33 +537,19 @@ export default function UserProfile() {
                     <p className="text-xs text-gray-500 mb-3">Min 400x400px, PNG ou JPEG</p>
                     <div className="flex items-start gap-4">
                       <div className="w-24 h-24 rounded-full border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden flex-shrink-0">
-                        {logoPreview ? (
-                          <img
-                            src={logoPreview}
-                            alt="Logo"
-                            className="w-full h-full object-contain"
-                          />
-                        ) : (
-                          <Building2 className="h-10 w-10 text-gray-300" />
-                        )}
+                        <Building2 className="h-10 w-10 text-gray-300" />
                       </div>
                       <div className="flex flex-col gap-2">
-                        {/* Logo upload disabled (Phase-1f D-F4-4): no backend logo storage yet —
-                            the control is deferred to a later "logo storage" slice. */}
+                        {/* Phase-1f F7b — logo upload/remove disabled (D-F4-4): no backend logo
+                            storage yet; deferred to a later "logo storage" slice. Path severed
+                            (handlers + Supabase chain removed); the static disabled markup +
+                            caption is the honest interim UX. */}
                         <div className="flex gap-2">
-                          <label className="px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-400 cursor-not-allowed opacity-60">
+                          <span className="px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-400 cursor-not-allowed opacity-60">
                             Changer
-                            <input
-                              type="file"
-                              accept="image/png,image/jpeg,image/webp"
-                              className="hidden"
-                              disabled
-                              onChange={handleLogoChange}
-                            />
-                          </label>
+                          </span>
                           <button
                             type="button"
-                            onClick={handleLogoRemove}
                             disabled
                             className="px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-400 bg-white cursor-not-allowed opacity-60"
                           >
@@ -668,17 +557,6 @@ export default function UserProfile() {
                           </button>
                         </div>
                         <p className="text-xs text-gray-400">Bientôt disponible</p>
-                        {logoFile && (
-                          <button
-                            type="button"
-                            onClick={handleLogoUpload}
-                            disabled={uploadingLogo}
-                            className="self-start px-3 py-2 rounded-lg text-sm font-medium text-black disabled:opacity-50 hover:opacity-90"
-                            style={{ background: '#76E6AB' }}
-                          >
-                            {uploadingLogo ? 'Envoi...' : 'Enregistrer le logo'}
-                          </button>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -998,20 +876,16 @@ export default function UserProfile() {
                         <span className="text-sm text-gray-600">Completed</span>
                       </div>
                     </button>
-                    {/* Phase-1f F5: the trash clears a freshly-picked local file; removing an
-                        UPLOADED document is disabled (no DELETE endpoint — replace by re-uploading).
-                        handleRemoveDocument stays referenced (the documentFile branch) but the
-                        disabled state means it never fires for an uploaded doc. */}
+                    {/* Phase-1f F7b — clears a freshly-picked local file; removing an UPLOADED
+                        document is disabled (no DELETE endpoint — replace by re-uploading).
+                        D-F5-3 defer wired: the dead else-branch is gone; disabled gates this
+                        button when no local file is present. */}
                     <button
                       type="button"
                       disabled={!documentFile}
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (documentFile) {
-                          setDocumentFile(null);
-                        } else {
-                          handleRemoveDocument();
-                        }
+                        setDocumentFile(null);
                       }}
                       className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-gray-400 disabled:hover:bg-transparent"
                       title={documentFile ? 'Retirer le fichier' : 'Suppression bientôt disponible'}
@@ -1360,80 +1234,30 @@ export default function UserProfile() {
             )}
 
             {confidentialiteSub === 'delete' && (
-              <div className="p-6 max-w-xl space-y-5">
-                <div className="flex items-start gap-3 p-4 rounded-xl border border-red-200 bg-red-50">
-                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-red-500 flex items-center justify-center">
+              <div className="p-6 max-w-xl space-y-4">
+                {/* Phase-1f F7b — D-F7-2 ruling: deactivation control disabled until the backend
+                    /api/account/deactivate endpoint ships. Pre-K the form re-auth-confirmed via
+                    supabase.auth.signInWithPassword before destroying the account; post-K the
+                    Supabase auth store is no longer the password source (users live in
+                    apps/api's users table), so the re-auth was a broken no-op that rejected
+                    every password attempt — a class-(b) security gap. The static message below
+                    is the honest interim path while preserving the user's right to close their
+                    account via the support team. */}
+                <div className="flex items-start gap-3 p-4 rounded-xl border border-gray-200 bg-gray-50">
+                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-gray-400 flex items-center justify-center">
                     <Info className="h-4 w-4 text-white" />
                   </div>
-                  <p className="text-sm font-medium text-red-800">Cette action est irréversible.</p>
-                </div>
-                <div className="space-y-2">
                   <p className="text-sm text-gray-700">
-                    Toutes vos données, y compris votre profil, vos publications et vos informations
-                    personnelles, seront définitivement supprimées.
-                  </p>
-                  <p className="text-sm text-gray-700">
-                    En saisissant votre mot de passe, vous confirmez avoir compris et accepté les
-                    conséquences de la suppression de votre compte.
-                  </p>
-                </div>
-                <div>
-                  <label
-                    className="block text-sm font-medium text-gray-900 mb-1.5"
-                    htmlFor="delete-confirm-password"
-                  >
-                    Confirmer la suppression *
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showDeletePassword ? 'text' : 'password'}
-                      value={deleteConfirmPassword}
-                      onChange={(e) => setDeleteConfirmPassword(e.target.value)}
-                      className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500/30 focus:border-red-500 text-gray-900 placeholder-gray-400"
-                      placeholder="••••••••"
-                      id="delete-confirm-password"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowDeletePassword((v) => !v)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
-                      aria-label={
-                        showDeletePassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'
-                      }
+                    La désactivation de compte sera bientôt disponible. Pour fermer votre compte,
+                    contactez le support à{' '}
+                    <a
+                      href="mailto:support@too-dooh.com"
+                      className="font-medium text-brand-primary underline"
                     >
-                      {showDeletePassword ? (
-                        <EyeOff className="h-5 w-5" />
-                      ) : (
-                        <Eye className="h-5 w-5" />
-                      )}
-                    </button>
-                  </div>
-                  <div className="flex items-start gap-2 mt-1.5">
-                    <div className="flex-shrink-0 w-4 h-4 rounded-full bg-gray-400 flex items-center justify-center mt-0.5">
-                      <Info className="h-2.5 w-2.5 text-white" />
-                    </div>
-                    <p className="text-xs text-gray-500">
-                      Veuillez saisir votre mot de passe pour procéder à la suppression de votre
-                      compte.
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setDeleteConfirmPassword('')}
-                    className="px-5 py-2.5 rounded-xl font-medium text-gray-700 border border-gray-300 bg-white hover:bg-gray-50"
-                  >
-                    Annuler
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleDeactivateAccount}
-                    disabled={deactivating || !deleteConfirmPassword.trim()}
-                    className="px-5 py-2.5 rounded-xl font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-50"
-                  >
-                    {deactivating ? 'Désactivation...' : 'Désactiver le compte'}
-                  </button>
+                      support@too-dooh.com
+                    </a>
+                    .
+                  </p>
                 </div>
               </div>
             )}

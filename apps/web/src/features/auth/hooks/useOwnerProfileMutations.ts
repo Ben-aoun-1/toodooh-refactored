@@ -1,16 +1,9 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { authService } from '@/features/auth/services/auth.service';
-import { getErrorMessage } from '@/lib/errors';
-import { logger } from '@/lib/logger';
-import { supabase } from '@/lib/supabase';
 
 import { authKeys } from './queryKeys';
 
-const log = logger.child({ module: 'useOwnerProfileMutations' });
-
-/** The partial-profile patch accepted by `authService.updateProfile`. */
-type ProfileUpdate = Parameters<typeof authService.updateProfile>[0];
 /** The partial patch accepted by `authService.updateBusinessProfile`. */
 type BusinessProfileUpdate = Parameters<typeof authService.updateBusinessProfile>[0];
 
@@ -29,18 +22,11 @@ interface DocumentInput {
  * Step 10 — write mutations for the owner's `business_profiles` row, used by
  * `OwnerSettings` (Commit 5c1).
  *
- * The owner-side counterpart to the advertiser feature's `useProfileMutations`
- * (TBD-P, Commit 9, tracks consolidating the two). Every mutation that writes
- * the profile invalidates `authKeys.profile(userId)` on success — refetching
- * the live `useBusinessProfile` query and replacing the page handlers' former
- * manual `loadProfile()` calls.
- *
- * Factoring (CF-13 amendment 1): OwnerSettings' eleven write handlers collapse
- * to seven distinct `mutationFn` shapes. Five plain-field writes share
- * `updateProfile` (the patch is the argument); `updateBusinessProfile` covers
- * three more. `removeDocument` is split from `uploadDocument` because clearing
- * the individual-owner CIN column is a direct `business_profiles` write —
- * `cin_doc_url` is not on `authService.updateProfile`'s patch type.
+ * Phase-1f F7b — the generic `updateProfile` mutation + `uploadLogo` +
+ * `removeDocument` + `deactivateAccount` mutations were removed (the
+ * D-F4-4 / D-F5-3 / D-F7-2 defers wired). The section-scoped saves + the
+ * password-change + document-upload + `updateBusinessProfile` (kept for the
+ * wallet's later-slice bank-details edit) remain.
  */
 export function useOwnerProfileMutations(userId: string | undefined) {
   const queryClient = useQueryClient();
@@ -72,15 +58,8 @@ export function useOwnerProfileMutations(userId: string | undefined) {
     onSuccess: invalidateProfile,
   });
 
-  // Generic field write — DEAD post-F4b (Supabase removed); kept only for the deferred logo-remove /
-  // RNE-doc-remove handlers (D9 / F5), which still call it.
-  const updateProfile = useMutation({
-    mutationFn: (patch: ProfileUpdate) => authService.updateProfile(patch),
-    onSuccess: invalidateProfile,
-  });
-
-  // Generic business-profile write — DEAD post-F4b; kept only for the deferred bank sub-form
-  // (handleSaveBankDetails — money-slice). Entreprise/adresse now route to the section methods above.
+  // Generic business-profile write — kept only for the deferred bank sub-form
+  // (handleSaveBankDetails — wallet/later-slice). Entreprise/adresse route to the section methods.
   const updateBusinessProfile = useMutation({
     mutationFn: (patch: BusinessProfileUpdate) => authService.updateBusinessProfile(patch),
     onSuccess: invalidateProfile,
@@ -92,30 +71,6 @@ export function useOwnerProfileMutations(userId: string | undefined) {
       authService.updatePasswordWithOld(currentPassword, newPassword),
   });
 
-  // handleDeactivateAccount — sets is_active=false then logs out; the page
-  // handler runs the password re-auth check before calling this.
-  const deactivateAccount = useMutation({
-    mutationFn: () => authService.deactivateAccount(),
-  });
-
-  // handleLogoUpload — storage upload + signed URL + profile.logo_url write.
-  const uploadLogo = useMutation({
-    mutationFn: async (file: File) => {
-      const ext = file.name.split('.').pop() || 'png';
-      const filePath = `logo_${userId}_${Date.now()}.${ext}`;
-      const { error: uploadError } = await supabase.storage
-        .from('registres')
-        .upload(filePath, file);
-      if (uploadError) throw uploadError;
-      const { data: signed, error: signedError } = await supabase.storage
-        .from('registres')
-        .createSignedUrl(filePath, 604800);
-      if (signedError || !signed) throw signedError || new Error('URL signée');
-      await authService.updateProfile({ logo_url: signed.signedUrl });
-    },
-    onSuccess: invalidateProfile,
-  });
-
   // Phase-1f F5 — individual owners upload a CIN (→ /documents/cin), fleet owners an RNE
   // (→ /documents/rne). Multipart, post-signin; onSuccess refetches /api/me → documents.* flips.
   const uploadDocument = useMutation({
@@ -124,40 +79,13 @@ export function useOwnerProfileMutations(userId: string | undefined) {
     onSuccess: invalidateProfile,
   });
 
-  // handleRemoveDocument — CIN clear is a direct write (`cin_doc_url` is not on
-  // `updateProfile`'s patch type); the RNE clear routes through the service.
-  const removeDocument = useMutation({
-    mutationFn: async (isIndividualOwner: boolean) => {
-      if (isIndividualOwner) {
-        const { error } = await supabase
-          .from('business_profiles')
-          .update({ cin_doc_url: null })
-          .eq('user_id', userId as string);
-        if (error) throw error;
-      } else {
-        await authService.updateProfile({
-          registration_doc_url: null,
-          registration_doc_path: null,
-        });
-      }
-    },
-    onSuccess: invalidateProfile,
-    onError: (error) => {
-      log.error({ error: getErrorMessage(error) }, 'failed to remove owner legal document');
-    },
-  });
-
   return {
     updateContact,
     updateBusiness,
     updateAddress,
     updateNotifications,
-    updateProfile,
     updateBusinessProfile,
     updatePasswordWithOld,
-    deactivateAccount,
-    uploadLogo,
     uploadDocument,
-    removeDocument,
   };
 }
