@@ -6,8 +6,6 @@ import {
   CheckCircle,
   Save,
   ArrowLeft,
-  Eye,
-  EyeOff,
   Upload,
   FileText,
   X,
@@ -39,7 +37,6 @@ export default function MyAccount() {
   const { user, profileType, needsApproval, validationStatus, refreshUserStatus } = useAuthStore();
   const isDisabled = needsApproval && validationStatus === 'pending';
   const [saving, setSaving] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [documentFile, setDocumentFile] = useState<File | null>(null);
 
@@ -55,8 +52,6 @@ export default function MyAccount() {
     lastName: '',
     email: '',
     phone: '',
-    password: '',
-    confirmPassword: '',
 
     // Informations entreprise
     businessName: '',
@@ -90,8 +85,6 @@ export default function MyAccount() {
       lastName: profile.contact_name?.split(' ').slice(1).join(' ') || '',
       email: user?.email || '',
       phone: profile.contact_phone || '',
-      password: '',
-      confirmPassword: '',
       businessName: profile.business_name || '',
       taxNumber: profile.tax_number || '',
       businessSectorId: profile.business_sector_id || '',
@@ -147,10 +140,9 @@ export default function MyAccount() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (formData.password && formData.password !== formData.confirmPassword) {
-      toast.error('Les mots de passe ne correspondent pas');
-      return;
-    }
+    // Phase-1f F6 — no-old password change removed from MyAccount: the backend correctly requires the
+    // current password (re-auth, D4) — a no-old change has no endpoint. The proper path is the
+    // OwnerSettings → Confidentialité change form (with current password).
 
     setSaving(true);
 
@@ -172,16 +164,8 @@ export default function MyAccount() {
 
       await profileMutations.updateBusinessProfile.mutateAsync(updateData);
 
-      // Mettre à jour le mot de passe si fourni
-      if (formData.password) {
-        try {
-          await profileMutations.updatePassword.mutateAsync(formData.password);
-        } catch (passwordError) {
-          throw new Error(
-            `Erreur lors de la mise à jour du mot de passe: ${passwordError instanceof Error ? passwordError.message : 'Erreur inconnue'}`,
-          );
-        }
-      }
+      // Phase-1f F6 — password change moved to OwnerSettings (the with-old change has the current
+      // password, the only path the backend supports). MyAccount no longer touches the password.
 
       toast.success('Profil mis à jour avec succès');
 
@@ -809,62 +793,16 @@ export default function MyAccount() {
                       )}
                     </div>
 
-                    {/* Changement de mot de passe */}
+                    {/* Phase-1f F6 — password change moved to Paramètres → Confidentialité (the
+                        with-old change is the only path the backend supports). */}
                     <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200">
                       <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center">
                         <Lock className="h-6 w-6 text-brand-primary mr-2" />
                         Sécurité
                       </h3>
-                      <div className="space-y-6">
-                        <div>
-                          <label
-                            className="block text-sm font-medium text-gray-700 mb-2"
-                            htmlFor="password"
-                          >
-                            Nouveau mot de passe (optionnel)
-                          </label>
-                          <div className="relative">
-                            <input
-                              type={showPassword ? 'text' : 'password'}
-                              value={formData.password}
-                              onChange={(e) => handleInputChange('password', e.target.value)}
-                              className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary pr-12"
-                              placeholder="Laissez vide pour conserver le mot de passe actuel"
-                              id="password"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setShowPassword(!showPassword)}
-                              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                            >
-                              {showPassword ? (
-                                <EyeOff className="h-5 w-5" />
-                              ) : (
-                                <Eye className="h-5 w-5" />
-                              )}
-                            </button>
-                          </div>
-                        </div>
-
-                        {formData.password && (
-                          <div>
-                            <label
-                              className="block text-sm font-medium text-gray-700 mb-2"
-                              htmlFor="confirm-password"
-                            >
-                              Confirmer le mot de passe
-                            </label>
-                            <input
-                              type="password"
-                              value={formData.confirmPassword}
-                              onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
-                              className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
-                              placeholder="Confirmer le nouveau mot de passe"
-                              id="confirm-password"
-                            />
-                          </div>
-                        )}
-                      </div>
+                      <p className="text-sm text-gray-600">
+                        Modifiez votre mot de passe dans Paramètres → Confidentialité et sécurité.
+                      </p>
                     </div>
                   </div>
                 )}

@@ -4,6 +4,7 @@ import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
 import { auth } from '../auth/auth.js';
+import { env } from '../env.js';
 import { requireAuth } from '../middleware/require-auth.js';
 
 const resetRequestSchema = z.object({ email: z.email('A valid email is required') });
@@ -40,7 +41,10 @@ export const passwordRoutes: FastifyPluginAsync = async (app) => {
     const parsed = resetRequestSchema.safeParse(request.body);
     if (!parsed.success) return invalidInput(reply, parsed.error.issues);
     await auth.api.requestPasswordReset({
-      body: { email: parsed.data.email },
+      // redirectTo is the FE reset-landing (Phase-1f F6); better-auth's reset link
+      // (/auth/reset-password/:token) redirects there with ?token= (or ?error=). Absolute →
+      // passes originCheck (WEB_ORIGIN trusted). Without it the link has no FE target.
+      body: { email: parsed.data.email, redirectTo: `${env.WEB_ORIGIN}/update-password` },
       headers: fromNodeHeaders(request.headers),
     });
     return reply.status(200).send({
@@ -66,12 +70,10 @@ export const passwordRoutes: FastifyPluginAsync = async (app) => {
           .send({ error: 'INVALID_TOKEN', message: 'This reset link is invalid or has expired.' });
       }
       request.log.error(err, 'password reset failed');
-      return reply
-        .status(500)
-        .send({
-          error: 'INTERNAL_ERROR',
-          message: 'An unexpected error occurred. Please try again.',
-        });
+      return reply.status(500).send({
+        error: 'INTERNAL_ERROR',
+        message: 'An unexpected error occurred. Please try again.',
+      });
     }
     return reply.status(200).send({ success: true });
   });
@@ -104,12 +106,10 @@ export const passwordRoutes: FastifyPluginAsync = async (app) => {
           .send({ error: 'INVALID_CREDENTIALS', message: 'The current password is incorrect.' });
       }
       request.log.error(err, 'password change failed');
-      return reply
-        .status(500)
-        .send({
-          error: 'INTERNAL_ERROR',
-          message: 'An unexpected error occurred. Please try again.',
-        });
+      return reply.status(500).send({
+        error: 'INTERNAL_ERROR',
+        message: 'An unexpected error occurred. Please try again.',
+      });
     }
     forwardSetCookie(reply, result.headers); // the refreshed current-session cookie
     return reply.status(200).send({ success: true });

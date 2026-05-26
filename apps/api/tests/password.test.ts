@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { auth, emailSender } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
 import { users, verifications } from '../src/db/schema.js';
+import { env } from '../src/env.js';
 import { apiRoutes } from '../src/routes/index.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
@@ -94,6 +95,12 @@ describe('password management: reset-request + reset + change (real Postgres)', 
     expect(res.statusCode).toBe(200);
     expect(res.json<{ success: boolean }>().success).toBe(true);
     expect(sendSpy).toHaveBeenCalledTimes(1);
+    // F6: the reset link carries the FE reset-landing as the redirectTo (better-auth builds
+    // /auth/reset-password/{token}?callbackURL={redirectTo}).
+    const arg = sendSpy.mock.calls[0]?.[0];
+    expect(arg?.html).toContain(
+      `callbackURL=${encodeURIComponent(`${env.WEB_ORIGIN}/update-password`)}`,
+    );
   });
 
   it('reset-request unknown email → identical 200, no email sent (no enumeration)', async () => {

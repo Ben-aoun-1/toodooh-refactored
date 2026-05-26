@@ -26,6 +26,7 @@ import { useGovernorates } from '@/features/auth/hooks/useGovernorates';
 import { useSectors } from '@/features/auth/hooks/useSectors';
 import { authService } from '@/features/auth/services/auth.service';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
+import { isValidPassword, passwordChecks } from '@/features/auth/utils/password';
 import { getErrorMessage } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
 
@@ -276,13 +277,17 @@ export default function UserProfile() {
     }
   };
 
+  // Phase-1f F6 — converge to the shared 12-char policy (utils/password.ts = the backend's rule:
+  // 12 + upper + lower + digit). Adds a lowercase requirement vs the old 8/upper/digit (the FE now
+  // accepts exactly what the backend accepts — no FE-pass/BE-reject mismatch).
+  const pwChecks = passwordChecks(passwordData.newPassword);
   const passwordRequirements = {
-    uppercase: /[A-Z]/.test(passwordData.newPassword),
-    digit: /\d/.test(passwordData.newPassword),
-    minLength: passwordData.newPassword.length >= 8,
+    uppercase: pwChecks.upper,
+    lowercase: pwChecks.lower,
+    digit: pwChecks.digit,
+    minLength: pwChecks.minLen,
   };
-  const passwordValid =
-    passwordRequirements.uppercase && passwordRequirements.digit && passwordRequirements.minLength;
+  const passwordValid = isValidPassword(passwordData.newPassword);
 
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1307,6 +1312,16 @@ export default function UserProfile() {
                     <li className="flex items-center gap-2">
                       <span
                         className={
+                          passwordRequirements.lowercase ? 'text-brand-primary' : 'text-gray-300'
+                        }
+                      >
+                        <Check className="h-4 w-4" strokeWidth={2.5} />
+                      </span>
+                      Au moins une minuscule
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <span
+                        className={
                           passwordRequirements.digit ? 'text-brand-primary' : 'text-gray-300'
                         }
                       >
@@ -1322,7 +1337,7 @@ export default function UserProfile() {
                       >
                         <Check className="h-4 w-4" strokeWidth={2.5} />
                       </span>
-                      Minimum 8 caractères
+                      Minimum 12 caractères
                     </li>
                   </ul>
                 </div>

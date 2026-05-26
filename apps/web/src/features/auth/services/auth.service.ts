@@ -10,8 +10,6 @@ import {
   MeUser,
 } from '@/features/auth/types/auth';
 import { apiClient, ApiError } from '@/lib/api-client';
-import { getAppUrl } from '@/lib/app-url';
-import { isErrorWithCode } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase';
 
@@ -254,40 +252,25 @@ export const authService = {
     }
   },
 
-  async resetPassword(email: string) {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: getAppUrl('/update-password'),
-    });
-    if (error) throw new Error(mapAuthError(error));
+  // Phase-1f F6 — forgot-password request. Generic 200 (anti-enum, backend-built); the form keeps
+  // its generic toast.
+  async resetPassword(email: string): Promise<void> {
+    try {
+      await apiClient.post('/password/reset-request', { email });
+    } catch (error) {
+      throw new Error(apiErrorMessage(error));
+    }
   },
 
-  async updatePassword(password: string) {
-    // Vérifier les critères de base
-    if (password.length < 6) {
-      throw new Error('Le mot de passe doit contenir au moins 6 caractères');
+  // Phase-1f F6 — the reset-landing's token path: better-auth's reset link redirects to
+  // /update-password?token=, the form posts the token + the new password here. Distinct from the
+  // with-old change (/change). (Replaces the old no-old `updatePassword` + its 6-char guard.)
+  async confirmPasswordReset(token: string, newPassword: string): Promise<void> {
+    try {
+      await apiClient.post('/password/reset', { token, new_password: newPassword });
+    } catch (error) {
+      throw new Error(apiErrorMessage(error));
     }
-
-    const { data, error } = await supabase.auth.updateUser({
-      password,
-    });
-
-    if (error) {
-      log.error({ error }, '❌ Erreur lors de la mise à jour du mot de passe');
-      if (isErrorWithCode(error)) {
-        log.error(
-          {
-            message: error.message,
-            details: error.details,
-            hint: error.hint,
-            code: error.code,
-          },
-          "Détails de l'erreur",
-        );
-      }
-      throw new Error(mapAuthError(error));
-    }
-
-    return data;
   },
 
   async updateBusinessProfile(updateData: Partial<BusinessProfile>) {
@@ -316,29 +299,17 @@ export const authService = {
     return data;
   },
 
-  async updatePasswordWithOld(currentPassword: string, newPassword: string) {
-    // First verify the current password
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) throw new Error('Utilisateur non connecté');
-
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: user.email!,
-      password: currentPassword,
-    });
-
-    if (signInError) throw new Error('Le mot de passe actuel est incorrect');
-
-    // Then update to the new password
-    const { error } = await supabase.auth.updateUser({
-      password: newPassword,
-    });
-    if (error) {
-      const mapped = mapAuthError(error);
-      const generic =
-        "❌ Une erreur s'est produite. Veuillez réessayer dans quelques instants. Si le problème persiste, contactez notre support technique.";
-      throw new Error(mapped === generic ? error?.message || mapped : mapped);
+  // Phase-1f F6 — authenticated change: the backend re-auths the current password + revokes other
+  // sessions, forwarding the refreshed cookie so the current device stays logged in (D4). No FE
+  // bounce.
+  async updatePasswordWithOld(currentPassword: string, newPassword: string): Promise<void> {
+    try {
+      await apiClient.post('/password/change', {
+        current_password: currentPassword,
+        new_password: newPassword,
+      });
+    } catch (error) {
+      throw new Error(apiErrorMessage(error));
     }
   },
 
