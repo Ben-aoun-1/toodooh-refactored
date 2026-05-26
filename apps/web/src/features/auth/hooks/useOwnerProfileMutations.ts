@@ -48,14 +48,39 @@ export function useOwnerProfileMutations(userId: string | undefined) {
   const invalidateProfile = () =>
     queryClient.invalidateQueries({ queryKey: authKeys.profile(userId ?? '') });
 
-  // handleSaveResponsable / handleSaveNotifications / handleLogoRemove +
-  // the RNE branch of handleRemoveDocument — every plain profile-field write.
+  // Phase-1f F4b — section-scoped saves → the 4 PATCH endpoints (the shared, F4a-tested service
+  // methods). handleSaveResponsable→Contact, handleSaveEntreprise→Business, handleSaveAdresse→
+  // Address, handleSaveNotifications→Notifications.
+  const updateContact = useMutation({
+    mutationFn: (patch: Parameters<typeof authService.updateProfileContact>[0]) =>
+      authService.updateProfileContact(patch),
+    onSuccess: invalidateProfile,
+  });
+  const updateBusiness = useMutation({
+    mutationFn: (patch: Parameters<typeof authService.updateProfileBusiness>[0]) =>
+      authService.updateProfileBusiness(patch),
+    onSuccess: invalidateProfile,
+  });
+  const updateAddress = useMutation({
+    mutationFn: (patch: Parameters<typeof authService.updateProfileAddress>[0]) =>
+      authService.updateProfileAddress(patch),
+    onSuccess: invalidateProfile,
+  });
+  const updateNotifications = useMutation({
+    mutationFn: (patch: Parameters<typeof authService.updateProfileNotifications>[0]) =>
+      authService.updateProfileNotifications(patch),
+    onSuccess: invalidateProfile,
+  });
+
+  // Generic field write — DEAD post-F4b (Supabase removed); kept only for the deferred logo-remove /
+  // RNE-doc-remove handlers (D9 / F5), which still call it.
   const updateProfile = useMutation({
     mutationFn: (patch: ProfileUpdate) => authService.updateProfile(patch),
     onSuccess: invalidateProfile,
   });
 
-  // handleSaveEntreprise / handleSaveAdresse / handleSaveBankDetails.
+  // Generic business-profile write — DEAD post-F4b; kept only for the deferred bank sub-form
+  // (handleSaveBankDetails — money-slice). Entreprise/adresse now route to the section methods above.
   const updateBusinessProfile = useMutation({
     mutationFn: (patch: BusinessProfileUpdate) => authService.updateBusinessProfile(patch),
     onSuccess: invalidateProfile,
@@ -155,6 +180,10 @@ export function useOwnerProfileMutations(userId: string | undefined) {
   });
 
   return {
+    updateContact,
+    updateBusiness,
+    updateAddress,
+    updateNotifications,
     updateProfile,
     updateBusinessProfile,
     updatePasswordWithOld,

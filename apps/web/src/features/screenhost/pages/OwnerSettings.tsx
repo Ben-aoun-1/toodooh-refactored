@@ -251,7 +251,7 @@ export default function OwnerSettings() {
         .filter(Boolean)
         .join(' ')
         .trim();
-      await profileMutations.updateProfile.mutateAsync({
+      await profileMutations.updateContact.mutateAsync({
         contact_name,
         contact_phone: responsableForm.contact_phone,
         fonction: responsableForm.fonction || null,
@@ -279,18 +279,15 @@ export default function OwnerSettings() {
       toast.error('La catégorie est obligatoire');
       return;
     }
-    if (!entrepriseForm.number_of_screens || !entrepriseForm.number_of_rooms) {
-      toast.error("Nombre d'écrans et nombre de salles sont obligatoires");
-      return;
-    }
-    if (isFleetOwner && !entrepriseForm.company_size) {
-      toast.error("Le nombre d'établissements du parc est obligatoire");
-      return;
-    }
+    // Phase-1f F4b §2: number_of_screens/rooms/company_size have NO backend column in slice 1
+    // (owner-extras → owner slice). Requiring them would block saving the persisted fields with
+    // data that then strips (a trap) — so they are no longer required here, and their inputs are
+    // disabled (see the render). The wire still forwards them (empty → backend-stripped) for
+    // forward-compat (the owner slice re-enables the inputs + adds columns; no wire change then).
     try {
       const ns = parseScreenCount(entrepriseForm.number_of_screens);
       const nr = parseInt(entrepriseForm.number_of_rooms, 10);
-      await profileMutations.updateBusinessProfile.mutateAsync({
+      await profileMutations.updateBusiness.mutateAsync({
         business_name: entrepriseForm.business_name,
         tax_number: entrepriseForm.tax_number,
         business_sector_id: entrepriseForm.business_sector_id,
@@ -317,11 +314,13 @@ export default function OwnerSettings() {
       return;
     }
     try {
-      await profileMutations.updateBusinessProfile.mutateAsync({
+      await profileMutations.updateAddress.mutateAsync({
         street_address: adresseForm.street_address,
         city: adresseForm.city,
         postal_code: adresseForm.postal_code,
-        governorate_id: adresseForm.governorate_id || null,
+        // undefined (not null) when empty — JSON drops it → the uuid optional is left unchanged
+        // rather than 400'd (null fails z.uuid()). zone is nullable → ||null clears it. (F4a §2.B.)
+        governorate_id: adresseForm.governorate_id || undefined,
         zone: adresseForm.zone?.trim() || null,
       });
       toast.success('Adresse enregistrée');
@@ -334,7 +333,7 @@ export default function OwnerSettings() {
   const handleSaveNotifications = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await profileMutations.updateProfile.mutateAsync({
+      await profileMutations.updateNotifications.mutateAsync({
         notify_news_updates: notificationsForm.notify_news_updates,
         notify_reminders_events: notificationsForm.notify_reminders_events,
         notify_promotions_offers: notificationsForm.notify_promotions_offers,
@@ -828,24 +827,29 @@ export default function OwnerSettings() {
                               )}
                             </div>
                             <div className="flex flex-col gap-2">
+                              {/* Logo upload disabled (Phase-1f D-F4-4): no backend logo storage yet
+                                  — deferred to a later "logo storage" slice. */}
                               <div className="flex gap-2 flex-wrap">
-                                <label className="px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-600 cursor-pointer hover:bg-gray-50">
+                                <label className="px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-400 cursor-not-allowed opacity-60">
                                   Changer
                                   <input
                                     type="file"
                                     accept="image/png,image/jpeg,image/webp"
                                     className="hidden"
+                                    disabled
                                     onChange={handleLogoChange}
                                   />
                                 </label>
                                 <button
                                   type="button"
                                   onClick={handleLogoRemove}
-                                  className="px-3 py-2 border border-red-500 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 bg-white"
+                                  disabled
+                                  className="px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-400 bg-white cursor-not-allowed opacity-60"
                                 >
                                   Supprimer
                                 </button>
                               </div>
+                              <p className="text-xs text-gray-400">Bientôt disponible</p>
                               {logoFile && (
                                 <button
                                   type="button"
@@ -934,17 +938,19 @@ export default function OwnerSettings() {
                               className="block text-sm font-medium text-gray-700 mb-1"
                               htmlFor="number-of-screens"
                             >
-                              Nombre d&apos;écrans <span className="text-red-500">*</span>
+                              Nombre d&apos;écrans{' '}
+                              <span className="text-xs text-gray-400">(bientôt disponible)</span>
                             </label>
                             <select
                               value={entrepriseForm.number_of_screens}
+                              disabled
                               onChange={(e) =>
                                 setEntrepriseForm((p) => ({
                                   ...p,
                                   number_of_screens: e.target.value,
                                 }))
                               }
-                              className={`${inputClass} appearance-none pr-10`}
+                              className={`${inputClass} appearance-none pr-10 opacity-60 cursor-not-allowed`}
                               id="number-of-screens"
                             >
                               <option value="">Sélectionner</option>
@@ -964,14 +970,15 @@ export default function OwnerSettings() {
                               htmlFor="company-size"
                             >
                               Nombre d&apos;établissements du parc{' '}
-                              <span className="text-red-500">*</span>
+                              <span className="text-xs text-gray-400">(bientôt disponible)</span>
                             </label>
                             <select
                               value={entrepriseForm.company_size}
+                              disabled
                               onChange={(e) =>
                                 setEntrepriseForm((p) => ({ ...p, company_size: e.target.value }))
                               }
-                              className={`${inputClass} appearance-none pr-10 max-w-md`}
+                              className={`${inputClass} appearance-none pr-10 max-w-md opacity-60 cursor-not-allowed`}
                               id="company-size"
                             >
                               <option value="">Sélectionner</option>
@@ -989,14 +996,16 @@ export default function OwnerSettings() {
                             className="block text-sm font-medium text-gray-700 mb-1"
                             htmlFor="number-of-rooms"
                           >
-                            Nombre de salles <span className="text-red-500">*</span>
+                            Nombre de salles{' '}
+                            <span className="text-xs text-gray-400">(bientôt disponible)</span>
                           </label>
                           <select
                             value={entrepriseForm.number_of_rooms}
+                            disabled
                             onChange={(e) =>
                               setEntrepriseForm((p) => ({ ...p, number_of_rooms: e.target.value }))
                             }
-                            className={`${inputClass} appearance-none pr-10 max-w-full md:max-w-2xl`}
+                            className={`${inputClass} appearance-none pr-10 max-w-full md:max-w-2xl opacity-60 cursor-not-allowed`}
                             id="number-of-rooms"
                           >
                             <option value="">Sélectionner</option>
