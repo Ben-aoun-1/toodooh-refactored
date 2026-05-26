@@ -24,6 +24,7 @@ vi.mock('@/lib/api-client', async (importActual) => {
 
 const patch = vi.mocked(apiClient.patch);
 const get = vi.mocked(apiClient.get);
+const postForm = vi.mocked(apiClient.postForm);
 
 const meUser: MeUser = {
   id: 'u1',
@@ -141,6 +142,9 @@ describe('authService.getBusinessProfile (F4a — /api/me read bridge)', () => {
     // deferred fields absent (no backend columns)
     expect(p?.logo_url).toBeUndefined();
     expect(p?.bank_rib).toBeUndefined();
+    // F5 — document presence is a direct map of /api/me's booleans (no sentinel; _doc_url undefined)
+    expect(p?.documents).toEqual({ registration: false, cin: false });
+    expect(p?.registration_doc_url).toBeUndefined();
   });
 
   it('401 → null (logged out)', async () => {
@@ -151,5 +155,56 @@ describe('authService.getBusinessProfile (F4a — /api/me read bridge)', () => {
   it('non-401 → throws a French message', async () => {
     get.mockRejectedValueOnce(new ApiError({ status: 0, code: 'NETWORK', message: '' }));
     await expect(authService.getBusinessProfile()).rejects.toThrow(/connexion/i);
+  });
+});
+
+describe('authService documents (F5 — multipart upload + on-demand view)', () => {
+  beforeEach(() => {
+    postForm.mockReset();
+    get.mockReset();
+  });
+
+  it('uploadProfileDocument(rne) → POST /profile/documents/rne with the file in FormData', async () => {
+    postForm.mockResolvedValue({ type: 'rne', key: 'rne/u1' });
+    const file = new File(['x'], 'rc.pdf', { type: 'application/pdf' });
+    await authService.uploadProfileDocument('rne', file);
+    expect(postForm).toHaveBeenCalledTimes(1);
+    expect(postForm.mock.calls[0][0]).toBe('/profile/documents/rne');
+    const form = postForm.mock.calls[0][1] as FormData;
+    expect(form.get('file')).toBe(file);
+  });
+
+  it('uploadProfileDocument(cin) → POST /profile/documents/cin', async () => {
+    postForm.mockResolvedValue({ type: 'cin', key: 'cin/u1' });
+    await authService.uploadProfileDocument(
+      'cin',
+      new File(['x'], 'cin.png', { type: 'image/png' }),
+    );
+    expect(postForm.mock.calls[0][0]).toBe('/profile/documents/cin');
+  });
+
+  it('upload failure → throws a French message', async () => {
+    postForm.mockRejectedValueOnce(
+      new ApiError({ status: 413, code: 'PAYLOAD_TOO_LARGE', message: '' }),
+    );
+    await expect(
+      authService.uploadProfileDocument('rne', new File(['x'], 'big.pdf')),
+    ).rejects.toThrow(/5 Mo/);
+  });
+
+  it('getProfileDocumentUrl(rne) → GET /profile/documents/rne → the presigned url', async () => {
+    get.mockResolvedValue({ url: 'https://minio/presigned' });
+    await expect(authService.getProfileDocumentUrl('rne')).resolves.toBe('https://minio/presigned');
+    expect(get).toHaveBeenCalledWith('/profile/documents/rne');
+  });
+
+  it('getProfileDocumentUrl → 404 (no document) → null', async () => {
+    get.mockRejectedValueOnce(new ApiError({ status: 404, code: 'NOT_FOUND', message: '' }));
+    await expect(authService.getProfileDocumentUrl('cin')).resolves.toBeNull();
+  });
+
+  it('getProfileDocumentUrl → non-404 → throws a French message', async () => {
+    get.mockRejectedValueOnce(new ApiError({ status: 0, code: 'NETWORK', message: '' }));
+    await expect(authService.getProfileDocumentUrl('rne')).rejects.toThrow(/connexion/i);
   });
 });

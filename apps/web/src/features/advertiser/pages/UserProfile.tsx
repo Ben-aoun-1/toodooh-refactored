@@ -417,20 +417,13 @@ export default function UserProfile() {
       URL.revokeObjectURL(url);
       return;
     }
-    if (profile.registration_doc_path) {
-      try {
-        const { data: signed, error } = await supabase.storage
-          .from('registres')
-          .createSignedUrl(profile.registration_doc_path, 3600);
-        if (error || !signed?.signedUrl) throw error;
-        window.open(signed.signedUrl, '_blank', 'noopener,noreferrer');
-      } catch (err) {
-        toast.error(getErrorMessage(err) || "Impossible d'ouvrir le document");
-      }
-      return;
-    }
-    if (profile.registration_doc_url) {
-      window.open(profile.registration_doc_url, '_blank', 'noopener,noreferrer');
+    // Phase-1f F5 — presign the RNE on demand (the URL expires → never stored).
+    try {
+      const url = await authService.getProfileDocumentUrl('rne');
+      if (url) window.open(url, '_blank', 'noopener,noreferrer');
+      else toast.error('Aucun document à afficher');
+    } catch (err) {
+      toast.error(getErrorMessage(err) || "Impossible d'ouvrir le document");
     }
   };
 
@@ -977,9 +970,7 @@ export default function UserProfile() {
                   </label>
                 </div>
 
-                {(profile.registration_doc_path ||
-                  profile.registration_doc_url ||
-                  documentFile) && (
+                {(profile.documents?.registration || documentFile) && (
                   <div className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
                     <button
                       type="button"
@@ -1002,8 +993,13 @@ export default function UserProfile() {
                         <span className="text-sm text-gray-600">Completed</span>
                       </div>
                     </button>
+                    {/* Phase-1f F5: the trash clears a freshly-picked local file; removing an
+                        UPLOADED document is disabled (no DELETE endpoint — replace by re-uploading).
+                        handleRemoveDocument stays referenced (the documentFile branch) but the
+                        disabled state means it never fires for an uploaded doc. */}
                     <button
                       type="button"
+                      disabled={!documentFile}
                       onClick={(e) => {
                         e.stopPropagation();
                         if (documentFile) {
@@ -1012,8 +1008,8 @@ export default function UserProfile() {
                           handleRemoveDocument();
                         }
                       }}
-                      className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 flex-shrink-0"
-                      title="Supprimer"
+                      className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-gray-400 disabled:hover:bg-transparent"
+                      title={documentFile ? 'Retirer le fichier' : 'Suppression bientôt disponible'}
                     >
                       <Trash2 className="h-5 w-5" />
                     </button>

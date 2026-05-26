@@ -401,6 +401,39 @@ export const authService = {
     }
   },
 
+  // Phase-1f F5 — document upload (multipart, post-signin). At signup the user is unverified +
+  // logged-out and can't call this requireAuth endpoint, so the upload flow-position moved here.
+  // type ∈ rne|cin (by role: advertiser→rne, individual_owner→cin, fleet_owner→rne). POST overwrites
+  // (deterministic key) → re-upload replaces. request.file() reads the first file (field name is
+  // irrelevant).
+  async uploadProfileDocument(
+    type: 'rne' | 'cin',
+    file: File,
+  ): Promise<{ type: string; key: string }> {
+    const form = new FormData();
+    form.append('file', file);
+    try {
+      return await apiClient.postForm<{ type: string; key: string }>(
+        `/profile/documents/${type}`,
+        form,
+      );
+    } catch (error) {
+      throw new Error(apiErrorMessage(error));
+    }
+  },
+
+  // Phase-1f F5 — presign the stored document ON DEMAND (presigned URLs expire → fetched on view,
+  // never stored). 404 (no document of that type) → null.
+  async getProfileDocumentUrl(type: 'rne' | 'cin'): Promise<string | null> {
+    try {
+      const { url } = await apiClient.get<{ url: string }>(`/profile/documents/${type}`);
+      return url;
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) return null;
+      throw new Error(apiErrorMessage(error));
+    }
+  },
+
   // Phase-1f F4 — the profile READ now comes from GET /api/me (no GET /api/profile; the backend has
   // no logo/bank columns, so a dedicated endpoint couldn't supply them either). Map the /api/me user
   // → BusinessProfile: section fields direct, notifications FLATTENED (nested → flat notify_*),
@@ -439,6 +472,9 @@ export const authService = {
       created_at: '',
       updated_at: '',
       is_admin: false,
+      // F5 — document presence (direct map of /api/me's booleans). The *_doc_url fields stay
+      // undefined (no stored URL; the view presigns on demand via getProfileDocumentUrl).
+      documents: { registration: user.documents.registration, cin: user.documents.cin },
     };
   },
 

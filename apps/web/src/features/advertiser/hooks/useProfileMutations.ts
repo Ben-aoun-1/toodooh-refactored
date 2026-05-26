@@ -1,13 +1,9 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { authService } from '@/features/auth/services/auth.service';
-import { getErrorMessage } from '@/lib/errors';
-import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase';
 
 import { advertiserKeys } from './queryKeys';
-
-const log = logger.child({ module: 'useProfileMutations' });
 
 /** The partial-profile patch accepted by `authService.updateProfile`. */
 type ProfileUpdate = Parameters<typeof authService.updateProfile>[0];
@@ -81,40 +77,10 @@ export function useProfileMutations(userId: string | undefined) {
     onSuccess: invalidateProfile,
   });
 
-  // handleUploadDocument — storage upload + business_profiles row update.
-  // Errors are logged and rethrown with their user-facing message so the
-  // page handler's `toast.error(getErrorMessage(err))` shows the same text
-  // the pre-React-Query inline flow did.
+  // Phase-1f F5 — the advertiser document is the RNE (Registre de commerce) → POST /documents/rne
+  // (multipart, post-signin). onSuccess refetches /api/me → documents.registration flips true.
   const uploadDocument = useMutation({
-    mutationFn: async (file: File) => {
-      const ext = file.name.split('.').pop();
-      const filePath = `rne_${userId}_${Date.now()}.${ext}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('registres')
-        .upload(filePath, file);
-      if (uploadError) {
-        log.error({ error: uploadError }, 'failed to upload registration document');
-        throw new Error(getErrorMessage(uploadError) || 'Erreur upload du document');
-      }
-
-      const { error: updateError } = await supabase
-        .from('business_profiles')
-        .update({ registration_doc_path: filePath, registration_doc_url: null })
-        .eq('user_id', userId as string);
-      if (updateError) {
-        // The file is in storage but the DB doesn't reference it. We do not
-        // attempt cleanup — best-effort delete creates more failure modes
-        // than it solves; the orphan can be reclaimed by a storage GC job.
-        log.error(
-          { error: updateError },
-          'failed to update business_profile after document upload',
-        );
-        throw new Error(
-          getErrorMessage(updateError) || 'Erreur enregistrement du chemin du document',
-        );
-      }
-    },
+    mutationFn: (file: File) => authService.uploadProfileDocument('rne', file),
     onSuccess: invalidateProfile,
   });
 

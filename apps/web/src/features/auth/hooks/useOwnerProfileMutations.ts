@@ -123,36 +123,11 @@ export function useOwnerProfileMutations(userId: string | undefined) {
     onSuccess: invalidateProfile,
   });
 
-  // handleUploadDocument — storage upload + signed URL, then a branch write:
-  // individual owners store `cin_doc_url`, fleet owners store the RNE path+url.
+  // Phase-1f F5 — individual owners upload a CIN (→ /documents/cin), fleet owners an RNE
+  // (→ /documents/rne). Multipart, post-signin; onSuccess refetches /api/me → documents.* flips.
   const uploadDocument = useMutation({
-    mutationFn: async ({ file, isIndividualOwner }: DocumentInput) => {
-      const ext = file.name.split('.').pop();
-      const filePrefix = isIndividualOwner ? 'cin' : 'rne';
-      const filePath = `${filePrefix}_${userId}_${Date.now()}.${ext}`;
-      await supabase.storage.from('registres').upload(filePath, file);
-      const { data: signedData, error: signedError } = await supabase.storage
-        .from('registres')
-        .createSignedUrl(filePath, 604800);
-      if (signedError || !signedData) throw signedError || new Error('URL signée');
-
-      if (isIndividualOwner) {
-        const { error } = await supabase
-          .from('business_profiles')
-          .update({ cin_doc_url: signedData.signedUrl })
-          .eq('user_id', userId as string);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('business_profiles')
-          .update({
-            registration_doc_path: filePath,
-            registration_doc_url: signedData.signedUrl,
-          })
-          .eq('user_id', userId as string);
-        if (error) throw error;
-      }
-    },
+    mutationFn: ({ file, isIndividualOwner }: DocumentInput) =>
+      authService.uploadProfileDocument(isIndividualOwner ? 'cin' : 'rne', file),
     onSuccess: invalidateProfile,
   });
 

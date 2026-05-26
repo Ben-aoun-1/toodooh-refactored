@@ -27,6 +27,7 @@ import { useGovernorates } from '@/features/auth/hooks/useGovernorates';
 import { useOwnerBusinessSectors } from '@/features/auth/hooks/useOwnerBusinessSectors';
 import { useOwnerProfileMutations } from '@/features/auth/hooks/useOwnerProfileMutations';
 import { useSectors } from '@/features/auth/hooks/useSectors';
+import { authService } from '@/features/auth/services/auth.service';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import type { BusinessProfile } from '@/features/auth/types/auth';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
@@ -486,32 +487,20 @@ export default function OwnerSettings() {
   };
 
   const openDocumentForView = async () => {
-    if (!profile) return;
     if (documentFile) {
       const url = URL.createObjectURL(documentFile);
       window.open(url, '_blank', 'noopener,noreferrer');
       URL.revokeObjectURL(url);
       return;
     }
-    if (isIndividualOwner && profile.cin_doc_url) {
-      window.open(profile.cin_doc_url, '_blank', 'noopener,noreferrer');
-      return;
-    }
-    if (profile.registration_doc_path) {
-      try {
-        const { data: signed, error } = await supabase.storage
-          .from('registres')
-          .createSignedUrl(profile.registration_doc_path, 3600);
-        if (error || !signed?.signedUrl) throw error;
-        window.open(signed.signedUrl, '_blank', 'noopener,noreferrer');
-      } catch (err: unknown) {
-        const m = err instanceof Error ? err.message : "Impossible d'ouvrir le document";
-        toast.error(m);
-      }
-      return;
-    }
-    if (profile.registration_doc_url) {
-      window.open(profile.registration_doc_url, '_blank', 'noopener,noreferrer');
+    // Phase-1f F5 — presign the role's document (CIN for individual, RNE for fleet) on demand.
+    try {
+      const url = await authService.getProfileDocumentUrl(isIndividualOwner ? 'cin' : 'rne');
+      if (url) window.open(url, '_blank', 'noopener,noreferrer');
+      else toast.error('Aucun document à afficher');
+    } catch (err: unknown) {
+      const m = err instanceof Error ? err.message : "Impossible d'ouvrir le document";
+      toast.error(m);
     }
   };
 
@@ -582,9 +571,7 @@ export default function OwnerSettings() {
   const hasDocument =
     !!documentFile ||
     (!!profile &&
-      (isIndividualOwner
-        ? !!profile.cin_doc_url
-        : !!(profile.registration_doc_path || profile.registration_doc_url)));
+      (isIndividualOwner ? !!profile.documents?.cin : !!profile.documents?.registration));
   const hasBankDocument = !!bankDocFile || !!profile?.bank_doc_path || !!profile?.bank_doc_url;
 
   if (loading) {
@@ -1270,8 +1257,11 @@ export default function OwnerSettings() {
                                 <span className="text-sm text-gray-600">Enregistré</span>
                               </div>
                             </button>
+                            {/* Phase-1f F5: clears a freshly-picked local file; removing an UPLOADED
+                                document is disabled (no DELETE endpoint — replace by re-uploading). */}
                             <button
                               type="button"
+                              disabled={!documentFile}
                               onClick={(ev) => {
                                 ev.stopPropagation();
                                 if (documentFile) {
@@ -1280,8 +1270,12 @@ export default function OwnerSettings() {
                                   handleRemoveDocument();
                                 }
                               }}
-                              className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 flex-shrink-0"
-                              title="Supprimer"
+                              className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-gray-400 disabled:hover:bg-transparent"
+                              title={
+                                documentFile
+                                  ? 'Retirer le fichier'
+                                  : 'Suppression bientôt disponible'
+                              }
                             >
                               <Trash2 className="h-5 w-5" />
                             </button>

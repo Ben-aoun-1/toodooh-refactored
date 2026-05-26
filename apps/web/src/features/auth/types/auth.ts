@@ -24,6 +24,12 @@ export interface BusinessProfile {
   logo_url?: string;
   registration_doc_url?: string;
   registration_doc_path?: string;
+  /**
+   * Phase-1f F5 — document presence, a direct map of GET /api/me's `documents` booleans (the columns
+   * hold a storage key, not a URL; the view presigns on demand via getProfileDocumentUrl). The
+   * `*_doc_url`/`*_doc_path` fields stay undefined off the /api/me bridge (no stored URL).
+   */
+  documents?: { registration: boolean; cin: boolean };
   bank_account_holder?: string;
   bank_rib?: string;
   bank_iban?: string;
