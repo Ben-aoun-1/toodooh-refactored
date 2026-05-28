@@ -14,3 +14,6 @@ docs/handoff/
 
 # Verbatim plan and spec artifacts — same precedent as docs/handoff/
 docs/superpowers/
+
+# Byte-exact built marketing landing (minified Vite output) — preserve verbatim, never reformat
+infra/landing/
