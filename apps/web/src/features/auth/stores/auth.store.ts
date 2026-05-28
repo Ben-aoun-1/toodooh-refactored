@@ -86,6 +86,22 @@ export const useAuthStore = create<AuthState>()(
       initialize: async () => {
         set({ loading: true, rehydrateError: false });
 
+        // Phase-1f tail: clear pre-1f leftover Supabase session keys from localStorage.
+        // Post-keystone the auth store of truth is apps/api (cookie + /api/me); a user who
+        // signed in via Supabase pre-1f has stale `sb-<project-ref>-auth-token` localStorage
+        // entries that fed the Supabase client's (now-disabled, see lib/supabase.ts)
+        // refresh-token loop. Idempotent: a fresh post-1f user has no such keys. Iterates
+        // backward because removeItem shifts indexes. The regex matches both the canonical
+        // key and its `.0`/`.1` chunked-storage variants.
+        if (typeof window !== 'undefined') {
+          for (let i = window.localStorage.length - 1; i >= 0; i--) {
+            const key = window.localStorage.key(i);
+            if (key && /^sb-.+-auth-token(\.|$)/.test(key)) {
+              window.localStorage.removeItem(key);
+            }
+          }
+        }
+
         // Admin identity rides its own store (admin.store, Phase 1g); skip /api/me on admin routes.
         if (typeof window !== 'undefined' && window.location.pathname.startsWith('/admin')) {
           set({ ...LOGGED_OUT, initialized: true, loading: false });

@@ -84,19 +84,14 @@ export default function OwnerDashboard() {
   const [selectedEstablishment, setSelectedEstablishment] = useState<string | null>(null);
 
   const { profile, loading: profileLoading, error: profileError } = useBusinessProfile(user?.id);
-  const { data: sectors, isLoading: sectorsLoading, isError: sectorsError } = useSectors();
+  const { data: sectors, isError: sectorsError } = useSectors();
   const { screens, loading: screensLoading, isError: screensError } = useScreens();
-  const {
-    stats: revenueStats,
-    loading: revenueLoading,
-    isError: revenueError,
-  } = useRevenueStats(user?.id);
+  const { stats: revenueStats, isError: revenueError } = useRevenueStats(user?.id);
   // Pending-approval notifications — Commit 7b adopts the campaigns-owned
   // `useOwnerCampaignApprovals` hook (the former inline `getPendingCampaigns`
   // read is the deferred-consumer rewire); the dashboard derives its
   // notification list from the cached approvals.
-  const { campaigns: pendingApprovalCampaigns, loading: notificationsLoading } =
-    useOwnerCampaignApprovals(user?.id);
+  const { campaigns: pendingApprovalCampaigns } = useOwnerCampaignApprovals(user?.id);
   const ownerNotifications = useMemo<OwnerDashboardNotification[]>(
     () =>
       pendingApprovalCampaigns
@@ -114,8 +109,14 @@ export default function OwnerDashboard() {
   );
 
   const stats = revenueStats ?? EMPTY_REVENUE_STATS;
-  const loading =
-    profileLoading || sectorsLoading || screensLoading || revenueLoading || notificationsLoading;
+  // Le shell et tous les widgets ne dépendent que du chargement du compte
+  // (profileLoading → /api/me, rapide). Les hooks des tranches ultérieures
+  // (écrans / revenus / campagnes, survey §2.3) interrogent encore le backend
+  // Supabase mort : ils ne bloquent plus le rendu. Une fois le compte résolu,
+  // les widgets adossés à des données vivantes (Catégorie, Taille du réseau)
+  // affichent leurs valeurs réelles, et les widgets adossés au backend mort
+  // (revenus + 4 KPI) affichent leur état vide/zéro honnête.
+  const accountLoading = profileLoading;
 
   const businessSectorName = useMemo(() => {
     if (!profile?.business_sector_id || !sectors) return '';
@@ -146,7 +147,7 @@ export default function OwnerDashboard() {
   // chargées. NB : `_alerts` n'est consommé nulle part — état mort conservé
   // tel quel par fidélité de migration (candidat à une passe dead-code).
   useEffect(() => {
-    if (loading) return;
+    if (screensLoading) return;
     const generatedAlerts: Alert[] = [];
 
     const maintenanceScreens = screens.filter((screen) => screen.status === 'maintenance');
@@ -203,7 +204,7 @@ export default function OwnerDashboard() {
     }
 
     setAlerts(generatedAlerts.slice(0, 5));
-  }, [loading, screens, revenueStats]);
+  }, [screensLoading, screens, revenueStats]);
 
   // Fonctions de redirection pour les widgets
   const handleNavigateToScreens = () => {
@@ -336,7 +337,7 @@ export default function OwnerDashboard() {
   const hideOwnerGettingStartedBlock =
     hasOwnerLegalDocument && hasOwnerBankDetails && isOwnerAccountActive;
 
-  if (loading) {
+  if (accountLoading) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
@@ -434,7 +435,7 @@ export default function OwnerDashboard() {
                 <div className="rounded-2xl bg-gradient-to-tr from-[#3db39a] via-[#1a6b5a] to-[#0a3d32] p-8 sm:p-10 shadow-lg min-h-[160px] sm:min-h-[180px] flex flex-col justify-center">
                   <p className="text-lg font-medium text-white/95 mb-3">Revenus</p>
                   <p className="text-3xl sm:text-4xl font-bold text-white tracking-tight tabular-nums font-sans">
-                    {loading
+                    {accountLoading
                       ? '...'
                       : `${(stats.totalRevenue ?? 0).toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} TND`}
                   </p>
@@ -453,7 +454,7 @@ export default function OwnerDashboard() {
                         Catégorie
                       </span>
                       <div className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-gray-200 text-gray-900 text-sm bg-gray-50/80 flex items-center">
-                        {loading ? (
+                        {accountLoading ? (
                           <span className="text-gray-400">…</span>
                         ) : (
                           <span className="font-medium">{businessSectorName || '—'}</span>
@@ -467,7 +468,7 @@ export default function OwnerDashboard() {
                           : 'Taille du réseau'}
                       </span>
                       <div className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-gray-200 text-gray-900 text-sm bg-gray-50/80 flex items-center">
-                        {loading ? (
+                        {accountLoading ? (
                           <span className="text-gray-400">…</span>
                         ) : (
                           <span className="font-medium">
@@ -626,7 +627,7 @@ export default function OwnerDashboard() {
                     <DollarSign className="h-5 w-5 text-[#c9a227] flex-shrink-0" />
                   </div>
                   <p className="text-3xl font-bold text-[#1a1a1a] tabular-nums font-sans mt-auto">
-                    {loading
+                    {accountLoading
                       ? '...'
                       : (stats.totalRevenue ?? 0).toLocaleString('fr-FR', {
                           minimumFractionDigits: 2,
@@ -648,7 +649,7 @@ export default function OwnerDashboard() {
                     <Megaphone className="h-5 w-5 text-[#85cc95] flex-shrink-0" />
                   </div>
                   <p className="text-3xl font-bold text-[#1a1a1a] tabular-nums font-sans mt-auto">
-                    {loading ? '...' : ownerKpi.campaignsDiffused}
+                    {accountLoading ? '...' : ownerKpi.campaignsDiffused}
                   </p>
                   <p className="text-xs mt-1 text-[#16a34a]">+12% Année précédente</p>
                 </div>
@@ -660,7 +661,7 @@ export default function OwnerDashboard() {
                     <Eye className="h-5 w-5 text-[#6e82f6] flex-shrink-0" />
                   </div>
                   <p className="text-3xl font-bold text-[#1a1a1a] tabular-nums font-sans mt-auto">
-                    {loading
+                    {accountLoading
                       ? '...'
                       : ownerKpi.impressions.toLocaleString('fr-FR').replace(/\s/g, ' ')}
                   </p>
@@ -674,7 +675,7 @@ export default function OwnerDashboard() {
                     <Monitor className="h-5 w-5 text-[#a08cf0] flex-shrink-0" />
                   </div>
                   <p className="text-3xl font-bold text-[#1a1a1a] tabular-nums font-sans mt-auto font-mono">
-                    {loading ? '...' : formatDuration(ownerKpi.totalDurationSeconds)}
+                    {accountLoading ? '...' : formatDuration(ownerKpi.totalDurationSeconds)}
                   </p>
                   <p className="text-xs mt-1 text-red-500">-22% Année précédente</p>
                 </div>
