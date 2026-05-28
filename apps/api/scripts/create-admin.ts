@@ -8,6 +8,11 @@ import { users } from '../src/db/schema.js';
 // correctly, force-verifies the email (admin staff don't go through the email loop), and promotes
 // to superadmin. Idempotent on re-run for an existing email (skips create, re-applies the flags).
 // usage: pnpm --filter @toodooh/api tsx scripts/create-admin.ts <email> <password(>=12)> [name]
+//
+// 1h PROD CARRY-FORWARD: the password is passed as an argv (fine for local, where the chat/terminal
+// is the record). NOT prod-safe — an argv/printed password can leak into shell history / CI logs.
+// Before bootstrapping the PRODUCTION admin, add a prod-safe mode (read from stdin or an env var,
+// never echo it) and run it interactively on the server. Easy fix; just don't use argv in prod.
 const email = process.argv[2];
 const password = process.argv[3];
 const name = process.argv[4] ?? 'Toodooh Admin';
