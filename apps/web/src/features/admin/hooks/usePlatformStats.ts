@@ -11,6 +11,12 @@ import { adminKeys } from './queryKeys';
 export function usePlatformStats() {
   const query = useQuery({
     queryKey: adminKeys.platformStats(),
+    // Phase-1g tail: fail fast. These five reads still hit the dead Supabase backend (the admin
+    // platform-stats slice is unbuilt) — the global retry:1 + ~1s backoff made the admin landing
+    // spin ~1-2s before the content rendered. retry:false errors on the first attempt so the shell
+    // (which already paints) is joined by the null-guarded empty stats (0/dashes) near-instantly.
+    // Per-hook retry behavior gets re-evaluated when this slice repoints onto apps/api.
+    retry: false,
     queryFn: async () => {
       const [global, revenue, occupancy, campaigns, top] = await Promise.all([
         platformStatsService.getGlobalStats(),
