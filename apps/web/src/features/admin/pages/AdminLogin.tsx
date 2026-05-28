@@ -1,7 +1,7 @@
 import { Eye, EyeOff, Shield, ArrowLeft } from 'lucide-react';
 import React, { useState } from 'react';
 import { toast } from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 
 import AnimatedLogo from '@/components/AnimatedLogo';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
@@ -15,6 +15,8 @@ export default function AdminLogin() {
   // message — never signed out, never stuck on /admin-login.
   const login = useAuthStore((s) => s.login);
   const loading = useAuthStore((s) => s.loading);
+  const user = useAuthStore((s) => s.user);
+  const role = useAuthStore((s) => s.role);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -49,6 +51,15 @@ export default function AdminLogin() {
       [e.target.name]: e.target.value,
     }));
   };
+
+  // Reactive redirect (Phase-1g): /admin-login is a bare route — unlike /login (wrapped in
+  // PublicRoute), it has no reactive auth guard, so the imperative navigate in handleSubmit raced
+  // AdminRoute's guard and a fresh admin login needed a manual refresh to land. Mirroring
+  // PublicRoute: once the store holds an admin session, leave /admin-login for the dashboard. Also
+  // bounces an already-signed-in admin who revisits /admin-login.
+  if (user && (role === 'admin' || role === 'superadmin')) {
+    return <Navigate to="/admin-dashboard" replace />;
+  }
 
   return (
     <div className="min-h-screen bg-white font-poppins text-[#171717] flex flex-col justify-center py-12 sm:px-6 lg:px-8">
