@@ -121,6 +121,15 @@ only.)
 
 ## §4 — Adapt-vs-rebuild ruling
 
+> **⚠️ REVERSED (2026-05-28).** This §4 REBUILD ruling is **dead**. The React rebuild was
+> executed (Hero/AudienceSplit, tokens, Poppins) and **rejected by MABA** — it didn't preserve
+> the built UI/UX. The directive changed to **PRESERVE-AND-INTEGRATE**: keep the built output
+> EXACTLY (byte-exact static files in `infra/landing/`), only re-point the CTAs + co-serve at one
+> origin (nginx, 1h). The authority is
+> `docs/superpowers/plans/2026-05-28-landing-stage-now-preserve-integrate.md`. The rebuild
+> sub-factoring (L2/L3 below) and the §7 `frontend-design` build path are superseded. The text
+> below is retained for history only.
+
 **REBUILD.** Forced by §0 (no source). The build path:
 1. **Serve the snapshot locally** (`npx serve ~/Desktop/code\ hebergement\ 090526/www` or
    similar) → render the real landing in a browser = the visual + copy spec (the Figma stand-in).
