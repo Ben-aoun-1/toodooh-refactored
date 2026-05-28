@@ -21,7 +21,7 @@ import {
   useAdminEvents,
   useAdminEventStats,
 } from '@/features/admin/hooks/useAdminEvents';
-import { useAdminStore } from '@/features/admin/stores/admin.store';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { SpecialEvent, CreateEventDTO } from '@/features/events/types/event';
 import { getErrorMessage } from '@/lib/errors';
 import { supabase } from '@/lib/supabase';
@@ -29,7 +29,8 @@ import { supabase } from '@/lib/supabase';
 const EVENT_IMAGES_BUCKET = 'event-images';
 
 export default function EventManagement() {
-  const { admin } = useAdminStore();
+  const user = useAuthStore((s) => s.user);
+  const role = useAuthStore((s) => s.role);
   const { events, loading } = useAdminEvents();
   const { stats: eventStats } = useAdminEventStats();
   const { createEvent, updateEvent, deleteEvent, toggleFeatured } = useAdminEventMutations();
@@ -110,7 +111,7 @@ export default function EventManagement() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!admin?.id) return;
+    if (!user?.id) return;
 
     try {
       // Validation côté client
@@ -129,7 +130,7 @@ export default function EventManagement() {
         end_date: endDate.toISOString(),
       };
 
-      const newEvent = await createEvent.mutateAsync({ eventData, adminId: admin.id });
+      const newEvent = await createEvent.mutateAsync({ eventData, adminId: user.id });
       if (newEvent) {
         toast.success('Événement créé avec succès');
         setShowCreateModal(false);
@@ -295,7 +296,7 @@ export default function EventManagement() {
   }
 
   // Vérifier que c'est bien le super admin
-  if (admin?.role !== 'superadmin') {
+  if (role !== 'superadmin') {
     return (
       <AdminLayout title="Accès Refusé">
         <div className="flex flex-col items-center justify-center h-full text-center p-6">

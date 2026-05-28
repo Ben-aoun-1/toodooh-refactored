@@ -19,7 +19,7 @@ import {
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
-import { useAdminStore } from '@/features/admin/stores/admin.store';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { logger } from '@/lib/logger';
 
 const log = logger.child({ module: 'AdminLayout' });
@@ -31,7 +31,11 @@ interface AdminLayoutProps {
 }
 
 export default function AdminLayout({ children, title, subtitle }: AdminLayoutProps) {
-  const { admin, logout } = useAdminStore();
+  // Phase-1g (D3): identity + role derived from the one auth store.
+  const user = useAuthStore((s) => s.user);
+  const role = useAuthStore((s) => s.role);
+  const contactName = useAuthStore((s) => s.contactName);
+  const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -46,7 +50,7 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
     }
   };
 
-  if (!admin) {
+  if (!user) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
@@ -89,16 +93,11 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
               {/* Profil admin */}
               <div className="flex items-center space-x-3">
                 <div className="text-right">
-                  <p className="text-sm font-medium text-gray-900">
-                    {admin.first_name} {admin.last_name}
-                  </p>
-                  <p className="text-xs text-gray-500 capitalize">{admin.role}</p>
+                  <p className="text-sm font-medium text-gray-900">{contactName}</p>
+                  <p className="text-xs text-gray-500 capitalize">{role}</p>
                 </div>
                 <div className="h-8 w-8 bg-brand-primary rounded-full flex items-center justify-center">
-                  <span className="text-white text-sm font-medium">
-                    {admin.first_name.charAt(0)}
-                    {admin.last_name.charAt(0)}
-                  </span>
+                  <span className="text-white text-sm font-medium">{contactName?.charAt(0)}</span>
                 </div>
               </div>
             </div>
@@ -167,7 +166,7 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
               </button>
 
               {/* Campagnes - Accessible aux Super Admin et Admin */}
-              {(admin.role === 'superadmin' || admin.role === 'admin') && (
+              {(role === 'superadmin' || role === 'admin') && (
                 <>
                   <button
                     onClick={() => navigate('/admin-campaigns')}
@@ -217,7 +216,7 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
               )}
 
               {/* Événements, Gestion Admins - Super Admin uniquement */}
-              {admin.role === 'superadmin' && (
+              {role === 'superadmin' && (
                 <>
                   <button
                     onClick={() => navigate('/admin-events')}
@@ -269,7 +268,7 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
                 Rapports
               </button> */}
 
-              {(admin.role === 'superadmin' || admin.role === 'admin') && (
+              {(role === 'superadmin' || role === 'admin') && (
                 <button
                   onClick={() => navigate('/admin-global-config')}
                   className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
@@ -288,16 +287,11 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
             <div className="p-4 border-t border-gray-200">
               <div className="flex items-center space-x-3 p-3 rounded-lg bg-gray-50">
                 <div className="h-10 w-10 bg-brand-primary rounded-full flex items-center justify-center">
-                  <span className="text-white text-sm font-medium">
-                    {admin.first_name.charAt(0)}
-                    {admin.last_name.charAt(0)}
-                  </span>
+                  <span className="text-white text-sm font-medium">{contactName?.charAt(0)}</span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">
-                    {admin.first_name} {admin.last_name}
-                  </p>
-                  <p className="text-xs text-gray-500 truncate capitalize">{admin.role}</p>
+                  <p className="text-sm font-medium text-gray-900 truncate">{contactName}</p>
+                  <p className="text-xs text-gray-500 truncate capitalize">{role}</p>
                 </div>
                 <button
                   onClick={() => setShowLogoutModal(true)}

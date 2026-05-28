@@ -23,11 +23,11 @@ import { useLocation } from 'react-router-dom';
 import AdminLayout from '@/features/admin/components/AdminLayout';
 import { useUserMutations, useUsers } from '@/features/admin/hooks/useUsers';
 import { type AdminUser } from '@/features/admin/services/admin-user.service';
-import { useAdminStore } from '@/features/admin/stores/admin.store';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { getErrorMessage } from '@/lib/errors';
 
 export default function UserManagement() {
-  const { admin } = useAdminStore();
+  const user = useAuthStore((s) => s.user);
   const location = useLocation();
   const { users, loading, isError: usersError } = useUsers();
   const {
@@ -143,7 +143,7 @@ export default function UserManagement() {
 
     setBulkActionLoading(true);
     try {
-      await bulkApprove.mutateAsync({ userIds: Array.from(selectedUsers), adminId: admin?.id });
+      await bulkApprove.mutateAsync({ userIds: Array.from(selectedUsers), adminId: user?.id });
       toast.success(`✅ ${selectedUsers.size} utilisateur(s) approuvé(s) avec succès`);
       clearSelection();
     } catch (error) {
@@ -166,7 +166,7 @@ export default function UserManagement() {
 
     setBulkActionLoading(true);
     try {
-      await bulkReject.mutateAsync({ userIds: Array.from(selectedUsers), adminId: admin?.id });
+      await bulkReject.mutateAsync({ userIds: Array.from(selectedUsers), adminId: user?.id });
       toast.success(`✅ ${selectedUsers.size} utilisateur(s) rejeté(s) avec succès`);
       clearSelection();
     } catch (error) {
@@ -235,7 +235,7 @@ export default function UserManagement() {
 
   const handleApprove = async (userId: string) => {
     try {
-      const success = await approveUser.mutateAsync({ userId, adminId: admin?.id });
+      const success = await approveUser.mutateAsync({ userId, adminId: user?.id });
       if (success) {
         toast.success('Utilisateur approuvé avec succès');
       } else {
@@ -248,7 +248,7 @@ export default function UserManagement() {
 
   const handleReject = async (userId: string) => {
     try {
-      const success = await rejectUser.mutateAsync({ userId, adminId: admin?.id });
+      const success = await rejectUser.mutateAsync({ userId, adminId: user?.id });
       if (success) {
         toast.success('Utilisateur rejeté');
       } else {

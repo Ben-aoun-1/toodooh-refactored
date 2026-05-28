@@ -4,12 +4,16 @@ import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 import AnimatedLogo from '@/components/AnimatedLogo';
-import { useAdminStore } from '@/features/admin/stores/admin.store';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { getErrorMessage } from '@/lib/errors';
 
 export default function AdminLogin() {
   const navigate = useNavigate();
-  const { login, loading } = useAdminStore();
+  // Phase-1g (D1/D6): admins sign in via the unified /api/signin (the keystone), then we gate on
+  // role∈{admin,superadmin}. A non-admin who authenticates here is cleared and told to use /login.
+  const login = useAuthStore((s) => s.login);
+  const clearSession = useAuthStore((s) => s.clearSession);
+  const loading = useAuthStore((s) => s.loading);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -25,6 +29,12 @@ export default function AdminLogin() {
 
     try {
       await login(formData.email, formData.password);
+      const role = useAuthStore.getState().role;
+      if (role !== 'admin' && role !== 'superadmin') {
+        clearSession();
+        toast.error("Ce compte n'est pas un compte administrateur.");
+        return;
+      }
       toast.success('Connexion réussie');
       navigate('/admin-dashboard');
     } catch (error) {

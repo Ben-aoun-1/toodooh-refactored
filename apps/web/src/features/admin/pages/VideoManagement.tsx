@@ -5,12 +5,12 @@ import { useLocation } from 'react-router-dom';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
 import { useVideoMutations, useVideos, useVideoStats } from '@/features/admin/hooks/useVideos';
-import { useAdminStore } from '@/features/admin/stores/admin.store';
 import type { Video } from '@/features/admin/types/video';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { getErrorMessage } from '@/lib/errors';
 
 export default function VideoManagement() {
-  const { admin } = useAdminStore();
+  const user = useAuthStore((s) => s.user);
   const location = useLocation();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>(
@@ -67,13 +67,13 @@ export default function VideoManagement() {
   }, [searchTerm, statusFilter]);
 
   const handleApprove = async (videoId: string) => {
-    if (!admin?.id) {
+    if (!user?.id) {
       toast.error('Vous devez être connecté pour approuver une vidéo');
       return;
     }
 
     try {
-      const success = await approveVideo.mutateAsync({ videoId, adminId: admin.id });
+      const success = await approveVideo.mutateAsync({ videoId, adminId: user.id });
 
       if (success) {
         toast.success('Vidéo approuvée avec succès');
@@ -86,13 +86,13 @@ export default function VideoManagement() {
   };
 
   const handleReject = async (videoId: string) => {
-    if (!admin?.id) {
+    if (!user?.id) {
       toast.error('Vous devez être connecté pour rejeter une vidéo');
       return;
     }
 
     try {
-      const success = await rejectVideo.mutateAsync({ videoId, adminId: admin.id });
+      const success = await rejectVideo.mutateAsync({ videoId, adminId: user.id });
 
       if (success) {
         toast.success('Vidéo rejetée avec succès');

@@ -38,6 +38,8 @@ interface AuthState {
   shouldOnboard?: boolean;
   needsApproval?: boolean;
   validationStatus?: string;
+  /** users.role from /api/me|/api/signin (Phase-1g) — admin identity is a role on the user (D1). */
+  role: string | null;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   initialize: () => Promise<void>;
@@ -55,6 +57,7 @@ const mapRouting = (u: SessionUser) => ({
   shouldOnboard: !u.onboarding_completed,
   validationStatus: u.status,
   needsApproval: u.status !== 'approved',
+  role: u.role,
 });
 
 // The logged-out routing reset (user falsy → guards redirect to /login).
@@ -66,6 +69,7 @@ const LOGGED_OUT = {
   shouldOnboard: false,
   needsApproval: false,
   validationStatus: undefined,
+  role: null,
 };
 
 export const useAuthStore = create<AuthState>()(
@@ -81,6 +85,7 @@ export const useAuthStore = create<AuthState>()(
       shouldOnboard: false,
       needsApproval: false,
       validationStatus: undefined,
+      role: null,
 
       // Rehydrate identity on app load/reload from the cookie via GET /api/me (D3).
       initialize: async () => {
@@ -102,12 +107,8 @@ export const useAuthStore = create<AuthState>()(
           }
         }
 
-        // Admin identity rides its own store (admin.store, Phase 1g); skip /api/me on admin routes.
-        if (typeof window !== 'undefined' && window.location.pathname.startsWith('/admin')) {
-          set({ ...LOGGED_OUT, initialized: true, loading: false });
-          return;
-        }
-
+        // Phase-1g: admin identity is collapsed onto this store (role-on-users, D1/D3); /admin/*
+        // routes rehydrate from /api/me like any other route (no separate admin store/skip).
         try {
           const user = await authService.getCurrentUser();
           if (user) {
@@ -174,6 +175,7 @@ export const useAuthStore = create<AuthState>()(
         validationStatus: state.validationStatus,
         contactName: state.contactName,
         onboardingCompleted: state.onboardingCompleted,
+        role: state.role,
       }),
     },
   ),
@@ -184,3 +186,10 @@ export const useAuthStore = create<AuthState>()(
 apiClient.onUnauthorized(() => {
   useAuthStore.getState().clearSession();
 });
+
+// Phase-1g — admin identity as role-derived selectors on the one store (D3). Admin is a user
+// with role∈{admin,superadmin}; there is no separate admin store. `role` is set together with
+// `user` from /api/me|/api/signin, so admin gating also requires `user` truthiness (AdminRoute).
+export const useIsAdmin = (): boolean =>
+  useAuthStore((s) => s.role === 'admin' || s.role === 'superadmin');
+export const useIsSuperadmin = (): boolean => useAuthStore((s) => s.role === 'superadmin');

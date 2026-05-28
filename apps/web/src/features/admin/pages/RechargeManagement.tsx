@@ -26,11 +26,12 @@ import {
   adminRechargesService,
   type AdminRecharge,
 } from '@/features/admin/services/admin-recharges.service';
-import { useAdminStore } from '@/features/admin/stores/admin.store';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { getErrorMessage, isErrorWithCode } from '@/lib/errors';
 
 export default function RechargeManagement() {
-  const { admin } = useAdminStore();
+  const user = useAuthStore((s) => s.user);
+  const contactName = useAuthStore((s) => s.contactName);
   const [selectedRecharge, setSelectedRecharge] = useState<AdminRecharge | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showValidateModal, setShowValidateModal] = useState(false);
@@ -87,12 +88,12 @@ export default function RechargeManagement() {
   }, [rechargesError]);
 
   const handleApprove = async () => {
-    if (!selectedRecharge || !admin) return;
+    if (!selectedRecharge || !user) return;
 
     try {
       await approveRecharge.mutateAsync({
         rechargeId: selectedRecharge.id,
-        adminId: admin.id,
+        adminId: user.id,
         advertiserUserId: selectedRecharge.user_id,
         notes: validationNotes,
       });
@@ -107,7 +108,7 @@ export default function RechargeManagement() {
   };
 
   const handleReject = async () => {
-    if (!selectedRecharge || !admin || !rejectReason.trim()) {
+    if (!selectedRecharge || !user || !rejectReason.trim()) {
       toast.error('Veuillez indiquer une raison de rejet');
       return;
     }
@@ -115,7 +116,7 @@ export default function RechargeManagement() {
     try {
       await rejectRecharge.mutateAsync({
         rechargeId: selectedRecharge.id,
-        adminId: admin.id,
+        adminId: user.id,
         reason: rejectReason,
       });
 
@@ -129,7 +130,7 @@ export default function RechargeManagement() {
   };
 
   const handleCreateRecharge = async () => {
-    if (!admin) return;
+    if (!user) return;
 
     // Validation
     if (!newRecharge.user_id) {
@@ -148,8 +149,8 @@ export default function RechargeManagement() {
         paymentMethod: newRecharge.payment_method,
         description: newRecharge.description,
         autoValidate: newRecharge.auto_validate,
-        adminId: admin.id,
-        adminFullName: admin.full_name,
+        adminId: user.id,
+        adminFullName: contactName ?? '',
       });
 
       toast.success(

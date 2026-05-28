@@ -1,24 +1,21 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Navigate } from 'react-router-dom';
 
-import { useAdminStore } from '@/features/admin/stores/admin.store';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
 
 interface AdminRouteProps {
   children: React.ReactNode;
   requiredRoles?: string[];
 }
 
+// Phase-1g (D3): admin is a user with role∈{admin,superadmin} on the one auth store. The session
+// is rehydrated by auth.store.initialize() in App.tsx; this guard only reads it (no own init).
 export default function AdminRoute({ children, requiredRoles = [] }: AdminRouteProps) {
-  const { admin, initialized, initialize, loading } = useAdminStore();
+  const initialized = useAuthStore((s) => s.initialized);
+  const user = useAuthStore((s) => s.user);
+  const role = useAuthStore((s) => s.role);
 
-  useEffect(() => {
-    if (!initialized && !loading) {
-      initialize();
-    }
-  }, [initialized, loading, initialize]);
-
-  // Si on est en train de charger ou pas encore initialisé, afficher le loading
-  if (loading || !initialized || (!admin && initialized)) {
+  if (!initialized) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
@@ -29,12 +26,12 @@ export default function AdminRoute({ children, requiredRoles = [] }: AdminRouteP
     );
   }
 
-  if (!admin) {
+  const isAdmin = role === 'admin' || role === 'superadmin';
+  if (!user || !isAdmin) {
     return <Navigate to="/admin-login" />;
   }
 
-  // Vérifier les rôles requis
-  if (requiredRoles.length > 0 && !requiredRoles.includes(admin.role)) {
+  if (requiredRoles.length > 0 && !requiredRoles.includes(role ?? '')) {
     return <Navigate to="/admin-dashboard" />;
   }
 

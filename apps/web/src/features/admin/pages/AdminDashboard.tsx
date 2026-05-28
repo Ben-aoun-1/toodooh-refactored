@@ -17,10 +17,11 @@ import { useNavigate } from 'react-router-dom';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
 import { usePlatformStats } from '@/features/admin/hooks/usePlatformStats';
-import { useAdminStore } from '@/features/admin/stores/admin.store';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
 
 export default function AdminDashboard() {
-  const { admin } = useAdminStore();
+  const user = useAuthStore((s) => s.user);
+  const contactName = useAuthStore((s) => s.contactName);
   const navigate = useNavigate();
   const { data: platformStats, loading } = usePlatformStats();
   const globalStats = platformStats?.global ?? null;
@@ -51,7 +52,7 @@ export default function AdminDashboard() {
     );
   }
 
-  if (!admin) {
+  if (!user) {
     return (
       <AdminLayout title="Administration">
         <div className="flex items-center justify-center h-64">
@@ -69,7 +70,7 @@ export default function AdminDashboard() {
       <div className="mb-8">
         <h2 className="text-2xl font-bold text-gray-900 mb-2">Vue d'ensemble de la plateforme</h2>
         <p className="text-gray-600">
-          Bienvenue, {admin.first_name} {admin.last_name}. Voici les chiffres clés de TooDooh.
+          Bienvenue, {contactName}. Voici les chiffres clés de TooDooh.
         </p>
       </div>
 

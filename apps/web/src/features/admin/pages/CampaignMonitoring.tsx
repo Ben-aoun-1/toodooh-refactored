@@ -32,19 +32,21 @@ import {
   useStopCampaign,
 } from '@/features/admin/hooks/useCampaignMonitoring';
 import { adminCampaignMonitoringService } from '@/features/admin/services/admin-campaign-monitoring.service';
-import { useAdminStore } from '@/features/admin/stores/admin.store';
 import {
   CampaignMonitoringData,
   CampaignLocation,
   CampaignImpressionProgress,
 } from '@/features/admin/types/campaign-monitoring';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { getErrorMessage } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 
 const log = logger.child({ module: 'CampaignMonitoring' });
 
 export default function CampaignMonitoring() {
-  const { admin } = useAdminStore();
+  const user = useAuthStore((s) => s.user);
+  const role = useAuthStore((s) => s.role);
+  const contactName = useAuthStore((s) => s.contactName);
   const location = useLocation();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<
@@ -64,9 +66,9 @@ export default function CampaignMonitoring() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
 
-  const { campaigns, loading } = useMonitoringCampaigns(!!admin);
-  const { stats: monitoringStats } = useMonitoringGlobalStats(!!admin);
-  const { categories: categoriesData } = useMonitoringCategories(!!admin);
+  const { campaigns, loading } = useMonitoringCampaigns(!!user);
+  const { stats: monitoringStats } = useMonitoringGlobalStats(!!user);
+  const { categories: categoriesData } = useMonitoringCategories(!!user);
   const stopCampaign = useStopCampaign();
   const stats = monitoringStats ?? {
     total_campaigns: 0,
@@ -120,7 +122,7 @@ export default function CampaignMonitoring() {
   // NB: ce garde est volontairement placé APRÈS tous les Hooks pour respecter
   // l'invariant d'ordre des Hooks de React (un early return au-dessus des Hooks
   // change leur nombre d'un rendu à l'autre quand `admin` s'hydrate de façon async).
-  if (!admin || (admin.role !== 'superadmin' && admin.role !== 'admin')) {
+  if (!user || (role !== 'superadmin' && role !== 'admin')) {
     return (
       <AdminLayout title="Monitoring des Campagnes" subtitle="Accès réservé aux administrateurs">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
@@ -156,7 +158,7 @@ export default function CampaignMonitoring() {
   };
 
   const handleStopCampaign = async () => {
-    if (!campaignToStop || !admin) return;
+    if (!campaignToStop || !user) return;
 
     if (!stopReason.trim()) {
       toast.error("Veuillez indiquer une raison d'arrêt");
@@ -166,7 +168,7 @@ export default function CampaignMonitoring() {
     try {
       await stopCampaign.mutateAsync({
         campaignId: campaignToStop.campaign_id,
-        adminFullName: admin.full_name,
+        adminFullName: contactName ?? '',
         reason: stopReason,
       });
 

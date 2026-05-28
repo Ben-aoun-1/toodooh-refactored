@@ -16,11 +16,12 @@ import { useNavigate } from 'react-router-dom';
 import AdminLayout from '@/features/admin/components/AdminLayout';
 import { useAdminMutations, useAdmins } from '@/features/admin/hooks/useAdmins';
 import { adminService } from '@/features/admin/services/admin.service';
-import { useAdminStore } from '@/features/admin/stores/admin.store';
 import { AdminProfile } from '@/features/admin/types/admin';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
 
 export default function AdminManagement() {
-  const { admin } = useAdminStore();
+  const user = useAuthStore((s) => s.user);
+  const role = useAuthStore((s) => s.role);
   const navigate = useNavigate();
   const { admins, loading, isError: adminsError } = useAdmins();
   const { deleteAdmin, reactivateAdmin } = useAdminMutations();
@@ -69,9 +70,9 @@ export default function AdminManagement() {
       setAdminToDeactivate(null);
 
       // Log l'activité
-      if (admin) {
+      if (user) {
         await adminService.logActivity({
-          admin_id: admin.id,
+          admin_id: user.id,
           action: 'deactivate_admin',
           target_type: 'admin',
           target_id: adminToDeactivate.id,
@@ -98,9 +99,9 @@ export default function AdminManagement() {
       setAdminToReactivate(null);
 
       // Log l'activité
-      if (admin) {
+      if (user) {
         await adminService.logActivity({
-          admin_id: admin.id,
+          admin_id: user.id,
           action: 'reactivate_admin',
           target_type: 'admin',
           target_id: adminToReactivate.id,
@@ -155,7 +156,7 @@ export default function AdminManagement() {
   };
 
   // Vérifier que l'utilisateur est super admin
-  if (!admin || admin.role !== 'superadmin') {
+  if (!user || role !== 'superadmin') {
     return (
       <AdminLayout title="Gestion des Admins" subtitle="Accès réservé au Super Administrateur">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">

@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import AdminLayout from '@/features/admin/components/AdminLayout';
 import { useAdminMutations } from '@/features/admin/hooks/useAdmins';
 import { adminService } from '@/features/admin/services/admin.service';
-import { useAdminStore } from '@/features/admin/stores/admin.store';
+import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { getErrorMessage } from '@/lib/errors';
 
 interface AdminFormData {
@@ -19,7 +19,8 @@ interface AdminFormData {
 }
 
 export default function CreateAdmin() {
-  const { admin } = useAdminStore();
+  const user = useAuthStore((s) => s.user);
+  const role = useAuthStore((s) => s.role);
   const navigate = useNavigate();
   const { createAdmin } = useAdminMutations();
   const [loading, setLoading] = useState(false);
@@ -69,7 +70,7 @@ export default function CreateAdmin() {
       return;
     }
 
-    if (!admin) {
+    if (!user) {
       toast.error('Vous devez être connecté');
       return;
     }
@@ -85,7 +86,7 @@ export default function CreateAdmin() {
           role: formData.role,
           permissions: [],
         },
-        createdBy: admin.id,
+        createdBy: user.id,
       });
 
       toast.success(
@@ -104,7 +105,7 @@ export default function CreateAdmin() {
 
       // Log l'activité
       await adminService.logActivity({
-        admin_id: admin.id,
+        admin_id: user.id,
         action: 'create_admin',
         target_type: 'admin',
         description: `Création d'un ${formData.role === 'admin' ? 'administrateur' : 'modérateur'}: ${formData.first_name} ${formData.last_name}`,
@@ -117,7 +118,7 @@ export default function CreateAdmin() {
   };
 
   // Vérifier que l'utilisateur est super admin
-  if (!admin || admin.role !== 'superadmin') {
+  if (!user || role !== 'superadmin') {
     return (
       <AdminLayout title="Créer un Admin" subtitle="Accès réservé au Super Administrateur">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
