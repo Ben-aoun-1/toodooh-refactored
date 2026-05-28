@@ -9,10 +9,11 @@ import { getErrorMessage } from '@/lib/errors';
 
 export default function AdminLogin() {
   const navigate = useNavigate();
-  // Phase-1g (D1/D6): admins sign in via the unified /api/signin (the keystone), then we gate on
-  // role∈{admin,superadmin}. A non-admin who authenticates here is cleared and told to use /login.
+  // Phase-1g (D1/D6, Option X): admins sign in via the unified /api/signin (the keystone), then we
+  // gate on role∈{admin,superadmin}. A non-admin who authenticates here KEEPS their session (a valid
+  // user) and is bounced to their regular dashboard via `/` (PublicRoute role-routes), with a
+  // message — never signed out, never stuck on /admin-login.
   const login = useAuthStore((s) => s.login);
-  const clearSession = useAuthStore((s) => s.clearSession);
   const loading = useAuthStore((s) => s.loading);
   const [formData, setFormData] = useState({
     email: '',
@@ -31,8 +32,8 @@ export default function AdminLogin() {
       await login(formData.email, formData.password);
       const role = useAuthStore.getState().role;
       if (role !== 'admin' && role !== 'superadmin') {
-        clearSession();
         toast.error("Ce compte n'est pas un compte administrateur.");
+        navigate('/', { replace: true });
         return;
       }
       toast.success('Connexion réussie');
