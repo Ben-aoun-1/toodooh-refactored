@@ -2009,6 +2009,16 @@ later-slice adds.
 - **The `database.types` lint-1 floor** — clears at the LAST Supabase removal (when the 59
   later-slice importers are repointed and `supabase.ts` itself goes); a future-slice cleanup,
   Phase-1f close was always going to leave this at 1 (survey §2.4 prediction held).
+- **`autoRefreshToken: false` on `supabase.ts`** — deferred to the #15 last-slice Supabase
+  removal. The phase-1f-tail dashboard-render fix (`b5d3454`) wanted to flip this off to kill the
+  ~10s `ERR_NAME_NOT_RESOLVED` auto-refresh loop, but staging `supabase.ts` trips the husky
+  lint-staged raw `eslint` on the pre-existing `database.types` baseline error (CI tolerates it
+  via the baseline gate; lint-staged does not — see the lint-staged-baseline blocker). Splitting
+  off this single knob landed the rest of the fix cleanly (the auth-store `sb-*-auth-token`
+  localStorage sweep, which clears the token that **drives** the loop, covers the symptom for
+  migrated users meanwhile). The knob is a durable belt-and-suspenders guard; it lands naturally
+  when `supabase.ts` can be staged clean — i.e. alongside the #15 `database.types`/supabase
+  removal above.
 - **Strict tax_number matricule validation** — current backend zod is lenient (any
   non-empty string); the strict matricule format (Tunisian tax-number pattern) waits for the
   validation slice.
