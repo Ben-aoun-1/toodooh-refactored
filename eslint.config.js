@@ -11,7 +11,15 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['**/node_modules/**', '**/dist/**', '**/build/**', '**/coverage/**', '**/.vite/**'],
+    ignores: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/build/**',
+      '**/coverage/**',
+      '**/.vite/**',
+      // Byte-exact built marketing landing (minified Vite output) — not lintable source.
+      'infra/landing/**',
+    ],
   },
 
   js.configs.recommended,
