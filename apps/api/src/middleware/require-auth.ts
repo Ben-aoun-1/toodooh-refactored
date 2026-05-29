@@ -38,3 +38,22 @@ export const requireAuth = async (request: FastifyRequest, reply: FastifyReply):
     status: sessionUser.status ?? 'pending',
   };
 };
+
+const ADMIN_ROLES = new Set(['admin', 'superadmin']);
+
+// Admin role gate. Composes AFTER requireAuth in a preHandler array
+// ({ preHandler: [requireAuth, requireAdmin] }) — requireAuth attaches request.user and
+// 401s on no session; requireAdmin only adds the 403 role check. An authenticated non-admin
+// gets 403 (not 404): /api/admin/* existing is not a leak.
+export const requireAdmin = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+  const role = request.user?.role;
+  if (role === undefined || !ADMIN_ROLES.has(role)) {
+    await reply.status(403).send({
+      error: 'FORBIDDEN',
+      message: 'Administrator access required.',
+      statusCode: 403,
+      requestId: request.id,
+    });
+    return;
+  }
+};

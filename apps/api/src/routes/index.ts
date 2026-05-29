@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 
+import { adminRoutes } from './admin.js';
 import { meRoutes } from './me.js';
 import { passwordRoutes } from './password.js';
 import { profileDocumentsRoutes } from './profile-documents.js';
@@ -17,6 +18,7 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   await app.register(profileRoutes);
   await app.register(profileDocumentsRoutes);
   await app.register(passwordRoutes);
+  await app.register(adminRoutes);
   // Public reference-data reads (no auth) — register last; they add no preHandler.
   await app.register(referenceRoutes);
 };
