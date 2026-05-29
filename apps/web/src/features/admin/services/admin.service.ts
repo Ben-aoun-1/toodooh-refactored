@@ -1,5 +1,9 @@
-import { AdminProfile, AdminSignUpData, AdminDashboardStats, AdminActivity } from '@/features/admin/types/admin';
-import { getErrorMessage } from '@/lib/errors';
+import {
+  AdminProfile,
+  AdminSignUpData,
+  AdminDashboardStats,
+  AdminActivity,
+} from '@/features/admin/types/admin';
 import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase';
 
@@ -28,91 +32,6 @@ const mapAdminError = (error: any): string => {
 };
 
 export const adminService = {
-  // Authentification
-  async login(email: string, password: string): Promise<AdminProfile> {
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) {
-        throw new Error(`Erreur de connexion: ${error.message}`);
-      }
-
-      if (!data.user) {
-        throw new Error('Aucun utilisateur trouvé');
-      }
-
-      // Vérifier si l'utilisateur est un admin
-      const { data: adminProfile, error: profileError } = await supabase
-        .from('admin_profiles')
-        .select('*')
-        .eq('user_id', data.user.id)
-        .eq('is_active', true)
-        .single();
-
-      if (profileError) {
-        throw new Error("Accès refusé. Ce compte n'est pas autorisé.");
-      }
-
-      if (!adminProfile) {
-        throw new Error("Accès refusé. Ce compte n'est pas autorisé.");
-      }
-
-      // Mettre à jour la dernière connexion
-      await supabase
-        .from('admin_profiles')
-        .update({ last_login: new Date().toISOString() })
-        .eq('id', adminProfile.id);
-
-      return adminProfile;
-    } catch (error) {
-      throw new Error(getErrorMessage(error) || 'Erreur de connexion');
-    }
-  },
-
-  async logout(): Promise<void> {
-    try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
-    } catch (_error) {
-      throw new Error('Erreur lors de la déconnexion');
-    }
-  },
-
-  async getCurrentAdmin(): Promise<AdminProfile | null> {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        return null;
-      }
-
-      const { data: adminProfile, error } = await supabase
-        .from('admin_profiles')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('is_active', true)
-        .single();
-
-      if (error) {
-        log.error({ error }, 'Error getting current admin');
-        return null;
-      }
-
-      if (!adminProfile) {
-        return null;
-      }
-
-      return adminProfile;
-    } catch (error) {
-      log.error({ error }, 'Error getting current admin');
-      return null;
-    }
-  },
-
   // Gestion des admins
   async createAdmin(adminData: AdminSignUpData, createdBy: string): Promise<AdminProfile> {
     try {

@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Users,
   Search,
@@ -21,25 +22,17 @@ import { toast } from 'react-hot-toast';
 import { useLocation } from 'react-router-dom';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
+import { adminKeys } from '@/features/admin/hooks/queryKeys';
 import { useUserMutations, useUsers } from '@/features/admin/hooks/useUsers';
-import { type AdminUser } from '@/features/admin/services/admin-user.service';
-import { useAuthStore } from '@/features/auth/stores/auth.store';
-import { getErrorMessage } from '@/lib/errors';
+import { adminUserService, type AdminUser } from '@/features/admin/services/admin-user.service';
+import { apiErrorMessage } from '@/features/auth/services/auth-errors';
+import { ApiError } from '@/lib/api-client';
 
 export default function UserManagement() {
-  const user = useAuthStore((s) => s.user);
   const location = useLocation();
+  const queryClient = useQueryClient();
   const { users, loading, isError: usersError } = useUsers();
-  const {
-    approveUser,
-    rejectUser,
-    deleteUser,
-    bulkApprove,
-    bulkReject,
-    bulkDelete,
-    uploadUserDocument,
-    saveAgentCode,
-  } = useUserMutations();
+  const { approveUser, rejectUser } = useUserMutations();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>(
     'all',
@@ -58,60 +51,15 @@ export default function UserManagement() {
   }, [location.search]);
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [userToDelete, setUserToDelete] = useState<AdminUser | null>(null);
-  const [deleting, setDeleting] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-
-  // État pour la sélection multiple
-  const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
-  const [showBulkActions, setShowBulkActions] = useState(false);
-  const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [itemsPerPage] = useState(10);
-  const [uploadingDocument, setUploadingDocument] = useState(false);
-  const [documentFile, setDocumentFile] = useState<File | null>(null);
-  const [agentCodeInput, setAgentCodeInput] = useState('');
-  const [savingAgentCode, setSavingAgentCode] = useState(false);
-
-  // Fonctions pour la sélection multiple
-  const handleSelectUser = (userId: string) => {
-    const newSelectedUsers = new Set(selectedUsers);
-    if (newSelectedUsers.has(userId)) {
-      newSelectedUsers.delete(userId);
-    } else {
-      newSelectedUsers.add(userId);
-    }
-    setSelectedUsers(newSelectedUsers);
-    setShowBulkActions(newSelectedUsers.size > 0);
-  };
-
-  const handleSelectAll = () => {
-    // Sélectionner uniquement les utilisateurs de la page actuelle
-    const currentPageUsers = paginatedUsers;
-    const currentPageUserIds = currentPageUsers.map((user) => user.id);
-
-    // Vérifier si tous les utilisateurs de la page sont sélectionnés
-    const allCurrentPageSelected = currentPageUserIds.every((id) => selectedUsers.has(id));
-
-    if (allCurrentPageSelected) {
-      // Désélectionner tous les utilisateurs de la page actuelle
-      const newSelectedUsers = new Set(selectedUsers);
-      currentPageUserIds.forEach((id) => newSelectedUsers.delete(id));
-      setSelectedUsers(newSelectedUsers);
-      setShowBulkActions(newSelectedUsers.size > 0);
-    } else {
-      // Sélectionner tous les utilisateurs de la page actuelle
-      const newSelectedUsers = new Set(selectedUsers);
-      currentPageUserIds.forEach((id) => newSelectedUsers.add(id));
-      setSelectedUsers(newSelectedUsers);
-      setShowBulkActions(true);
-    }
-  };
-
-  const clearSelection = () => {
-    setSelectedUsers(new Set());
-    setShowBulkActions(false);
-  };
+  // Reject-reason modal (G2 D-G2-3) — the backend requires a non-empty rejection note.
+  const [rejectTarget, setRejectTarget] = useState<AdminUser | null>(null);
+  const [rejectNotes, setRejectNotes] = useState('');
+  const [submittingReject, setSubmittingReject] = useState(false);
+  // 409 prior-state modal (G2 D-G2-4) — set to the conflicted user's id; the queue is refetched
+  // first so the modal reads the now-fresh row from the merged list.
+  const [conflictId, setConflictId] = useState<string | null>(null);
 
   // Fonction pour obtenir les utilisateurs filtrés
   const getFilteredUsers = () => {
@@ -129,95 +77,11 @@ export default function UserManagement() {
     });
   };
 
-  // Fonctions pour les actions en lot
-  const handleBulkApprove = async () => {
-    if (selectedUsers.size === 0) return;
-
-    // Sécurité pour les actions en masse
-    if (selectedUsers.size > 20) {
-      const confirmed = window.confirm(
-        `Vous êtes sur le point d'approuver ${selectedUsers.size} utilisateur(s). Voulez-vous continuer ?`,
-      );
-      if (!confirmed) return;
-    }
-
-    setBulkActionLoading(true);
-    try {
-      await bulkApprove.mutateAsync({ userIds: Array.from(selectedUsers), adminId: user?.id });
-      toast.success(`✅ ${selectedUsers.size} utilisateur(s) approuvé(s) avec succès`);
-      clearSelection();
-    } catch (error) {
-      toast.error(`❌ Erreur lors de l'approbation: ${getErrorMessage(error)}`);
-    } finally {
-      setBulkActionLoading(false);
-    }
-  };
-
-  const handleBulkReject = async () => {
-    if (selectedUsers.size === 0) return;
-
-    // Sécurité pour les actions en masse
-    if (selectedUsers.size > 20) {
-      const confirmed = window.confirm(
-        `Vous êtes sur le point de rejeter ${selectedUsers.size} utilisateur(s). Voulez-vous continuer ?`,
-      );
-      if (!confirmed) return;
-    }
-
-    setBulkActionLoading(true);
-    try {
-      await bulkReject.mutateAsync({ userIds: Array.from(selectedUsers), adminId: user?.id });
-      toast.success(`✅ ${selectedUsers.size} utilisateur(s) rejeté(s) avec succès`);
-      clearSelection();
-    } catch (error) {
-      toast.error(`❌ Erreur lors du rejet: ${getErrorMessage(error)}`);
-    } finally {
-      setBulkActionLoading(false);
-    }
-  };
-
-  const handleBulkDelete = async () => {
-    if (selectedUsers.size === 0) return;
-
-    // Sécurité supplémentaire pour éviter les suppressions massives
-    if (selectedUsers.size > 10) {
-      const confirmed = window.confirm(
-        `⚠️ ATTENTION : Vous êtes sur le point de supprimer ${selectedUsers.size} utilisateur(s) !\n\nCette action est irréversible et pourrait avoir un impact majeur sur votre système.\n\nÊtes-vous absolument certain de vouloir continuer ?`,
-      );
-      if (!confirmed) return;
-    } else {
-      const confirmed = window.confirm(
-        `Êtes-vous sûr de vouloir supprimer ${selectedUsers.size} utilisateur(s) ? Cette action est irréversible.`,
-      );
-      if (!confirmed) return;
-    }
-
-    setBulkActionLoading(true);
-    try {
-      const { successCount, errorCount } = await bulkDelete.mutateAsync(Array.from(selectedUsers));
-      if (successCount > 0) {
-        toast.success(`✅ ${successCount} utilisateur(s) supprimé(s) avec succès`);
-      }
-      if (errorCount > 0) {
-        toast.error(`❌ ${errorCount} utilisateur(s) n'ont pas pu être supprimés`);
-      }
-      clearSelection();
-    } catch (error) {
-      toast.error(`❌ Erreur lors de la suppression: ${getErrorMessage(error)}`);
-    } finally {
-      setBulkActionLoading(false);
-    }
-  };
-
   useEffect(() => {
     if (usersError) {
       toast.error('Erreur lors du chargement des utilisateurs');
     }
   }, [usersError]);
-
-  useEffect(() => {
-    setAgentCodeInput(selectedUser?.agent_toodooh || '');
-  }, [selectedUser?.id, selectedUser?.agent_toodooh]);
 
   const filteredUsers = getFilteredUsers();
 
@@ -227,91 +91,69 @@ export default function UserManagement() {
   const endIndex = startIndex + itemsPerPage;
   const paginatedUsers = filteredUsers.slice(startIndex, endIndex);
 
-  // Reset à la page 1 et désélectionner tout quand les filtres changent
+  // Reset à la page 1 quand les filtres changent
   useEffect(() => {
     setCurrentPage(1);
-    clearSelection(); // Désélectionner pour éviter de manipuler des utilisateurs non visibles
   }, [searchTerm, statusFilter, typeFilter]);
 
-  const handleApprove = async (userId: string) => {
-    try {
-      const success = await approveUser.mutateAsync({ userId, adminId: user?.id });
-      if (success) {
-        toast.success('Utilisateur approuvé avec succès');
-      } else {
-        toast.error("Erreur lors de l'approbation");
-      }
-    } catch (_error) {
-      toast.error("Erreur lors de l'approbation");
-    }
+  // On a 409 (already approved/rejected by another admin), refetch the queue first so the modal
+  // reads the now-fresh row, then open the prior-state modal (G2 D-G2-4).
+  const handleConflict = async (id: string): Promise<void> => {
+    await queryClient.invalidateQueries({ queryKey: adminKeys.users() });
+    setConflictId(id);
   };
 
-  const handleReject = async (userId: string) => {
+  const handleApprove = async (id: string) => {
     try {
-      const success = await rejectUser.mutateAsync({ userId, adminId: user?.id });
-      if (success) {
-        toast.success('Utilisateur rejeté');
-      } else {
-        toast.error('Erreur lors du rejet');
-      }
-    } catch (_error) {
-      toast.error('Erreur lors du rejet');
-    }
-  };
-
-  const handleDeleteUser = async () => {
-    if (!userToDelete) return;
-
-    setDeleting(true);
-    try {
-      const success = await deleteUser.mutateAsync(userToDelete.id);
-      if (success) {
-        toast.success('Utilisateur supprimé définitivement');
-        setShowDeleteModal(false);
-        setUserToDelete(null);
-      } else {
-        toast.error('Erreur lors de la suppression');
-      }
-    } catch (_error) {
-      toast.error('Erreur lors de la suppression');
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  const confirmDelete = (user: AdminUser) => {
-    setUserToDelete(user);
-    setShowDeleteModal(true);
-  };
-
-  const handleUploadDocument = async (authUserId: string, userProfileType: string) => {
-    if (!documentFile) {
-      toast.error('Veuillez sélectionner un fichier');
-      return;
-    }
-
-    setUploadingDocument(true);
-    try {
-      const result = await uploadUserDocument.mutateAsync({
-        authUserId,
-        isIndividualOwner: userProfileType === 'individual_owner',
-        file: documentFile,
-      });
-
-      // Rafraîchit la modale ouverte sur l'utilisateur concerné.
-      setSelectedUser((prev) => {
-        if (!prev) return prev;
-        return result.updateField === 'cin_doc_url'
-          ? { ...prev, cin_doc_url: result.signedUrl }
-          : { ...prev, registration_doc_url: result.signedUrl };
-      });
-
-      setDocumentFile(null);
-      toast.success('✅ Document uploadé avec succès !');
+      await approveUser.mutateAsync({ id });
+      toast.success('Utilisateur approuvé avec succès');
+      setShowDetailsModal(false);
     } catch (error) {
-      toast.error(`❌ Erreur lors de l'upload: ${getErrorMessage(error) || 'Erreur inconnue'}`);
+      if (error instanceof ApiError && error.status === 409) {
+        await handleConflict(id);
+      } else {
+        toast.error(`Erreur lors de l'approbation: ${apiErrorMessage(error)}`);
+      }
+    }
+  };
+
+  // The reject flow opens a modal collecting the required reason (G2 D-G2-3); submitReject sends it.
+  const openReject = (target: AdminUser) => {
+    setRejectNotes('');
+    setRejectTarget(target);
+  };
+
+  const submitReject = async () => {
+    if (!rejectTarget) return;
+    const notes = rejectNotes.trim();
+    if (!notes) return;
+    setSubmittingReject(true);
+    const id = rejectTarget.id;
+    try {
+      await rejectUser.mutateAsync({ id, notes });
+      toast.success('Utilisateur rejeté');
+      setRejectTarget(null);
+      setRejectNotes('');
+      setShowDetailsModal(false);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        setRejectTarget(null);
+        await handleConflict(id);
+      } else {
+        toast.error(`Erreur lors du rejet: ${apiErrorMessage(error)}`);
+      }
     } finally {
-      setUploadingDocument(false);
+      setSubmittingReject(false);
+    }
+  };
+
+  // Presign-on-demand: fetch a fresh signed URL for the user's document and open it (G2 D-G2-1).
+  const handleViewDocument = async (id: string, type: 'rne' | 'cin') => {
+    try {
+      const url = await adminUserService.getDocumentUrl(id, type);
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (error) {
+      toast.error(`Impossible d'ouvrir le document: ${apiErrorMessage(error)}`);
     }
   };
 
@@ -384,32 +226,6 @@ export default function UserManagement() {
     return '';
   };
 
-  const handleSaveAgentCode = async () => {
-    if (!selectedUser) return;
-
-    const value = agentCodeInput.trim();
-    if (!value) {
-      toast.error('Veuillez saisir un code agent');
-      return;
-    }
-
-    setSavingAgentCode(true);
-    try {
-      await saveAgentCode.mutateAsync({ profileId: selectedUser.id, code: value });
-
-      setSelectedUser((prev) =>
-        prev ? { ...prev, agent_toodooh: value, updated_at: new Date().toISOString() } : prev,
-      );
-      toast.success('Code agent enregistré');
-    } catch (error) {
-      toast.error(
-        `Erreur lors de l'enregistrement: ${getErrorMessage(error) || 'Erreur inconnue'}`,
-      );
-    } finally {
-      setSavingAgentCode(false);
-    }
-  };
-
   if (loading) {
     return (
       <AdminLayout title="Gestion des Utilisateurs" subtitle="Validez et gérez les inscriptions">
@@ -473,58 +289,8 @@ export default function UserManagement() {
         </div>
       </div>
 
-      {/* Actions en lot */}
-      {showBulkActions && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <div className="bg-blue-100 p-2 rounded-lg mr-3">
-                <Users className="h-5 w-5 text-blue-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-blue-900">
-                  {selectedUsers.size} utilisateur(s) sélectionné(s)
-                </h3>
-                <p className="text-sm text-blue-700">
-                  Choisissez une action à appliquer à tous les utilisateurs sélectionnés
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={handleBulkApprove}
-                disabled={bulkActionLoading}
-                className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Check className="h-4 w-4 mr-2" />
-                {bulkActionLoading ? 'Traitement...' : 'Approuver'}
-              </button>
-              <button
-                onClick={handleBulkReject}
-                disabled={bulkActionLoading}
-                className="flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <X className="h-4 w-4 mr-2" />
-                {bulkActionLoading ? 'Traitement...' : 'Rejeter'}
-              </button>
-              <button
-                onClick={handleBulkDelete}
-                disabled={bulkActionLoading}
-                className="flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                {bulkActionLoading ? 'Traitement...' : 'Supprimer'}
-              </button>
-              <button
-                onClick={clearSelection}
-                className="flex items-center px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-              >
-                Annuler
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Actions en lot (approbation/rejet/suppression groupés) — désactivées en attendant les
+          endpoints backend correspondants (slice future). */}
 
       {/* Statistiques */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
@@ -590,17 +356,6 @@ export default function UserManagement() {
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  <input
-                    type="checkbox"
-                    checked={
-                      paginatedUsers.length > 0 &&
-                      paginatedUsers.every((user) => selectedUsers.has(user.id))
-                    }
-                    onChange={handleSelectAll}
-                    className="h-4 w-4 text-brand-primary focus:ring-brand-primary border-gray-300 rounded"
-                  />
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Utilisateur
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -619,18 +374,7 @@ export default function UserManagement() {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {paginatedUsers.map((user) => (
-                <tr
-                  key={user.id}
-                  className={`hover:bg-gray-50 ${selectedUsers.has(user.id) ? 'bg-blue-50' : ''}`}
-                >
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <input
-                      type="checkbox"
-                      checked={selectedUsers.has(user.id)}
-                      onChange={() => handleSelectUser(user.id)}
-                      className="h-4 w-4 text-brand-primary focus:ring-brand-primary border-gray-300 rounded"
-                    />
-                  </td>
+                <tr key={user.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
                       <div className="h-10 w-10 bg-brand-primary rounded-full flex items-center justify-center">
@@ -656,8 +400,6 @@ export default function UserManagement() {
                         onClick={() => {
                           setSelectedUser(user);
                           setShowDetailsModal(true);
-                          setDocumentFile(null); // Réinitialiser le fichier
-                          setAgentCodeInput(user.agent_toodooh || '');
                         }}
                         className="text-brand-primary hover:text-brand-primary/80"
                         title="Voir détails"
@@ -675,7 +417,7 @@ export default function UserManagement() {
                             <UserCheck className="h-4 w-4" />
                           </button>
                           <button
-                            onClick={() => handleReject(user.id)}
+                            onClick={() => openReject(user)}
                             className="text-red-600 hover:text-red-800"
                             title="Rejeter"
                           >
@@ -684,11 +426,11 @@ export default function UserManagement() {
                         </>
                       )}
 
-                      {/* Bouton de suppression pour tous les utilisateurs */}
+                      {/* Suppression — bientôt disponible (endpoint backend à venir, slice future) */}
                       <button
-                        onClick={() => confirmDelete(user)}
-                        className="text-red-600 hover:text-red-800"
-                        title="Supprimer définitivement"
+                        disabled
+                        className="text-gray-300 cursor-not-allowed"
+                        title="Suppression bientôt disponible"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -860,54 +602,23 @@ export default function UserManagement() {
                                     {selectedUser.cin || 'Non fourni'}
                                   </span>
                                 </div>
-                                {selectedUser.cin_doc_url ? (
+                                {selectedUser.documents.cin ? (
                                   <div className="flex justify-between items-center pt-2">
                                     <span className="text-gray-600">Document CIN:</span>
-                                    <a
-                                      href={selectedUser.cin_doc_url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
+                                    <button
+                                      onClick={() => handleViewDocument(selectedUser.id, 'cin')}
                                       className="flex items-center text-brand-primary hover:text-brand-primary/90 font-medium transition-colors"
                                     >
                                       <FileText className="h-4 w-4 mr-1" />
                                       Voir le document
-                                    </a>
+                                    </button>
                                   </div>
                                 ) : (
-                                  <div className="pt-2">
-                                    <span className="text-gray-600 text-xs block mb-2">
-                                      Document CIN non fourni - Upload manuel :
+                                  <div className="flex justify-between items-center pt-2">
+                                    <span className="text-gray-600">Document CIN:</span>
+                                    <span className="text-xs text-gray-500">
+                                      Non fourni — upload admin bientôt disponible
                                     </span>
-                                    <div className="flex items-center gap-2">
-                                      <input
-                                        type="file"
-                                        accept=".pdf,.jpg,.jpeg,.png"
-                                        onChange={(e) => {
-                                          if (e.target.files && e.target.files[0]) {
-                                            if (e.target.files[0].size > 5 * 1024 * 1024) {
-                                              toast.error('Fichier trop volumineux (max 5 MB)');
-                                              return;
-                                            }
-                                            setDocumentFile(e.target.files[0]);
-                                          }
-                                        }}
-                                        className="text-xs file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-brand-primary file:text-white hover:file:bg-brand-primary/90 cursor-pointer"
-                                      />
-                                      {documentFile && (
-                                        <button
-                                          onClick={() =>
-                                            handleUploadDocument(
-                                              selectedUser.user_id,
-                                              selectedUser.profile_type,
-                                            )
-                                          }
-                                          disabled={uploadingDocument}
-                                          className="px-3 py-1 bg-brand-primary text-brand-deep rounded text-xs font-semibold hover:bg-brand-primary/90 transition-colors disabled:opacity-50"
-                                        >
-                                          {uploadingDocument ? 'Upload...' : 'Uploader'}
-                                        </button>
-                                      )}
-                                    </div>
                                   </div>
                                 )}
                                 {selectedUser.zone && (
@@ -934,54 +645,23 @@ export default function UserManagement() {
                             {/* RNE pour les propriétaires de parc */}
                             {selectedUser.profile_type === 'fleet_owner' && (
                               <>
-                                {selectedUser.registration_doc_url ? (
+                                {selectedUser.documents.registration ? (
                                   <div className="flex justify-between items-center pt-2 border-t border-gray-200 mt-2">
                                     <span className="text-gray-600">Registre de commerce:</span>
-                                    <a
-                                      href={selectedUser.registration_doc_url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
+                                    <button
+                                      onClick={() => handleViewDocument(selectedUser.id, 'rne')}
                                       className="flex items-center text-brand-primary hover:text-brand-primary/90 font-medium transition-colors"
                                     >
                                       <FileText className="h-4 w-4 mr-1" />
                                       Voir le document
-                                    </a>
+                                    </button>
                                   </div>
                                 ) : (
-                                  <div className="pt-2 border-t border-gray-200 mt-2">
-                                    <span className="text-gray-600 text-xs block mb-2">
-                                      Registre de commerce non fourni - Upload manuel :
+                                  <div className="flex justify-between items-center pt-2 border-t border-gray-200 mt-2">
+                                    <span className="text-gray-600">Registre de commerce:</span>
+                                    <span className="text-xs text-gray-500">
+                                      Non fourni — upload admin bientôt disponible
                                     </span>
-                                    <div className="flex items-center gap-2">
-                                      <input
-                                        type="file"
-                                        accept=".pdf,.jpg,.jpeg,.png"
-                                        onChange={(e) => {
-                                          if (e.target.files && e.target.files[0]) {
-                                            if (e.target.files[0].size > 5 * 1024 * 1024) {
-                                              toast.error('Fichier trop volumineux (max 5 MB)');
-                                              return;
-                                            }
-                                            setDocumentFile(e.target.files[0]);
-                                          }
-                                        }}
-                                        className="text-xs file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-brand-primary file:text-white hover:file:bg-brand-primary/90 cursor-pointer"
-                                      />
-                                      {documentFile && (
-                                        <button
-                                          onClick={() =>
-                                            handleUploadDocument(
-                                              selectedUser.user_id,
-                                              selectedUser.profile_type,
-                                            )
-                                          }
-                                          disabled={uploadingDocument}
-                                          className="px-3 py-1 bg-brand-primary text-brand-deep rounded text-xs font-semibold hover:bg-brand-primary/90 transition-colors disabled:opacity-50"
-                                        >
-                                          {uploadingDocument ? 'Upload...' : 'Uploader'}
-                                        </button>
-                                      )}
-                                    </div>
                                   </div>
                                 )}
                                 {selectedUser.zone && (
@@ -1008,54 +688,23 @@ export default function UserManagement() {
                             {/* RNE pour les annonceurs */}
                             {selectedUser.profile_type === 'advertiser' && (
                               <>
-                                {selectedUser.registration_doc_url ? (
+                                {selectedUser.documents.registration ? (
                                   <div className="flex justify-between items-center pt-2 border-t border-gray-200 mt-2">
                                     <span className="text-gray-600">Registre de commerce:</span>
-                                    <a
-                                      href={selectedUser.registration_doc_url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
+                                    <button
+                                      onClick={() => handleViewDocument(selectedUser.id, 'rne')}
                                       className="flex items-center text-brand-primary hover:text-brand-primary/90 font-medium transition-colors"
                                     >
                                       <FileText className="h-4 w-4 mr-1" />
                                       Voir le document
-                                    </a>
+                                    </button>
                                   </div>
                                 ) : (
-                                  <div className="pt-2 border-t border-gray-200 mt-2">
-                                    <span className="text-gray-600 text-xs block mb-2">
-                                      Registre de commerce non fourni - Upload manuel :
+                                  <div className="flex justify-between items-center pt-2 border-t border-gray-200 mt-2">
+                                    <span className="text-gray-600">Registre de commerce:</span>
+                                    <span className="text-xs text-gray-500">
+                                      Non fourni — upload admin bientôt disponible
                                     </span>
-                                    <div className="flex items-center gap-2">
-                                      <input
-                                        type="file"
-                                        accept=".pdf,.jpg,.jpeg,.png"
-                                        onChange={(e) => {
-                                          if (e.target.files && e.target.files[0]) {
-                                            if (e.target.files[0].size > 5 * 1024 * 1024) {
-                                              toast.error('Fichier trop volumineux (max 5 MB)');
-                                              return;
-                                            }
-                                            setDocumentFile(e.target.files[0]);
-                                          }
-                                        }}
-                                        className="text-xs file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-brand-primary file:text-white hover:file:bg-brand-primary/90 cursor-pointer"
-                                      />
-                                      {documentFile && (
-                                        <button
-                                          onClick={() =>
-                                            handleUploadDocument(
-                                              selectedUser.user_id,
-                                              selectedUser.profile_type,
-                                            )
-                                          }
-                                          disabled={uploadingDocument}
-                                          className="px-3 py-1 bg-brand-primary text-brand-deep rounded text-xs font-semibold hover:bg-brand-primary/90 transition-colors disabled:opacity-50"
-                                        >
-                                          {uploadingDocument ? 'Upload...' : 'Uploader'}
-                                        </button>
-                                      )}
-                                    </div>
                                   </div>
                                 )}
                               </>
@@ -1069,33 +718,14 @@ export default function UserManagement() {
                                   <span className="text-gray-600">
                                     {getAgentCodeLabel(selectedUser.profile_type)}:
                                   </span>
-                                  {selectedUser.agent_toodooh ? (
+                                  {selectedUser.agent_code ? (
                                     <span className="font-medium text-gray-900">
-                                      {selectedUser.agent_toodooh}
+                                      {selectedUser.agent_code}
                                     </span>
                                   ) : (
                                     <span className="text-xs text-amber-600">Non renseigné</span>
                                   )}
                                 </div>
-
-                                {!selectedUser.agent_toodooh && (
-                                  <div className="mt-2 flex items-center gap-2">
-                                    <input
-                                      type="text"
-                                      value={agentCodeInput}
-                                      onChange={(e) => setAgentCodeInput(e.target.value)}
-                                      placeholder="Saisir le code agent"
-                                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent text-sm"
-                                    />
-                                    <button
-                                      onClick={handleSaveAgentCode}
-                                      disabled={savingAgentCode}
-                                      className="px-3 py-2 bg-brand-primary text-brand-deep rounded-lg text-sm font-medium hover:bg-brand-primary/90 transition-colors disabled:opacity-50"
-                                    >
-                                      {savingAgentCode ? 'Enregistrement...' : 'Enregistrer'}
-                                    </button>
-                                  </div>
-                                )}
                               </div>
                             )}
                           </div>
@@ -1145,12 +775,6 @@ export default function UserManagement() {
                                 {formatDate(selectedUser.created_at)}
                               </span>
                             </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">Dernière MAJ:</span>
-                              <span className="font-medium text-gray-900">
-                                {formatDate(selectedUser.updated_at)}
-                              </span>
-                            </div>
                             {selectedUser.verification_status && (
                               <div className="flex justify-between">
                                 <span className="text-gray-600">Vérification:</span>
@@ -1198,14 +822,6 @@ export default function UserManagement() {
                               </span>
                             </div>
                           )}
-                          {selectedUser.validated_by && (
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">Validé par:</span>
-                              <span className="font-medium text-gray-900">
-                                Admin ID: {selectedUser.validated_by}
-                              </span>
-                            </div>
-                          )}
                         </div>
                       </div>
                     )}
@@ -1230,7 +846,7 @@ export default function UserManagement() {
                             Approuver
                           </button>
                           <button
-                            onClick={() => handleReject(selectedUser.id)}
+                            onClick={() => openReject(selectedUser)}
                             className="flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
                           >
                             <X className="h-4 w-4 mr-2" />
@@ -1255,72 +871,42 @@ export default function UserManagement() {
         </div>
       )}
 
-      {/* Modal de confirmation de suppression */}
-      {showDeleteModal && userToDelete && (
+      {/* Modal — raison du rejet (obligatoire, G2 D-G2-3) */}
+      {rejectTarget && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
             <div className="fixed inset-0 transition-opacity" aria-hidden="true">
               <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
             </div>
-
             <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                <div className="sm:flex sm:items-start">
-                  <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
-                    <Trash2 className="h-6 w-6 text-red-600" />
-                  </div>
-                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
-                    <h3 className="text-lg leading-6 font-medium text-gray-900">
-                      Supprimer définitivement
-                    </h3>
-                    <div className="mt-2">
-                      <p className="text-sm text-gray-500">
-                        Êtes-vous sûr de vouloir supprimer définitivement l'utilisateur{' '}
-                        <strong>{userToDelete.contact_name}</strong> ({userToDelete.business_name})
-                        ?
-                      </p>
-                      <div className="mt-3 p-3 bg-red-50 rounded-lg">
-                        <p className="text-sm text-red-800 font-medium">
-                          ⚠️ Cette action est irréversible et supprimera :
-                        </p>
-                        <ul className="text-sm text-red-700 mt-2 list-disc list-inside">
-                          <li>Le profil utilisateur</li>
-                          <li>Toutes les campagnes publicitaires</li>
-                          <li>Tous les écrans et emplacements</li>
-                          <li>Tous les clients associés</li>
-                          <li>Toutes les recharges et factures</li>
-                          <li>Le compte d'authentification</li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+              <div className="bg-white px-4 pt-5 pb-4 sm:p-6">
+                <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
+                  Rejeter {rejectTarget.contact_name}?
+                </h3>
+                <label htmlFor="reject-notes" className="block text-sm text-gray-600 mb-2">
+                  Raison du rejet (obligatoire)
+                </label>
+                <textarea
+                  id="reject-notes"
+                  value={rejectNotes}
+                  onChange={(e) => setRejectNotes(e.target.value)}
+                  rows={4}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent text-sm"
+                  placeholder="Expliquez la raison du rejet…"
+                />
               </div>
               <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
                 <button
-                  onClick={handleDeleteUser}
-                  disabled={deleting}
+                  onClick={submitReject}
+                  disabled={submittingReject || rejectNotes.trim().length === 0}
                   className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed sm:ml-3 sm:w-auto sm:text-sm"
                 >
-                  {deleting ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      Suppression...
-                    </>
-                  ) : (
-                    <>
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Supprimer définitivement
-                    </>
-                  )}
+                  {submittingReject ? 'Rejet…' : 'Rejeter'}
                 </button>
                 <button
-                  onClick={() => {
-                    setShowDeleteModal(false);
-                    setUserToDelete(null);
-                  }}
-                  disabled={deleting}
-                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
+                  onClick={() => setRejectTarget(null)}
+                  disabled={submittingReject}
+                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
                 >
                   Annuler
                 </button>
@@ -1329,6 +915,58 @@ export default function UserManagement() {
           </div>
         </div>
       )}
+
+      {/* Modal — conflit 409 (déjà approuvé/rejeté ailleurs, G2 D-G2-4). La file a déjà été
+          rafraîchie; on lit la ligne fraîche dans la liste fusionnée. */}
+      {conflictId &&
+        (() => {
+          const conflictUser = users.find((u) => u.id === conflictId);
+          const statusLabel =
+            conflictUser?.status === 'approved'
+              ? 'approuvé'
+              : conflictUser?.status === 'rejected'
+                ? 'rejeté'
+                : 'mis à jour';
+          return (
+            <div className="fixed inset-0 z-50 overflow-y-auto">
+              <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+                  <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
+                </div>
+                <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                  <div className="bg-white px-4 pt-5 pb-4 sm:p-6">
+                    <div className="flex items-center mb-3">
+                      <AlertCircle className="h-6 w-6 text-yellow-600 mr-2" />
+                      <h3 className="text-lg leading-6 font-medium text-gray-900">
+                        Action déjà effectuée
+                      </h3>
+                    </div>
+                    <p className="text-sm text-gray-600">
+                      Cet utilisateur a déjà été <strong>{statusLabel}</strong>
+                      {conflictUser?.validated_at && (
+                        <> le {formatDate(conflictUser.validated_at)}</>
+                      )}
+                      . La file a été actualisée.
+                    </p>
+                    {conflictUser?.validation_notes && (
+                      <p className="text-sm text-gray-900 mt-2 p-2 bg-gray-50 rounded border">
+                        {conflictUser.validation_notes}
+                      </p>
+                    )}
+                  </div>
+                  <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                    <button
+                      onClick={() => setConflictId(null)}
+                      className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-brand-primary text-base font-medium text-brand-deep hover:bg-brand-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary sm:ml-3 sm:w-auto sm:text-sm"
+                    >
+                      Fermer
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
     </AdminLayout>
   );
 }
