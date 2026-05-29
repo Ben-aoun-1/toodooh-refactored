@@ -1034,6 +1034,8 @@ per commit.
 
 - **Phase 1f — Frontend repoint (`apps/web` → `apps/api`)** — the largest phase of the project: every user-facing flow rewired off Supabase onto the apps/api backend the four prior phases shipped. Ten commits (keystone + seven per-flow repoints + two cleanup commits), each CI-green; the per-flow arc K → F1 → F2 → F3 → F4a → F4b → F5 → F6 → F7a → F7b. Opened by the **keystone design read** (`5d46b48`, `docs/handoff/phase-1f-keystone-design.md` — the source-driven design of the api-client + the auth-store session model + the 10 D-rulings D1-D10 every per-flow commit consumes). Keystone (`0c9826a`): `lib/api-client.ts` (typed `fetch` singleton, base `/api` via same-origin proxy, `credentials:'include'`, the two-error-shape normalizer `ApiError` with `code` read from `body.error`); `lib/auth-errors.ts` (`apiErrorMessage` code→French, the `mapAuthError` successor); auth-store rewrite (`{id,email}` user shape per D4, `/api/me` rehydration per D3 fetch-authoritative + cushion-only persist, status→`pending|approved|rejected` per D5, the 401-mid-session shared-clear per D6); session methods rewired (`login`→`POST /api/signin` populate-from-response, `logout`→`POST /api/signout`, `getCurrentUser`→`GET /api/me`); `LoginForm` 403 verify-first branch; three anti-enum/Supabase-hack methods deleted (`checkSignupConflicts`, `ensureBusinessProfileExists`, `createDefaultProfile`). The 30 importer files of `useAuthStore` + the 16 of `authService` are untouched by construction — the centralize-first premise (survey §1.4) held. **F1 reference reads** (`2935697`): `useSectors`/`useOwnerBusinessSectors`→`/api/business-sectors?audience=`, `useGovernorates`→`/api/governorates`; advertiser `company_size` hardcoded inline (D8); support_objectives left on Supabase (D8 later-slice); the `owner_business_sectors` no-remap (the endpoint returns `{id,name}` directly). **F2 signup wizard** (`ee67d7d`, the largest single file in the project at ~1940 lines): the wizard sends the grown profile to `POST /api/signup`; the blur-RPC `check_signup_conflicts_secure` (the email-enumeration disclosure) is removed; 12-char password floor with upper/lower/digit (matching the backend); `profile_type` becomes a non-privileged hint; owner-extras collected-but-`.strip()`'d server-side; 201-generic consumed. **F3 verify-email page + callbackURL** (`aa72b37`, **cross-package**): new `apps/web/src/features/auth/pages/VerifyEmail.tsx` consuming better-auth's redirect (`/verify-email?token=...&callbackURL=...&error=...`); apps/api `auth.ts` adds `emailVerification.sendOnSignIn=true` (B′ — the deliberate Phase-1d behavior change: unverified-signin now resends the verification email, enabling the verify-page's error CTA recovery loop); apps/api `signup.ts` passes absolute `callbackURL=${WEB_ORIGIN}/verify-email` to `signUpEmail`; signup.test Q8 extended to assert the verify link carries the callback. **F4a profile advertiser** (`b320f4c`): `UserProfile`'s 4 sub-section saves rewired to the 4 PATCHes (`/api/profile/{contact,business,address,notifications}`); the read-bridge — no `GET /api/profile` exists (it couldn't supply the deferred logo/bank fields anyway), so `getBusinessProfile` reads `/api/me` and maps to `BusinessProfile` (notifications nested→flat, status→verification_status); per-field null handling (`||undefined` for uuid optionals to clear via JSON-drop, `||null` for nullable text fields); the `mapAuthError`→`apiErrorMessage` retarget pattern. **F4b profile owner** (`30c684b`): the parallel OwnerSettings repoint reusing F4a's tested service methods; owner-extras (screens/rooms/company_size) `.strip()`'d functionally — the inputs render and the wire carries them, but slice 1 doesn't persist (forward-compat for the owner slice). **F5 documents** (`c3dfe6d`): the multipart upload moves to `POST /api/profile/documents/:type` (rne|cin discriminator); the GET presigns on-demand and never stores the URL; the upload **flow-position moved** from signup (where the user is unverified+logged-out and can't call `requireAuth`) to post-signin, with both pages exposing the upload control through the section-tab; remove disabled with caption (D-F5-3) — the dead remove-path was severed at F7b. **F6 password domain** (`b5e15cd`): all three flows wired — `/password/reset-request` (anti-enum already correct, no oracle), the new `/update-password` reset-landing page consuming `?token=`/`?error=` via `confirmPasswordReset(token,new)`, and `/password/change` for the with-old change. 12-char convergence (`isValidPassword`/`passwordChecks` from `utils/password.ts`); 6-char service guard dropped (`updatePassword` deleted); owner special-char dropped. **MyAccount no-old password change** removed at source (D-F6-5a — the only way to honor the backend's re-auth requirement). UpdatePasswordForm restyled to the light auth-form pattern. **F7a independent cleanup** (`38c3dab`): the three zero-caller `auth.service` methods removed (`getCompanySizeOptions`, `getSupportObjectivesForAdvertiserAgency`, `getSupportObjectivesForOwners`) + the orphaned `CompanySizeOption` type; MyAccount.tsx (848-line hidden duplicate page) consolidated/deleted — fully covered by OwnerSettings, no nav link to it (`/my-account` was reachable only by URL, the OwnerDashboard CTA was `className="hidden ... aria-hidden"`). **F7b deferred-control wirings + cascade removals** (`737b43f`): the caption-vs-wire fix — the per-flow rulings D-F4-4 (logo) + D-F5-3 (doc-remove) named UX defers but only **captioned** them ("Bientôt disponible" beside still-live buttons + handlers + Supabase chains); F7b actually **severs** the wirings (logo controls statically disabled with placeholder slot; doc-remove dead else-branch gone, local-pick-clear preserved). **Deactivation control disabled** (D-F7-2, new) — pre-K the form re-auth-confirmed via `supabase.auth.signInWithPassword` before destroying the account; post-K the Supabase auth store is no longer the password source so the gate became a broken no-op (rejects every password) — a **class-(b) security finding** closed defensively with a static "coming soon + contact `support@too-dooh.com`" message until the backend `POST /api/account/deactivate` ships. **Cascade** (verify-dead-at-execution): post-wiring re-grep proved updateProfile=0/deactivateAccount=0/signInWithPassword=1 (admin only, Phase-1g out-of-scope) — `authService.updateProfile` + `authService.deactivateAccount` removed; re-grep proved mapAuthError=0 — the 157-line any-typed function removed (its branches were Supabase-error-string heuristics no longer firing; `apiErrorMessage` handles every live error path). Unused supabase imports dropped from UserProfile/useProfileMutations/useOwnerProfileMutations; the auth.service.ts supabase import STAYS (still used by `updateBusinessProfile` for the wallet slice + `getAppointmentObjectives` per D8); OwnerSettings.tsx supabase import STAYS (bank-doc createSignedUrl, wallet/later-slice); `lib/supabase.ts` STAYS (59 later-slice importers — campaigns/screens/admin/wallet/performances/events). Gate floors **post-Phase-1f**: `apps/web` typecheck **36** / lint **1** / test **217** / build **135.73 kB** gzip; `apps/api` per-package typecheck **0** / lint **0** / test **146** / build success (entered post-1e-Part-A at `apps/web` **51/1/160/139.80**, `apps/api` **146**). The full arc: typecheck **51→36** (-15 — account-layer types resolve; the **last-slice ratchet** will clear the remaining 36 when `supabase.ts` + `database.types` go), test **160→217** (+57 — all `apps/web` node-level: api-client, apiErrorMessage, auth-store with mocked fetch, auth.service.reference/profile/password/signup, password utils, errors; **RTL never stood up — the thin-adapter outcome**, §7.6), build **139.80→135.73 kB** (**-4.07 kB net — the repoint made the app SMALLER**: dead Supabase + the MyAccount/F7b removals exceeded the new pages/client added), lint **1** (held — `database.types` only in `lib/supabase.ts`, clears at last-slice). `apps/api` **146 untouched except F3** (cross-package: F3 added `sendOnSignIn=true` + the `callbackURL` wire + extended Q8 in signup.test — no new test files; the apps/api floor held flat). **No new formal CF** (CF-19–24 all already formal); **three CF refinements promoted** (see §7.4): **CF-25 caption-vs-wire** (a defer/disable ruling is satisfied only when the wiring is severed, not when a caption announces it), **the third dead-UI-detection pattern (attribute-gated unreachability)** complementing setter-to-true + CSS-gated, and **CF-23 instances** across the per-flow source-reads. Operating learnings (see §7.6): the thin-adapter outcome (RTL provisioned-but-never-needed), the read-bridge pattern (`/api/me` as the profile read source), truthful-data over convenience (the empty-optional/null→400 lesson recurring across F2/F4), the sendOnSignIn behavior change recorded, the deactivation class-(b) finding, the named owner-extras functional reduction, the F7b orphaned-consumer learning (grep the consumer-name after a handler removal). The keystone + 9 per-flow scoping/plan docs: `5d46b48` (keystone design), `374fae2` (keystone plan), `71245bb` (F1 plan), `5a80aae` (F2 scoping+plan), `6dd1f02` (F3 scoping+plan), `a78568c` (F4 scoping+F4a plan), `aab9fcb` (F4b scoping+plan), `f0d88ca` (F5 scoping+plan), `d13378b` (F6 scoping+plan), `29b2e87` (F7 scoping+F7a plan), `1a42e0d` (F7b plan) — their §-sections are the canonical CF-25 + caption-vs-wire + read-bridge + thin-adapter write-up home. Phase 1f was direct feature work (no `→ Issue`). **Phase-1g carry-forwards** (admin slice — full list §17): the deactivation backend (`POST /api/account/deactivate` + current_password re-auth, mirroring `/password/change`); the logo storage column + endpoint + control re-enable; the document DELETE endpoint + remove-control re-enable; the owner-extras persistence (screens/rooms/company_size columns + un-strip + re-enable the inputs); company_size reference table+endpoint; WiFi-at-signup wizard field + column + provisioning consumer; the money-slice `assertOrigin ∈ [WEB_ORIGIN]` CSRF gate; the inline-`#76E6AB` styling pass (13 legacy files); the `database.types` lint-1 floor clears with the last Supabase removal; strict tax_number matricule; 2FA. Closes 2026-05-26 (CI-green on `737b43f`); Phase 1f's **record** closes with this audit refresh; the **phase itself** closes after the phase-close human visual QA against the three F7b-disabled controls + the F1-F6 repointed flows end-to-end. Commits `0c9826a` (K), `2935697` (F1), `ee67d7d` (F2), `aa72b37` (F3), `b320f4c` (F4a), `30c684b` (F4b), `c3dfe6d` (F5), `b5e15cd` (F6), `38c3dab` (F7a), `737b43f` (F7b), plus the eleven plan/scoping doc commits above and this audit refresh.
 
+- **Phase 1g — Admin approval slice** — the first gated admin surface, shipped end-to-end on the keystone; the dead-Supabase admin surface substantially reduced. Three sub-phases: **G0** admin auth converged onto BE role-on-users — `0997339` (`refactor(web)` — `/api/signin` + role gate, `admin.store` collapsed into `auth.store`, `/admin-login` repointed), `04b8c52` (discovery scoping + G0 plan), `2b6ba60` (`create-admin.ts` superadmin bootstrap), `3e3bd58` (Option-X non-admin keep-session redirect), `7bfbb7a` (create-admin prod-safety note), plus the 1g-tail `34cc839` (fail-fast `usePlatformStats`) + `1a49044` (reactive `/admin-login` redirect — the CF-26 worked instance); **G1** the approval backend — `6b2c15c` (`feat(api)` — `requireAdmin` + four `/api/admin/*` endpoints [queue / approve / reject / doc-presign] + 28 integration tests), plan `5a75bae`; **G2** the UserManagement repoint — `18ef074` (`feat(web)` — 3-parallel queue merge + required-reason reject modal + 409 prior-state modal + doc-presign-on-click; the six no-backend ops disabled+severed; dead-auth cascade-removal; net −922 lines), plan `e802113`. Scope **approval-only** (D2); the rest of the admin surface (screens/wallet/campaigns/events/video/dashboards) stays deferred to its data slices. Gate floors **post-Phase-1g**: `apps/web` typecheck **33** / lint **1** / test **217** / build flat (~134.5 kB gzip main); `apps/api` typecheck **0** / lint **0** / test **174** / build success (the +28 is all G1 admin-endpoint integration tests; G0/G2 are `apps/web`-only). Promotes **CF-26** (render-time-guard over imperative-navigate, §7.4); four operating learnings (§7.6); the full record + the D1-6 / D-G1 / D-G2 rulings + carry-forwards in §18. Phase 1g was direct feature work (no `→ Issue`). Closed 2026-05-29 at HEAD `18ef074`, CI run `26656409715`. Commits `0997339`, `04b8c52`, `2b6ba60`, `3e3bd58`, `7bfbb7a`, `34cc839`, `1a49044`, `5a75bae`, `6b2c15c`, `e802113`, `18ef074`, plus this audit refresh.
+
 ---
 
 ## 5. Roadmap
@@ -1355,6 +1357,27 @@ for the doc hashes):
   upshot: when auditing a "disabled" control, grep its handlers; a disabled attribute is a UI
   state, not a wiring assertion.
 
+Phase 1g promoted one new formal CF and accumulated scoping/method notes; canonical write-ups in
+the Phase-1g plan/scoping docs and the §18 phase record:
+
+- **CF-26 — PROMOTED — render-time-guard over imperative-navigate.** After an auth-state change
+  (sign-in/out, role acquisition), an imperative `navigate()` fired from the handler **races** the
+  reactive route guards still reading the previous store state — the navigate lands, then the guard
+  re-evaluates on stale state and bounces it back (or the page paints the wrong surface for a tick).
+  The fix is structural: let a **render-time guard** (a `<PublicRoute>` / `<AdminRoute>` wrapper that
+  reads the store and renders `<Navigate>` declaratively) own the redirect, and **remove the
+  imperative `navigate()` from the post-auth handler**. The component re-renders when the store
+  updates and the guard redirects deterministically — no race. **Worked instance:** the 1g-tail
+  `/admin-login` bug — admin sign-in set the session but the manual `navigate('/admin-dashboard')`
+  raced `AdminRoute`'s role read, requiring a manual refresh to land; `1a49044` made the redirect
+  reactive (the guard redirects once the store carries the role). This is the state-coupling sibling
+  of the [[dead-ui-detection-patterns]] family — a control/route whose behavior depends on
+  asynchronously-settling store state must be driven by render, not by an imperative call at the
+  moment the state is still in flight. Canonical home: the G0 plan doc + §18.
+- **Accumulated (no promotion):** CF-22 (the G1 admin-exclusion list-filter surface), CF-23 (the
+  per-endpoint source-reads), CF-24 (reject-notes-required as a class-b BE-correct divergence),
+  CF-25 (the G2 disable-and-sever of the six no-backend ops) — all worked again this phase; see §18.
+
 ### 7.5 — Per-step record
 
 Each row's full record is in §4 "Already resolved"; one line each here (numbering per
@@ -1610,6 +1633,23 @@ first set drawn from `apps/web` work:
   the handler called) to pre-check whether the variable becomes unreferenced.** Caught at the
   gate sweep, fixed in-commit; surfaced honestly in CF-9 rather than re-running the gates
   silently.
+
+Phase 1g (admin slice) added four operating learnings (their originating G1/G2 context lives in
+§18.4):
+
+- **Scope a consumer-aware backend phase by the consumer's full ACTION set, not just its display
+  needs.** Enumerate what the consuming UI _does_ — every mutation/action it can fire — not only
+  what it _renders_; otherwise the backend ships endpoints for the visible fields but misses the
+  actions, and the gap surfaces only at the frontend repoint.
+- **Infer a list endpoint's filter behavior from the dead consumer's service logic, not just its
+  response shape.** A list endpoint inherits _which rows to exclude_ from the legacy consumer's
+  filtering (often buried in a service layer), not only the columns to return — read both.
+- **Cascade-removal: verify dead-at-execution with grep; don't trust a prior commit's plan section
+  about removals.** A removal a previous plan _said_ it performed is a hypothesis until
+  grep-confirmed zero-caller at the next commit's §0 source-confirm.
+- **Provision the local test environment so the gate-sweep is fully local.** When a package's tests
+  need infra the dev box lacks (here a CI-parity `test` role + `test_db`), provision it once rather
+  than deferring to CI — local-gate-sweep-before-push is the discipline.
 
 ---
 
@@ -2074,3 +2114,145 @@ Phase 1g/1h — Phase 1g rebuilds the admin surface (UI changes by definition), 
 infrastructure that may move floors. The phase-1 working pattern transfers: inventory-first
 plans, halt-on-finding, CF-9 pause summaries, per-commit gate verification, CI-green on every
 push, the two-assistant architect/executor/human role separation.
+
+**Update — Phase 1g (admin) has CLOSED; full record in §18.** The admin slice shipped CI-green
+(G0 auth convergence → G1 approval endpoints → G2 UserManagement repoint), proving the
+user-approval flow end-to-end on the real backend. The remaining admin surfaces (screens / wallet /
+campaigns / events / video / dashboards) stay deferred to their data slices, exactly as scoped.
+**Next ordering decision (architect + MABA):** the landing/Figma design-alignment (Track B above)
+vs Phase 1h (deployment + nginx single-origin serve) — not yet committed; see §18.2.
+
+## 18. Phase 1g — Admin approval slice
+
+Phase 1g built the first gated admin surface end-to-end: admin authentication converged onto the
+backend identity model, the user-approval backend (queue + approve/reject + document review), and
+the frontend repoint of the approval UI onto it. Scope was deliberately **approval-only** (D2): the
+other admin surfaces (screens / wallet / campaigns / events / video / dashboards) stay dead-Supabase,
+deferred to their data slices. **Eleven commits** across three sub-phases (G0 auth → G1 backend →
+G2 frontend), each CI-green.
+
+### 18.1 — The commit arc
+
+**G0 — admin auth onto the keystone (FE-only).** `0997339` (`refactor(web)` — converge admin auth
+onto the BE role-on-users model: admin signs in via the existing `/api/signin`, gated on
+`role∈{admin,superadmin}` from `/api/me`; the standalone Supabase `admin.store` collapsed into the
+user `auth.store` with role-derived selectors; `/admin-login` kept, repointed; the 8 display-only
+admin pages' identity reads swapped; `admin.service` left intact pending G2), `04b8c52` (the
+discovery scoping + G0 plan docs), `2b6ba60` (`chore(api)` — the `create-admin.ts` superadmin
+bootstrap script), `3e3bd58` (`fix(web)` — Option-X: a non-admin reaching `/admin-login` keeps its
+session and is redirected to its role dashboard rather than being logged out), `7bfbb7a`
+(`chore(api)` — the create-admin prod-safety carry-forward note). **1g-tail:** `34cc839`
+(`fix(web)` — `retry:false` on `usePlatformStats` so the admin dashboard fails fast and renders
+instantly), `1a49044` (`fix(web)` — the reactive `/admin-login` redirect, the **CF-26** worked
+instance: removing the imperative post-signin `navigate` that raced the route guard).
+
+**G1 — admin approval endpoints + guard (BE-only).** `5a75bae` (the G1 plan doc), `6b2c15c`
+(`feat(api)` — `requireAdmin` composed after `requireAuth` [401 no-session / 403 non-admin]; four
+`/api/admin/*` endpoints: `GET /users?status=` [the end-user moderation queue — single-table select,
+the `/api/me` projection + `created_at` + the validation trio, sorted `created_at DESC`,
+**admin-role users excluded server-side**], `POST /users/:id/approve` [status→approved +
+`onboarding_completed`→true + trio], `POST /users/:id/reject` [status→rejected + trio, notes
+required, onboarding untouched], `GET /users/:id/documents/:type` [presign-on-demand for the doc
+review, distinct `USER_NOT_FOUND` / `DOCUMENT_NOT_UPLOADED` 404s]; **28 integration tests**, the
+1b-1e pattern — direct DB seed + mocked session, the trio asserted on the row; CI run `26652301911`).
+
+**G2 — UserManagement repoint (FE-only).** `e802113` (the G2 plan doc), `18ef074` (`feat(web)` — the
+admin user-approval queue repointed off dead Supabase onto the G1 endpoints, the 1f thin-adapter
+pattern: `admin-user.service` → a thin api-client adapter [`getUsersByStatus`/`approveUser`/
+`rejectUser`/`getDocumentUrl`, mutations throw `ApiError` so the page branches on 409];
+`useUsers` → a 3-parallel `useQueries` merge preserving the all-tab + the per-status stat cards;
+`UserManagement` → one-click approve, a required-reason reject modal, a 409 prior-state modal with
+an immediate queue refetch, doc-view presign-on-click; the **six no-backend operations**
+[single + bulk delete, bulk approve/reject, admin doc-upload, agent-code save] **disabled + Supabase
+-severed** per CF-25, agent-code rendered read-only; the two modals **inlined** [not extracted —
+page-coupled]; `admin.service`'s three zero-caller dead-auth methods cascade-removed; CI run
+`26656409715`). Net **−922 lines** across 4 files — the repoint made the surface smaller.
+
+### 18.2 — Ratified decisions
+
+- **D1–D6 (the discovery rulings):** D1 converge the FE admin onto BE role-on-users (drop
+  `admin_profiles` / `moderator` / `permissions[]`); D2 approval-only scope (defer the rest);
+  D3 collapse `admin.store` into `auth.store` (one session model); D4 drop the Supabase
+  `admin_activities` action-log (approval self-audits via the trio); D5 approve sets
+  `onboarding_completed=true`; D6 keep the dedicated `/admin-login` page, repointed.
+- **D-G1-1…7 (G1 plan):** include the doc-review presign endpoint (built with its consumer);
+  `/api/admin/users?status=` (one list + required filter, not `/pending-users`); the `/api/me`
+  projection + `created_at` + trio response shape; reject notes **required non-empty** (CF-24
+  class-b); test fixture = direct `db.insert` + mocked session (not `create-admin.ts`);
+  idempotency = **409 with the prior-state body**; single-commit phases skip the intermediate
+  scoping commit.
+- **D-G2-1…6 (G2 plan):** disable-and-sever the six no-backend ops (no client-side bulk loops —
+  atomicity / audit); status strategy = 3-parallel `useQueries` merge; a required-reason reject
+  modal; the 409 prior-state modal (date + status + notes + auto-refetch, **no `validatedBy` uuid**
+  shown); fold the dead-auth removal into G2; one commit.
+
+### 18.3 — Gate arcs
+
+- **apps/api:** test **146 → 174** (+28, all G1 admin-endpoint integration tests); typecheck **0** /
+  lint **0** flat; build success. **Untouched by G0/G2** (both FE-only) — only G1 moved it.
+- **apps/web:** typecheck **36 → 33** (−3: G0's `admin.store` collapse cleared the
+  Supabase-admin-auth types, G2's dead-auth removal cleared one more `AdminProfile`-typed baseline
+  error); lint **1** (the `database.types` floor, unchanged — clears at the last-slice Supabase
+  removal); test **217 flat** (the 1f thin-adapter outcome held — the repoints are node-testable
+  service-layer changes; RTL stayed not-stood-up; render-correctness moved to MABA visual QA);
+  build flat (~134.5 kB gzip main — the G2 −922-line reduction landed in the lazy admin chunk, not
+  main, since admin is `React.lazy`).
+
+### 18.4 — Methodology learnings (the phase's durable contributions)
+
+1. **CF-26 promoted (render-time-guard over imperative-navigate)** — §7.4. An imperative redirect
+   issued at the moment auth state is still settling races the reactive guard; let a render-time
+   guard own the redirect. The 1g-tail `/admin-login` bug is the worked instance.
+2. **The validation trio is single-state.** `validated_by` / `validated_at` / `validation_notes`
+   describe the **current** status's validation context, not multi-state history — so approve
+   **overwrites** the trio (a reject→approve transition replaces, not appends). Audit-history (every
+   decision over time) is a deliberate slice-2+ concern (D4 dropped the `admin_activities` log).
+   From the G1 W2 ruling.
+3. **Single-commit phases skip the intermediate scoping commit.** When a slice ships as one commit,
+   the CF-9 + the plan-doc are the scoping deliverable; no separate held scoping-doc commit is
+   warranted (it would be churn). **Multi-commit phases — where a shared scoping read informs
+   several per-commit plans — still warrant a committed scoping doc.** From D-G1-7.
+4. **Scope a consumer-aware BE phase by the consumer's full ACTION set, not just its DISPLAY needs.**
+   G1's scoping read the UserManagement _response shape_ but not its _action inventory_, so it built
+   4 of the 10 operations the page exercises; G2 surfaced the gap (6 actions with no backend) and
+   disabled-and-severed them. The cost was small (they defer cleanly), but the discipline applies
+   forward: enumerate what the consumer _does_, not only what it _shows_.
+5. **Infer a list endpoint's FILTER behavior from the dead consumer's service logic.** G1's queue
+   accidentally inherited an "admins-in-the-list" behavior the consumer never wanted, because the
+   dead-Supabase consumer's `admin_profiles` exclusion was buried in its service layer and the
+   scoping read only the response shape. A test caught it (the seeded superadmin appeared in
+   `status=approved`); the fix (`notInArray(role, ['admin','superadmin'])`) is the correct
+   implementation of "the moderation queue," not a filter bolted on. The CF-22 surface worked as
+   designed — halt-and-surface beat silently relaxing the test.
+6. **Cascade-removal — verify dead-at-execution with grep, don't trust the prior commit's plan.**
+   G0's plan §2.F said to remove `admin.service`'s three dead-auth methods; they shipped intact
+   (a §0-execution drift). G2's source-confirm grep found them zero-caller and finished the removal.
+   The F7a/F7b discipline reinforced: a removal claimed in a plan section is a hypothesis until
+   grep-verified at the next commit's execution.
+7. **The local apps/api test environment is now provisioned.** A `test`-role + `test_db` were created
+   and migrated locally during G1 (matching the CI Postgres service); the 1e-tracked
+   "local apps/api tests are env-blocked, rely on CI" workaround is **closed** — the local
+   gate-sweep is now fully local across both packages for every future apps/api session.
+
+### 18.5 — Carry-forwards (new this phase; join the §17.1 durable list)
+
+Each tracked to its real future consumer (the build-with-first-consumer discipline). All are the
+G2 disable-and-sever surfaces awaiting a backend:
+
+- **Bulk-ops slice** — `POST` bulk approve / reject / delete endpoints (the G2 bulk UI was removed,
+  not faked client-side; atomicity + audit demand a real endpoint). Re-enable the selection UI then.
+- **User-delete endpoint** — single `DELETE /api/admin/users/:id` (cascade rules TBD) + re-enable the
+  G2-disabled Trash2 control.
+- **Admin-doc-upload endpoint** — `POST /api/admin/users/:id/documents/:type` (admin uploading a doc
+  on a user's behalf) + re-enable the captioned upload control. The doc-**view** presign already ships.
+- **Agent-code write endpoint** — an agent-code mutation (the agent-ops slice) + re-enable the input
+  (G2 ships read-only display; `agent_code` is already returned by the queue).
+- **`create-admin.ts` prod-safety mode** — read the password from stdin / an env var rather than
+  argv (argv leaks into shell history / CI logs); land before bootstrapping the production admin in
+  Phase 1h.
+
+The existing §17.1 entries continue to carry unchanged.
+
+**Phase 1g closes** on this audit refresh + MABA's full-1g visual-QA pass (G0 auth + G1-backed
+approval flow + G2 UI, end-to-end). Next: the Track B (landing/Figma) vs Phase 1h (deployment)
+ordering decision (architect + MABA), per §17.2 / §18.2.
