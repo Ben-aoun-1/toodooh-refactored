@@ -1,35 +1,28 @@
-# CI — automated verification of the four gates on every push to main and every PR.
+# Deploy — deliberate, gated production deploy to the VPS. Triggered by a `v*` tag or manually
+# (NOT every push to main). Runs the same four gates as ci.yml, then builds, assembles the
+# single-origin webroot (landing + app), rsyncs the artifacts to the VPS deploy user, and brings
+# the compose stack up. The .env and persistent volumes live on the VPS and are never synced.
 #
-# Baseline-gated gates (typecheck, lint): the cleanup phase hands off to CI with
-# accepted, deferred debt — 51 typecheck errors and 1 lint error, all blocked on
-# the Phase-1 Supabase typed client (issue #15). CI therefore verifies
-# "no regression past the committed baseline", not "exit 0". The gate fails when
-# the error count EXCEEDS the baseline, and emits a ::notice:: (without failing)
-# when the count drops BELOW it — prompting a manual ratchet-down of the baseline
-# constant here. When #15 lands, both baselines drop to 0.
-# See docs/audit.md §5 row 13 and issue #11.
+# NOTE: this workflow's gate steps mirror ci.yml inline (two workflows → readable duplication;
+# factor into a reusable workflow when a third appears). The deploy steps are exercised for real
+# at 1h-app-deploy — until the VPS is bootstrapped + the secrets set, this is a drafted artifact.
 
-name: CI
+name: Deploy
 
 on:
+  workflow_dispatch:
   push:
-    branches: [main]
-  pull_request:
+    tags: ['v*']
 
 jobs:
-  verify:
+  deploy:
     runs-on: ubuntu-latest
-    # Phase 1b Commit 3: integration tests (apps/api/tests/signup.test.ts) need a
-    # real Postgres. AUTH_SECRET is a throwaway CI value; BETTER_AUTH_URL uses its
-    # env default. The web/api unit suites ignore DATABASE_URL.
     env:
       DATABASE_URL: postgresql://toodooh:toodooh@localhost:5432/toodooh_test
       AUTH_SECRET: ci-auth-secret-at-least-32-characters-long
       SMTP_USER: ci@too-dooh.com
       SMTP_PASSWORD: ci-smtp-password
       SMTP_FROM: no-reply@too-dooh.com
-      # MinIO storage (Commit 2) — STORAGE_BUCKET/REGION use env.ts defaults. The
-      # accessKey/secretKey match the MINIO_ROOT_* of the docker-run step below.
       STORAGE_ENDPOINT: http://localhost:9000
       STORAGE_ACCESS_KEY: ci-minio-root
       STORAGE_SECRET_KEY: ci-minio-secret
@@ -49,25 +42,18 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@v4
-
       - name: Install pnpm
         uses: pnpm/action-setup@v4
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20.20.2
           cache: pnpm
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Typecheck (baseline-gated)
         run: |
-          # Ratcheted to 33 at Phase 1h-prep (was 51): the repoint phases (1c-1g) resolved the
-          # account/admin-layer cascades. The residual 33 are later-slice errors (react-leaflet,
-          # file-saver, the dooh engine, the database.types propagation) that clear at the last
-          # Supabase removal (#15), when this drops to 0.
           TYPECHECK_BASELINE=33
           pnpm typecheck 2>&1 | tee typecheck.log || true
           n=$(grep -c 'error TS' typecheck.log || true)
@@ -75,13 +61,10 @@ jobs:
           if [ "$n" -gt "$TYPECHECK_BASELINE" ]; then
             echo "::error::typecheck regressed — $n errors > baseline $TYPECHECK_BASELINE"
             exit 1
-          elif [ "$n" -lt "$TYPECHECK_BASELINE" ]; then
-            echo "::notice::typecheck improved — $n < $TYPECHECK_BASELINE; ratchet TYPECHECK_BASELINE down in .github/workflows/ci.yml"
           fi
 
       - name: Lint (baseline-gated)
         run: |
-          # Phase-1 #15: import-x/no-unresolved on src/lib/supabase.ts awaits ./database.types.
           LINT_BASELINE=1
           pnpm lint 2>&1 | tee lint.log || true
           n=$(grep -oE '[0-9]+ error' lint.log | head -1 | grep -oE '^[0-9]+' || true)
@@ -90,16 +73,11 @@ jobs:
           if [ "$n" -gt "$LINT_BASELINE" ]; then
             echo "::error::lint regressed — $n errors > baseline $LINT_BASELINE"
             exit 1
-          elif [ "$n" -lt "$LINT_BASELINE" ]; then
-            echo "::notice::lint improved — $n < $LINT_BASELINE; ratchet LINT_BASELINE down in .github/workflows/ci.yml"
           fi
 
       - name: Migrate (integration DB)
         run: pnpm --filter @toodooh/api migrate
 
-      # MinIO can't be a `services:` block — it needs the `server /data` command and
-      # GHA service syntax has no command/args key. A docker-run step keeps the same
-      # pinned image as docker-compose, reachable at localhost:9000 like a service.
       - name: Start MinIO (S3-compatible storage for integration tests)
         run: |
           docker run -d --name minio -p 9000:9000 \
@@ -116,3 +94,42 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Assemble single-origin webroot
+        run: |
+          mkdir -p www/assets
+          cp -r infra/landing/. www/                 # landing index.html + assets + images + fonts + robots
+          cp -r apps/web/dist/assets/. www/assets/    # merge app hashed assets alongside landing's
+          cp apps/web/dist/index.html www/app.html    # app SPA entry (renamed; refs its own /assets/<hash>)
+          # collision-verify: no duplicate basenames across the merged assets dir
+          dupes=$(find www/assets -type f -printf '%f\n' | sort | uniq -d)
+          if [ -n "$dupes" ]; then
+            echo "::error::asset filename collision in merged webroot:"; echo "$dupes"; exit 1
+          fi
+
+      - name: Set up SSH
+        run: |
+          install -m 700 -d ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          echo "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+
+      - name: Rsync artifacts to the VPS
+        run: |
+          rsync -az --delete \
+            www \
+            infra/docker-compose.prod.yml \
+            infra/nginx \
+            apps \
+            package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/srv/toodooh/"
+
+      - name: Deploy (compose up)
+        run: |
+          ssh "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+            'cd /srv/toodooh && docker compose -f docker-compose.prod.yml up -d --build'
+
+      - name: Smoke check
+        run: |
+          ssh "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+            'curl -fsS -H "Host: too-dooh.com" http://127.0.0.1/api/health && echo OK'
