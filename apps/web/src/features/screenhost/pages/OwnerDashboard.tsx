@@ -99,7 +99,7 @@ export default function OwnerDashboard() {
             : 'Nouvelle campagne à diffuser sur votre parc',
           createdAt: new Date(c.campaign_start_date || Date.now()),
           actionLabel: 'Consulter',
-          actionPath: '/owner-campaign-approvals',
+          actionPath: '/owner-campaigns',
         })),
     [pendingApprovalCampaigns],
   );

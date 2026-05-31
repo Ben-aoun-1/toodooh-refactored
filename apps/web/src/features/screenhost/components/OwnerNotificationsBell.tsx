@@ -165,7 +165,7 @@ export default function OwnerNotificationsBell({ userId }: { userId?: string }) 
                 type="button"
                 onClick={() => {
                   setOpen(false);
-                  navigate('/owner-campaign-approvals');
+                  navigate('/owner-campaigns');
                 }}
                 className="text-sm font-medium text-[#5C5C5C] hover:text-[#171717] underline underline-offset-2"
               >

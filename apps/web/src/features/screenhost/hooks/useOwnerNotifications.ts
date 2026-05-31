@@ -149,7 +149,7 @@ async function fetchOwnerNotifications(
           toDate((c as { campaign_start_date?: string }).campaign_start_date) ||
           new Date(),
         actionLabel: 'Consulter la campagne',
-        actionPath: '/owner-campaign-approvals',
+        actionPath: '/owner-campaigns',
       });
     });
 
@@ -168,7 +168,7 @@ async function fetchOwnerNotifications(
         title: `Rappel campagne validée (à venir) (J-1) : ${name}`,
         timestamp: start,
         actionLabel: 'Consulter la campagne',
-        actionPath: '/owner-campaign-approvals',
+        actionPath: '/owner-campaigns',
       });
     }
 
@@ -179,7 +179,7 @@ async function fetchOwnerNotifications(
         title: `Rappel événement validé (à venir) (H-4) : ${name}`,
         timestamp: start,
         actionLabel: 'Consulter la campagne',
-        actionPath: '/owner-campaign-approvals',
+        actionPath: '/owner-campaigns',
       });
     }
 

@@ -318,7 +318,7 @@ export const adminVideoService = {
                           scope: 'owner',
                           kind: 'campaign_validation_received',
                           title: `Nouvelle campagne a valider : ${campaign.name || 'Campagne'}`,
-                          action_path: '/owner-campaign-approvals',
+                          action_path: '/owner-campaigns',
                           action_label: 'Consulter la campagne',
                           entity_type: 'campaign',
                           entity_id: campaign.id,

@@ -30,6 +30,7 @@ import {
 
 type OwnerCampaignStatusFilter =
   | 'all'
+  | 'to_approve'
   | 'active'
   | 'upcoming'
   | 'pending'
@@ -93,6 +94,20 @@ const getStatusUi = (status: string, isUpcoming: boolean) => {
   };
 };
 
+/**
+ * A campaign still awaiting THIS owner's accept/reject decision. Module-level
+ * (pure) so the `filteredCampaigns` / `statusCounts` memos and the drawer
+ * footer gating all share one definition — the "À approuver" tab predicate is
+ * exactly this (B3).
+ */
+const isPendingForOwner = (campaign: OwnerCampaignCard | null) =>
+  Boolean(
+    campaign &&
+    campaign.approvalStatus !== 'approved' &&
+    campaign.approvalStatus !== 'rejected' &&
+    campaign.status !== 'completed',
+  );
+
 export default function OwnerCampaigns() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -110,6 +125,7 @@ export default function OwnerCampaigns() {
   const [processingDecision, setProcessingDecision] = useState<'accept' | 'reject' | null>(null);
   const [showApprovalSuccessModal, setShowApprovalSuccessModal] = useState(false);
   const [showRejectConfirmModal, setShowRejectConfirmModal] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
   const itemsPerPage = 6;
 
   const {
@@ -151,11 +167,17 @@ export default function OwnerCampaigns() {
         campaign.clientName.toLowerCase().includes(search.toLowerCase());
 
       const isUpcoming = Boolean(campaign.startDate && campaign.startDate > now);
+      // "À approuver" is on the approvalStatus axis — it OVERRIDES the status
+      // filter (shows every owner-pending campaign regardless of status), and
+      // reuses isPendingForOwner so the tab matches the drawer footer gating.
       const matchesStatus =
-        statusFilter === 'all' ||
-        (statusFilter === 'upcoming'
-          ? isUpcoming
-          : (campaign.status || '').toLowerCase() === statusFilter);
+        statusFilter === 'all'
+          ? true
+          : statusFilter === 'to_approve'
+            ? isPendingForOwner(campaign)
+            : statusFilter === 'upcoming'
+              ? isUpcoming
+              : (campaign.status || '').toLowerCase() === statusFilter;
 
       return matchesSearch && matchesStatus;
     });
@@ -199,6 +221,7 @@ export default function OwnerCampaigns() {
       setSelectedCampaign(null);
       setProcessingDecision(null);
       setShowRejectConfirmModal(false);
+      setRejectReason('');
     }, 300);
   };
 
@@ -209,14 +232,6 @@ export default function OwnerCampaigns() {
     setOpenActionMenuId(null);
     setShowDetailsModal(true);
   };
-
-  const isPendingForOwner = (campaign: OwnerCampaignCard | null) =>
-    Boolean(
-      campaign &&
-      campaign.approvalStatus !== 'approved' &&
-      campaign.approvalStatus !== 'rejected' &&
-      campaign.status !== 'completed',
-    );
 
   const handleApproveSelectedCampaign = async () => {
     if (!selectedCampaign || !user?.id) return;
@@ -238,10 +253,14 @@ export default function OwnerCampaigns() {
     if (!selectedCampaign || !user?.id) return;
     try {
       setProcessingDecision('reject');
-      await rejectCampaign.mutateAsync({ campaignId: selectedCampaign.id });
+      await rejectCampaign.mutateAsync({
+        campaignId: selectedCampaign.id,
+        reason: rejectReason.trim() || undefined,
+      });
       setSelectedCampaign((prev) => (prev ? { ...prev, approvalStatus: 'rejected' } : prev));
       toast.success('Campagne refusée');
       setShowRejectConfirmModal(false);
+      setRejectReason('');
       closeDetailsDrawer();
     } catch (_error) {
       toast.error('Impossible de refuser la campagne');
@@ -254,6 +273,7 @@ export default function OwnerCampaigns() {
     const now = new Date();
     return {
       all: campaigns.length,
+      toApprove: campaigns.filter((c) => isPendingForOwner(c)).length,
       active: campaigns.filter((c) => c.status === 'active').length,
       upcoming: campaigns.filter((c) => Boolean(c.startDate && c.startDate > now)).length,
       pending: campaigns.filter((c) => c.status === 'pending').length,
@@ -332,6 +352,11 @@ export default function OwnerCampaigns() {
                 <div className="flex flex-wrap items-center gap-2">
                   {[
                     { key: 'all' as const, label: 'Tous', count: statusCounts.all },
+                    {
+                      key: 'to_approve' as const,
+                      label: 'À approuver',
+                      count: statusCounts.toApprove,
+                    },
                     { key: 'active' as const, label: 'Actives', count: statusCounts.active },
                     { key: 'upcoming' as const, label: 'A venir', count: statusCounts.upcoming },
                     { key: 'pending' as const, label: 'En attente', count: statusCounts.pending },
@@ -755,6 +780,7 @@ export default function OwnerCampaigns() {
             if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
               e.preventDefault();
               setShowRejectConfirmModal(false);
+              setRejectReason('');
             }
           }}
         >
@@ -770,10 +796,29 @@ export default function OwnerCampaigns() {
                 Etes-vous sur de vouloir refuser cette campagne ?
               </h3>
             </div>
+            <div className="px-8 pt-5">
+              <label
+                htmlFor="reject-reason"
+                className="block text-sm font-medium text-[#171717] mb-2"
+              >
+                Motif du refus
+              </label>
+              <textarea
+                id="reject-reason"
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                rows={3}
+                placeholder="Expliquez la raison du refus (communiquée à l'annonceur)…"
+                className="w-full rounded-xl border border-[#EBEBEB] px-4 py-3 text-sm text-[#171717] placeholder:text-[#A3A3A3] focus:outline-none focus:border-brand-primary resize-none"
+              />
+            </div>
             <div className="px-8 py-5 flex items-center justify-center gap-4">
               <button
                 type="button"
-                onClick={() => setShowRejectConfirmModal(false)}
+                onClick={() => {
+                  setShowRejectConfirmModal(false);
+                  setRejectReason('');
+                }}
                 className="h-14 min-w-[210px] px-8 rounded-2xl border border-[#EBEBEB] bg-white text-[#5C5C5C] text-[16px] leading-none font-medium hover:bg-[#FAFAFA]"
               >
                 Annuler

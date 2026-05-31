@@ -37,9 +37,6 @@ const OwnerStatementDetailPage = lazy(
   () => import('@/features/screenhost/pages/OwnerStatementDetailPage'),
 );
 const OwnerSettings = lazy(() => import('@/features/screenhost/pages/OwnerSettings'));
-const OwnerCampaignApprovals = lazy(
-  () => import('@/features/screenhost/pages/OwnerCampaignApprovals'),
-);
 const ContactPage = lazy(() => import('@/features/screenhost/pages/ContactPage'));
 const AdminLogin = lazy(() => import('@/features/admin/pages/AdminLogin'));
 const AdminDashboard = lazy(() => import('@/features/admin/pages/AdminDashboard'));
@@ -402,14 +399,6 @@ export default function App() {
               element={
                 <OwnerRoute>
                   <OwnerStatementDetailPage />
-                </OwnerRoute>
-              }
-            />
-            <Route
-              path="/owner-campaign-approvals"
-              element={
-                <OwnerRoute>
-                  <OwnerCampaignApprovals />
                 </OwnerRoute>
               }
             />
