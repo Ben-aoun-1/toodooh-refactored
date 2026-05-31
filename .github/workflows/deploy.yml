@@ -129,7 +129,21 @@ jobs:
           ssh "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
             'cd /srv/toodooh && docker compose -f docker-compose.prod.yml up -d --build'
 
-      - name: Smoke check
+      - name: Smoke check (retry up to 60s for api boot)
         run: |
+          # `compose up -d` returns before the api finishes migrate-on-start + boot (~10-30s), so a
+          # single immediate curl false-fails (the stack is healthy, the timing is wrong). Retry up
+          # to 30×2s; on exhaustion emit the full response (headers + body) for diagnosis instead of
+          # a bare non-zero exit.
+          for i in $(seq 1 30); do
+            if ssh "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+                 'curl -fsS -H "Host: too-dooh.com" http://127.0.0.1/api/health' >/dev/null 2>&1; then
+              echo "Smoke OK (attempt $i, $(( (i - 1) * 2 ))s elapsed)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Smoke FAILED after 60s — full response for diagnosis:"
           ssh "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
-            'curl -fsS -H "Host: too-dooh.com" http://127.0.0.1/api/health && echo OK'
+            'curl -i -H "Host: too-dooh.com" http://127.0.0.1/api/health' || true
+          exit 1
