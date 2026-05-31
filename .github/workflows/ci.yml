@@ -81,8 +81,9 @@ jobs:
 
       - name: Lint (baseline-gated)
         run: |
-          # Phase-1 #15: import-x/no-unresolved on src/lib/supabase.ts awaits ./database.types.
-          LINT_BASELINE=1
+          # Lint baseline is 0 (ratcheted from 1): the dangling src/lib/supabase.ts → './database.types'
+          # import (a phantom file — never in-repo) was removed at the lazy-proxy fix; lint is clean.
+          LINT_BASELINE=0
           pnpm lint 2>&1 | tee lint.log || true
           n=$(grep -oE '[0-9]+ error' lint.log | head -1 | grep -oE '^[0-9]+' || true)
           n=${n:-0}
