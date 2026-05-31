@@ -1,9 +1,21 @@
 # Slice 2 — Discovery Read
 
-**Status:** HELD (not committed). Read-only, source-internal. Awaiting architect ratification (CF-9
-may land in chunks).
-**Date generated:** 2026-05-31. HEAD `94c7ce3` on `main`, working tree clean.
+**Status:** COMMITTED + RATIFIED. Source-internal. The §7 ordering and the 9 ambiguities are
+architect-ruled (see Revision history below + the rulings ledger at the foot of this doc).
+**Date generated:** 2026-05-31. Initial discovery at HEAD `94c7ce3`; revised post-Foundation-A (`c00d661`).
 **Audience:** architect + executor. Internal only — no exec summary, technical depth throughout.
+
+> **Revision history:**
+>
+> - `c387f88` — initial discovery.
+> - _this commit_ — revised sub-slice ordering (§7); locked architect rulings on the 9 ambiguities
+>   (folded into §2.2/§3/§4/§5/§6/§8/§9). Source-truth findings: the booking unit is the
+>   **geographic zone** (not the screen — `new-campaign/Step4.tsx` + `campaign_locations` +
+>   `getLocationsInArea()`); the campaigns sub-slice's read dependency is the **locations-read**
+>   surface (not a screens-write api). Consequence: the **advertiser flow ships before
+>   screenhost-write** — Locations-read is a small mini-slice (2.1) ahead of Campaigns (2.2);
+>   Screenhost-write moves to 2.4.
+
 **Method:** triangulation of `docs/figma-vs-code.md`, `docs/user-flows.md`,
 `docs/handoff/frontend-repoint-survey.md`, `docs/handoff/supabase-rpc-inventory.md`,
 `docs/handoff/supabase-schema-inventory.md`, `docs/handoff/v3-data-requirements.md` — **reconciled
@@ -84,9 +96,9 @@ table and the monitoring join are untouched.
   to Figma's **side-drawer** over the campaigns list. Removes `App.tsx:308–314` route + the orphan
   hook `hooks/useCampaignDetail.ts`. `useVideoById` is **shared** (MyCampaigns, NewCampaign,
   OwnerCampaigns) — keep. The drawer host is the advertiser `MyCampaigns`; the screenhost
-  `OwnerCampaigns` already renders a detail drawer (figma-vs-code §2 screenhost). **Ambiguity:** is
-  `CampaignDetails.tsx`'s body re-homed as a shared `<CampaignDetailDrawer>` consumed by both, or two
-  drawers? (§7 / ambiguities.)
+  `OwnerCampaigns` already renders a detail drawer (figma-vs-code §2 screenhost). **RULED (architect):**
+  one shared `<CampaignDetailDrawer>` with a role prop (`advertiser` | `owner`), consumed by both
+  `MyCampaigns` and `OwnerCampaigns`. Lands in **Foundation B**.
 
 ### §2.3 — `[ALREADY DONE]` — confirm-only (no slice-2 work)
 
@@ -129,10 +141,10 @@ password / delete-account). **Both were already repointed to `apiClient` in Phas
 → `PATCH /api/profile/{business,contact,address,notifications}`; documents → `/api/profile/
 documents/:type`). So this consolidation is **UI/structural, not a repoint**.
 
-- **Canonical target (lean):** extract one shared `ProfileSettings` component parametrized by role
-  (the only real divergence is label text — *Entreprise/Documents légaux* vs *Établissement/Coordonnées
-  bancaires*), consumed by two thin route wrappers. Literal "one route for everyone" is not viable
-  (the advertiser and screenhost tab sets differ). **Surface for ruling (§7).**
+- **RULED (architect):** one shared `ProfileSettings` component parametrized by role (the only real
+  divergence is label text — *Entreprise/Documents légaux* vs *Établissement/Coordonnées bancaires*),
+  consumed by **two thin advertiser/screenhost route wrappers**. Literal "one route for everyone" was
+  rejected (the tab sets differ by role). Lands in **Foundation B**.
 - **What's lost:** nothing functional; the duplication collapses.
 
 ### §3.2 — Mes Finances → ONE (Kais #6)
@@ -180,10 +192,10 @@ Campaigns sub-slice** (the screenhost campaigns surface).
 
 - **Resolved non-conflict:** "events dropped" + "events in Mes Campagnes" is not a contradiction — the
   *separate page* is dropped; events become a *section of the campaigns surface*.
-- **Ambiguity (§7):** the **advertiser** `/evenements` (`Events.tsx`) is the event-campaign **browse
-  + Booster** entry (→ `/new-campaign` event mode). Kais #7 reads screenhost-specific. Does the
-  advertiser `/evenements` also fold into `/my-campaigns`, or stay standalone? **Lean: stays
-  standalone** (it's the event-campaign creation funnel, not a redundant list).
+- **Provisional ruling (architect):** the **advertiser** `/evenements` (`Events.tsx`, the
+  event-campaign **browse + Booster** entry → `/new-campaign` event mode) **stays standalone** — Kais
+  #7 reads screenhost-specific, and `/evenements` is the event-campaign creation funnel, not a
+  redundant list. **Pending Kais confirmation** (tracked in §9, Kais batch #3).
 
 ### §3.5 — The `/owner-campaign-approvals` ↔ `/owner-campaigns` merge
 
@@ -198,13 +210,20 @@ route. **Inbound references to reroute (6):**
 - `features/admin/services/admin-video.service.ts:321` hardcoded notification `action_path`
   (server-authored payload — reroute the string).
 
-**Lives in the Campaigns sub-slice** (screenhost side). **Confirm merged target route name (§7).**
+**RULED (architect):** `/owner-campaigns` **absorbs** `/owner-campaign-approvals` (as a tab/filter);
+the standalone route is deleted and the 6 reroutes above land with it. **Lives in Foundation B** —
+it's a UI restructure (the approval hooks stay on Supabase until Screenhost-write 2.4 repoints them).
 
 ---
 
 ## §4 — The AGENT user type slice (net-new)
 
 **Confirmed net-new** — nothing agent-shaped exists in code today.
+
+> **BLOCKED on Kais batch #5.** The three agent sub-decisions below — (a) `profile_type` enum
+> extension vs a separate role; (b) self-signup vs admin-created; (c) sensor-management scope — are
+> all **pending the next Kais email batch** (tracked in §9). Agent-signup (2.8) cannot scope until
+> (a)+(b) land; sensor-management (2.9) is additionally external-platform-blocked.
 
 ### §4.1 — Current enum reality
 
@@ -286,6 +305,13 @@ consumed by the campaign wizard), and `/admin-global-config` uses the cross-cutt
 `global-configuration.service`. These two admin pages repoint *with* their owning domains, not as
 admin-only work.
 
+**Admin-creation auth path (source-verify at Admin scoping — likely new endpoint).** `/admin-create`
+creates admins via `supabase.auth.signUp` (+ an `admin_profiles` insert). better-auth probably lacks
+an admin-create-without-email-verify primitive, so the repoint **likely needs a new
+`POST /api/admin/users`** endpoint (admin-authed; creates the credential + admin profile, bypassing
+the signup email-verify gate). **Source-verify against `apps/api` at the Admin sub-slice (2.7)
+scoping** — do not assume the primitive exists. Tracked in §9.
+
 ---
 
 ## §6 — The data domains
@@ -339,8 +365,9 @@ sub-slice.
 - **Deps:** **campaigns** (cart debit — the circular seam; resolve by repointing `balance.service` in
   foundation), **admin-recharges** (same `recharges` table, admin moderation side).
 - **Absorbs** the §3.2 (Mes Finances) + §3.3 (Mes Revenus) consolidations.
-- **MONEY-ADJACENT — CLAUDE rule 10:** confirm recharge/debit semantics on every repoint; ask before
-  changing.
+- **MONEY-ADJACENT — CLAUDE rule 10 (RULED):** recharge/debit semantics are **preserved exactly** on
+  repoint — the api mirrors today's `balance.service` debit/credit behavior (and the cart-launch
+  debit, recharge-approval credit). No semantic change; ask before touching any of it.
 
 ### §6.4 — Performances (≈2 files) — `features/performances/**`
 
@@ -400,63 +427,104 @@ knot). Admin is a pure consumer. Performances and Agent are downstream/partly ex
 
 ---
 
-## §7 — Sub-slice ordering proposal
+## §7 — Sub-slice ordering (RATIFIED REVISION)
 
-### §7.1 — Three lenses
+### §7.0 — Ratified ordering
 
-- **Dependency-driven:** Screens → Campaigns → Wallet → Events → Admin → Performances → Agent.
-  (`balance.service` repointed in foundation breaks the campaigns↔wallet cycle.)
-- **Priority-driven (Kais "screenhost signup → campaign creation"):** signup is done, so the headline
-  product flow is **campaign creation** — but it can't go live without Screens (targeting) and Wallet
-  (cart launch). So Screens+Campaigns+Wallet form a **core-transaction cluster** that ships in
-  sequence early.
-- **Risk-driven (velocity / smallest-first):** Foundation (deletions + consolidations + cross-cutting
-  repoint) → **Agent signup** (net-new, isolated, small) → then data domains. Builds momentum but
-  defers the high-value transaction.
+Foundation A shipped at `c00d661`. The ratified slice-2 ordering:
 
-### §7.2 — Recommended path (lean)
+| # | Sub-slice | Notes |
+|---|---|---|
+| Foundation A | **shipped** (`c00d661`) | 5 dead/deferred route deletions |
+| Foundation B | next | profile 2→1 (§3.1) + approvals merge (§3.5) + CampaignDetails→drawer (§2.2) + GiftCatalog/loyalty removal from OwnerDashboard (§8.1); UI restructure, no backend |
+| Foundation C | after B | apiClient upload helpers (§8.2) + residual demo sweep (§8.1) |
+| **2.1 Locations-read** | mini-slice | expose the locations read surface for the wizard; mechanical, ~4–6 commits, no new pages |
+| **2.2 Campaigns / advertiser flow** | headline | the advertiser value chain ships; money-adjacent (debit semantics) |
+| **2.3 Wallet** | — | follows Campaigns (which established the debit semantics); absorbs §3.2 + §3.3 |
+| **2.4 Screenhost-write** | — | the screenhost flow with **real campaigns flowing in**; absorbs the events fold (§3.4) + repoints the approval hooks merged in Foundation B; two-sided flow demoable end-to-end |
+| **2.5 Events** | — | user-facing browse/boost |
+| **2.6 Performances** | — | screenhost real, advertiser placeholder; partly external-blocked |
+| **2.7 Admin non-approval** | — | repoint the remaining admin services; replicate UI (Kais #2); taxonomy collapse (#13); admin-creation auth path source-verify (§5) |
+| **2.8 Agent-signup** | parallelizable from 2.4 onward | **BLOCKED on Kais #5** (role model + signup mode) |
+| **2.9 Agent sensor-management** | last | external-platform-blocked (§9) |
 
-**Dependency-driven with foundation first**, Agent sliceable in parallel:
+### §7.1 — Reasoning for the revision (two source-truth findings)
 
-0. **Foundation** (§8) — deletions + merge + drawer conversion; cross-cutting `balance.service` /
-   `global-configuration.service` / notifications repoint; apiClient upload-helper gap.
-1. **Screens** — root dependency; unblocks campaigns + `/admin-screens` + `/admin-zones`.
-2. **Campaigns (+ video + cart)** — the headline transaction; pulls the wallet balance debit; absorbs
-   the screenhost-events fold (§3.4) and the approvals merge (§3.5).
-3. **Wallet / Finance** — recharge/revenue/statements/invoices; absorbs §3.2 + §3.3 consolidations.
-4. **Events** — small; user-facing browse/boost.
-5. **Admin** — repoint the 8 remaining admin services; replicate UI (Kais #2); event-taxonomy
-   collapse (#13).
-6. **Performances** — lowest urgency; screenhost real, advertiser placeholder; partly external-blocked.
-7. **Agent** — net-new; needs Figma scoping (§4.4) + external-platform coordination (§4.3). **Agent
-   *signup* (role + onboarding) can slot in parallel early** (it's auth-adjacent and isolated);
-   **sensor-management waits** on the external interface.
+The original ordering (§7.3, superseded) was dependency-driven — Screens before Campaigns because
+"campaigns book screens." Two findings surfaced during ratification revised the picture:
 
-### §7.3 — Dependency-only (what could parallelize)
+**Finding 1 — the booking unit is the GEOGRAPHIC ZONE, not the screen.** Verified at
+`apps/web/src/features/campaigns/pages/new-campaign/Step4.tsx` + the `campaign_locations` schema +
+`getLocationsInArea()`. The advertiser picks **zone(s)** — a radius around a map point, OR predefined
+zones from a catalog. The system computes which locations fall in the zone(s); the advertiser
+**cannot cherry-pick locations**. Locations + screens are operational data the platform uses to
+**fulfill** zone bookings, not the advertiser's choice surface.
 
-- After **Foundation**: Screens and Agent-signup are independent → parallel.
-- After **Screens**: Campaigns and `/admin-screens` + `/admin-zones` can proceed; Wallet is largely
-  parallel to Campaigns except the cart-launch seam.
-- **Admin** pages are independent of each other (per-page repoint) → highly parallelizable among
+**Finding 2 — the campaigns sub-slice's read dependency is the LOCATIONS read surface, not a
+screens-write api.** Concretely: `predefined_zones` (admin-curated zone catalog), `locations` +
+`business_profiles` (owner display), `location_affluence_schedule` (impression math),
+`screens.location_id` + `screens.status='active'` ("how many active screens at this location"). None
+of these need **screenhost-write** to function — the data already exists in the DB from the prior
+dev's era (real screenhosts, venues, screens). The advertiser flow can ship **end-to-end against
+pre-existing data** with no new screenhost-write capability.
+
+**Consequence — split "Locations-read" from "Screenhost-write":**
+
+- **2.1 Locations-read** = small mini-slice: api endpoints exposing the read surfaces above; repoint
+  the read methods of `campaign-screens.service.ts` + `predefined-zones.service.ts` to `apiClient`.
+  **No new pages, no behavior changes** — mechanical, ~4–6 commits.
+- **2.2 Campaigns** = the headline sub-slice; the advertiser value chain ships. Money-adjacent.
+- **2.3 Wallet** = follows Campaigns because Campaigns established the debit semantics.
+- **2.4 Screenhost-write** = the screenhost flow with real campaigns already flowing in; by 2.4 the
+  two-sided marketplace is demoable end-to-end.
+
+### §7.2 — Dependency-only (what could parallelize)
+
+- After **Foundation C**: 2.1 Locations-read and (once Kais #5 lands) 2.8 Agent-signup are
+  independent → parallel.
+- **2.7 Admin** pages are independent of each other (per-page repoint) → parallelizable among
   themselves once their owning-domain tables are stable.
-- **Performances** and **Agent-sensors** are the trailing/external-blocked pair.
+- **2.6 Performances** and **2.9 Agent-sensors** are the trailing/external-blocked pair.
+
+### §7.3 — Superseded — original ordering (see ratified revision §7.0)
+
+> The text below is the pre-revision ordering, kept for the record. **Superseded** by §7.0/§7.1.
+>
+> - **Dependency-driven:** Screens → Campaigns → Wallet → Events → Admin → Performances → Agent
+>   (`balance.service` repointed in foundation breaks the campaigns↔wallet cycle).
+> - **Priority-driven:** Screens+Campaigns+Wallet as a core-transaction cluster early.
+> - **Risk-driven:** Foundation → Agent-signup → data domains.
+>
+> Recommended path was: Foundation → Screens → Campaigns → Wallet → Events → Admin → Performances →
+> Agent (signup parallel-early, sensor-management last). The revision keeps the *spirit* (advertiser
+> transaction first) but **drops "Screens" as a prerequisite sub-slice** — replaced by the smaller
+> "Locations-read" mini-slice — because Finding 1/2 showed campaigns need locations-**read**, not
+> screens-**write**.
 
 ---
 
 ## §8 — Foundation work (before the first data-domain sub-slice)
 
-### §8.1 — Packaging options (for ruling)
+### §8.1 — Packaging — Option B RATIFIED (A/B/C split)
 
-- **Option A (prompt's lean): one `slice-2-foundation` commit** — deletions + consolidations +
-  demo-sweep together. **Risk:** the finance/revenue/profile consolidations are real refactors that
-  intersect the Wallet domain — bundling them invites a double-touch when Wallet repoints.
-- **Option B (recommended): split.**
-  - **Foundation-A (cheap, no backend):** deletions (§2.1) + `/campaign-details`→drawer (§2.2) +
-    approvals merge (§3.5) + notification actionPath reroute. Pure removal/restructure.
-  - **Foundation-B:** profile 2→1 consolidation (§3.1) — UI only, already-repointed.
-  - **Finance (§3.2) + Revenue (§3.3) consolidations ride the Wallet sub-slice** (consolidate while
-    repointing).
-  - **Events fold (§3.4) rides the Campaigns sub-slice.**
+The architect **ratified Option B** (split into Foundation A/B/C). Option A (one mega-commit) was
+rejected — the consolidations are real refactors intersecting the Wallet domain; bundling them
+invites a double-touch. The split as shipped/scoped:
+
+- **Foundation A — SHIPPED (`c00d661`):** the 5 dead/deferred route deletions (§2.1) + orphan-symbol
+  cleanup + the typecheck-baseline ratchet 33→28. Pure removal. _(A was deletions-only —
+  `/campaign-details`→drawer and the approvals merge were held back to B.)_
+- **Foundation B — next (UI restructure, no backend):** profile 2→1 (§3.1) + approvals merge (§3.5)
+  + `CampaignDetails`→shared drawer (§2.2) + **GiftCatalog/loyalty-UI removal from `OwnerDashboard`**
+  + delete `components/GiftCatalog.tsx` (Kais #11 — the architect's §6.A ruling deferred this from
+  Foundation A to here).
+- **Foundation C — after B:** the apiClient upload-helper gap (§8.2) + any residual demo-content
+  sweep. _(Note: `DEMO_RECIPIENT` (§3.3) actually rides the Wallet/Revenue consolidation in 2.3, not
+  C; the Carrefour gift items ride the GiftCatalog removal in B. C's demo residue is therefore
+  minimal — confirm at C scoping.)_
+- **Finance (§3.2) + Revenue (§3.3) consolidations ride the Wallet sub-slice (2.3)** — consolidate
+  while repointing.
+- **Events fold (§3.4) rides Screenhost-write (2.4).**
 
 ### §8.2 — apiClient infrastructure gaps
 
@@ -479,6 +547,16 @@ Phase 1f built the `apiClient` (`credentials:'include'`, `VITE_API_URL`) and a d
   the `global_configuration` table **when pricing wires in**, not in slice 2.
 - **Sensor live feed / external-platform integration** — the agent sub-slice can build UI against a
   contract; the live feed waits.
+- **Pending Kais email batch:**
+  - **#3 — advertiser `/evenements` fold-vs-standalone.** Provisional ruling: **stays standalone**
+    (§3.4). Confirm in the next batch; flips nothing already-built if it changes.
+  - **#5 — agent (§4).** Three sub-decisions: (a) `profile_type` enum extension vs a separate role;
+    (b) self-signup vs admin-created; (c) sensor-management scope. **All gate the agent sub-slices.**
+- **Agent-signup (2.8) is BLOCKED on Kais #5** — cannot scope until (a)+(b) land. Agent
+  sensor-management (2.9) is additionally external-platform-blocked.
+- **Admin-creation auth path (§5, 2.7):** `/admin-create` uses `supabase.auth.signUp`; the repoint
+  likely needs a **new `POST /api/admin/users`** (better-auth probably lacks admin-create-without-
+  verify). Source-verify against `apps/api` at the Admin sub-slice scoping.
 - **Carry-forwards (repoint survey §17.1 / 1f):** 2FA, strict `tax_number` matricule validation,
   `autoRefreshToken` removal.
 - **`lint-1` floor (`import-x/no-unresolved` on `database.types`)** — clears only when **the last**
@@ -521,28 +599,23 @@ stale-doc problem. Logged so the executor trusts the code, not the older maps:
 
 ---
 
-## Conflicts / ambiguities needing an architect ruling
+## Rulings ledger (ratified — folded into the sections above)
 
-1. **Profile "ONE page" shape** (§3.1) — one shared `ProfileSettings` component + two role wrappers
-   (lean), or literally one route? Tab sets differ by role.
-2. **Campaign-detail drawer** (§2.2) — one shared `<CampaignDetailDrawer>` for advertiser +
-   screenhost, or two?
-3. **Advertiser `/evenements`** (§3.4) — fold into `/my-campaigns` too, or stay standalone (lean:
-   standalone)?
-4. **Approvals merge target** (§3.5) — confirm `/owner-campaigns` is the merged route + that the 3
-   notification actionPaths + the admin-video notification payload reroute there.
-5. **Agent** (§4) — `profile_type` extension vs separate role; self-signup vs admin-created;
-   approval-gated?; sensor-management scope (blocked on external platform). Needs Figma scoping (file
-   key on hand).
-6. **Foundation packaging** (§8.1) — Option A (one commit) vs Option B (split; consolidations ride
-   their sub-slices). Lean: B.
-7. **Sub-slice ordering** (§7) — confirm dependency-driven (Screens→Campaigns→Wallet→Events→Admin→
-   Performances→Agent) with Agent-signup parallelizable.
-8. **Money-adjacent semantics** (§6.3) — confirm recharge/debit semantics are preserved exactly on
-   the Wallet + admin-recharges repoint (CLAUDE rule 10).
-9. **Admin-creation auth path** (§5.2 / §10.9) — does a better-auth admin-creation endpoint exist, or
-   is it new backend work?
+The 9 ambiguities the initial discovery surfaced are now architect-ruled. Recorded here for trace;
+each is folded into its section.
+
+| # | Ambiguity | Ruling | Folded into |
+|---|---|---|---|
+| 1 | Profile "ONE page" shape | shared `ProfileSettings` + 2 role wrappers | §3.1 (→ Foundation B) |
+| 2 | Campaign-detail drawer | one shared `<CampaignDetailDrawer>` with a role prop | §2.2 (→ Foundation B) |
+| 3 | Advertiser `/evenements` fold? | **provisional: stays standalone** — pending Kais | §3.4 + §9 |
+| 4 | Approvals merge target | `/owner-campaigns` absorbs it; 6 reroutes | §3.5 (→ Foundation B) |
+| 5 | Agent (role model / signup mode / sensor scope) | **BLOCKED on Kais batch #5** | §4 + §9 |
+| 6 | Foundation packaging | **Option B (A/B/C split)** ratified | §8.1 |
+| 7 | Sub-slice ordering | **revised** — advertiser-first; Locations-read (2.1) ahead of Campaigns (2.2); Screenhost-write at 2.4 | §7 |
+| 8 | Money-adjacent semantics | preserved **exactly** (CLAUDE rule 10) | §6.3 |
+| 9 | Admin-creation auth path | likely new `POST /api/admin/users`; source-verify at 2.7 | §5 + §9 |
 
 ---
 
-*End of slice-2 discovery. Held under `docs/handoff/`. Not committed.*
+*End of slice-2 discovery. Committed on `main`; §7 + the rulings ledger ratified post-Foundation-A.*
