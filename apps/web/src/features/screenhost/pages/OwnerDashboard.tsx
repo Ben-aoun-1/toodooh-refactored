@@ -5,12 +5,10 @@ import {
   CheckCircle,
   DollarSign,
   Monitor,
-  Gift,
   Calendar,
   CalendarX,
   BarChart3,
   TrendingUp,
-  Star,
   LayoutGrid,
   Megaphone,
   Eye,
@@ -25,7 +23,6 @@ import { useSectors } from '@/features/auth/hooks/useSectors';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { useOwnerCampaignApprovals } from '@/features/campaigns/hooks/useOwnerCampaignApprovals';
 import AddScreen from '@/features/screenhost/components/AddScreen';
-import GiftCatalog from '@/features/screenhost/components/GiftCatalog';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
 import OwnerNotificationsBell from '@/features/screenhost/components/OwnerNotificationsBell';
 import { useScreens } from '@/features/screens/hooks/useScreens';
@@ -79,7 +76,6 @@ export default function OwnerDashboard() {
   const [_accountStatus, _setAccountStatus] = useState<'active' | 'pending' | 'suspended'>(
     'active',
   );
-  const [showGiftCatalog, setShowGiftCatalog] = useState(false);
   const [showAddScreen, setShowAddScreen] = useState(false);
   const [selectedEstablishment, setSelectedEstablishment] = useState<string | null>(null);
 
@@ -193,16 +189,6 @@ export default function OwnerDashboard() {
       });
     }
 
-    if (revenueStats && revenueStats.loyaltyPoints > 100) {
-      generatedAlerts.push({
-        id: 'loyalty',
-        type: 'info',
-        title: 'Points fidélité disponibles',
-        message: `Vous avez ${revenueStats.loyaltyPoints} points fidélité à échanger dans le catalogue.`,
-        timestamp: new Date().toISOString(),
-      });
-    }
-
     setAlerts(generatedAlerts.slice(0, 5));
   }, [screensLoading, screens, revenueStats]);
 
@@ -215,10 +201,6 @@ export default function OwnerDashboard() {
   const handleNavigateToRevenue = () => {
     navigate('/owner-revenue');
     toast.success('Redirection vers la page des revenus');
-  };
-
-  const handleNavigateToGiftCatalog = () => {
-    setShowGiftCatalog(true);
   };
 
   const handleDeclareUnavailability = () => {
@@ -1021,63 +1003,12 @@ export default function OwnerDashboard() {
                       </button>
                     </div>
                   </div>
-
-                  {/* Section Rewards */}
-                  <div className="mb-8">
-                    <h3 className="text-2xl font-bold text-gray-900 mb-4 flex items-center">
-                      <Gift className="h-6 w-6 text-brand-primary mr-2" />
-                      Rewards
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {/* Points Fidélité */}
-                      <button
-                        onClick={handleNavigateToGiftCatalog}
-                        className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 border border-gray-200 cursor-pointer group"
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-600 mb-1">
-                              Points Fidélité
-                            </p>
-                            <p className="text-3xl font-bold text-gray-900 group-hover:text-brand-primary transition-colors">
-                              {stats.loyaltyPoints}
-                            </p>
-                          </div>
-                          <div className="p-3 rounded-xl bg-gradient-to-br from-brand-primary to-brand-primary/80 shadow-lg group-hover:scale-110 transition-transform flex-shrink-0 ml-3">
-                            <Star className="h-6 w-6 text-white" />
-                          </div>
-                        </div>
-                      </button>
-
-                      {/* Catalogue Cadeaux */}
-                      <button
-                        onClick={handleNavigateToGiftCatalog}
-                        className="bg-white rounded-xl p-6 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 border border-gray-200 cursor-pointer group text-left"
-                      >
-                        <div className="flex items-center justify-center mb-4">
-                          <div className="p-4 rounded-xl bg-gradient-to-br from-brand-primary to-brand-primary/80 shadow-lg group-hover:scale-110 transition-transform">
-                            <Gift className="h-8 w-8 text-white" />
-                          </div>
-                        </div>
-                        <p className="text-sm font-medium text-gray-600 text-center">
-                          Échanger vos points fidélité
-                        </p>
-                      </button>
-                    </div>
-                  </div>
                 </>
               )}
             </div>
           </div>
         </div>
       </div>
-
-      {/* Gift Catalog Modal */}
-      <GiftCatalog
-        isOpen={showGiftCatalog}
-        onClose={() => setShowGiftCatalog(false)}
-        userPoints={stats.loyaltyPoints}
-      />
 
       {/* Add Screen Modal */}
       <AddScreen
