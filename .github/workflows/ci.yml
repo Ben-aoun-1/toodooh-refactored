@@ -64,12 +64,13 @@ jobs:
 
       - name: Typecheck (baseline-gated)
         run: |
-          # Ratcheted to 28 at slice-2 Foundation A (was 33 at 1h-prep, 51 before): deleting
-          # LocationsMap.tsx removed its 5 react-leaflet/LatLngExpression errors. The residual 28 are
-          # later-slice errors (remaining react-leaflet in /admin-zones + wizard Step4, file-saver,
-          # the dooh engine, the database.types propagation) that clear at the last Supabase
-          # removal (#15), when this drops to 0.
-          TYPECHECK_BASELINE=28
+          # Ratcheted to 27 at slice-2 Foundation B4a (was 28 at Foundation A, 33 at 1h-prep, 51
+          # before): the advertiser profile→ProfileSettings extraction dropped UserProfile's dead
+          # number_of_screens form-state, resolving its TS2353. The residual 27 are later-slice
+          # errors (react-leaflet in /admin-zones + wizard Step4, file-saver, the dooh engine, the
+          # database.types propagation) that clear at the last Supabase removal (#15), when this
+          # drops to 0.
+          TYPECHECK_BASELINE=27
           pnpm typecheck 2>&1 | tee typecheck.log || true
           n=$(grep -c 'error TS' typecheck.log || true)
           echo "typecheck errors: $n (baseline $TYPECHECK_BASELINE)"

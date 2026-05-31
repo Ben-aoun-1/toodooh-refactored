@@ -54,7 +54,7 @@ jobs:
 
       - name: Typecheck (baseline-gated)
         run: |
-          TYPECHECK_BASELINE=28
+          TYPECHECK_BASELINE=27
           pnpm typecheck 2>&1 | tee typecheck.log || true
           n=$(grep -c 'error TS' typecheck.log || true)
           echo "typecheck errors: $n (baseline $TYPECHECK_BASELINE)"
