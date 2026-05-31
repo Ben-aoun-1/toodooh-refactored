@@ -37,7 +37,11 @@ services:
 
   api:
     build:
-      context: ..
+      # `.` (not `..`): on the VPS the deploy rsyncs flat into /srv/toodooh/ (apps/ + the root pnpm
+      # files alongside this compose file), so the build context is the compose dir itself. Do NOT
+      # `docker compose build` this file from the repo's infra/ dir — context resolution differs from
+      # the flat VPS layout (the repo dev stack is infra/docker-compose.yml, unaffected).
+      context: .
       dockerfile: apps/api/Dockerfile
     restart: unless-stopped
     env_file: [.env]
@@ -56,7 +60,9 @@ services:
       - '80:80'
       - '443:443'
     volumes:
-      - ./nginx/toodooh.conf:/etc/nginx/conf.d/default.conf:ro
+      # HTTP-only variant for 1h-app-deploy (no TLS yet). Swaps back to toodooh.conf at 1h-tls,
+      # once /etc/letsencrypt is populated and the 443 servers can bind.
+      - ./nginx/toodooh-http.conf:/etc/nginx/conf.d/default.conf:ro
       - ./nginx/proxy_common.conf:/etc/nginx/proxy_common.conf:ro
       - ./www:/srv/toodooh/www:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro

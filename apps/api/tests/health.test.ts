@@ -10,7 +10,7 @@ const buildApp = (execute: () => Promise<unknown>) => {
   return app;
 };
 
-describe('GET /health', () => {
+describe('GET /api/health', () => {
   let app: ReturnType<typeof buildApp> | undefined;
 
   afterEach(async () => {
@@ -21,7 +21,7 @@ describe('GET /health', () => {
   it('returns 200 ok when db ping succeeds', async () => {
     app = buildApp(async () => [{ '?column?': 1 }]);
     await app.register(healthRoute);
-    const response = await app.inject({ method: 'GET', url: '/health' });
+    const response = await app.inject({ method: 'GET', url: '/api/health' });
     expect(response.statusCode).toBe(200);
     const body = response.json<{
       status: string;
@@ -39,7 +39,7 @@ describe('GET /health', () => {
       throw new Error('db down');
     });
     await app.register(healthRoute);
-    const response = await app.inject({ method: 'GET', url: '/health' });
+    const response = await app.inject({ method: 'GET', url: '/api/health' });
     expect(response.statusCode).toBe(200);
     const body = response.json<{ status: string; checks: { db: string } }>();
     expect(body.status).toBe('degraded');

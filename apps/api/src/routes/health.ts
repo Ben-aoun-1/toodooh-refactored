@@ -17,7 +17,7 @@ const responseSchema = {
 } as const;
 
 export const healthRoute: FastifyPluginAsync = async (app) => {
-  app.get('/health', { schema: { response: { 200: responseSchema } } }, async (request) => {
+  app.get('/api/health', { schema: { response: { 200: responseSchema } } }, async (request) => {
     let dbStatus: 'ok' | 'error' = 'ok';
     try {
       await app.db.execute(sql`select 1`);
