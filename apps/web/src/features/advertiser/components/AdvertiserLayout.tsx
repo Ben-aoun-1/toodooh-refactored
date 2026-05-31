@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Users, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -50,7 +50,6 @@ function AdvertiserLayoutChrome({ children, userName }: AdvertiserLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const user = useAuthStore((s) => s.user);
-  const profileType = useAuthStore((s) => s.profileType);
   const needsApproval = useAuthStore((s) => s.needsApproval);
   const validationStatus = useAuthStore((s) => s.validationStatus);
   const contactName = useAuthStore((s) => s.contactName);
@@ -62,7 +61,6 @@ function AdvertiserLayoutChrome({ children, userName }: AdvertiserLayoutProps) {
   const [cartOpen, setCartOpen] = useState(false);
 
   const isDisabled = needsApproval && validationStatus === 'pending';
-  const showClientsLink = profileType === 'advertising_agency' || profileType === 'event_organizer';
   const fallbackName = user?.email?.split('@')[0] || 'Utilisateur';
   const displayName = userName || contactName || fallbackName;
   const isProfileRoute = location.pathname === '/profile';
@@ -161,31 +159,6 @@ function AdvertiserLayoutChrome({ children, userName }: AdvertiserLayoutProps) {
             disabled={isDisabled}
             onNavigate={() => setIsMenuOpen(false)}
           />
-          {showClientsLink && (
-            <button
-              onClick={() => {
-                if (isDisabled) return;
-                navigate('/my-clients');
-                setIsMenuOpen(false);
-              }}
-              disabled={isDisabled}
-              title={!sidebarExpanded ? 'Mes clients' : undefined}
-              className={`h-9 flex items-center rounded-lg text-sm font-medium transition-colors ${
-                sidebarExpanded
-                  ? 'w-full max-w-[232px] px-3 py-2 gap-3'
-                  : 'w-10 justify-center mx-auto'
-              } ${
-                isDisabled
-                  ? 'text-[#5C5C5C] opacity-50 cursor-not-allowed'
-                  : location.pathname === '/my-clients'
-                    ? 'bg-[#E4F9EB] text-[#132B1B]'
-                    : 'text-[#5C5C5C] hover:bg-gray-100/80'
-              }`}
-            >
-              <Users className="h-5 w-5 flex-shrink-0" strokeWidth={1.5} />
-              {sidebarExpanded && <span className="leading-5 truncate">Mes clients</span>}
-            </button>
-          )}
         </nav>
 
         <div

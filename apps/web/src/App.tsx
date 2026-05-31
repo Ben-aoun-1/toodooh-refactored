@@ -17,7 +17,6 @@ const MyCampaigns = lazy(() => import('@/features/campaigns/pages/MyCampaigns'))
 const Events = lazy(() => import('@/features/events/pages/Events'));
 const MyRecharges = lazy(() => import('@/features/wallet/pages/MyRecharges'));
 const MyInvoices = lazy(() => import('@/features/wallet/pages/MyInvoices'));
-const MyClients = lazy(() => import('@/features/advertiser/pages/MyClients'));
 const AdvertiserPerformancePlaceholder = lazy(
   () => import('@/features/performances/pages/AdvertiserPerformancePlaceholder'),
 );
@@ -30,7 +29,6 @@ const ResetPassword = lazy(() => import('@/features/auth/pages/ResetPassword'));
 const UpdatePassword = lazy(() => import('@/features/auth/pages/UpdatePassword'));
 const VerifyEmail = lazy(() => import('@/features/auth/pages/VerifyEmail'));
 const OwnerScreens = lazy(() => import('@/features/screenhost/pages/OwnerScreens'));
-const OwnerLocations = lazy(() => import('@/features/screenhost/pages/OwnerLocations'));
 const OwnerRevenue = lazy(() => import('@/features/screenhost/pages/OwnerRevenue'));
 const OwnerCampaigns = lazy(() => import('@/features/screenhost/pages/OwnerCampaigns'));
 const OwnerPerformance = lazy(() => import('@/features/screenhost/pages/OwnerPerformance'));
@@ -39,13 +37,10 @@ const OwnerStatementsPage = lazy(() => import('@/features/screenhost/pages/Owner
 const OwnerStatementDetailPage = lazy(
   () => import('@/features/screenhost/pages/OwnerStatementDetailPage'),
 );
-const OwnerActivity = lazy(() => import('@/features/screenhost/pages/OwnerActivity'));
-const OwnerMaintenance = lazy(() => import('@/features/screenhost/pages/OwnerMaintenance'));
 const OwnerSettings = lazy(() => import('@/features/screenhost/pages/OwnerSettings'));
 const OwnerCampaignApprovals = lazy(
   () => import('@/features/screenhost/pages/OwnerCampaignApprovals'),
 );
-const GiftCatalogPage = lazy(() => import('@/features/screenhost/pages/GiftCatalogPage'));
 const ContactPage = lazy(() => import('@/features/screenhost/pages/ContactPage'));
 const AdminLogin = lazy(() => import('@/features/admin/pages/AdminLogin'));
 const AdminDashboard = lazy(() => import('@/features/admin/pages/AdminDashboard'));
@@ -334,16 +329,6 @@ export default function App() {
               }
             />
             <Route
-              path="/my-clients"
-              element={
-                <AdvertiserRoute>
-                  <AdvertiserLayout>
-                    <MyClients />
-                  </AdvertiserLayout>
-                </AdvertiserRoute>
-              }
-            />
-            <Route
               path="/perfor"
               element={
                 <AdvertiserRoute>
@@ -390,14 +375,6 @@ export default function App() {
               }
             />
             <Route
-              path="/owner-locations"
-              element={
-                <OwnerRoute>
-                  <OwnerLocations />
-                </OwnerRoute>
-              }
-            />
-            <Route
               path="/owner-revenue"
               element={
                 <OwnerRoute>
@@ -438,22 +415,6 @@ export default function App() {
               }
             />
             <Route
-              path="/owner-activity"
-              element={
-                <OwnerRoute>
-                  <OwnerActivity />
-                </OwnerRoute>
-              }
-            />
-            <Route
-              path="/owner-maintenance"
-              element={
-                <OwnerRoute>
-                  <OwnerMaintenance />
-                </OwnerRoute>
-              }
-            />
-            <Route
               path="/owner-campaign-approvals"
               element={
                 <OwnerRoute>
@@ -466,14 +427,6 @@ export default function App() {
               element={
                 <OwnerRoute>
                   <OwnerSettings />
-                </OwnerRoute>
-              }
-            />
-            <Route
-              path="/gift-catalog"
-              element={
-                <OwnerRoute>
-                  <GiftCatalogPage />
                 </OwnerRoute>
               }
             />
