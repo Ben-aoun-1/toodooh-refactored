@@ -565,6 +565,40 @@ Phase 1f built the `apiClient` (`credentials:'include'`, `VITE_API_URL`) and a d
 
 ---
 
+## §9.5 — Slice-2-close polish (Foundation B deferrals)
+
+Six small, deliberate deferrals accumulated across Foundation B — each a known divergence parked for
+a dedicated slice-2-close polish pass (none blocks a data-domain sub-slice). Recorded here as the
+durable tracking list (also referenced in each B-commit message):
+
+1. **CampaignDrawer cosmetic normalization (B2).** The advertiser (480px) and owner (420px) drawers
+   were consolidated with their cosmetic divergences **preserved faithfully** (padding `p-5`/`p-4`,
+   header typography, status-badge derivation, video treatment). Normalize to one canon at close.
+2. **Status-derivation shared-util consolidation (B2).** `getStatusUi` (owner) stayed page-local
+   (shared with the list cards) and the advertiser status map stayed inline; the drawer takes the
+   badge as a `statusBadge` slot. Consolidate the two derivations into a shared util at close.
+3. **Notification deep-link to the À-approuver tab (B3).** The 6 rerouted approval notifications land
+   on plain `/owner-campaigns` (default tab); deep-link them to the new `to_approve` tab (e.g. a query
+   param, reusing the existing `?openCampaignId=` pattern).
+4. **Symmetric "Refus enregistré" success modal (B3).** Reject currently `toast`s; accept has a
+   "Félicitations" modal. Add the symmetric reject-success modal (Figma `597:16465` panel 6).
+5. **`company_size` null-vs-undefined (B4b nuance 1).** The shared `onSaveBusiness` sends
+   `company_size: value || undefined` (omit); the owner's prior wire used `|| null` (clear). Moot
+   today (the owner field is disabled) — reconcile when the **owner-extras slice** makes it editable.
+6. **Owner documents-tab intro paragraph (B4b note 1).** The owner documents tab had a leading
+   descriptive `<p>` (CIN/registre) the shared component (advertiser-shaped) doesn't render; the
+   `documentDropTitle` still conveys the doc type. Re-add via a prop at close if product wants it.
+
+**Figma divergence to reconcile (product-directed):** frame `597:16465` shows a **confirm-only**
+reject modal; the code now has the **optional reason textarea** (B3, architect-directed). Design to be
+updated to match the code — flagged to design, not a code change.
+
+**Also parked (B4b, Option A — ratified):** the owner business-save no longer forwards
+`number_of_screens`/`number_of_rooms` (backend-stripped in slice 1, zero persisted effect); the
+**owner-extras slice** re-establishes that wire when it adds the columns.
+
+---
+
 ## §10 — Methodology surfaces (docs-vs-reality drift)
 
 The slice-1 `1h-app-deploy` "lint-1 floor" model was stale; slice-2 discovery surfaced a **larger**

@@ -2256,3 +2256,76 @@ The existing §17.1 entries continue to carry unchanged.
 **Phase 1g closes** on this audit refresh + MABA's full-1g visual-QA pass (G0 auth + G1-backed
 approval flow + G2 UI, end-to-end). Next: the Track B (landing/Figma) vs Phase 1h (deployment)
 ordering decision (architect + MABA), per §17.2 / §18.2.
+
+## 19. Slice 2 — Foundation (deletions + consolidations)
+
+After Phase 1h shipped the stack to the VPS, **slice 2** (the product layer beyond the account
+keystone) opened with a discovery (`docs/handoff/slice-2-discovery.md`) and a **Foundation** phase of
+pure frontend cleanup/consolidation — deletions (A) + UI consolidations (B) — before the first
+data-domain repoint (2.1). Foundation A/B are now **closed**; `apps/api` was untouched throughout.
+
+### 19.1 — Commit table + net effects
+
+| Commit                | What                                                                                                                                                              | Net                    |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| `c00d661`             | **Foundation A** — delete 5 dead/deferred routes (`/my-clients`, `/gift-catalog`, `/owner-locations`, `/owner-activity`, `/owner-maintenance`) + orphan hooks/nav | −1893; floor **33→28** |
+| `c387f88` → `ba61b45` | slice-2 discovery + revised sub-slice ordering (advertiser-first; Locations-read 2.1 ahead of Campaigns)                                                          | docs                   |
+| `2e72dbd`             | **B1** — remove GiftCatalog modal + OwnerDashboard loyalty cascade (Kais #11)                                                                                     | −357                   |
+| `8903984`             | **B2** — extract generic `components/Drawer` + shared `CampaignDrawer`; delete orphaned `/campaign-details` route+page+hook                                       | −363; supabase 52→51   |
+| `ae226a4`             | **B3** — merge `OwnerCampaignApprovals` into `OwnerCampaigns` (À-approuver tab) + optional reject-reason; reroute 7 refs                                          | −293                   |
+| `60b6f5f`             | **B4a** — shared `features/profile/components/ProfileSettings` + advertiser wrapper                                                                               | floor **28→27**        |
+| `4ec4a3e`             | **B4b** — owner wrapper + `OwnerBankDetailsSlot`; delete owner inline form; **closes Foundation B**                                                               | −1308                  |
+
+**Net effect across Foundation:** supabase-import surface **54 → 51**; typecheck floor **33 → 27**;
+the two ~1300/1700-line profile pages + two inline campaign drawers consolidated into shared
+components (`ProfileSettings`, `Drawer`/`CampaignDrawer`); GiftCatalog/loyalty + the standalone
+approvals / campaign-details / owner-locations / activity / maintenance / my-clients / gift-catalog
+routes removed. lint held **0** (root), tests held **219**. Slice-2-close polish parked in
+discovery §9.5 (6 items + the Figma reject-modal reconcile).
+
+### 19.2 — Methodology surfaces (durable; the phase's contributions)
+
+1. **Disk-verification-first, at the level of running code (the headline rule).** The discovery doc
+   was wrong **three times** — reject-reason "capture" framing (B3), route line-number drift
+   (Foundation A), and owner `number_of_screens`/`number_of_rooms` "not saved" (B4b). **The discovery
+   is a map, not the territory.** A confirm-pass must read the actual payload-producing / mutation /
+   save **bodies**, not summaries of them. The B4b near-miss is the worked instance: the inventory
+   claimed screens/rooms were unsaved; the real `handleSaveEntreprise` **forwarded** them — reading
+   the save body caught it before a silent interface widening reached an architect ratification.
+   **Mandatory per sub-slice — and the cost of a wrong assumption rises at 2.1+** (a wrong endpoint
+   shape is more expensive to walk back than a frontend miss).
+2. **Slot-injection consolidation pattern (validated 4×).** `footerSlot` (B2), `statusBadge` slot
+   (B2), `bankSlot` (B4b), and the normalized-mutations / awaited-callback interface (B4a/B4b). The
+   established pattern: **inject divergent behavior as props/slots; never derive role logic inside a
+   shared component; prefer awaited callbacks over passing mutation objects** (the shared component
+   owns its own pending state). It kept the profile consolidation gap-free across two role wrappers.
+3. **Inventory-confirm-before-build (two-phase).** A read-only inventory/confirm pass → architect
+   rulings → build. Earned its keep at B2 (drawer), B3 (approvals), B4 (profile). **Standard for any
+   consolidation/repoint of non-trivial size** — the confirm pass is where the disk-vs-doc divergences
+   surface before they reach code.
+4. **Zero-diff as a halt tripwire.** Declaring a file "must be zero-diff" and **halting on any
+   deviation** is a cheap way to catch unforeseen interface gaps. On B4b it forced the entreprise-save
+   gap (screens/rooms) to the architect for a ruling (Option A) instead of a silent patch or a silent
+   widening of `ProfileSettings`. The single authorized exception (the 1-line zone-trim) was itself
+   surfaced and ratified, not slipped in.
+5. **Ratchet-follows-reality.** When a change **incidentally retires a floor error**, ratchet the
+   baseline down **with identity proof** (the same set minus the retired error; no swap) — the floor
+   only moves down, never up. B4a's `28→27` is the instance: the ruling-mandated dead-state drop
+   (`number_of_screens` in the advertiser hydration) retired `UserProfile.tsx`'s `TS2353`; both
+   `ci.yml` + `deploy.yml` ratcheted to 27 with the identity confirmed in the CF-9.
+
+### 19.3 — Methodology inflection at 2.1 (flag for the next scope)
+
+Foundation was **frontend delete/consolidate** — `apps/api` out of scope, gates frontend-only, the
+"map vs territory" risk bounded to UI. **Sub-slice 2.1 (Locations-read) is the first data-domain
+repoint and the first `apps/api` touch.** The working shape shifts accordingly and the adjustment
+must be **deliberate at 2.1 scope time, not silent**:
+
+- **Commit shapes** — backend + frontend may split (the 1e/1f precedent: backend prereq commit, then
+  the repoint), vs Foundation's single frontend commits.
+- **Gate expectations** — `apps/api` re-enters scope: its typecheck/lint/test gates + the real-Postgres
+  integration suite (now locally provisioned, §18.4.7) apply again; the supabase-import surface starts
+  ticking **down** (51 → …) as read methods repoint.
+- **Verification** — **endpoint-contract checks** (request/response shape, the consumer's full action
+  set per §18.4.4, the filter behavior per §18.4.5) become the load-bearing verification, on top of
+  the frontend floor gates. Disk-verification-first (§19.2.1) applies hardest here.
