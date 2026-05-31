@@ -22,7 +22,6 @@ const AdvertiserPerformancePlaceholder = lazy(
 );
 const CartPage = lazy(() => import('@/features/campaigns/pages/CartPage'));
 const OwnerDashboard = lazy(() => import('@/features/screenhost/pages/OwnerDashboard'));
-const CampaignDetails = lazy(() => import('@/features/campaigns/pages/CampaignDetails'));
 const Login = lazy(() => import('@/features/auth/pages/Login'));
 const SignUp = lazy(() => import('@/features/auth/pages/SignUp'));
 const ResetPassword = lazy(() => import('@/features/auth/pages/ResetPassword'));
@@ -297,14 +296,6 @@ export default function App() {
                   <AdvertiserLayout>
                     <NewCampaign />
                   </AdvertiserLayout>
-                </AdvertiserRoute>
-              }
-            />
-            <Route
-              path="/campaign-details/:id"
-              element={
-                <AdvertiserRoute>
-                  <CampaignDetails />
                 </AdvertiserRoute>
               }
             />

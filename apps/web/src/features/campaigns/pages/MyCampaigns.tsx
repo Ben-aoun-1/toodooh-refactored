@@ -8,12 +8,9 @@ import {
   DollarSign,
   MoreVertical,
   Plus,
-  X,
   MapPin,
   Rocket,
   RotateCcw,
-  Crosshair,
-  Monitor,
   Trash2,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
@@ -24,6 +21,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import 'react-datepicker/dist/react-datepicker.css';
 import campagneIcon from '@/assets/sidebar/campagnes.png';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
+import CampaignDrawer from '@/features/campaigns/components/CampaignDrawer';
 import { useMyCampaigns } from '@/features/campaigns/hooks/useMyCampaigns';
 import { useMyCampaignsMutations } from '@/features/campaigns/hooks/useMyCampaignsMutations';
 import { useVideoById } from '@/features/campaigns/hooks/useVideoById';
@@ -141,27 +139,17 @@ export default function MyCampaigns() {
   const [selectedCampaign, setSelectedCampaign] = useState<any>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [openActionRowId, setOpenActionRowId] = useState<string | null>(null);
-  const [drawerVisible, setDrawerVisible] = useState(false);
 
   // Detail-modal video — the shared `useVideoById` consolidation (Commit 7b).
   // Loads reactively when a campaign with a `video_id` is selected.
   const { video: campaignVideo } = useVideoById(selectedCampaign?.video_id);
 
-  // Animation du panneau droit : ouvrir après le montage, fermer avant le démontage
-  useEffect(() => {
-    if (showDetailsModal) {
-      const t = requestAnimationFrame(() => setDrawerVisible(true));
-      return () => cancelAnimationFrame(t);
-    }
-    setDrawerVisible(false);
-  }, [showDetailsModal]);
-
+  // The slide animation now lives in the shared <Drawer> primitive (B2): close
+  // flips `open` (showDetailsModal) immediately; the campaign data is cleared
+  // after the 300ms exit so the body stays rendered through the slide-out.
   const closeDetailsDrawer = () => {
-    setDrawerVisible(false);
-    setTimeout(() => {
-      setShowDetailsModal(false);
-      setSelectedCampaign(null);
-    }, 300);
+    setShowDetailsModal(false);
+    setTimeout(() => setSelectedCampaign(null), 300);
   };
 
   // Fonction pour consulter une campagne — la vidéo est chargée par
@@ -1095,9 +1083,10 @@ export default function MyCampaigns() {
         </div>
       </div>
 
-      {/* Panneau droit (drawer) Détails de Campagne — 480px, design maquette */}
-      {showDetailsModal &&
-        selectedCampaign &&
+      {/* Panneau droit (drawer) Détails de Campagne — 480px, design maquette.
+          Guard on selectedCampaign (not showDetailsModal) so the drawer stays
+          mounted through the <Drawer> exit animation; `open` drives the slide. */}
+      {selectedCampaign &&
         (() => {
           const drawerStatusStyle: Record<
             string,
@@ -1147,231 +1136,32 @@ export default function MyCampaigns() {
             },
           };
           const st = drawerStatusStyle[selectedCampaign.status] || drawerStatusStyle.draft;
-          const startStr = selectedCampaign.startDate
-            ? new Date(selectedCampaign.startDate).toLocaleDateString('fr-FR', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-              })
-            : '—';
-          const endStr = selectedCampaign.endDate
-            ? new Date(selectedCampaign.endDate).toLocaleDateString('fr-FR', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-              })
-            : '—';
-          const durationDays =
-            selectedCampaign.startDate && selectedCampaign.endDate
-              ? Math.ceil(
-                  (selectedCampaign.endDate.getTime() - selectedCampaign.startDate.getTime()) /
-                    (1000 * 60 * 60 * 24),
-                )
-              : 0;
-          const categories =
-            selectedCampaign.selected_categories ||
-            (selectedCampaign.category ? [selectedCampaign.category] : []);
-          const zones = selectedCampaign.selected_zones || [];
           return (
-            <div className="fixed inset-0 z-50 overflow-hidden">
-              <div
-                className={`absolute inset-0 bg-gray-500/75 transition-opacity duration-300 ${drawerVisible ? 'opacity-100' : 'opacity-0'}`}
-                onClick={closeDetailsDrawer}
-                aria-hidden
-              />
-              <div
-                className={`absolute top-0 bottom-0 w-[480px] right-2 bg-white flex flex-col isolate transform transition-transform duration-300 ease-out ${
-                  drawerVisible ? 'translate-x-0' : 'translate-x-full'
-                }`}
-                style={{
-                  boxShadow: '0px 16px 32px rgba(14, 18, 27, 0.101961)',
-                  border: '1px solid #EBEBEB',
-                  borderRadius: '12px',
-                }}
-              >
-                {/* Header — Frame 413 */}
-                <div className="flex-none flex flex-row items-start p-5 gap-4 border-b border-[#EBEBEB]">
-                  <div className="flex flex-col gap-1 min-w-0 flex-1">
-                    <h3
-                      className="text-lg font-medium text-[#171717] leading-6 truncate"
-                      style={{ letterSpacing: '-0.015em' }}
-                    >
-                      {selectedCampaign.name}
-                    </h3>
-                    <span
-                      className="inline-flex items-center gap-1.5 w-fit px-2 py-0.5 rounded-md"
-                      style={{ background: st.bg, border: `1px solid ${st.border}` }}
-                    >
-                      <span
-                        className="w-1.5 h-1.5 rounded-full shrink-0"
-                        style={{ background: st.dot }}
-                      />
-                      <span
-                        className="text-xs font-medium"
-                        style={{ color: st.text, letterSpacing: '-0.006em', lineHeight: '16px' }}
-                      >
-                        {st.label}
-                      </span>
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={closeDetailsDrawer}
-                    className="p-2 text-[#5C5C5C] hover:bg-gray-100 rounded-lg transition-colors shrink-0"
-                    aria-label="Fermer"
+            <CampaignDrawer
+              open={showDetailsModal}
+              onClose={closeDetailsDrawer}
+              campaign={selectedCampaign}
+              video={campaignVideo}
+              variant="advertiser"
+              statusBadge={
+                <span
+                  className="inline-flex items-center gap-1.5 w-fit px-2 py-0.5 rounded-md"
+                  style={{ background: st.bg, border: `1px solid ${st.border}` }}
+                >
+                  <span
+                    className="w-1.5 h-1.5 rounded-full shrink-0"
+                    style={{ background: st.dot }}
+                  />
+                  <span
+                    className="text-xs font-medium"
+                    style={{ color: st.text, letterSpacing: '-0.006em', lineHeight: '16px' }}
                   >
-                    <X className="h-6 w-6" strokeWidth={1.5} />
-                  </button>
-                </div>
-
-                {/* Content — Frame 414 */}
-                <div className="flex-1 overflow-y-auto flex flex-col p-5 gap-4">
-                  {/* Type de la campagne */}
-                  <div className="flex flex-col gap-2">
-                    <span
-                      className="text-xs font-medium uppercase text-[#A3A3A3] tracking-tight"
-                      style={{ letterSpacing: '-0.006em', lineHeight: '16px' }}
-                    >
-                      Type de la campagne
-                    </span>
-                    <div className="flex gap-2">
-                      <div
-                        className="flex-1 flex items-center gap-2 p-1.5 rounded-lg bg-white border border-brand-primary"
-                        style={{ boxShadow: '0px 1px 2px rgba(10, 13, 20, 0.0313726)' }}
-                      >
-                        <div className="w-8 h-8 rounded-lg bg-[#DCF0E9] flex items-center justify-center shrink-0">
-                          <Crosshair className="h-5 w-5 text-[#142522]" />
-                        </div>
-                        <span className="text-xs text-[#171717]">Réseau Toodooh</span>
-                      </div>
-                      <div
-                        className="flex-1 flex items-center gap-2 p-1.5 rounded-lg bg-[#F7F7F7] border border-[#EBEBEB]"
-                        style={{ boxShadow: '0px 1px 2px rgba(10, 13, 20, 0.0313726)' }}
-                      >
-                        <div className="w-8 h-8 rounded-lg border border-[#EBEBEB] flex items-center justify-center shrink-0">
-                          <Monitor className="h-5 w-5 text-[#D1D1D1]" />
-                        </div>
-                        <span className="text-xs text-[#D1D1D1]">Parc TV</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Catégorie(s) */}
-                  <div className="flex flex-col gap-2">
-                    <span
-                      className="text-xs font-medium uppercase text-[#A3A3A3] tracking-tight"
-                      style={{ letterSpacing: '-0.006em', lineHeight: '16px' }}
-                    >
-                      Catégorie(s)
-                    </span>
-                    <div className="flex flex-wrap gap-2">
-                      {categories.map((cat: string, i: number) => (
-                        <span
-                          key={i}
-                          className="inline-flex items-center px-2 py-1 rounded bg-white border border-brand-primary text-xs text-[#171717]"
-                          style={{ boxShadow: '0px 1px 2px rgba(10, 13, 20, 0.0313726)' }}
-                        >
-                          {cat}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Période */}
-                  <div className="flex flex-col gap-2">
-                    <span
-                      className="text-xs font-medium uppercase text-[#A3A3A3] tracking-tight"
-                      style={{ letterSpacing: '-0.006em', lineHeight: '16px' }}
-                    >
-                      Période
-                    </span>
-                    <div
-                      className="flex flex-wrap gap-4 text-xs font-medium text-[#171717]"
-                      style={{ letterSpacing: '-0.006em', lineHeight: '16px' }}
-                    >
-                      <span>Début: {startStr}</span>
-                      <span>Fin: {endStr}</span>
-                      <span>Durée: {durationDays} jours</span>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col gap-2">
-                    <span
-                      className="text-xs font-medium uppercase text-[#A3A3A3] tracking-tight"
-                      style={{ letterSpacing: '-0.006em', lineHeight: '16px' }}
-                    >
-                      Impressions validées
-                    </span>
-                    <div className="text-sm font-semibold text-[#171717]">
-                      {(selectedCampaign.validated_impressions || 0).toLocaleString('fr-FR')}
-                    </div>
-                  </div>
-
-                  {/* Zones géographiques */}
-                  <div className="flex flex-col gap-2">
-                    <span
-                      className="text-xs font-medium uppercase text-[#A3A3A3] tracking-tight"
-                      style={{ letterSpacing: '-0.006em', lineHeight: '16px' }}
-                    >
-                      Zones géographiques
-                    </span>
-                    <div
-                      className="flex flex-wrap gap-2 text-xs font-medium text-[#171717]"
-                      style={{ letterSpacing: '-0.006em', lineHeight: '16px' }}
-                    >
-                      {zones.length > 0 ? (
-                        zones.map((zone: string) => (
-                          <span
-                            key={zone}
-                            className="inline-flex items-center px-2 py-1 rounded bg-white border border-brand-primary"
-                          >
-                            {zone}
-                          </span>
-                        ))
-                      ) : (
-                        <span>—</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Spot */}
-                  <div className="flex flex-col gap-2">
-                    <span
-                      className="text-xs font-medium uppercase text-[#A3A3A3] tracking-tight"
-                      style={{ letterSpacing: '-0.006em', lineHeight: '16px' }}
-                    >
-                      Spot
-                    </span>
-                    <div className="rounded-xl border border-[#EBEBEB] overflow-hidden bg-black/5 relative">
-                      {campaignVideo?.url ? (
-                        <div className="relative">
-                          <video
-                            src={campaignVideo.url}
-                            controls
-                            className="w-full aspect-video object-contain rounded-xl"
-                            muted
-                            playsInline
-                          />
-                          <div
-                            className="absolute inset-x-0 bottom-0 h-24 pointer-events-none"
-                            style={{
-                              background:
-                                'linear-gradient(180deg, rgba(13, 15, 20, 0) 0%, rgba(13, 15, 20, 0.9) 80.37%)',
-                              backdropFilter: 'blur(1px)',
-                            }}
-                          />
-                        </div>
-                      ) : (
-                        <div className="aspect-video flex items-center justify-center text-[#A3A3A3] text-sm">
-                          Aucun spot
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Footer — Frame 415 */}
-                <div className="flex-none flex flex-row items-center p-5 gap-4 border-t border-[#EBEBEB]">
+                    {st.label}
+                  </span>
+                </span>
+              }
+              footerSlot={
+                <div className="flex flex-row items-center gap-4">
                   <button
                     type="button"
                     onClick={closeDetailsDrawer}
@@ -1422,8 +1212,8 @@ export default function MyCampaigns() {
                     </button>
                   )}
                 </div>
-              </div>
-            </div>
+              }
+            />
           );
         })()}
     </div>

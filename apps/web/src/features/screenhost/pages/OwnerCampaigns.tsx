@@ -2,7 +2,6 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
-  Crosshair,
   DollarSign,
   Grid3X3,
   List,
@@ -13,13 +12,13 @@ import {
   PartyPopper,
   Search,
   TrendingUp,
-  X,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { useAuthStore } from '@/features/auth/stores/auth.store';
+import CampaignDrawer from '@/features/campaigns/components/CampaignDrawer';
 import { useOwnerCampaignApprovalMutations } from '@/features/campaigns/hooks/useOwnerCampaignApprovalMutations';
 import { useVideoById } from '@/features/campaigns/hooks/useVideoById';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
@@ -108,7 +107,6 @@ export default function OwnerCampaigns() {
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
   const [selectedCampaign, setSelectedCampaign] = useState<OwnerCampaignCard | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [drawerVisible, setDrawerVisible] = useState(false);
   const [processingDecision, setProcessingDecision] = useState<'accept' | 'reject' | null>(null);
   const [showApprovalSuccessModal, setShowApprovalSuccessModal] = useState(false);
   const [showRejectConfirmModal, setShowRejectConfirmModal] = useState(false);
@@ -176,14 +174,6 @@ export default function OwnerCampaigns() {
   }, [currentPage, totalPages]);
 
   useEffect(() => {
-    if (showDetailsModal) {
-      const t = requestAnimationFrame(() => setDrawerVisible(true));
-      return () => cancelAnimationFrame(t);
-    }
-    setDrawerVisible(false);
-  }, [showDetailsModal]);
-
-  useEffect(() => {
     const params = new URLSearchParams(location.search);
     const openCampaignId = params.get('openCampaignId');
     if (!openCampaignId || campaigns.length === 0) return;
@@ -203,9 +193,9 @@ export default function OwnerCampaigns() {
   }, [location.pathname, location.search, campaigns, navigate]);
 
   const closeDetailsDrawer = () => {
-    setDrawerVisible(false);
+    // Slide-out is owned by <Drawer> (B2): flip `open` now, clear data after exit.
+    setShowDetailsModal(false);
     setTimeout(() => {
-      setShowDetailsModal(false);
       setSelectedCampaign(null);
       setProcessingDecision(null);
       setShowRejectConfirmModal(false);
@@ -640,181 +630,61 @@ export default function OwnerCampaigns() {
         </div>
       </div>
 
-      {showDetailsModal &&
-        selectedCampaign &&
+      {selectedCampaign &&
         (() => {
           const statusUi = getStatusUi(
             selectedCampaign.status,
             Boolean(selectedCampaign.startDate && selectedCampaign.startDate > new Date()),
           );
-          const startStr = selectedCampaign.startDate
-            ? selectedCampaign.startDate.toLocaleDateString('fr-FR')
-            : '—';
-          const endStr = selectedCampaign.endDate
-            ? selectedCampaign.endDate.toLocaleDateString('fr-FR')
-            : '—';
-          const durationDays =
-            selectedCampaign.startDate && selectedCampaign.endDate
-              ? Math.max(
-                  0,
-                  Math.ceil(
-                    (selectedCampaign.endDate.getTime() - selectedCampaign.startDate.getTime()) /
-                      (1000 * 60 * 60 * 24),
-                  ),
-                )
-              : 0;
           return (
-            <div className="fixed inset-0 z-50 overflow-hidden">
-              <div
-                className={`absolute inset-0 bg-gray-500/75 transition-opacity duration-300 ${drawerVisible ? 'opacity-100' : 'opacity-0'}`}
-                onClick={closeDetailsDrawer}
-                aria-hidden
-              />
-              <div
-                className={`absolute top-0 bottom-0 right-2 w-[420px] bg-white flex flex-col isolate transform transition-transform duration-300 ease-out ${
-                  drawerVisible ? 'translate-x-0' : 'translate-x-full'
-                }`}
-                style={{
-                  boxShadow: '0px 16px 32px rgba(14,18,27,0.102)',
-                  border: '1px solid #EBEBEB',
-                  borderRadius: '12px',
-                }}
-              >
-                <div className="flex-none flex flex-row items-start p-4 gap-3 border-b border-[#EBEBEB]">
-                  <div className="flex flex-col gap-1 min-w-0 flex-1">
-                    <h3 className="text-[20px] leading-6 font-semibold text-[#171717] truncate">
-                      {selectedCampaign.name}
-                    </h3>
-                    <span
-                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium w-fit ${statusUi.badge}`}
+            <CampaignDrawer
+              open={showDetailsModal}
+              onClose={closeDetailsDrawer}
+              campaign={selectedCampaign}
+              video={campaignVideo}
+              variant="owner"
+              statusBadge={
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium w-fit ${statusUi.badge}`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${statusUi.dot}`} />
+                  {statusUi.label}
+                </span>
+              }
+              footerSlot={
+                isPendingForOwner(selectedCampaign) ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowRejectConfirmModal(true)}
+                      disabled={processingDecision !== null}
+                      className="h-10 rounded-lg border border-[#FFC5C7] bg-[#FFF6F6] text-[#FB3748] font-medium hover:opacity-90 disabled:opacity-60"
                     >
-                      <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${statusUi.dot}`} />
-                      {statusUi.label}
-                    </span>
+                      {processingDecision === 'reject' ? 'Traitement...' : 'Refuser'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleApproveSelectedCampaign}
+                      disabled={processingDecision !== null}
+                      className="h-10 rounded-lg border border-brand-primary bg-[#E8F8EE] text-[#1FC16B] font-medium hover:opacity-90 disabled:opacity-60 inline-flex items-center justify-center gap-2"
+                    >
+                      {processingDecision === 'accept' && (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      )}
+                      <span>{processingDecision === 'accept' ? 'Traitement...' : 'Accepter'}</span>
+                    </button>
                   </div>
+                ) : (
                   <button
                     type="button"
                     onClick={closeDetailsDrawer}
-                    className="p-2 text-[#5C5C5C] hover:bg-gray-100 rounded-lg transition-colors shrink-0"
-                    aria-label="Fermer"
+                    className="w-full h-10 rounded-lg border border-[#EBEBEB] bg-white text-[#5C5C5C] font-medium hover:bg-gray-50"
                   >
-                    <X className="h-5 w-5" />
+                    Fermer
                   </button>
-                </div>
-
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                  <div className="border-b border-[#EFEFEF] pb-3">
-                    <p className="text-xs uppercase text-[#A3A3A3] mb-2">Type de la campagne</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="flex items-center gap-2 rounded-lg p-2 border border-brand-primary bg-white">
-                        <div className="w-8 h-8 rounded-lg bg-[#E8F8EE] border border-brand-primary flex items-center justify-center">
-                          <Crosshair className="h-4 w-4 text-[#142522]" />
-                        </div>
-                        <span className="text-sm text-[#171717]">Réseau Toodooh</span>
-                      </div>
-                      <div className="flex items-center gap-2 rounded-lg p-2 border border-[#EBEBEB] bg-[#F7F7F7]">
-                        <div className="w-8 h-8 rounded-lg bg-white border border-[#EBEBEB] flex items-center justify-center">
-                          <Monitor className="h-4 w-4 text-[#D1D1D1]" />
-                        </div>
-                        <span className="text-sm text-[#9D9D9D]">Parc TV</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="border-b border-[#EFEFEF] pb-3">
-                    <p className="text-xs uppercase text-[#A3A3A3] mb-2">Etablissements</p>
-                    <div className="inline-flex items-center justify-center h-7 min-w-7 px-2 rounded border border-brand-primary bg-[#E8F8EE] text-[#1FC16B] text-sm font-semibold">
-                      {selectedCampaign.ownerLocationsCount}
-                    </div>
-                  </div>
-
-                  <div className="border-b border-[#EFEFEF] pb-3">
-                    <p className="text-xs uppercase text-[#A3A3A3] mb-2">Période</p>
-                    <div className="flex justify-between text-sm text-[#171717]">
-                      <span>
-                        <strong>Début:</strong> {startStr}
-                      </span>
-                      <span>
-                        <strong>Fin:</strong> {endStr}
-                      </span>
-                      <span>
-                        <strong>Durée:</strong> {durationDays} jours
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="border-b border-[#EFEFEF] pb-3">
-                    <p className="text-xs uppercase text-[#A3A3A3] mb-2">Zones géographiques</p>
-                    <div className="flex justify-between text-sm text-[#171717]">
-                      <span>
-                        <strong>Nombre de zones:</strong>{' '}
-                        {Math.max(1, selectedCampaign.ownerLocationsCount)}
-                      </span>
-                      <span>
-                        <strong>Zone couverte:</strong> —
-                      </span>
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="text-xs uppercase text-[#A3A3A3] mb-2">Spot</p>
-                    <div className="rounded-xl border border-[#EBEBEB] overflow-hidden bg-black/5">
-                      {campaignVideo?.url ? (
-                        <video
-                          src={campaignVideo.url || undefined}
-                          controls
-                          className="w-full aspect-video object-contain bg-black"
-                        >
-                          {/* Empty caption track — satisfies jsx-a11y/media-has-caption
-                              for advertiser-uploaded media that has no caption file. */}
-                          <track kind="captions" />
-                        </video>
-                      ) : (
-                        <div className="aspect-video flex items-center justify-center text-sm text-[#A3A3A3]">
-                          Aucun spot
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex-none p-4 border-t border-[#EBEBEB]">
-                  {isPendingForOwner(selectedCampaign) ? (
-                    <div className="grid grid-cols-2 gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setShowRejectConfirmModal(true)}
-                        disabled={processingDecision !== null}
-                        className="h-10 rounded-lg border border-[#FFC5C7] bg-[#FFF6F6] text-[#FB3748] font-medium hover:opacity-90 disabled:opacity-60"
-                      >
-                        {processingDecision === 'reject' ? 'Traitement...' : 'Refuser'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleApproveSelectedCampaign}
-                        disabled={processingDecision !== null}
-                        className="h-10 rounded-lg border border-brand-primary bg-[#E8F8EE] text-[#1FC16B] font-medium hover:opacity-90 disabled:opacity-60 inline-flex items-center justify-center gap-2"
-                      >
-                        {processingDecision === 'accept' && (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        )}
-                        <span>
-                          {processingDecision === 'accept' ? 'Traitement...' : 'Accepter'}
-                        </span>
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={closeDetailsDrawer}
-                      className="w-full h-10 rounded-lg border border-[#EBEBEB] bg-white text-[#5C5C5C] font-medium hover:bg-gray-50"
-                    >
-                      Fermer
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
+                )
+              }
+            />
           );
         })()}
 
