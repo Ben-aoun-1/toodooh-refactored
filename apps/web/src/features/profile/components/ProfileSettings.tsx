@@ -388,7 +388,7 @@ export default function ProfileSettings({
         postal_code: adresseForm.postal_code,
         governorate_id: adresseForm.governorate_id || undefined,
       };
-      if (fields.zone) patch.zone = adresseForm.zone || null;
+      if (fields.zone) patch.zone = adresseForm.zone.trim() || null;
       await onSaveAddress(patch);
       toast.success('Adresse enregistrée');
     } catch (err) {
