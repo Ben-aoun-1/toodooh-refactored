@@ -26,6 +26,7 @@ const OwnerDashboard = lazy(() => import('@/features/screenhost/pages/OwnerDashb
 const CampaignDetails = lazy(() => import('@/features/campaigns/pages/CampaignDetails'));
 const Login = lazy(() => import('@/features/auth/pages/Login'));
 const SignUp = lazy(() => import('@/features/auth/pages/SignUp'));
+const SignUpSuccess = lazy(() => import('@/features/auth/pages/SignUpSuccess'));
 const ResetPassword = lazy(() => import('@/features/auth/pages/ResetPassword'));
 const UpdatePassword = lazy(() => import('@/features/auth/pages/UpdatePassword'));
 const VerifyEmail = lazy(() => import('@/features/auth/pages/VerifyEmail'));
@@ -224,6 +225,9 @@ export default function App() {
                 </PublicRoute>
               }
             />
+            {/* Post-signup validation screen (slice-1 auth-bug-1). Standalone — reached right after
+                signup with the email in router state; the just-registered user is logged out. */}
+            <Route path="/signup-success" element={<SignUpSuccess />} />
             <Route
               path="/reset-password"
               element={
