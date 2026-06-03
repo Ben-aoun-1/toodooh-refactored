@@ -114,6 +114,22 @@ export const auth = betterAuth({
     // account's own address. Changes Phase-1d behavior (then: 403 without resend; now: 403 + resend).
     sendOnSignIn: true,
     sendVerificationEmail,
+    // Slice-1 auth-bug-2: land a freshly-verified user logged into their dashboard (the Figma
+    // target) instead of a logged-out success page. The three guardrails (a verify link now grants
+    // a session, so it must not be a reusable magic link):
+    //   G1 (one-shot) — better-auth's verify-email handler short-circuits on `user.emailVerified`
+    //     BEFORE this auto-signin block (email-verification.mjs: `if (user.user.emailVerified) {
+    //     redirect; return }`). So a session is created ONLY on the unverified→verified transition;
+    //     a re-click of an already-consumed link redirects to the success page with NO session. The
+    //     gating is the framework's own state check — no custom code needed.
+    //   G2 (short expiry) — drop the credential's lifetime from better-auth's 1h default to 30 min,
+    //     since it now mints a session. G1 is the real protection; this narrows the pre-first-click
+    //     window. Expired links are recoverable via the resend button (sendOnSignIn/the FE resend).
+    //   G3 (session-before-redirect) — the same handler calls `setSessionCookie` and THEN
+    //     `ctx.redirect(callbackURL)`, so the Set-Cookie and the 302 ride one response (no
+    //     click→login race). Verified at execution (verify-email auto-login test).
+    autoSignInAfterVerification: true,
+    expiresIn: 1800,
   },
   user: {
     // Map better-auth's logical `name` field to the drizzle `contactName` property
