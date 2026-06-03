@@ -181,7 +181,9 @@ export default function GeographicZonesManagement() {
             latitude: selectedLocations[0].lat,
             longitude: selectedLocations[0].lng,
             radius: radius,
-            image_url: zoneImageUrl || null,
+            // image_url is owned + persisted by POST /predefined-zones/:id/image (Z2 §3). Sending
+            // it here would write the serialized /storage/<key> path back over the bare key — the
+            // upload route is the single writer of this column.
             is_hot: zoneIsHot,
             country: zoneCountry || null,
             region: zoneRegion || null,

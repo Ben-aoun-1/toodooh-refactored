@@ -1,11 +1,9 @@
 import { apiClient } from '@/lib/api-client';
-import { supabase } from '@/lib/supabase';
 
-// Z1 cutover: reads + the 4 scalar writes are on apps/api (`/predefined-zones`). The endpoint
-// serializer returns this exact snake_case shape with latitude/longitude as numbers, so the
-// interface and every consumer (wizard Haversine + Leaflet, /admin-zones) are untouched.
-// uploadZoneImage stays on supabase.storage — the SOLE remaining Supabase call here, repointed in Z2
-// (storage integration).
+// Zones cutover COMPLETE (Z1 reads + scalar writes; Z2 image upload). The whole service is on
+// apps/api (`/predefined-zones`); no Supabase. The GET serializer returns this exact snake_case
+// shape with latitude/longitude as numbers and image_url as /storage/<key>, so the interface and
+// every consumer (wizard Haversine + Leaflet, /admin-zones) are untouched.
 export interface PredefinedZone {
   id: string;
   name: string;
@@ -74,19 +72,18 @@ export const predefinedZonesService = {
   },
 
   /**
-   * Upload une image pour une zone (bucket zone-images). Retourne l'URL publique.
-   * SOLE remaining Supabase call in this service — repointed in Z2 (storage integration).
+   * Upload une image pour une zone → POST /predefined-zones/:id/image (admin, multipart). The route
+   * stores at the stable key zones/<id>, persists image_url server-side, and returns the bare key.
+   * Compose the relative /storage/<key> the consumers render directly (the C2→C4 contract's second
+   * composition site; the GET serializer is the first — accepted duplication, not hoisted this slice).
    */
   async uploadZoneImage(zoneId: string, file: File): Promise<string> {
-    const ext = file.name.split('.').pop() || 'jpg';
-    const path = `${zoneId}/${Date.now()}.${ext}`;
-    const { error } = await supabase.storage
-      .from('zone-images')
-      .upload(path, file, { contentType: file.type, upsert: true });
-    if (error) throw error;
-    const {
-      data: { publicUrl },
-    } = supabase.storage.from('zone-images').getPublicUrl(path);
-    return publicUrl;
+    const form = new FormData();
+    form.append('file', file);
+    const { key } = await apiClient.postForm<{ id: string; key: string }>(
+      `/predefined-zones/${zoneId}/image`,
+      form,
+    );
+    return `/storage/${key}`;
   },
 };
