@@ -8,13 +8,21 @@ architect-ruled (see Revision history below + the rulings ledger at the foot of 
 > **Revision history:**
 >
 > - `c387f88` — initial discovery.
-> - _this commit_ — revised sub-slice ordering (§7); locked architect rulings on the 9 ambiguities
+> - `ba61b45` — revised sub-slice ordering (§7); locked architect rulings on the 9 ambiguities
 >   (folded into §2.2/§3/§4/§5/§6/§8/§9). Source-truth findings: the booking unit is the
 >   **geographic zone** (not the screen — `new-campaign/Step4.tsx` + `campaign_locations` +
 >   `getLocationsInArea()`); the campaigns sub-slice's read dependency is the **locations-read**
 >   surface (not a screens-write api). Consequence: the **advertiser flow ships before
 >   screenhost-write** — Locations-read is a small mini-slice (2.1) ahead of Campaigns (2.2);
 >   Screenhost-write moves to 2.4.
+> - _this commit_ — **§7 ordering CORRECTED to writes-before-reads.** §7.1 **Finding 2 was a FALSE
+>   premise**: it assumed real inventory data already existed in the DB from the prior dev's era —
+>   **none ever did** (project owner, ratified). Inventory must be **created before it can be read**,
+>   so the ordering **inverts**: Zones cutover (Z) → Agent role (A) → Screenhost-agent
+>   establishment-write (E) → Locations-read (R) → Campaigns (2.2) → tail. Also records the
+>   corrected data model (establishment = coordinate-bearing dot), the Kais #5 agent ruling
+>   (separate admin-created role; two agent types; sensors deferred), and the screencaster/screenhost
+>   terminology lock. See §7.0/§7.1/§7.1.1.
 
 **Method:** triangulation of `docs/figma-vs-code.md`, `docs/user-flows.md`,
 `docs/handoff/frontend-repoint-survey.md`, `docs/handoff/supabase-rpc-inventory.md`,
@@ -220,10 +228,13 @@ it's a UI restructure (the approval hooks stay on Supabase until Screenhost-writ
 
 **Confirmed net-new** — nothing agent-shaped exists in code today.
 
-> **BLOCKED on Kais batch #5.** The three agent sub-decisions below — (a) `profile_type` enum
-> extension vs a separate role; (b) self-signup vs admin-created; (c) sensor-management scope — are
-> all **pending the next Kais email batch** (tracked in §9). Agent-signup (2.8) cannot scope until
-> (a)+(b) land; sensor-management (2.9) is additionally external-platform-blocked.
+> **✅ RULED — Kais #5 (this revision; see §7.1.1).** The three agent sub-decisions are now settled:
+> (a) agent = a **separate admin-created role**, NOT a `profile_type` enum value; (b) **admin-created**
+> (no self-signup); (c) sensor-management scope **DEFERRED**. There are **TWO agent types** —
+> **screencast-agent** + **screenhost-agent**; the screenhost-agent is the **inventory-creation path**
+> (registers coordinate-bearing establishments — sub-slice **E** in the §7.0 ordering). The
+> assumptions recorded in §4.2/§4.3 below are **superseded** where they conflict with this ruling;
+> sensor-management (§7.0 row **2.9**) remains additionally external-platform-blocked.
 
 ### §4.1 — Current enum reality
 
@@ -429,24 +440,33 @@ knot). Admin is a pure consumer. Performances and Agent are downstream/partly ex
 
 ## §7 — Sub-slice ordering (RATIFIED REVISION)
 
-### §7.0 — Ratified ordering
+### §7.0 — Ratified ordering — CORRECTED (writes-before-reads)
 
-Foundation A shipped at `c00d661`. The ratified slice-2 ordering:
+> **CORRECTION (this revision).** The prior ratified ordering (preserved at §7.3.1) was
+> **advertiser-first**, justified by §7.1 Finding 2 — that real inventory data already existed in
+> the DB from the prior dev's era. **That premise is FALSE** (project owner, ratified): no real data
+> ever existed; the DB was never populated. Inventory must be **CREATED before it can be read**, so
+> the ordering **inverts** — the zones cutover (Z), the agent role (A), and establishment-write (E)
+> ship *ahead of* Locations-read (R) and the advertiser flow (2.2).
+
+Foundation A/B shipped (`c00d661` … `4ec4a3e`, closed `20a5e73`); Foundation C is open. The corrected
+slice-2 ordering:
 
 | # | Sub-slice | Notes |
 |---|---|---|
 | Foundation A | **shipped** (`c00d661`) | 5 dead/deferred route deletions |
-| Foundation B | next | profile 2→1 (§3.1) + approvals merge (§3.5) + CampaignDetails→drawer (§2.2) + GiftCatalog/loyalty removal from OwnerDashboard (§8.1); UI restructure, no backend |
-| Foundation C | after B | apiClient upload helpers (§8.2) + residual demo sweep (§8.1) |
-| **2.1 Locations-read** | mini-slice | expose the locations read surface for the wizard; mechanical, ~4–6 commits, no new pages |
-| **2.2 Campaigns / advertiser flow** | headline | the advertiser value chain ships; money-adjacent (debit semantics) |
-| **2.3 Wallet** | — | follows Campaigns (which established the debit semantics); absorbs §3.2 + §3.3 |
-| **2.4 Screenhost-write** | — | the screenhost flow with **real campaigns flowing in**; absorbs the events fold (§3.4) + repoints the approval hooks merged in Foundation B; two-sided flow demoable end-to-end |
-| **2.5 Events** | — | user-facing browse/boost |
-| **2.6 Performances** | — | screenhost real, advertiser placeholder; partly external-blocked |
-| **2.7 Admin non-approval** | — | repoint the remaining admin services; replicate UI (Kais #2); taxonomy collapse (#13); admin-creation auth path source-verify (§5) |
-| **2.8 Agent-signup** | parallelizable from 2.4 onward | **BLOCKED on Kais #5** (role model + signup mode) |
-| **2.9 Agent sensor-management** | last | external-platform-blocked (§9) |
+| Foundation B | **shipped** (`4ec4a3e`, closed `20a5e73`) | profile 2→1 (§3.1) + approvals merge (§3.5) + CampaignDetails→drawer (§2.2) + GiftCatalog/loyalty removal from OwnerDashboard (§8.1); UI restructure, no backend |
+| Foundation C | open (after B) | apiClient upload helpers (§8.2) + residual demo sweep (§8.1) |
+| **Z — Zones cutover** | unblocked | `apps/api` `predefined_zones` reads + admin CRUD off the dead Supabase; canonical = the `apps/api` seed; build-ready (Phase-Z discovery complete) |
+| **A — Agent role foundation** | — | agent = SEPARATE admin-created role (Kais #5); + `/admin-create` off `supabase.auth.signUp` → better-auth admin path; prereq for E |
+| **E — Screenhost-agent establishment-write** | pulled to front | the screenhost-agent registers screenhost + establishment **WITH COORDINATES** — this CREATES the dots the advertiser sees; was doc 2.4 + 2.8 |
+| **R — Locations-read** | after E | advertiser reads points-in-zone; was doc 2.1 — now AFTER E, because E creates what R reads |
+| **2.2 — Campaigns / advertiser flow** | after R | the advertiser value chain ships; money-adjacent (debit semantics) |
+| **2.3 — Wallet** | — | follows Campaigns (which established the debit semantics); absorbs §3.2 + §3.3 |
+| **2.5 — Events** | — | user-facing browse/boost |
+| **2.6 — Performances** | — | screenhost real, advertiser placeholder; partly external-blocked |
+| **2.7 — Admin non-approval** | — | repoint the remaining admin services; replicate UI (Kais #2); taxonomy collapse (#13); admin-creation auth path source-verify (§5) |
+| **2.9 — Agent sensor-management + screencast-agent** | DEFERRED | sensor scope: "cross when we reach it"; external-platform-blocked (§9) |
 
 ### §7.1 — Reasoning for the revision (two source-truth findings)
 
@@ -464,27 +484,68 @@ zones from a catalog. The system computes which locations fall in the zone(s); t
 screens-write api.** Concretely: `predefined_zones` (admin-curated zone catalog), `locations` +
 `business_profiles` (owner display), `location_affluence_schedule` (impression math),
 `screens.location_id` + `screens.status='active'` ("how many active screens at this location"). None
-of these need **screenhost-write** to function — the data already exists in the DB from the prior
+of these need **screenhost-write** to function — ~~the data already exists in the DB from the prior
 dev's era (real screenhosts, venues, screens). The advertiser flow can ship **end-to-end against
-pre-existing data** with no new screenhost-write capability.
+pre-existing data** with no new screenhost-write capability.~~
 
-**Consequence — split "Locations-read" from "Screenhost-write":**
+> **❌ CORRECTED — FALSE PREMISE (this revision; project owner, ratified).** The struck sentence
+> above is **wrong**: **no real inventory data ever existed.** The DB this Finding assumes was
+> **never populated** — there were never any inherited screenhosts, venues, or screens. This was a
+> **false premise, not staleness.** Because it is the load-bearing justification for the entire §7
+> advertiser-first ordering, the ordering **inverts** (§7.0 corrected table): inventory must be
+> **CREATED before it can be read** — establishment-write (E), gated by the agent role (A) and the
+> zones cutover (Z), ships **ahead of** Locations-read (R) and the advertiser flow (2.2). The read
+> surfaces this Finding enumerates remain correct; what was false is that anything had populated them.
 
-- **2.1 Locations-read** = small mini-slice: api endpoints exposing the read surfaces above; repoint
-  the read methods of `campaign-screens.service.ts` + `predefined-zones.service.ts` to `apiClient`.
-  **No new pages, no behavior changes** — mechanical, ~4–6 commits.
-- **2.2 Campaigns** = the headline sub-slice; the advertiser value chain ships. Money-adjacent.
+**Consequence — CORRECTED (writes-before-reads):** "Locations-read" can no longer ship first — it
+has **nothing to read** until establishment-write populates the inventory. The split stands, but the
+order inverts:
+
+- **Z — Zones cutover** + **A — Agent role foundation** + **E — Screenhost-agent establishment-write**
+  **create** the inventory (zone catalog, agent role, coordinate-bearing establishments).
+- **R — Locations-read** = the same mechanical read-surface mini-slice as before — repoint the read
+  methods of `campaign-screens.service.ts` + `predefined-zones.service.ts` to `apiClient`, no new
+  pages — but now sequenced **after E**, because E is what populates those rows.
+- **2.2 Campaigns** = the headline sub-slice; the advertiser value chain ships against real,
+  agent-created inventory. Money-adjacent.
 - **2.3 Wallet** = follows Campaigns because Campaigns established the debit semantics.
-- **2.4 Screenhost-write** = the screenhost flow with real campaigns already flowing in; by 2.4 the
-  two-sided marketplace is demoable end-to-end.
+
+### §7.1.1 — Corrected data model, agent ruling, and terminology (this revision)
+
+**Data model (ratified this session).**
+
+- The **coordinate-bearing entity is the ESTABLISHMENT/LOCATION**: one establishment = one
+  coordinate = one **dot** on the advertiser's map.
+- **screen-count is METADATA** on the establishment; nothing in the booking / zone math depends on it.
+- The advertiser (**"screencaster"**) sees **DOTS only** — coordinates, with **no names, owner, or
+  details** (privacy by design; booking is zone-level, not establishment-level).
+- The **agent enters the coordinate** at establishment registration (sub-slice **E**). This is the
+  act that creates the dots; there is **no inherited dot set** (§7.1 Finding 2 correction).
+
+**Agent model — Kais #5 RULED** (was BLOCKED; supersedes the §4 banner + §4.2/§4.3 "Open" + the §9 block):
+
+- Agent = a **separate role**, **NOT** a `profile_type` enum value.
+- **Admin-created** (no self-signup).
+- **TWO agent types:** **screencast-agent** + **screenhost-agent**.
+- **screenhost-agent = the inventory-creation path** — registers establishments (with coordinates);
+  this is sub-slice **E**.
+- **sensor-management scope DEFERRED** ("cross when we reach it") → folded into the deferred §7.0
+  tail row **2.9** (alongside the screencast-agent build).
+
+**Terminology lock (record once):** **"screencaster" = advertiser**; **"screenhost" = screen /
+establishment owner.**
 
 ### §7.2 — Dependency-only (what could parallelize)
 
-- After **Foundation C**: 2.1 Locations-read and (once Kais #5 lands) 2.8 Agent-signup are
-  independent → parallel.
+- **Z (Zones cutover)** is unblocked and can start immediately; **A (Agent role foundation)** is
+  independent of Z → the two can run in parallel.
+- **E (establishment-write)** depends on **A** (the agent role must exist) and consumes **Z** (the
+  zone catalog): sequence **A → E**, with **Z** parallel/ahead.
+- **R (Locations-read)** depends on **E** — E populates exactly what R reads.
 - **2.7 Admin** pages are independent of each other (per-page repoint) → parallelizable among
   themselves once their owning-domain tables are stable.
-- **2.6 Performances** and **2.9 Agent-sensors** are the trailing/external-blocked pair.
+- **2.6 Performances** and **2.9 (sensor-management + screencast-agent)** are the trailing /
+  external-blocked pair.
 
 ### §7.3 — Superseded — original ordering (see ratified revision §7.0)
 
@@ -500,6 +561,24 @@ pre-existing data** with no new screenhost-write capability.
 > transaction first) but **drops "Screens" as a prerequisite sub-slice** — replaced by the smaller
 > "Locations-read" mini-slice — because Finding 1/2 showed campaigns need locations-**read**, not
 > screens-**write**.
+
+### §7.3.1 — Superseded — advertiser-first ordering (pre-correction; see §7.0)
+
+> Kept for the record. **Superseded** by the §7.0 writes-before-reads correction — its load-bearing
+> justification (§7.1 Finding 2: inventory already existed) was a **false premise** (no real data
+> ever existed). The table below was the ratified ordering from `ba61b45` until this revision.
+>
+> | # | Sub-slice | Notes |
+> |---|---|---|
+> | **2.1 Locations-read** | mini-slice | expose the locations read surface for the wizard; mechanical, ~4–6 commits, no new pages |
+> | **2.2 Campaigns / advertiser flow** | headline | the advertiser value chain ships; money-adjacent (debit semantics) |
+> | **2.3 Wallet** | — | follows Campaigns; absorbs §3.2 + §3.3 |
+> | **2.4 Screenhost-write** | — | the screenhost flow with real campaigns flowing in; absorbs the events fold (§3.4) |
+> | **2.5 Events** | — | user-facing browse/boost |
+> | **2.6 Performances** | — | screenhost real, advertiser placeholder; partly external-blocked |
+> | **2.7 Admin non-approval** | — | repoint the remaining admin services; replicate UI (Kais #2) |
+> | **2.8 Agent-signup** | parallelizable from 2.4 | BLOCKED on Kais #5 |
+> | **2.9 Agent sensor-management** | last | external-platform-blocked |
 
 ---
 
@@ -550,10 +629,19 @@ Phase 1f built the `apiClient` (`credentials:'include'`, `VITE_API_URL`) and a d
 - **Pending Kais email batch:**
   - **#3 — advertiser `/evenements` fold-vs-standalone.** Provisional ruling: **stays standalone**
     (§3.4). Confirm in the next batch; flips nothing already-built if it changes.
-  - **#5 — agent (§4).** Three sub-decisions: (a) `profile_type` enum extension vs a separate role;
-    (b) self-signup vs admin-created; (c) sensor-management scope. **All gate the agent sub-slices.**
-- **Agent-signup (2.8) is BLOCKED on Kais #5** — cannot scope until (a)+(b) land. Agent
-  sensor-management (2.9) is additionally external-platform-blocked.
+  - **#5 — agent (§4).** ✅ **RULED (this revision; §7.1.1):** separate **admin-created role** (not a
+    `profile_type` value); **two agent types** (screencast-agent + screenhost-agent); sensor-management
+    **DEFERRED**. No longer blocking — the agent role foundation (A) + establishment-write (E) are now
+    sequenced in §7.0.
+- **Agent role (A) + establishment-write (E)** are **unblocked** by the Kais #5 ruling and sit early
+  in the corrected §7.0 ordering. **Agent sensor-management + screencast-agent (§7.0 row 2.9)** remain
+  **DEFERRED** — external-platform-blocked.
+- **OPEN operational task (not slice-3) — auth-fix branch reconciliation.** The slice-1 auth-bugfix
+  branch `fix/slice1-auth-e2e` (HEAD `626cd71`: post-signup validation screen + auto-login-on-verify)
+  **diverged from `main` at `2822435`**, before Phase 1h and all of slice-2 — it contains **none** of
+  the Foundation A/B work or this discovery. It must be **reconciled onto `main`** (merge/rebase +
+  conflict + gate) as a **separate tracked task** before slice-2 data-domain work proceeds on a
+  unified line.
 - **Admin-creation auth path (§5, 2.7):** `/admin-create` uses `supabase.auth.signUp`; the repoint
   likely needs a **new `POST /api/admin/users`** (better-auth probably lacks admin-create-without-
   verify). Source-verify against `apps/api` at the Admin sub-slice scoping.
@@ -644,12 +732,13 @@ each is folded into its section.
 | 2 | Campaign-detail drawer | one shared `<CampaignDetailDrawer>` with a role prop | §2.2 (→ Foundation B) |
 | 3 | Advertiser `/evenements` fold? | **provisional: stays standalone** — pending Kais | §3.4 + §9 |
 | 4 | Approvals merge target | `/owner-campaigns` absorbs it; 6 reroutes | §3.5 (→ Foundation B) |
-| 5 | Agent (role model / signup mode / sensor scope) | **BLOCKED on Kais batch #5** | §4 + §9 |
+| 5 | Agent (role model / signup mode / sensor scope) | **RULED (Kais #5)** — separate admin-created role; two types (screencast + screenhost); screenhost-agent = establishment-write (E); sensors deferred (2.9) | §4 + §7.1.1 + §9 |
 | 6 | Foundation packaging | **Option B (A/B/C split)** ratified | §8.1 |
-| 7 | Sub-slice ordering | **revised** — advertiser-first; Locations-read (2.1) ahead of Campaigns (2.2); Screenhost-write at 2.4 | §7 |
+| 7 | Sub-slice ordering | **CORRECTED** — writes-before-reads (Z→A→E→R→2.2→…); §7.1 Finding 2 was a **FALSE premise** (no inherited data ever existed), inverting the prior advertiser-first order | §7.0 + §7.1 + §7.1.1 |
 | 8 | Money-adjacent semantics | preserved **exactly** (CLAUDE rule 10) | §6.3 |
 | 9 | Admin-creation auth path | likely new `POST /api/admin/users`; source-verify at 2.7 | §5 + §9 |
 
 ---
 
-*End of slice-2 discovery. Committed on `main`; §7 + the rulings ledger ratified post-Foundation-A.*
+*End of slice-2 discovery. Committed on `main`; §7 + the rulings ledger ratified post-Foundation-A,
+then **§7 CORRECTED to writes-before-reads** (this revision — §7.1 Finding 2 was a false premise).*

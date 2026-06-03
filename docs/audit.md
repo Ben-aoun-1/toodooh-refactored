@@ -2262,14 +2262,24 @@ ordering decision (architect + MABA), per §17.2 / §18.2.
 After Phase 1h shipped the stack to the VPS, **slice 2** (the product layer beyond the account
 keystone) opened with a discovery (`docs/handoff/slice-2-discovery.md`) and a **Foundation** phase of
 pure frontend cleanup/consolidation — deletions (A) + UI consolidations (B) — before the first
-data-domain repoint (2.1). Foundation A/B are now **closed**; `apps/api` was untouched throughout.
+data-domain repoint. Foundation A/B are now **closed**; `apps/api` was untouched throughout.
+
+> **Ordering CORRECTED (post-Foundation-B) — writes-before-reads.** The discovery's §7 ordering was
+> **advertiser-first** (Locations-read `2.1` ahead of Campaigns), justified by the premise that real
+> inventory data already existed in the DB from the prior dev's era. **That premise is FALSE**
+> (project owner, ratified): no real data ever existed; the DB was never populated. Inventory must be
+> **created before it can be read**, so the post-Foundation ordering **inverts** to **Z (Zones
+> cutover) → A (Agent role) → E (Screenhost-agent establishment-write) → R (Locations-read) → 2.2
+> Campaigns → tail**. The first data-domain repoint is now **Z**, not Locations-read. See
+> `slice-2-discovery.md` §7.0/§7.1/§7.1.1 for the corrected ordering, data model, and Kais #5 agent
+> ruling.
 
 ### 19.1 — Commit table + net effects
 
 | Commit                | What                                                                                                                                                              | Net                    |
 | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
 | `c00d661`             | **Foundation A** — delete 5 dead/deferred routes (`/my-clients`, `/gift-catalog`, `/owner-locations`, `/owner-activity`, `/owner-maintenance`) + orphan hooks/nav | −1893; floor **33→28** |
-| `c387f88` → `ba61b45` | slice-2 discovery + revised sub-slice ordering (advertiser-first; Locations-read 2.1 ahead of Campaigns)                                                          | docs                   |
+| `c387f88` → `ba61b45` | slice-2 discovery + revised sub-slice ordering (advertiser-first; Locations-read 2.1 ahead of Campaigns) — **later CORRECTED to writes-before-reads** (§19 intro) | docs                   |
 | `2e72dbd`             | **B1** — remove GiftCatalog modal + OwnerDashboard loyalty cascade (Kais #11)                                                                                     | −357                   |
 | `8903984`             | **B2** — extract generic `components/Drawer` + shared `CampaignDrawer`; delete orphaned `/campaign-details` route+page+hook                                       | −363; supabase 52→51   |
 | `ae226a4`             | **B3** — merge `OwnerCampaignApprovals` into `OwnerCampaigns` (À-approuver tab) + optional reject-reason; reroute 7 refs                                          | −293                   |
@@ -2314,12 +2324,13 @@ discovery §9.5 (6 items + the Figma reject-modal reconcile).
    (`number_of_screens` in the advertiser hydration) retired `UserProfile.tsx`'s `TS2353`; both
    `ci.yml` + `deploy.yml` ratcheted to 27 with the identity confirmed in the CF-9.
 
-### 19.3 — Methodology inflection at 2.1 (flag for the next scope)
+### 19.3 — Methodology inflection at the first data-domain sub-slice (flag for the next scope)
 
 Foundation was **frontend delete/consolidate** — `apps/api` out of scope, gates frontend-only, the
-"map vs territory" risk bounded to UI. **Sub-slice 2.1 (Locations-read) is the first data-domain
-repoint and the first `apps/api` touch.** The working shape shifts accordingly and the adjustment
-must be **deliberate at 2.1 scope time, not silent**:
+"map vs territory" risk bounded to UI. Under the corrected ordering (§19 intro), **sub-slice Z (Zones
+cutover) — not Locations-read — is the first data-domain repoint and the first `apps/api` touch**
+(followed by A → E → R → 2.2). The working shape shifts accordingly and the adjustment must be
+**deliberate at that scope time, not silent**:
 
 - **Commit shapes** — backend + frontend may split (the 1e/1f precedent: backend prereq commit, then
   the repoint), vs Foundation's single frontend commits.
