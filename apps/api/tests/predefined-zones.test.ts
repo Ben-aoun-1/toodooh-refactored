@@ -6,8 +6,25 @@ import { auth } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
 import { type NewUser, predefinedZones, users } from '../src/db/schema.js';
 import { apiRoutes } from '../src/routes/index.js';
+import { storage } from '../src/storage/s3-storage.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
+
+// Dependency-free multipart body (form-data not installed; web FormData isn't inject-consumable).
+// Mirrors profile-documents.test.ts. Single `file` part; the zone :id rides in the URL path.
+const multipartBody = (file: { filename: string; contentType: string; content: Buffer }) => {
+  const boundary = `----toodoohzone${Date.now()}${Math.random().toString(16).slice(2)}`;
+  const head = Buffer.from(
+    `--${boundary}\r\n` +
+      `Content-Disposition: form-data; name="file"; filename="${file.filename}"\r\n` +
+      `Content-Type: ${file.contentType}\r\n\r\n`,
+  );
+  const tail = Buffer.from(`\r\n--${boundary}--\r\n`);
+  return {
+    payload: Buffer.concat([head, file.content, tail]),
+    headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
+  };
+};
 
 // Integration suite — real Postgres. predefined_zones carries the 8-row Phase-1c seed and is NOT
 // truncated by resetAuthTables (only auth tables are), so the GET reads the seeds directly. The
@@ -173,6 +190,83 @@ describe('predefined-zones endpoints (real Postgres)', () => {
       });
       expect(res.statusCode).toBe(404);
       expect(res.json<{ error: string }>().error).toBe('ZONE_NOT_FOUND');
+    });
+  });
+
+  describe('POST /:id/image (multipart, real MinIO)', () => {
+    const png = Buffer.from('\x89PNG\r\n\x1a\n fake zone image bytes');
+
+    // Create a real zone, return its id. Named TEST_ZONE_NAME so the outer afterEach reaps the row.
+    const seedZone = async (): Promise<string> => {
+      const [z] = await db
+        .insert(predefinedZones)
+        .values({ name: TEST_ZONE_NAME, latitude: '36.5', longitude: '10.25', radius: 2500 })
+        .returning({ id: predefinedZones.id });
+      return z?.id ?? '';
+    };
+
+    it('uploads → 200 {id,key}, persists image_url=zones/<id>, stable key', async () => {
+      mockSession(adminId, 'superadmin');
+      const id = await seedZone();
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/predefined-zones/${id}/image`,
+        ...multipartBody({ filename: 'z.png', contentType: 'image/png', content: png }),
+      });
+      try {
+        expect(res.statusCode).toBe(200);
+        expect(res.json<{ id: string; key: string }>()).toEqual({ id, key: `zones/${id}` });
+
+        // Column persisted server-side (route owns image_url — §3).
+        const [row] = await db
+          .select({ imageUrl: predefinedZones.imageUrl })
+          .from(predefinedZones)
+          .where(eq(predefinedZones.id, id))
+          .limit(1);
+        expect(row?.imageUrl).toBe(`zones/${id}`);
+      } finally {
+        await storage.delete({ key: `zones/${id}` }).catch(() => undefined);
+      }
+    });
+
+    it('unknown :id → 404 ZONE_NOT_FOUND (before touching storage)', async () => {
+      mockSession(adminId, 'superadmin');
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/predefined-zones/00000000-0000-0000-0000-000000000000/image',
+        ...multipartBody({ filename: 'z.png', contentType: 'image/png', content: png }),
+      });
+      expect(res.statusCode).toBe(404);
+      expect(res.json<{ error: string }>().error).toBe('ZONE_NOT_FOUND');
+    });
+
+    it('non-image MIME (pdf) → 400', async () => {
+      mockSession(adminId, 'superadmin');
+      const id = await seedZone();
+      try {
+        const res = await app.inject({
+          method: 'POST',
+          url: `/api/predefined-zones/${id}/image`,
+          ...multipartBody({
+            filename: 'z.pdf',
+            contentType: 'application/pdf',
+            content: Buffer.from('%PDF-1.4'),
+          }),
+        });
+        expect(res.statusCode).toBe(400);
+      } finally {
+        await storage.delete({ key: `zones/${id}` }).catch(() => undefined);
+      }
+    });
+
+    it('non-admin → 403', async () => {
+      mockSession(adminId, 'advertiser');
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/predefined-zones/00000000-0000-0000-0000-000000000000/image',
+        ...multipartBody({ filename: 'z.png', contentType: 'image/png', content: png }),
+      });
+      expect(res.statusCode).toBe(403);
     });
   });
 });
