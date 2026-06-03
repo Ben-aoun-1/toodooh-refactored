@@ -1,8 +1,10 @@
 import {
   CreateBucketCommand,
   DeleteObjectCommand,
+  GetBucketPolicyCommand,
   GetObjectCommand,
   HeadBucketCommand,
+  PutBucketPolicyCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
@@ -23,6 +25,8 @@ export class S3Storage implements StorageProvider {
   // Memoized ensure-bucket: runs once on first upload (sync constructor → no import-time
   // network). Faithful to "ensure before first use" without an async constructor.
   private bucketReady: Promise<void> | undefined;
+  // Memoized zones-public-read policy (Z2). Same lazy pattern as bucketReady.
+  private zonesPublicReadReady: Promise<void> | undefined;
 
   constructor(client: S3Client, bucket: string) {
     this.client = client;
@@ -53,6 +57,68 @@ export class S3Storage implements StorageProvider {
       })();
     }
     return this.bucketReady;
+  }
+
+  // The single anonymous-read statement scoped to the zones/* prefix. Sid lets us detect our own
+  // statement for idempotency + merge.
+  private zonesStatement(): Record<string, unknown> {
+    return {
+      Sid: 'PublicReadZonesPrefix',
+      Effect: 'Allow',
+      Principal: { AWS: ['*'] },
+      Action: ['s3:GetObject'],
+      Resource: [`arn:aws:s3:::${this.bucket}/zones/*`],
+    };
+  }
+
+  // Z2 (Option 1): grant anonymous GET to zones/* ONLY. PutBucketPolicy is FULL-REPLACE, so we read
+  // the current policy first and MERGE our statement in — never clobbering a policy the bucket may
+  // already carry. Idempotent (skips if our Sid is already present) + memoized (runs once).
+  // Private prefixes (rne/, cin/) are untouched: deny-by-default holds, and presigned reads are
+  // signature-based, independent of this bucket policy.
+  async ensureZonesPublicRead(): Promise<void> {
+    if (!this.zonesPublicReadReady) {
+      this.zonesPublicReadReady = (async () => {
+        await this.ensureBucket();
+        const statement = this.zonesStatement();
+
+        let statements: Record<string, unknown>[] = [];
+        let version = '2012-10-17';
+        let hadPolicy = false;
+        try {
+          const current = await this.client.send(
+            new GetBucketPolicyCommand({ Bucket: this.bucket }),
+          );
+          hadPolicy = true;
+          const parsed = JSON.parse(current.Policy ?? '{}') as {
+            Version?: string;
+            Statement?: Record<string, unknown>[];
+          };
+          version = parsed.Version ?? version;
+          statements = Array.isArray(parsed.Statement) ? parsed.Statement : [];
+          if (statements.some((s) => s['Sid'] === statement['Sid'])) {
+            log.info({ bucket: this.bucket }, 'zones public-read policy already present (no-op)');
+            return;
+          }
+        } catch (err) {
+          // NoSuchBucketPolicy → no prior policy; ship zones/* as the sole statement. Any OTHER
+          // error is ambiguous → rethrow rather than risk clobbering an existing policy.
+          if (err instanceof Error && err.name !== 'NoSuchBucketPolicy') throw err;
+        }
+
+        const policy = { Version: version, Statement: [...statements, statement] };
+        await this.client.send(
+          new PutBucketPolicyCommand({ Bucket: this.bucket, Policy: JSON.stringify(policy) }),
+        );
+        log.info(
+          { bucket: this.bucket, mergedIntoExisting: hadPolicy },
+          hadPolicy
+            ? 'zones public-read statement merged into existing bucket policy'
+            : 'zones public-read policy set (no prior bucket policy)',
+        );
+      })();
+    }
+    return this.zonesPublicReadReady;
   }
 
   async upload(params: { key: string; body: Buffer; contentType: string }): Promise<UploadResult> {

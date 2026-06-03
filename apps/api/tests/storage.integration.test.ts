@@ -41,3 +41,41 @@ describe('S3Storage integration (real MinIO)', () => {
     expect(res2.status).toBe(404); // gone after delete
   });
 });
+
+// Z2 C1 — the public-read prefix + its isolation invariant, proven with ANONYMOUS (no-SigV4) GETs
+// against the SAME bucket. This is the whole reason Option 1 (prefix in `storage`) is acceptable over
+// a separate public bucket: zones/* is anonymously readable, every other prefix stays private.
+describe('S3Storage zones public-read (Option 1 prefix isolation, real MinIO)', () => {
+  const zoneKey = `zones/itest-${Date.now()}`;
+  const privKey = `rne/itest-${Date.now()}`;
+  const imageBytes = Buffer.from('public zone image bytes');
+
+  afterAll(async () => {
+    await storage.delete({ key: zoneKey }).catch(() => undefined);
+    await storage.delete({ key: privKey }).catch(() => undefined);
+  });
+
+  it('anonymous GET: zones/* → 200 (bytes match); a private prefix → 403 (isolation invariant)', async () => {
+    await storage.ensureZonesPublicRead();
+    await storage.upload({ key: zoneKey, body: imageBytes, contentType: 'image/png' });
+    await storage.upload({
+      key: privKey,
+      body: Buffer.from('private legal doc'),
+      contentType: 'application/pdf',
+    });
+
+    // Path-style base, exactly what nginx /storage/ proxies to (bucket = first path segment).
+    const base = `${env.STORAGE_ENDPOINT.replace(/\/$/, '')}/${env.STORAGE_BUCKET}`;
+
+    // UNSIGNED fetch (no SigV4 headers/query) — the public catalog read path.
+    const pub = await fetch(`${base}/${zoneKey}`);
+    expect(pub.status).toBe(200);
+    const fetched = Buffer.from(await pub.arrayBuffer());
+    expect(fetched.equals(imageBytes)).toBe(true);
+
+    // UNSIGNED fetch of a NON-zones key in the SAME bucket → denied. This is the load-bearing
+    // isolation assertion: the anonymous policy is scoped to zones/* and does not leak rne/cin.
+    const priv = await fetch(`${base}/${privKey}`);
+    expect(priv.status).toBe(403);
+  });
+});

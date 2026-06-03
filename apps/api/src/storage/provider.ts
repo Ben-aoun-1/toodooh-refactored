@@ -10,4 +10,8 @@ export interface StorageProvider {
   upload(params: { key: string; body: Buffer; contentType: string }): Promise<UploadResult>;
   getPresignedUrl(params: { key: string; expiresInSeconds?: number }): Promise<PresignResult>;
   delete(params: { key: string }): Promise<DeleteResult>;
+  // Z2 (Option 1): idempotently grant ANONYMOUS s3:GetObject to the `zones/*` prefix only, so the
+  // public catalog imagery renders via a durable /storage/<key> URL while private prefixes
+  // (rne/, cin/) stay deny-by-default. Merges into any pre-existing bucket policy (full-replace API).
+  ensureZonesPublicRead(): Promise<void>;
 }
