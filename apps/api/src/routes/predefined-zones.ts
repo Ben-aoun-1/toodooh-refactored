@@ -32,7 +32,9 @@ const toZoneRow = (row: PredefinedZone) => ({
   longitude: Number(row.longitude),
   radius: row.radius,
   is_active: row.isActive,
-  image_url: row.imageUrl,
+  // C3: the column stores the bare key (zones/<id>, C2). Compose the relative /storage/<key> URL the
+  // consumers render directly (nginx /storage/ proxies it). null stays null (picsum fallback).
+  image_url: row.imageUrl === null ? null : `/storage/${row.imageUrl}`,
   is_hot: row.isHot,
   country: row.country,
   region: row.region,

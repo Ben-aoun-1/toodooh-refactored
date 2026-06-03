@@ -107,6 +107,8 @@ describe('predefined-zones endpoints (real Postgres)', () => {
       expect(ariana).toHaveProperty('is_active');
       expect(ariana).toHaveProperty('image_url');
       expect(ariana).toHaveProperty('created_at');
+      // C3 serializer: seeded zones have a null image_url → stays null (consumer's picsum fallback).
+      expect(ariana?.image_url).toBeNull();
     });
   });
 
@@ -224,6 +226,11 @@ describe('predefined-zones endpoints (real Postgres)', () => {
           .where(eq(predefinedZones.id, id))
           .limit(1);
         expect(row?.imageUrl).toBe(`zones/${id}`);
+
+        // C3 serializer: the bare key is composed to /storage/<key> on read (what the consumer renders).
+        const list = await app.inject({ method: 'GET', url: '/api/predefined-zones' });
+        const served = list.json<ZoneRow[]>().find((z) => z.id === id);
+        expect(served?.image_url).toBe(`/storage/zones/${id}`);
       } finally {
         await storage.delete({ key: `zones/${id}` }).catch(() => undefined);
       }
