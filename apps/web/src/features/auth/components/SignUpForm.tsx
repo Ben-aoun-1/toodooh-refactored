@@ -499,10 +499,11 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             : undefined,
       };
       // Signup creates an unverified account (no auto-login) and returns the 201-generic — no logout
-      // needed (there is no session). The user verifies via email, then signs in (Phase-1f F2/D-F2-7).
+      // needed (there is no session). Land on the validation screen (slice-1 auth-bug-1) which guides
+      // the user to the confirmation email + offers a resend; the email rides router state so that
+      // screen's resend button can call send-verification-email. Verifying the link auto-logs in.
       await authService.signUp(signupDataWithFile);
-      toast.success('Inscription réussie ! Vérifiez votre email pour activer votre compte.');
-      setTimeout(() => navigate('/login'), 2000);
+      navigate('/signup-success', { state: { email: formData.email } });
     } catch (error) {
       toast.error(getErrorMessage(error) || 'Une erreur inattendue');
     } finally {

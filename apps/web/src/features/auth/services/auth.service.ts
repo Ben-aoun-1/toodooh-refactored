@@ -90,6 +90,27 @@ export const authService = {
     }
   },
 
+  // Slice-1 auth-bug-1 — the post-signup validation screen's "Renvoyer l'e-mail de vérification"
+  // button. Hits better-auth's send-verification-email route DIRECTLY (not the /api client, which is
+  // /api-scoped): going through the /auth/* handler keeps better-auth's built-in rate-limiter +
+  // anti-enumeration (a custom /api wrapper would call auth.api.* and bypass both — origin-check is
+  // router-level, and so is the rate-limiter). Anti-enum: the endpoint returns { status: true } for
+  // an unknown OR already-verified email without sending, so the caller never branches on existence.
+  // callbackURL mirrors signup's so the resent link lands on /verify-email (auto-login on first use).
+  async resendVerificationEmail(email: string): Promise<void> {
+    const res = await fetch('/auth/send-verification-email', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, callbackURL: `${window.location.origin}/verify-email` }),
+    });
+    // Success is silent (status:true even when nothing was sent — anti-enum). A non-2xx is a 429
+    // (rate-limited) or 5xx; surface a generic retry so the button doesn't dead-end.
+    if (!res.ok) {
+      throw new Error("Impossible d'envoyer l'e-mail pour le moment. Réessayez dans un instant.");
+    }
+  },
+
   // Phase-1f F6 — forgot-password request. Generic 200 (anti-enum, backend-built); the form keeps
   // its generic toast.
   async resetPassword(email: string): Promise<void> {

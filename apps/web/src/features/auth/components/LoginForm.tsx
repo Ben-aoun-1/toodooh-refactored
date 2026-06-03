@@ -4,6 +4,7 @@ import { toast } from 'react-hot-toast';
 import { useNavigate, Link } from 'react-router-dom';
 
 import { useAuthStore } from '@/features/auth/stores/auth.store';
+import { resolveHomeRoute } from '@/features/auth/utils/home-route';
 import { getErrorMessage } from '@/lib/errors';
 
 export default function LoginForm() {
@@ -24,13 +25,7 @@ export default function LoginForm() {
     try {
       await login(formData.email, formData.password);
       const { profileType } = useAuthStore.getState();
-
-      if (profileType === 'individual_owner' || profileType === 'fleet_owner') {
-        navigate('/owner-dashboard');
-      } else {
-        navigate('/dashboard');
-      }
-
+      navigate(resolveHomeRoute(profileType));
       toast.success('Connexion réussie');
     } catch (error) {
       toast.error(getErrorMessage(error) || "Une erreur inattendue s'est produite");
