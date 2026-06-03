@@ -1,8 +1,11 @@
-import { logger } from '@/lib/logger';
+import { apiClient } from '@/lib/api-client';
 import { supabase } from '@/lib/supabase';
 
-const log = logger.child({ module: 'predefined-zones.service' });
-
+// Z1 cutover: reads + the 4 scalar writes are on apps/api (`/predefined-zones`). The endpoint
+// serializer returns this exact snake_case shape with latitude/longitude as numbers, so the
+// interface and every consumer (wizard Haversine + Leaflet, /admin-zones) are untouched.
+// uploadZoneImage stays on supabase.storage — the SOLE remaining Supabase call here, repointed in Z2
+// (storage integration).
 export interface PredefinedZone {
   id: string;
   name: string;
@@ -20,50 +23,11 @@ export interface PredefinedZone {
 }
 
 export const predefinedZonesService = {
-  async getAll(): Promise<PredefinedZone[]> {
-    const { data, error } = await supabase
-      .from('predefined_zones')
-      .select('*')
-      .eq('is_active', true)
-      .order('name', { ascending: true });
-
-    if (error) {
-      log.error({ error }, '❌ Erreur lors de la récupération des zones prédéfinies');
-      log.error(
-        { message: error.message, details: error.details, hint: error.hint, code: error.code },
-        'Détails',
-      );
-      throw error;
-    }
-
-    return data || [];
-  },
-
-  async getById(id: string): Promise<PredefinedZone | null> {
-    const { data, error } = await supabase
-      .from('predefined_zones')
-      .select('*')
-      .eq('id', id)
-      .eq('is_active', true)
-      .single();
-
-    if (error) {
-      log.error({ error }, 'Erreur lors de la récupération de la zone prédéfinie');
-      return null;
-    }
-
-    return data;
-  },
-
-  // Méthodes admin pour gérer les zones
+  // Every zone (active + inactive). The wizard filters is_active at render; the admin page needs
+  // inactive too — no server-side active filter (Z1 ruling). (getAll/getById were dead code — 0
+  // consumers — and deleted in Z1.)
   async getAllForAdmin(): Promise<PredefinedZone[]> {
-    const { data, error } = await supabase
-      .from('predefined_zones')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-    return data || [];
+    return apiClient.get<PredefinedZone[]>('/predefined-zones');
   },
 
   async create(zone: {
@@ -78,19 +42,7 @@ export const predefinedZonesService = {
     country?: string | null;
     region?: string | null;
   }): Promise<PredefinedZone> {
-    const { data, error } = await supabase
-      .from('predefined_zones')
-      .insert([
-        {
-          ...zone,
-          is_active: zone.is_active !== undefined ? zone.is_active : true,
-        },
-      ])
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
+    return apiClient.post<PredefinedZone>('/predefined-zones', zone);
   },
 
   async update(
@@ -108,36 +60,23 @@ export const predefinedZonesService = {
       region?: string | null;
     },
   ): Promise<PredefinedZone> {
-    const { data, error } = await supabase
-      .from('predefined_zones')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
+    return apiClient.patch<PredefinedZone>(`/predefined-zones/${id}`, updates);
   },
 
   async delete(id: string): Promise<void> {
-    const { error } = await supabase.from('predefined_zones').delete().eq('id', id);
-
-    if (error) throw error;
+    await apiClient.del(`/predefined-zones/${id}`);
   },
 
   async toggleActive(id: string, isActive: boolean): Promise<PredefinedZone> {
-    const { data, error } = await supabase
-      .from('predefined_zones')
-      .update({ is_active: isActive })
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
+    return apiClient.patch<PredefinedZone>(`/predefined-zones/${id}/active`, {
+      is_active: isActive,
+    });
   },
 
-  /** Upload une image pour une zone (bucket zone-images). Retourne l'URL publique. */
+  /**
+   * Upload une image pour une zone (bucket zone-images). Retourne l'URL publique.
+   * SOLE remaining Supabase call in this service — repointed in Z2 (storage integration).
+   */
   async uploadZoneImage(zoneId: string, file: File): Promise<string> {
     const ext = file.name.split('.').pop() || 'jpg';
     const path = `${zoneId}/${Date.now()}.${ext}`;

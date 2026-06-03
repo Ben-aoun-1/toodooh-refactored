@@ -127,6 +127,9 @@ export const apiClient = {
   patch<T>(path: string, body?: unknown, opts?: RequestOptions): Promise<T> {
     return request<T>('PATCH', path, { ...opts, body });
   },
+  del<T>(path: string, opts?: RequestOptions): Promise<T> {
+    return request<T>('DELETE', path, opts);
+  },
   postForm<T>(path: string, form: FormData, opts?: RequestOptions): Promise<T> {
     return request<T>('POST', path, { ...opts, form });
   },

@@ -3,6 +3,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { adminRoutes } from './admin.js';
 import { meRoutes } from './me.js';
 import { passwordRoutes } from './password.js';
+import { predefinedZonesRoutes } from './predefined-zones.js';
 import { profileDocumentsRoutes } from './profile-documents.js';
 import { profileRoutes } from './profile.js';
 import { referenceRoutes } from './reference.js';
@@ -19,6 +20,8 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   await app.register(profileDocumentsRoutes);
   await app.register(passwordRoutes);
   await app.register(adminRoutes);
+  // Zones cutover (Z1): public GET catalog + admin-guarded scalar writes.
+  await app.register(predefinedZonesRoutes);
   // Public reference-data reads (no auth) — register last; they add no preHandler.
   await app.register(referenceRoutes);
 };

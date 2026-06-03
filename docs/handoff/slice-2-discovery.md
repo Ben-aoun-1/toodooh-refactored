@@ -532,6 +532,13 @@ order inverts:
 - **sensor-management scope DEFERRED** ("cross when we reach it") → folded into the deferred §7.0
   tail row **2.9** (alongside the screencast-agent build).
 
+> **Soft assumption (current-truth, not permanent design).** "screenhost-agent = the
+> establishment/inventory registrant" is the working model **for now** — it is what the ordering
+> (E ahead of R) rests on today, not a ratified-forever boundary. If the field-ops shape shifts
+> (e.g. screenhosts self-register, or registration splits from the agent role), revisit E's owner;
+> the writes-before-reads ordering itself still holds (someone must create the dots first), only the
+> *who* would change. Recorded so the executor doesn't read it as a locked design contract.
+
 **Terminology lock (record once):** **"screencaster" = advertiser**; **"screenhost" = screen /
 establishment owner.**
 
