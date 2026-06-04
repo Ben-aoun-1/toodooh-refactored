@@ -1220,7 +1220,7 @@ export default function UserProfile() {
                       >
                         <Check className="h-4 w-4" strokeWidth={2.5} />
                       </span>
-                      Minimum 12 caractères
+                      Minimum 10 caractères
                     </li>
                   </ul>
                 </div>

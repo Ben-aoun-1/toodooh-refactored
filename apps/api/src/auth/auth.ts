@@ -98,7 +98,7 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: true,
-    minPasswordLength: 12,
+    minPasswordLength: 10,
     // Wires /api/password/reset-request: better-auth emails the reset link only
     // for a real account (anti-enumeration is built in — password.mjs:50-72).
     sendResetPassword,

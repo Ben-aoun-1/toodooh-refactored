@@ -1,9 +1,9 @@
 /**
- * Password policy — the backend's floor (Phase-1f §4.2 / D-F2-6): min 12 + upper + lower + digit.
+ * Password policy — the backend's floor (slice-1 C3): min 10 + upper + lower + digit.
  * Single source of truth for signup (F2) and password-change (F6) so the two never drift. Pure: no
  * I/O, no state.
  */
-export const PASSWORD_MIN_LENGTH = 12;
+export const PASSWORD_MIN_LENGTH = 10;
 
 export interface PasswordChecks {
   minLen: boolean;

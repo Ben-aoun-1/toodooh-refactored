@@ -141,7 +141,7 @@ describe('POST /api/signup', () => {
     expect(body.fields[0]?.field).toBe('tax_number');
   });
 
-  it('password < 12 → 400 with field detail', async () => {
+  it('password < 10 → 400 with field detail', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/signup',
