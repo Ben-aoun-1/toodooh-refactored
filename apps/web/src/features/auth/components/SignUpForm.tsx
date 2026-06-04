@@ -166,6 +166,9 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
   const [fonction, setFonction] = useState('');
   const [emailConflict, setEmailConflict] = useState<string | null>(null);
   const [phoneConflict, setPhoneConflict] = useState<string | null>(null);
+  // C5 (#8a): step-2 tax_number FORMAT error (mirrors phoneConflict). Uniqueness stays
+  // submit-time/server-side — there is no availability endpoint.
+  const [taxNumberError, setTaxNumberError] = useState<string | null>(null);
   const [confirmPassword, setConfirmPassword] = useState('');
   const [formData, setFormData] = useState<Partial<SignUpData>>({
     email: '',
@@ -266,6 +269,9 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const normalizePhone = (value: string) => (value || '').replace(/\s+/g, '').trim();
   const isValidTunisiaPhone = (value: string) => /^\+216\d{8}$/.test(normalizePhone(value));
+  // C5 (#8a): mirror the backend matricule rule (apps/api/src/validation/tax-number.ts).
+  const isValidTaxNumber = (value: string) => /^[A-Za-z0-9/]{7,20}$/.test(value);
+  const TAX_NUMBER_ERROR = 'Matricule invalide (7 à 20 caractères alphanumériques ou /).';
   const pwChecks = passwordChecks(formData.password || '');
   const pwHasUpper = pwChecks.upper;
   const pwHasDigit = pwChecks.digit;
@@ -338,6 +344,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
           return Boolean(
             etablissementName.trim() &&
             formData.tax_number?.trim() &&
+            isValidTaxNumber(String(formData.tax_number || '')) &&
             formData.business_sector_id &&
             etablissementScreens &&
             etablissementRooms.trim(),
@@ -346,6 +353,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
         return Boolean(
           formData.business_name?.trim() &&
           formData.tax_number?.trim() &&
+          isValidTaxNumber(String(formData.tax_number || '')) &&
           (selectedProfileType === 'agency' ? true : formData.business_sector_id) &&
           formData.company_size &&
           formData.street_address?.trim() &&
@@ -920,11 +928,22 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
                 type="text"
                 required
                 value={formData.tax_number}
-                onChange={(e) => setFormData({ ...formData, tax_number: e.target.value })}
+                onChange={(e) => {
+                  setTaxNumberError(null);
+                  setFormData({ ...formData, tax_number: e.target.value });
+                }}
+                onBlur={() =>
+                  setTaxNumberError(
+                    formData.tax_number && !isValidTaxNumber(formData.tax_number)
+                      ? TAX_NUMBER_ERROR
+                      : null,
+                  )
+                }
                 className={inputClass}
                 placeholder="Matricule fiscal"
                 id="tax-number"
               />
+              {taxNumberError && <p className="text-xs text-red-600 mt-1">{taxNumberError}</p>}
             </div>
             <div>
               <label className={labelClass} htmlFor="business-sector-id">
@@ -1047,11 +1066,22 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
                 type="text"
                 required
                 value={formData.tax_number}
-                onChange={(e) => setFormData({ ...formData, tax_number: e.target.value })}
+                onChange={(e) => {
+                  setTaxNumberError(null);
+                  setFormData({ ...formData, tax_number: e.target.value });
+                }}
+                onBlur={() =>
+                  setTaxNumberError(
+                    formData.tax_number && !isValidTaxNumber(formData.tax_number)
+                      ? TAX_NUMBER_ERROR
+                      : null,
+                  )
+                }
                 className={inputClass}
                 placeholder="Matricule fiscal"
                 id="tax-number-2"
               />
+              {taxNumberError && <p className="text-xs text-red-600 mt-1">{taxNumberError}</p>}
             </div>
             <div>
               <label className={labelClass} htmlFor="signup-business-sector">
