@@ -14,4 +14,7 @@ export interface StorageProvider {
   // public catalog imagery renders via a durable /storage/<key> URL while private prefixes
   // (rne/, cin/) stay deny-by-default. Merges into any pre-existing bucket policy (full-replace API).
   ensureZonesPublicRead(): Promise<void>;
+  // Idempotent: ensure the bucket exists. Called once at boot (slice-1 hotfix C1) so the
+  // first upload doesn't pay the head-then-create round-trip; safe to call repeatedly.
+  ensureReady(): Promise<void>;
 }

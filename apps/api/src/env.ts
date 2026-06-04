@@ -26,7 +26,15 @@ const EnvSchema = z.object({
   SMTP_FROM: z.email(),
   // MinIO / S3-compatible object storage (Commit 2). ENDPOINT/ACCESS_KEY/SECRET_KEY
   // required (fast-fail at boot); BUCKET/REGION default. forcePathStyle is set in code.
+  // STORAGE_ENDPOINT is the INTERNAL endpoint for ALL server-side SDK calls (upload,
+  // ensure-bucket, delete) — on the VPS this is http://minio:9000 (the api container
+  // can't reach the public host: it 301-redirects via the legacy origin until 1h-flip).
   STORAGE_ENDPOINT: z.url(),
+  // Browser-facing endpoint used ONLY to sign presigned GET URLs (slice-1 hotfix C1).
+  // Falls back to STORAGE_ENDPOINT when unset, preserving dev's single-host setup. On the
+  // VPS this is http://too-dooh.com; presigned downloads stay broken until the production
+  // A-record is flipped to the VPS (1h-flip) — expected, gated, not a regression.
+  STORAGE_PUBLIC_ENDPOINT: z.url().optional(),
   STORAGE_ACCESS_KEY: z.string().min(1),
   STORAGE_SECRET_KEY: z.string().min(1),
   STORAGE_BUCKET: z.string().min(1).default('toodooh-documents'),
