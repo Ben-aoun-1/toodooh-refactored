@@ -19,6 +19,7 @@ import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 import { useBusinessProfile } from '@/features/auth/hooks/useBusinessProfile';
+import { useOwnerBusinessSectors } from '@/features/auth/hooks/useOwnerBusinessSectors';
 import { useSectors } from '@/features/auth/hooks/useSectors';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { useOwnerCampaignApprovals } from '@/features/campaigns/hooks/useOwnerCampaignApprovals';
@@ -81,6 +82,10 @@ export default function OwnerDashboard() {
 
   const { profile, loading: profileLoading, error: profileError } = useBusinessProfile(user?.id);
   const { data: sectors, isError: sectorsError } = useSectors();
+  // C4 (#7): the owner's business_sector_id is stored from the OWNER sector list at signup, so
+  // it must be resolved against owner sectors first (advertiser `sectors` is only a fallback) —
+  // mirrors the OwnerSettings precedent. Resolving against advertiser sectors alone left it blank.
+  const { data: ownerSectors } = useOwnerBusinessSectors();
   const { screens, loading: screensLoading, isError: screensError } = useScreens();
   const { stats: revenueStats, isError: revenueError } = useRevenueStats(user?.id);
   // Pending-approval notifications — Commit 7b adopts the campaigns-owned
@@ -115,9 +120,12 @@ export default function OwnerDashboard() {
   const accountLoading = profileLoading;
 
   const businessSectorName = useMemo(() => {
-    if (!profile?.business_sector_id || !sectors) return '';
-    return sectors.find((s) => s.id === profile.business_sector_id)?.name?.trim() || '';
-  }, [profile, sectors]);
+    const id = profile?.business_sector_id;
+    if (!id) return '';
+    const fromOwner = ownerSectors?.find((s) => s.id === id)?.name?.trim();
+    if (fromOwner) return fromOwner;
+    return sectors?.find((s) => s.id === id)?.name?.trim() || '';
+  }, [profile, sectors, ownerSectors]);
 
   const handleScreenAdded = () => {
     queryClient.invalidateQueries({ queryKey: walletKeys.revenueStats(user?.id ?? '') });
