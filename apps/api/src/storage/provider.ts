@@ -10,4 +10,7 @@ export interface StorageProvider {
   upload(params: { key: string; body: Buffer; contentType: string }): Promise<UploadResult>;
   getPresignedUrl(params: { key: string; expiresInSeconds?: number }): Promise<PresignResult>;
   delete(params: { key: string }): Promise<DeleteResult>;
+  // Idempotent: ensure the bucket exists. Called once at boot (slice-1 hotfix C1) so the
+  // first upload doesn't pay the head-then-create round-trip; safe to call repeatedly.
+  ensureReady(): Promise<void>;
 }

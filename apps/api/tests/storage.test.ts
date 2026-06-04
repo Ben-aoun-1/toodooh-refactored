@@ -106,3 +106,76 @@ describe('S3Storage (unit)', () => {
     expect(cmds.filter((c) => c instanceof PutObjectCommand)).toHaveLength(2);
   });
 });
+
+// C1 (slice-1 hotfix): the api's server-side SDK calls go to the INTERNAL endpoint
+// (STORAGE_ENDPOINT) while presigned GET URLs are signed against the PUBLIC endpoint
+// (STORAGE_PUBLIC_ENDPOINT). The host-split can't be shown by the integration round-trip
+// (CI runs a single MinIO), so it's pinned deterministically here.
+describe('S3Storage endpoint split (C1)', () => {
+  const baseEnv = {
+    STORAGE_ENDPOINT: 'http://minio:9000',
+    STORAGE_ACCESS_KEY: 'k',
+    STORAGE_SECRET_KEY: 's',
+    STORAGE_BUCKET: 'storage',
+    STORAGE_REGION: 'us-east-1',
+  };
+  const hostOf = async (c: S3Client): Promise<string> => {
+    const resolve = c.config.endpoint;
+    if (!resolve) return '';
+    return (await resolve()).hostname;
+  };
+  const split = (s: S3Storage): { client: S3Client; presignClient: S3Client } =>
+    s as unknown as { client: S3Client; presignClient: S3Client };
+
+  it('fromEnv: server-side client → STORAGE_ENDPOINT, presign client → STORAGE_PUBLIC_ENDPOINT', async () => {
+    const s = S3Storage.fromEnv({
+      ...baseEnv,
+      STORAGE_PUBLIC_ENDPOINT: 'http://too-dooh.com',
+    } as unknown as Env);
+    const { client, presignClient } = split(s);
+    expect(client).not.toBe(presignClient);
+    expect(await hostOf(client)).toBe('minio');
+    expect(await hostOf(presignClient)).toBe('too-dooh.com');
+  });
+
+  it('fromEnv: presign falls back to the server-side client when STORAGE_PUBLIC_ENDPOINT is unset', () => {
+    const { client, presignClient } = split(S3Storage.fromEnv(baseEnv as unknown as Env));
+    expect(presignClient).toBe(client);
+  });
+
+  it('getPresignedUrl signs with the presign client, never the server-side client', async () => {
+    vi.mocked(getSignedUrl).mockResolvedValueOnce('http://too-dooh.com/signed');
+    const serverClient = fakeClient(vi.fn());
+    const presignClient = fakeClient(vi.fn());
+    const s = new S3Storage(serverClient, 'storage', presignClient);
+    await s.getPresignedUrl({ key: 'rne/u1' });
+    // lastCall, not calls[0]: getSignedUrl is module-mocked and its call history
+    // accumulates across this file's tests (restoreAllMocks doesn't clear it).
+    expect(vi.mocked(getSignedUrl).mock.lastCall?.[0]).toBe(presignClient);
+    expect(vi.mocked(getSignedUrl).mock.lastCall?.[0]).not.toBe(serverClient);
+  });
+
+  it('ensureReady is idempotent: second call no-ops (one Head/Create), no throw', async () => {
+    const notFound = Object.assign(new Error('NotFound'), { name: 'NotFound' });
+    const send = vi.fn().mockRejectedValueOnce(notFound).mockResolvedValue({});
+    const s = new S3Storage(fakeClient(send), 'storage');
+    await expect(s.ensureReady()).resolves.toBeUndefined();
+    await expect(s.ensureReady()).resolves.toBeUndefined();
+    const cmds = send.mock.calls.map((c) => c[0]);
+    expect(cmds.filter((c) => c instanceof HeadBucketCommand)).toHaveLength(1);
+    expect(cmds.filter((c) => c instanceof CreateBucketCommand)).toHaveLength(1);
+  });
+
+  it('ensureReady clears the memo on failure so the next call retries', async () => {
+    const boom = new Error('connection refused');
+    const send = vi
+      .fn()
+      .mockRejectedValueOnce(boom) // HeadBucket fails
+      .mockRejectedValueOnce(boom) // CreateBucket fails → first ensureReady rejects
+      .mockResolvedValue({}); // retry: HeadBucket ok
+    const s = new S3Storage(fakeClient(send), 'storage');
+    await expect(s.ensureReady()).rejects.toThrow('connection refused');
+    await expect(s.ensureReady()).resolves.toBeUndefined();
+    expect(send.mock.calls).toHaveLength(3);
+  });
+});

@@ -10,6 +10,7 @@ import { buildErrorHandler, buildNotFoundHandler } from './error-handler.js';
 import { buildLoggerConfig } from './logger.js';
 import { healthRoute } from './routes/health.js';
 import { apiRoutes } from './routes/index.js';
+import { storage } from './storage/s3-storage.js';
 
 const app: FastifyInstance = Fastify({
   logger: buildLoggerConfig(env),
@@ -52,6 +53,12 @@ const start = async (): Promise<void> => {
     await app.register(authPlugin);
     await app.register(apiRoutes);
     await app.register(healthRoute);
+    // Pre-create the storage bucket so the first document upload doesn't pay the
+    // head-then-create round-trip. Non-fatal: if storage is briefly unreachable at boot,
+    // the api still serves; the retry-safe lazy path re-attempts on the first upload.
+    await storage.ensureReady().catch((err: unknown) => {
+      app.log.warn({ err }, 'storage ensure-bucket at boot failed; will retry on first upload');
+    });
     await app.listen({ port: env.PORT, host: env.HOST });
   } catch (err) {
     app.log.error(err);
