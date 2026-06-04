@@ -400,6 +400,9 @@ export default function OwnerSettings() {
       setDocumentFile(null);
       toast.success('Document enregistré');
     } catch (err: unknown) {
+      // Clear the optimistic file so a failed upload leaves no false "saved" row; the
+      // server-confirmed badge stays off until the refetched profile says otherwise.
+      setDocumentFile(null);
       const m = err instanceof Error ? err.message : 'Erreur upload';
       toast.error(m);
     }
@@ -482,16 +485,22 @@ export default function OwnerSettings() {
       toast.success('Coordonnées bancaires enregistrées');
       navigate('/owner-dashboard');
     } catch (err: unknown) {
+      // Clear the optimistic file so a failed save leaves no false "saved" RIB badge.
+      setBankDocFile(null);
       const m = err instanceof Error ? err.message : 'Erreur lors de la mise à jour bancaire';
       toast.error(m);
     }
   };
 
-  const hasDocument =
-    !!documentFile ||
-    (!!profile &&
-      (isIndividualOwner ? !!profile.documents?.cin : !!profile.documents?.registration));
-  const hasBankDocument = !!bankDocFile || !!profile?.bank_doc_path || !!profile?.bank_doc_url;
+  // C2 (#3b): server-confirmed legal-document flag (from /api/me via React Query). The saved
+  // badge gates on THIS, never on `documentFile` (the locally-picked, pending file).
+  const documentConfirmed =
+    !!profile && (isIndividualOwner ? !!profile.documents?.cin : !!profile.documents?.registration);
+  const hasDocument = !!documentFile || documentConfirmed;
+  // C2 (#3b): same server-confirmed-vs-picked split for the bank-RIB document. The saved badge
+  // gates on `bankDocConfirmed` (server profile fields), never on `bankDocFile` (the picked file).
+  const bankDocConfirmed = !!profile?.bank_doc_path || !!profile?.bank_doc_url;
+  const hasBankDocument = !!bankDocFile || bankDocConfirmed;
 
   if (loading) {
     return (
@@ -1144,10 +1153,12 @@ export default function OwnerSettings() {
                                     : 'Fichier validé'}
                                 </p>
                               </div>
-                              <div className="flex items-center gap-2 flex-shrink-0">
-                                <Check className="h-5 w-5 text-green-600" />
-                                <span className="text-sm text-gray-600">Enregistré</span>
-                              </div>
+                              {documentConfirmed && (
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                  <Check className="h-5 w-5 text-green-600" />
+                                  <span className="text-sm text-gray-600">Enregistré</span>
+                                </div>
+                              )}
                             </button>
                             {/* Phase-1f F7b — clears a freshly-picked local file; removing an
                                 UPLOADED document is disabled (no DELETE endpoint — replace by
@@ -1292,10 +1303,12 @@ export default function OwnerSettings() {
                                     : 'Fichier validé'}
                                 </p>
                               </div>
-                              <div className="flex items-center gap-2 flex-shrink-0">
-                                <Check className="h-5 w-5 text-green-600" />
-                                <span className="text-sm text-gray-600">Enregistré</span>
-                              </div>
+                              {bankDocConfirmed && (
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                  <Check className="h-5 w-5 text-green-600" />
+                                  <span className="text-sm text-gray-600">Enregistré</span>
+                                </div>
+                              )}
                             </button>
                             <button
                               type="button"

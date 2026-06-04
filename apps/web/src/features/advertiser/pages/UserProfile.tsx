@@ -113,6 +113,10 @@ export default function UserProfile() {
   const { updateContact, updateBusiness, updateAddress, updateNotifications, uploadDocument } =
     useProfileMutations(user?.id);
   const isAgencyProfile = profile?.profile_type === 'agency';
+  // C2 (#3b): the saved badge must reflect SERVER confirmation, never the locally-picked
+  // file. `documentConfirmed` is the server-confirmed flag (from /api/me via React Query);
+  // `documentFile` is only the file the user just picked, pending upload.
+  const documentConfirmed = !!profile?.documents?.registration;
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -312,6 +316,9 @@ export default function UserProfile() {
       setDocumentFile(null);
       toast.success('Document enregistré');
     } catch (err) {
+      // Clear the optimistic file so a failed upload leaves no false "saved" row; the
+      // server-confirmed badge stays off until the refetched profile says otherwise.
+      setDocumentFile(null);
       toast.error(getErrorMessage(err) || 'Erreur upload');
     } finally {
       setUploadingDocument(false);
@@ -853,7 +860,7 @@ export default function UserProfile() {
                   </label>
                 </div>
 
-                {(profile.documents?.registration || documentFile) && (
+                {(documentConfirmed || documentFile) && (
                   <div className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
                     <button
                       type="button"
@@ -871,10 +878,12 @@ export default function UserProfile() {
                           {documentFile ? formatFileSize(documentFile.size) : 'Document enregistré'}
                         </p>
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <Check className="h-5 w-5 text-green-600" />
-                        <span className="text-sm text-gray-600">Completed</span>
-                      </div>
+                      {documentConfirmed && (
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <Check className="h-5 w-5 text-green-600" />
+                          <span className="text-sm text-gray-600">Completed</span>
+                        </div>
+                      )}
                     </button>
                     {/* Phase-1f F7b — clears a freshly-picked local file; removing an UPLOADED
                         document is disabled (no DELETE endpoint — replace by re-uploading).
