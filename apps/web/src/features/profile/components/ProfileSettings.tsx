@@ -453,6 +453,9 @@ export default function ProfileSettings({
       setDocumentFile(null);
       toast.success('Document enregistré');
     } catch (err) {
+      // Clear the optimistic file so a failed upload leaves no false "saved" row; the
+      // server-confirmed badge (documentRegistered) stays off until the refetch says otherwise.
+      setDocumentFile(null);
       toast.error(getErrorMessage(err) || 'Erreur upload');
     } finally {
       setUploadingDocument(false);
@@ -1022,10 +1025,12 @@ export default function ProfileSettings({
                           {documentFile ? formatFileSize(documentFile.size) : 'Document enregistré'}
                         </p>
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <Check className="h-5 w-5 text-green-600" />
-                        <span className="text-sm text-gray-600">Enregistré</span>
-                      </div>
+                      {documentRegistered && (
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <Check className="h-5 w-5 text-green-600" />
+                          <span className="text-sm text-gray-600">Enregistré</span>
+                        </div>
+                      )}
                     </button>
                     <button
                       type="button"

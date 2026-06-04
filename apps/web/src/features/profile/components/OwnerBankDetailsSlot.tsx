@@ -51,7 +51,10 @@ export default function OwnerBankDetailsSlot({ profile, userId }: OwnerBankDetai
     setExistingBankDocUrl(profile.bank_doc_url ?? null);
   }, [profile]);
 
-  const hasBankDocument = !!bankDocFile || !!profile.bank_doc_path || !!profile.bank_doc_url;
+  // C2 (#3b): server-confirmed bank-RIB flag. The saved badge gates on THIS, never on
+  // `bankDocFile` (the locally-picked, pending file).
+  const bankDocConfirmed = !!profile.bank_doc_path || !!profile.bank_doc_url;
+  const hasBankDocument = !!bankDocFile || bankDocConfirmed;
 
   const openBankDocumentForView = async () => {
     if (bankDocFile) {
@@ -109,6 +112,8 @@ export default function OwnerBankDetailsSlot({ profile, userId }: OwnerBankDetai
       toast.success('Coordonnées bancaires enregistrées');
       navigate('/owner-dashboard');
     } catch (err: unknown) {
+      // Clear the optimistic file so a failed save leaves no false "saved" RIB badge.
+      setBankDocFile(null);
       const m = err instanceof Error ? err.message : 'Erreur lors de la mise à jour bancaire';
       toast.error(m);
     }
@@ -193,10 +198,12 @@ export default function OwnerBankDetailsSlot({ profile, userId }: OwnerBankDetai
                 {bankDocFile ? formatFileSize(bankDocFile.size) : 'Fichier validé'}
               </p>
             </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <Check className="h-5 w-5 text-green-600" />
-              <span className="text-sm text-gray-600">Enregistré</span>
-            </div>
+            {bankDocConfirmed && (
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <Check className="h-5 w-5 text-green-600" />
+                <span className="text-sm text-gray-600">Enregistré</span>
+              </div>
+            )}
           </button>
           <button
             type="button"
