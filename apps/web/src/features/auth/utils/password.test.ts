@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import { PASSWORD_MIN_LENGTH, isValidPassword, passwordChecks } from './password';
 
-describe('password policy (Phase-1f §4.2 — 12 + upper + lower + digit)', () => {
-  it('PASSWORD_MIN_LENGTH is 12', () => {
-    expect(PASSWORD_MIN_LENGTH).toBe(12);
+describe('password policy (slice-1 C3 — 10 + upper + lower + digit)', () => {
+  it('PASSWORD_MIN_LENGTH is 10', () => {
+    expect(PASSWORD_MIN_LENGTH).toBe(10);
   });
 
   it('isValidPassword requires all four rules', () => {
@@ -15,9 +15,9 @@ describe('password policy (Phase-1f §4.2 — 12 + upper + lower + digit)', () =
     expect(isValidPassword('Abcdefghijkl')).toBe(false); // no digit
   });
 
-  it('rejects an 11-char password but accepts 12 (the floor boundary)', () => {
-    expect(isValidPassword('Abcdefghij1')).toBe(false); // 11
-    expect(isValidPassword('Abcdefghij12')).toBe(true); // 12
+  it('rejects a 9-char password but accepts 10 (the floor boundary)', () => {
+    expect(isValidPassword('Abcdefg12')).toBe(false); // 9
+    expect(isValidPassword('Abcdefgh12')).toBe(true); // 10
   });
 
   it('passwordChecks reports each rule independently', () => {

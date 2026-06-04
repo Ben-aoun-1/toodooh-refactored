@@ -1264,7 +1264,7 @@ export default function ProfileSettings({
                     <PasswordRule ok={passwordRequirements.digit} label="Au moins un chiffre" />
                     <PasswordRule
                       ok={passwordRequirements.minLength}
-                      label="Minimum 12 caractères"
+                      label="Minimum 10 caractères"
                     />
                   </ul>
                 </div>

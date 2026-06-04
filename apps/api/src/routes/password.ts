@@ -10,11 +10,11 @@ import { requireAuth } from '../middleware/require-auth.js';
 const resetRequestSchema = z.object({ email: z.email('A valid email is required') });
 const resetSchema = z.object({
   token: z.string().min(1, 'Token is required'),
-  new_password: z.string().min(12, 'Password must be at least 12 characters'),
+  new_password: z.string().min(10, 'Password must be at least 10 characters'),
 });
 const changeSchema = z.object({
   current_password: z.string().min(1, 'Current password is required'),
-  new_password: z.string().min(12, 'Password must be at least 12 characters'),
+  new_password: z.string().min(10, 'Password must be at least 10 characters'),
 });
 
 const invalidInput = (

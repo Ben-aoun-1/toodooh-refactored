@@ -19,7 +19,7 @@ import { validateTaxNumber } from '../validation/tax-number.js';
 // decouple from the reference-data-GET ordering and avoid FK-500s on partial data).
 const signupBodySchema = z.object({
   email: z.email('A valid email is required'),
-  password: z.string().min(12, 'Password must be at least 12 characters'),
+  password: z.string().min(10, 'Password must be at least 10 characters'),
   contact_name: z.string().min(1).max(100),
   business_name: z.string().min(1).max(200),
   contact_phone: z.string().refine(validatePhone, 'Phone must be E.164 (e.g. +21612345678)'),

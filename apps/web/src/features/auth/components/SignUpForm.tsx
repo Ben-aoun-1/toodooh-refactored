@@ -840,7 +840,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             )}
           </div>
           <span className={`text-xs ${pwHasMinLen ? 'text-gray-700' : 'text-gray-400'}`}>
-            Minimum 12 caractères
+            Minimum 10 caractères
           </span>
         </div>
       </div>

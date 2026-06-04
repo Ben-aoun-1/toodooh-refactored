@@ -15,6 +15,8 @@ import { users } from '../src/db/schema.js';
 //   password source (prod-safe — never echoed): ADMIN_PASSWORD env  ──or──  piped stdin.
 //   local-only convenience: --generate-and-print-unsafe generates + PRINTS a password (opt-in;
 //   NEVER use in prod — a printed password leaks into shell history / CI logs).
+// Privileged admin accounts keep a stricter 12-char floor — intentionally above the
+// 10-char user floor (slice-1 C3 / #5); do not lower this to match users.
 const MIN_PASSWORD_LEN = 12;
 const UNSAFE_FLAG = '--generate-and-print-unsafe';
 

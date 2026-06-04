@@ -155,7 +155,7 @@ describe('password management: reset-request + reset + change (real Postgres)', 
     expect(res.json<{ error: string }>().error).toBe('INVALID_TOKEN');
   });
 
-  it('reset new password < 12 chars → 400', async () => {
+  it('reset new password < 10 chars → 400', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/password/reset',
@@ -208,7 +208,7 @@ describe('password management: reset-request + reset + change (real Postgres)', 
     expect(res.statusCode).toBe(401);
   });
 
-  it('change new password < 12 chars → 400', async () => {
+  it('change new password < 10 chars → 400', async () => {
     await createVerifiedUser('shortpw@example.com');
     const cookie = cookieHeader(
       (await signin('shortpw@example.com', PASSWORD)).headers['set-cookie'],
