@@ -17,11 +17,11 @@ import { resolveHomeRoute } from '@/features/auth/utils/home-route';
 export default function VerifyEmail() {
   const [params] = useSearchParams();
   const isError = params.get('error') !== null;
-  const { user, profileType } = useAuthStore();
+  const { user, profileType, role } = useAuthStore();
 
   // Auto-login succeeded (unverified→verified transition minted a session) → straight to the dashboard.
   if (!isError && user) {
-    return <Navigate to={resolveHomeRoute(profileType)} replace />;
+    return <Navigate to={resolveHomeRoute(profileType, role)} replace />;
   }
 
   return (

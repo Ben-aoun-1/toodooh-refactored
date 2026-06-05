@@ -5,7 +5,9 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 
 import PageLoadingFallback from '@/components/PageLoadingFallback';
 import AdminRoute from '@/features/admin/components/AdminRoute';
+import AgentRoute from '@/features/agent/components/AgentRoute';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
+import { resolveHomeRoute } from '@/features/auth/utils/home-route';
 import { createQueryClient } from '@/lib/query-client';
 
 // Toutes les pages sont chargées à la demande (code-splitting par route).
@@ -39,6 +41,7 @@ const OwnerStatementDetailPage = lazy(
 );
 const OwnerSettings = lazy(() => import('@/features/screenhost/pages/OwnerSettings'));
 const ContactPage = lazy(() => import('@/features/screenhost/pages/ContactPage'));
+const AgentWorkspace = lazy(() => import('@/features/agent/pages/AgentWorkspace'));
 const AdminLogin = lazy(() => import('@/features/admin/pages/AdminLogin'));
 const AdminDashboard = lazy(() => import('@/features/admin/pages/AdminDashboard'));
 const UserManagement = lazy(() => import('@/features/admin/pages/UserManagement'));
@@ -71,7 +74,7 @@ const ReactQueryDevtools = import.meta.env.DEV
   : null;
 
 function AdvertiserRoute({ children }: { children: React.ReactNode }) {
-  const { user, initialized, profileType } = useAuthStore();
+  const { user, initialized, profileType, role } = useAuthStore();
   if (!initialized) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
@@ -89,6 +92,10 @@ function AdvertiserRoute({ children }: { children: React.ReactNode }) {
   // Les utilisateurs en attente peuvent accéder au dashboard
   // mais les fonctionnalités seront grisées/désactivées via isDisabled
 
+  // Slice-2 E — a screenhost_agent (profile_type null) must not sit on the advertiser dashboard.
+  if (role === 'screenhost_agent') {
+    return <Navigate to="/agent" />;
+  }
   // Utiliser le profileType du store au lieu de localStorage
   if (profileType === 'individual_owner' || profileType === 'fleet_owner') {
     return <Navigate to="/owner-dashboard" />;
@@ -125,7 +132,7 @@ function OwnerRoute({ children }: { children: React.ReactNode }) {
 }
 
 function PublicRoute({ children }: { children: React.ReactNode }) {
-  const { user, initialized, profileType } = useAuthStore();
+  const { user, initialized, profileType, role } = useAuthStore();
 
   if (!initialized) {
     return (
@@ -138,13 +145,10 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
     );
   }
 
-  // Si un utilisateur est connecté, le rediriger vers son dashboard
-  // même s'il est en attente de validation (les fonctionnalités seront grisées)
+  // Si un utilisateur est connecté, le rediriger vers son espace (agent/owner/advertiser) via le
+  // résolveur unique — même s'il est en attente de validation (les fonctionnalités seront grisées).
   if (user) {
-    if (profileType === 'individual_owner' || profileType === 'fleet_owner') {
-      return <Navigate to="/owner-dashboard" />;
-    }
-    return <Navigate to="/dashboard" />;
+    return <Navigate to={resolveHomeRoute(profileType, role)} />;
   }
 
   return <>{children}</>;
@@ -238,6 +242,16 @@ export default function App() {
             {/* Verify-email result (Phase-1f F3): the better-auth callbackURL target. Standalone —
                 the just-verified user is logged out and must always see the result. */}
             <Route path="/verify-email" element={<VerifyEmail />} />
+
+            {/* Slice-2 E — screenhost-agent workspace (role-gated) */}
+            <Route
+              path="/agent"
+              element={
+                <AgentRoute>
+                  <AgentWorkspace />
+                </AgentRoute>
+              }
+            />
 
             {/* Routes protégées - Dashboard Annonceur */}
             <Route
