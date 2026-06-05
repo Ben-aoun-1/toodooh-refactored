@@ -3,6 +3,8 @@ import { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
+import cguScreencastersUrl from '@/assets/cgu/cgu-screencasters.pdf?url';
+import cguScreenhostsUrl from '@/assets/cgu/cgu-screenhosts.pdf?url';
 import inscriptionImg from '@/assets/inscription.png';
 import adresseStepIcon from '@/assets/inscrit/adressex.png';
 import agenceIcon from '@/assets/inscrit/agence.png';
@@ -135,6 +137,8 @@ function parseFleetScreenCount(v: string): number {
 export default function SignUpForm({ currentStep, onStepChange, onProfileTypeChange }: Props) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  // CGU viewer: role-specific terms shown in an in-page modal (no route change → wizard state survives).
+  const [cguOpen, setCguOpen] = useState(false);
   const [showPassword, _setShowPassword] = useState(false);
   const [showConfirmPassword, _setShowConfirmPassword] = useState(false);
   const [sectors, setSectors] = useState<BusinessSector[]>([]);
@@ -1629,20 +1633,29 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
       )}
 
       <div className="space-y-4 pt-2">
-        <label className="flex items-start cursor-pointer gap-3">
+        {/* CGU trigger lives OUTSIDE the acceptance label: opening the terms must never toggle
+            terms_accepted. The label wraps only the checkbox + "J'accepte" text. */}
+        <div className="flex items-start gap-3">
           <input
+            id="signup-terms-owner"
             type="checkbox"
             checked={formData.terms_accepted}
             onChange={(e) => setFormData({ ...formData, terms_accepted: e.target.checked })}
             className="h-5 w-5 text-brand-primary focus:ring-brand-primary border-gray-300 rounded mt-0.5 flex-shrink-0"
           />
           <span className="text-sm text-gray-700">
-            J&apos;accepte{' '}
-            <a href="/terms" className="text-gray-900 font-medium underline underline-offset-2">
+            <label htmlFor="signup-terms-owner" className="cursor-pointer">
+              J&apos;accepte
+            </label>{' '}
+            <button
+              type="button"
+              onClick={() => setCguOpen(true)}
+              className="text-gray-900 font-medium underline underline-offset-2"
+            >
               les conditions générales d&apos;utilisation
-            </a>
+            </button>
           </span>
-        </label>
+        </div>
         <label className="flex items-start cursor-pointer gap-3">
           <input
             type="checkbox"
@@ -1853,20 +1866,29 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
 
       {/* CGU checkboxes */}
       <div className="space-y-4 pt-2">
-        <label className="flex items-start cursor-pointer gap-3">
+        {/* CGU trigger lives OUTSIDE the acceptance label: opening the terms must never toggle
+            terms_accepted. The label wraps only the checkbox + "J'accepte" text. */}
+        <div className="flex items-start gap-3">
           <input
+            id="signup-terms-advertiser"
             type="checkbox"
             checked={formData.terms_accepted}
             onChange={(e) => setFormData({ ...formData, terms_accepted: e.target.checked })}
             className="h-5 w-5 text-brand-primary focus:ring-brand-primary border-gray-300 rounded mt-0.5 flex-shrink-0"
           />
           <span className="text-sm text-gray-700">
-            J&apos;accepte{' '}
-            <a href="/terms" className="text-gray-900 font-medium underline underline-offset-2">
+            <label htmlFor="signup-terms-advertiser" className="cursor-pointer">
+              J&apos;accepte
+            </label>{' '}
+            <button
+              type="button"
+              onClick={() => setCguOpen(true)}
+              className="text-gray-900 font-medium underline underline-offset-2"
+            >
               les conditions générales d&apos;utilisation
-            </a>
+            </button>
           </span>
-        </label>
+        </div>
         <label className="flex items-start cursor-pointer gap-3">
           <input
             type="checkbox"
@@ -1976,6 +1998,46 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
               )}
             </button>
           )}
+        </div>
+      )}
+
+      {cguOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Conditions générales d'utilisation"
+        >
+          <div className="flex h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Conditions générales d&apos;utilisation
+                {isOwner ? ' — Screenhosts' : ' — Screencasters'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setCguOpen(false)}
+                className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                aria-label="Fermer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <iframe
+              src={isOwner ? cguScreenhostsUrl : cguScreencastersUrl}
+              title="Conditions générales d'utilisation"
+              className="h-full w-full flex-1"
+            />
+            <div className="flex justify-end border-t border-gray-200 px-6 py-3">
+              <button
+                type="button"
+                onClick={() => setCguOpen(false)}
+                className="rounded-lg bg-brand-primary px-5 py-2 text-sm font-semibold text-brand-deep transition-colors hover:bg-brand-primary/90"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
