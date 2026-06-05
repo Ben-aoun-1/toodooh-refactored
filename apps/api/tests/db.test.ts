@@ -6,6 +6,7 @@ import * as schema from '../src/db/schema.js';
 import {
   accounts,
   businessSectors,
+  establishments,
   governorates,
   predefinedZones,
   sessions,
@@ -95,6 +96,20 @@ describe('db schema', () => {
     expect(predefinedZones.latitude).toBeDefined();
     expect(predefinedZones.longitude).toBeDefined();
     expect(predefinedZones.radius).toBeDefined();
+  });
+
+  it('establishments exposes its coordinate + metadata + ownership columns (Slice-2 E)', () => {
+    expect(establishments.name).toBeDefined();
+    expect(establishments.latitude).toBeDefined();
+    expect(establishments.longitude).toBeDefined();
+    expect(establishments.screenCount).toBeDefined();
+    expect(establishments.address).toBeDefined();
+    expect(establishments.city).toBeDefined();
+    expect(establishments.governorateId).toBeDefined();
+    expect(establishments.zone).toBeDefined();
+    expect(establishments.isActive).toBeDefined();
+    expect(establishments.createdBy).toBeDefined();
+    expect(establishments.screenhostId).toBeDefined();
   });
 });
 

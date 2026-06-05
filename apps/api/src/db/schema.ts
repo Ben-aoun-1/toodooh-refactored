@@ -264,3 +264,55 @@ export type BusinessSector = typeof businessSectors.$inferSelect;
 export type NewBusinessSector = typeof businessSectors.$inferInsert;
 export type PredefinedZone = typeof predefinedZones.$inferSelect;
 export type NewPredefinedZone = typeof predefinedZones.$inferInsert;
+
+// ── establishments (Slice-2 E) ─────────────────────────────────────────
+// The coordinate-bearing inventory dot a screenhost_agent registers: one establishment = one
+// coordinate = one dot on the advertiser map (ruling §7.1.1). screen_count is METADATA (E does NOT
+// create screens rows; booking is zone-level). Coordinates are numeric lat/lng mirroring
+// predefined_zones (no PostGIS in E — zone matching is client-side Haversine). created_by = the
+// registering agent; screenhost_id is the future owner link, nullable + deferred (E neither creates
+// nor links screenhost user accounts). Distinct from the signup agent_code referral field.
+export const establishments = pgTable(
+  'establishments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull(),
+    latitude: numeric('latitude', { precision: 10, scale: 8 }).notNull(),
+    longitude: numeric('longitude', { precision: 11, scale: 8 }).notNull(),
+    // Free metadata, NOT screens rows. The route requires >= 1; the DB tolerates >= 0.
+    screenCount: integer('screen_count').notNull().default(0),
+    address: text('address'),
+    city: text('city'),
+    governorateId: uuid('governorate_id').references(() => governorates.id, {
+      onDelete: 'set null',
+    }),
+    zone: text('zone'),
+    isActive: boolean('is_active').notNull().default(true),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id),
+    screenhostId: uuid('screenhost_id').references(() => users.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index('establishments_created_by_idx').on(table.createdBy),
+    index('establishments_is_active_idx').on(table.isActive),
+    index('establishments_governorate_id_idx').on(table.governorateId),
+    check(
+      'establishments_latitude_range',
+      sql`${table.latitude} >= -90 AND ${table.latitude} <= 90`,
+    ),
+    check(
+      'establishments_longitude_range',
+      sql`${table.longitude} >= -180 AND ${table.longitude} <= 180`,
+    ),
+    check('establishments_screen_count_nonneg', sql`${table.screenCount} >= 0`),
+  ],
+);
+
+export type Establishment = typeof establishments.$inferSelect;
+export type NewEstablishment = typeof establishments.$inferInsert;

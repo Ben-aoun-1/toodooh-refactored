@@ -57,6 +57,13 @@
       "when": 1780684455078,
       "tag": "0007_woozy_stranger",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1780687920998,
+      "tag": "0008_military_mojo",
+      "breakpoints": true
     }
   ]
 }
