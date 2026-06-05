@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { adminService } from '@/features/admin/services/admin.service';
+import type { CreateInternalAccountInput } from '@/features/admin/types/admin';
 
 import { adminKeys } from './queryKeys';
 
@@ -15,11 +16,6 @@ export function useAdmins() {
     loading: query.isLoading,
     isError: query.isError,
   };
-}
-
-interface CreateAdminInput {
-  adminData: Parameters<typeof adminService.createAdmin>[0];
-  createdBy: string;
 }
 
 /**
@@ -43,8 +39,7 @@ export function useAdminMutations() {
   });
 
   const createAdmin = useMutation({
-    mutationFn: ({ adminData, createdBy }: CreateAdminInput) =>
-      adminService.createAdmin(adminData, createdBy),
+    mutationFn: (input: CreateInternalAccountInput) => adminService.createAdmin(input),
     onSuccess: invalidateAdmins,
   });
 

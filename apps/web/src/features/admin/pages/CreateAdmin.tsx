@@ -1,11 +1,21 @@
-import { UserPlus, Shield, User, Mail, Lock, AlertCircle, CheckCircle } from 'lucide-react';
+import {
+  UserPlus,
+  Shield,
+  User,
+  Mail,
+  Lock,
+  AlertCircle,
+  CheckCircle,
+  Monitor,
+  Cast,
+} from 'lucide-react';
 import React, { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
 import { useAdminMutations } from '@/features/admin/hooks/useAdmins';
-import { adminService } from '@/features/admin/services/admin.service';
+import type { InternalAccountRole } from '@/features/admin/types/admin';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { getErrorMessage } from '@/lib/errors';
 
@@ -15,8 +25,15 @@ interface AdminFormData {
   confirmPassword: string;
   first_name: string;
   last_name: string;
-  role: 'admin' | 'moderator';
+  role: InternalAccountRole;
 }
+
+// Labels for the success toast + the role-card picker (no `moderator` — slice-2 A ruling 2).
+const ROLE_LABELS: Record<InternalAccountRole, string> = {
+  admin: 'Administrateur',
+  screenhost_agent: 'Agent ScreenHost',
+  screencast_agent: 'Agent ScreenCast',
+};
 
 export default function CreateAdmin() {
   const user = useAuthStore((s) => s.user);
@@ -45,8 +62,8 @@ export default function CreateAdmin() {
       return 'Tous les champs sont obligatoires';
     }
 
-    if (formData.password.length < 6) {
-      return 'Le mot de passe doit contenir au moins 6 caractères';
+    if (formData.password.length < 12) {
+      return 'Le mot de passe doit contenir au moins 12 caractères';
     }
 
     if (formData.password !== formData.confirmPassword) {
@@ -77,21 +94,17 @@ export default function CreateAdmin() {
 
     setLoading(true);
     try {
+      // contact_name is the single name field the apps/api endpoint stores; compose it from the
+      // first/last inputs. role/status/verification are server-controlled (created approved +
+      // verified); credentials are delivered out-of-band, so no verification email is sent.
       await createAdmin.mutateAsync({
-        adminData: {
-          email: formData.email,
-          password: formData.password,
-          first_name: formData.first_name,
-          last_name: formData.last_name,
-          role: formData.role,
-          permissions: [],
-        },
-        createdBy: user.id,
+        email: formData.email,
+        password: formData.password,
+        contact_name: `${formData.first_name} ${formData.last_name}`.trim(),
+        role: formData.role,
       });
 
-      toast.success(
-        `${formData.role === 'admin' ? 'Administrateur' : 'Modérateur'} créé avec succès !`,
-      );
+      toast.success(`${ROLE_LABELS[formData.role]} créé avec succès !`);
 
       // Réinitialiser le formulaire
       setFormData({
@@ -101,14 +114,6 @@ export default function CreateAdmin() {
         first_name: '',
         last_name: '',
         role: 'admin',
-      });
-
-      // Log l'activité
-      await adminService.logActivity({
-        admin_id: user.id,
-        action: 'create_admin',
-        target_type: 'admin',
-        description: `Création d'un ${formData.role === 'admin' ? 'administrateur' : 'modérateur'}: ${formData.first_name} ${formData.last_name}`,
       });
     } catch (error) {
       toast.error(getErrorMessage(error) || 'Erreur lors de la création');
@@ -125,7 +130,7 @@ export default function CreateAdmin() {
           <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-900 mb-2">Accès Refusé</h3>
           <p className="text-gray-600 mb-6">
-            Seul le Super Administrateur peut créer des administrateurs et modérateurs.
+            Seul le Super Administrateur peut créer des comptes internes.
           </p>
           <button
             onClick={() => navigate('/admin-dashboard')}
@@ -139,7 +144,7 @@ export default function CreateAdmin() {
   }
 
   return (
-    <AdminLayout title="Créer un Admin" subtitle="Ajouter un administrateur ou modérateur">
+    <AdminLayout title="Créer un compte" subtitle="Ajouter un administrateur ou un agent">
       <div className="max-w-3xl mx-auto">
         {/* En-tête informatif */}
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
@@ -147,13 +152,15 @@ export default function CreateAdmin() {
             <Shield className="h-6 w-6 text-blue-600 mr-3 mt-0.5" />
             <div>
               <h4 className="text-sm font-semibold text-blue-900 mb-1">
-                Création de compte administrateur
+                Création de compte interne
               </h4>
               <p className="text-sm text-blue-700">
                 <strong>Administrateur :</strong> Accès complet à toutes les fonctionnalités (sauf
-                création d'autres admins)
+                création d'autres comptes internes)
                 <br />
-                <strong>Modérateur :</strong> Accès limité aux fonctions de modération et validation
+                <strong>Agent ScreenHost :</strong> Inscription des établissements / inventaire
+                <br />
+                <strong>Agent ScreenCast :</strong> Acquisition des annonceurs
               </p>
             </div>
           </div>
@@ -165,54 +172,53 @@ export default function CreateAdmin() {
             {/* Type de compte */}
             <div>
               <span className="block text-sm font-medium text-gray-700 mb-2">Type de compte *</span>
-              <div className="grid grid-cols-2 gap-4">
-                <button
-                  type="button"
-                  onClick={() => setFormData({ ...formData, role: 'admin' })}
-                  className={`p-4 border-2 rounded-lg transition-all ${
-                    formData.role === 'admin'
-                      ? 'border-brand-primary bg-brand-primary bg-opacity-10'
-                      : 'border-gray-300 hover:border-gray-400'
-                  }`}
-                >
-                  <Shield
-                    className={`h-8 w-8 mx-auto mb-2 ${
-                      formData.role === 'admin' ? 'text-brand-primary' : 'text-gray-400'
-                    }`}
-                  />
-                  <p
-                    className={`font-semibold ${
-                      formData.role === 'admin' ? 'text-brand-primary' : 'text-gray-700'
-                    }`}
-                  >
-                    Administrateur
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">Accès complet</p>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setFormData({ ...formData, role: 'moderator' })}
-                  className={`p-4 border-2 rounded-lg transition-all ${
-                    formData.role === 'moderator'
-                      ? 'border-brand-primary bg-brand-primary bg-opacity-10'
-                      : 'border-gray-300 hover:border-gray-400'
-                  }`}
-                >
-                  <User
-                    className={`h-8 w-8 mx-auto mb-2 ${
-                      formData.role === 'moderator' ? 'text-brand-primary' : 'text-gray-400'
-                    }`}
-                  />
-                  <p
-                    className={`font-semibold ${
-                      formData.role === 'moderator' ? 'text-brand-primary' : 'text-gray-700'
-                    }`}
-                  >
-                    Modérateur
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">Accès limité</p>
-                </button>
+              <div className="grid grid-cols-3 gap-4">
+                {(
+                  [
+                    {
+                      value: 'admin',
+                      label: 'Administrateur',
+                      desc: 'Accès complet',
+                      Icon: Shield,
+                    },
+                    {
+                      value: 'screenhost_agent',
+                      label: 'Agent ScreenHost',
+                      desc: 'Inventaire / établissements',
+                      Icon: Monitor,
+                    },
+                    {
+                      value: 'screencast_agent',
+                      label: 'Agent ScreenCast',
+                      desc: 'Acquisition annonceurs',
+                      Icon: Cast,
+                    },
+                  ] as const
+                ).map(({ value, label, desc, Icon }) => {
+                  const selected = formData.role === value;
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, role: value })}
+                      className={`p-4 border-2 rounded-lg transition-all ${
+                        selected
+                          ? 'border-brand-primary bg-brand-primary bg-opacity-10'
+                          : 'border-gray-300 hover:border-gray-400'
+                      }`}
+                    >
+                      <Icon
+                        className={`h-8 w-8 mx-auto mb-2 ${selected ? 'text-brand-primary' : 'text-gray-400'}`}
+                      />
+                      <p
+                        className={`font-semibold ${selected ? 'text-brand-primary' : 'text-gray-700'}`}
+                      >
+                        {label}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">{desc}</p>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -292,13 +298,13 @@ export default function CreateAdmin() {
                   name="password"
                   value={formData.password}
                   onChange={handleChange}
-                  placeholder="Minimum 6 caractères"
+                  placeholder="Minimum 12 caractères"
                   className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent"
                   required
                   id="password"
                 />
               </div>
-              <p className="text-xs text-gray-500 mt-1">Minimum 6 caractères</p>
+              <p className="text-xs text-gray-500 mt-1">Minimum 12 caractères</p>
             </div>
 
             {/* Confirmation mot de passe */}

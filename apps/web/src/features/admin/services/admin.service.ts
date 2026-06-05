@@ -1,85 +1,29 @@
 import {
   AdminProfile,
-  AdminSignUpData,
   AdminDashboardStats,
   AdminActivity,
+  CreateInternalAccountInput,
+  InternalAccount,
 } from '@/features/admin/types/admin';
+import { apiClient } from '@/lib/api-client';
 import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase';
 
 const log = logger.child({ module: 'admin.service' });
 
-// Fonction pour mapper les erreurs admin
-// TODO(phase-1): typed source [supabase] — see #15
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mapAdminError = (error: any): string => {
-  const errorMessage =
-    error?.message || error?.error_description || "Une erreur inattendue s'est produite";
-
-  if (errorMessage.includes('Invalid login credentials')) {
-    return 'Email ou mot de passe incorrect.';
-  }
-
-  if (errorMessage.includes('User already registered')) {
-    return 'Un compte admin existe déjà avec cette adresse email.';
-  }
-
-  if (errorMessage.includes('Email not confirmed')) {
-    return "Votre compte admin n'est pas encore activé.";
-  }
-
-  return errorMessage;
-};
-
 export const adminService = {
-  // Gestion des admins
-  async createAdmin(adminData: AdminSignUpData, createdBy: string): Promise<AdminProfile> {
-    try {
-      // Créer l'utilisateur auth avec signUp
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: adminData.email,
-        password: adminData.password,
-        options: {
-          data: {
-            first_name: adminData.first_name,
-            last_name: adminData.last_name,
-            role: adminData.role,
-          },
-        },
-      });
-
-      if (authError) {
-        throw authError;
-      }
-
-      if (!authData.user) {
-        throw new Error('Failed to create user');
-      }
-
-      // Créer le profil admin
-      const { data: adminProfile, error: profileError } = await supabase
-        .from('admin_profiles')
-        .insert({
-          user_id: authData.user.id,
-          email: adminData.email,
-          first_name: adminData.first_name,
-          last_name: adminData.last_name,
-          role: adminData.role,
-          permissions: adminData.permissions || [],
-          is_active: true,
-          created_by: createdBy,
-        })
-        .select()
-        .single();
-
-      if (profileError) {
-        throw profileError;
-      }
-
-      return adminProfile;
-    } catch (error) {
-      throw new Error(mapAdminError(error));
-    }
+  // Slice-2 A: internal-account creation is repointed onto apps/api — superadmin-only
+  // POST /api/admin/accounts (no verification email; created email_verified + approved). The created
+  // account lands in the `users` table, so it does NOT appear in the legacy admin_profiles-backed
+  // list (getAdmins) until the 2.7 admin repoint — an intentional interim gap. Every method BELOW
+  // stays on Supabase until 2.7. Errors propagate as ApiError → the page's getErrorMessage surfaces
+  // the server message (e.g. the 409 EMAIL_TAKEN message).
+  async createAdmin(input: CreateInternalAccountInput): Promise<InternalAccount> {
+    const { account } = await apiClient.post<{ account: InternalAccount }>(
+      '/admin/accounts',
+      input,
+    );
+    return account;
   },
 
   async getAdmins(): Promise<AdminProfile[]> {

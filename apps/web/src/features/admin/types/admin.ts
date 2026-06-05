@@ -47,6 +47,27 @@ export interface AdminSignUpData {
   permissions?: string[];
 }
 
+// Slice-2 A — internal-account creation via the apps/api endpoint POST /api/admin/accounts
+// (superadmin-only). `moderator` is intentionally absent (not a user_role value); the agent roles
+// are the new admin-creatable types. Distinct from the legacy admin_profiles shape above.
+export type InternalAccountRole = 'admin' | 'screenhost_agent' | 'screencast_agent';
+
+export interface CreateInternalAccountInput {
+  email: string;
+  password: string;
+  contact_name: string;
+  role: InternalAccountRole;
+}
+
+export interface InternalAccount {
+  id: string;
+  email: string;
+  role: string;
+  status: string;
+  contact_name: string;
+  email_verified: boolean;
+}
+
 export interface AdminDashboardStats {
   totalUsers: number;
   totalOwners: number;
