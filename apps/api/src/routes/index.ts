@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 
+import { adminAccountsRoutes } from './admin-accounts.js';
 import { adminRoutes } from './admin.js';
 import { meRoutes } from './me.js';
 import { passwordRoutes } from './password.js';
@@ -20,6 +21,8 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   await app.register(profileDocumentsRoutes);
   await app.register(passwordRoutes);
   await app.register(adminRoutes);
+  // Superadmin-only internal-account creation (staff admins + agents) — slice-2 A.
+  await app.register(adminAccountsRoutes);
   // Zones cutover (Z1): public GET catalog + admin-guarded scalar writes.
   await app.register(predefinedZonesRoutes);
   // Public reference-data reads (no auth) — register last; they add no preHandler.
