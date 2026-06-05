@@ -74,9 +74,10 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/admin/users?status=pending|approved|rejected — the moderation queue for END-USERS.
   // Single-table select on users (the dual-identity collapse: no business_profiles/documents join).
   // status is REQUIRED (no surprise all-users dump); sort by created_at DESC (the UI's "Inscription"
-  // column). Admin staff (role admin/superadmin, seeded via create-admin, pre-approved) are NOT in
-  // the moderation queue — the endpoint's semantic is "end-users awaiting/with a decision", so they
-  // are excluded (the dead-Supabase consumer filtered admin_profiles the same way).
+  // column). Internal accounts (admin/superadmin seeded via create-admin; agent roles created via
+  // POST /api/admin/accounts — all pre-approved) are NOT in the moderation queue — the endpoint's
+  // semantic is "end-users awaiting/with a decision", so they are excluded (the dead-Supabase
+  // consumer filtered admin_profiles the same way).
   app.get('/api/admin/users', adminGuard, async (request, reply) => {
     const parsed = listQuerySchema.safeParse(request.query);
     if (!parsed.success) {
@@ -93,7 +94,12 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       .select()
       .from(users)
       .where(
-        and(eq(users.status, parsed.data.status), notInArray(users.role, ['admin', 'superadmin'])),
+        and(
+          eq(users.status, parsed.data.status),
+          // Internal accounts are not end-users: exclude admin staff (admin/superadmin) AND the
+          // admin-created agent roles (screenhost_agent/screencast_agent) from the moderation queue.
+          notInArray(users.role, ['admin', 'superadmin', 'screenhost_agent', 'screencast_agent']),
+        ),
       )
       .orderBy(desc(users.createdAt));
 

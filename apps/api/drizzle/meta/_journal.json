@@ -50,6 +50,13 @@
       "when": 1779740528740,
       "tag": "0006_wooden_pyro",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1780684455078,
+      "tag": "0007_woozy_stranger",
+      "breakpoints": true
     }
   ]
 }

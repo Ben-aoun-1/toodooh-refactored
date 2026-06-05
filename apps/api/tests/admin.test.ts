@@ -118,6 +118,19 @@ describe('admin endpoints (real Postgres)', () => {
       expect(body.users[0]?.status).toBe('approved');
     });
 
+    it('excludes internal-account roles (admin/superadmin + agents) from the queue', async () => {
+      await seedUser({ role: 'screenhost_agent', status: 'approved' });
+      await seedUser({ role: 'screencast_agent', status: 'approved' });
+      await seedUser({ role: 'admin', status: 'approved' });
+      const body = (await list('approved')).json<{ users: { role: string }[] }>();
+      const roles = body.users.map((u) => u.role);
+      expect(roles).not.toContain('screenhost_agent');
+      expect(roles).not.toContain('screencast_agent');
+      expect(roles).not.toContain('admin');
+      expect(roles).not.toContain('superadmin');
+      expect(roles).toContain('advertiser'); // the lone approved end-user still shows
+    });
+
     it('missing status → 400', async () => {
       const res = await app.inject({ method: 'GET', url: '/api/admin/users' });
       expect(res.statusCode).toBe(400);

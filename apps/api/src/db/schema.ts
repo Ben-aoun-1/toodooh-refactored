@@ -27,6 +27,12 @@ export const userRole = pgEnum('user_role', [
   'fleet_owner',
   'admin',
   'superadmin',
+  // Slice-2 A — agent is a SEPARATE admin-created role (NOT a profile_type), with two types.
+  // screenhost_agent is the inventory-creation path consumed by slice E; screencast_agent's
+  // product surface is deferred (2.9). Distinct from the signup `agent_code`/`agent_toodooh`
+  // referral-attribution field, which is unrelated to this role.
+  'screenhost_agent',
+  'screencast_agent',
 ]);
 
 export const userStatus = pgEnum('user_status', ['pending', 'approved', 'rejected']);

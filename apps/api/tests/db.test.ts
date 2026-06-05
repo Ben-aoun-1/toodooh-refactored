@@ -20,13 +20,16 @@ describe('db schema', () => {
     expect(schema).toBeDefined();
   });
 
-  it('user_role enum has exactly the five locked values', () => {
+  it('user_role enum has exactly the seven locked values', () => {
     expect(userRole.enumValues).toEqual([
       'advertiser',
       'individual_owner',
       'fleet_owner',
       'admin',
       'superadmin',
+      // slice-2 A — admin-created agent roles (screenhost_agent = E inventory path)
+      'screenhost_agent',
+      'screencast_agent',
     ]);
   });
 
