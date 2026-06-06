@@ -6,9 +6,10 @@ import * as schema from '../src/db/schema.js';
 import {
   accounts,
   businessSectors,
-  establishments,
   governorates,
   predefinedZones,
+  screenhostExportStatus,
+  screenhosts,
   sessions,
   userRole,
   users,
@@ -98,18 +99,30 @@ describe('db schema', () => {
     expect(predefinedZones.radius).toBeDefined();
   });
 
-  it('establishments exposes its coordinate + metadata + ownership columns (Slice-2 E)', () => {
-    expect(establishments.name).toBeDefined();
-    expect(establishments.latitude).toBeDefined();
-    expect(establishments.longitude).toBeDefined();
-    expect(establishments.screenCount).toBeDefined();
-    expect(establishments.address).toBeDefined();
-    expect(establishments.city).toBeDefined();
-    expect(establishments.governorateId).toBeDefined();
-    expect(establishments.zone).toBeDefined();
-    expect(establishments.isActive).toBeDefined();
-    expect(establishments.createdBy).toBeDefined();
-    expect(establishments.screenhostId).toBeDefined();
+  it('screenhost_export_status enum mirrors the status convention (pending → exported)', () => {
+    expect(screenhostExportStatus.enumValues).toEqual(['pending', 'exported']);
+  });
+
+  it('screenhosts exposes coordinate + metadata + ownership + wifi/export columns (Slice-2 E)', () => {
+    expect(screenhosts.name).toBeDefined();
+    expect(screenhosts.latitude).toBeDefined();
+    expect(screenhosts.longitude).toBeDefined();
+    expect(screenhosts.screenCount).toBeDefined();
+    expect(screenhosts.address).toBeDefined();
+    expect(screenhosts.city).toBeDefined();
+    expect(screenhosts.postalCode).toBeDefined();
+    expect(screenhosts.governorateId).toBeDefined();
+    expect(screenhosts.zone).toBeDefined();
+    expect(screenhosts.isActive).toBeDefined();
+    expect(screenhosts.ownerId).toBeDefined();
+    expect(screenhosts.wifiSsid).toBeDefined();
+    expect(screenhosts.wifiPasswordEncrypted).toBeDefined();
+    expect(screenhosts.exportStatus).toBeDefined();
+    expect(screenhosts.exportedAt).toBeDefined();
+    // CF-19 P0 rework: the agent-create column is gone; owner_id replaces screenhost_id.
+    const cols = screenhosts as unknown as Record<string, unknown>;
+    expect(cols['createdBy']).toBeUndefined();
+    expect(cols['screenhostId']).toBeUndefined();
   });
 });
 

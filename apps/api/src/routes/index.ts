@@ -24,7 +24,8 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   // Superadmin-only internal-account creation (staff admins + agents) — slice-2 A.
   await app.register(adminAccountsRoutes);
   // (CF-19 P0) agent establishment-write routes removed — agents do NOT create places. The
-  // establishments table is retained but unused; the screenhost-owned location model lands later.
+  // screenhosts table (replaces establishments) is scaffolding only — no write path, read
+  // endpoint, or signup capture yet (P2/P3).
   // Zones cutover (Z1): public GET catalog + admin-guarded scalar writes.
   await app.register(predefinedZonesRoutes);
   // Public reference-data reads (no auth) — register last; they add no preHandler.

@@ -265,37 +265,49 @@ export type NewBusinessSector = typeof businessSectors.$inferInsert;
 export type PredefinedZone = typeof predefinedZones.$inferSelect;
 export type NewPredefinedZone = typeof predefinedZones.$inferInsert;
 
-// ── establishments (Slice-2) ───────────────────────────────────────────
-// Coordinate-bearing location row (one establishment = one coordinate = one dot on the advertiser
-// map; screen_count is metadata, no screens rows). Numeric lat/lng mirror predefined_zones (no
-// PostGIS; zone matching is client-side Haversine).
+// Location lifecycle toward the player/CMS export. Mirrors the users.status enum convention
+// (lowercase pgEnum, *_status). The export trigger is owner approval (admin.ts); a location starts
+// 'pending' and flips to 'exported' (stamping exported_at) once its approved owner is exported.
+export const screenhostExportStatus = pgEnum('screenhost_export_status', ['pending', 'exported']);
+
+// ── screenhosts (Slice-2) ──────────────────────────────────────
+// Screenhost-OWNED coordinate-bearing location (one location = one coordinate = one dot on the
+// advertiser map; screen_count is metadata, no screens rows). Numeric lat/lng mirror
+// predefined_zones (no PostGIS; zone matching is client-side Haversine).
 //
-// NOT AN AGENT-WRITE SURFACE (CF-19 P0 correction): agents do NOT create establishments. The
-// agent-facing POST/GET routes were removed; this table is currently UNUSED at runtime and reserved
-// for the future SCREENHOST-OWNED location model created at screenhost signup after admin approval
-// (CF-18 P3) — at which point screenhost_id becomes the populated owner and wifi/status/export
-// columns are added. created_by stays for now but carries no agent-create semantics. Distinct from
-// the signup agent_code referral field.
-export const establishments = pgTable(
-  'establishments',
+// Replaces the repudiated agent-create `establishments` table (CF-19 P0). This slice REDEFINES the
+// shape only — it adds NO write path, read endpoint, or signup capture (those are P2/P3). All new
+// columns are nullable scaffolding:
+//   - owner_id (was screenhost_id): the owning screenhost; app-enforced not-null arrives in P3.
+//   - latitude/longitude are nullable here (populated when the owner/admin supplies coordinates in
+//     P3); the range checks still hold — they pass on NULL.
+//   - wifi_password_encrypted holds app-layer AES-256-GCM ciphertext (encrypt-not-hash; key from
+//     env, provisioned later) — stored as text, no crypto wired this slice.
+//   - export_status mirrors the users.status enum convention; the export trigger is owner approval.
+// created_by is dropped — the approver is audited on users.validated_by, not here.
+export const screenhosts = pgTable(
+  'screenhosts',
   {
     id: uuid('id').primaryKey().defaultRandom(),
     name: text('name').notNull(),
-    latitude: numeric('latitude', { precision: 10, scale: 8 }).notNull(),
-    longitude: numeric('longitude', { precision: 11, scale: 8 }).notNull(),
-    // Free metadata, NOT screens rows. The route requires >= 1; the DB tolerates >= 0.
+    latitude: numeric('latitude', { precision: 10, scale: 8 }),
+    longitude: numeric('longitude', { precision: 11, scale: 8 }),
+    // Free metadata, NOT screens rows.
     screenCount: integer('screen_count').notNull().default(0),
     address: text('address'),
     city: text('city'),
+    postalCode: text('postal_code'),
     governorateId: uuid('governorate_id').references(() => governorates.id, {
       onDelete: 'set null',
     }),
     zone: text('zone'),
     isActive: boolean('is_active').notNull().default(true),
-    createdBy: uuid('created_by')
-      .notNull()
-      .references(() => users.id),
-    screenhostId: uuid('screenhost_id').references(() => users.id),
+    ownerId: uuid('owner_id').references(() => users.id),
+    wifiSsid: text('wifi_ssid'),
+    // App-layer AES-256-GCM ciphertext (encrypt-not-hash); no crypto wired this slice.
+    wifiPasswordEncrypted: text('wifi_password_encrypted'),
+    exportStatus: screenhostExportStatus('export_status').notNull().default('pending'),
+    exportedAt: timestamp('exported_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
@@ -303,20 +315,18 @@ export const establishments = pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
-    index('establishments_created_by_idx').on(table.createdBy),
-    index('establishments_is_active_idx').on(table.isActive),
-    index('establishments_governorate_id_idx').on(table.governorateId),
+    index('screenhosts_owner_id_idx').on(table.ownerId),
+    index('screenhosts_is_active_idx').on(table.isActive),
+    index('screenhosts_governorate_id_idx').on(table.governorateId),
+    index('screenhosts_export_status_idx').on(table.exportStatus),
+    check('screenhosts_latitude_range', sql`${table.latitude} >= -90 AND ${table.latitude} <= 90`),
     check(
-      'establishments_latitude_range',
-      sql`${table.latitude} >= -90 AND ${table.latitude} <= 90`,
-    ),
-    check(
-      'establishments_longitude_range',
+      'screenhosts_longitude_range',
       sql`${table.longitude} >= -180 AND ${table.longitude} <= 180`,
     ),
-    check('establishments_screen_count_nonneg', sql`${table.screenCount} >= 0`),
+    check('screenhosts_screen_count_nonneg', sql`${table.screenCount} >= 0`),
   ],
 );
 
-export type Establishment = typeof establishments.$inferSelect;
-export type NewEstablishment = typeof establishments.$inferInsert;
+export type Screenhost = typeof screenhosts.$inferSelect;
+export type NewScreenhost = typeof screenhosts.$inferInsert;
