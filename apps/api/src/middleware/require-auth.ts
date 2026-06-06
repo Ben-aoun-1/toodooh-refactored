@@ -40,9 +40,9 @@ export const requireAuth = async (request: FastifyRequest, reply: FastifyReply):
 };
 
 // Generic role-allowlist gate factory. Composes AFTER requireAuth (which attaches request.user):
-// { preHandler: [requireAuth, requireRole('superadmin')] }. A2 uses it for superadmin-only account
-// creation; slice E reuses it to gate the agent (screenhost_agent) establishment-write routes. An
-// authenticated user whose role is not in the allowlist gets 403 (not 404) — mirrors requireAdmin.
+// { preHandler: [requireAuth, requireRole('superadmin')] }. Used today by admin-accounts for
+// superadmin-only account creation; future agent read endpoints may reuse it. An authenticated user
+// whose role is not in the allowlist gets 403 (not 404) — mirrors requireAdmin.
 export const requireRole =
   (...allowed: string[]) =>
   async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {

@@ -265,13 +265,17 @@ export type NewBusinessSector = typeof businessSectors.$inferInsert;
 export type PredefinedZone = typeof predefinedZones.$inferSelect;
 export type NewPredefinedZone = typeof predefinedZones.$inferInsert;
 
-// ── establishments (Slice-2 E) ─────────────────────────────────────────
-// The coordinate-bearing inventory dot a screenhost_agent registers: one establishment = one
-// coordinate = one dot on the advertiser map (ruling §7.1.1). screen_count is METADATA (E does NOT
-// create screens rows; booking is zone-level). Coordinates are numeric lat/lng mirroring
-// predefined_zones (no PostGIS in E — zone matching is client-side Haversine). created_by = the
-// registering agent; screenhost_id is the future owner link, nullable + deferred (E neither creates
-// nor links screenhost user accounts). Distinct from the signup agent_code referral field.
+// ── establishments (Slice-2) ───────────────────────────────────────────
+// Coordinate-bearing location row (one establishment = one coordinate = one dot on the advertiser
+// map; screen_count is metadata, no screens rows). Numeric lat/lng mirror predefined_zones (no
+// PostGIS; zone matching is client-side Haversine).
+//
+// NOT AN AGENT-WRITE SURFACE (CF-19 P0 correction): agents do NOT create establishments. The
+// agent-facing POST/GET routes were removed; this table is currently UNUSED at runtime and reserved
+// for the future SCREENHOST-OWNED location model created at screenhost signup after admin approval
+// (CF-18 P3) — at which point screenhost_id becomes the populated owner and wifi/status/export
+// columns are added. created_by stays for now but carries no agent-create semantics. Distinct from
+// the signup agent_code referral field.
 export const establishments = pgTable(
   'establishments',
   {
