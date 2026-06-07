@@ -9,6 +9,16 @@ const EnvSchema = z.object({
   AUTH_SECRET: z
     .string()
     .min(32, 'AUTH_SECRET must be at least 32 characters for cryptographic security'),
+  // App-layer AES-256-GCM key for screenhost WiFi passwords (recoverable at-rest
+  // encryption). A base64 string decoding to EXACTLY 32 bytes; fails fast at boot,
+  // mirroring AUTH_SECRET. Generate with: openssl rand -base64 32. The real key is
+  // provisioned on the VPS as a deploy-time operator task.
+  WIFI_ENC_KEY: z
+    .string()
+    .refine(
+      (value) => Buffer.from(value, 'base64').length === 32,
+      'WIFI_ENC_KEY must be a base64 string decoding to exactly 32 bytes',
+    ),
   // Base URL for better-auth verification links. Dev default avoids a test-env
   // shim; production overrides to https://api.too-dooh.com (Phase 1g).
   BETTER_AUTH_URL: z.url().default('http://localhost:4000'),

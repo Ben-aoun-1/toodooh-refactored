@@ -14,6 +14,9 @@ export default defineConfig({
     env: {
       DATABASE_URL: process.env['DATABASE_URL'] ?? 'postgresql://test:test@localhost:5432/test_db',
       AUTH_SECRET: process.env['AUTH_SECRET'] ?? 'test-auth-secret-at-least-32-characters-long',
+      // WIFI_ENC_KEY = base64 of 32 zero bytes (a 32-byte key); a fixed test key,
+      // never a real secret. wifi-crypto round-trips against this in unit tests.
+      WIFI_ENC_KEY: process.env['WIFI_ENC_KEY'] ?? 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
       // Required SMTP vars (HOST/PORT/SECURE default in env.ts). nodemailer is
       // mocked in tests, so these are never used to connect.
       SMTP_USER: process.env['SMTP_USER'] ?? 'ci@too-dooh.com',
