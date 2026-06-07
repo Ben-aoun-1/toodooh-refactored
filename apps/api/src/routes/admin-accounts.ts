@@ -4,8 +4,13 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import { db } from '../db/client.js';
-import { accounts, users } from '../db/schema.js';
+import { accounts, agents, users } from '../db/schema.js';
+import { generateUniqueAgentCode } from '../lib/agent-code.js';
 import { requireAuth, requireRole } from '../middleware/require-auth.js';
+
+// The two agent roles get an issued referral code (held in agents.code). admin does not.
+const isAgentRole = (role: string): boolean =>
+  role === 'screenhost_agent' || role === 'screencast_agent';
 
 // Superadmin-only creation of INTERNAL accounts (staff admins + agents). These are NOT public
 // signups: we deliberately do NOT use better-auth's signUpEmail (it sends a verification email —
@@ -119,9 +124,28 @@ export const adminAccountsRoutes: FastifyPluginAsync = async (app) => {
         userId: user.id,
         password: passwordHash,
       });
-      return user;
+      // Agent roles get a unique issued code in the SAME tx (atomic with the user). The
+      // SELECT-check runs on tx so it sees this tx's own pending rows; we never catch a
+      // unique-violation (which would poison the tx) — generateUniqueAgentCode regenerates.
+      let agentCode: string | null = null;
+      if (isAgentRole(role)) {
+        agentCode = await generateUniqueAgentCode(async (candidate) => {
+          const [hit] = await tx
+            .select({ code: agents.code })
+            .from(agents)
+            .where(eq(agents.code, candidate))
+            .limit(1);
+          return hit !== undefined;
+        });
+        await tx.insert(agents).values({ userId: user.id, code: agentCode });
+      }
+      return { user, agentCode };
     });
 
-    return reply.status(201).send({ account: toAccountView(created) });
+    // account.code is the agent's OWN issued referral code (null for non-agent roles); it is
+    // NOT users.agent_code (the referred-user attribution field). P2 reads it for display.
+    return reply
+      .status(201)
+      .send({ account: { ...toAccountView(created.user), code: created.agentCode } });
   });
 };
