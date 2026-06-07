@@ -330,3 +330,56 @@ export const screenhosts = pgTable(
 
 export type Screenhost = typeof screenhosts.$inferSelect;
 export type NewScreenhost = typeof screenhosts.$inferInsert;
+
+// ── agents + agent_referrals (P1 — agent unique codes + referral linkage) ──
+// Each agent user (role screenhost_agent | screencast_agent) owns ONE issued
+// referral code, held here in `agents.code`. This is the agent's OWN code and
+// is distinct from `users.agent_code` (line ~100), which keeps its meaning: the
+// raw value a REFERRED user typed at signup. The agent TYPE is implied by the
+// owner's role, so no type column lives here.
+//
+// agent_referrals is the normalized link from a referred signup to the agent
+// whose code resolved. It is written ONLY on a compatible match (role rules:
+// screenhost_agent ↔ individual_owner/fleet_owner; screencast_agent ↔
+// advertiser, which subsumes 'agency' = advertiser + business_type='agency').
+// A non-match or role-incompatible match links NOTHING — the signup still
+// succeeds and `users.agent_code` still stores the raw entry for admin
+// follow-up. agent_code_used preserves the raw entered value for audit.
+export const agents = pgTable('agents', {
+  // One row per agent user; the PK IS the FK (1:1 with users). ON DELETE CASCADE:
+  // deleting the agent user removes its issued code.
+  userId: uuid('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  code: text('code').notNull().unique(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const agentReferrals = pgTable(
+  'agent_referrals',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    // The referring agent. NO ACTION on delete (the default): a referral is an
+    // audit fact and must not vanish if the agent user is removed.
+    agentUserId: uuid('agent_user_id')
+      .notNull()
+      .references(() => users.id),
+    // UNIQUE — one referring agent per referred user. ON DELETE CASCADE: the link
+    // is meaningless once the referred user is gone.
+    referredUserId: uuid('referred_user_id')
+      .notNull()
+      .unique()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    // Raw entered value (post-normalization is NOT applied here — this is the audit
+    // trail of exactly what resolved the match).
+    agentCodeUsed: text('agent_code_used').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  // P2 reads agents' downlines by agent_user_id.
+  (table) => [index('agent_referrals_agent_user_id_idx').on(table.agentUserId)],
+);
+
+export type Agent = typeof agents.$inferSelect;
+export type NewAgent = typeof agents.$inferInsert;
+export type AgentReferral = typeof agentReferrals.$inferSelect;
+export type NewAgentReferral = typeof agentReferrals.$inferInsert;
