@@ -5,9 +5,10 @@ import { z } from 'zod';
 
 import { auth } from '../auth/auth.js';
 import { db } from '../db/client.js';
-import { accounts, agentReferrals, agents, users } from '../db/schema.js';
+import { accounts, agentReferrals, agents, screenhosts, users } from '../db/schema.js';
 import { env } from '../env.js';
 import { PROFILE_TYPES, fromProfileType } from '../lib/profile-type.js';
+import { encryptWifiPassword } from '../lib/wifi-crypto.js';
 import { validatePhone } from '../validation/phone.js';
 import { validateTaxNumber } from '../validation/tax-number.js';
 
@@ -17,6 +18,27 @@ import { validateTaxNumber } from '../validation/tax-number.js';
 // non-privileged hint mapped to role post-create (CF-24 class-b). Required = the minimal account
 // identity + terms; the rest of the profile is optional and stored when present (kept lenient to
 // decouple from the reference-data-GET ordering and avoid FK-500s on partial data).
+// One fleet location the fleet_owner declares at signup → one screenhosts row. All
+// location/WiFi fields are optional ("add later"); name is the only requirement.
+// room_count is accepted on the wire (the FE still sends it) but stripped here —
+// screenhosts has no room_count column, so it is never persisted.
+const fleetEstablishmentSchema = z.object({
+  name: z.string().min(1).max(200),
+  screen_count: z.number().int().min(0).optional(),
+  address: z.string().min(1).optional(),
+  city: z.string().min(1).optional(),
+  zone: z.string().optional(),
+  governorate_id: z.uuid().optional(),
+  postal_code: z
+    .string()
+    .regex(/^\d{4}$/, 'Postal code must be 4 digits')
+    .optional(),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+  wifi_ssid: z.string().min(1).optional(),
+  wifi_password: z.string().min(1).optional(),
+});
+
 const signupBodySchema = z.object({
   email: z.email('A valid email is required'),
   password: z.string().min(10, 'Password must be at least 10 characters'),
@@ -38,6 +60,14 @@ const signupBodySchema = z.object({
   fonction: z.string().optional(),
   zone: z.string().optional(),
   agent_toodooh: z.string().optional(),
+  // Screenhost signup location/WiFi capture (P3). individual_owner = ONE location
+  // built from these top-level fields; fleet_owner = one per fleet_establishments
+  // row. Coordinates and WiFi are optional ("add later") and never block signup.
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
+  wifi_ssid: z.string().min(1).optional(),
+  wifi_password: z.string().min(1).optional(),
+  fleet_establishments: z.array(fleetEstablishmentSchema).optional(),
 });
 
 // Q4 — better-auth's signup is sequential, not atomic (createUser → linkAccount
@@ -91,6 +121,11 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
       fonction,
       zone,
       agent_toodooh,
+      latitude,
+      longitude,
+      wifi_ssid,
+      wifi_password,
+      fleet_establishments,
     } = parsed.data;
     // terms_accepted is enforced `true` by the schema (z.literal); the acceptance time is
     // server-stamped below, never taken from the client.
@@ -143,8 +178,10 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
         .limit(1);
       if (persisted && persisted.id === result.user.id) {
         const updates: Partial<typeof users.$inferInsert> = { termsAcceptedAt: new Date() };
+        let mappedRole: ReturnType<typeof fromProfileType>['role'] | undefined;
         if (profile_type) {
           const { role, businessTypeOverride } = fromProfileType(profile_type);
+          mappedRole = role;
           updates.role = role;
           if (businessTypeOverride) updates.businessType = businessTypeOverride;
         }
@@ -159,6 +196,48 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
         if (zone !== undefined) updates.zone = zone;
         if (agent_toodooh !== undefined) updates.agentCode = agent_toodooh;
         await db.update(users).set(updates).where(eq(users.id, persisted.id));
+
+        // P3 — persist screenhost location(s) from signup. owner_id is enforced in
+        // application code here (every row gets ownerId = the new user id); the column
+        // stays nullable on disk by design. Coordinates/WiFi are stored when provided,
+        // else NULL ("add later"). The WiFi password is encrypted at rest (recoverable);
+        // the plaintext is never logged. export_status keeps its 'pending' default.
+        if (mappedRole === 'individual_owner') {
+          await db.insert(screenhosts).values({
+            name: business_name,
+            address: street_address ?? null,
+            city: city ?? null,
+            postalCode: postal_code ?? null,
+            governorateId: governorate_id ?? null,
+            zone: zone ?? null,
+            latitude: latitude !== undefined ? latitude.toString() : null,
+            longitude: longitude !== undefined ? longitude.toString() : null,
+            wifiSsid: wifi_ssid ?? null,
+            wifiPasswordEncrypted: wifi_password ? encryptWifiPassword(wifi_password) : null,
+            ownerId: persisted.id,
+          });
+        } else if (mappedRole === 'fleet_owner' && fleet_establishments?.length) {
+          await db.insert(screenhosts).values(
+            fleet_establishments.map((establishment) => ({
+              name: establishment.name,
+              screenCount: establishment.screen_count ?? 0,
+              address: establishment.address ?? null,
+              city: establishment.city ?? null,
+              postalCode: establishment.postal_code ?? null,
+              governorateId: establishment.governorate_id ?? null,
+              zone: establishment.zone ?? null,
+              latitude:
+                establishment.latitude !== undefined ? establishment.latitude.toString() : null,
+              longitude:
+                establishment.longitude !== undefined ? establishment.longitude.toString() : null,
+              wifiSsid: establishment.wifi_ssid ?? null,
+              wifiPasswordEncrypted: establishment.wifi_password
+                ? encryptWifiPassword(establishment.wifi_password)
+                : null,
+              ownerId: persisted.id,
+            })),
+          );
+        }
 
         // Agent referral linkage (P1 Commit 3). Resolve the entered code (trim+uppercase) against
         // agents.code; on a ROLE-COMPATIBLE match, normalize the link into agent_referrals. The
