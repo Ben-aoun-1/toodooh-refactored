@@ -50,12 +50,30 @@ export const authService = {
 
   async signUp(data: SignUpData): Promise<SignupResponse> {
     // Accepted-fields JSON (snake wire, Phase-1f F2). NOT sent: files (registration_doc/
-    // company_logo/bank_doc — documents upload post-signin in F5, the endpoint is requireAuth),
-    // owner-extras (cin/formule/number_of_screens/number_of_rooms/company_size) and
-    // fleet_establishments (the endpoint strips unknowns; the owner slice has no endpoint). Empty
-    // optionals are OMITTED — the endpoint's optionals validate-when-present (min(1)/uuid/^\d{4}$),
-    // so '' would 400. profile_type is a non-privileged hint, mapped server-side (role input:false).
+    // company_logo/bank_doc — documents upload post-signin in F5, the endpoint is requireAuth) and
+    // owner-extras (cin/formule/number_of_screens/number_of_rooms/company_size — backend-stripped).
+    // SENT (P3): screenhost geo + WiFi — top-level latitude/longitude/wifi_ssid/wifi_password build
+    // the individual_owner's single location; `fleet_establishments` (one per fleet_owner location)
+    // each carry the same, with street_address remapped to the endpoint's `address`. Empty optionals
+    // are OMITTED — the endpoint's optionals validate-when-present (min(1)/uuid/^\d{4}$), so '' would
+    // 400. profile_type is a non-privileged hint, mapped server-side (role input:false).
     const t = (v?: string) => (v && v.trim() ? v.trim() : undefined);
+    const n = (v?: number) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+    // One fleet establishment → one wire object. street_address → `address` (the endpoint's field);
+    // optionals omitted-when-empty so a blank field never 400s on validate-when-present.
+    const fleetEstablishments = data.fleet_establishments?.map((e) => ({
+      name: e.name,
+      screen_count: e.screen_count,
+      ...(t(e.street_address) ? { address: t(e.street_address) } : {}),
+      ...(t(e.city) ? { city: t(e.city) } : {}),
+      ...(t(e.zone) ? { zone: t(e.zone) } : {}),
+      ...(t(e.governorate_id) ? { governorate_id: t(e.governorate_id) } : {}),
+      ...(t(e.postal_code) ? { postal_code: t(e.postal_code) } : {}),
+      ...(n(e.latitude) !== undefined ? { latitude: n(e.latitude) } : {}),
+      ...(n(e.longitude) !== undefined ? { longitude: n(e.longitude) } : {}),
+      ...(t(e.wifi_ssid) ? { wifi_ssid: t(e.wifi_ssid) } : {}),
+      ...(t(e.wifi_password) ? { wifi_password: t(e.wifi_password) } : {}),
+    }));
     const payload = {
       email: data.email,
       password: data.password,
@@ -74,6 +92,12 @@ export const authService = {
       ...(t(data.fonction) ? { fonction: t(data.fonction) } : {}),
       ...(t(data.zone) ? { zone: t(data.zone) } : {}),
       ...(t(data.agent_toodooh) ? { agent_toodooh: t(data.agent_toodooh) } : {}),
+      // Screenhost geo + WiFi (P3). Top-level = individual_owner's location; the array = fleet.
+      ...(n(data.latitude) !== undefined ? { latitude: n(data.latitude) } : {}),
+      ...(n(data.longitude) !== undefined ? { longitude: n(data.longitude) } : {}),
+      ...(t(data.wifi_ssid) ? { wifi_ssid: t(data.wifi_ssid) } : {}),
+      ...(t(data.wifi_password) ? { wifi_password: t(data.wifi_password) } : {}),
+      ...(fleetEstablishments?.length ? { fleet_establishments: fleetEstablishments } : {}),
     };
     try {
       return await apiClient.post<SignupResponse>('/signup', payload);

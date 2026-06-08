@@ -121,6 +121,88 @@ describe('authService.signUp → POST /signup (Phase-1f F2)', () => {
     expect(body()).toMatchObject({ profile_type: 'individual_owner', tax_number: 'OWNER123' });
   });
 
+  it('sends individual_owner location + WiFi top-level when present (P3)', async () => {
+    post.mockResolvedValue(ok);
+    await authService.signUp({
+      ...advertiser,
+      profile_type: 'individual_owner',
+      latitude: 36.8065,
+      longitude: 10.1815,
+      wifi_ssid: 'CafeNet',
+      wifi_password: 'hunter2pass',
+    });
+    expect(body()).toMatchObject({
+      latitude: 36.8065,
+      longitude: 10.1815,
+      wifi_ssid: 'CafeNet',
+      wifi_password: 'hunter2pass',
+    });
+  });
+
+  it('omits location + WiFi (and fleet_establishments) when absent (P3)', async () => {
+    post.mockResolvedValue(ok);
+    await authService.signUp(advertiser);
+    for (const k of [
+      'latitude',
+      'longitude',
+      'wifi_ssid',
+      'wifi_password',
+      'fleet_establishments',
+    ]) {
+      expect(body()).not.toHaveProperty(k);
+    }
+  });
+
+  it('maps fleet_establishments to the wire shape — street_address → address, geo/WiFi, blanks omitted (P3)', async () => {
+    post.mockResolvedValue(ok);
+    await authService.signUp({
+      ...advertiser,
+      profile_type: 'fleet_owner',
+      fleet_establishments: [
+        {
+          name: 'Café Centre',
+          screen_count: 3,
+          room_count: 2,
+          street_address: '12 Av. Habib Bourguiba',
+          city: 'Tunis',
+          zone: 'Centre Ville Tunis',
+          governorate_id: '22222222-2222-2222-2222-222222222222',
+          latitude: 36.8,
+          longitude: 10.18,
+          wifi_ssid: 'CafeWifi',
+          wifi_password: 'cafe1234',
+        },
+        // Minimal row: every optional blank → only name + screen_count reach the wire.
+        {
+          name: 'Kiosque Lac',
+          screen_count: 1,
+          room_count: 1,
+          street_address: '',
+          city: '',
+          zone: '',
+          governorate_id: '',
+        },
+      ],
+    });
+    const sent = body().fleet_establishments as Array<Record<string, unknown>>;
+    expect(sent).toHaveLength(2);
+    expect(sent[0]).toEqual({
+      name: 'Café Centre',
+      screen_count: 3,
+      address: '12 Av. Habib Bourguiba',
+      city: 'Tunis',
+      zone: 'Centre Ville Tunis',
+      governorate_id: '22222222-2222-2222-2222-222222222222',
+      latitude: 36.8,
+      longitude: 10.18,
+      wifi_ssid: 'CafeWifi',
+      wifi_password: 'cafe1234',
+    });
+    expect(sent[0]).not.toHaveProperty('street_address'); // remapped, never sent raw
+    expect(sent[0]).not.toHaveProperty('room_count'); // backend has no such column
+    expect(sent[1]).toEqual({ name: 'Kiosque Lac', screen_count: 1 });
+  });
+
   it('throws a French message when the POST fails', async () => {
     post.mockRejectedValueOnce(new ApiError({ status: 0, code: 'NETWORK', message: '' }));
     await expect(authService.signUp(advertiser)).rejects.toThrow(/connexion/i);

@@ -76,6 +76,12 @@ export interface FleetEstablishmentInput {
   zone: string;
   governorate_id: string;
   postal_code?: string;
+  // Screenhost geo + WiFi capture (P3) — one screenhosts row per establishment. All optional
+  // ("add later"); the service maps street_address → `address` on the wire to match the endpoint.
+  latitude?: number;
+  longitude?: number;
+  wifi_ssid?: string;
+  wifi_password?: string;
 }
 
 export interface SignUpData {
@@ -104,6 +110,12 @@ export interface SignUpData {
   company_logo?: File; // Logo entreprise/établissement
   bank_doc?: File; // Relevé d'identité bancaire (propriétaires)
   terms_accepted: boolean;
+  // Screenhost geo + WiFi capture (P3) — individual_owner's single location, built server-side from
+  // these top-level fields + the street_address/city/zone/… already sent. All optional ("add later").
+  latitude?: number;
+  longitude?: number;
+  wifi_ssid?: string;
+  wifi_password?: string;
   /** Localités créées après inscription (propriétaire de parc) */
   fleet_establishments?: FleetEstablishmentInput[];
 }
