@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 import { auth } from '../auth/auth.js';
 import { db } from '../db/client.js';
-import { accounts, users } from '../db/schema.js';
+import { accounts, agentReferrals, agents, users } from '../db/schema.js';
 import { env } from '../env.js';
 import { PROFILE_TYPES, fromProfileType } from '../lib/profile-type.js';
 import { validatePhone } from '../validation/phone.js';
@@ -159,6 +159,40 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
         if (zone !== undefined) updates.zone = zone;
         if (agent_toodooh !== undefined) updates.agentCode = agent_toodooh;
         await db.update(users).set(updates).where(eq(users.id, persisted.id));
+
+        // Agent referral linkage (P1 Commit 3). Resolve the entered code (trim+uppercase) against
+        // agents.code; on a ROLE-COMPATIBLE match, normalize the link into agent_referrals. The
+        // raw `users.agent_code` write above still happens regardless — agent_referrals is the
+        // structured attribution, agent_code is the raw audit field. A non-match or an
+        // incompatible role links NOTHING (signup still 201). Absent agent_toodooh → no lookup.
+        // This sits INSIDE the synthetic-id guard, so a duplicate-email signup never links.
+        if (agent_toodooh !== undefined) {
+          const resolvedCode = agent_toodooh.trim().toUpperCase();
+          const [agent] = await db
+            .select({ agentUserId: agents.userId, agentRole: users.role })
+            .from(agents)
+            .innerJoin(users, eq(users.id, agents.userId))
+            .where(eq(agents.code, resolvedCode))
+            .limit(1);
+          if (agent) {
+            // The referred user's MAPPED role (server-controlled): profile_type maps via
+            // fromProfileType; absent profile_type defaults to advertiser (the DB default applied
+            // above). screenhost_agent ↔ individual_owner/fleet_owner; screencast_agent ↔
+            // advertiser (which subsumes 'agency' = advertiser + business_type='agency').
+            const referredRole = profile_type ? fromProfileType(profile_type).role : 'advertiser';
+            const compatible =
+              (agent.agentRole === 'screenhost_agent' &&
+                (referredRole === 'individual_owner' || referredRole === 'fleet_owner')) ||
+              (agent.agentRole === 'screencast_agent' && referredRole === 'advertiser');
+            if (compatible) {
+              await db.insert(agentReferrals).values({
+                agentUserId: agent.agentUserId,
+                referredUserId: persisted.id,
+                agentCodeUsed: agent_toodooh, // raw entered value (audit trail, pre-normalization)
+              });
+            }
+          }
+        }
       }
 
       return reply.status(201).send({

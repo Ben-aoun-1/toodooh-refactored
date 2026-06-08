@@ -5,7 +5,14 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { auth, emailSender } from '../src/auth/auth.js';
 import { authPlugin } from '../src/auth/plugin.js';
 import { db, sql } from '../src/db/client.js';
-import { accounts, businessSectors, governorates, users } from '../src/db/schema.js';
+import {
+  accounts,
+  agentReferrals,
+  agents,
+  businessSectors,
+  governorates,
+  users,
+} from '../src/db/schema.js';
 import { env } from '../src/env.js';
 import { apiRoutes } from '../src/routes/index.js';
 
@@ -342,5 +349,139 @@ describe('POST /api/signup', () => {
     expect(rows).toHaveLength(1); // still one
     expect(rows[0]?.role).toBe('individual_owner'); // NOT flipped to fleet_owner
     expect(rows[0]?.agentCode).toBe('FIRST'); // NOT overwritten by the duplicate
+  });
+
+  // ── agent referral linkage at signup (P1 Commit 3) ──
+
+  // Seed an agent user (role implies the agent TYPE) + its issued code in `agents.code`.
+  // resetAuthTables TRUNCATE ... CASCADE clears these between tests.
+  const seedAgent = async (
+    role: 'screenhost_agent' | 'screencast_agent',
+    code: string,
+  ): Promise<string> => {
+    const [agentUser] = await db
+      .insert(users)
+      .values({ email: `agent-${code.toLowerCase()}@example.com`, contactName: 'Agent', role })
+      .returning({ id: users.id });
+    const id = agentUser?.id ?? '';
+    await db.insert(agents).values({ userId: id, code });
+    return id;
+  };
+
+  const referralsFor = async (email: string) => {
+    const [u] = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
+    return db
+      .select()
+      .from(agentReferrals)
+      .where(eq(agentReferrals.referredUserId, u?.id ?? ''));
+  };
+
+  it('compatible match (screenhost_agent ↔ individual_owner) → links the referral', async () => {
+    const agentId = await seedAgent('screenhost_agent', 'HOSTCODE');
+    // entered lowercase → resolves via trim+uppercase to the stored code.
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      payload: await fullProfile({ profile_type: 'individual_owner', agent_toodooh: ' hostcode ' }),
+    });
+    expect(res.statusCode).toBe(201);
+    const refs = await referralsFor('owner@example.com');
+    expect(refs).toHaveLength(1);
+    expect(refs[0]?.agentUserId).toBe(agentId);
+    expect(refs[0]?.agentCodeUsed).toBe(' hostcode '); // raw entered value preserved (audit)
+    const [u] = await db.select().from(users).where(eq(users.email, 'owner@example.com'));
+    expect(u?.agentCode).toBe(' hostcode '); // existing raw write still happens
+  });
+
+  it('compatible match (screenhost_agent ↔ fleet_owner) → links the referral', async () => {
+    const agentId = await seedAgent('screenhost_agent', 'HOSTCODE');
+    await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      payload: await fullProfile({ profile_type: 'fleet_owner', agent_toodooh: 'HOSTCODE' }),
+    });
+    const refs = await referralsFor('owner@example.com');
+    expect(refs).toHaveLength(1);
+    expect(refs[0]?.agentUserId).toBe(agentId);
+  });
+
+  it('compatible match (screencast_agent ↔ advertiser) → links the referral', async () => {
+    const agentId = await seedAgent('screencast_agent', 'CASTCODE');
+    await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      payload: await fullProfile({ profile_type: 'advertiser', agent_toodooh: 'CASTCODE' }),
+    });
+    const refs = await referralsFor('owner@example.com');
+    expect(refs).toHaveLength(1);
+    expect(refs[0]?.agentUserId).toBe(agentId);
+  });
+
+  it('compatible match (screencast_agent ↔ agency, which maps to advertiser) → links', async () => {
+    const agentId = await seedAgent('screencast_agent', 'CASTCODE');
+    await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      payload: await fullProfile({ profile_type: 'agency', agent_toodooh: 'CASTCODE' }),
+    });
+    const refs = await referralsFor('owner@example.com');
+    expect(refs).toHaveLength(1);
+    expect(refs[0]?.agentUserId).toBe(agentId);
+  });
+
+  it('incompatible role (screenhost_agent ↔ advertiser) → 201, no link, agent_code stored', async () => {
+    await seedAgent('screenhost_agent', 'HOSTONLY');
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      payload: await fullProfile({ profile_type: 'advertiser', agent_toodooh: 'HOSTONLY' }),
+    });
+    expect(res.statusCode).toBe(201);
+    expect(await referralsFor('owner@example.com')).toHaveLength(0);
+    const [u] = await db.select().from(users).where(eq(users.email, 'owner@example.com'));
+    expect(u?.agentCode).toBe('HOSTONLY'); // raw entry still stored for admin follow-up
+  });
+
+  it('unknown code → 201, no link, agent_code stored', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      payload: await fullProfile({ profile_type: 'individual_owner', agent_toodooh: 'NOSUCH99' }),
+    });
+    expect(res.statusCode).toBe(201);
+    expect(await referralsFor('owner@example.com')).toHaveLength(0);
+    const [u] = await db.select().from(users).where(eq(users.email, 'owner@example.com'));
+    expect(u?.agentCode).toBe('NOSUCH99');
+  });
+
+  it('absent agent_toodooh → no lookup, no link', async () => {
+    const payload = await fullProfile({ profile_type: 'individual_owner' });
+    delete (payload as { agent_toodooh?: string }).agent_toodooh;
+    const res = await app.inject({ method: 'POST', url: '/api/signup', payload });
+    expect(res.statusCode).toBe(201);
+    expect(await referralsFor('owner@example.com')).toHaveLength(0);
+  });
+
+  it('duplicate-email synthetic-id path inserts NO referral', async () => {
+    await seedAgent('screenhost_agent', 'DUPCODE1');
+    // First real signup establishes owner@example.com (no agent code → no referral).
+    await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      payload: await fullProfile({ profile_type: 'individual_owner' }),
+    });
+    // Duplicate-email signup with an OTHERWISE-compatible code: the synthetic-id guard
+    // skips the whole post-create block, so no referral is written.
+    const res2 = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      payload: await fullProfile({
+        profile_type: 'individual_owner',
+        agent_toodooh: 'DUPCODE1',
+        tax_number: '7654321XYZ',
+      }),
+    });
+    expect(res2.statusCode).toBe(201);
+    expect(await referralsFor('owner@example.com')).toHaveLength(0);
   });
 });
