@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 
 import { adminAccountsRoutes } from './admin-accounts.js';
 import { adminRoutes } from './admin.js';
+import { agentRoutes } from './agent.js';
 import { meRoutes } from './me.js';
 import { passwordRoutes } from './password.js';
 import { predefinedZonesRoutes } from './predefined-zones.js';
@@ -26,6 +27,8 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   // (CF-19 P0) agent establishment-write routes removed — agents do NOT create places. The
   // screenhosts table (replaces establishments) is scaffolding only — no write path, read
   // endpoint, or signup capture yet (P2/P3).
+  // (P2) Read-only agent dashboard: GET /api/agent/clients — an agent's referred clients only.
+  await app.register(agentRoutes);
   // Zones cutover (Z1): public GET catalog + admin-guarded scalar writes.
   await app.register(predefinedZonesRoutes);
   // Public reference-data reads (no auth) — register last; they add no preHandler.
