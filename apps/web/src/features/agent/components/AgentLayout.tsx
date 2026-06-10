@@ -1,7 +1,8 @@
-import { Building2, LogOut, Menu, X } from 'lucide-react';
+import { LogOut, Menu, Users, X } from 'lucide-react';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { agentRoleLabel } from '@/features/agent/utils/agent-roles';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { logger } from '@/lib/logger';
 
@@ -13,11 +14,13 @@ interface AgentLayoutProps {
   subtitle?: string;
 }
 
-// Slice-2 E — the screenhost-agent workspace shell. TOODOOH-branded header + sidebar mirroring
-// AdminLayout's structure/tokens (brand-primary/brand-deep, font-poppins, rounded-xl), trimmed to the
-// single agent surface (Établissements). Logout returns to /login (agents use the public sign-in).
+// Slice-2 E / P2 — the agent workspace shell (both agent roles). TOODOOH-branded header + sidebar
+// mirroring AdminLayout's structure/tokens (brand-primary/brand-deep, font-poppins, rounded-xl),
+// trimmed to the single agent surface (Clients référés). Logout returns to /login (agents use the
+// public sign-in).
 export default function AgentLayout({ children, title, subtitle }: AgentLayoutProps) {
   const contactName = useAuthStore((s) => s.contactName);
+  const role = useAuthStore((s) => s.role);
   const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -53,7 +56,7 @@ export default function AgentLayout({ children, title, subtitle }: AgentLayoutPr
             <div className="flex items-center space-x-3">
               <div className="text-right">
                 <p className="text-sm font-medium text-gray-900">{contactName}</p>
-                <p className="text-xs text-gray-500">Agent ScreenHost</p>
+                <p className="text-xs text-gray-500">{agentRoleLabel(role)}</p>
               </div>
               <div className="h-8 w-8 bg-brand-primary rounded-full flex items-center justify-center">
                 <span className="text-white text-sm font-medium">{contactName?.charAt(0)}</span>
@@ -84,8 +87,8 @@ export default function AgentLayout({ children, title, subtitle }: AgentLayoutPr
 
             <nav className="mt-8 px-4 space-y-2 flex-1">
               <span className="group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl bg-brand-primary text-brand-deep shadow-lg shadow-brand-primary/25">
-                <Building2 className="mr-3 h-5 w-5" />
-                Établissements
+                <Users className="mr-3 h-5 w-5" />
+                Clients référés
               </span>
             </nav>
 
@@ -96,7 +99,7 @@ export default function AgentLayout({ children, title, subtitle }: AgentLayoutPr
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-900 truncate">{contactName}</p>
-                  <p className="text-xs text-gray-500 truncate">Agent ScreenHost</p>
+                  <p className="text-xs text-gray-500 truncate">{agentRoleLabel(role)}</p>
                 </div>
                 <button
                   onClick={handleLogout}

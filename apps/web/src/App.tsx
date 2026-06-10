@@ -6,6 +6,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import PageLoadingFallback from '@/components/PageLoadingFallback';
 import AdminRoute from '@/features/admin/components/AdminRoute';
 import AgentRoute from '@/features/agent/components/AgentRoute';
+import { isAgentRole } from '@/features/agent/utils/agent-roles';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { resolveHomeRoute } from '@/features/auth/utils/home-route';
 import { createQueryClient } from '@/lib/query-client';
@@ -92,8 +93,8 @@ function AdvertiserRoute({ children }: { children: React.ReactNode }) {
   // Les utilisateurs en attente peuvent accéder au dashboard
   // mais les fonctionnalités seront grisées/désactivées via isDisabled
 
-  // Slice-2 E — a screenhost_agent (profile_type null) must not sit on the advertiser dashboard.
-  if (role === 'screenhost_agent') {
+  // Slice-2 E / P2 — an agent (profile_type null) must not sit on the advertiser dashboard.
+  if (isAgentRole(role)) {
     return <Navigate to="/agent" />;
   }
   // Utiliser le profileType du store au lieu de localStorage
@@ -243,7 +244,7 @@ export default function App() {
                 the just-verified user is logged out and must always see the result. */}
             <Route path="/verify-email" element={<VerifyEmail />} />
 
-            {/* Slice-2 E — screenhost-agent workspace (role-gated) */}
+            {/* Slice-2 E / P2 — agent referred-clients workspace (role-gated, both agent roles) */}
             <Route
               path="/agent"
               element={

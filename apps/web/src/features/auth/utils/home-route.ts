@@ -3,9 +3,9 @@
 // agent workspace, owners on the owner dashboard, everyone else on the advertiser dashboard. Mirrors
 // the guard redirects in App.tsx (PublicRoute/OwnerRoute/AdvertiserRoute/AgentRoute); keep them in step.
 export function resolveHomeRoute(profileType: string | null, role?: string | null): string {
-  // screenhost_agent (Slice-2 E) lands in the agent establishment workspace; screencast_agent has no
-  // product surface yet (deferred). Agents have profile_type=null, so they must route by ROLE here.
-  if (role === 'screenhost_agent') return '/agent';
+  // Both agent roles (Slice-2 E screenhost_agent; P2 screencast_agent) land in the agent
+  // referred-clients workspace. Agents have profile_type=null, so they must route by ROLE here.
+  if (role === 'screenhost_agent' || role === 'screencast_agent') return '/agent';
   return profileType === 'individual_owner' || profileType === 'fleet_owner'
     ? '/owner-dashboard'
     : '/dashboard';

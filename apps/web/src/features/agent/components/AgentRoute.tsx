@@ -1,13 +1,14 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
 
+import { isAgentRole } from '@/features/agent/utils/agent-roles';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 
-// Slice-2 E — role gate for the screenhost-agent workspace. Mirrors AdminRoute: it only READS the one
-// auth store (App's initialize() rehydrates the session). Only `screenhost_agent` may enter; a
-// logged-out user goes to /login, and any other authenticated role is sent to /dashboard (the
-// advertiser/owner guards re-route owners from there), so a non-agent never sees the agent surface.
-// screencast_agent has no product surface yet (deferred) → treated as a non-agent here.
+// Slice-2 E / P2 — role gate for the agent workspace. Mirrors AdminRoute: it only READS the one
+// auth store (App's initialize() rehydrates the session). Both agent roles (screenhost_agent,
+// screencast_agent — P2 referred-clients dashboard) may enter; a logged-out user goes to /login,
+// and any other authenticated role is sent to /dashboard (the advertiser/owner guards re-route
+// owners from there), so a non-agent never sees the agent surface.
 export default function AgentRoute({ children }: { children: React.ReactNode }) {
   const initialized = useAuthStore((s) => s.initialized);
   const user = useAuthStore((s) => s.user);
@@ -24,6 +25,6 @@ export default function AgentRoute({ children }: { children: React.ReactNode }) 
     );
   }
   if (!user) return <Navigate to="/login" replace />;
-  if (role !== 'screenhost_agent') return <Navigate to="/dashboard" replace />;
+  if (!isAgentRole(role)) return <Navigate to="/dashboard" replace />;
   return <>{children}</>;
 }
