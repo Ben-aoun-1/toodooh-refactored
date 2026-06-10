@@ -65,7 +65,10 @@ interface MeUser {
   business_name: string | null;
   tax_number: string | null;
   contact_phone: string | null;
-  documents: { registration: boolean; cin: boolean };
+  bank_account_holder: string | null;
+  bank_rib: string | null;
+  bank_iban: string | null;
+  documents: { registration: boolean; cin: boolean; bank: boolean };
   notifications: {
     news_updates: boolean;
     reminders_events: boolean;
@@ -116,13 +119,38 @@ describe('GET /api/me (real Postgres)', () => {
     expect(user.business_name).toBe('Me Biz');
     expect(user.contact_phone).toBe('+21612345678');
     expect(typeof user.tax_number).toBe('string');
+    // bank details (none at signup)
+    expect(user.bank_account_holder).toBeNull();
+    expect(user.bank_rib).toBeNull();
+    expect(user.bank_iban).toBeNull();
     // document presence (none uploaded at signup) + notification defaults
-    expect(user.documents).toEqual({ registration: false, cin: false });
+    expect(user.documents).toEqual({ registration: false, cin: false, bank: false });
     expect(user.notifications).toEqual({
       news_updates: false,
       reminders_events: true,
       promotions_offers: false,
     });
+  });
+
+  it('bank details + bank document presence round-trip', async () => {
+    const userId = await createVerifiedUser('me-bank@example.com');
+    await db
+      .update(users)
+      .set({
+        bankAccountHolder: 'Foulen Ben Foulen',
+        bankRib: '12345678901234567890',
+        bankIban: 'TN5912345678901234567890',
+        bankDocUrl: `bank/${userId}`,
+      })
+      .where(eq(users.id, userId));
+    const cookie = cookieHeader(
+      (await signin('me-bank@example.com', PASSWORD)).headers['set-cookie'],
+    );
+    const { user } = (await me(cookie)).json<{ user: MeUser }>();
+    expect(user.bank_account_holder).toBe('Foulen Ben Foulen');
+    expect(user.bank_rib).toBe('12345678901234567890');
+    expect(user.bank_iban).toBe('TN5912345678901234567890');
+    expect(user.documents.bank).toBe(true);
   });
 
   it('no cookie → 401 UNAUTHENTICATED', async () => {

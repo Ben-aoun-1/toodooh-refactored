@@ -46,7 +46,10 @@ const meUser: MeUser = {
   postal_code: '1000',
   governorate_id: 'g1',
   zone: null,
-  documents: { registration: false, cin: false },
+  bank_account_holder: null,
+  bank_rib: null,
+  bank_iban: null,
+  documents: { registration: false, cin: false, bank: false },
   notifications: { news_updates: true, reminders_events: false, promotions_offers: true },
 };
 
@@ -112,6 +115,20 @@ describe('authService profile section saves (F4a)', () => {
     });
   });
 
+  it('updateProfileBank → PATCH /profile/bank', async () => {
+    patch.mockResolvedValue(undefined);
+    await authService.updateProfileBank({
+      bank_account_holder: 'Foulen Ben Foulen',
+      bank_rib: '12345678901234567890',
+      bank_iban: 'TN5912345678901234567890',
+    });
+    expect(patch).toHaveBeenCalledWith('/profile/bank', {
+      bank_account_holder: 'Foulen Ben Foulen',
+      bank_rib: '12345678901234567890',
+      bank_iban: 'TN5912345678901234567890',
+    });
+  });
+
   it('a section save throws a French message on failure', async () => {
     patch.mockRejectedValueOnce(new ApiError({ status: 0, code: 'NETWORK', message: '' }));
     await expect(authService.updateProfileContact({ contact_name: 'X' })).rejects.toThrow(
@@ -141,10 +158,30 @@ describe('authService.getBusinessProfile (F4a — /api/me read bridge)', () => {
     expect(p?.verification_status).toBe('verified');
     // deferred fields absent (no backend columns)
     expect(p?.logo_url).toBeUndefined();
+    // bank fields: null on the wire → undefined on the profile (no details saved yet)
     expect(p?.bank_rib).toBeUndefined();
+    expect(p?.bank_doc_path).toBeUndefined();
     // F5 — document presence is a direct map of /api/me's booleans (no sentinel; _doc_url undefined)
-    expect(p?.documents).toEqual({ registration: false, cin: false });
+    expect(p?.documents).toEqual({ registration: false, cin: false, bank: false });
     expect(p?.registration_doc_url).toBeUndefined();
+  });
+
+  it('maps bank details when present; bank_doc_path carries the deterministic key', async () => {
+    get.mockResolvedValue({
+      user: {
+        ...meUser,
+        bank_account_holder: 'Foulen Ben Foulen',
+        bank_rib: '12345678901234567890',
+        bank_iban: 'TN5912345678901234567890',
+        documents: { registration: false, cin: false, bank: true },
+      },
+    });
+    const p = await authService.getBusinessProfile();
+    expect(p?.bank_account_holder).toBe('Foulen Ben Foulen');
+    expect(p?.bank_rib).toBe('12345678901234567890');
+    expect(p?.bank_iban).toBe('TN5912345678901234567890');
+    expect(p?.bank_doc_path).toBe('bank/u1');
+    expect(p?.documents?.bank).toBe(true);
   });
 
   it('401 → null (logged out)', async () => {
@@ -181,6 +218,14 @@ describe('authService documents (F5 — multipart upload + on-demand view)', () 
       new File(['x'], 'cin.png', { type: 'image/png' }),
     );
     expect(postForm.mock.calls[0][0]).toBe('/profile/documents/cin');
+  });
+
+  it('uploadProfileDocument(bank) → POST /profile/documents/bank', async () => {
+    postForm.mockResolvedValue({ type: 'bank', key: 'bank/u1' });
+    await expect(
+      authService.uploadProfileDocument('bank', new File(['x'], 'rib.pdf')),
+    ).resolves.toEqual({ type: 'bank', key: 'bank/u1' });
+    expect(postForm.mock.calls[0][0]).toBe('/profile/documents/bank');
   });
 
   it('upload failure → throws a French message', async () => {

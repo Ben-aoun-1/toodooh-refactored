@@ -59,6 +59,7 @@ describe('POST/GET /api/profile/documents/:type (real Postgres + MinIO)', () => 
   afterEach(async () => {
     await storage.delete({ key: `rne/${userId}` }).catch(() => undefined);
     await storage.delete({ key: `cin/${userId}` }).catch(() => undefined);
+    await storage.delete({ key: `bank/${userId}` }).catch(() => undefined);
     await app.close();
     vi.restoreAllMocks();
   });
@@ -95,6 +96,29 @@ describe('POST/GET /api/profile/documents/:type (real Postgres + MinIO)', () => 
     expect(res.statusCode).toBe(200);
     const [row] = await db.select().from(users).where(eq(users.id, userId));
     expect(row?.cinDocUrl).toBe(`cin/${userId}`);
+  });
+
+  it('POST bank → 200, key in bank_doc_url; GET bank presigns it', async () => {
+    mockSession(userId);
+    const res = await post(
+      'bank',
+      multipartBody({ filename: 'rib.pdf', contentType: 'application/pdf', content: pdf }),
+    );
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ key: string }>().key).toBe(`bank/${userId}`);
+    const [row] = await db.select().from(users).where(eq(users.id, userId));
+    expect(row?.bankDocUrl).toBe(`bank/${userId}`);
+    const getRes = await get('bank');
+    expect(getRes.statusCode).toBe(200);
+    const fetched = Buffer.from(
+      await (await fetch(getRes.json<{ url: string }>().url)).arrayBuffer(),
+    );
+    expect(fetched.equals(pdf)).toBe(true);
+  });
+
+  it('GET bank with no document → 404', async () => {
+    mockSession(userId);
+    expect((await get('bank')).statusCode).toBe(404);
   });
 
   it('GET rne → 200 { url } fetching the uploaded bytes', async () => {

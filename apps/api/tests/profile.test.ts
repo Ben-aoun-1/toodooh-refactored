@@ -366,6 +366,73 @@ describe('PATCH /api/profile/notifications', () => {
   });
 });
 
+describe('PATCH /api/profile/bank', () => {
+  let app: ReturnType<typeof buildApp>;
+  let userId: string;
+
+  beforeEach(async () => {
+    await resetAuthTables();
+    const [u] = await db
+      .insert(users)
+      .values({ email: 'bank@example.com', contactName: 'Bank Owner' })
+      .returning();
+    userId = u?.id ?? '';
+    app = buildApp();
+    await app.register(profileRoutes);
+    await app.ready();
+  });
+
+  afterEach(async () => {
+    await app.close();
+    vi.restoreAllMocks();
+  });
+
+  const patch = (payload: Record<string, unknown>) =>
+    app.inject({ method: 'PATCH', url: '/api/profile/bank', payload });
+
+  it('authenticated → stores fields + server-stamps bank_details_updated_at', async () => {
+    mockSession(userId);
+    const res = await patch({
+      bank_account_holder: 'Foulen Ben Foulen',
+      bank_rib: '12345678901234567890',
+      bank_iban: 'TN5912345678901234567890',
+    });
+    expect(res.statusCode).toBe(200);
+    const [row] = await db.select().from(users).where(eq(users.id, userId));
+    expect(row?.bankAccountHolder).toBe('Foulen Ben Foulen');
+    expect(row?.bankRib).toBe('12345678901234567890');
+    expect(row?.bankIban).toBe('TN5912345678901234567890');
+    expect(row?.bankDetailsUpdatedAt).toBeInstanceOf(Date);
+  });
+
+  it('partial: only supplied fields change', async () => {
+    await db
+      .update(users)
+      .set({ bankAccountHolder: 'Original Holder', bankRib: 'RIB-1' })
+      .where(eq(users.id, userId));
+    mockSession(userId);
+    await patch({ bank_rib: 'RIB-2' });
+    const [row] = await db.select().from(users).where(eq(users.id, userId));
+    expect(row?.bankRib).toBe('RIB-2');
+    expect(row?.bankAccountHolder).toBe('Original Holder'); // untouched
+  });
+
+  it('empty-string field → 400 (min 1)', async () => {
+    mockSession(userId);
+    expect((await patch({ bank_account_holder: '' })).statusCode).toBe(400);
+  });
+
+  it('unauthenticated → 401', async () => {
+    vi.spyOn(auth.api, 'getSession').mockResolvedValue(null);
+    expect((await patch({ bank_rib: 'X' })).statusCode).toBe(401);
+  });
+
+  it('empty body → 400', async () => {
+    mockSession(userId);
+    expect((await patch({})).statusCode).toBe(400);
+  });
+});
+
 // Single file-level teardown — the pool is shared across all describes above
 // (sql.end() must run once, after the last suite, not per-describe).
 afterAll(async () => {

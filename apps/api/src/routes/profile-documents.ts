@@ -8,14 +8,21 @@ import { users } from '../db/schema.js';
 import { requireAuth } from '../middleware/require-auth.js';
 import { storage } from '../storage/s3-storage.js';
 
-// RNE (company registry) → registration_doc_url; CIN (individual ID) → cin_doc_url. The columns
-// hold the STORAGE KEY (`rne/<userId>` | `cin/<userId>`), NOT a presigned URL — presigned URLs
+// RNE (company registry) → registration_doc_url; CIN (individual ID) → cin_doc_url; BANK
+// (relevé d'identité bancaire, QA-fix lane) → bank_doc_url. The columns hold the STORAGE KEY
+// (`rne/<userId>` | `cin/<userId>` | `bank/<userId>`), NOT a presigned URL — presigned URLs
 // expire (Commit-2 decision). The "_url" column names are cosmetically wrong (they hold keys);
 // not worth a rename migration.
 const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB — matches the frontend cap (signup + owner-settings)
 const ALLOWED_MIME = new Set(['application/pdf', 'image/jpeg', 'image/png']);
 
-const typeParamSchema = z.object({ type: z.enum(['rne', 'cin']) });
+const typeParamSchema = z.object({ type: z.enum(['rne', 'cin', 'bank']) });
+
+const DOC_COLUMN = {
+  rne: 'registrationDocUrl',
+  cin: 'cinDocUrl',
+  bank: 'bankDocUrl',
+} as const;
 
 export const profileDocumentsRoutes: FastifyPluginAsync = async (app) => {
   // Framework-level guard: busboy stops at fileSize, so an oversized upload is never fully
@@ -34,7 +41,7 @@ export const profileDocumentsRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(400).send({
         error: 'INVALID_INPUT',
         message: 'Validation failed',
-        fields: [{ field: 'type', reason: 'must be rne or cin' }],
+        fields: [{ field: 'type', reason: 'must be rne, cin or bank' }],
       });
     }
 
@@ -93,7 +100,7 @@ export const profileDocumentsRoutes: FastifyPluginAsync = async (app) => {
 
     await db
       .update(users)
-      .set(type === 'rne' ? { registrationDocUrl: key } : { cinDocUrl: key })
+      .set({ [DOC_COLUMN[type]]: key })
       .where(eq(users.id, userId));
 
     return reply.status(200).send({ type, key });
@@ -107,7 +114,7 @@ export const profileDocumentsRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(400).send({
         error: 'INVALID_INPUT',
         message: 'Validation failed',
-        fields: [{ field: 'type', reason: 'must be rne or cin' }],
+        fields: [{ field: 'type', reason: 'must be rne, cin or bank' }],
       });
     }
 
@@ -124,11 +131,12 @@ export const profileDocumentsRoutes: FastifyPluginAsync = async (app) => {
       .select({
         registrationDocUrl: users.registrationDocUrl,
         cinDocUrl: users.cinDocUrl,
+        bankDocUrl: users.bankDocUrl,
       })
       .from(users)
       .where(eq(users.id, userId))
       .limit(1);
-    const key = type === 'rne' ? row?.registrationDocUrl : row?.cinDocUrl;
+    const key = row?.[DOC_COLUMN[type]];
     if (!key) {
       return reply.status(404).send({
         error: 'NOT_FOUND',

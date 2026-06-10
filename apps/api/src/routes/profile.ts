@@ -57,6 +57,18 @@ const addressPatchSchema = z
   })
   .refine((b) => Object.keys(b).length > 0, { message: 'At least one field is required' });
 
+// Bank sub-form (QA-fix lane — migrated off the dead Supabase business_profiles surface).
+// Free-text payout coordinates: RIB/IBAN format is intentionally NOT constrained (parity
+// with the legacy surface; strict TN-format is a pending product ruling). The bank document
+// itself rides POST /api/profile/documents/bank.
+const bankPatchSchema = z
+  .object({
+    bank_account_holder: z.string().min(1).max(200).optional(),
+    bank_rib: z.string().min(1).max(100).optional(),
+    bank_iban: z.string().min(1).max(100).optional(),
+  })
+  .refine((b) => Object.keys(b).length > 0, { message: 'At least one field is required' });
+
 // Notifications sub-form — the three notify_* booleans (columns shipped Commit 3).
 const notificationsPatchSchema = z
   .object({
@@ -232,6 +244,40 @@ export const profileRoutes: FastifyPluginAsync = async (app) => {
       notifyNewsUpdates: updated?.notifyNewsUpdates ?? null,
       notifyRemindersEvents: updated?.notifyRemindersEvents ?? null,
       notifyPromotionsOffers: updated?.notifyPromotionsOffers ?? null,
+    });
+  });
+
+  app.patch('/api/profile/bank', { preHandler: requireAuth }, async (request, reply) => {
+    const parsed = bankPatchSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: parsed.error.issues.map((i) => ({ field: i.path.join('.'), reason: i.message })),
+      });
+    }
+
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply
+        .status(401)
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+    }
+
+    const data = parsed.data;
+    const patch: Partial<typeof users.$inferInsert> = {
+      // Server-stamped audit marker (money-adjacent) — never a client-supplied timestamp.
+      bankDetailsUpdatedAt: new Date(),
+    };
+    if (data.bank_account_holder !== undefined) patch.bankAccountHolder = data.bank_account_holder;
+    if (data.bank_rib !== undefined) patch.bankRib = data.bank_rib;
+    if (data.bank_iban !== undefined) patch.bankIban = data.bank_iban;
+
+    const [updated] = await db.update(users).set(patch).where(eq(users.id, userId)).returning();
+    return reply.status(200).send({
+      bankAccountHolder: updated?.bankAccountHolder ?? null,
+      bankRib: updated?.bankRib ?? null,
+      bankIban: updated?.bankIban ?? null,
     });
   });
 };

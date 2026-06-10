@@ -3,9 +3,9 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
+import { authService } from '@/features/auth/services/auth.service';
 import type { BusinessProfile } from '@/features/auth/types/auth';
 import { useSaveBankDetails } from '@/features/wallet/hooks/useSaveBankDetails';
-import { supabase } from '@/lib/supabase';
 
 interface OwnerBankDetailsSlotProps {
   profile: BusinessProfile;
@@ -24,9 +24,9 @@ function formatFileSize(bytes: number) {
 /**
  * Owner-only "Mes coordonnées bancaires" sub-tab, passed to the shared
  * `ProfileSettings` via its `bankSlot` prop (slice-2 B4b). Owns the bank form,
- * the `useSaveBankDetails` write, and the on-demand signed-URL view — the sole
- * direct-supabase use, relocated here so the OwnerSettings wrapper carries no
- * direct supabase import.
+ * the `useSaveBankDetails` write, and the on-demand presigned-URL view (QA-fix
+ * lane: both repointed off Supabase onto apps/api — PATCH /api/profile/bank +
+ * the `bank` document type).
  */
 export default function OwnerBankDetailsSlot({ profile, userId }: OwnerBankDetailsSlotProps) {
   const navigate = useNavigate();
@@ -65,11 +65,9 @@ export default function OwnerBankDetailsSlot({ profile, userId }: OwnerBankDetai
     }
     if (profile.bank_doc_path) {
       try {
-        const { data: signed, error } = await supabase.storage
-          .from('registres')
-          .createSignedUrl(profile.bank_doc_path, 3600);
-        if (error || !signed?.signedUrl) throw error;
-        window.open(signed.signedUrl, '_blank', 'noopener,noreferrer');
+        const url = await authService.getProfileDocumentUrl('bank');
+        if (!url) throw new Error('Document bancaire introuvable');
+        window.open(url, '_blank', 'noopener,noreferrer');
       } catch (err: unknown) {
         const m = err instanceof Error ? err.message : "Impossible d'ouvrir le document bancaire";
         toast.error(m);

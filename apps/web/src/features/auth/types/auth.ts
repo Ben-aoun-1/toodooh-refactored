@@ -29,7 +29,7 @@ export interface BusinessProfile {
    * hold a storage key, not a URL; the view presigns on demand via getProfileDocumentUrl). The
    * `*_doc_url`/`*_doc_path` fields stay undefined off the /api/me bridge (no stored URL).
    */
-  documents?: { registration: boolean; cin: boolean };
+  documents?: { registration: boolean; cin: boolean; bank: boolean };
   bank_account_holder?: string;
   bank_rib?: string;
   bank_iban?: string;
@@ -138,7 +138,8 @@ export interface SignupResponse {
 /**
  * The `user` object returned by GET /api/me (Phase-1f F4 — the profile read source). The forms read
  * a `BusinessProfile`; `getBusinessProfile` maps this → that (notifications flattened, status mapped,
- * deferred fields — logo/bank/doc-urls — absent: the backend has no such columns).
+ * deferred fields — logo/doc-urls — absent: the backend has no such columns). Bank details landed
+ * with the QA-fix lane (PATCH /api/profile/bank + the `bank` document type).
  */
 export interface MeUser {
   id: string;
@@ -160,7 +161,10 @@ export interface MeUser {
   postal_code: string | null;
   governorate_id: string | null;
   zone: string | null;
-  documents: { registration: boolean; cin: boolean };
+  bank_account_holder: string | null;
+  bank_rib: string | null;
+  bank_iban: string | null;
+  documents: { registration: boolean; cin: boolean; bank: boolean };
   notifications: {
     news_updates: boolean | null;
     reminders_events: boolean | null;

@@ -243,6 +243,21 @@ export const authService = {
     }
   },
 
+  // QA-fix lane — the owner's bank coordinates (replaces the dead Supabase
+  // business_profiles write). The bank document itself uploads separately via
+  // uploadProfileDocument('bank', file); bank_details_updated_at is server-stamped.
+  async updateProfileBank(patch: {
+    bank_account_holder?: string;
+    bank_rib?: string;
+    bank_iban?: string;
+  }): Promise<void> {
+    try {
+      await apiClient.patch('/profile/bank', patch);
+    } catch (error) {
+      throw new Error(apiErrorMessage(error));
+    }
+  },
+
   async updateProfileNotifications(patch: {
     notify_news_updates?: boolean;
     notify_reminders_events?: boolean;
@@ -257,11 +272,11 @@ export const authService = {
 
   // Phase-1f F5 — document upload (multipart, post-signin). At signup the user is unverified +
   // logged-out and can't call this requireAuth endpoint, so the upload flow-position moved here.
-  // type ∈ rne|cin (by role: advertiser→rne, individual_owner→cin, fleet_owner→rne). POST overwrites
-  // (deterministic key) → re-upload replaces. request.file() reads the first file (field name is
-  // irrelevant).
+  // type ∈ rne|cin|bank (rne/cin by role: advertiser→rne, individual_owner→cin, fleet_owner→rne;
+  // bank = the owner's relevé d'identité bancaire, QA-fix lane). POST overwrites (deterministic
+  // key) → re-upload replaces. request.file() reads the first file (field name is irrelevant).
   async uploadProfileDocument(
-    type: 'rne' | 'cin',
+    type: 'rne' | 'cin' | 'bank',
     file: File,
   ): Promise<{ type: string; key: string }> {
     const form = new FormData();
@@ -278,7 +293,7 @@ export const authService = {
 
   // Phase-1f F5 — presign the stored document ON DEMAND (presigned URLs expire → fetched on view,
   // never stored). 404 (no document of that type) → null.
-  async getProfileDocumentUrl(type: 'rne' | 'cin'): Promise<string | null> {
+  async getProfileDocumentUrl(type: 'rne' | 'cin' | 'bank'): Promise<string | null> {
     try {
       const { url } = await apiClient.get<{ url: string }>(`/profile/documents/${type}`);
       return url;
@@ -317,6 +332,13 @@ export const authService = {
       postal_code: user.postal_code ?? '',
       governorate_id: user.governorate_id ?? '',
       zone: user.zone ?? undefined,
+      // Bank details (QA-fix lane). bank_doc_path carries the deterministic storage key when a
+      // bank document exists — consumers (OwnerBankDetailsSlot/OwnerRevenue/OwnerDashboard) gate
+      // on its truthiness; the view presigns on demand via getProfileDocumentUrl('bank').
+      bank_account_holder: user.bank_account_holder ?? undefined,
+      bank_rib: user.bank_rib ?? undefined,
+      bank_iban: user.bank_iban ?? undefined,
+      bank_doc_path: user.documents.bank ? `bank/${user.id}` : undefined,
       notify_news_updates: user.notifications.news_updates ?? false,
       notify_reminders_events: user.notifications.reminders_events ?? false,
       notify_promotions_offers: user.notifications.promotions_offers ?? false,
@@ -328,7 +350,11 @@ export const authService = {
       is_admin: false,
       // F5 — document presence (direct map of /api/me's booleans). The *_doc_url fields stay
       // undefined (no stored URL; the view presigns on demand via getProfileDocumentUrl).
-      documents: { registration: user.documents.registration, cin: user.documents.cin },
+      documents: {
+        registration: user.documents.registration,
+        cin: user.documents.cin,
+        bank: user.documents.bank,
+      },
     };
   },
 

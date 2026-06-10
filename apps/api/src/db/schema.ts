@@ -84,6 +84,17 @@ export const users = pgTable(
     zone: text('zone'),
     registrationDocUrl: text('registration_doc_url'), // RNE — Commit 4 upload
     cinDocUrl: text('cin_doc_url'), // CIN — Commit 4 upload
+    // ── bank details (QA-fix lane) — owner payout coordinates, migrated off the dead
+    // Supabase business_profiles surface. Free text, nullable: RIB/IBAN format is not
+    // constrained here (product ruling pending — route validates required-only).
+    bankAccountHolder: text('bank_account_holder'),
+    bankRib: text('bank_rib'),
+    bankIban: text('bank_iban'),
+    // STORAGE KEY (`bank/<userId>`), not a URL — same convention (and same cosmetic
+    // misnomer) as registration_doc_url/cin_doc_url.
+    bankDocUrl: text('bank_doc_url'),
+    // Server-stamped on each PATCH /api/profile/bank (money-adjacent audit marker).
+    bankDetailsUpdatedAt: timestamp('bank_details_updated_at', { withTimezone: true }),
     onboardingCompleted: boolean('onboarding_completed').notNull().default(false),
     // ── notification preferences (Phase 1c) — columns only this commit; the
     // notify endpoint is Commit 4. Defaults from the legacy schema (inventory §2.2).
