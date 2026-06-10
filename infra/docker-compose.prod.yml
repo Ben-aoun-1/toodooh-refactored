@@ -64,6 +64,8 @@ services:
       # once /etc/letsencrypt is populated and the 443 servers can bind.
       - ./nginx/toodooh-http.conf:/etc/nginx/conf.d/default.conf:ro
       - ./nginx/proxy_common.conf:/etc/nginx/proxy_common.conf:ro
+      # wedooh.too-dooh.com server block (host PM2 app via bridge gateway) — added 2026-06-10
+      - ./nginx/wedooh.conf:/etc/nginx/conf.d/wedooh.conf:ro
       - ./www:/srv/toodooh/www:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - certbot-webroot:/var/www/certbot
