@@ -3,6 +3,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { adminAccountsRoutes } from './admin-accounts.js';
 import { adminRoutes } from './admin.js';
 import { agentRoutes } from './agent.js';
+import { emailAvailabilityRoute } from './email-availability.js';
 import { meRoutes } from './me.js';
 import { passwordRoutes } from './password.js';
 import { predefinedZonesRoutes } from './predefined-zones.js';
@@ -16,6 +17,9 @@ import { signupRoute } from './signup.js';
 // (/api/admin/users) register here.
 export const apiRoutes: FastifyPluginAsync = async (app) => {
   await app.register(signupRoute);
+  // Public, rate-limited signup-wizard email pre-check (QA-fix lane) — the limiter is
+  // registered inside the plugin, so it scopes to that route only.
+  await app.register(emailAvailabilityRoute);
   await app.register(signinRoutes);
   await app.register(meRoutes);
   await app.register(profileRoutes);
