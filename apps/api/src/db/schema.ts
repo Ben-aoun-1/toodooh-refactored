@@ -394,3 +394,37 @@ export type Agent = typeof agents.$inferSelect;
 export type NewAgent = typeof agents.$inferInsert;
 export type AgentReferral = typeof agentReferrals.$inferSelect;
 export type NewAgentReferral = typeof agentReferrals.$inferInsert;
+
+// ── device sessions (MAP M1) ──────────────────────────────────────────────────────────
+// Opaque bearer-token auth for the Android TV app (its WebView/OkHttp stack has no cookie
+// jar worth trusting — better-auth's cookie sessions stay web-only). Tokens are random
+// 32-byte values handed to the device ONCE and stored here HASHED (sha-256) — a DB leak
+// exposes no usable token. Access TTL 12h; refresh TTL 90d; a refresh ROTATES both (the
+// old pair dies with the rotation, so a replayed refresh token is a loud failure).
+// Namespaced under /api/device/auth/* — /api/auth/* belongs to better-auth.
+export const deviceSessions = pgTable(
+  'device_sessions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    accessTokenHash: text('access_token_hash').notNull(),
+    refreshTokenHash: text('refresh_token_hash').notNull(),
+    accessExpiresAt: timestamp('access_expires_at', { withTimezone: true }).notNull(),
+    refreshExpiresAt: timestamp('refresh_expires_at', { withTimezone: true }).notNull(),
+    deviceType: text('device_type'),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    // The guard's hot path is hash → row; rotation looks up by refresh hash.
+    uniqueIndex('device_sessions_access_token_hash_uq').on(table.accessTokenHash),
+    uniqueIndex('device_sessions_refresh_token_hash_uq').on(table.refreshTokenHash),
+    index('device_sessions_user_id_idx').on(table.userId),
+  ],
+);
+
+export type DeviceSession = typeof deviceSessions.$inferSelect;
+export type NewDeviceSession = typeof deviceSessions.$inferInsert;

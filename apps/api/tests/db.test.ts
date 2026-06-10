@@ -6,6 +6,7 @@ import * as schema from '../src/db/schema.js';
 import {
   accounts,
   businessSectors,
+  deviceSessions,
   governorates,
   predefinedZones,
   screenhostExportStatus,
@@ -86,6 +87,17 @@ describe('db schema', () => {
   it('users exposes agent_code + terms_accepted_at columns (Phase 1e signup-grows)', () => {
     expect(users.agentCode).toBeDefined();
     expect(users.termsAcceptedAt).toBeDefined();
+  });
+
+  it('device_sessions exposes the token-auth columns (MAP M1)', () => {
+    expect(deviceSessions.userId).toBeDefined();
+    expect(deviceSessions.accessTokenHash).toBeDefined();
+    expect(deviceSessions.refreshTokenHash).toBeDefined();
+    expect(deviceSessions.accessExpiresAt).toBeDefined();
+    expect(deviceSessions.refreshExpiresAt).toBeDefined();
+    expect(deviceSessions.deviceType).toBeDefined();
+    expect(deviceSessions.revokedAt).toBeDefined();
+    expect(deviceSessions.lastUsedAt).toBeDefined();
   });
 
   it('reference tables export their key columns', () => {

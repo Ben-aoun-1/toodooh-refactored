@@ -92,6 +92,13 @@
       "when": 1781090858693,
       "tag": "0012_collapse_zones_grand_tunis",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1781113622140,
+      "tag": "0013_device_sessions",
+      "breakpoints": true
     }
   ]
 }

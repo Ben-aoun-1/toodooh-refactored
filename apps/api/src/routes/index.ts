@@ -3,6 +3,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { adminAccountsRoutes } from './admin-accounts.js';
 import { adminRoutes } from './admin.js';
 import { agentRoutes } from './agent.js';
+import { deviceAuthRoutes } from './device-auth.js';
 import { emailAvailabilityRoute } from './email-availability.js';
 import { meRoutes } from './me.js';
 import { passwordRoutes } from './password.js';
@@ -21,6 +22,8 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   // registered inside the plugin, so it scopes to that route only.
   await app.register(emailAvailabilityRoute);
   await app.register(signinRoutes);
+  // MAP M1 — TV-app opaque-token auth, namespaced /api/device/auth/* (better-auth owns /api/auth).
+  await app.register(deviceAuthRoutes);
   await app.register(meRoutes);
   await app.register(profileRoutes);
   await app.register(profileDocumentsRoutes);
