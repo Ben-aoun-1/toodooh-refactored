@@ -140,8 +140,10 @@ describe('reference-table seeds (Postgres)', () => {
     expect(await db.$count(governorates)).toBe(24);
   });
 
-  it('predefined_zones seed = 8 rows', async () => {
-    expect(await db.$count(predefinedZones)).toBe(8);
+  it('predefined_zones seed = 1 row (0012 collapsed the 0003 eight into GRAND TUNIS)', async () => {
+    expect(await db.$count(predefinedZones)).toBe(1);
+    const [zone] = await db.select({ name: predefinedZones.name }).from(predefinedZones);
+    expect(zone?.name).toBe('GRAND TUNIS');
   });
 
   it('business_sectors seed = 29 rows (25 advertiser + 4 owner)', async () => {

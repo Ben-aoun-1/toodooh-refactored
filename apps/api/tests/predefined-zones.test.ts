@@ -87,28 +87,31 @@ describe('predefined-zones endpoints (real Postgres)', () => {
   });
 
   describe('GET /api/predefined-zones (public)', () => {
-    it('200, serves the 8 seeded rows, lat/lng as NUMBER (not string) + snake_case keys', async () => {
+    it('200, serves the GRAND TUNIS seed (0012 collapse), lat/lng as NUMBER + snake_case keys', async () => {
       const res = await app.inject({ method: 'GET', url: '/api/predefined-zones' });
       expect(res.statusCode).toBe(200);
       const rows = res.json<ZoneRow[]>();
-      // The 8-row seed is present (>= 8 tolerates any rows other suites might leave; afterEach cleans ours).
-      expect(rows.length).toBeGreaterThanOrEqual(8);
+      // Post-0012 seed: the 8 city zones collapsed into the single GRAND TUNIS row
+      // (>= 1 tolerates any rows other suites might leave; afterEach cleans ours).
+      expect(rows.length).toBeGreaterThanOrEqual(1);
+      expect(rows.find((r) => r.name === 'Ariana')).toBeUndefined();
 
-      const ariana = rows.find((r) => r.name === 'Ariana');
-      expect(ariana).toBeDefined();
+      const grandTunis = rows.find((r) => r.name === 'GRAND TUNIS');
+      expect(grandTunis).toBeDefined();
       // LOAD-BEARING: the serializer Number()s the numeric columns. Without it Drizzle yields strings
       // and the wizard's Haversine + Leaflet-circle math breaks.
-      expect(typeof ariana?.latitude).toBe('number');
-      expect(typeof ariana?.longitude).toBe('number');
-      expect(ariana?.latitude).toBeCloseTo(36.8625, 4);
-      expect(ariana?.longitude).toBeCloseTo(10.1956, 4);
-      expect(typeof ariana?.radius).toBe('number');
+      expect(typeof grandTunis?.latitude).toBe('number');
+      expect(typeof grandTunis?.longitude).toBe('number');
+      expect(grandTunis?.latitude).toBeCloseTo(36.842, 4);
+      expect(grandTunis?.longitude).toBeCloseTo(10.253, 4);
+      expect(typeof grandTunis?.radius).toBe('number');
+      expect(grandTunis?.radius).toBe(13000);
       // snake_case keys the PredefinedZone interface expects.
-      expect(ariana).toHaveProperty('is_active');
-      expect(ariana).toHaveProperty('image_url');
-      expect(ariana).toHaveProperty('created_at');
+      expect(grandTunis).toHaveProperty('is_active');
+      expect(grandTunis).toHaveProperty('image_url');
+      expect(grandTunis).toHaveProperty('created_at');
       // C3 serializer: seeded zones have a null image_url → stays null (consumer's picsum fallback).
-      expect(ariana?.image_url).toBeNull();
+      expect(grandTunis?.image_url).toBeNull();
     });
   });
 
