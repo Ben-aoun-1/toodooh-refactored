@@ -26,6 +26,9 @@ jobs:
       STORAGE_ENDPOINT: http://localhost:9000
       STORAGE_ACCESS_KEY: ci-minio-root
       STORAGE_SECRET_KEY: ci-minio-secret
+      # CI dummy, NOT a real key (env.ts requires base64 → exactly 32 bytes; prod's
+      # real key lives only in the VPS .env, provisioned by the operator).
+      WIFI_ENC_KEY: bdGZPH/rQXdJWSrMWJjkoNVf2znhj3TcNJw7+rUL56k=
     services:
       postgres:
         image: postgis/postgis:16-3.4
