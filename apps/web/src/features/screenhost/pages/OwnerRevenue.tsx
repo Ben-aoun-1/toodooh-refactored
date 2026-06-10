@@ -21,6 +21,13 @@ import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
 import OwnerNotificationsBell from '@/features/screenhost/components/OwnerNotificationsBell';
 import { useRevenueByPeriod, useRevenueStats } from '@/features/wallet/hooks/useRevenue';
 import { useSaveBankDetails } from '@/features/wallet/hooks/useSaveBankDetails';
+import {
+  IBAN_ERROR,
+  RIB_ERROR,
+  isValidIban,
+  isValidRib,
+  normalizeBankInput,
+} from '@/features/wallet/lib/bank-validation';
 import { getErrorMessage } from '@/lib/errors';
 
 type TxFilter = 'all' | 'recharges' | 'depenses';
@@ -51,6 +58,10 @@ export default function OwnerRevenue() {
   const [bankIban, setBankIban] = useState('');
   const [bankDocFile, setBankDocFile] = useState<File | null>(null);
   const [existingBankDocPath, setExistingBankDocPath] = useState<string | null>(null);
+  // C5-style inline format errors (TN formats, commit-1 ruling) — blur + submit, the
+  // same messages as OwnerBankDetailsSlot, mirroring PATCH /api/profile/bank's zod.
+  const [bankRibError, setBankRibError] = useState<string | null>(null);
+  const [bankIbanError, setBankIbanError] = useState<string | null>(null);
 
   const bankFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -118,6 +129,11 @@ export default function OwnerRevenue() {
       toast.error("Indiquez l'IBAN");
       return;
     }
+    const ribInvalid = !isValidRib(rib);
+    const ibanInvalid = !isValidIban(iban);
+    setBankRibError(ribInvalid ? RIB_ERROR : null);
+    setBankIbanError(ibanInvalid ? IBAN_ERROR : null);
+    if (ribInvalid || ibanInvalid) return;
     if (!bankDocFile && !existingBankDocPath) {
       toast.error("Ajoutez le relevé d'identité bancaire");
       return;
@@ -603,11 +619,19 @@ export default function OwnerRevenue() {
                     id="bank-rib"
                     type="text"
                     value={bankRib}
-                    onChange={(e) => setBankRib(e.target.value)}
+                    onChange={(e) => {
+                      setBankRibError(null);
+                      setBankRib(normalizeBankInput(e.target.value));
+                    }}
+                    onBlur={() => {
+                      const v = bankRib.trim();
+                      if (v) setBankRibError(isValidRib(v) ? null : RIB_ERROR);
+                    }}
                     className="w-full bg-transparent border-0 p-0 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-0 font-mono tracking-wide"
                     placeholder="···· ···· ···· ···· ···· ····"
                     autoComplete="off"
                   />
+                  {bankRibError && <p className="text-xs text-red-600 mt-1">{bankRibError}</p>}
                 </div>
               </div>
 
@@ -624,11 +648,19 @@ export default function OwnerRevenue() {
                     id="bank-iban"
                     type="text"
                     value={bankIban}
-                    onChange={(e) => setBankIban(e.target.value)}
+                    onChange={(e) => {
+                      setBankIbanError(null);
+                      setBankIban(normalizeBankInput(e.target.value));
+                    }}
+                    onBlur={() => {
+                      const v = bankIban.trim();
+                      if (v) setBankIbanError(isValidIban(v) ? null : IBAN_ERROR);
+                    }}
                     className="w-full bg-transparent border-0 p-0 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-0 font-mono tracking-wide"
                     placeholder="···· ···· ···· ···· ···· ···· ····"
                     autoComplete="off"
                   />
+                  {bankIbanError && <p className="text-xs text-red-600 mt-1">{bankIbanError}</p>}
                 </div>
               </div>
 

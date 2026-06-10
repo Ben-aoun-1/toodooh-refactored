@@ -106,6 +106,22 @@ export const authService = {
     }
   },
 
+  // QA-fix lane — the wizard's on-blur email pre-check (product ruling 2026-06-10 reversed
+  // anti-enumeration for THIS surface; the endpoint is rate-limited, 10/min/IP). Returns
+  // `null` when availability can't be determined (429/network) so callers fail OPEN — the
+  // signup submit stays the server-side authority on duplicates.
+  async checkEmailAvailability(email: string): Promise<boolean | null> {
+    try {
+      const { available } = await apiClient.post<{ available: boolean }>(
+        '/signup/email-availability',
+        { email },
+      );
+      return available;
+    } catch {
+      return null;
+    }
+  },
+
   async logout() {
     try {
       await apiClient.post('/signout');

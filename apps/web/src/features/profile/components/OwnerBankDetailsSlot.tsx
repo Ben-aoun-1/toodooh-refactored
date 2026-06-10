@@ -6,6 +6,13 @@ import { useNavigate } from 'react-router-dom';
 import { authService } from '@/features/auth/services/auth.service';
 import type { BusinessProfile } from '@/features/auth/types/auth';
 import { useSaveBankDetails } from '@/features/wallet/hooks/useSaveBankDetails';
+import {
+  IBAN_ERROR,
+  RIB_ERROR,
+  isValidIban,
+  isValidRib,
+  normalizeBankInput,
+} from '@/features/wallet/lib/bank-validation';
 
 interface OwnerBankDetailsSlotProps {
   profile: BusinessProfile;
@@ -40,6 +47,10 @@ export default function OwnerBankDetailsSlot({ profile, userId }: OwnerBankDetai
   });
   const [existingBankDocPath, setExistingBankDocPath] = useState<string | null>(null);
   const [existingBankDocUrl, setExistingBankDocUrl] = useState<string | null>(null);
+  // C5-style inline format errors (TN formats, commit-1 ruling) — set on blur AND on
+  // submit, mirrored by the backend zod on PATCH /api/profile/bank.
+  const [ribError, setRibError] = useState<string | null>(null);
+  const [ibanError, setIbanError] = useState<string | null>(null);
 
   useEffect(() => {
     setBankForm({
@@ -88,6 +99,11 @@ export default function OwnerBankDetailsSlot({ profile, userId }: OwnerBankDetai
       toast.error('Nom, RIB et IBAN sont obligatoires');
       return;
     }
+    const ribInvalid = !isValidRib(rib);
+    const ibanInvalid = !isValidIban(iban);
+    setRibError(ribInvalid ? RIB_ERROR : null);
+    setIbanError(ibanInvalid ? IBAN_ERROR : null);
+    if (ribInvalid || ibanInvalid) return;
     if (!bankDocFile && !existingBankDocPath && !existingBankDocUrl) {
       toast.error("Ajoutez le relevé d'identité bancaire");
       return;
@@ -142,11 +158,19 @@ export default function OwnerBankDetailsSlot({ profile, userId }: OwnerBankDetai
         <input
           type="text"
           value={bankForm.bank_rib}
-          onChange={(e) => setBankForm((p) => ({ ...p, bank_rib: e.target.value }))}
+          onChange={(e) => {
+            setRibError(null);
+            setBankForm((p) => ({ ...p, bank_rib: normalizeBankInput(e.target.value) }));
+          }}
+          onBlur={() => {
+            const v = bankForm.bank_rib.trim();
+            if (v) setRibError(isValidRib(v) ? null : RIB_ERROR);
+          }}
           className={INPUT_CLASS}
-          placeholder="RIB"
+          placeholder="RIB (20 chiffres)"
           id="bank-rib"
         />
+        {ribError && <p className="text-xs text-red-600 mt-1">{ribError}</p>}
       </div>
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="bank-iban">
@@ -155,11 +179,19 @@ export default function OwnerBankDetailsSlot({ profile, userId }: OwnerBankDetai
         <input
           type="text"
           value={bankForm.bank_iban}
-          onChange={(e) => setBankForm((p) => ({ ...p, bank_iban: e.target.value }))}
+          onChange={(e) => {
+            setIbanError(null);
+            setBankForm((p) => ({ ...p, bank_iban: normalizeBankInput(e.target.value) }));
+          }}
+          onBlur={() => {
+            const v = bankForm.bank_iban.trim();
+            if (v) setIbanError(isValidIban(v) ? null : IBAN_ERROR);
+          }}
           className={INPUT_CLASS}
-          placeholder="IBAN"
+          placeholder="IBAN (TN + 22 chiffres)"
           id="bank-iban"
         />
+        {ibanError && <p className="text-xs text-red-600 mt-1">{ibanError}</p>}
       </div>
 
       <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center gap-3 bg-gray-50/50">
@@ -219,6 +251,8 @@ export default function OwnerBankDetailsSlot({ profile, userId }: OwnerBankDetai
           type="button"
           onClick={() => {
             setBankDocFile(null);
+            setRibError(null);
+            setIbanError(null);
             setBankForm({
               bank_account_holder: profile.bank_account_holder ?? '',
               bank_rib: profile.bank_rib ?? '',

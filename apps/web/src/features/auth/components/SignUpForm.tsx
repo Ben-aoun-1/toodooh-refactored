@@ -190,6 +190,8 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
   // C5 (#8a): step-2 tax_number FORMAT error (mirrors phoneConflict). Uniqueness stays
   // submit-time/server-side — there is no availability endpoint.
   const [taxNumberError, setTaxNumberError] = useState<string | null>(null);
+  // C5: postal-code FORMAT error (the API rejects non-^\d{4}$ at submit; gate it per step).
+  const [postalCodeError, setPostalCodeError] = useState<string | null>(null);
   const [confirmPassword, setConfirmPassword] = useState('');
   const [formData, setFormData] = useState<Partial<SignUpData>>({
     email: '',
@@ -297,6 +299,9 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
   // C5 (#8a): mirror the backend matricule rule (apps/api/src/validation/tax-number.ts).
   const isValidTaxNumber = (value: string) => /^[A-Za-z0-9/]{7,20}$/.test(value);
   const TAX_NUMBER_ERROR = 'Matricule invalide (7 à 20 caractères alphanumériques ou /).';
+  // C5: mirror the backend postal rule (signup zod + the users CHECK, ^\d{4}$).
+  const isValidPostalCode = (value: string) => /^\d{4}$/.test(value);
+  const POSTAL_CODE_ERROR = 'Code postal invalide (4 chiffres).';
   const pwChecks = passwordChecks(formData.password || '');
   const pwHasUpper = pwChecks.upper;
   const pwHasDigit = pwChecks.digit;
@@ -311,9 +316,10 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
     setFormData((prev) => ({ ...prev, contact_name: fullName }));
   }, [firstName, lastName]);
 
-  // Phase-1f F2: format-only (the client-side email-existence oracle is removed — anti-enumeration,
-  // class-b §4.1). Duplicates are handled server-side by the 201-generic signup; the wizard no longer
-  // discloses "email taken" pre-submit. `emailConflict`/`phoneConflict` now carry FORMAT errors only.
+  // Format layer (sync): `emailConflict`/`phoneConflict` carry FORMAT errors here. The email
+  // EXISTENCE check is layered separately (checkEmailTaken below) — product ruling 2026-06-10
+  // reversed the Phase-1f F2 anti-enumeration removal for the wizard surface only, backed by
+  // the rate-limited POST /api/signup/email-availability.
   const validateUniqueCredentials = (
     showToast = true,
     scope: 'both' | 'email' | 'phone' = 'both',
@@ -341,6 +347,31 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
     if (checkEmail) setEmailConflict(null);
     if (checkPhone) setPhoneConflict(null);
     return true;
+  };
+
+  // Availability layer (async, format pre-checked by the caller): asks the rate-limited
+  // endpoint whether the email is taken and mirrors the verdict into `emailConflict` (the
+  // same state the inline <p> and canGoNext already consume). The last verdict is cached
+  // per email so blur + Suivant don't double-spend the 10/min rate limit. `null` from the
+  // service (429/network) fails OPEN — the signup submit stays the server-side authority.
+  const EMAIL_TAKEN_ERROR =
+    'Un compte existe déjà avec cet e-mail. Connectez-vous ou utilisez une autre adresse.';
+  const lastAvailability = useRef<{ email: string; available: boolean } | null>(null);
+
+  const checkEmailAvailable = async (): Promise<boolean> => {
+    const normalizedEmail = String(formData.email || '')
+      .trim()
+      .toLowerCase();
+    let available: boolean | null;
+    if (lastAvailability.current?.email === normalizedEmail) {
+      available = lastAvailability.current.available;
+    } else {
+      available = await authService.checkEmailAvailability(normalizedEmail);
+      if (available === null) return true; // unknown → don't block; server decides at submit
+      lastAvailability.current = { email: normalizedEmail, available };
+    }
+    setEmailConflict(available ? null : EMAIL_TAKEN_ERROR);
+    return available;
   };
 
   /* ── navigation helpers ── */
@@ -384,7 +415,9 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
           formData.street_address?.trim() &&
           formData.city?.trim() &&
           formData.zone?.trim() &&
-          (selectedProfileType === 'fleet_owner' ? formData.postal_code?.trim() : true) &&
+          (selectedProfileType === 'fleet_owner'
+            ? isValidPostalCode(String(formData.postal_code || '').trim())
+            : true) &&
           formData.governorate_id,
         );
       case 3:
@@ -393,7 +426,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
           return Boolean(
             formData.street_address?.trim() &&
             formData.city?.trim() &&
-            formData.postal_code?.trim() &&
+            isValidPostalCode(String(formData.postal_code || '').trim()) &&
             formData.zone?.trim() &&
             formData.governorate_id,
           );
@@ -401,7 +434,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
         return Boolean(
           formData.street_address?.trim() &&
           formData.city?.trim() &&
-          formData.postal_code?.trim() &&
+          isValidPostalCode(String(formData.postal_code || '').trim()) &&
           formData.governorate_id,
         );
       case 4:
@@ -411,11 +444,15 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
     }
   };
 
-  const goNext = () => {
+  const goNext = async () => {
     if (currentStep >= 4 || !canGoNext()) return;
     if (currentStep === 1) {
-      // Format-only check now (the existence oracle is gone — duplicates are server-side 201-generic).
+      // Format first (sync), then availability (async, cached) — ruling 2026-06-10.
       if (!validateUniqueCredentials(true)) return;
+      if (!(await checkEmailAvailable())) {
+        toast.error(EMAIL_TAKEN_ERROR);
+        return;
+      }
       onStepChange(currentStep + 1);
       return;
     }
@@ -775,7 +812,9 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
               setFormData({ ...formData, email: e.target.value });
             }}
             onBlur={() => {
-              if (formData.email?.trim()) void validateUniqueCredentials(false, 'email');
+              // Format (sync), then availability (async) — only when the format passes.
+              if (formData.email?.trim() && validateUniqueCredentials(false, 'email'))
+                void checkEmailAvailable();
             }}
             className={inputClass}
             placeholder="contact@entreprise.com"
@@ -1261,11 +1300,19 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
                 required
                 pattern="\d{4}"
                 value={formData.postal_code}
-                onChange={(e) => setFormData({ ...formData, postal_code: e.target.value })}
+                onChange={(e) => {
+                  setPostalCodeError(null);
+                  setFormData({ ...formData, postal_code: e.target.value });
+                }}
+                onBlur={() => {
+                  const v = String(formData.postal_code || '').trim();
+                  if (v) setPostalCodeError(isValidPostalCode(v) ? null : POSTAL_CODE_ERROR);
+                }}
                 className={inputClass}
                 placeholder="1000"
                 id="postal-code"
               />
+              {postalCodeError && <p className="text-xs text-red-600 mt-1">{postalCodeError}</p>}
             </div>
           )}
 
@@ -1886,11 +1933,19 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             required
             pattern="\d{4}"
             value={formData.postal_code}
-            onChange={(e) => setFormData({ ...formData, postal_code: e.target.value })}
+            onChange={(e) => {
+              setPostalCodeError(null);
+              setFormData({ ...formData, postal_code: e.target.value });
+            }}
+            onBlur={() => {
+              const v = String(formData.postal_code || '').trim();
+              if (v) setPostalCodeError(isValidPostalCode(v) ? null : POSTAL_CODE_ERROR);
+            }}
             className={inputClass}
             placeholder="1000"
             id="postal-code-2"
           />
+          {postalCodeError && <p className="text-xs text-red-600 mt-1">{postalCodeError}</p>}
         </div>
         {(selectedProfileType === 'fleet_owner' || selectedProfileType === 'individual_owner') && (
           <div className="md:col-span-2">
@@ -2130,7 +2185,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
           </button>
           <button
             type="button"
-            onClick={goNext}
+            onClick={() => void goNext()}
             disabled={!canGoNext()}
             className="py-3.5 rounded-xl font-semibold text-sm text-brand-deep transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             style={{ background: '#76E6AB' }}
@@ -2154,7 +2209,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
           {currentStep < 4 ? (
             <button
               type="button"
-              onClick={goNext}
+              onClick={() => void goNext()}
               disabled={!canGoNext()}
               className="flex-1 py-3.5 rounded-xl font-semibold text-sm text-brand-deep transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               style={{ background: '#76E6AB' }}

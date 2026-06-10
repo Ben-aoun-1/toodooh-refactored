@@ -58,14 +58,20 @@ const addressPatchSchema = z
   .refine((b) => Object.keys(b).length > 0, { message: 'At least one field is required' });
 
 // Bank sub-form (QA-fix lane — migrated off the dead Supabase business_profiles surface).
-// Free-text payout coordinates: RIB/IBAN format is intentionally NOT constrained (parity
-// with the legacy surface; strict TN-format is a pending product ruling). The bank document
-// itself rides POST /api/profile/documents/bank.
+// TN formats per the commit-1 ruling: RIB = exactly 20 digits; IBAN = "TN" + 22 digits
+// (24 chars — the 2 check digits are NOT pinned). Fields stay optional; format applies
+// when present. The bank document itself rides POST /api/profile/documents/bank.
 const bankPatchSchema = z
   .object({
     bank_account_holder: z.string().min(1).max(200).optional(),
-    bank_rib: z.string().min(1).max(100).optional(),
-    bank_iban: z.string().min(1).max(100).optional(),
+    bank_rib: z
+      .string()
+      .regex(/^\d{20}$/, 'RIB must be exactly 20 digits')
+      .optional(),
+    bank_iban: z
+      .string()
+      .regex(/^TN\d{22}$/, 'IBAN must be TN followed by 22 digits')
+      .optional(),
   })
   .refine((b) => Object.keys(b).length > 0, { message: 'At least one field is required' });
 

@@ -208,3 +208,24 @@ describe('authService.signUp → POST /signup (Phase-1f F2)', () => {
     await expect(authService.signUp(advertiser)).rejects.toThrow(/connexion/i);
   });
 });
+
+describe('authService.checkEmailAvailability → POST /signup/email-availability (QA-fix lane)', () => {
+  beforeEach(() => post.mockReset());
+
+  it('returns the endpoint verdict', async () => {
+    post.mockResolvedValue({ available: false });
+    await expect(authService.checkEmailAvailability('taken@example.com')).resolves.toBe(false);
+    expect(post).toHaveBeenCalledWith('/signup/email-availability', {
+      email: 'taken@example.com',
+    });
+    post.mockResolvedValue({ available: true });
+    await expect(authService.checkEmailAvailability('new@example.com')).resolves.toBe(true);
+  });
+
+  it('fails OPEN (null) on rate-limit or network errors — submit stays the authority', async () => {
+    post.mockRejectedValueOnce(new ApiError({ status: 429, code: 'RATE_LIMITED', message: '' }));
+    await expect(authService.checkEmailAvailability('a@b.c')).resolves.toBeNull();
+    post.mockRejectedValueOnce(new ApiError({ status: 0, code: 'NETWORK', message: '' }));
+    await expect(authService.checkEmailAvailability('a@b.c')).resolves.toBeNull();
+  });
+});

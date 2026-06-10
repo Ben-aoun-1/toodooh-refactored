@@ -408,18 +408,35 @@ describe('PATCH /api/profile/bank', () => {
   it('partial: only supplied fields change', async () => {
     await db
       .update(users)
-      .set({ bankAccountHolder: 'Original Holder', bankRib: 'RIB-1' })
+      .set({ bankAccountHolder: 'Original Holder', bankRib: '11111111111111111111' })
       .where(eq(users.id, userId));
     mockSession(userId);
-    await patch({ bank_rib: 'RIB-2' });
+    await patch({ bank_rib: '22222222222222222222' });
     const [row] = await db.select().from(users).where(eq(users.id, userId));
-    expect(row?.bankRib).toBe('RIB-2');
+    expect(row?.bankRib).toBe('22222222222222222222');
     expect(row?.bankAccountHolder).toBe('Original Holder'); // untouched
   });
 
   it('empty-string field → 400 (min 1)', async () => {
     mockSession(userId);
     expect((await patch({ bank_account_holder: '' })).statusCode).toBe(400);
+  });
+
+  it('bank_rib format: exactly 20 digits (commit-1 ruling)', async () => {
+    mockSession(userId);
+    expect((await patch({ bank_rib: '1234567890123456789' })).statusCode).toBe(400); // 19
+    expect((await patch({ bank_rib: '123456789012345678901' })).statusCode).toBe(400); // 21
+    expect((await patch({ bank_rib: '1234567890123456789X' })).statusCode).toBe(400); // letter
+    expect((await patch({ bank_rib: '12345678901234567890' })).statusCode).toBe(200);
+  });
+
+  it('bank_iban format: TN + 22 digits, check digits not pinned', async () => {
+    mockSession(userId);
+    expect((await patch({ bank_iban: 'TN591234567890123456789' })).statusCode).toBe(400); // 23 chars
+    expect((await patch({ bank_iban: 'FR5912345678901234567890' })).statusCode).toBe(400); // not TN
+    expect((await patch({ bank_iban: 'tn5912345678901234567890' })).statusCode).toBe(400); // lowercase
+    expect((await patch({ bank_iban: 'TN0012345678901234567890' })).statusCode).toBe(200); // any check digits
+    expect((await patch({ bank_iban: 'TN5912345678901234567890' })).statusCode).toBe(200);
   });
 
   it('unauthenticated → 401', async () => {
