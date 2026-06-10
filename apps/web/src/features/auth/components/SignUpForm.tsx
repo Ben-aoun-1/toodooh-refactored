@@ -28,6 +28,11 @@ import type {
   SignUpData,
   FleetEstablishmentInput,
 } from '@/features/auth/types/auth';
+import {
+  AGENT_CODE_ERROR,
+  isValidAgentCode,
+  normalizeAgentCode,
+} from '@/features/auth/utils/agent-code';
 import { isValidPassword, passwordChecks } from '@/features/auth/utils/password';
 import { getErrorMessage } from '@/lib/errors';
 
@@ -182,6 +187,9 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
   const [taxNumberError, setTaxNumberError] = useState<string | null>(null);
   // C5: postal-code FORMAT error (the API rejects non-^\d{4}$ at submit; gate it per step).
   const [postalCodeError, setPostalCodeError] = useState<string | null>(null);
+  // F4: agent-code FORMAT error ("Numéros" ruling — exactly 8 digits). Format only: resolution
+  // stays server-side (unmatched codes are accepted and stored unlinked).
+  const [agentCodeError, setAgentCodeError] = useState<string | null>(null);
   const [confirmPassword, setConfirmPassword] = useState('');
   const [formData, setFormData] = useState<Partial<SignUpData>>({
     email: '',
@@ -373,6 +381,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
           firstName.trim() &&
           fonction.trim() &&
           formData.agent_toodooh?.trim() &&
+          isValidAgentCode(String(formData.agent_toodooh || '').trim()) &&
           formData.email?.trim() &&
           emailRegex.test(String(formData.email || '').trim()) &&
           formData.password &&
@@ -819,11 +828,23 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             id="signup-agent-code"
             type="text"
             required
+            inputMode="numeric"
             value={formData.agent_toodooh}
-            onChange={(e) => setFormData({ ...formData, agent_toodooh: e.target.value })}
+            onChange={(e) => {
+              setAgentCodeError(null);
+              setFormData({ ...formData, agent_toodooh: normalizeAgentCode(e.target.value) });
+            }}
+            onBlur={() =>
+              setAgentCodeError(
+                formData.agent_toodooh && !isValidAgentCode(formData.agent_toodooh)
+                  ? AGENT_CODE_ERROR
+                  : null,
+              )
+            }
             className={inputClass}
-            placeholder="- - - - - - - - - -"
+            placeholder="- - - - - - - -"
           />
+          {agentCodeError && <p className="text-xs text-red-600 mt-1">{agentCodeError}</p>}
         </div>
         {/* Mot de passe */}
         <div>
