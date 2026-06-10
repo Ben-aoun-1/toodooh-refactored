@@ -428,3 +428,32 @@ export const deviceSessions = pgTable(
 
 export type DeviceSession = typeof deviceSessions.$inferSelect;
 export type NewDeviceSession = typeof deviceSessions.$inferInsert;
+
+// ── screens (MAP M1 commit 2) ─────────────────────────────────────────────────────────
+// One row per physical TV/screen under a screenhost. Rows are GENERATED when the owner is
+// APPROVED (admin approve hook + the 0014 backfill for already-approved owners):
+// screen_count rows per screenhost, named "Écran 1..N" — screenhosts.screen_count stays
+// free metadata; this table is what devices pair against. paired_at/last_seen_at are set
+// by the TV app's pair call (M1: is_online is derived later from last_seen_at).
+export const screens = pgTable(
+  'screens',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    screenhostId: uuid('screenhost_id')
+      .notNull()
+      .references(() => screenhosts.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    isActive: boolean('is_active').notNull().default(true),
+    pairedAt: timestamp('paired_at', { withTimezone: true }),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [index('screens_screenhost_id_idx').on(table.screenhostId)],
+);
+
+export type Screen = typeof screens.$inferSelect;
+export type NewScreen = typeof screens.$inferInsert;

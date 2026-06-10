@@ -11,6 +11,7 @@ import { predefinedZonesRoutes } from './predefined-zones.js';
 import { profileDocumentsRoutes } from './profile-documents.js';
 import { profileRoutes } from './profile.js';
 import { referenceRoutes } from './reference.js';
+import { screensRoutes } from './screens.js';
 import { signinRoutes } from './signin.js';
 import { signupRoute } from './signup.js';
 
@@ -24,6 +25,8 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   await app.register(signinRoutes);
   // MAP M1 — TV-app opaque-token auth, namespaced /api/device/auth/* (better-auth owns /api/auth).
   await app.register(deviceAuthRoutes);
+  // MAP M1 — device-bearer screen list + pair/GPS-link.
+  await app.register(screensRoutes);
   await app.register(meRoutes);
   await app.register(profileRoutes);
   await app.register(profileDocumentsRoutes);

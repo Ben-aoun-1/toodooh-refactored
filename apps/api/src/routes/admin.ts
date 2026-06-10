@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { db } from '../db/client.js';
 import { type User, users } from '../db/schema.js';
 import { toProfileType } from '../lib/profile-type.js';
+import { OWNER_ROLES, createMissingScreensForOwner } from '../lib/screens.js';
 import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
 import { storage } from '../storage/s3-storage.js';
 
@@ -166,6 +167,13 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       })
       .where(eq(users.id, id))
       .returning();
+
+    // MAP M1 — approving a screenhost owner materializes their screens rows ("Écran 1..N"
+    // per screenhost, idempotent: a screenhost that already has screens is left alone, so
+    // a reject → re-approve cycle never duplicates).
+    if (updated && OWNER_ROLES.has(updated.role)) {
+      await createMissingScreensForOwner(updated.id);
+    }
 
     return reply.status(200).send({ user: toAdminUserView(updated as User) });
   });

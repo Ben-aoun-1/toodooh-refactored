@@ -11,6 +11,7 @@ import {
   predefinedZones,
   screenhostExportStatus,
   screenhosts,
+  screens,
   sessions,
   userRole,
   users,
@@ -98,6 +99,14 @@ describe('db schema', () => {
     expect(deviceSessions.deviceType).toBeDefined();
     expect(deviceSessions.revokedAt).toBeDefined();
     expect(deviceSessions.lastUsedAt).toBeDefined();
+  });
+
+  it('screens exposes the pair/liveness columns (MAP M1)', () => {
+    expect(screens.screenhostId).toBeDefined();
+    expect(screens.name).toBeDefined();
+    expect(screens.isActive).toBeDefined();
+    expect(screens.pairedAt).toBeDefined();
+    expect(screens.lastSeenAt).toBeDefined();
   });
 
   it('reference tables export their key columns', () => {
