@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 
 import { auth } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
-import { type NewUser, users } from '../src/db/schema.js';
+import { type NewUser, userDocuments, users } from '../src/db/schema.js';
 import { adminRoutes } from '../src/routes/admin.js';
 import { storage } from '../src/storage/s3-storage.js';
 
@@ -137,9 +137,12 @@ describe('admin endpoints (real Postgres)', () => {
         bankAccountHolder: 'Café Central SARL',
         bankRib: '12345678901234567890',
         bankIban: 'TN5912345678901234567890',
-        bankDocUrl: 'bank/seeded',
         bankDetailsUpdatedAt: new Date('2026-06-01T00:00:00Z'),
       });
+      // documents.bank presence reads user_documents (F-docs Commit 1), not the frozen column.
+      await db
+        .insert(userDocuments)
+        .values({ userId: withBank, category: 'bank', position: 1, storageKey: 'bank/seeded' });
       const body = (await list('pending')).json<{
         users: {
           id: string;
@@ -310,7 +313,7 @@ describe('admin endpoints (real Postgres)', () => {
     });
   });
 
-  describe('GET /api/admin/users/:id/documents/:type (real Postgres + MinIO)', () => {
+  describe('admin document review endpoints (real Postgres + MinIO)', () => {
     const pdf = Buffer.from('%PDF-1.4 fake admin-review bytes');
     const uploadedKeys: string[] = [];
 
@@ -321,27 +324,31 @@ describe('admin endpoints (real Postgres)', () => {
 
     const getDoc = (id: string, type: string) =>
       app.inject({ method: 'GET', url: `/api/admin/users/${id}/documents/${type}` });
+    const listDocs = (id: string) =>
+      app.inject({ method: 'GET', url: `/api/admin/users/${id}/documents` });
+    const presignDoc = (id: string, docId: string) =>
+      app.inject({ method: 'GET', url: `/api/admin/users/${id}/documents/${docId}/url` });
 
-    const seedDoc = async (type: 'rne' | 'cin' | 'bank'): Promise<string> => {
-      const target = await seedUser({ status: 'pending' });
-      const key = `${type}/${target}`;
+    // Seeds a user_documents row (F-docs Commit 1 — the users.*_doc_url columns are frozen).
+    // A legacy-style key stands in for a backfilled document.
+    const seedDoc = async (
+      type: 'rne' | 'cin' | 'complementaire' | 'bank',
+      position = 1,
+      ownerId?: string,
+    ): Promise<{ target: string; docId: string }> => {
+      const target = ownerId ?? (await seedUser({ status: 'pending' }));
+      const key = `${type}/${target}-${position}`;
       await storage.upload({ key, body: pdf, contentType: 'application/pdf' });
       uploadedKeys.push(key);
-      await db
-        .update(users)
-        .set(
-          type === 'rne'
-            ? { registrationDocUrl: key }
-            : type === 'cin'
-              ? { cinDocUrl: key }
-              : { bankDocUrl: key },
-        )
-        .where(eq(users.id, target));
-      return target;
+      const [row] = await db
+        .insert(userDocuments)
+        .values({ userId: target, category: type, position, storageKey: key })
+        .returning();
+      return { target, docId: row?.id ?? '' };
     };
 
-    it('rne → 200 { url } fetching the uploaded bytes', async () => {
-      const target = await seedDoc('rne');
+    it('compat :type rne → 200 { url } fetching the uploaded bytes (table-backed)', async () => {
+      const { target } = await seedDoc('rne');
       mockSession(adminId);
       const res = await getDoc(target, 'rne');
       expect(res.statusCode).toBe(200);
@@ -351,19 +358,19 @@ describe('admin endpoints (real Postgres)', () => {
       expect(fetched.equals(pdf)).toBe(true);
     });
 
-    it('cin → 200 { url }', async () => {
-      const target = await seedDoc('cin');
+    it('compat :type cin → 200 { url }', async () => {
+      const { target } = await seedDoc('cin');
       mockSession(adminId);
       expect((await getDoc(target, 'cin')).statusCode).toBe(200);
     });
 
-    it('bank → 200 { url } (F6 — admin bank-details review)', async () => {
-      const target = await seedDoc('bank');
+    it('compat :type bank → 200 { url } (F6 — admin bank-details review, table-backed)', async () => {
+      const { target } = await seedDoc('bank');
       mockSession(adminId);
       expect((await getDoc(target, 'bank')).statusCode).toBe(200);
     });
 
-    it('null key → 404 DOCUMENT_NOT_UPLOADED', async () => {
+    it('compat :type with no document → 404 DOCUMENT_NOT_UPLOADED', async () => {
       const target = await seedUser({ status: 'pending' });
       mockSession(adminId);
       const res = await getDoc(target, 'cin');
@@ -373,7 +380,7 @@ describe('admin endpoints (real Postgres)', () => {
       expect(body.documentType).toBe('cin');
     });
 
-    it('bank with no document on file → 404 DOCUMENT_NOT_UPLOADED', async () => {
+    it('bank with no document on file → 404 DOCUMENT_NOT_UPLOADED (F6)', async () => {
       const target = await seedUser({ status: 'pending' });
       mockSession(adminId);
       const res = await getDoc(target, 'bank');
@@ -383,11 +390,12 @@ describe('admin endpoints (real Postgres)', () => {
       expect(body.documentType).toBe('bank');
     });
 
-    it('unknown user → 404 USER_NOT_FOUND', async () => {
+    it('unknown user → 404 USER_NOT_FOUND (compat + list)', async () => {
       mockSession(adminId);
-      const res = await getDoc(NO_ROW_ID, 'rne');
-      expect(res.statusCode).toBe(404);
-      expect(res.json<{ error: string }>().error).toBe('USER_NOT_FOUND');
+      expect((await getDoc(NO_ROW_ID, 'rne')).json<{ error: string }>().error).toBe(
+        'USER_NOT_FOUND',
+      );
+      expect((await listDocs(NO_ROW_ID)).json<{ error: string }>().error).toBe('USER_NOT_FOUND');
     });
 
     it('invalid type → 400', async () => {
@@ -396,10 +404,57 @@ describe('admin endpoints (real Postgres)', () => {
       expect((await getDoc(target, 'passport')).statusCode).toBe(400);
     });
 
-    it('non-admin → 403', async () => {
-      const target = await seedUser({ status: 'pending' });
+    it('non-admin → 403 on all three document routes', async () => {
+      const { target, docId } = await seedDoc('rne');
       mockSession(adminId, 'advertiser');
       expect((await getDoc(target, 'rne')).statusCode).toBe(403);
+      expect((await listDocs(target)).statusCode).toBe(403);
+      expect((await presignDoc(target, docId)).statusCode).toBe(403);
+    });
+
+    it('GET /:id/documents lists ALL documents grouped by category', async () => {
+      const { target } = await seedDoc('cin', 1);
+      await seedDoc('cin', 2, target);
+      await seedDoc('complementaire', 1, target);
+      mockSession(adminId);
+      const res = await listDocs(target);
+      expect(res.statusCode).toBe(200);
+      const docs = res.json<{
+        documents: { cin: { position: number }[]; complementaire: unknown[]; rne: unknown[] };
+      }>().documents;
+      expect(docs.cin.map((d) => d.position)).toEqual([1, 2]);
+      expect(docs.complementaire).toHaveLength(1);
+      expect(docs.rne).toHaveLength(0);
+    });
+
+    it('GET /:id/documents/:docId/url presigns one document; wrong user pairing → 404', async () => {
+      const { target, docId } = await seedDoc('cin');
+      mockSession(adminId);
+      const res = await presignDoc(target, docId);
+      expect(res.statusCode).toBe(200);
+      const fetched = Buffer.from(
+        await (await fetch(res.json<{ url: string }>().url)).arrayBuffer(),
+      );
+      expect(fetched.equals(pdf)).toBe(true);
+      // A document id must only presign under ITS user — a mismatched pair 404s.
+      const stranger = await seedUser({ status: 'pending' });
+      expect((await presignDoc(stranger, docId)).statusCode).toBe(404);
+    });
+
+    it('moderation list document presence reads the table', async () => {
+      const { target } = await seedDoc('cin');
+      mockSession(adminId);
+      const res = await app.inject({ method: 'GET', url: '/api/admin/users?status=pending' });
+      expect(res.statusCode).toBe(200);
+      const row = res
+        .json<{
+          users: {
+            id: string;
+            documents: { registration: boolean; cin: boolean; bank: boolean };
+          }[];
+        }>()
+        .users.find((u) => u.id === target);
+      expect(row?.documents).toEqual({ registration: false, cin: true, bank: false });
     });
   });
 });

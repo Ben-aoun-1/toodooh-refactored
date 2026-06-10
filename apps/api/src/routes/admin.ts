@@ -1,11 +1,12 @@
-import { and, desc, eq, notInArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, notInArray } from 'drizzle-orm';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import { db } from '../db/client.js';
-import { type User, users } from '../db/schema.js';
+import { type User, userDocuments, users } from '../db/schema.js';
 import { toProfileType } from '../lib/profile-type.js';
 import { OWNER_ROLES, createMissingScreensForOwner } from '../lib/screens.js';
+import { groupedDocuments } from '../lib/user-documents.js';
 import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
 import { storage } from '../storage/s3-storage.js';
 
@@ -15,14 +16,11 @@ const adminGuard = { preHandler: [requireAuth, requireAdmin] };
 
 const listQuerySchema = z.object({ status: z.enum(['pending', 'approved', 'rejected']) });
 const idParamSchema = z.object({ id: z.uuid() });
-const docParamSchema = z.object({ id: z.uuid(), type: z.enum(['rne', 'cin', 'bank']) });
-
-// Mirrors profile-documents.ts — the columns hold the STORAGE KEY, not a URL.
-const DOC_COLUMN = {
-  rne: 'registrationDocUrl',
-  cin: 'cinDocUrl',
-  bank: 'bankDocUrl',
-} as const;
+// The two GET routes under /:id/documents share the `:ref` segment (find-my-way allows one
+// param name per position): a legacy type for the compat presign, a document uuid for /url.
+// `bank` rides the same compat path (F6 — the admin bank-details card presigns type=bank).
+const docTypeParamSchema = z.object({ id: z.uuid(), ref: z.enum(['rne', 'cin', 'bank']) });
+const docIdParamSchema = z.object({ id: z.uuid(), ref: z.uuid() });
 // Approve notes are optional (an admin may approve without comment); reject notes are required
 // non-empty (D-G1-4 — a rejection benefits from feedback; the rebuild establishes the contract
 // the dead-Supabase FE lacked, CF-24 class-b).
@@ -32,7 +30,30 @@ const rejectBodySchema = z.object({ notes: z.string().trim().min(1) });
 // The snake_case admin view G2 renders: the /api/me projection (identity + business profile)
 // + created_at + the validation trio. The trio is single-state — it describes the CURRENT
 // status's validation context, not multi-state history (D4 ruled out an action-log).
-const toAdminUserView = (row: User) => ({
+// Document presence per user, read from user_documents (F-docs Commit 1 — the users.*_doc_url
+// columns are frozen). Batch query: the moderation list maps many users in one round-trip.
+const documentsPresenceFor = async (
+  userIds: string[],
+): Promise<Map<string, { registration: boolean; cin: boolean; bank: boolean }>> => {
+  const presence = new Map<string, { registration: boolean; cin: boolean; bank: boolean }>();
+  if (userIds.length === 0) return presence;
+  const rows = await db
+    .select({ userId: userDocuments.userId, category: userDocuments.category })
+    .from(userDocuments)
+    .where(inArray(userDocuments.userId, userIds));
+  for (const row of rows) {
+    const entry = presence.get(row.userId) ?? { registration: false, cin: false, bank: false };
+    if (row.category === 'rne') entry.registration = true;
+    if (row.category === 'cin') entry.cin = true;
+    if (row.category === 'bank') entry.bank = true;
+    presence.set(row.userId, entry);
+  }
+  return presence;
+};
+
+const NO_DOCUMENTS = { registration: false, cin: false, bank: false };
+
+const toAdminUserView = (row: User, documents = NO_DOCUMENTS) => ({
   id: row.id,
   email: row.email,
   email_verified: row.emailVerified,
@@ -59,11 +80,7 @@ const toAdminUserView = (row: User) => ({
   bank_rib: row.bankRib,
   bank_iban: row.bankIban,
   bank_details_updated_at: row.bankDetailsUpdatedAt,
-  documents: {
-    registration: row.registrationDocUrl !== null,
-    cin: row.cinDocUrl !== null,
-    bank: row.bankDocUrl !== null,
-  },
+  documents,
   created_at: row.createdAt,
   validated_by: row.validatedBy,
   validated_at: row.validatedAt,
@@ -118,7 +135,10 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       )
       .orderBy(desc(users.createdAt));
 
-    return reply.status(200).send({ users: rows.map(toAdminUserView) });
+    const presence = await documentsPresenceFor(rows.map((r) => r.id));
+    return reply
+      .status(200)
+      .send({ users: rows.map((r) => toAdminUserView(r, presence.get(r.id) ?? NO_DOCUMENTS)) });
   });
 
   // POST /api/admin/users/:id/approve — status→approved + onboarding_completed→true + the trio
@@ -189,7 +209,10 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       await createMissingScreensForOwner(updated.id);
     }
 
-    return reply.status(200).send({ user: toAdminUserView(updated as User) });
+    const presence = await documentsPresenceFor([id]);
+    return reply
+      .status(200)
+      .send({ user: toAdminUserView(updated as User, presence.get(id) ?? NO_DOCUMENTS) });
   });
 
   // POST /api/admin/users/:id/reject — status→rejected + the trio. onboarding_completed is NOT
@@ -251,15 +274,89 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       .where(eq(users.id, id))
       .returning();
 
-    return reply.status(200).send({ user: toAdminUserView(updated as User) });
+    const presence = await documentsPresenceFor([id]);
+    return reply
+      .status(200)
+      .send({ user: toAdminUserView(updated as User, presence.get(id) ?? NO_DOCUMENTS) });
   });
 
-  // GET /api/admin/users/:id/documents/:type — presign another user's stored document key on
-  // demand (the doc-review the approval decision rests on). Mirrors the self-serve presign
-  // (profile-documents.ts) but keyed by :id. Distinct 404 codes: USER_NOT_FOUND (stale link) vs
-  // DOCUMENT_NOT_UPLOADED (account for a missing doc in review) — G2 branches on the code.
-  app.get('/api/admin/users/:id/documents/:type', adminGuard, async (request, reply) => {
-    const parsed = docParamSchema.safeParse(request.params);
+  // GET /api/admin/users/:id/documents — ALL of a user's documents grouped by category (the
+  // multi-doc review surface, Commit 3). Distinct 404 for a stale link (USER_NOT_FOUND).
+  app.get('/api/admin/users/:id/documents', adminGuard, async (request, reply) => {
+    const parsed = idParamSchema.safeParse(request.params);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        statusCode: 400,
+        requestId: request.id,
+        fields: [{ field: 'id', reason: 'must be a valid uuid' }],
+      });
+    }
+    const { id } = parsed.data;
+    const [target] = await db.select({ id: users.id }).from(users).where(eq(users.id, id)).limit(1);
+    if (!target) {
+      return reply.status(404).send({
+        error: 'USER_NOT_FOUND',
+        message: 'No user with that id.',
+        statusCode: 404,
+        requestId: request.id,
+      });
+    }
+    const rows = await db
+      .select()
+      .from(userDocuments)
+      .where(eq(userDocuments.userId, id))
+      .orderBy(asc(userDocuments.category), asc(userDocuments.position));
+    return reply.status(200).send({ documents: groupedDocuments(rows) });
+  });
+
+  // GET /api/admin/users/:id/documents/:ref/url — presign ONE document (by uuid) of the
+  // reviewed user. The :id scoping is deliberate: a document id alone must not presign
+  // across users from a guessable URL shape.
+  app.get('/api/admin/users/:id/documents/:ref/url', adminGuard, async (request, reply) => {
+    const parsed = docIdParamSchema.safeParse(request.params);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        statusCode: 400,
+        requestId: request.id,
+        fields: parsed.error.issues.map((i) => ({ field: i.path.join('.'), reason: i.message })),
+      });
+    }
+    const { id, ref } = parsed.data;
+    const [row] = await db
+      .select()
+      .from(userDocuments)
+      .where(and(eq(userDocuments.id, ref), eq(userDocuments.userId, id)))
+      .limit(1);
+    if (!row) {
+      return reply.status(404).send({
+        error: 'NOT_FOUND',
+        message: 'No such document for that user.',
+        statusCode: 404,
+        requestId: request.id,
+      });
+    }
+    const result = await storage.getPresignedUrl({ key: row.storageKey });
+    if ('error' in result) {
+      return reply.status(502).send({
+        error: 'STORAGE_ERROR',
+        message: 'Could not generate a document URL. Please retry.',
+        statusCode: 502,
+        requestId: request.id,
+      });
+    }
+    return reply.status(200).send({ url: result.url });
+  });
+
+  // GET /api/admin/users/:id/documents/:ref — COMPAT shim (the pre-reshape admin UI's fixed
+  // rne/cin slots + the F6 bank-doc button — G2 keeps working until Commit 3 lands). Presigns
+  // the category's lowest-position document, now read from user_documents. Distinct 404 codes:
+  // USER_NOT_FOUND (stale link) vs DOCUMENT_NOT_UPLOADED (account for a missing doc in review).
+  app.get('/api/admin/users/:id/documents/:ref', adminGuard, async (request, reply) => {
+    const parsed = docTypeParamSchema.safeParse(request.params);
     if (!parsed.success) {
       return reply.status(400).send({
         error: 'INVALID_INPUT',
@@ -270,17 +367,9 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       });
     }
 
-    const { id, type } = parsed.data;
-    const [row] = await db
-      .select({
-        registrationDocUrl: users.registrationDocUrl,
-        cinDocUrl: users.cinDocUrl,
-        bankDocUrl: users.bankDocUrl,
-      })
-      .from(users)
-      .where(eq(users.id, id))
-      .limit(1);
-    if (!row) {
+    const { id, ref: type } = parsed.data;
+    const [target] = await db.select({ id: users.id }).from(users).where(eq(users.id, id)).limit(1);
+    if (!target) {
       return reply.status(404).send({
         error: 'USER_NOT_FOUND',
         message: 'No user with that id.',
@@ -289,8 +378,13 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       });
     }
 
-    const key = row[DOC_COLUMN[type]];
-    if (!key) {
+    const [row] = await db
+      .select()
+      .from(userDocuments)
+      .where(and(eq(userDocuments.userId, id), eq(userDocuments.category, type)))
+      .orderBy(asc(userDocuments.position))
+      .limit(1);
+    if (!row) {
       return reply.status(404).send({
         error: 'DOCUMENT_NOT_UPLOADED',
         message: `No ${type} document on file for this user.`,
@@ -300,7 +394,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       });
     }
 
-    const result = await storage.getPresignedUrl({ key });
+    const result = await storage.getPresignedUrl({ key: row.storageKey });
     if ('error' in result) {
       return reply.status(502).send({
         error: 'STORAGE_ERROR',
