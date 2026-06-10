@@ -9,7 +9,9 @@ import {
 } from '../src/lib/agent-code.js';
 
 describe('generateAgentCode', () => {
-  it('is AGENT_CODE_LENGTH chars, all from the unambiguous alphabet', () => {
+  it('is exactly 8 digits, all from the numeric alphabet (F2 — "Numéros" ruling)', () => {
+    expect(AGENT_CODE_ALPHABET).toBe('0123456789');
+    expect(AGENT_CODE_LENGTH).toBe(8);
     // Many draws so a bad index/range mistake would surface deterministically.
     for (let i = 0; i < 1000; i += 1) {
       const code = generateAgentCode();
@@ -18,16 +20,33 @@ describe('generateAgentCode', () => {
     }
   });
 
-  it('never emits the dropped symbols I, O, 0, 1 (true by construction — note L is kept)', () => {
-    // The locked alphabet drops I/O/0/1 only, keeping L, to stay at exactly 32 symbols.
-    const blob = Array.from({ length: 2000 }, () => generateAgentCode()).join('');
-    expect(/[IO01]/.test(blob)).toBe(false);
-    expect(AGENT_CODE_ALPHABET).toHaveLength(32);
+  it('preserves leading zeros and can produce 0 and 9 at every position', () => {
+    // 5000 draws: P(any of the 8 positions never shows a given digit) ≈ 16·0.9^5000 ≈ 0 —
+    // a miss here means the per-digit draw is broken, not bad luck. Position 0 producing
+    // '0' is the leading-zero case: the code is a string, so nothing strips it.
+    const codes = Array.from({ length: 5000 }, () => generateAgentCode());
+    for (let pos = 0; pos < 8; pos += 1) {
+      const seen = new Set(codes.map((c) => c.charAt(pos)));
+      expect(seen.has('0')).toBe(true);
+      expect(seen.has('9')).toBe(true);
+    }
+    const leading = codes.find((c) => c.startsWith('0'));
+    expect(leading).toBeDefined();
+    expect(leading).toHaveLength(8);
+  });
+
+  it('every generated code passes the SAME /^\\d{8}$/ the web signup gate enforces', () => {
+    // Contract cross-check with isValidAgentCode in
+    // apps/web/src/features/auth/utils/agent-code.ts (F4 commit 2) — the two must never drift.
+    const WEB_GATE = /^\d{8}$/;
+    for (let i = 0; i < 1000; i += 1) {
+      expect(generateAgentCode()).toMatch(WEB_GATE);
+    }
   });
 });
 
 describe('generateUniqueAgentCode', () => {
-  // RNG uniqueness is probabilistic (32^8 space) and not asserted on raw draws — the loop
+  // RNG uniqueness is probabilistic (10^8 space) and not asserted on raw draws — the loop
   // logic is what we verify deterministically, via an injected `exists` predicate.
   it('returns the first candidate when none collide', async () => {
     let calls = 0;
