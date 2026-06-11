@@ -298,7 +298,7 @@ export default function OwnerPerformance() {
         <OwnerNavigation isDisabled={isDisabled} />
         <div className="flex-1 flex flex-col overflow-hidden">
           <header className="bg-white border-b border-[#EBEBEB]">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
+            <div className="w-full px-4 sm:px-6 lg:px-8 py-3">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h1 className="text-xl font-semibold text-[#171717]">Mes performances</h1>
@@ -322,7 +322,7 @@ export default function OwnerPerformance() {
           </header>
 
           <div className="flex-1 overflow-y-auto">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+            <div className="w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6">
               <div className="rounded-2xl border border-gray-200 bg-white p-5">
                 <div className="mb-5 flex items-center gap-2 text-sm font-semibold text-gray-800">
                   <img src={performanceIntroIcon} alt="" className="h-10 w-10 object-contain" />
