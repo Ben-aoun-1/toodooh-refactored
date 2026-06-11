@@ -15,7 +15,7 @@ interface SaveBankDetailsInput {
 }
 
 interface SaveBankDetailsResult {
-  /** The document path persisted on the profile (new upload or the prior one). */
+  /** Truthy marker that a bank document is on file (new upload's row id or the prior path). */
   bankDocPath: string | null;
 }
 
@@ -23,7 +23,10 @@ interface SaveBankDetailsResult {
  * Persists the owner's bank details — an optional document upload through
  * POST /api/profile/documents/bank, then PATCH /api/profile/bank (QA-fix lane;
  * replaces the dead Supabase `registres` upload + `business_profiles` write,
- * which had no session and no backing columns post auth-migration).
+ * which had no session and no backing columns post auth-migration). F-docs
+ * Commit 2: bank stays SINGLE-SLOT — no position is sent, so the cap-1
+ * category resolves to slot 1 and a re-upload replaces in place; the upload
+ * response is the document row (no storage key on the wire anymore).
  *
  * Caller-side validation (required fields, the 5 MB size limit) stays in the
  * page handler; this mutation owns only the async upload + write.
@@ -33,8 +36,8 @@ async function saveBankDetails(input: SaveBankDetailsInput): Promise<SaveBankDet
 
   let bankDocPath = existingBankDocPath;
   if (bankDocFile) {
-    const { key } = await authService.uploadProfileDocument('bank', bankDocFile);
-    bankDocPath = key;
+    const document = await authService.uploadProfileDocument('bank', bankDocFile);
+    bankDocPath = document.id;
   }
 
   await authService.updateProfileBank({

@@ -3,6 +3,8 @@ import {
   BusinessProfile,
   BusinessSector,
   Governorate,
+  GroupedProfileDocuments,
+  ProfileDocument,
   SignupResponse,
   SupportObjectiveOption,
   SessionUser,
@@ -286,35 +288,74 @@ export const authService = {
     }
   },
 
-  // Phase-1f F5 — document upload (multipart, post-signin). At signup the user is unverified +
-  // logged-out and can't call this requireAuth endpoint, so the upload flow-position moved here.
-  // type ∈ rne|cin|bank (rne/cin by role: advertiser→rne, individual_owner→cin, fleet_owner→rne;
-  // bank = the owner's relevé d'identité bancaire, QA-fix lane). POST overwrites (deterministic
-  // key) → re-upload replaces. request.file() reads the first file (field name is irrelevant).
-  async uploadProfileDocument(
-    type: 'rne' | 'cin' | 'bank',
-    file: File,
-  ): Promise<{ type: string; key: string }> {
-    const form = new FormData();
-    form.append('file', file);
+  // F-docs Commit 2 — the user's documents grouped by category (cin/rne/complementaire/bank),
+  // the multi-document read source. Presence flags in /api/me stay the cheap booleans; this is
+  // the full listing the settings manager renders.
+  async listProfileDocuments(): Promise<GroupedProfileDocuments> {
     try {
-      return await apiClient.postForm<{ type: string; key: string }>(
-        `/profile/documents/${type}`,
-        form,
+      const { documents } = await apiClient.get<{ documents: GroupedProfileDocuments }>(
+        '/profile/documents',
       );
+      return documents;
     } catch (error) {
       throw new Error(apiErrorMessage(error));
     }
   },
 
-  // Phase-1f F5 — presign the stored document ON DEMAND (presigned URLs expire → fetched on view,
-  // never stored). 404 (no document of that type) → null.
-  async getProfileDocumentUrl(type: 'rne' | 'cin' | 'bank'): Promise<string | null> {
+  // Phase-1f F5, reshaped by F-docs Commit 2 — slot upload (multipart, post-signin; at signup
+  // the user is unverified + logged-out and can't call this requireAuth endpoint). `position`
+  // is REQUIRED for cin (1=recto, 2=verso — semantic slots); elsewhere it's omitted and the
+  // server picks the lowest free slot (bank cap-1 → slot 1, re-upload replaces — the F1 flow).
+  // Same-slot re-upload replaces in place. request.file() reads the first file (field name is
+  // irrelevant).
+  async uploadProfileDocument(
+    category: 'rne' | 'cin' | 'complementaire' | 'bank',
+    file: File,
+    position?: number,
+  ): Promise<ProfileDocument> {
+    const form = new FormData();
+    form.append('file', file);
+    const query = position !== undefined ? `?position=${position}` : '';
     try {
-      const { url } = await apiClient.get<{ url: string }>(`/profile/documents/${type}`);
+      const { document } = await apiClient.postForm<{ document: ProfileDocument }>(
+        `/profile/documents/${category}${query}`,
+        form,
+      );
+      return document;
+    } catch (error) {
+      throw new Error(apiErrorMessage(error));
+    }
+  },
+
+  // F-docs Commit 2 — presign ONE document by id ON DEMAND (presigned URLs expire → fetched on
+  // view, never stored). Owner-scoped server-side; a foreign/missing id 404s → null.
+  async getProfileDocumentUrlById(id: string): Promise<string | null> {
+    try {
+      const { url } = await apiClient.get<{ url: string }>(`/profile/documents/${id}/url`);
       return url;
     } catch (error) {
       if (error instanceof ApiError && error.status === 404) return null;
+      throw new Error(apiErrorMessage(error));
+    }
+  },
+
+  // F-docs Commit 2 — category convenience for single-slot views (the bank RIB card): list,
+  // then presign the lowest-position document. None of that category → null.
+  async getProfileDocumentUrlByCategory(
+    category: 'rne' | 'cin' | 'complementaire' | 'bank',
+  ): Promise<string | null> {
+    const documents = await this.listProfileDocuments();
+    const lowest = [...documents[category]].sort((a, b) => a.position - b.position)[0];
+    if (!lowest) return null;
+    return this.getProfileDocumentUrlById(lowest.id);
+  },
+
+  // F-docs Commit 2 — owner-scoped delete. The server sweeps the MinIO object only when the
+  // row owns its key (legacy backfilled objects are never deleted).
+  async deleteProfileDocument(id: string): Promise<void> {
+    try {
+      await apiClient.del(`/profile/documents/${id}`);
+    } catch (error) {
       throw new Error(apiErrorMessage(error));
     }
   },
@@ -350,7 +391,7 @@ export const authService = {
       zone: user.zone ?? undefined,
       // Bank details (QA-fix lane). bank_doc_path carries the deterministic storage key when a
       // bank document exists — consumers (OwnerBankDetailsSlot/OwnerRevenue/OwnerDashboard) gate
-      // on its truthiness; the view presigns on demand via getProfileDocumentUrl('bank').
+      // on its truthiness; the view presigns on demand via getProfileDocumentUrlByCategory('bank').
       bank_account_holder: user.bank_account_holder ?? undefined,
       bank_rib: user.bank_rib ?? undefined,
       bank_iban: user.bank_iban ?? undefined,
@@ -365,7 +406,7 @@ export const authService = {
       updated_at: '',
       is_admin: false,
       // F5 — document presence (direct map of /api/me's booleans). The *_doc_url fields stay
-      // undefined (no stored URL; the view presigns on demand via getProfileDocumentUrl).
+      // undefined (no stored URL; the view presigns on demand via getProfileDocumentUrlByCategory).
       documents: {
         registration: user.documents.registration,
         cin: user.documents.cin,

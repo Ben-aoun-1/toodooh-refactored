@@ -10,6 +10,7 @@ import { useGovernorates } from '@/features/auth/hooks/useGovernorates';
 import { useSectors } from '@/features/auth/hooks/useSectors';
 import { authService } from '@/features/auth/services/auth.service';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
+import ProfileDocumentsManager from '@/features/profile/components/ProfileDocumentsManager';
 import ProfileSettings, {
   type ProfileFormInitialValues,
 } from '@/features/profile/components/ProfileSettings';
@@ -25,7 +26,7 @@ export default function UserProfile() {
   const { profile, loading } = useUserProfile(user?.id);
   const { data: sectors = [] } = useSectors();
   const { data: governorates = [] } = useGovernorates();
-  const { updateContact, updateBusiness, updateAddress, updateNotifications, uploadDocument } =
+  const { updateContact, updateBusiness, updateAddress, updateNotifications, invalidateProfile } =
     useProfileMutations(user?.id);
 
   const isAgencyProfile = profile?.profile_type === 'agency';
@@ -79,7 +80,6 @@ export default function UserProfile() {
       profileLoaded={Boolean(profile)}
       initialValues={initialValues}
       userEmail={user?.email}
-      documentRegistered={Boolean(profile?.documents?.registration)}
       governorates={governorates}
       onSaveContact={(patch) => updateContact.mutateAsync(patch).then(() => undefined)}
       onSaveBusiness={(patch) => updateBusiness.mutateAsync(patch).then(() => undefined)}
@@ -88,16 +88,21 @@ export default function UserProfile() {
       onChangePassword={(currentPassword, newPassword) =>
         authService.updatePasswordWithOld(currentPassword, newPassword).then(() => undefined)
       }
-      onUploadDocument={(file) => uploadDocument.mutateAsync(file).then(() => undefined)}
-      getDocumentUrl={() => authService.getProfileDocumentUrl('rne').then((u) => u ?? null)}
       sector={{
         options: sectorsForAdvertiserProfile(sectors, profile?.business_sector_id ?? ''),
         required: false,
         label: "Secteur d'activité",
         readOnlyValue: isAgencyProfile ? 'Agence de publicité' : undefined,
       }}
-      documentDropTitle="Ajouter votre registre de commerce"
-      documentFileLabel="Registre de commerce"
+      documentsSlot={
+        <ProfileDocumentsManager
+          categories={[
+            { category: 'rne', title: 'Registre de commerce (RNE)' },
+            { category: 'complementaire', title: 'Documents complémentaires' },
+          ]}
+          onChanged={() => void invalidateProfile()}
+        />
+      }
       fields={{ companySize: true, numberOfScreens: false, numberOfRooms: false, zone: false }}
       copy={{
         remindersText: 'Recevez des rappels pour vos événements, échéances et rendez-vous à venir.',
