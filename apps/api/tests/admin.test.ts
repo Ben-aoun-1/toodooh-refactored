@@ -131,6 +131,40 @@ describe('admin endpoints (real Postgres)', () => {
       expect(roles).toContain('advertiser'); // the lone approved end-user still shows
     });
 
+    it('projection carries bank details + documents.bank (F6 — admin user-info view)', async () => {
+      const withBank = await seedUser({
+        status: 'pending',
+        bankAccountHolder: 'Café Central SARL',
+        bankRib: '12345678901234567890',
+        bankIban: 'TN5912345678901234567890',
+        bankDocUrl: 'bank/seeded',
+        bankDetailsUpdatedAt: new Date('2026-06-01T00:00:00Z'),
+      });
+      const body = (await list('pending')).json<{
+        users: {
+          id: string;
+          bank_account_holder: string | null;
+          bank_rib: string | null;
+          bank_iban: string | null;
+          bank_details_updated_at: string | null;
+          documents: { registration: boolean; cin: boolean; bank: boolean };
+        }[];
+      }>();
+      const row = body.users.find((u) => u.id === withBank);
+      expect(row?.bank_account_holder).toBe('Café Central SARL');
+      expect(row?.bank_rib).toBe('12345678901234567890');
+      expect(row?.bank_iban).toBe('TN5912345678901234567890');
+      expect(new Date(row?.bank_details_updated_at ?? '').toISOString()).toBe(
+        '2026-06-01T00:00:00.000Z',
+      );
+      expect(row?.documents).toEqual({ registration: false, cin: false, bank: true });
+      // A user without bank details serializes null/false — no server-side coalescing.
+      const bare = body.users.find((u) => u.id !== withBank);
+      expect(bare?.bank_account_holder).toBeNull();
+      expect(bare?.bank_details_updated_at).toBeNull();
+      expect(bare?.documents.bank).toBe(false);
+    });
+
     it('missing status → 400', async () => {
       const res = await app.inject({ method: 'GET', url: '/api/admin/users' });
       expect(res.statusCode).toBe(400);
@@ -288,14 +322,20 @@ describe('admin endpoints (real Postgres)', () => {
     const getDoc = (id: string, type: string) =>
       app.inject({ method: 'GET', url: `/api/admin/users/${id}/documents/${type}` });
 
-    const seedDoc = async (type: 'rne' | 'cin'): Promise<string> => {
+    const seedDoc = async (type: 'rne' | 'cin' | 'bank'): Promise<string> => {
       const target = await seedUser({ status: 'pending' });
       const key = `${type}/${target}`;
       await storage.upload({ key, body: pdf, contentType: 'application/pdf' });
       uploadedKeys.push(key);
       await db
         .update(users)
-        .set(type === 'rne' ? { registrationDocUrl: key } : { cinDocUrl: key })
+        .set(
+          type === 'rne'
+            ? { registrationDocUrl: key }
+            : type === 'cin'
+              ? { cinDocUrl: key }
+              : { bankDocUrl: key },
+        )
         .where(eq(users.id, target));
       return target;
     };
@@ -317,6 +357,12 @@ describe('admin endpoints (real Postgres)', () => {
       expect((await getDoc(target, 'cin')).statusCode).toBe(200);
     });
 
+    it('bank → 200 { url } (F6 — admin bank-details review)', async () => {
+      const target = await seedDoc('bank');
+      mockSession(adminId);
+      expect((await getDoc(target, 'bank')).statusCode).toBe(200);
+    });
+
     it('null key → 404 DOCUMENT_NOT_UPLOADED', async () => {
       const target = await seedUser({ status: 'pending' });
       mockSession(adminId);
@@ -325,6 +371,16 @@ describe('admin endpoints (real Postgres)', () => {
       const body = res.json<{ error: string; documentType: string }>();
       expect(body.error).toBe('DOCUMENT_NOT_UPLOADED');
       expect(body.documentType).toBe('cin');
+    });
+
+    it('bank with no document on file → 404 DOCUMENT_NOT_UPLOADED', async () => {
+      const target = await seedUser({ status: 'pending' });
+      mockSession(adminId);
+      const res = await getDoc(target, 'bank');
+      expect(res.statusCode).toBe(404);
+      const body = res.json<{ error: string; documentType: string }>();
+      expect(body.error).toBe('DOCUMENT_NOT_UPLOADED');
+      expect(body.documentType).toBe('bank');
     });
 
     it('unknown user → 404 USER_NOT_FOUND', async () => {

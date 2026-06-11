@@ -15,7 +15,14 @@ const adminGuard = { preHandler: [requireAuth, requireAdmin] };
 
 const listQuerySchema = z.object({ status: z.enum(['pending', 'approved', 'rejected']) });
 const idParamSchema = z.object({ id: z.uuid() });
-const docParamSchema = z.object({ id: z.uuid(), type: z.enum(['rne', 'cin']) });
+const docParamSchema = z.object({ id: z.uuid(), type: z.enum(['rne', 'cin', 'bank']) });
+
+// Mirrors profile-documents.ts — the columns hold the STORAGE KEY, not a URL.
+const DOC_COLUMN = {
+  rne: 'registrationDocUrl',
+  cin: 'cinDocUrl',
+  bank: 'bankDocUrl',
+} as const;
 // Approve notes are optional (an admin may approve without comment); reject notes are required
 // non-empty (D-G1-4 — a rejection benefits from feedback; the rebuild establishes the contract
 // the dead-Supabase FE lacked, CF-24 class-b).
@@ -46,9 +53,16 @@ const toAdminUserView = (row: User) => ({
   governorate_id: row.governorateId,
   zone: row.zone,
   agent_code: row.agentCode,
+  // F6 (Kais QA 2026-06-11): the admin user-info view shows a screenhost's bank details —
+  // snake_case mirroring the /api/me projection, not the camelCase PATCH /api/profile/bank body.
+  bank_account_holder: row.bankAccountHolder,
+  bank_rib: row.bankRib,
+  bank_iban: row.bankIban,
+  bank_details_updated_at: row.bankDetailsUpdatedAt,
   documents: {
     registration: row.registrationDocUrl !== null,
     cin: row.cinDocUrl !== null,
+    bank: row.bankDocUrl !== null,
   },
   created_at: row.createdAt,
   validated_by: row.validatedBy,
@@ -261,6 +275,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       .select({
         registrationDocUrl: users.registrationDocUrl,
         cinDocUrl: users.cinDocUrl,
+        bankDocUrl: users.bankDocUrl,
       })
       .from(users)
       .where(eq(users.id, id))
@@ -274,7 +289,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       });
     }
 
-    const key = type === 'rne' ? row.registrationDocUrl : row.cinDocUrl;
+    const key = row[DOC_COLUMN[type]];
     if (!key) {
       return reply.status(404).send({
         error: 'DOCUMENT_NOT_UPLOADED',
