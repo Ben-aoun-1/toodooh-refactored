@@ -35,10 +35,11 @@ describe('generateAgentCode', () => {
     expect(leading).toHaveLength(8);
   });
 
-  it('every generated code passes the SAME /^\\d{8}$/ the web signup gate enforces', () => {
+  it('every generated code passes the SAME /^\\d{1,16}$/ the web signup gate enforces', () => {
     // Contract cross-check with isValidAgentCode in
-    // apps/web/src/features/auth/utils/agent-code.ts (F4 commit 2) — the two must never drift.
-    const WEB_GATE = /^\d{8}$/;
+    // apps/web/src/features/auth/utils/agent-code.ts (loosened by F5, Kais QA ruling
+    // 2026-06-11: numeric without fixed length) — the two must never drift.
+    const WEB_GATE = /^\d{1,16}$/;
     for (let i = 0; i < 1000; i += 1) {
       expect(generateAgentCode()).toMatch(WEB_GATE);
     }

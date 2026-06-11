@@ -5,8 +5,9 @@ import { randomInt } from 'node:crypto';
 // (no type prefix — the agent TYPE is implied by the owner's role). The draw must stay
 // unbiased and 256 is NOT a multiple of 10, so `byte % 10` is out (it would favor 0-5);
 // node:crypto randomInt rejection-samples internally, giving each digit a perfectly uniform
-// draw. node:crypto only — no new dep. The web signup gate enforces the matching /^\d{8}$/
-// (apps/web/src/features/auth/utils/agent-code.ts).
+// draw. node:crypto only — no new dep. The web signup gate accepts any 1–16-digit code
+// (apps/web/src/features/auth/utils/agent-code.ts, loosened by the F5 2026-06-11 ruling);
+// generation stays at 8 digits regardless.
 export const AGENT_CODE_ALPHABET = '0123456789';
 export const AGENT_CODE_LENGTH = 8;
 

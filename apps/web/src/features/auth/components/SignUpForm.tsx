@@ -187,8 +187,8 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
   const [taxNumberError, setTaxNumberError] = useState<string | null>(null);
   // C5: postal-code FORMAT error (the API rejects non-^\d{4}$ at submit; gate it per step).
   const [postalCodeError, setPostalCodeError] = useState<string | null>(null);
-  // F4: agent-code FORMAT error ("Numéros" ruling — exactly 8 digits). Format only: resolution
-  // stays server-side (unmatched codes are accepted and stored unlinked).
+  // F5: agent-code FORMAT error (Kais QA ruling 2026-06-11 — numeric, no fixed length). Format
+  // only: resolution stays server-side (unmatched codes are accepted and stored unlinked).
   const [agentCodeError, setAgentCodeError] = useState<string | null>(null);
   const [confirmPassword, setConfirmPassword] = useState('');
   const [formData, setFormData] = useState<Partial<SignUpData>>({
@@ -842,7 +842,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
               )
             }
             className={inputClass}
-            placeholder="- - - - - - - -"
+            placeholder="Votre code agent"
           />
           {agentCodeError && <p className="text-xs text-red-600 mt-1">{agentCodeError}</p>}
         </div>
