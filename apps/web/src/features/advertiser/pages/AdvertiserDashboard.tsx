@@ -1,4 +1,3 @@
-
 import BalanceCard from '@/features/advertiser/components/dashboard/BalanceCard';
 import FeaturedEventsGrid from '@/features/advertiser/components/dashboard/FeaturedEventsGrid';
 import GettingStartedSection from '@/features/advertiser/components/dashboard/GettingStartedSection';
@@ -15,15 +14,19 @@ export default function AdvertiserDashboard() {
   const needsApproval = useAuthStore((s) => s.needsApproval);
   const validationStatus = useAuthStore((s) => s.validationStatus);
 
-  const { stats, availableBalanceTnd, totalCreatedCampaignsCount, loading: loadingStats } =
-    useDashboardStats(user?.id);
+  const {
+    stats,
+    availableBalanceTnd,
+    totalCreatedCampaignsCount,
+    loading: loadingStats,
+  } = useDashboardStats(user?.id);
   const { campaigns: lastCampaigns, loading: loadingLastCampaigns } = useLastCampaigns(user?.id, 5);
   const { profile } = useUserProfile(user?.id);
 
   const isDisabled = Boolean(needsApproval && validationStatus === 'pending');
-  const hasRegistrationDocument = Boolean(
-    profile?.registration_doc_path || profile?.registration_doc_url,
-  );
+  // F5 (Kais QA 2026-06-11): read /api/me's documents boolean — the legacy registration_doc_*
+  // fields are never set by the bridge, which kept the getting-started block permanently visible.
+  const hasRegistrationDocument = Boolean(profile?.documents?.registration);
   const canRechargeAccount =
     !isDisabled && validationStatus === 'approved' && profile?.is_active !== false;
   const canLaunchCampaign = !isDisabled && validationStatus === 'approved';

@@ -26,6 +26,11 @@ import { useOwnerCampaignApprovals } from '@/features/campaigns/hooks/useOwnerCa
 import AddScreen from '@/features/screenhost/components/AddScreen';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
 import OwnerNotificationsBell from '@/features/screenhost/components/OwnerNotificationsBell';
+import {
+  hasOwnerBankDetails,
+  hasOwnerLegalDocument,
+  hideOwnerGettingStarted,
+} from '@/features/screenhost/utils/ownerGettingStarted';
 import { useScreens } from '@/features/screens/hooks/useScreens';
 import type { Screen } from '@/features/screens/services/screens.service';
 import { walletKeys } from '@/features/wallet/hooks/queryKeys';
@@ -314,18 +319,11 @@ export default function OwnerDashboard() {
     if (ownerNotifications.length === 0) return null;
     return [...ownerNotifications].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
   }, [ownerNotifications]);
-  const hasOwnerLegalDocument = Boolean(
-    profile?.cin_doc_url || profile?.registration_doc_path || profile?.registration_doc_url,
-  );
-  const hasOwnerBankDetails = Boolean(
-    profile?.bank_account_holder &&
-    profile?.bank_rib &&
-    profile?.bank_iban &&
-    (profile?.bank_doc_path || profile?.bank_doc_url),
-  );
-  const isOwnerAccountActive = validationStatus === 'approved' && profile?.is_active !== false;
-  const hideOwnerGettingStartedBlock =
-    hasOwnerLegalDocument && hasOwnerBankDetails && isOwnerAccountActive;
+  // F5 (Kais QA 2026-06-11): gating extracted to utils/ownerGettingStarted — the legal-document
+  // check now reads /api/me's documents booleans (the legacy *_doc_url fields are never set).
+  const hasLegalDocument = hasOwnerLegalDocument(profile);
+  const hasBankDetails = hasOwnerBankDetails(profile);
+  const hideOwnerGettingStartedBlock = hideOwnerGettingStarted(profile, validationStatus);
 
   if (accountLoading) {
     return (
@@ -681,7 +679,7 @@ export default function OwnerDashboard() {
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                     <div className="rounded-2xl border border-[#E4E7EC] bg-white p-5 flex items-start gap-4">
-                      {hasOwnerLegalDocument ? (
+                      {hasLegalDocument ? (
                         <div className="w-10 h-10 rounded-full bg-[#60BA76] flex items-center justify-center flex-shrink-0">
                           <CheckCircle className="h-5 w-5 text-white" />
                         </div>
@@ -698,20 +696,20 @@ export default function OwnerDashboard() {
                         <button
                           type="button"
                           onClick={() => navigate('/owner-settings?tab=entreprise&sub=documents')}
-                          disabled={hasOwnerLegalDocument}
+                          disabled={hasLegalDocument}
                           className={`mt-4 inline-flex items-center justify-center px-5 py-2 rounded-xl text-sm font-medium transition-colors ${
-                            hasOwnerLegalDocument
+                            hasLegalDocument
                               ? 'bg-[#F2F4F7] text-[#98A2B3] cursor-not-allowed'
                               : 'bg-white border border-[#D0D5DD] text-[#344054] hover:bg-gray-50'
                           }`}
                         >
-                          {hasOwnerLegalDocument ? 'OK' : 'Upload'}
+                          {hasLegalDocument ? 'OK' : 'Upload'}
                         </button>
                       </div>
                     </div>
 
                     <div className="rounded-2xl border border-[#E4E7EC] bg-white p-5 flex items-start gap-4">
-                      {hasOwnerBankDetails ? (
+                      {hasBankDetails ? (
                         <div className="w-10 h-10 rounded-full bg-[#60BA76] flex items-center justify-center flex-shrink-0">
                           <CheckCircle className="h-5 w-5 text-white" />
                         </div>
@@ -732,14 +730,14 @@ export default function OwnerDashboard() {
                           onClick={() =>
                             navigate('/owner-settings?tab=entreprise&sub=coordonnees-bancaires')
                           }
-                          disabled={hasOwnerBankDetails}
+                          disabled={hasBankDetails}
                           className={`mt-4 inline-flex items-center justify-center px-5 py-2 rounded-xl text-sm font-medium transition-colors ${
-                            hasOwnerBankDetails
+                            hasBankDetails
                               ? 'bg-[#F2F4F7] text-[#98A2B3] cursor-not-allowed'
                               : 'bg-white border border-[#D0D5DD] text-[#344054] hover:bg-gray-50'
                           }`}
                         >
-                          {hasOwnerBankDetails ? 'OK' : 'Ajouter'}
+                          {hasBankDetails ? 'OK' : 'Ajouter'}
                         </button>
                       </div>
                     </div>
