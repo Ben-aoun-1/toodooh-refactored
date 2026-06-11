@@ -139,6 +139,13 @@ function parseFleetScreenCount(v: string): number {
   return Number.isNaN(n) ? 0 : n;
 }
 
+// F6 — a manually-typed coordinate string → a finite number, or undefined when blank/invalid
+// (so an empty field is omitted from the payload rather than sent as NaN).
+function parseCoord(v: string): number | undefined {
+  const f = Number.parseFloat(v);
+  return v.trim() && Number.isFinite(f) ? f : undefined;
+}
+
 export default function SignUpForm({ currentStep, onStepChange, onProfileTypeChange }: Props) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -167,12 +174,18 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
   const [fleetDraftCity, setFleetDraftCity] = useState('');
   const [fleetDraftZone, setFleetDraftZone] = useState('');
   const [fleetDraftGovernorate, setFleetDraftGovernorate] = useState('');
-  // F4 — optional screenhost WiFi per fleet establishment (carried into the FleetRow on add).
-  // Coordinates are NOT captured at signup: they come from the TV app at first login.
+  // F6 — optional screenhost geo + WiFi per fleet establishment (carried into the FleetRow on add).
+  // Dual-source ruling (2026-06-11): signup MAY capture coordinates; the TV's first-login GPS
+  // fills only screenhosts whose lat/lng are still NULL, so signup-provided values win.
+  const [fleetDraftLatitude, setFleetDraftLatitude] = useState('');
+  const [fleetDraftLongitude, setFleetDraftLongitude] = useState('');
   const [fleetDraftWifiSsid, setFleetDraftWifiSsid] = useState('');
   const [fleetDraftWifiPassword, setFleetDraftWifiPassword] = useState('');
   const [fleetMenuOpenId, setFleetMenuOpenId] = useState<string | null>(null);
-  // F4 — optional screenhost WiFi for the individual owner's single location (attached at submit).
+  // F6 — optional screenhost geo + WiFi for the individual owner's single location (attached at
+  // submit). Dual-source ruling (2026-06-11): see the fleet-draft note above.
+  const [ownerLatitude, setOwnerLatitude] = useState('');
+  const [ownerLongitude, setOwnerLongitude] = useState('');
   const [ownerWifiSsid, setOwnerWifiSsid] = useState('');
   const [ownerWifiPassword, setOwnerWifiPassword] = useState('');
   const [companyLogo, setCompanyLogo] = useState<File | null>(null);
@@ -259,6 +272,8 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
       setFleetDraftCity('');
       setFleetDraftZone('');
       setFleetDraftGovernorate('');
+      setFleetDraftLatitude('');
+      setFleetDraftLongitude('');
       setFleetDraftWifiSsid('');
       setFleetDraftWifiPassword('');
       setFleetMenuOpenId(null);
@@ -501,6 +516,24 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
     );
   };
 
+  // F6 — "Utiliser ma position": prefill the lat/lng inputs from the browser. Manual entry stays the
+  // baseline (geolocation needs HTTPS + user consent), so a denial/absence just keeps the fields empty.
+  const fillLocation = (setLat: (v: string) => void, setLng: (v: string) => void) => {
+    if (!('geolocation' in navigator)) {
+      toast.error("La géolocalisation n'est pas disponible sur cet appareil");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLat(pos.coords.latitude.toFixed(6));
+        setLng(pos.coords.longitude.toFixed(6));
+        toast.success('Position détectée');
+      },
+      () => toast.error("Impossible d'obtenir votre position. Saisissez-la manuellement."),
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  };
+
   const addFleetEstablishment = () => {
     if (!isFleetDraftValid()) {
       toast.error('Veuillez remplir tous les champs obligatoires');
@@ -517,7 +550,9 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
       city: fleetDraftCity,
       zone: fleetDraftZone.trim(),
       governorate_id: fleetDraftGovernorate,
-      // F4 — optional WiFi ("add later"); omitted when blank. No coordinates at signup.
+      // F6 — optional geo + WiFi ("add later"); omitted when blank (dual-source ruling 2026-06-11).
+      latitude: parseCoord(fleetDraftLatitude),
+      longitude: parseCoord(fleetDraftLongitude),
       wifi_ssid: fleetDraftWifiSsid.trim() || undefined,
       wifi_password: fleetDraftWifiPassword.trim() || undefined,
     };
@@ -529,6 +564,8 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
     setFleetDraftCity('');
     setFleetDraftZone('');
     setFleetDraftGovernorate('');
+    setFleetDraftLatitude('');
+    setFleetDraftLongitude('');
     setFleetDraftWifiSsid('');
     setFleetDraftWifiPassword('');
     toast.success('Établissement ajouté au réseau');
@@ -565,9 +602,14 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
         registration_doc: !isOwner ? documentFile || undefined : undefined,
         company_logo: companyLogo || undefined,
         bank_doc: isOwner && !addBankLater ? bankDocFile || undefined : undefined,
-        // F4 — individual_owner's single screenhost WiFi (optional). The service omits any blank
-        // field; the endpoint only consumes these for the individual_owner role. Coordinates are
-        // never sent from signup — the TV app provides them at first login.
+        // F6 — individual_owner's single screenhost location/WiFi (optional). The service omits any
+        // blank field; the endpoint only consumes these for the individual_owner role. Dual-source
+        // ruling (2026-06-11): signup MAY send coordinates; the TV's first-login GPS fills only
+        // screenhosts whose lat/lng are still NULL, so values captured here win.
+        latitude:
+          selectedProfileType === 'individual_owner' ? parseCoord(ownerLatitude) : undefined,
+        longitude:
+          selectedProfileType === 'individual_owner' ? parseCoord(ownerLongitude) : undefined,
         wifi_ssid:
           selectedProfileType === 'individual_owner'
             ? ownerWifiSsid.trim() || undefined
@@ -1642,8 +1684,12 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             ))}
           </select>
         </div>
-        {renderWifiFields({
+        {renderLocationWifiFields({
           idPrefix: 'fleet-draft',
+          lat: fleetDraftLatitude,
+          setLat: setFleetDraftLatitude,
+          lng: fleetDraftLongitude,
+          setLng: setFleetDraftLongitude,
           ssid: fleetDraftWifiSsid,
           setSsid: setFleetDraftWifiSsid,
           pw: fleetDraftWifiPassword,
@@ -1772,11 +1818,16 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
     </div>
   );
 
-  /* ═══════ Screenhost WiFi capture (F4) — shared by the individual-owner address step and each
-     fleet-establishment draft. Optional — nothing blocks submission. Coordinates are NOT captured
-     here: the TV app reports the screen's position at first login (TV-GPS ruling, 2026-06-10). ═══════ */
-  const renderWifiFields = (opts: {
+  /* ═══════ Screenhost geo + WiFi capture (F6) — shared by the individual-owner address step and
+     each fleet-establishment draft. Manual lat/lng is the baseline (works on HTTP); "Utiliser ma
+     position" only prefills. Everything here is optional — nothing blocks submission. Dual-source
+     ruling (2026-06-11): the TV's first-login GPS fills only NULL coordinates, so these win. ═══════ */
+  const renderLocationWifiFields = (opts: {
     idPrefix: string;
+    lat: string;
+    setLat: (v: string) => void;
+    lng: string;
+    setLng: (v: string) => void;
     ssid: string;
     setSsid: (v: string) => void;
     pw: string;
@@ -1784,12 +1835,52 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
   }) => (
     <div className="rounded-2xl border border-gray-200 bg-gray-50 p-5 space-y-4">
       <div>
-        <p className="text-sm font-semibold text-gray-900">WiFi de l&apos;écran</p>
+        <p className="text-sm font-semibold text-gray-900">Position et WiFi de l&apos;écran</p>
         <p className="text-xs text-gray-500 mt-1">
           Optionnel — cela aide nos techniciens à installer votre écran. Vous pourrez l&apos;ajouter
           ou le modifier plus tard depuis votre profil.
         </p>
       </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div>
+          <label className={labelClass} htmlFor={`${opts.idPrefix}-lat`}>
+            Latitude
+          </label>
+          <input
+            type="number"
+            inputMode="decimal"
+            step="any"
+            value={opts.lat}
+            onChange={(e) => opts.setLat(e.target.value)}
+            className={inputClass}
+            placeholder="36.8065"
+            id={`${opts.idPrefix}-lat`}
+          />
+        </div>
+        <div>
+          <label className={labelClass} htmlFor={`${opts.idPrefix}-lng`}>
+            Longitude
+          </label>
+          <input
+            type="number"
+            inputMode="decimal"
+            step="any"
+            value={opts.lng}
+            onChange={(e) => opts.setLng(e.target.value)}
+            className={inputClass}
+            placeholder="10.1815"
+            id={`${opts.idPrefix}-lng`}
+          />
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={() => fillLocation(opts.setLat, opts.setLng)}
+        className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors"
+      >
+        <MapPin className="w-4 h-4" />
+        Utiliser ma position
+      </button>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         <div>
           <label className={labelClass} htmlFor={`${opts.idPrefix}-wifi-ssid`}>
@@ -1925,8 +2016,12 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
         </div>
         {selectedProfileType === 'individual_owner' && (
           <div className="md:col-span-2">
-            {renderWifiFields({
+            {renderLocationWifiFields({
               idPrefix: 'owner',
+              lat: ownerLatitude,
+              setLat: setOwnerLatitude,
+              lng: ownerLongitude,
+              setLng: setOwnerLongitude,
               ssid: ownerWifiSsid,
               setSsid: setOwnerWifiSsid,
               pw: ownerWifiPassword,
