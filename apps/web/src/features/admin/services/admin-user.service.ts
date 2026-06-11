@@ -28,7 +28,13 @@ export interface AdminUser {
   postal_code: string;
   zone?: string | null;
   agent_code?: string | null;
-  documents: { registration: boolean; cin: boolean };
+  // F6 (Kais QA 2026-06-11): bank details for the admin user-info view. Kept null when absent —
+  // the modal renders its own "Non fourni" fallback; no 'N/A' coalescing here.
+  bank_account_holder: string | null;
+  bank_rib: string | null;
+  bank_iban: string | null;
+  bank_details_updated_at: string | null;
+  documents: { registration: boolean; cin: boolean; bank: boolean };
   created_at: string;
   validated_by: string | null;
   validated_at: string | null;
@@ -59,7 +65,11 @@ interface AdminUserWire {
   city: string | null;
   postal_code: string | null;
   agent_code: string | null;
-  documents: { registration: boolean; cin: boolean };
+  bank_account_holder: string | null;
+  bank_rib: string | null;
+  bank_iban: string | null;
+  bank_details_updated_at: string | null;
+  documents: { registration: boolean; cin: boolean; bank: boolean };
   created_at: string;
   validated_by: string | null;
   validated_at: string | null;
@@ -86,6 +96,10 @@ const mapUser = (w: AdminUserWire): AdminUser => ({
   city: w.city ?? 'N/A',
   postal_code: w.postal_code ?? 'N/A',
   agent_code: w.agent_code,
+  bank_account_holder: w.bank_account_holder,
+  bank_rib: w.bank_rib,
+  bank_iban: w.bank_iban,
+  bank_details_updated_at: w.bank_details_updated_at,
   documents: w.documents,
   created_at: w.created_at,
   validated_by: w.validated_by,
@@ -116,7 +130,7 @@ export const adminUserService = {
 
   // Presign-on-demand for an end-user's stored document (the admin doc-review the approval rests on).
   // Throws ApiError with code USER_NOT_FOUND or DOCUMENT_NOT_UPLOADED on the distinct 404s.
-  async getDocumentUrl(id: string, type: 'rne' | 'cin'): Promise<string> {
+  async getDocumentUrl(id: string, type: 'rne' | 'cin' | 'bank'): Promise<string> {
     const { url } = await apiClient.get<{ url: string }>(`/admin/users/${id}/documents/${type}`);
     return url;
   },

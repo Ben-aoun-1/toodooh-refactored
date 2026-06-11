@@ -16,6 +16,7 @@ import {
   FileText,
   AlertCircle,
   Trash2,
+  CreditCard,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
@@ -148,7 +149,7 @@ export default function UserManagement() {
   };
 
   // Presign-on-demand: fetch a fresh signed URL for the user's document and open it (G2 D-G2-1).
-  const handleViewDocument = async (id: string, type: 'rne' | 'cin') => {
+  const handleViewDocument = async (id: string, type: 'rne' | 'cin' | 'bank') => {
     try {
       const url = await adminUserService.getDocumentUrl(id, type);
       window.open(url, '_blank', 'noopener,noreferrer');
@@ -730,6 +731,53 @@ export default function UserManagement() {
                             )}
                           </div>
                         </div>
+
+                        {/* Coordonnées bancaires (propriétaires) — lecture seule (F6) */}
+                        {isOwnerProfile(selectedUser.profile_type) && (
+                          <div className="bg-gray-50 p-4 rounded-lg">
+                            <h4 className="font-semibold text-gray-900 mb-3 flex items-center">
+                              <CreditCard className="h-5 w-5 mr-2 text-brand-primary" />
+                              Coordonnées bancaires
+                            </h4>
+                            <div className="space-y-2 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">Titulaire du compte:</span>
+                                <span className="font-medium text-gray-900">
+                                  {selectedUser.bank_account_holder || 'Non fourni'}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">RIB:</span>
+                                <span className="font-medium text-gray-900">
+                                  {selectedUser.bank_rib || 'Non fourni'}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">IBAN:</span>
+                                <span className="font-medium text-gray-900">
+                                  {selectedUser.bank_iban || 'Non fourni'}
+                                </span>
+                              </div>
+                              {selectedUser.documents.bank ? (
+                                <div className="flex justify-between items-center pt-2 border-t border-gray-200 mt-2">
+                                  <span className="text-gray-600">Relevé d'identité bancaire:</span>
+                                  <button
+                                    onClick={() => handleViewDocument(selectedUser.id, 'bank')}
+                                    className="flex items-center text-brand-primary hover:text-brand-primary/90 font-medium transition-colors"
+                                  >
+                                    <FileText className="h-4 w-4 mr-1" />
+                                    Voir le document
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex justify-between items-center pt-2 border-t border-gray-200 mt-2">
+                                  <span className="text-gray-600">Relevé d'identité bancaire:</span>
+                                  <span className="text-xs text-gray-500">Non fourni</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       {/* Colonne droite */}
