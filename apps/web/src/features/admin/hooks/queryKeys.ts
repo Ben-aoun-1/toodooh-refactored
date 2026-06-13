@@ -34,6 +34,8 @@ export const adminKeys = {
 
   /** End-user list for UserManagement (`adminUserService.getUsers`). */
   users: () => [...adminKeys.all, 'users'] as const,
+  /** One user's grouped documents for the review modal (`adminUserService.getUserDocuments`). */
+  userDocuments: (id: string) => [...adminKeys.all, 'userDocuments', id] as const,
   /** Admin-account list for AdminManagement (`adminService.getAdmins`). */
   admins: () => [...adminKeys.all, 'admins'] as const,
 

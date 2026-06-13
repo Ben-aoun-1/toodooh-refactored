@@ -4,12 +4,13 @@ export type UserStatus = 'pending' | 'approved' | 'rejected';
 export type AdminProfileType = 'individual_owner' | 'fleet_owner' | 'advertiser' | 'agency';
 
 // The admin view of an end-user, repointed onto GET /api/admin/users (Phase-1g G2). Shape mirrors
-// the backend `toAdminUserView` (the /api/me projection + created_at + the validation trio +
-// document presence). The dual-identity collapse means there is one `id` (no separate user_id).
-// Document keys are not exposed — presence booleans drive the UI, and the URL is presigned on
-// demand via getDocumentUrl. Fields the backend does not model (cin number, number_of_screens,
-// formule, verification_status) are intentionally absent — the UI null-guards them ("Non fourni"),
-// it does not invent data (audit §17.1 functional reductions; G2 D-G2-2).
+// the backend `toAdminUserView` (the /api/me projection + created_at + the validation trio). The
+// dual-identity collapse means there is one `id` (no separate user_id). Documents are NOT carried
+// here — F-docs Commit 3 moved the review surface onto the per-category grouped endpoint
+// (getUserDocuments), presigned by uuid on demand (getDocumentUrlById). Fields the backend does not
+// model (cin number, number_of_screens, formule, verification_status) are intentionally absent —
+// the UI null-guards them ("Non fourni"), it does not invent data (audit §17.1 functional
+// reductions; G2 D-G2-2).
 export interface AdminUser {
   id: string;
   email: string;
@@ -34,7 +35,6 @@ export interface AdminUser {
   bank_rib: string | null;
   bank_iban: string | null;
   bank_details_updated_at: string | null;
-  documents: { registration: boolean; cin: boolean; bank: boolean };
   created_at: string;
   validated_by: string | null;
   validated_at: string | null;
@@ -69,11 +69,36 @@ interface AdminUserWire {
   bank_rib: string | null;
   bank_iban: string | null;
   bank_details_updated_at: string | null;
-  documents: { registration: boolean; cin: boolean; bank: boolean };
   created_at: string;
   validated_by: string | null;
   validated_at: string | null;
   validation_notes: string | null;
+}
+
+// One stored document in the multi-document model (F-docs Commit 3) — mirrors the server's
+// `docView` projection (apps/api lib/user-documents.ts). `position` is semantic for cin (1=recto,
+// 2=verso); for the other categories it is just upload order. Storage keys are never exposed —
+// the URL is presigned by id on demand.
+export interface AdminDocumentView {
+  id: string;
+  category: DocumentCategory;
+  position: number;
+  original_filename: string;
+  mime_type: string;
+  size_bytes: number;
+  uploaded_at: string;
+}
+
+export type DocumentCategory = 'cin' | 'rne' | 'complementaire' | 'bank';
+
+// The admin review surface's grouped read — mirrors the server `groupedDocuments` shape (every
+// category present, possibly empty). Caps are server-enforced (cin/rne 2, complémentaire 10,
+// bank 1); the UI reads the arrays as-is.
+export interface GroupedAdminDocuments {
+  cin: AdminDocumentView[];
+  rne: AdminDocumentView[];
+  complementaire: AdminDocumentView[];
+  bank: AdminDocumentView[];
 }
 
 // Coalesce the nullable display fields so the page's filter (`.toLowerCase()`) + the table render
@@ -100,7 +125,6 @@ const mapUser = (w: AdminUserWire): AdminUser => ({
   bank_rib: w.bank_rib,
   bank_iban: w.bank_iban,
   bank_details_updated_at: w.bank_details_updated_at,
-  documents: w.documents,
   created_at: w.created_at,
   validated_by: w.validated_by,
   validated_at: w.validated_at,
@@ -128,10 +152,22 @@ export const adminUserService = {
     await apiClient.post(`/admin/users/${id}/reject`, { notes });
   },
 
-  // Presign-on-demand for an end-user's stored document (the admin doc-review the approval rests on).
-  // Throws ApiError with code USER_NOT_FOUND or DOCUMENT_NOT_UPLOADED on the distinct 404s.
-  async getDocumentUrl(id: string, type: 'rne' | 'cin' | 'bank'): Promise<string> {
-    const { url } = await apiClient.get<{ url: string }>(`/admin/users/${id}/documents/${type}`);
+  // All of a user's documents, grouped by category (the multi-doc review surface — F-docs Commit 3).
+  // Throws ApiError with code USER_NOT_FOUND on a stale link.
+  async getUserDocuments(id: string): Promise<GroupedAdminDocuments> {
+    const { documents } = await apiClient.get<{ documents: GroupedAdminDocuments }>(
+      `/admin/users/${id}/documents`,
+    );
+    return documents;
+  },
+
+  // Presign ONE document by its uuid (the :id-scoped route). Deliberately NOT the legacy
+  // /documents/:ref category shim, which collapses to the category's lowest position and would
+  // lose recto-vs-verso for cin. Throws ApiError (NOT_FOUND / STORAGE_ERROR) on failure.
+  async getDocumentUrlById(userId: string, docId: string): Promise<string> {
+    const { url } = await apiClient.get<{ url: string }>(
+      `/admin/users/${userId}/documents/${docId}/url`,
+    );
     return url;
   },
 };

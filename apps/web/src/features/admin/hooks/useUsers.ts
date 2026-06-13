@@ -1,8 +1,9 @@
-import { useMutation, useQueries, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
   adminUserService,
   type AdminUser,
+  type GroupedAdminDocuments,
   type UserStatus,
 } from '@/features/admin/services/admin-user.service';
 
@@ -25,6 +26,22 @@ export function useUsers(): { users: AdminUser[]; loading: boolean; isError: boo
     loading: results.some((r) => r.isLoading),
     isError: results.some((r) => r.isError),
   };
+}
+
+// The reviewed user's documents, grouped by category, for the details modal. Disabled until a user
+// is selected (userId null → no fetch); presigning a single document is a separate imperative call
+// (getDocumentUrlById) the page makes on the "Voir" click, not server state.
+export function useUserDocuments(userId: string | null): {
+  documents: GroupedAdminDocuments | undefined;
+  loading: boolean;
+  isError: boolean;
+} {
+  const query = useQuery({
+    queryKey: adminKeys.userDocuments(userId ?? 'none'),
+    queryFn: () => adminUserService.getUserDocuments(userId as string),
+    enabled: userId !== null,
+  });
+  return { documents: query.data, loading: query.isLoading, isError: query.isError };
 }
 
 interface ApproveInput {
