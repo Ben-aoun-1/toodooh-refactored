@@ -1,15 +1,12 @@
 import { FileText } from 'lucide-react';
 
+import { cinSlots } from '@/features/admin/lib/cin-slots';
 import type { AdminDocumentView } from '@/features/admin/services/admin-user.service';
 
 // F-docs Commit 3 — one category's slice of the admin grouped-document review. CIN is rendered as
 // two SEMANTIC slots (1=recto, 2=verso) so a missing side is visible; rne / complémentaire / bank
 // are flat lists (server-capped at 2 / 10 / 1). Each present document presigns by id on the "Voir"
 // click (getDocumentUrlById) — never the legacy category shim, which would lose recto-vs-verso.
-const CIN_SLOTS: ReadonlyArray<{ position: number; label: string }> = [
-  { position: 1, label: 'Recto' },
-  { position: 2, label: 'Verso' },
-];
 
 interface UserDocumentReviewGroupProps {
   /** Section label, e.g. "Document CIN" / "Registre de commerce" / "Documents complémentaires". */
@@ -90,23 +87,20 @@ export default function UserDocumentReviewGroup({
   if (cin) {
     return (
       <>
-        {CIN_SLOTS.map(({ position, label: slotLabel }, index) => {
-          const doc = docs.find((d) => d.position === position);
-          return (
-            <Row
-              key={position}
-              rowLabel={`${label} — ${slotLabel}`}
-              first={index === 0}
-              topBorder={topBorder}
-            >
-              {doc ? (
-                <ViewButton docId={doc.id} onView={onView} />
-              ) : (
-                <span className="text-xs text-gray-500">Non fourni</span>
-              )}
-            </Row>
-          );
-        })}
+        {cinSlots(docs).map(({ position, label: slotLabel, doc }, index) => (
+          <Row
+            key={position}
+            rowLabel={`${label} — ${slotLabel}`}
+            first={index === 0}
+            topBorder={topBorder}
+          >
+            {doc ? (
+              <ViewButton docId={doc.id} onView={onView} />
+            ) : (
+              <span className="text-xs text-gray-500">Non fourni</span>
+            )}
+          </Row>
+        ))}
       </>
     );
   }
