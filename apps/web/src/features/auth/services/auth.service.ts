@@ -122,6 +122,23 @@ export const authService = {
     }
   },
 
+  // Kais QA3 — the wizard's step-2 matricule-fiscal pre-check, mirroring checkEmailAvailability.
+  // Asks the rate-limited endpoint whether the tax number is already registered so a duplicate
+  // surfaces BEFORE the last step (Kais: "contrôle avant la dernière étape") instead of only as a
+  // transient toast at submit. `null` (429/network) fails OPEN — the signup submit's 409 stays the
+  // server-side authority on the UNIQUE collision.
+  async checkTaxAvailability(taxNumber: string): Promise<boolean | null> {
+    try {
+      const { available } = await apiClient.post<{ available: boolean }>(
+        '/signup/tax-availability',
+        { tax_number: taxNumber },
+      );
+      return available;
+    } catch {
+      return null;
+    }
+  },
+
   async logout() {
     try {
       await apiClient.post('/signout');

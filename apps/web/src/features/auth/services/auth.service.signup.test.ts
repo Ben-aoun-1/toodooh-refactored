@@ -229,3 +229,22 @@ describe('authService.checkEmailAvailability → POST /signup/email-availability
     await expect(authService.checkEmailAvailability('a@b.c')).resolves.toBeNull();
   });
 });
+
+describe('authService.checkTaxAvailability → POST /signup/tax-availability (Kais QA3)', () => {
+  beforeEach(() => post.mockReset());
+
+  it('returns the endpoint verdict', async () => {
+    post.mockResolvedValue({ available: false });
+    await expect(authService.checkTaxAvailability('MATRIC123')).resolves.toBe(false);
+    expect(post).toHaveBeenCalledWith('/signup/tax-availability', { tax_number: 'MATRIC123' });
+    post.mockResolvedValue({ available: true });
+    await expect(authService.checkTaxAvailability('FREE456A')).resolves.toBe(true);
+  });
+
+  it('fails OPEN (null) on rate-limit or network errors — submit stays the authority', async () => {
+    post.mockRejectedValueOnce(new ApiError({ status: 429, code: 'RATE_LIMITED', message: '' }));
+    await expect(authService.checkTaxAvailability('MATRIC123')).resolves.toBeNull();
+    post.mockRejectedValueOnce(new ApiError({ status: 0, code: 'NETWORK', message: '' }));
+    await expect(authService.checkTaxAvailability('MATRIC123')).resolves.toBeNull();
+  });
+});
