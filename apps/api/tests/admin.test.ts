@@ -4,7 +4,8 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 
 import { auth } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
-import { type NewUser, userDocuments, users } from '../src/db/schema.js';
+import { type NewUser, screenhosts, userDocuments, users } from '../src/db/schema.js';
+import { encryptWifiPassword } from '../src/lib/wifi-crypto.js';
 import { adminRoutes } from '../src/routes/admin.js';
 import { storage } from '../src/storage/s3-storage.js';
 
@@ -166,6 +167,43 @@ describe('admin endpoints (real Postgres)', () => {
       expect(bare?.bank_account_holder).toBeNull();
       expect(bare?.bank_details_updated_at).toBeNull();
       expect(bare?.documents.bank).toBe(false);
+    });
+
+    it('projection carries the owner’s screenhosts with wifi_password_set, never the password', async () => {
+      const owner = await seedUser({ status: 'pending', role: 'individual_owner' });
+      await db.insert(screenhosts).values([
+        {
+          name: 'Café A',
+          ownerId: owner,
+          wifiSsid: 'NET-A',
+          wifiPasswordEncrypted: encryptWifiPassword('secret-a'),
+        },
+        { name: 'Café B', ownerId: owner, wifiSsid: null, wifiPasswordEncrypted: null },
+      ]);
+      const body = (await list('pending')).json<{
+        users: {
+          id: string;
+          screenhosts: {
+            id: string;
+            name: string;
+            wifi_ssid: string | null;
+            wifi_password_set: boolean;
+          }[];
+        }[];
+      }>();
+      const row = body.users.find((u) => u.id === owner);
+      expect(row?.screenhosts).toHaveLength(2);
+      const a = row?.screenhosts.find((s) => s.name === 'Café A');
+      const b = row?.screenhosts.find((s) => s.name === 'Café B');
+      expect(a).toMatchObject({ wifi_ssid: 'NET-A', wifi_password_set: true });
+      expect(b).toMatchObject({ wifi_ssid: null, wifi_password_set: false });
+      // The cipher/plaintext must never reach the wire — the view exposes only the presence flag.
+      expect(Object.keys(a ?? {}).sort()).toEqual(['id', 'name', 'wifi_password_set', 'wifi_ssid']);
+      expect(JSON.stringify(row)).not.toContain('secret-a');
+      expect(JSON.stringify(row)).not.toContain('wifiPasswordEncrypted');
+      // A user with no screenhosts serializes an empty array.
+      const bare = body.users.find((u) => u.id !== owner);
+      expect(bare?.screenhosts).toEqual([]);
     });
 
     it('missing status → 400', async () => {

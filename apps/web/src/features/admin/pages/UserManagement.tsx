@@ -17,12 +17,14 @@ import {
   AlertCircle,
   Trash2,
   CreditCard,
+  Wifi,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { useLocation } from 'react-router-dom';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
+import AdminUserWifiSlot from '@/features/admin/components/AdminUserWifiSlot';
 import UserDocumentReviewGroup from '@/features/admin/components/UserDocumentReviewGroup';
 import { adminKeys } from '@/features/admin/hooks/queryKeys';
 import { useUserDocuments, useUserMutations, useUsers } from '@/features/admin/hooks/useUsers';
@@ -747,6 +749,22 @@ export default function UserManagement() {
                                 onView={(docId) => handleViewDocument(selectedUser.id, docId)}
                               />
                             </div>
+                          </div>
+                        )}
+
+                        {/* WiFi du lieu (propriétaires) — éditable, write-only (PATCH admin) */}
+                        {isOwnerProfile(selectedUser.profile_type) && (
+                          <div className="bg-gray-50 p-4 rounded-lg">
+                            <h4 className="font-semibold text-gray-900 mb-3 flex items-center">
+                              <Wifi className="h-5 w-5 mr-2 text-brand-primary" />
+                              WiFi du lieu
+                            </h4>
+                            <AdminUserWifiSlot
+                              screenhosts={
+                                users.find((u) => u.id === selectedUser.id)?.screenhosts ??
+                                selectedUser.screenhosts
+                              }
+                            />
                           </div>
                         )}
                       </div>

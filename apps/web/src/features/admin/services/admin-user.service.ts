@@ -1,3 +1,4 @@
+import type { ScreenhostWifi } from '@/features/screenhost/services/screenhost.service';
 import { apiClient } from '@/lib/api-client';
 
 export type UserStatus = 'pending' | 'approved' | 'rejected';
@@ -35,6 +36,9 @@ export interface AdminUser {
   bank_rib: string | null;
   bank_iban: string | null;
   bank_details_updated_at: string | null;
+  // The owner's screenhosts (WiFi-redacted) — drives the admin "WiFi du lieu" editor. [] for
+  // non-owners. The password is never carried; only wifi_password_set.
+  screenhosts: ScreenhostWifi[];
   created_at: string;
   validated_by: string | null;
   validated_at: string | null;
@@ -69,6 +73,7 @@ interface AdminUserWire {
   bank_rib: string | null;
   bank_iban: string | null;
   bank_details_updated_at: string | null;
+  screenhosts: ScreenhostWifi[];
   created_at: string;
   validated_by: string | null;
   validated_at: string | null;
@@ -125,6 +130,7 @@ const mapUser = (w: AdminUserWire): AdminUser => ({
   bank_rib: w.bank_rib,
   bank_iban: w.bank_iban,
   bank_details_updated_at: w.bank_details_updated_at,
+  screenhosts: w.screenhosts ?? [],
   created_at: w.created_at,
   validated_by: w.validated_by,
   validated_at: w.validated_at,

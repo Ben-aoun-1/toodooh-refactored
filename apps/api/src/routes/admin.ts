@@ -3,7 +3,7 @@ import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import { db } from '../db/client.js';
-import { type User, userDocuments, users } from '../db/schema.js';
+import { type User, screenhosts, userDocuments, users } from '../db/schema.js';
 import { toProfileType } from '../lib/profile-type.js';
 import { OWNER_ROLES, createMissingScreensForOwner } from '../lib/screens.js';
 import { groupedDocuments } from '../lib/user-documents.js';
@@ -54,7 +54,54 @@ const documentsPresenceFor = async (
 
 const NO_DOCUMENTS = { registration: false, cin: false, bank: false };
 
-const toAdminUserView = (row: User, documents = NO_DOCUMENTS) => ({
+// A screenhost's WiFi state for the admin user-info view. The password is WRITE-ONLY: only its
+// presence (wifi_password_set) ever crosses the wire — the cipher/plaintext never does (parallel
+// to routes/screenhosts.ts wifiView; the editable counterpart is PATCH /api/admin/screenhosts/:id/wifi).
+interface ScreenhostWifiView {
+  id: string;
+  name: string;
+  wifi_ssid: string | null;
+  wifi_password_set: boolean;
+}
+
+const NO_SCREENHOSTS: ScreenhostWifiView[] = [];
+
+// Batch-load each user's screenhosts (WiFi-redacted), grouped by owner id — one round-trip for the
+// moderation list, mirroring documentsPresenceFor. Selects only what the view needs; the encrypted
+// password is read solely to derive the boolean and is never returned.
+const screenhostsFor = async (userIds: string[]): Promise<Map<string, ScreenhostWifiView[]>> => {
+  const byOwner = new Map<string, ScreenhostWifiView[]>();
+  if (userIds.length === 0) return byOwner;
+  const rows = await db
+    .select({
+      id: screenhosts.id,
+      name: screenhosts.name,
+      ownerId: screenhosts.ownerId,
+      wifiSsid: screenhosts.wifiSsid,
+      wifiPasswordEncrypted: screenhosts.wifiPasswordEncrypted,
+    })
+    .from(screenhosts)
+    .where(inArray(screenhosts.ownerId, userIds))
+    .orderBy(asc(screenhosts.name));
+  for (const row of rows) {
+    if (row.ownerId === null) continue;
+    const list = byOwner.get(row.ownerId) ?? [];
+    list.push({
+      id: row.id,
+      name: row.name,
+      wifi_ssid: row.wifiSsid,
+      wifi_password_set: row.wifiPasswordEncrypted !== null,
+    });
+    byOwner.set(row.ownerId, list);
+  }
+  return byOwner;
+};
+
+const toAdminUserView = (
+  row: User,
+  documents = NO_DOCUMENTS,
+  screenhostsView: ScreenhostWifiView[] = NO_SCREENHOSTS,
+) => ({
   id: row.id,
   email: row.email,
   email_verified: row.emailVerified,
@@ -82,6 +129,8 @@ const toAdminUserView = (row: User, documents = NO_DOCUMENTS) => ({
   bank_iban: row.bankIban,
   bank_details_updated_at: row.bankDetailsUpdatedAt,
   documents,
+  // The owner's screenhosts (WiFi-redacted) for the admin "WiFi du lieu" editor. [] for non-owners.
+  screenhosts: screenhostsView,
   created_at: row.createdAt,
   validated_by: row.validatedBy,
   validated_at: row.validatedAt,
@@ -136,10 +185,14 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       )
       .orderBy(desc(users.createdAt));
 
-    const presence = await documentsPresenceFor(rows.map((r) => r.id));
-    return reply
-      .status(200)
-      .send({ users: rows.map((r) => toAdminUserView(r, presence.get(r.id) ?? NO_DOCUMENTS)) });
+    const userIds = rows.map((r) => r.id);
+    const presence = await documentsPresenceFor(userIds);
+    const screenhostsByOwner = await screenhostsFor(userIds);
+    return reply.status(200).send({
+      users: rows.map((r) =>
+        toAdminUserView(r, presence.get(r.id) ?? NO_DOCUMENTS, screenhostsByOwner.get(r.id) ?? []),
+      ),
+    });
   });
 
   // POST /api/admin/users/:id/approve — status→approved + onboarding_completed→true + the trio
