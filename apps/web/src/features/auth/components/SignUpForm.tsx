@@ -391,6 +391,27 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
     return available;
   };
 
+  // Kais QA3 — matricule-fiscal availability, mirroring checkEmailAvailable. The verdict mirrors
+  // into taxNumberError (the same state the inline <p> + canGoNext already consume), cached per
+  // value so blur + Suivant don't double-spend the 10/min limit. `null` (429/network) fails OPEN.
+  const TAX_TAKEN_ERROR = 'Ce matricule fiscal est déjà enregistré. Utilisez-en un autre.';
+  const lastTaxAvailability = useRef<{ taxNumber: string; available: boolean } | null>(null);
+
+  const checkTaxAvailable = async (): Promise<boolean> => {
+    const taxNumber = String(formData.tax_number || '').trim();
+    if (!taxNumber || !isValidTaxNumber(taxNumber)) return true; // the format gate owns these
+    let available: boolean | null;
+    if (lastTaxAvailability.current?.taxNumber === taxNumber) {
+      available = lastTaxAvailability.current.available;
+    } else {
+      available = await authService.checkTaxAvailability(taxNumber);
+      if (available === null) return true; // unknown → don't block; server decides at submit
+      lastTaxAvailability.current = { taxNumber, available };
+    }
+    setTaxNumberError(available ? null : TAX_TAKEN_ERROR);
+    return available;
+  };
+
   /* ── navigation helpers ── */
   const canGoNext = () => {
     switch (currentStep) {
@@ -419,6 +440,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             etablissementName.trim() &&
             formData.tax_number?.trim() &&
             isValidTaxNumber(String(formData.tax_number || '')) &&
+            !taxNumberError &&
             formData.business_sector_id &&
             etablissementScreens &&
             etablissementRooms.trim(),
@@ -428,6 +450,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
           formData.business_name?.trim() &&
           formData.tax_number?.trim() &&
           isValidTaxNumber(String(formData.tax_number || '')) &&
+          !taxNumberError &&
           (selectedProfileType === 'agency' ? true : formData.business_sector_id) &&
           formData.company_size &&
           formData.street_address?.trim() &&
@@ -473,6 +496,14 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
       }
       onStepChange(currentStep + 1);
       return;
+    }
+    if (currentStep === 2) {
+      // Kais QA3 — surface a duplicate matricule BEFORE the last step (mirror step 1's email gate).
+      // Format is already enforced by canGoNext; this adds the availability layer.
+      if (!(await checkTaxAvailable())) {
+        toast.error(TAX_TAKEN_ERROR);
+        return;
+      }
     }
     if (selectedProfileType === 'individual_owner' && currentStep === 2) {
       const screensNum =

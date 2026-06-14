@@ -14,6 +14,7 @@ import { referenceRoutes } from './reference.js';
 import { screensRoutes } from './screens.js';
 import { signinRoutes } from './signin.js';
 import { signupRoute } from './signup.js';
+import { taxAvailabilityRoute } from './tax-availability.js';
 
 // Aggregates all application-shaped /api/* routes. Future routes
 // (/api/admin/users) register here.
@@ -22,6 +23,10 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   // Public, rate-limited signup-wizard email pre-check (QA-fix lane) — the limiter is
   // registered inside the plugin, so it scopes to that route only.
   await app.register(emailAvailabilityRoute);
+  // Public, rate-limited signup-wizard matricule-fiscal pre-check (Kais QA3) — same
+  // encapsulated-limiter pattern; lets the wizard surface a duplicate tax number before the
+  // last step instead of as a transient toast at submit.
+  await app.register(taxAvailabilityRoute);
   await app.register(signinRoutes);
   // MAP M1 — TV-app opaque-token auth, namespaced /api/device/auth/* (better-auth owns /api/auth).
   await app.register(deviceAuthRoutes);
