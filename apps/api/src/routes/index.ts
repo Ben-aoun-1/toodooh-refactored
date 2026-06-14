@@ -5,6 +5,7 @@ import { adminRoutes } from './admin.js';
 import { agentRoutes } from './agent.js';
 import { deviceAuthRoutes } from './device-auth.js';
 import { emailAvailabilityRoute } from './email-availability.js';
+import { internalRoutes } from './internal.js';
 import { meRoutes } from './me.js';
 import { passwordRoutes } from './password.js';
 import { predefinedZonesRoutes } from './predefined-zones.js';
@@ -39,6 +40,9 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   await app.register(adminRoutes);
   // Superadmin-only internal-account creation (staff admins + agents) — slice-2 A.
   await app.register(adminAccountsRoutes);
+  // S-T1 — service-authenticated toodooh↔wedooh sync surface (/api/internal/*): B1 locations read,
+  // C1 affluence ingest, Edge A agent provisioning. Guarded by WEDOOH_SYNC_KEY; 503 when unset.
+  await app.register(internalRoutes);
   // (CF-19 P0) agent establishment-write routes removed — agents do NOT create places. The
   // screenhosts table (replaces establishments) is scaffolding only — no write path, read
   // endpoint, or signup capture yet (P2/P3).
