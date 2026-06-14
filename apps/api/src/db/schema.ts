@@ -8,6 +8,7 @@ import {
   numeric,
   pgEnum,
   pgTable,
+  smallint,
   text,
   timestamp,
   uniqueIndex,
@@ -82,16 +83,17 @@ export const users = pgTable(
     }),
     // free-text zone/secteur (owner address sub-form) — NOT a predefined_zones FK (CF-23 §2.1)
     zone: text('zone'),
-    registrationDocUrl: text('registration_doc_url'), // RNE — Commit 4 upload
-    cinDocUrl: text('cin_doc_url'), // CIN — Commit 4 upload
+    // FROZEN (F-docs Commit 1): single-slot doc keys superseded by user_documents (backfilled
+    // by migration 0013). No readers or writers remain; the columns drop in a later cleanup.
+    registrationDocUrl: text('registration_doc_url'), // RNE — frozen legacy slot
+    cinDocUrl: text('cin_doc_url'), // CIN — frozen legacy slot
     // ── bank details (QA-fix lane) — owner payout coordinates, migrated off the dead
     // Supabase business_profiles surface. Free text, nullable: RIB/IBAN format is not
     // constrained here (product ruling pending — route validates required-only).
     bankAccountHolder: text('bank_account_holder'),
     bankRib: text('bank_rib'),
     bankIban: text('bank_iban'),
-    // STORAGE KEY (`bank/<userId>`), not a URL — same convention (and same cosmetic
-    // misnomer) as registration_doc_url/cin_doc_url.
+    // FROZEN (F-docs Commit 1) — same legacy single-slot convention as the two above.
     bankDocUrl: text('bank_doc_url'),
     // Server-stamped on each PATCH /api/profile/bank (money-adjacent audit marker).
     bankDetailsUpdatedAt: timestamp('bank_details_updated_at', { withTimezone: true }),
@@ -457,3 +459,49 @@ export const screens = pgTable(
 
 export type Screen = typeof screens.$inferSelect;
 export type NewScreen = typeof screens.$inferInsert;
+
+// ── multi-document model (F-docs Commit 1) ────────────────────────────────────────────
+// One row per uploaded document, replacing the single-slot users.*_doc_url columns as the
+// READ source. Categories: cin (2 named slots — 1=recto, 2=verso), rne (≤2),
+// complementaire (≤10), bank (≤1). Caps are enforced at the route (category-dependent —
+// not expressible as a simple CHECK). storage_key holds the MinIO KEY (same bucket):
+// new uploads use `<category>/<userId>/<rowId>`; backfilled rows keep the legacy
+// `<type>/<userId>` keys verbatim (objects never move). The legacy users columns are
+// FROZEN (no writers; dropped in a later cleanup once nothing reads them).
+// original_filename/mime_type/size_bytes are nullable: backfilled rows don't know them.
+export const documentCategory = pgEnum('document_category', [
+  'cin',
+  'rne',
+  'complementaire',
+  'bank',
+]);
+
+export const userDocuments = pgTable(
+  'user_documents',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    category: documentCategory('category').notNull(),
+    position: smallint('position').notNull(),
+    storageKey: text('storage_key').notNull(),
+    originalFilename: text('original_filename'),
+    mimeType: text('mime_type'),
+    sizeBytes: integer('size_bytes'),
+    uploadedAt: timestamp('uploaded_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    // One document per slot — same-slot re-upload REPLACES (route updates the row in place).
+    uniqueIndex('user_documents_user_category_position_uq').on(
+      table.userId,
+      table.category,
+      table.position,
+    ),
+    index('user_documents_user_id_idx').on(table.userId),
+    check('user_documents_position_min', sql`${table.position} >= 1`),
+  ],
+);
+
+export type UserDocument = typeof userDocuments.$inferSelect;
+export type NewUserDocument = typeof userDocuments.$inferInsert;

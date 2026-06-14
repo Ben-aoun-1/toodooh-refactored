@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 
 import { db } from '../db/client.js';
-import { users } from '../db/schema.js';
+import { userDocuments, users } from '../db/schema.js';
 import { toProfileType } from '../lib/profile-type.js';
 import { requireAuth } from '../middleware/require-auth.js';
 
@@ -39,12 +39,9 @@ export const meRoutes: FastifyPluginAsync = async (app) => {
         postalCode: users.postalCode,
         governorateId: users.governorateId,
         zone: users.zone,
-        registrationDocUrl: users.registrationDocUrl,
-        cinDocUrl: users.cinDocUrl,
         bankAccountHolder: users.bankAccountHolder,
         bankRib: users.bankRib,
         bankIban: users.bankIban,
-        bankDocUrl: users.bankDocUrl,
         notifyNewsUpdates: users.notifyNewsUpdates,
         notifyRemindersEvents: users.notifyRemindersEvents,
         notifyPromotionsOffers: users.notifyPromotionsOffers,
@@ -55,6 +52,14 @@ export const meRoutes: FastifyPluginAsync = async (app) => {
     if (!row) {
       return reply.status(500).send({ error: 'INTERNAL_ERROR', message: 'Account lookup failed.' });
     }
+    // Document presence now reads user_documents (F-docs Commit 1) — the users.*_doc_url
+    // columns are frozen. The wire shape stays the legacy booleans (the FE store consumes
+    // them); the full grouped listing lives at GET /api/profile/documents.
+    const docRows = await db
+      .select({ category: userDocuments.category })
+      .from(userDocuments)
+      .where(eq(userDocuments.userId, userId));
+    const has = (c: 'cin' | 'rne' | 'bank') => docRows.some((d) => d.category === c);
     return reply.status(200).send({
       user: {
         id: row.id,
@@ -80,9 +85,9 @@ export const meRoutes: FastifyPluginAsync = async (app) => {
         bank_rib: row.bankRib,
         bank_iban: row.bankIban,
         documents: {
-          registration: row.registrationDocUrl !== null,
-          cin: row.cinDocUrl !== null,
-          bank: row.bankDocUrl !== null,
+          registration: has('rne'),
+          cin: has('cin'),
+          bank: has('bank'),
         },
         notifications: {
           news_updates: row.notifyNewsUpdates,

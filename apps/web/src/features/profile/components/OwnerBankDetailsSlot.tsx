@@ -76,7 +76,7 @@ export default function OwnerBankDetailsSlot({ profile, userId }: OwnerBankDetai
     }
     if (profile.bank_doc_path) {
       try {
-        const url = await authService.getProfileDocumentUrl('bank');
+        const url = await authService.getProfileDocumentUrlByCategory('bank');
         if (!url) throw new Error('Document bancaire introuvable');
         window.open(url, '_blank', 'noopener,noreferrer');
       } catch (err: unknown) {

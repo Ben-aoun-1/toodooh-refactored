@@ -6,9 +6,11 @@ import { useGovernorates } from '@/features/auth/hooks/useGovernorates';
 import { useOwnerBusinessSectors } from '@/features/auth/hooks/useOwnerBusinessSectors';
 import { useOwnerProfileMutations } from '@/features/auth/hooks/useOwnerProfileMutations';
 import { useSectors } from '@/features/auth/hooks/useSectors';
-import { authService } from '@/features/auth/services/auth.service';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import OwnerBankDetailsSlot from '@/features/profile/components/OwnerBankDetailsSlot';
+import ProfileDocumentsManager, {
+  type DocumentCategoryConfig,
+} from '@/features/profile/components/ProfileDocumentsManager';
 import ProfileSettings, {
   type ProfileFormInitialValues,
 } from '@/features/profile/components/ProfileSettings';
@@ -96,9 +98,14 @@ export default function OwnerSettings() {
     );
   }
 
-  const documentRegistered = isIndividualOwner
-    ? !!profile.documents?.cin
-    : !!profile.documents?.registration;
+  // F-docs Commit 2 — the owner's identity/registry category by type (individual → CIN
+  // recto/verso, fleet → RNE), plus the shared complémentaires group. Bank keeps its slot.
+  const documentCategories: DocumentCategoryConfig[] = [
+    isIndividualOwner
+      ? { category: 'cin', title: "Carte d'identité nationale (CIN)" }
+      : { category: 'rne', title: 'Registre de commerce (RNE)' },
+    { category: 'complementaire', title: 'Documents complémentaires' },
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -118,7 +125,6 @@ export default function OwnerSettings() {
               profileLoaded
               initialValues={initialValues}
               userEmail={user?.email}
-              documentRegistered={documentRegistered}
               governorates={governorates}
               onSaveContact={(patch) =>
                 profileMutations.updateContact.mutateAsync(patch).then(() => undefined)
@@ -137,24 +143,13 @@ export default function OwnerSettings() {
                   .mutateAsync({ currentPassword, newPassword })
                   .then(() => undefined)
               }
-              onUploadDocument={(file) =>
-                profileMutations.uploadDocument
-                  .mutateAsync({ file, isIndividualOwner })
-                  .then(() => undefined)
-              }
-              getDocumentUrl={() =>
-                authService
-                  .getProfileDocumentUrl(isIndividualOwner ? 'cin' : 'rne')
-                  .then((u) => u ?? null)
-              }
               sector={{ options: ownerSectorOptions, required: true, label: 'Catégorie' }}
-              documentMaxBytes={5 * 1024 * 1024}
-              documentDropTitle={
-                isIndividualOwner
-                  ? 'Ajouter votre CIN ou pièce d’identité'
-                  : 'Ajouter votre registre de commerce'
+              documentsSlot={
+                <ProfileDocumentsManager
+                  categories={documentCategories}
+                  onChanged={() => void profileMutations.invalidateProfile()}
+                />
               }
-              documentFileLabel="Document enregistré"
               fields={{
                 companySize: isFleetOwner,
                 numberOfScreens: true,

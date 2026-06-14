@@ -12,12 +12,6 @@ interface UpdatePasswordInput {
   newPassword: string;
 }
 
-interface DocumentInput {
-  file: File;
-  /** Individual owners store a CIN; fleet owners store an RNE registration document. */
-  isIndividualOwner: boolean;
-}
-
 /**
  * Step 10 — write mutations for the owner's `business_profiles` row, used by
  * `OwnerSettings` (Commit 5c1).
@@ -25,8 +19,11 @@ interface DocumentInput {
  * Phase-1f F7b — the generic `updateProfile` mutation + `uploadLogo` +
  * `removeDocument` + `deactivateAccount` mutations were removed (the
  * D-F4-4 / D-F5-3 / D-F7-2 defers wired). The section-scoped saves + the
- * password-change + document-upload + `updateBusinessProfile` (kept for the
- * wallet's later-slice bank-details edit) remain.
+ * password-change + `updateBusinessProfile` (kept for the wallet's
+ * later-slice bank-details edit) remain; the F5 single-slot `uploadDocument`
+ * moved to `ProfileDocumentsManager`'s slot mutations (F-docs Commit 2) —
+ * `invalidateProfile` is exported so the manager's writes can refresh the
+ * /api/me-backed profile (its booleans flip).
  */
 export function useOwnerProfileMutations(userId: string | undefined) {
   const queryClient = useQueryClient();
@@ -71,14 +68,6 @@ export function useOwnerProfileMutations(userId: string | undefined) {
       authService.updatePasswordWithOld(currentPassword, newPassword),
   });
 
-  // Phase-1f F5 — individual owners upload a CIN (→ /documents/cin), fleet owners an RNE
-  // (→ /documents/rne). Multipart, post-signin; onSuccess refetches /api/me → documents.* flips.
-  const uploadDocument = useMutation({
-    mutationFn: ({ file, isIndividualOwner }: DocumentInput) =>
-      authService.uploadProfileDocument(isIndividualOwner ? 'cin' : 'rne', file),
-    onSuccess: invalidateProfile,
-  });
-
   return {
     updateContact,
     updateBusiness,
@@ -86,6 +75,6 @@ export function useOwnerProfileMutations(userId: string | undefined) {
     updateNotifications,
     updateBusinessProfile,
     updatePasswordWithOld,
-    uploadDocument,
+    invalidateProfile,
   };
 }

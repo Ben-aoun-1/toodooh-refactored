@@ -5,7 +5,6 @@ import {
   Building2,
   MapPin,
   Bell,
-  Upload,
   User,
   Lock,
   Trash2,
@@ -81,8 +80,6 @@ interface ProfileSettingsProps {
   profileLoaded: boolean;
   initialValues: ProfileFormInitialValues | null;
   userEmail: string | null | undefined;
-  /** `profile.documents?.registration` — shows the saved-document card. */
-  documentRegistered: boolean;
   governorates: { id: string; name: string }[];
 
   // Section saves — normalized callbacks (wrapper wires its own mutation/service).
@@ -91,8 +88,6 @@ interface ProfileSettingsProps {
   onSaveAddress: (patch: AddressPatch) => Promise<void>;
   onSaveNotifications: (patch: NotificationsPatch) => Promise<void>;
   onChangePassword: (currentPassword: string, newPassword: string) => Promise<void>;
-  onUploadDocument: (file: File) => Promise<void>;
-  getDocumentUrl: () => Promise<string | null>;
 
   // Entreprise config (injected, not derived).
   sector: {
@@ -102,12 +97,12 @@ interface ProfileSettingsProps {
     /** When set, the sector is shown read-only with this value (advertiser agency case). */
     readOnlyValue?: string;
   };
-  /** Max upload size in bytes; undefined → no client-side limit (advertiser). */
-  documentMaxBytes?: number;
-  /** Dashed-dropzone title (advertiser: registre; owner B4b: CIN/registre by type). */
-  documentDropTitle: string;
-  /** Saved-document card display name. */
-  documentFileLabel: string;
+  /**
+   * "Documents légaux" sub-tab content (F-docs Commit 2) — the role's
+   * `ProfileDocumentsManager`, injected like `bankSlot` so this component
+   * stays decoupled from the per-role category sets.
+   */
+  documentsSlot: ReactNode;
   /** Which optional Entreprise fields render for this role. */
   fields: {
     companySize: boolean;
@@ -169,12 +164,6 @@ const CITIES = [
   'Zaghouan',
 ];
 
-function formatFileSize(bytes: number) {
-  if (bytes < 1024) return `${bytes} o`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 /**
  * Shared profile/settings tabbed content for the advertiser (`/profile`) and
  * screenhost (`/owner-settings`) pages. Renders the inner tabs only — layout
@@ -192,19 +181,14 @@ export default function ProfileSettings({
   profileLoaded,
   initialValues,
   userEmail,
-  documentRegistered,
   governorates,
   onSaveContact,
   onSaveBusiness,
   onSaveAddress,
   onSaveNotifications,
   onChangePassword,
-  onUploadDocument,
-  getDocumentUrl,
   sector,
-  documentMaxBytes,
-  documentDropTitle,
-  documentFileLabel,
+  documentsSlot,
   fields,
   copy,
   bankSlot,
@@ -247,9 +231,6 @@ export default function ProfileSettings({
     notify_reminders_events: true,
     notify_promotions_offers: false,
   });
-
-  const [documentFile, setDocumentFile] = useState<File | null>(null);
-  const [uploadingDocument, setUploadingDocument] = useState(false);
 
   const entrepriseSubItems: { id: EntrepriseSubId; label: string; icon: React.ReactNode }[] = [
     {
@@ -435,46 +416,6 @@ export default function ProfileSettings({
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (err) {
       toast.error(getErrorMessage(err) || 'Erreur lors de la mise à jour du mot de passe');
-    }
-  };
-
-  const handleUploadDocument = async () => {
-    if (!documentFile) {
-      toast.error('Veuillez sélectionner un fichier');
-      return;
-    }
-    if (documentMaxBytes && documentFile.size > documentMaxBytes) {
-      toast.error('Le fichier dépasse la taille maximale autorisée (5 MB)');
-      return;
-    }
-    setUploadingDocument(true);
-    try {
-      await onUploadDocument(documentFile);
-      setDocumentFile(null);
-      toast.success('Document enregistré');
-    } catch (err) {
-      // Clear the optimistic file so a failed upload leaves no false "saved" row; the
-      // server-confirmed badge (documentRegistered) stays off until the refetch says otherwise.
-      setDocumentFile(null);
-      toast.error(getErrorMessage(err) || 'Erreur upload');
-    } finally {
-      setUploadingDocument(false);
-    }
-  };
-
-  const openDocumentForView = async () => {
-    if (documentFile) {
-      const url = URL.createObjectURL(documentFile);
-      window.open(url, '_blank', 'noopener,noreferrer');
-      URL.revokeObjectURL(url);
-      return;
-    }
-    try {
-      const url = await getDocumentUrl();
-      if (url) window.open(url, '_blank', 'noopener,noreferrer');
-      else toast.error('Aucun document à afficher');
-    } catch (err) {
-      toast.error(getErrorMessage(err) || "Impossible d'ouvrir le document");
     }
   };
 
@@ -986,87 +927,7 @@ export default function ProfileSettings({
               </form>
             )}
 
-            {entrepriseSub === 'documents' && (
-              <div className="p-6 space-y-6">
-                <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 flex flex-col items-center justify-center min-h-[200px] gap-3 bg-gray-50/50">
-                  <div className="rounded-full p-3" style={{ background: '#E6F7ED' }}>
-                    <Upload className="h-8 w-8" style={{ color: '#22c55e' }} />
-                  </div>
-                  <p className="text-base font-semibold text-gray-900">{documentDropTitle}</p>
-                  <p className="text-sm text-gray-500">
-                    Formats acceptés : PDF, JPG, JPEG, PNG (Max 5 MB)
-                  </p>
-                  <label className="px-4 py-2.5 rounded-xl text-sm font-medium text-gray-700 cursor-pointer hover:bg-gray-100 border border-gray-300 bg-white">
-                    Parcourir les fichiers
-                    <input
-                      type="file"
-                      accept=".pdf,.jpg,.jpeg,.png"
-                      className="hidden"
-                      onChange={(e) => e.target.files?.[0] && setDocumentFile(e.target.files[0])}
-                    />
-                  </label>
-                </div>
-
-                {(documentRegistered || documentFile) && (
-                  <div className="flex items-center gap-4 p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
-                    <button
-                      type="button"
-                      onClick={openDocumentForView}
-                      className="flex flex-1 items-center gap-4 min-w-0 text-left rounded-lg hover:bg-gray-50 transition-colors"
-                    >
-                      <div className="flex-shrink-0 rounded-lg p-2 bg-gray-100">
-                        <FileText className="h-6 w-6 text-gray-600" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">
-                          {documentFile ? documentFile.name : documentFileLabel}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {documentFile ? formatFileSize(documentFile.size) : 'Document enregistré'}
-                        </p>
-                      </div>
-                      {documentRegistered && (
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <Check className="h-5 w-5 text-green-600" />
-                          <span className="text-sm text-gray-600">Enregistré</span>
-                        </div>
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={!documentFile}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDocumentFile(null);
-                      }}
-                      className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-gray-400 disabled:hover:bg-transparent"
-                      title={documentFile ? 'Retirer le fichier' : 'Suppression bientôt disponible'}
-                    >
-                      <Trash2 className="h-5 w-5" />
-                    </button>
-                  </div>
-                )}
-
-                <div className="flex items-center gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setDocumentFile(null)}
-                    className="px-5 py-2.5 rounded-xl font-medium text-gray-700 border border-gray-300 bg-white hover:bg-gray-50"
-                  >
-                    Annuler
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleUploadDocument}
-                    disabled={!documentFile || uploadingDocument}
-                    className="px-5 py-2.5 rounded-xl font-medium text-brand-deep hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
-                    style={SAVE_BUTTON_STYLE}
-                  >
-                    {uploadingDocument ? 'Enregistrement...' : 'Enregistrer'}
-                  </button>
-                </div>
-              </div>
-            )}
+            {entrepriseSub === 'documents' && documentsSlot}
 
             {entrepriseSub === 'coordonnees-bancaires' && bankSlot}
           </div>

@@ -36,6 +36,8 @@ import {
 import { isValidPassword, passwordChecks } from '@/features/auth/utils/password';
 import { getErrorMessage } from '@/lib/errors';
 
+import SignupDocumentSlots from './SignupDocumentSlots';
+
 type ProfileType = 'advertiser' | 'agency' | 'individual_owner' | 'fleet_owner';
 
 // Advertiser/agency company-size options — hardcoded (Phase-1f D8): the legacy `company_size_options`
@@ -157,7 +159,11 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
   const [ownerSectors, setOwnerSectors] = useState<BusinessSector[]>([]);
   const [governorates, setGovernorates] = useState<Governorate[]>([]);
   const [selectedProfileType, setSelectedProfileType] = useState<ProfileType>('advertiser');
-  const [documentFile, setDocumentFile] = useState<File | null>(null);
+  // F-docs Commit 2 — per-category picks (rne ≤2, complémentaires ≤10, caps mirrored from the
+  // server). LOCAL only: signup is sessionless, so files are dropped by the service (F5 ruling —
+  // upload happens post-signin from settings); registration_doc keeps carrying the first RNE pick.
+  const [rneFiles, setRneFiles] = useState<File[]>([]);
+  const [complementaireFiles, setComplementaireFiles] = useState<File[]>([]);
   const [addDocumentLater, setAddDocumentLater] = useState(false);
   const [addBankLater, setAddBankLater] = useState(false);
   const [bankDocFile, setBankDocFile] = useState<File | null>(null);
@@ -599,7 +605,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
         contact_name: composedContactName,
         profile_type: selectedProfileType,
         fonction: fonction.trim() || undefined,
-        registration_doc: !isOwner ? documentFile || undefined : undefined,
+        registration_doc: !isOwner ? rneFiles[0] || undefined : undefined,
         company_logo: companyLogo || undefined,
         bank_doc: isOwner && !addBankLater ? bankDocFile || undefined : undefined,
         // F6 — individual_owner's single screenhost location/WiFi (optional). The service omits any
@@ -2054,7 +2060,10 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             checked={addDocumentLater}
             onChange={(e) => {
               setAddDocumentLater(e.target.checked);
-              if (e.target.checked) setDocumentFile(null);
+              if (e.target.checked) {
+                setRneFiles([]);
+                setComplementaireFiles([]);
+              }
             }}
             className="h-5 w-5 text-brand-primary focus:ring-brand-primary border-gray-300 rounded mt-0.5 flex-shrink-0"
           />
@@ -2073,60 +2082,14 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
         </label>
       </div>
 
-      {/* Upload zone */}
+      {/* Per-category picks (F-docs Commit 2): RNE ≤2 + documents complémentaires ≤10. */}
       {!addDocumentLater && (
-        <div className="space-y-4">
-          <div
-            className="border-2 border-dashed border-gray-300 rounded-2xl p-8 text-center"
-            style={{ background: '#FAFAFA' }}
-          >
-            <Upload className="h-10 w-10 text-gray-400 mx-auto mb-4" />
-            <h4 className="font-medium text-gray-900 mb-1">
-              Ajouter votre Registre du Commerce / Patente...
-            </h4>
-            <p className="text-xs text-gray-500 mb-5">
-              Formats acceptés : PDF, JPG, JPEG, PNG (Max 5 MB)
-            </p>
-            <label className="inline-block cursor-pointer px-6 py-2.5 border border-gray-300 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
-              Parcourir les fichiers
-              <input
-                type="file"
-                accept=".pdf,.jpg,.jpeg,.png"
-                className="hidden"
-                onChange={(e) => {
-                  if (e.target.files?.[0]) {
-                    if (e.target.files[0].size > 5 * 1024 * 1024) {
-                      toast.error('Fichier trop volumineux (max 5 MB)');
-                      return;
-                    }
-                    setDocumentFile(e.target.files[0]);
-                  }
-                }}
-              />
-            </label>
-          </div>
-          {documentFile && (
-            <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <FileText className="h-5 w-5 text-green-600" />
-                <div>
-                  <p className="font-medium text-green-900 text-sm">{documentFile.name}</p>
-                  <p className="text-xs text-green-700">
-                    {(documentFile.size / 1024 / 1024).toFixed(2)} MB
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setDocumentFile(null)}
-                className="flex items-center px-3 py-1.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-sm"
-              >
-                <X className="h-4 w-4 mr-1" />
-                Retirer
-              </button>
-            </div>
-          )}
-        </div>
+        <SignupDocumentSlots
+          rneFiles={rneFiles}
+          onRneChange={setRneFiles}
+          complementaireFiles={complementaireFiles}
+          onComplementaireChange={setComplementaireFiles}
+        />
       )}
 
       {/* CGU checkboxes */}

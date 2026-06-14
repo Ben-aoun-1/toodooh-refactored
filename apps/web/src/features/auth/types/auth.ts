@@ -26,7 +26,7 @@ export interface BusinessProfile {
   registration_doc_path?: string;
   /**
    * Phase-1f F5 — document presence, a direct map of GET /api/me's `documents` booleans (the columns
-   * hold a storage key, not a URL; the view presigns on demand via getProfileDocumentUrl). The
+   * hold a storage key, not a URL; the view presigns on demand via getProfileDocumentUrlByCategory). The
    * `*_doc_url`/`*_doc_path` fields stay undefined off the /api/me bridge (no stored URL).
    */
   documents?: { registration: boolean; cin: boolean; bank: boolean };
@@ -48,6 +48,27 @@ export interface BusinessProfile {
   is_admin: boolean;
   is_active?: boolean;
 }
+
+/**
+ * One user_documents row as the API serializes it (F-docs Commit 1 docView) — the wire
+ * shape of GET /api/profile/documents (grouped), the POST upload response's `document`,
+ * and the per-document presign routes. No storage key on the wire; views presign by id.
+ */
+export interface ProfileDocument {
+  id: string;
+  category: 'cin' | 'rne' | 'complementaire' | 'bank';
+  position: number;
+  original_filename: string | null;
+  mime_type: string | null;
+  size_bytes: number | null;
+  uploaded_at: string;
+}
+
+/** GET /api/profile/documents — every category present, empty arrays when none. */
+export type GroupedProfileDocuments = Record<
+  'cin' | 'rne' | 'complementaire' | 'bank',
+  ProfileDocument[]
+>;
 
 export interface BusinessSector {
   id: string;

@@ -7,12 +7,14 @@ import {
   accounts,
   businessSectors,
   deviceSessions,
+  documentCategory,
   governorates,
   predefinedZones,
   screenhostExportStatus,
   screenhosts,
   screens,
   sessions,
+  userDocuments,
   userRole,
   users,
   userStatus,
@@ -107,6 +109,18 @@ describe('db schema', () => {
     expect(screens.isActive).toBeDefined();
     expect(screens.pairedAt).toBeDefined();
     expect(screens.lastSeenAt).toBeDefined();
+  });
+
+  it('user_documents exposes the multi-doc columns + category enum (F-docs Commit 1)', () => {
+    expect(documentCategory.enumValues).toEqual(['cin', 'rne', 'complementaire', 'bank']);
+    expect(userDocuments.userId).toBeDefined();
+    expect(userDocuments.category).toBeDefined();
+    expect(userDocuments.position).toBeDefined();
+    expect(userDocuments.storageKey).toBeDefined();
+    expect(userDocuments.originalFilename).toBeDefined();
+    expect(userDocuments.mimeType).toBeDefined();
+    expect(userDocuments.sizeBytes).toBeDefined();
+    expect(userDocuments.uploadedAt).toBeDefined();
   });
 
   it('reference tables export their key columns', () => {

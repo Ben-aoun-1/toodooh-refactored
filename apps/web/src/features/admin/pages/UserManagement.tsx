@@ -23,8 +23,9 @@ import { toast } from 'react-hot-toast';
 import { useLocation } from 'react-router-dom';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
+import UserDocumentReviewGroup from '@/features/admin/components/UserDocumentReviewGroup';
 import { adminKeys } from '@/features/admin/hooks/queryKeys';
-import { useUserMutations, useUsers } from '@/features/admin/hooks/useUsers';
+import { useUserDocuments, useUserMutations, useUsers } from '@/features/admin/hooks/useUsers';
 import { adminUserService, type AdminUser } from '@/features/admin/services/admin-user.service';
 import { apiErrorMessage } from '@/features/auth/services/auth-errors';
 import { ApiError } from '@/lib/api-client';
@@ -52,6 +53,11 @@ export default function UserManagement() {
   }, [location.search]);
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  // The reviewed user's documents, grouped by category (F-docs Commit 3). Fetched only while a user
+  // is selected; presigning a single document is the imperative getDocumentUrlById call below.
+  const { documents: userDocuments, loading: documentsLoading } = useUserDocuments(
+    selectedUser?.id ?? null,
+  );
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
   // Reject-reason modal (G2 D-G2-3) — the backend requires a non-empty rejection note.
@@ -148,10 +154,11 @@ export default function UserManagement() {
     }
   };
 
-  // Presign-on-demand: fetch a fresh signed URL for the user's document and open it (G2 D-G2-1).
-  const handleViewDocument = async (id: string, type: 'rne' | 'cin' | 'bank') => {
+  // Presign-on-demand by document uuid (the :id-scoped route, NOT the legacy category shim) and open
+  // it (G2 D-G2-1). The uuid route preserves recto-vs-verso; the shim collapses to lowest position.
+  const handleViewDocument = async (userId: string, docId: string) => {
     try {
-      const url = await adminUserService.getDocumentUrl(id, type);
+      const url = await adminUserService.getDocumentUrlById(userId, docId);
       window.open(url, '_blank', 'noopener,noreferrer');
     } catch (error) {
       toast.error(`Impossible d'ouvrir le document: ${apiErrorMessage(error)}`);
@@ -603,25 +610,13 @@ export default function UserManagement() {
                                     {selectedUser.cin || 'Non fourni'}
                                   </span>
                                 </div>
-                                {selectedUser.documents.cin ? (
-                                  <div className="flex justify-between items-center pt-2">
-                                    <span className="text-gray-600">Document CIN:</span>
-                                    <button
-                                      onClick={() => handleViewDocument(selectedUser.id, 'cin')}
-                                      className="flex items-center text-brand-primary hover:text-brand-primary/90 font-medium transition-colors"
-                                    >
-                                      <FileText className="h-4 w-4 mr-1" />
-                                      Voir le document
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <div className="flex justify-between items-center pt-2">
-                                    <span className="text-gray-600">Document CIN:</span>
-                                    <span className="text-xs text-gray-500">
-                                      Non fourni — upload admin bientôt disponible
-                                    </span>
-                                  </div>
-                                )}
+                                <UserDocumentReviewGroup
+                                  label="Document CIN"
+                                  cin
+                                  docs={userDocuments?.cin ?? []}
+                                  loading={documentsLoading}
+                                  onView={(docId) => handleViewDocument(selectedUser.id, docId)}
+                                />
                                 {selectedUser.zone && (
                                   <div className="flex justify-between items-center pt-2">
                                     <span className="text-gray-600">Zone:</span>
@@ -646,25 +641,13 @@ export default function UserManagement() {
                             {/* RNE pour les propriétaires de parc */}
                             {selectedUser.profile_type === 'fleet_owner' && (
                               <>
-                                {selectedUser.documents.registration ? (
-                                  <div className="flex justify-between items-center pt-2 border-t border-gray-200 mt-2">
-                                    <span className="text-gray-600">Registre de commerce:</span>
-                                    <button
-                                      onClick={() => handleViewDocument(selectedUser.id, 'rne')}
-                                      className="flex items-center text-brand-primary hover:text-brand-primary/90 font-medium transition-colors"
-                                    >
-                                      <FileText className="h-4 w-4 mr-1" />
-                                      Voir le document
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <div className="flex justify-between items-center pt-2 border-t border-gray-200 mt-2">
-                                    <span className="text-gray-600">Registre de commerce:</span>
-                                    <span className="text-xs text-gray-500">
-                                      Non fourni — upload admin bientôt disponible
-                                    </span>
-                                  </div>
-                                )}
+                                <UserDocumentReviewGroup
+                                  label="Registre de commerce"
+                                  topBorder
+                                  docs={userDocuments?.rne ?? []}
+                                  loading={documentsLoading}
+                                  onView={(docId) => handleViewDocument(selectedUser.id, docId)}
+                                />
                                 {selectedUser.zone && (
                                   <div className="flex justify-between items-center pt-2">
                                     <span className="text-gray-600">Zone:</span>
@@ -689,27 +672,24 @@ export default function UserManagement() {
                             {/* RNE pour les annonceurs */}
                             {selectedUser.profile_type === 'advertiser' && (
                               <>
-                                {selectedUser.documents.registration ? (
-                                  <div className="flex justify-between items-center pt-2 border-t border-gray-200 mt-2">
-                                    <span className="text-gray-600">Registre de commerce:</span>
-                                    <button
-                                      onClick={() => handleViewDocument(selectedUser.id, 'rne')}
-                                      className="flex items-center text-brand-primary hover:text-brand-primary/90 font-medium transition-colors"
-                                    >
-                                      <FileText className="h-4 w-4 mr-1" />
-                                      Voir le document
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <div className="flex justify-between items-center pt-2 border-t border-gray-200 mt-2">
-                                    <span className="text-gray-600">Registre de commerce:</span>
-                                    <span className="text-xs text-gray-500">
-                                      Non fourni — upload admin bientôt disponible
-                                    </span>
-                                  </div>
-                                )}
+                                <UserDocumentReviewGroup
+                                  label="Registre de commerce"
+                                  topBorder
+                                  docs={userDocuments?.rne ?? []}
+                                  loading={documentsLoading}
+                                  onView={(docId) => handleViewDocument(selectedUser.id, docId)}
+                                />
                               </>
                             )}
+
+                            {/* Documents complémentaires — toutes catégories de profil (F-docs) */}
+                            <UserDocumentReviewGroup
+                              label="Documents complémentaires"
+                              topBorder
+                              docs={userDocuments?.complementaire ?? []}
+                              loading={documentsLoading}
+                              onView={(docId) => handleViewDocument(selectedUser.id, docId)}
+                            />
 
                             {/* Code agent (proprio/annonceur) */}
                             {(isOwnerProfile(selectedUser.profile_type) ||
@@ -758,23 +738,14 @@ export default function UserManagement() {
                                   {selectedUser.bank_iban || 'Non fourni'}
                                 </span>
                               </div>
-                              {selectedUser.documents.bank ? (
-                                <div className="flex justify-between items-center pt-2 border-t border-gray-200 mt-2">
-                                  <span className="text-gray-600">Relevé d'identité bancaire:</span>
-                                  <button
-                                    onClick={() => handleViewDocument(selectedUser.id, 'bank')}
-                                    className="flex items-center text-brand-primary hover:text-brand-primary/90 font-medium transition-colors"
-                                  >
-                                    <FileText className="h-4 w-4 mr-1" />
-                                    Voir le document
-                                  </button>
-                                </div>
-                              ) : (
-                                <div className="flex justify-between items-center pt-2 border-t border-gray-200 mt-2">
-                                  <span className="text-gray-600">Relevé d'identité bancaire:</span>
-                                  <span className="text-xs text-gray-500">Non fourni</span>
-                                </div>
-                              )}
+                              <UserDocumentReviewGroup
+                                label="Relevé d'identité bancaire"
+                                single
+                                topBorder
+                                docs={userDocuments?.bank ?? []}
+                                loading={documentsLoading}
+                                onView={(docId) => handleViewDocument(selectedUser.id, docId)}
+                              />
                             </div>
                           </div>
                         )}

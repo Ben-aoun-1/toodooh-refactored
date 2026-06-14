@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 
 import { auth } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
-import { users } from '../src/db/schema.js';
+import { userDocuments, users } from '../src/db/schema.js';
 import { apiRoutes } from '../src/routes/index.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
@@ -140,9 +140,12 @@ describe('GET /api/me (real Postgres)', () => {
         bankAccountHolder: 'Foulen Ben Foulen',
         bankRib: '12345678901234567890',
         bankIban: 'TN5912345678901234567890',
-        bankDocUrl: `bank/${userId}`,
       })
       .where(eq(users.id, userId));
+    // Document presence reads user_documents (F-docs Commit 1), not the frozen users column.
+    await db
+      .insert(userDocuments)
+      .values({ userId, category: 'bank', position: 1, storageKey: `bank/${userId}` });
     const cookie = cookieHeader(
       (await signin('me-bank@example.com', PASSWORD)).headers['set-cookie'],
     );

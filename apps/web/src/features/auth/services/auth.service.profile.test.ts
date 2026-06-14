@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { MeUser } from '@/features/auth/types/auth';
+import type { MeUser, ProfileDocument } from '@/features/auth/types/auth';
 import { ApiError, apiClient } from '@/lib/api-client';
 
 import { authService } from './auth.service';
@@ -16,6 +16,7 @@ vi.mock('@/lib/api-client', async (importActual) => {
       get: vi.fn(),
       post: vi.fn(),
       patch: vi.fn(),
+      del: vi.fn(),
       postForm: vi.fn(),
       onUnauthorized: vi.fn(),
     },
@@ -24,6 +25,7 @@ vi.mock('@/lib/api-client', async (importActual) => {
 
 const patch = vi.mocked(apiClient.patch);
 const get = vi.mocked(apiClient.get);
+const del = vi.mocked(apiClient.del);
 const postForm = vi.mocked(apiClient.postForm);
 
 const meUser: MeUser = {
@@ -195,36 +197,58 @@ describe('authService.getBusinessProfile (F4a — /api/me read bridge)', () => {
   });
 });
 
-describe('authService documents (F5 — multipart upload + on-demand view)', () => {
+// F-docs Commit 2 — the multi-document service surface (grouped list, slot upload,
+// presign-by-id, delete). Replaces the F5 single-slot pins (`{type,key}` response +
+// the GET /:type compat presign), which the web no longer calls.
+describe('authService documents (F-docs — grouped multi-document model)', () => {
+  const doc = (over: Partial<ProfileDocument> = {}): ProfileDocument => ({
+    id: 'd1',
+    category: 'rne',
+    position: 1,
+    original_filename: 'rc.pdf',
+    mime_type: 'application/pdf',
+    size_bytes: 123,
+    uploaded_at: '2026-06-11T00:00:00.000Z',
+    ...over,
+  });
+  const emptyGroups = { cin: [], rne: [], complementaire: [], bank: [] };
+
   beforeEach(() => {
     postForm.mockReset();
     get.mockReset();
+    del.mockReset();
   });
 
-  it('uploadProfileDocument(rne) → POST /profile/documents/rne with the file in FormData', async () => {
-    postForm.mockResolvedValue({ type: 'rne', key: 'rne/u1' });
+  it('listProfileDocuments → GET /profile/documents → the grouped categories', async () => {
+    const documents = { ...emptyGroups, rne: [doc()] };
+    get.mockResolvedValue({ documents });
+    await expect(authService.listProfileDocuments()).resolves.toEqual(documents);
+    expect(get).toHaveBeenCalledWith('/profile/documents');
+  });
+
+  it('uploadProfileDocument(rne) → POST /profile/documents/rne (no position) with the file in FormData → the document', async () => {
+    postForm.mockResolvedValue({ document: doc() });
     const file = new File(['x'], 'rc.pdf', { type: 'application/pdf' });
-    await authService.uploadProfileDocument('rne', file);
+    await expect(authService.uploadProfileDocument('rne', file)).resolves.toEqual(doc());
     expect(postForm).toHaveBeenCalledTimes(1);
     expect(postForm.mock.calls[0][0]).toBe('/profile/documents/rne');
     const form = postForm.mock.calls[0][1] as FormData;
     expect(form.get('file')).toBe(file);
   });
 
-  it('uploadProfileDocument(cin) → POST /profile/documents/cin', async () => {
-    postForm.mockResolvedValue({ type: 'cin', key: 'cin/u1' });
+  it('uploadProfileDocument(cin, position) → POST /profile/documents/cin?position=2 (semantic verso slot)', async () => {
+    postForm.mockResolvedValue({ document: doc({ category: 'cin', position: 2 }) });
     await authService.uploadProfileDocument(
       'cin',
-      new File(['x'], 'cin.png', { type: 'image/png' }),
+      new File(['x'], 'verso.png', { type: 'image/png' }),
+      2,
     );
-    expect(postForm.mock.calls[0][0]).toBe('/profile/documents/cin');
+    expect(postForm.mock.calls[0][0]).toBe('/profile/documents/cin?position=2');
   });
 
-  it('uploadProfileDocument(bank) → POST /profile/documents/bank', async () => {
-    postForm.mockResolvedValue({ type: 'bank', key: 'bank/u1' });
-    await expect(
-      authService.uploadProfileDocument('bank', new File(['x'], 'rib.pdf')),
-    ).resolves.toEqual({ type: 'bank', key: 'bank/u1' });
+  it('uploadProfileDocument(bank) sends no position (single-slot: the server replaces slot 1)', async () => {
+    postForm.mockResolvedValue({ document: doc({ category: 'bank' }) });
+    await authService.uploadProfileDocument('bank', new File(['x'], 'rib.pdf'));
     expect(postForm.mock.calls[0][0]).toBe('/profile/documents/bank');
   });
 
@@ -237,19 +261,53 @@ describe('authService documents (F5 — multipart upload + on-demand view)', () 
     ).rejects.toThrow(/5 Mo/);
   });
 
-  it('getProfileDocumentUrl(rne) → GET /profile/documents/rne → the presigned url', async () => {
+  it('getProfileDocumentUrlById → GET /profile/documents/:id/url → the presigned url', async () => {
     get.mockResolvedValue({ url: 'https://minio/presigned' });
-    await expect(authService.getProfileDocumentUrl('rne')).resolves.toBe('https://minio/presigned');
-    expect(get).toHaveBeenCalledWith('/profile/documents/rne');
+    await expect(authService.getProfileDocumentUrlById('d1')).resolves.toBe(
+      'https://minio/presigned',
+    );
+    expect(get).toHaveBeenCalledWith('/profile/documents/d1/url');
   });
 
-  it('getProfileDocumentUrl → 404 (no document) → null', async () => {
+  it('getProfileDocumentUrlById → 404 (no such document) → null', async () => {
     get.mockRejectedValueOnce(new ApiError({ status: 404, code: 'NOT_FOUND', message: '' }));
-    await expect(authService.getProfileDocumentUrl('cin')).resolves.toBeNull();
+    await expect(authService.getProfileDocumentUrlById('missing')).resolves.toBeNull();
   });
 
-  it('getProfileDocumentUrl → non-404 → throws a French message', async () => {
+  it('getProfileDocumentUrlById → non-404 → throws a French message', async () => {
     get.mockRejectedValueOnce(new ApiError({ status: 0, code: 'NETWORK', message: '' }));
-    await expect(authService.getProfileDocumentUrl('rne')).rejects.toThrow(/connexion/i);
+    await expect(authService.getProfileDocumentUrlById('d1')).rejects.toThrow(/connexion/i);
+  });
+
+  it('getProfileDocumentUrlByCategory presigns the LOWEST-position document of the category', async () => {
+    get
+      .mockResolvedValueOnce({
+        documents: {
+          ...emptyGroups,
+          bank: [doc({ id: 'd2', category: 'bank', position: 2 }), doc({ category: 'bank' })],
+        },
+      })
+      .mockResolvedValueOnce({ url: 'https://minio/presigned' });
+    await expect(authService.getProfileDocumentUrlByCategory('bank')).resolves.toBe(
+      'https://minio/presigned',
+    );
+    expect(get).toHaveBeenNthCalledWith(2, '/profile/documents/d1/url');
+  });
+
+  it('getProfileDocumentUrlByCategory → empty category → null without a presign call', async () => {
+    get.mockResolvedValueOnce({ documents: emptyGroups });
+    await expect(authService.getProfileDocumentUrlByCategory('bank')).resolves.toBeNull();
+    expect(get).toHaveBeenCalledTimes(1);
+  });
+
+  it('deleteProfileDocument → DELETE /profile/documents/:id', async () => {
+    del.mockResolvedValue({ deleted: true, id: 'd1' });
+    await authService.deleteProfileDocument('d1');
+    expect(del).toHaveBeenCalledWith('/profile/documents/d1');
+  });
+
+  it('delete failure → throws a French message', async () => {
+    del.mockRejectedValueOnce(new ApiError({ status: 0, code: 'NETWORK', message: '' }));
+    await expect(authService.deleteProfileDocument('d1')).rejects.toThrow(/connexion/i);
   });
 });

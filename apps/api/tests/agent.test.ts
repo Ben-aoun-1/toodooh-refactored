@@ -3,7 +3,13 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 
 import { auth } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
-import { type NewUser, agentReferrals, screenhosts, users } from '../src/db/schema.js';
+import {
+  type NewUser,
+  agentReferrals,
+  screenhosts,
+  userDocuments,
+  users,
+} from '../src/db/schema.js';
 import { agentRoutes } from '../src/routes/agent.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
@@ -171,11 +177,24 @@ describe('GET /api/agent/clients (real Postgres)', () => {
 
   it('NEVER exposes a document field or doc URL (the hard divergence from the admin view)', async () => {
     const agentId = await seedUser({ role: 'screenhost_agent' });
+    // Both document sources seeded: the frozen legacy columns AND user_documents rows
+    // (F-docs Commit 1) — the invariant must hold against the table-backed model too.
     const owner = await seedUser({
       role: 'individual_owner',
       registrationDocUrl: 'rne/secret-key',
       cinDocUrl: 'cin/secret-key',
     });
+    await db.insert(userDocuments).values([
+      { userId: owner, category: 'rne', position: 1, storageKey: 'rne/secret-table-key' },
+      { userId: owner, category: 'cin', position: 1, storageKey: 'cin/secret-table-key' },
+      {
+        userId: owner,
+        category: 'complementaire',
+        position: 1,
+        storageKey: `complementaire/${owner}/secret-doc-id`,
+        originalFilename: 'piece-secrete.pdf',
+      },
+    ]);
     await seedReferral(agentId, owner);
 
     mockSession(agentId, 'screenhost_agent');
@@ -185,6 +204,10 @@ describe('GET /api/agent/clients (real Postgres)', () => {
     expect(raw).not.toContain('registration');
     expect(raw).not.toContain('rne/secret-key');
     expect(raw).not.toContain('cin/secret-key');
+    expect(raw).not.toContain('secret-table-key');
+    expect(raw).not.toContain('secret-doc-id');
+    expect(raw).not.toContain('piece-secrete');
+    expect(raw).not.toContain('complementaire');
     const [client] = res.json<{ clients: Record<string, unknown>[] }>().clients;
     expect(client).toBeDefined();
     expect(client?.['documents']).toBeUndefined();

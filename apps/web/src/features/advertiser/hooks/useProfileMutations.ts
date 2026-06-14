@@ -14,8 +14,10 @@ import { advertiserKeys } from './queryKeys';
  *
  * Phase-1f F7b — the generic `updateProfile` + `uploadLogo` mutations were
  * removed (D-F4-4 logo defer wired; the dead-Supabase chain severed). The
- * four section-scoped saves (the F4a PATCH endpoints) + `uploadDocument`
- * remain.
+ * four section-scoped saves (the F4a PATCH endpoints) remain; the F5
+ * single-slot `uploadDocument` moved to `ProfileDocumentsManager`'s slot
+ * mutations (F-docs Commit 2) — `invalidateProfile` is exported so the
+ * manager's writes can refresh the /api/me-backed profile (its booleans flip).
  */
 export function useProfileMutations(userId: string | undefined) {
   const queryClient = useQueryClient();
@@ -45,18 +47,11 @@ export function useProfileMutations(userId: string | undefined) {
     onSuccess: invalidateProfile,
   });
 
-  // Phase-1f F5 — the advertiser document is the RNE (Registre de commerce) → POST /documents/rne
-  // (multipart, post-signin). onSuccess refetches /api/me → documents.registration flips true.
-  const uploadDocument = useMutation({
-    mutationFn: (file: File) => authService.uploadProfileDocument('rne', file),
-    onSuccess: invalidateProfile,
-  });
-
   return {
     updateContact,
     updateBusiness,
     updateAddress,
     updateNotifications,
-    uploadDocument,
+    invalidateProfile,
   };
 }
