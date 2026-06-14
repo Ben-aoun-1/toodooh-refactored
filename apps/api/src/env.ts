@@ -49,6 +49,17 @@ const EnvSchema = z.object({
   STORAGE_SECRET_KEY: z.string().min(1),
   STORAGE_BUCKET: z.string().min(1).default('toodooh-documents'),
   STORAGE_REGION: z.string().min(1).default('us-east-1'),
+  // toodooh ↔ wedooh sync (S-T1). ALL THREE ARE OPTIONAL by design — env.ts parses eagerly at
+  // import (line below), so a REQUIRED var here would fail-fast every entrypoint (server, migrate
+  // script, every vitest file) and re-run the 2026-06-10 CI-red incident unless ci.yml/deploy.yml/
+  // vitest.config all carry a dummy. Unset = the sync degrades: inbound /api/internal/* returns 503
+  // SYNC_DISABLED, the outbound B2 push no-ops with a boot warning. Provisioned at S-INT switch-on.
+  //   WEDOOH_SYNC_KEY  — inbound guard: wedooh presents it (Bearer) on /api/internal/*; we validate.
+  //   TOODOOH_SYNC_KEY — outbound auth: we present it (x-api-key) on the B2 push to wedooh.
+  //   WEDOOH_INGEST_URL — wedooh's base URL for the B2 location push (e.g. https://hub.too-dooh.com).
+  WEDOOH_SYNC_KEY: z.string().min(16).optional(),
+  TOODOOH_SYNC_KEY: z.string().min(16).optional(),
+  WEDOOH_INGEST_URL: z.url().optional(),
 });
 
 export type Env = z.infer<typeof EnvSchema> & {

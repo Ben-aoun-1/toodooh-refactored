@@ -7,6 +7,7 @@ import { type User, userDocuments, users } from '../db/schema.js';
 import { toProfileType } from '../lib/profile-type.js';
 import { OWNER_ROLES, createMissingScreensForOwner } from '../lib/screens.js';
 import { groupedDocuments } from '../lib/user-documents.js';
+import { pushApprovedOwnerLocations } from '../lib/wedooh-sync.js';
 import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
 import { storage } from '../storage/s3-storage.js';
 
@@ -207,6 +208,12 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     // a reject → re-approve cycle never duplicates).
     if (updated && OWNER_ROLES.has(updated.role)) {
       await createMissingScreensForOwner(updated.id);
+      // S-T1 B2 — push this owner's now-approved screenhosts to wedooh. Fire-and-forget AFTER the
+      // approval commit: a wedooh outage must NEVER fail the approval (export_status flips to
+      // 'failed' and the boot/interval sweep retries). No-op when the sync env is unset.
+      void pushApprovedOwnerLocations(updated.id, request.log).catch((err: unknown) => {
+        request.log.warn({ err }, 'wedooh B2 push (post-approval) failed to start');
+      });
     }
 
     const presence = await documentsPresenceFor([id]);

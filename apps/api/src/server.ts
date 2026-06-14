@@ -7,6 +7,7 @@ import { authPlugin } from './auth/plugin.js';
 import { db, sql } from './db/client.js';
 import { env } from './env.js';
 import { buildErrorHandler, buildNotFoundHandler } from './error-handler.js';
+import { isSyncEnabled, sweepUnexported } from './lib/wedooh-sync.js';
 import { buildLoggerConfig } from './logger.js';
 import { healthRoute } from './routes/health.js';
 import { apiRoutes } from './routes/index.js';
@@ -60,6 +61,25 @@ const start = async (): Promise<void> => {
       app.log.warn({ err }, 'storage ensure-bucket at boot failed; will retry on first upload');
     });
     await app.listen({ port: env.PORT, host: env.HOST });
+
+    // S-T1 B2 — re-push any pending/failed approved screenhosts to wedooh at boot, then every
+    // 10 min (unref'd so it never holds the process open). No-op + a single warn when unset.
+    if (isSyncEnabled()) {
+      void sweepUnexported(app.log).catch((err: unknown) =>
+        app.log.warn({ err }, 'wedooh B2 boot sweep failed'),
+      );
+      const sweepTimer = setInterval(
+        () => {
+          void sweepUnexported(app.log).catch((err: unknown) =>
+            app.log.warn({ err }, 'wedooh B2 sweep failed'),
+          );
+        },
+        10 * 60 * 1000,
+      );
+      sweepTimer.unref();
+    } else {
+      app.log.warn('wedooh B2 sync disabled (WEDOOH_INGEST_URL / TOODOOH_SYNC_KEY unset)');
+    }
   } catch (err) {
     app.log.error(err);
     process.exit(1);

@@ -134,8 +134,9 @@ describe('db schema', () => {
     expect(predefinedZones.radius).toBeDefined();
   });
 
-  it('screenhost_export_status enum mirrors the status convention (pending → exported)', () => {
-    expect(screenhostExportStatus.enumValues).toEqual(['pending', 'exported']);
+  it('screenhost_export_status enum mirrors the status convention (pending → exported → failed)', () => {
+    // 'failed' added by S-T1 (0016): a B2 push that errored; the sweep re-pushes pending+failed.
+    expect(screenhostExportStatus.enumValues).toEqual(['pending', 'exported', 'failed']);
   });
 
   it('screenhosts exposes coordinate + metadata + ownership + wifi/export columns (Slice-2 E)', () => {

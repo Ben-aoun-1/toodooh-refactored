@@ -281,7 +281,13 @@ export type NewPredefinedZone = typeof predefinedZones.$inferInsert;
 // Location lifecycle toward the player/CMS export. Mirrors the users.status enum convention
 // (lowercase pgEnum, *_status). The export trigger is owner approval (admin.ts); a location starts
 // 'pending' and flips to 'exported' (stamping exported_at) once its approved owner is exported.
-export const screenhostExportStatus = pgEnum('screenhost_export_status', ['pending', 'exported']);
+export const screenhostExportStatus = pgEnum('screenhost_export_status', [
+  'pending',
+  'exported',
+  // S-T1: a B2 push-on-approval attempt that failed (wedooh unreachable / non-2xx). The boot/
+  // interval sweep re-pushes 'pending' and 'failed' rows — wedooh's ingest is UUID-idempotent.
+  'failed',
+]);
 
 // ── screenhosts (Slice-2) ──────────────────────────────────────
 // Screenhost-OWNED coordinate-bearing location (one location = one coordinate = one dot on the
@@ -343,6 +349,41 @@ export const screenhosts = pgTable(
 
 export type Screenhost = typeof screenhosts.$inferSelect;
 export type NewScreenhost = typeof screenhosts.$inferInsert;
+
+// ── screenhost_affluence (S-T1 — Edge C1) ──────────────────────────────
+// wedooh pushes per (screenhost, day-of-week, hour) audience estimates here via
+// POST /api/internal/affluence. The FK is to screenhosts.id — the SAME UUID wedooh holds (it
+// received it through the B2 transfer), so a 404 on an unknown id is correct integrity, not a
+// lookup gap. Latest-value-wins: the ingest upserts on the (screenhost, day, hour) tuple.
+export const screenhostAffluence = pgTable(
+  'screenhost_affluence',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    screenhostId: uuid('screenhost_id')
+      .notNull()
+      .references(() => screenhosts.id, { onDelete: 'cascade' }),
+    dayOfWeek: integer('day_of_week').notNull(), // 1=Mon … 7=Sun (wedooh's convention)
+    hour: integer('hour').notNull(), // 0–23
+    estimatedImpressions: integer('estimated_impressions').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    uniqueIndex('screenhost_affluence_slot_uq').on(table.screenhostId, table.dayOfWeek, table.hour),
+    check(
+      'screenhost_affluence_day_range',
+      sql`${table.dayOfWeek} >= 1 AND ${table.dayOfWeek} <= 7`,
+    ),
+    check('screenhost_affluence_hour_range', sql`${table.hour} >= 0 AND ${table.hour} <= 23`),
+    check('screenhost_affluence_impressions_nonneg', sql`${table.estimatedImpressions} >= 0`),
+  ],
+);
+
+export type ScreenhostAffluence = typeof screenhostAffluence.$inferSelect;
+export type NewScreenhostAffluence = typeof screenhostAffluence.$inferInsert;
 
 // ── agents + agent_referrals (P1 — agent unique codes + referral linkage) ──
 // Each agent user (role screenhost_agent | screencast_agent) owns ONE issued

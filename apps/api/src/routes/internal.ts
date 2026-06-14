@@ -1,0 +1,286 @@
+import { hashPassword } from 'better-auth/crypto';
+import { eq, inArray } from 'drizzle-orm';
+import type { FastifyPluginAsync } from 'fastify';
+import { z } from 'zod';
+
+import { db } from '../db/client.js';
+import {
+  accounts,
+  agents,
+  governorates,
+  screenhostAffluence,
+  screenhosts,
+  screens,
+  users,
+} from '../db/schema.js';
+import { env } from '../env.js';
+import { generateUniqueAgentCode } from '../lib/agent-code.js';
+import { decryptWifiPassword } from '../lib/wifi-crypto.js';
+import { requireSyncKey } from '../middleware/require-sync-key.js';
+
+// S-T1 — the toodooh side of the toodooh↔wedooh sync. Service-authenticated, NOT a user surface:
+// every route is guarded by requireSyncKey(env.WEDOOH_SYNC_KEY) (wedooh presents a Bearer key).
+// Three edges (all consumed by wedooh's already-deployed S-W1 client, so the shapes are LOCKED):
+//   B1  GET  /api/internal/locations?email=  — pull/reconcile an owner's locations (carries WiFi).
+//   C1  POST /api/internal/affluence         — ingest pushed audience-estimate slots.
+//   A   POST /api/internal/agents            — provision a screenhost_agent + its referral code.
+// numeric→string: Drizzle maps Postgres numeric to a JS string, so lat/lng are Number()-ed to honor
+// the contract's `number | null`. NaN guards keep a malformed value as null rather than NaN.
+
+const num = (value: string | null): number | null => {
+  if (value === null) return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+};
+
+// Per-row WiFi decrypt: NEVER let one corrupt/legacy envelope sink the whole response. A throw
+// (bad version / GCM auth failure) degrades that single field to null. Plaintext is never logged.
+const decryptWifi = (encrypted: string | null): string | null => {
+  if (!encrypted) return null;
+  try {
+    return decryptWifiPassword(encrypted);
+  } catch {
+    return null;
+  }
+};
+
+const affluenceBodySchema = z.object({
+  slots: z
+    .array(
+      z.object({
+        location_id: z.uuid(),
+        day_of_week: z.number().int().min(1).max(7),
+        hour: z.number().int().min(0).max(23),
+        estimated_impressions: z.number().int().min(0),
+      }),
+    )
+    .max(168 * 64), // generous batch ceiling (a full week is 168 slots/location)
+});
+
+// Privileged-account password floor mirrors admin-accounts (min 12). OPTIONAL: omitted → no
+// credential row (the agent is wedooh-managed and has no toodooh login until one is set).
+const agentBodySchema = z.object({
+  email: z.email(),
+  contact_name: z.string().min(1).max(100),
+  password: z.string().min(12).optional(),
+});
+
+// `syncKey` defaults to env.WEDOOH_SYNC_KEY in production (index.ts registers with no options);
+// tests pass it explicitly so they never depend on the eagerly-parsed env singleton.
+export const internalRoutes: FastifyPluginAsync<{ syncKey?: string }> = async (app, opts) => {
+  const guard = { preHandler: [requireSyncKey(opts.syncKey ?? env.WEDOOH_SYNC_KEY)] };
+
+  // ── B1: GET /api/internal/locations?email= ──────────────────────────────────
+  // Owner + their screenhost locations (WiFi password DECRYPTED — this is the privileged transfer
+  // surface). 404 USER_NOT_FOUND when the email is unknown (users.email is unique → exact lookup).
+  app.get('/api/internal/locations', guard, async (request, reply) => {
+    const email = String((request.query as { email?: string }).email ?? '')
+      .trim()
+      .toLowerCase();
+    if (!email) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Query parameter "email" is required.',
+        statusCode: 400,
+        requestId: request.id,
+      });
+    }
+
+    const [owner] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    if (!owner) {
+      return reply.status(404).send({
+        error: 'USER_NOT_FOUND',
+        message: 'No user with this email.',
+        statusCode: 404,
+        requestId: request.id,
+      });
+    }
+
+    const rows = await db
+      .select({ s: screenhosts, governorateName: governorates.name })
+      .from(screenhosts)
+      .leftJoin(governorates, eq(screenhosts.governorateId, governorates.id))
+      .where(eq(screenhosts.ownerId, owner.id));
+
+    const locationIds = rows.map((r) => r.s.id);
+    const screenRows = locationIds.length
+      ? await db.select().from(screens).where(inArray(screens.screenhostId, locationIds))
+      : [];
+    const screensByHost = new Map<string, typeof screenRows>();
+    for (const sc of screenRows) {
+      const list = screensByHost.get(sc.screenhostId) ?? [];
+      list.push(sc);
+      screensByHost.set(sc.screenhostId, list);
+    }
+
+    return reply.status(200).send({
+      owner: {
+        id: owner.id,
+        email: owner.email,
+        contact_name: owner.contactName,
+        business_name: owner.businessName,
+        contact_phone: owner.contactPhone,
+        phone: owner.phone,
+        role: owner.role,
+        status: owner.status,
+      },
+      locations: rows.map(({ s, governorateName }) => ({
+        id: s.id,
+        name: s.name,
+        latitude: num(s.latitude),
+        longitude: num(s.longitude),
+        address: s.address,
+        city: s.city,
+        postal_code: s.postalCode,
+        zone: s.zone,
+        governorate: governorateName,
+        screen_count: s.screenCount,
+        wifi_ssid: s.wifiSsid,
+        wifi_password: decryptWifi(s.wifiPasswordEncrypted),
+        is_active: s.isActive,
+        export_status: s.exportStatus,
+        exported_at: s.exportedAt,
+        screens: (screensByHost.get(s.id) ?? []).map((sc) => ({
+          id: sc.id,
+          name: sc.name,
+          is_active: sc.isActive,
+          paired_at: sc.pairedAt,
+          last_seen_at: sc.lastSeenAt,
+        })),
+      })),
+    });
+  });
+
+  // ── C1: POST /api/internal/affluence ────────────────────────────────────────
+  // Flat batch of {location_id, day_of_week, hour, estimated_impressions}. Latest-value-wins upsert
+  // on (screenhost, day, hour). Unknown location_ids are SKIPPED and reported (never fail the batch).
+  app.post('/api/internal/affluence', guard, async (request, reply) => {
+    const parsed = affluenceBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        statusCode: 400,
+        requestId: request.id,
+        fields: parsed.error.issues.map((i) => ({ field: i.path.join('.'), reason: i.message })),
+      });
+    }
+    const { slots } = parsed.data;
+    if (slots.length === 0) {
+      return reply.status(200).send({ upserted: 0, unknown_locations: [] });
+    }
+
+    const requestedIds = [...new Set(slots.map((s) => s.location_id))];
+    const known = await db
+      .select({ id: screenhosts.id })
+      .from(screenhosts)
+      .where(inArray(screenhosts.id, requestedIds));
+    const knownIds = new Set(known.map((k) => k.id));
+    const unknownLocations = requestedIds.filter((id) => !knownIds.has(id));
+
+    const toUpsert = slots.filter((s) => knownIds.has(s.location_id));
+    let upserted = 0;
+    if (toUpsert.length > 0) {
+      await db.transaction(async (tx) => {
+        for (const slot of toUpsert) {
+          await tx
+            .insert(screenhostAffluence)
+            .values({
+              screenhostId: slot.location_id,
+              dayOfWeek: slot.day_of_week,
+              hour: slot.hour,
+              estimatedImpressions: slot.estimated_impressions,
+            })
+            .onConflictDoUpdate({
+              target: [
+                screenhostAffluence.screenhostId,
+                screenhostAffluence.dayOfWeek,
+                screenhostAffluence.hour,
+              ],
+              set: { estimatedImpressions: slot.estimated_impressions, updatedAt: new Date() },
+            });
+          upserted += 1;
+        }
+      });
+    }
+
+    return reply.status(200).send({ upserted, unknown_locations: unknownLocations });
+  });
+
+  // ── Edge A: POST /api/internal/agents ───────────────────────────────────────
+  // Provision a screenhost_agent (verified + approved) + its issued referral code. Reuses the
+  // admin-accounts transaction (users + optional credential account + agents row, atomic). Replay-
+  // safe: an existing screenhost_agent email returns its {user_id, code} (200); an email already
+  // taken by ANY OTHER role is a 409 EMAIL_TAKEN.
+  app.post('/api/internal/agents', guard, async (request, reply) => {
+    const parsed = agentBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        statusCode: 400,
+        requestId: request.id,
+        fields: parsed.error.issues.map((i) => ({ field: i.path.join('.'), reason: i.message })),
+      });
+    }
+    const { contact_name, password } = parsed.data;
+    const email = parsed.data.email.toLowerCase();
+
+    const [existing] = await db
+      .select({ id: users.id, role: users.role })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+    if (existing) {
+      if (existing.role === 'screenhost_agent') {
+        const [agent] = await db
+          .select({ code: agents.code })
+          .from(agents)
+          .where(eq(agents.userId, existing.id))
+          .limit(1);
+        return reply.status(200).send({ user_id: existing.id, code: agent?.code ?? null });
+      }
+      return reply.status(409).send({
+        error: 'EMAIL_TAKEN',
+        message: 'An account with this email already exists.',
+        statusCode: 409,
+        requestId: request.id,
+        fields: [{ field: 'email', reason: 'already registered' }],
+      });
+    }
+
+    const created = await db.transaction(async (tx) => {
+      const [user] = await tx
+        .insert(users)
+        .values({
+          email,
+          contactName: contact_name,
+          emailVerified: true,
+          role: 'screenhost_agent',
+          status: 'approved',
+        })
+        .returning({ id: users.id });
+      if (!user) throw new Error('internal agent insert returned no row');
+      if (password) {
+        await tx.insert(accounts).values({
+          accountId: user.id,
+          providerId: 'credential',
+          userId: user.id,
+          password: await hashPassword(password),
+        });
+      }
+      const code = await generateUniqueAgentCode(async (candidate) => {
+        const [hit] = await tx
+          .select({ code: agents.code })
+          .from(agents)
+          .where(eq(agents.code, candidate))
+          .limit(1);
+        return hit !== undefined;
+      });
+      await tx.insert(agents).values({ userId: user.id, code });
+      return { userId: user.id, code };
+    });
+
+    return reply.status(201).send({ user_id: created.userId, code: created.code });
+  });
+};
