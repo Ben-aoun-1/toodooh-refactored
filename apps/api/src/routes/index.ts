@@ -12,6 +12,7 @@ import { predefinedZonesRoutes } from './predefined-zones.js';
 import { profileDocumentsRoutes } from './profile-documents.js';
 import { profileRoutes } from './profile.js';
 import { referenceRoutes } from './reference.js';
+import { screenhostsRoutes } from './screenhosts.js';
 import { screensRoutes } from './screens.js';
 import { signinRoutes } from './signin.js';
 import { signupRoute } from './signup.js';
@@ -33,6 +34,9 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   await app.register(deviceAuthRoutes);
   // MAP M1 — device-bearer screen list + pair/GPS-link.
   await app.register(screensRoutes);
+  // Owner + admin WiFi maintenance for screenhosts (SSID/password) — every edit re-pushes the
+  // owner's approved screenhosts to wedooh (S-T1 Edge B2) so the hub's credentials stay current.
+  await app.register(screenhostsRoutes);
   await app.register(meRoutes);
   await app.register(profileRoutes);
   await app.register(profileDocumentsRoutes);
