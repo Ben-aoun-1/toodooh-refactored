@@ -10,6 +10,7 @@ import {
   Trash2,
   Check,
   Info,
+  Wifi,
 } from 'lucide-react';
 import React, { useState, useEffect, type ReactNode } from 'react';
 import { toast } from 'react-hot-toast';
@@ -19,7 +20,12 @@ import { isValidPassword, passwordChecks } from '@/features/auth/utils/password'
 import { getErrorMessage } from '@/lib/errors';
 
 type TabId = 'responsable' | 'entreprise' | 'notifications' | 'confidentialite';
-type EntrepriseSubId = 'informations' | 'adresse' | 'documents' | 'coordonnees-bancaires';
+type EntrepriseSubId =
+  | 'informations'
+  | 'adresse'
+  | 'documents'
+  | 'coordonnees-bancaires'
+  | 'wifi-lieu';
 type ConfidentialiteSubId = 'password' | 'delete';
 
 /**
@@ -117,6 +123,9 @@ interface ProfileSettingsProps {
   /** Owner-only "Mes coordonnées bancaires" sub-tab content (B4b). */
   bankSlot?: ReactNode;
   bankSubLabel?: string;
+  /** Owner-only "WiFi du lieu" sub-tab content (per-screenhost WiFi editor). */
+  wifiSlot?: ReactNode;
+  wifiSubLabel?: string;
 }
 
 const TABS: { id: TabId; label: string }[] = [
@@ -193,6 +202,8 @@ export default function ProfileSettings({
   copy,
   bankSlot,
   bankSubLabel,
+  wifiSlot,
+  wifiSubLabel,
 }: ProfileSettingsProps) {
   const location = useLocation();
   const [activeTab, setActiveTab] = useState<TabId>('responsable');
@@ -249,6 +260,15 @@ export default function ProfileSettings({
           },
         ]
       : []),
+    ...(wifiSlot
+      ? [
+          {
+            id: 'wifi-lieu' as const,
+            label: wifiSubLabel ?? 'WiFi du lieu',
+            icon: <Wifi className="h-5 w-5" />,
+          },
+        ]
+      : []),
   ];
 
   useEffect(() => {
@@ -267,8 +287,14 @@ export default function ProfileSettings({
 
     if (
       tabParam === 'entreprise' &&
-      (subParam === 'informations' || subParam === 'adresse' || subParam === 'documents')
+      (subParam === 'informations' ||
+        subParam === 'adresse' ||
+        subParam === 'documents' ||
+        subParam === 'coordonnees-bancaires' ||
+        subParam === 'wifi-lieu')
     ) {
+      // Owner-only sub-tabs (bank, wifi) render only when their slot is supplied; the render
+      // guards on the slot, so deep-linking to one without the slot is a harmless no-render.
       setEntrepriseSub(subParam);
     }
   }, [location.search]);
@@ -930,6 +956,8 @@ export default function ProfileSettings({
             {entrepriseSub === 'documents' && documentsSlot}
 
             {entrepriseSub === 'coordonnees-bancaires' && bankSlot}
+
+            {entrepriseSub === 'wifi-lieu' && wifiSlot}
           </div>
         </div>
       )}

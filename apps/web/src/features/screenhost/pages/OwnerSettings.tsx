@@ -15,6 +15,7 @@ import ProfileSettings, {
   type ProfileFormInitialValues,
 } from '@/features/profile/components/ProfileSettings';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
+import OwnerWifiSlot from '@/features/screenhost/components/OwnerWifiSlot';
 
 /**
  * Screenhost profile/settings page (`/owner-settings`). Thin wrapper over the
@@ -162,6 +163,8 @@ export default function OwnerSettings() {
               }}
               bankSlot={<OwnerBankDetailsSlot profile={profile} userId={user?.id ?? ''} />}
               bankSubLabel="Mes coordonnées bancaires"
+              wifiSlot={<OwnerWifiSlot userId={user?.id ?? ''} />}
+              wifiSubLabel="WiFi du lieu"
             />
           </div>
         </div>
