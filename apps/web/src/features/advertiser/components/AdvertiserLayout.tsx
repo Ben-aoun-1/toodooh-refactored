@@ -247,7 +247,7 @@ function AdvertiserLayoutChrome({ children, userName }: AdvertiserLayoutProps) {
           userId={user?.id}
           userName={displayName}
         />
-        <main className="flex-1 min-h-0 overflow-auto p-8">
+        <main className="flex-1 min-h-0 overflow-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
           <ContentErrorBoundary>{children}</ContentErrorBoundary>
         </main>
       </div>

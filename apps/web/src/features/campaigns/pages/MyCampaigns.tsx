@@ -332,7 +332,7 @@ export default function MyCampaigns() {
   ];
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8">
+    <div className="w-full space-y-8">
       {/* Bloc statistiques par statut (7 widgets) – cliquables = filtres sur la liste */}
       <div className="flex flex-row flex-wrap items-stretch gap-4">
         {statusWidgets.map((w, i) => {

@@ -161,7 +161,7 @@ export default function Events() {
   }, [eventType, search]);
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
+    <div className="w-full space-y-6">
       {/* Mes événements : ceux sur lesquels l'annonceur a lancé une campagne */}
       <div className="rounded-xl bg-white shadow-sm overflow-hidden">
         <div className="pt-2 pb-1">

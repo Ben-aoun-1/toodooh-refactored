@@ -87,7 +87,7 @@ export default function CartPage() {
   const totalTTC = subtotalHT + tva;
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8">
+    <div className="w-full space-y-8">
       {/* Deux blocs séparés : Récapitulatif + Prêt à diffuser */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Bloc gauche : Récapitulatif */}

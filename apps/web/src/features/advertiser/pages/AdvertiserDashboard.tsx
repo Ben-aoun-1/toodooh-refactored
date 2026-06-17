@@ -34,7 +34,7 @@ export default function AdvertiserDashboard() {
     hasRegistrationDocument && availableBalanceTnd > 0 && totalCreatedCampaignsCount > 0;
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8">
+    <div className="w-full space-y-8">
       <BalanceCard balance={stats.balance} loading={loadingStats} isDisabled={isDisabled} />
       <FeaturedEventsGrid />
       <StatsGrid
