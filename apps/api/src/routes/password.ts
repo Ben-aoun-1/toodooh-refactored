@@ -51,14 +51,14 @@ const resolveResetUserId = async (token: string): Promise<string | null> => {
   return row?.value ?? null;
 };
 
-// After a successful reset, push an AGENT's NEW password to the hub so login-by-code there rotates
-// to it (HB2's idempotent upsert rotates the hub scrypt hash). The agent lookup is awaited (cheap,
-// indexed) and the innerJoin on agents IS the agent-only gate — a non-agent (admin/owner) has no
-// agents row, so nothing propagates. Only the slow hub push is fire-and-forget; its env-gating +
-// never-throw live in pushAgentToHub (TA4), so a hub outage / unset sync env never delays or fails
-// the reset. Wrapped so even a lookup error can't fail the already-succeeded reset. The new plaintext
-// rides the authed x-api-key channel and is never logged.
-const propagateAgentPasswordReset = async (
+// After a successful reset OR change, push an AGENT's NEW password to the hub so login-by-code there
+// rotates to it (HB2's idempotent upsert rotates the hub scrypt hash). The agent lookup is awaited
+// (cheap, indexed) and the innerJoin on agents IS the agent-only gate — a non-agent (admin/owner)
+// has no agents row, so nothing propagates. Only the slow hub push is fire-and-forget; its env-gating
+// + never-throw live in pushAgentToHub (TA4), so a hub outage / unset sync env never delays or fails
+// the password update. Wrapped so even a lookup error can't fail the already-succeeded update. The
+// new plaintext rides the authed x-api-key channel and is never logged.
+const propagateAgentPassword = async (
   userId: string,
   newPassword: string,
   log: FastifyBaseLogger,
@@ -81,10 +81,10 @@ const propagateAgentPasswordReset = async (
       },
       log,
     ).catch((err: unknown) => {
-      log.warn(`hub reset propagation rejected: ${(err as Error).message}`);
+      log.warn(`hub password propagation rejected: ${(err as Error).message}`);
     });
   } catch (err) {
-    log.warn(`hub reset propagation lookup failed: ${(err as Error).message}`);
+    log.warn(`hub password propagation lookup failed: ${(err as Error).message}`);
   }
 };
 
@@ -134,8 +134,8 @@ export const passwordRoutes: FastifyPluginAsync = async (app) => {
       });
     }
     // Reset succeeded → propagate an agent's new password to the hub (best-effort, non-blocking;
-    // see propagateAgentPasswordReset — never throws, never fails the reset).
-    if (userId) await propagateAgentPasswordReset(userId, parsed.data.new_password, request.log);
+    // see propagateAgentPassword — never throws, never fails the reset).
+    if (userId) await propagateAgentPassword(userId, parsed.data.new_password, request.log);
     return reply.status(200).send({ success: true });
   });
 
@@ -173,6 +173,10 @@ export const passwordRoutes: FastifyPluginAsync = async (app) => {
       });
     }
     forwardSetCookie(reply, result.headers); // the refreshed current-session cookie
+    // Change succeeded → propagate an agent's new password to the hub, same as reset (best-effort,
+    // non-blocking). requireAuth guarantees request.user; the ?. narrows + defends.
+    const userId = request.user?.id;
+    if (userId) await propagateAgentPassword(userId, parsed.data.new_password, request.log);
     return reply.status(200).send({ success: true });
   });
 };

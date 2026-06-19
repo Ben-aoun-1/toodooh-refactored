@@ -262,9 +262,42 @@ describe('password management: reset-request + reset + change (real Postgres)', 
 
     const res = await change(cookie, PASSWORD, NEW_PASSWORD);
     expect(res.statusCode).toBe(200);
+    expect(pushAgentSpy).not.toHaveBeenCalled(); // advertiser (non-agent) → no hub propagation
 
     expect((await signin('changeme@example.com', NEW_PASSWORD)).statusCode).toBe(200);
     expect((await signin('changeme@example.com', PASSWORD)).statusCode).toBe(401);
+  });
+
+  it('an AGENT change propagates the NEW password to the hub', async () => {
+    await createAgentUser('agentchange@example.com', 'SH555555');
+    const cookie = cookieHeader(
+      (await signin('agentchange@example.com', PASSWORD)).headers['set-cookie'],
+    );
+
+    const res = await change(cookie, PASSWORD, NEW_PASSWORD);
+    expect(res.statusCode).toBe(200);
+    expect(pushAgentSpy).toHaveBeenCalledTimes(1);
+    expect(pushAgentSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: 'SH555555',
+        email: 'agentchange@example.com',
+        password: NEW_PASSWORD,
+        role: 'screenhost_agent',
+      }),
+      expect.anything(), // request.log
+    );
+  });
+
+  it('an AGENT change still completes when the hub re-push fails (non-blocking)', async () => {
+    await createAgentUser('agentchangefail@example.com', 'SH666666');
+    const cookie = cookieHeader(
+      (await signin('agentchangefail@example.com', PASSWORD)).headers['set-cookie'],
+    );
+    pushAgentSpy.mockRejectedValueOnce(new Error('hub down'));
+
+    const res = await change(cookie, PASSWORD, NEW_PASSWORD);
+    expect(res.statusCode).toBe(200); // change succeeds despite the failed hub re-push
+    expect(pushAgentSpy).toHaveBeenCalledTimes(1);
   });
 
   it('change wrong current → 400 INVALID_CREDENTIALS', async () => {
