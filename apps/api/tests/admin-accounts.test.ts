@@ -19,6 +19,17 @@ vi.mock('nodemailer', () => ({
   default: { createTransport: vi.fn(() => ({ sendMail: sendMailMock })) },
 }));
 
+// wedooh hub provisioning (the agent push) is mocked so we assert the CALL-SITE decision (agents
+// push, admin does not) without a real hub call. The sync env is UNSET in tests, so the real fn
+// no-ops regardless — the mock isolates the route gate; the wire is covered in wedooh-sync.test.ts.
+const pushAgentSpy = vi.hoisted(() =>
+  vi.fn<(agent: unknown, logger: unknown) => Promise<void>>(() => Promise.resolve()),
+);
+vi.mock('../src/lib/wedooh-sync.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/lib/wedooh-sync.js')>();
+  return { ...actual, pushAgentToHub: pushAgentSpy };
+});
+
 // Integration suite — real Postgres (DATABASE_URL). requireAuth's getSession is mocked (its
 // behavior lives in require-auth.test.ts); the route logic + the better-auth password round-trip
 // (create hash → /api/signin verify) run against real rows. The actor superadmin is a real users
@@ -57,6 +68,8 @@ describe('POST /api/admin/accounts (real Postgres)', () => {
 
   beforeEach(async () => {
     await resetAuthTables();
+    pushAgentSpy.mockReset();
+    pushAgentSpy.mockResolvedValue(undefined);
     superId = await seedUser({ role: 'superadmin', status: 'approved' });
     app = buildApp();
     await app.register(adminAccountsRoutes);
@@ -200,6 +213,45 @@ describe('POST /api/admin/accounts (real Postgres)', () => {
     expect(res.statusCode).toBe(201);
     expect(res.json<{ account: { code: string | null } }>().account.code).toMatch(/^SH\d{6}$/);
     // the account is really persisted despite the email failure
+    const [u] = await db.select().from(users).where(eq(users.email, 'agent1@example.com'));
+    expect(u?.id).toBeTruthy();
+  });
+
+  it('agent creation provisions the agent to the hub with the exact payload', async () => {
+    mockSession(superId);
+    const res = await create(VALID); // screenhost_agent
+    expect(res.statusCode).toBe(201);
+    const { account } = res.json<{
+      account: { code: string | null; temp_password: string | null };
+    }>();
+    const [u] = await db.select().from(users).where(eq(users.email, 'agent1@example.com'));
+    expect(pushAgentSpy).toHaveBeenCalledTimes(1);
+    // code = hub username; the SAME generated password rides the authed channel.
+    expect(pushAgentSpy).toHaveBeenCalledWith(
+      {
+        toodooh_user_id: u?.id,
+        code: account.code,
+        email: 'agent1@example.com',
+        password: account.temp_password,
+        role: 'screenhost_agent',
+      },
+      expect.anything(), // request.log
+    );
+  });
+
+  it('admin creation does NOT push to the hub (agents only)', async () => {
+    mockSession(superId);
+    const res = await create({ ...VALID, email: 'admin7@example.com', role: 'admin' });
+    expect(res.statusCode).toBe(201);
+    expect(pushAgentSpy).not.toHaveBeenCalled();
+  });
+
+  it('a hub push failure does NOT block agent creation (non-blocking)', async () => {
+    mockSession(superId);
+    pushAgentSpy.mockRejectedValueOnce(new Error('hub down'));
+    const res = await create(VALID);
+    expect(res.statusCode).toBe(201);
+    expect(res.json<{ account: { code: string | null } }>().account.code).toMatch(/^SH\d{6}$/);
     const [u] = await db.select().from(users).where(eq(users.email, 'agent1@example.com'));
     expect(u?.id).toBeTruthy();
   });

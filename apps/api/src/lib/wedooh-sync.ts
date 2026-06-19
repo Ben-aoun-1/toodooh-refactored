@@ -156,3 +156,45 @@ export const sweepUnexported = async (
     await pushOneLocation(id, cfg, logger);
   }
 };
+
+// S-T1 Edge — provision a newly-created AGENT to wedooh's hub on admin creation, so the agent can
+// log into hub.too-dooh.com with their agent code (= hub username) and the SAME generated password.
+// Mirrors the location push: same env-gating, same x-api-key auth, same swallow-and-log. Called
+// fire-and-forget from admin-accounts AFTER its commit — it NEVER blocks or fails creation (the
+// admin-UI panel + welcome email are the fallback). The plaintext password rides the authenticated
+// HTTPS channel and is NEVER logged (only the code + status). Unlike locations there is no
+// export-status/sweep retry here — a one-shot push; the hub receiver (HB2) + any retry is separate.
+export type AgentSyncPayload = {
+  toodooh_user_id: string;
+  code: string;
+  email: string;
+  password: string;
+  role: string;
+};
+
+export const pushAgentToHub = async (
+  agent: AgentSyncPayload,
+  logger: Logger,
+  override?: Partial<SyncConfig>,
+): Promise<void> => {
+  const cfg = resolveConfig(override);
+  if (!cfg) {
+    logger.warn(`hub agent sync disabled: agent ${agent.code} not provisioned (sync env unset)`);
+    return;
+  }
+  try {
+    const res = await fetch(`${cfg.ingestUrl}/api/sync/agents`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': cfg.syncKey },
+      body: JSON.stringify(agent),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (res.ok) {
+      logger.info(`hub agent provisioned: ${agent.code}`);
+      return;
+    }
+    logger.warn(`hub agent push failed: agent ${agent.code} → ${res.status}`);
+  } catch (err) {
+    logger.warn(`hub agent push error: agent ${agent.code} → ${(err as Error).message}`);
+  }
+};

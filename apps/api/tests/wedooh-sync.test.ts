@@ -3,7 +3,11 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 
 import { db, sql } from '../src/db/client.js';
 import { screenhosts, users } from '../src/db/schema.js';
-import { isSyncEnabled, pushApprovedOwnerLocations } from '../src/lib/wedooh-sync.js';
+import {
+  isSyncEnabled,
+  pushAgentToHub,
+  pushApprovedOwnerLocations,
+} from '../src/lib/wedooh-sync.js';
 import { encryptWifiPassword } from '../src/lib/wifi-crypto.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
@@ -88,5 +92,47 @@ describe('Edge B2 — pushApprovedOwnerLocations', () => {
     const [row] = await db.select().from(screenhosts).where(eq(screenhosts.id, hostId));
     expect(row?.exportStatus).toBe('failed');
     expect(logger.warn).toHaveBeenCalled();
+  });
+
+  describe('pushAgentToHub (agent provisioning)', () => {
+    const AGENT = {
+      toodooh_user_id: 'u1',
+      code: 'SH123456',
+      email: 'agent@example.com',
+      password: 'tempPlaintextPw',
+      role: 'screenhost_agent',
+    };
+
+    it('POSTs the agent to /api/sync/agents with x-api-key + the exact payload; no leak', async () => {
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(new Response(null, { status: 200 }));
+
+      await pushAgentToHub(AGENT, logger, CFG);
+
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      const [url, opts] = fetchSpy.mock.calls[0]!;
+      expect(url).toBe('https://hub.example/api/sync/agents');
+      expect((opts as RequestInit).method).toBe('POST');
+      expect((opts as RequestInit).headers).toMatchObject({ 'x-api-key': CFG.syncKey });
+      expect(JSON.parse((opts as RequestInit).body as string)).toEqual(AGENT);
+      // The plaintext password rides the body but is NEVER logged.
+      const logged = [...logger.info.mock.calls, ...logger.warn.mock.calls].flat().join(' ');
+      expect(logged).not.toContain(AGENT.password);
+    });
+
+    it('no-op (no fetch) + logs "disabled" when the sync env is unset', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch');
+      expect(isSyncEnabled()).toBe(false);
+      await pushAgentToHub(AGENT, logger); // no override → unset env
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalled();
+    });
+
+    it('never rejects on a non-2xx hub response (non-blocking)', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 502 }));
+      await expect(pushAgentToHub(AGENT, logger, CFG)).resolves.toBeUndefined();
+      expect(logger.warn).toHaveBeenCalled();
+    });
   });
 });

@@ -14,6 +14,7 @@ import {
 import { env } from '../env.js';
 import { generateUniqueAgentCode, type AgentCodePrefix } from '../lib/agent-code.js';
 import { generateTempPassword } from '../lib/generate-password.js';
+import { pushAgentToHub } from '../lib/wedooh-sync.js';
 import { logger } from '../logger.js';
 import { requireAuth, requireRole } from '../middleware/require-auth.js';
 
@@ -223,9 +224,25 @@ export const adminAccountsRoutes: FastifyPluginAsync = async (app) => {
       return { user, agentCode };
     });
 
-    // Agent roles: fire the non-blocking welcome email AFTER commit (so we only email a persisted
-    // account). It never throws and never fails the response — see sendAgentWelcomeEmail.
+    // Agent roles, AFTER commit (so we only provision a persisted account): provision the agent to
+    // the hub AND send the welcome email. BOTH are non-blocking and never fail the response.
     if (isAgent && created.agentCode) {
+      // Hub provisioning — fire-and-forget (mirrors the location sync). The agent logs into the hub
+      // with their code (= username) + this same generated password; the plaintext rides the authed
+      // x-api-key channel and is never logged. A hub outage / unset env degrades silently.
+      void pushAgentToHub(
+        {
+          toodooh_user_id: created.user.id,
+          code: created.agentCode,
+          email: normalizedEmail,
+          password: plainPassword,
+          role,
+        },
+        request.log,
+      ).catch((err: unknown) => {
+        request.log.warn(`hub agent push rejected: ${(err as Error).message}`);
+      });
+      // Welcome email — awaited but swallow-and-log (never throws); see sendAgentWelcomeEmail.
       await sendAgentWelcomeEmail({
         to: created.user.email,
         name: created.user.contactName,
