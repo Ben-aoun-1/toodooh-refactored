@@ -5,7 +5,6 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { auth } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
 import { accounts, agents, type NewUser, users } from '../src/db/schema.js';
-import { AGENT_CODE_ALPHABET, AGENT_CODE_LENGTH } from '../src/lib/agent-code.js';
 import { adminAccountsRoutes } from '../src/routes/admin-accounts.js';
 import { signinRoutes } from '../src/routes/signin.js';
 
@@ -112,14 +111,14 @@ describe('POST /api/admin/accounts (real Postgres)', () => {
     expect(body.user.status).toBe('approved');
   });
 
-  it('agent creation returns + persists a unique code (screenhost_agent)', async () => {
+  it('agent creation returns + persists a unique code (screenhost_agent → SH)', async () => {
     mockSession(superId);
     const res = await create(VALID); // role screenhost_agent
     expect(res.statusCode).toBe(201);
     const code = res.json<{ account: { code: string | null } }>().account.code;
     expect(code).not.toBeNull();
-    expect(code).toHaveLength(AGENT_CODE_LENGTH);
-    expect([...(code ?? '')].every((c) => AGENT_CODE_ALPHABET.includes(c))).toBe(true);
+    // screenhost_agent → 'SH' prefix + 6 digits (8 chars total).
+    expect(code).toMatch(/^SH\d{6}$/);
     // persisted in agents, keyed by the new user, matching the returned value
     const [u] = await db.select().from(users).where(eq(users.email, 'agent1@example.com'));
     const [agentRow] = await db
@@ -129,13 +128,12 @@ describe('POST /api/admin/accounts (real Postgres)', () => {
     expect(agentRow?.code).toBe(code);
   });
 
-  it('screencast_agent creation also issues a code', async () => {
+  it('screencast_agent creation also issues a code (→ SC)', async () => {
     mockSession(superId);
     const res = await create({ ...VALID, email: 'agent2@example.com', role: 'screencast_agent' });
     expect(res.statusCode).toBe(201);
-    expect(res.json<{ account: { code: string | null } }>().account.code).toHaveLength(
-      AGENT_CODE_LENGTH,
-    );
+    // screencast_agent → 'SC' prefix + 6 digits.
+    expect(res.json<{ account: { code: string | null } }>().account.code).toMatch(/^SC\d{6}$/);
   });
 
   it('non-agent (admin) creation issues no code and writes no agents row', async () => {

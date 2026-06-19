@@ -1,49 +1,54 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  AGENT_CODE_DIGITS,
   AGENT_CODE_ERROR,
-  AGENT_CODE_MAX_LENGTH,
+  AGENT_CODE_PREFIXES,
   isValidAgentCode,
   normalizeAgentCode,
 } from './agent-code';
 
-describe('agent-code field control (F5 — Kais QA ruling 2026-06-11: numeric, no fixed length)', () => {
-  it('AGENT_CODE_MAX_LENGTH is 16 and the error message is the ruled French copy', () => {
-    expect(AGENT_CODE_MAX_LENGTH).toBe(16);
-    expect(AGENT_CODE_ERROR).toBe('Code agent invalide (chiffres uniquement).');
+describe('agent-code field control (Kais GTM spec, 2026-06-19: SH/SC + 6 digits)', () => {
+  it('exposes the SH/SC prefix set, a 6-digit body, and the ruled French error copy', () => {
+    expect(AGENT_CODE_PREFIXES).toEqual(['SH', 'SC']);
+    expect(AGENT_CODE_DIGITS).toBe(6);
+    expect(AGENT_CODE_ERROR).toBe('Code agent invalide (format SH/SC + 6 chiffres).');
   });
 
-  it('accepts 8 digits (the generated format keeps passing)', () => {
-    expect(isValidAgentCode('12345678')).toBe(true);
-    expect(isValidAgentCode('00000000')).toBe(true);
+  it('accepts SH###### and SC###### — the issued format', () => {
+    expect(isValidAgentCode('SH123456')).toBe(true);
+    expect(isValidAgentCode('SC000000')).toBe(true); // all-zero body survives (string, not number)
+    expect(isValidAgentCode('SH999999')).toBe(true);
   });
 
-  it('accepts 7 and 9 digits — deliberate inversion of the F4 exactly-8 gate', () => {
-    // F4 ("Numéros", 2026-06-10) rejected these; the 2026-06-11 ruling ("pas besoin de
-    // 8 chiffres") makes any digit count 1–16 valid.
-    expect(isValidAgentCode('1234567')).toBe(true); // 7
-    expect(isValidAgentCode('123456789')).toBe(true); // 9
-    expect(isValidAgentCode('1')).toBe(true); // floor
-    expect(isValidAgentCode('1234567890123456')).toBe(true); // 16 — ceiling
+  it('is case-insensitive on the prefix (normalize uppercases anyway)', () => {
+    expect(isValidAgentCode('sh123456')).toBe(true);
+    expect(isValidAgentCode('Sc123456')).toBe(true);
+    expect(isValidAgentCode(normalizeAgentCode('sh123456'))).toBe(true);
   });
 
-  it('rejects empty and beyond the 16-digit ceiling', () => {
+  it('rejects the OLD bare-digit format (Kais GTM supersedes F5) and wrong digit counts', () => {
+    expect(isValidAgentCode('12345678')).toBe(false); // old numeric 8-digit
+    expect(isValidAgentCode('1234567')).toBe(false); // old 7-digit
+    expect(isValidAgentCode('SH12345')).toBe(false); // 5 digits
+    expect(isValidAgentCode('SH1234567')).toBe(false); // 7 digits
     expect(isValidAgentCode('')).toBe(false);
-    expect(isValidAgentCode('12345678901234567')).toBe(false); // 17
   });
 
-  it('rejects letters and mixed alphanumerics (legacy 32-symbol codes included)', () => {
-    expect(isValidAgentCode('ABCDEFGH')).toBe(false);
-    expect(isValidAgentCode('1234567A')).toBe(false);
-    expect(isValidAgentCode('AG2K9XPQ')).toBe(false); // legacy alphabet shape
+  it('rejects wrong/partial/missing prefixes and non-digit bodies', () => {
+    expect(isValidAgentCode('XY123456')).toBe(false); // wrong prefix
+    expect(isValidAgentCode('S123456')).toBe(false); // half a prefix
+    expect(isValidAgentCode('123456')).toBe(false); // no prefix
+    expect(isValidAgentCode('SHABCDEF')).toBe(false); // letters in body
+    expect(isValidAgentCode('SH12 456')).toBe(false); // embedded space (pre-normalize)
   });
 
-  it('normalizes spaces as the user types — pasted "12 34 56 78" becomes valid', () => {
-    expect(normalizeAgentCode('12 34 56 78')).toBe('12345678');
-    expect(normalizeAgentCode(' 12345678 ')).toBe('12345678');
-    expect(isValidAgentCode(normalizeAgentCode('12 34 56 78'))).toBe(true);
-    // Normalization strips whitespace ONLY — it never repairs an invalid code.
-    expect(isValidAgentCode(normalizeAgentCode('12 AB 56'))).toBe(false);
+  it('normalizes: uppercases + strips ALL whitespace — pasted "sh 12 34 56" becomes SH123456', () => {
+    expect(normalizeAgentCode('sh 12 34 56')).toBe('SH123456');
+    expect(normalizeAgentCode(' Sc123456 ')).toBe('SC123456');
+    expect(isValidAgentCode(normalizeAgentCode('sh 12 34 56'))).toBe(true);
+    // Normalization cases + de-spaces ONLY — it never repairs an invalid code.
+    expect(isValidAgentCode(normalizeAgentCode('sh 12 ab 56'))).toBe(false);
   });
 
   it('step gate: the canGoNext predicate (required + format over normalized input)', () => {
@@ -53,8 +58,8 @@ describe('agent-code field control (F5 — Kais QA ruling 2026-06-11: numeric, n
     expect(gate(undefined)).toBe(false); // missing — field stays REQUIRED
     expect(gate('')).toBe(false);
     expect(gate('   ')).toBe(false);
-    expect(gate('1234567')).toBe(true); // 7 digits now pass the step (F5 inversion)
-    expect(gate('ABCD1234')).toBe(false); // letters still block the step
-    expect(gate('12345678')).toBe(true);
+    expect(gate('SH123456')).toBe(true);
+    expect(gate('12345678')).toBe(false); // old numeric no longer passes the step
+    expect(gate('SHABCDEF')).toBe(false); // letters in body still block
   });
 });
