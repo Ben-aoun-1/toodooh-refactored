@@ -18,7 +18,11 @@ import { decryptWifiPassword } from './wifi-crypto.js';
 // Config is resolved from env by default; the public functions accept an override so tests pass it
 // directly (mirroring requireSyncKey) and never depend on the eagerly-parsed env singleton.
 
-type Logger = { info: (...a: unknown[]) => void; warn: (...a: unknown[]) => void };
+type Logger = {
+  info: (...a: unknown[]) => void;
+  warn: (...a: unknown[]) => void;
+  error: (...a: unknown[]) => void;
+};
 
 export type SyncConfig = { ingestUrl: string; syncKey: string };
 
@@ -201,19 +205,24 @@ export const pushAgentToHub = async (
     logger.warn(`hub agent sync disabled: agent ${agent.code} not provisioned (sync env unset)`);
     return;
   }
+  // The hub's /api/sync/agents accepts ONLY role 'agent' — the SH/SC subtype is already carried by
+  // the code prefix. Normalize at the wire so BOTH callers (admin create + reset propagation) are
+  // covered: pushing the raw user_role ('screenhost_agent'/'screencast_agent') 400s and the agent
+  // would never exist on the hub → login-by-code dead. Failures log at ERROR — a silent 400 here
+  // kills the feature, so make it loud.
   try {
     const res = await fetch(`${cfg.ingestUrl}/api/sync/agents`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-api-key': cfg.syncKey },
-      body: JSON.stringify(agent),
+      body: JSON.stringify({ ...agent, role: 'agent' }),
       signal: AbortSignal.timeout(8000),
     });
     if (res.ok) {
       logger.info(`hub agent provisioned: ${agent.code}`);
       return;
     }
-    logger.warn(`hub agent push failed: agent ${agent.code} → ${res.status}`);
+    logger.error(`hub agent push failed: agent ${agent.code} → ${res.status}`);
   } catch (err) {
-    logger.warn(`hub agent push error: agent ${agent.code} → ${(err as Error).message}`);
+    logger.error(`hub agent push error: agent ${agent.code} → ${(err as Error).message}`);
   }
 };

@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 
 import { db, sql } from '../src/db/client.js';
 import { agentReferrals, agents, screenhosts, users } from '../src/db/schema.js';
@@ -16,7 +17,7 @@ import { resetAuthTables } from './helpers/db-test-setup.js';
 // override (mirroring requireSyncKey) and global fetch is mocked — no real wedooh call.
 
 const CFG = { ingestUrl: 'https://hub.example', syncKey: 'k'.repeat(16) };
-const logger = { info: vi.fn(), warn: vi.fn() };
+const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
 const seedOwnerWithScreenhost = async () => {
   const [owner] = await db
@@ -43,7 +44,9 @@ const seedOwnerWithScreenhost = async () => {
 describe('Edge B2 — pushApprovedOwnerLocations', () => {
   beforeEach(async () => {
     await resetAuthTables();
+    logger.info.mockClear();
     logger.warn.mockClear();
+    logger.error.mockClear();
   });
   afterEach(() => vi.restoreAllMocks());
   afterAll(async () => {
@@ -145,9 +148,16 @@ describe('Edge B2 — pushApprovedOwnerLocations', () => {
       expect(url).toBe('https://hub.example/api/sync/agents');
       expect((opts as RequestInit).method).toBe('POST');
       expect((opts as RequestInit).headers).toMatchObject({ 'x-api-key': CFG.syncKey });
-      expect(JSON.parse((opts as RequestInit).body as string)).toEqual(AGENT);
+      // role is normalized to the hub-accepted 'agent' on the wire; everything else verbatim.
+      expect(JSON.parse((opts as RequestInit).body as string)).toEqual({ ...AGENT, role: 'agent' });
       // The plaintext password rides the body but is NEVER logged.
-      const logged = [...logger.info.mock.calls, ...logger.warn.mock.calls].flat().join(' ');
+      const logged = [
+        ...logger.info.mock.calls,
+        ...logger.warn.mock.calls,
+        ...logger.error.mock.calls,
+      ]
+        .flat()
+        .join(' ');
       expect(logged).not.toContain(AGENT.password);
     });
 
@@ -159,10 +169,46 @@ describe('Edge B2 — pushApprovedOwnerLocations', () => {
       expect(logger.warn).toHaveBeenCalled();
     });
 
-    it('never rejects on a non-2xx hub response (non-blocking)', async () => {
+    it('never rejects on a non-2xx hub response (non-blocking); logs at ERROR', async () => {
       vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 502 }));
       await expect(pushAgentToHub(AGENT, logger, CFG)).resolves.toBeUndefined();
-      expect(logger.warn).toHaveBeenCalled();
+      expect(logger.error).toHaveBeenCalled(); // a silent 400/5xx here kills login-by-code
     });
+
+    // CROSS-BOUNDARY contract guard. Mirrors the hub's agentSyncSchema for POST /api/sync/agents
+    // (the receiver — separate repo): it accepts ONLY role 'agent' (the SH/SC subtype is carried by
+    // the code prefix). MUST stay in sync with the hub. This is the test that catches a role-contract
+    // drift — with the raw user_role on the wire the hub 400s and the agent is never created.
+    const hubAgentSyncSchema = z.object({
+      toodooh_user_id: z.string(),
+      code: z.string(),
+      email: z.string(),
+      password: z.string(),
+      role: z.enum(['agent']),
+    });
+
+    it.each([['screenhost_agent'], ['screencast_agent']])(
+      'normalizes role to the hub-accepted "agent" for a %s',
+      async (role) => {
+        const fetchSpy = vi
+          .spyOn(globalThis, 'fetch')
+          .mockResolvedValue(new Response(null, { status: 200 }));
+        await pushAgentToHub(
+          { toodooh_user_id: 'u1', code: 'SH123456', email: 'a@b.com', password: 'pw', role },
+          logger,
+          CFG,
+        );
+        const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
+        expect(body.role).toBe('agent'); // NOT the raw user_role — that 400s on the hub
+        expect(() => hubAgentSyncSchema.parse(body)).not.toThrow();
+        expect(body).toMatchObject({
+          toodooh_user_id: 'u1',
+          code: 'SH123456',
+          email: 'a@b.com',
+          password: 'pw',
+          role: 'agent',
+        });
+      },
+    );
   });
 });
