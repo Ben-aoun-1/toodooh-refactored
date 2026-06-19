@@ -1,10 +1,14 @@
 import { APIError } from 'better-auth/api';
 import { fromNodeHeaders } from 'better-auth/node';
-import type { FastifyPluginAsync, FastifyReply } from 'fastify';
+import { eq } from 'drizzle-orm';
+import type { FastifyBaseLogger, FastifyPluginAsync, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
 import { auth } from '../auth/auth.js';
+import { db } from '../db/client.js';
+import { agents, users, verifications } from '../db/schema.js';
 import { env } from '../env.js';
+import { pushAgentToHub } from '../lib/wedooh-sync.js';
 import { requireAuth } from '../middleware/require-auth.js';
 
 const resetRequestSchema = z.object({ email: z.email('A valid email is required') });
@@ -33,6 +37,57 @@ const forwardSetCookie = (reply: FastifyReply, headers: Headers): void => {
   for (const cookie of headers.getSetCookie()) void reply.header('set-cookie', cookie);
 };
 
+// Agent reset → hub propagation (Kais credential model: hub login-by-code must use the NEW
+// password). The reset token is a verifications row (identifier 'reset-password:<token>', value =
+// userId — better-auth password.mjs). Resolve the userId from it BEFORE resetPassword consumes the
+// row. null for a bogus token (no row).
+const RESET_VERIFICATION_PREFIX = 'reset-password:';
+const resolveResetUserId = async (token: string): Promise<string | null> => {
+  const [row] = await db
+    .select({ value: verifications.value })
+    .from(verifications)
+    .where(eq(verifications.identifier, `${RESET_VERIFICATION_PREFIX}${token}`))
+    .limit(1);
+  return row?.value ?? null;
+};
+
+// After a successful reset, push an AGENT's NEW password to the hub so login-by-code there rotates
+// to it (HB2's idempotent upsert rotates the hub scrypt hash). The agent lookup is awaited (cheap,
+// indexed) and the innerJoin on agents IS the agent-only gate — a non-agent (admin/owner) has no
+// agents row, so nothing propagates. Only the slow hub push is fire-and-forget; its env-gating +
+// never-throw live in pushAgentToHub (TA4), so a hub outage / unset sync env never delays or fails
+// the reset. Wrapped so even a lookup error can't fail the already-succeeded reset. The new plaintext
+// rides the authed x-api-key channel and is never logged.
+const propagateAgentPasswordReset = async (
+  userId: string,
+  newPassword: string,
+  log: FastifyBaseLogger,
+): Promise<void> => {
+  try {
+    const [agent] = await db
+      .select({ email: users.email, role: users.role, code: agents.code })
+      .from(users)
+      .innerJoin(agents, eq(agents.userId, users.id))
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (!agent) return; // non-agent → no propagation
+    void pushAgentToHub(
+      {
+        toodooh_user_id: userId,
+        code: agent.code,
+        email: agent.email,
+        password: newPassword,
+        role: agent.role,
+      },
+      log,
+    ).catch((err: unknown) => {
+      log.warn(`hub reset propagation rejected: ${(err as Error).message}`);
+    });
+  } catch (err) {
+    log.warn(`hub reset propagation lookup failed: ${(err as Error).message}`);
+  }
+};
+
 export const passwordRoutes: FastifyPluginAsync = async (app) => {
   // Unauthenticated. Generic success regardless of whether the email exists
   // (better-auth timing-equalizes + returns an identical body; the email only
@@ -58,6 +113,9 @@ export const passwordRoutes: FastifyPluginAsync = async (app) => {
   app.post('/api/password/reset', async (request, reply) => {
     const parsed = resetSchema.safeParse(request.body);
     if (!parsed.success) return invalidInput(reply, parsed.error.issues);
+    // Capture the userId from the token's verification BEFORE the reset (better-auth deletes the row
+    // on success). null for a bogus token → no propagation, and the reset 400s below.
+    const userId = await resolveResetUserId(parsed.data.token);
     try {
       await auth.api.resetPassword({
         body: { token: parsed.data.token, newPassword: parsed.data.new_password },
@@ -75,6 +133,9 @@ export const passwordRoutes: FastifyPluginAsync = async (app) => {
         message: 'An unexpected error occurred. Please try again.',
       });
     }
+    // Reset succeeded → propagate an agent's new password to the hub (best-effort, non-blocking;
+    // see propagateAgentPasswordReset — never throws, never fails the reset).
+    if (userId) await propagateAgentPasswordReset(userId, parsed.data.new_password, request.log);
     return reply.status(200).send({ success: true });
   });
 
