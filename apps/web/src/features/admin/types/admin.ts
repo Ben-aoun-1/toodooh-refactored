@@ -66,6 +66,10 @@ export interface InternalAccount {
   status: string;
   contact_name: string;
   email_verified: boolean;
+  // The agent's OWN issued referral code (agents.code), returned by POST /api/admin/accounts:
+  // present for the agent roles, null for admin. Surfaced after creation so the superadmin can
+  // relay it to the agent.
+  code?: string | null;
 }
 
 export interface AdminDashboardStats {

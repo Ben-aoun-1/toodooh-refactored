@@ -8,6 +8,8 @@ import {
   CheckCircle,
   Monitor,
   Cast,
+  Copy,
+  X,
 } from 'lucide-react';
 import React, { useState } from 'react';
 import { toast } from 'react-hot-toast';
@@ -15,7 +17,7 @@ import { useNavigate } from 'react-router-dom';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
 import { useAdminMutations } from '@/features/admin/hooks/useAdmins';
-import type { InternalAccountRole } from '@/features/admin/types/admin';
+import type { InternalAccount, InternalAccountRole } from '@/features/admin/types/admin';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { getErrorMessage } from '@/lib/errors';
 
@@ -49,6 +51,12 @@ export default function CreateAdmin() {
     last_name: '',
     role: 'admin',
   });
+  // The created account surfaced after a successful POST — holds the issued agent code (agent
+  // roles only; null for admin) so the superadmin can relay it. Its role label is kept because
+  // formData.role is reset on success.
+  const [created, setCreated] = useState<{ account: InternalAccount; roleLabel: string } | null>(
+    null,
+  );
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({
@@ -97,13 +105,16 @@ export default function CreateAdmin() {
       // contact_name is the single name field the apps/api endpoint stores; compose it from the
       // first/last inputs. role/status/verification are server-controlled (created approved +
       // verified); credentials are delivered out-of-band, so no verification email is sent.
-      await createAdmin.mutateAsync({
+      const account = await createAdmin.mutateAsync({
         email: formData.email,
         password: formData.password,
         contact_name: `${formData.first_name} ${formData.last_name}`.trim(),
         role: formData.role,
       });
 
+      // Surface the created account (with its issued agent code, if any) so the superadmin can
+      // relay it; capture the role label now since formData.role is about to be reset.
+      setCreated({ account, roleLabel: ROLE_LABELS[formData.role] });
       toast.success(`${ROLE_LABELS[formData.role]} créé avec succès !`);
 
       // Réinitialiser le formulaire
@@ -119,6 +130,15 @@ export default function CreateAdmin() {
       toast.error(getErrorMessage(error) || 'Erreur lors de la création');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCopyCode = async (code: string) => {
+    try {
+      await navigator.clipboard.writeText(code);
+      toast.success('Code copié');
+    } catch {
+      toast.error('Copie impossible — copiez le code manuellement');
     }
   };
 
@@ -143,9 +163,53 @@ export default function CreateAdmin() {
     );
   }
 
+  const createdCode = created?.account.code ?? null;
+
   return (
     <AdminLayout title="Créer un compte" subtitle="Ajouter un administrateur ou un agent">
       <div className="max-w-3xl mx-auto">
+        {/* Confirmation post-création — surface le code agent (rôles agent) à relayer */}
+        {created && (
+          <div className="bg-green-50 border border-green-200 rounded-xl p-6 mb-6">
+            <div className="flex items-start">
+              <CheckCircle className="h-6 w-6 text-green-600 mr-3 mt-0.5 shrink-0" />
+              <div className="flex-1">
+                <h4 className="text-sm font-semibold text-green-900 mb-1">Compte créé</h4>
+                <p className="text-sm text-green-700">
+                  {created.roleLabel} — <span className="font-medium">{created.account.email}</span>
+                </p>
+                {createdCode && (
+                  <div className="mt-3">
+                    <span className="block text-xs font-medium text-green-900 mb-1">
+                      Code agent — à communiquer à l&apos;agent
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <code className="px-3 py-2 bg-white border border-green-300 rounded-lg font-mono text-base tracking-widest text-gray-900">
+                        {createdCode}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyCode(createdCode)}
+                        className="inline-flex items-center px-3 py-2 text-sm font-medium text-green-700 border border-green-300 rounded-lg hover:bg-green-100 transition-colors"
+                      >
+                        <Copy className="h-4 w-4 mr-1.5" />
+                        Copier
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setCreated(null)}
+                aria-label="Fermer la confirmation"
+                className="ml-3 text-green-600 hover:text-green-800 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+        )}
         {/* En-tête informatif */}
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
           <div className="flex items-start">
