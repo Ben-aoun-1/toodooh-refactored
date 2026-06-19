@@ -3,9 +3,18 @@ import { eq } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
+import { emailSender } from '../auth/auth.js';
 import { db } from '../db/client.js';
 import { accounts, agents, users } from '../db/schema.js';
+import {
+  agentWelcomeEmailPlainText,
+  agentWelcomeEmailSubject,
+  agentWelcomeEmailTemplate,
+} from '../email/welcome-agent-template.js';
+import { env } from '../env.js';
 import { generateUniqueAgentCode, type AgentCodePrefix } from '../lib/agent-code.js';
+import { generateTempPassword } from '../lib/generate-password.js';
+import { logger } from '../logger.js';
 import { requireAuth, requireRole } from '../middleware/require-auth.js';
 
 // The two agent roles get an issued referral code (held in agents.code), PREFIXED by the agent
@@ -20,24 +29,35 @@ const agentCodePrefix = (role: string): AgentCodePrefix | null => {
 
 // Superadmin-only creation of INTERNAL accounts (staff admins + agents). These are NOT public
 // signups: we deliberately do NOT use better-auth's signUpEmail (it sends a verification email —
-// Ruling 9). The account is created verified + approved directly; credentials are delivered
-// out-of-band. The password is hashed with better-auth's DEFAULT hashPassword (better-auth/crypto),
-// the same scheme auth.ts's emailAndPassword verifies on /api/signin, so the created account signs
-// in normally (proven by the sign-in test). Ruling 10: a direct users + accounts DB transaction,
-// not the better-auth admin plugin (which would add banned/impersonation schema).
+// Ruling 9). The account is created verified + approved directly. The password is hashed with
+// better-auth's DEFAULT hashPassword (better-auth/crypto), the same scheme auth.ts's
+// emailAndPassword verifies on /api/signin, so the created account signs in normally (proven by
+// the sign-in test). Ruling 10: a direct users + accounts DB transaction, not the better-auth admin
+// plugin (which would add banned/impersonation schema).
+//
+// Per-role credential delivery (Kais GTM): AGENT roles get a SYSTEM-generated password, surfaced
+// once in the create response AND sent in a non-blocking welcome email (with the agent code + a
+// reset link). The staff ADMIN role keeps the admin-typed password and gets NO email — Ruling 9
+// still stands for staff (credentials delivered out-of-band).
 const superadminGuard = { preHandler: [requireAuth, requireRole('superadmin')] };
 
 // role is constrained to the admin-creatable INTERNAL roles. superadmin is intentionally NOT
 // creatable here (bootstrap-only, via scripts/create-admin.ts); end-user roles
 // (advertiser/individual_owner/fleet_owner) sign up publicly, not here; `moderator` is not a
-// user_role value (slice-2 A ruling 2). Password floor is 12 — the privileged-account floor
-// (ruling 7), above the 10-char public-signup floor.
-const createAccountSchema = z.object({
-  email: z.email('A valid email is required'),
-  password: z.string().min(12, 'Password must be at least 12 characters'),
-  contact_name: z.string().min(1).max(100),
-  role: z.enum(['admin', 'screenhost_agent', 'screencast_agent']),
-});
+// user_role value (slice-2 A ruling 2). Password is OPTIONAL (agents generate their own) but
+// REQUIRED for the admin role (refine); the ≥12 floor — the privileged-account floor (ruling 7),
+// above the 10-char public-signup floor — is enforced whenever a password is present.
+const createAccountSchema = z
+  .object({
+    email: z.email('A valid email is required'),
+    password: z.string().min(12, 'Password must be at least 12 characters').optional(),
+    contact_name: z.string().min(1).max(100),
+    role: z.enum(['admin', 'screenhost_agent', 'screencast_agent']),
+  })
+  .refine((d) => d.role !== 'admin' || d.password !== undefined, {
+    message: 'Password is required for the admin role',
+    path: ['password'],
+  });
 
 // The shaped account view returned on create (snake_case wire; the identity subset, mirroring
 // /api/me). No password/hash is ever echoed.
@@ -57,6 +77,43 @@ const toAccountView = (row: {
   email_verified: row.emailVerified,
 });
 
+// Non-blocking welcome email for a newly-created AGENT (Kais GTM). Mirrors auth.ts's never-throw
+// pattern (Decision 8): emailSender.send returns a result union and never throws, and we ALWAYS
+// resolve — so a send failure is logged but can never fail account creation (which has already
+// committed by the time this runs). The admin-UI panel that echoes the code + temp password is the
+// reliable fallback when delivery is delayed or spam-filtered. resetUrl is the FE reset-request
+// entry (no token needed — the agent enters their email there to set their own password); the temp
+// password lets them sign in meanwhile.
+const sendAgentWelcomeEmail = async (params: {
+  to: string;
+  name: string;
+  agentCode: string;
+  tempPassword: string;
+}): Promise<void> => {
+  const fields = {
+    name: params.name,
+    agentCode: params.agentCode,
+    loginEmail: params.to,
+    tempPassword: params.tempPassword,
+    resetUrl: `${env.WEB_ORIGIN}/reset-password`,
+  };
+  try {
+    const result = await emailSender.send({
+      to: params.to,
+      subject: agentWelcomeEmailSubject,
+      html: agentWelcomeEmailTemplate(fields),
+      text: agentWelcomeEmailPlainText(fields),
+    });
+    if ('error' in result) {
+      logger.error({ to: params.to, error: result.error }, 'agent welcome email failed');
+    } else {
+      logger.info({ to: params.to, messageId: result.messageId }, 'agent welcome email sent');
+    }
+  } catch (err) {
+    logger.error({ to: params.to, err }, 'agent welcome email threw (swallowed)');
+  }
+};
+
 export const adminAccountsRoutes: FastifyPluginAsync = async (app) => {
   app.post('/api/admin/accounts', superadminGuard, async (request, reply) => {
     const parsed = createAccountSchema.safeParse(request.body);
@@ -71,6 +128,8 @@ export const adminAccountsRoutes: FastifyPluginAsync = async (app) => {
     }
     const { email, password, contact_name, role } = parsed.data;
     const normalizedEmail = email.toLowerCase();
+    const prefix = agentCodePrefix(role);
+    const isAgent = prefix !== null;
 
     const adminId = request.user?.id;
     if (!adminId) {
@@ -97,7 +156,22 @@ export const adminAccountsRoutes: FastifyPluginAsync = async (app) => {
       });
     }
 
-    const passwordHash = await hashPassword(password);
+    // Agent roles get a strong system-generated password (the admin no longer types one); the admin
+    // role keeps its typed password. Both hash with the same better-auth scheme, so /api/signin
+    // verifies either identically.
+    const plainPassword = isAgent ? generateTempPassword() : password;
+    if (plainPassword === undefined) {
+      // Unreachable: the schema refine requires a password for the admin role. This narrows the
+      // type and defends in depth.
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Password is required.',
+        statusCode: 400,
+        requestId: request.id,
+        fields: [{ field: 'password', reason: 'required' }],
+      });
+    }
+    const passwordHash = await hashPassword(plainPassword);
 
     // user + credential account in ONE transaction: a created account must be atomically usable —
     // never an orphan user without a credential (the sequential-failure mode signup.ts works around).
@@ -135,7 +209,6 @@ export const adminAccountsRoutes: FastifyPluginAsync = async (app) => {
       // rows; we never catch a unique-violation (which would poison the tx) —
       // generateUniqueAgentCode regenerates.
       let agentCode: string | null = null;
-      const prefix = agentCodePrefix(role);
       if (prefix) {
         agentCode = await generateUniqueAgentCode(prefix, async (candidate) => {
           const [hit] = await tx
@@ -150,10 +223,27 @@ export const adminAccountsRoutes: FastifyPluginAsync = async (app) => {
       return { user, agentCode };
     });
 
-    // account.code is the agent's OWN issued referral code (null for non-agent roles); it is
-    // NOT users.agent_code (the referred-user attribution field). P2 reads it for display.
-    return reply
-      .status(201)
-      .send({ account: { ...toAccountView(created.user), code: created.agentCode } });
+    // Agent roles: fire the non-blocking welcome email AFTER commit (so we only email a persisted
+    // account). It never throws and never fails the response — see sendAgentWelcomeEmail.
+    if (isAgent && created.agentCode) {
+      await sendAgentWelcomeEmail({
+        to: created.user.email,
+        name: created.user.contactName,
+        agentCode: created.agentCode,
+        tempPassword: plainPassword,
+      });
+    }
+
+    // account.code is the agent's OWN issued referral code (null for non-agent roles); it is NOT
+    // users.agent_code (the referred-user attribution field). temp_password is the generated
+    // password surfaced ONCE for the admin to relay (agent roles only; null for admin, whose
+    // password was admin-chosen) — the stored HASH is still never echoed. P2 reads both for display.
+    return reply.status(201).send({
+      account: {
+        ...toAccountView(created.user),
+        code: created.agentCode,
+        temp_password: isAgent ? plainPassword : null,
+      },
+    });
   });
 };

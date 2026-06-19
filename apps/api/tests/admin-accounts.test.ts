@@ -2,13 +2,22 @@ import { eq } from 'drizzle-orm';
 import Fastify from 'fastify';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { auth } from '../src/auth/auth.js';
+import { auth, emailSender } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
 import { accounts, agents, type NewUser, users } from '../src/db/schema.js';
 import { adminAccountsRoutes } from '../src/routes/admin-accounts.js';
 import { signinRoutes } from '../src/routes/signin.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
+
+// nodemailer mocked so the agent welcome email "sends" without a real SMTP connection (no external
+// network in CI). Per-test the agent welcome send is exercised through emailSender.send.
+const { sendMailMock } = vi.hoisted(() => ({
+  sendMailMock: vi.fn().mockResolvedValue({ messageId: 'test-msg-id' }),
+}));
+vi.mock('nodemailer', () => ({
+  default: { createTransport: vi.fn(() => ({ sendMail: sendMailMock })) },
+}));
 
 // Integration suite — real Postgres (DATABASE_URL). requireAuth's getSession is mocked (its
 // behavior lives in require-auth.test.ts); the route logic + the better-auth password round-trip
@@ -97,13 +106,18 @@ describe('POST /api/admin/accounts (real Postgres)', () => {
     expect(a[0]?.password).toBeTruthy();
   });
 
-  it('created account can sign in through /api/signin', async () => {
+  it('created agent signs in with its SYSTEM-generated password (not any typed value)', async () => {
     mockSession(superId);
-    expect((await create(VALID)).statusCode).toBe(201);
+    const createRes = await create(VALID);
+    expect(createRes.statusCode).toBe(201);
+    const tempPassword = createRes.json<{ account: { temp_password: string | null } }>().account
+      .temp_password;
+    expect(tempPassword).not.toBeNull();
+    if (tempPassword === null) throw new Error('expected a generated temp password'); // narrows
     const res = await app.inject({
       method: 'POST',
       url: '/api/signin',
-      payload: { email: 'agent1@example.com', password: 'agent-pass-1234' },
+      payload: { email: 'agent1@example.com', password: tempPassword },
     });
     expect(res.statusCode).toBe(200);
     const body = res.json<{ user: { role: string; status: string } }>();
@@ -149,6 +163,47 @@ describe('POST /api/admin/accounts (real Postgres)', () => {
     expect(rows).toHaveLength(0);
   });
 
+  it('agent creation returns a strong system-generated temp password (≥12) + a code', async () => {
+    mockSession(superId);
+    const res = await create(VALID); // screenhost_agent
+    expect(res.statusCode).toBe(201);
+    const { account } = res.json<{
+      account: { temp_password: string | null; code: string | null };
+    }>();
+    expect(account.temp_password).not.toBeNull();
+    expect((account.temp_password ?? '').length).toBeGreaterThanOrEqual(12);
+    expect(account.code).toMatch(/^SH\d{6}$/);
+  });
+
+  it('admin creation returns no generated password (admin-typed)', async () => {
+    mockSession(superId);
+    const res = await create({ ...VALID, email: 'admin5@example.com', role: 'admin' });
+    expect(res.statusCode).toBe(201);
+    expect(
+      res.json<{ account: { temp_password: string | null } }>().account.temp_password,
+    ).toBeNull();
+  });
+
+  it('agent creation sends a welcome email; admin creation does not', async () => {
+    mockSession(superId);
+    const sendSpy = vi.spyOn(emailSender, 'send');
+    await create(VALID); // agent → one welcome email
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+    await create({ ...VALID, email: 'admin6@example.com', role: 'admin' });
+    expect(sendSpy).toHaveBeenCalledTimes(1); // admin sends nothing
+  });
+
+  it('a welcome-email send failure does NOT block agent creation (non-blocking)', async () => {
+    mockSession(superId);
+    vi.spyOn(emailSender, 'send').mockResolvedValueOnce({ error: 'smtp down' });
+    const res = await create(VALID);
+    expect(res.statusCode).toBe(201);
+    expect(res.json<{ account: { code: string | null } }>().account.code).toMatch(/^SH\d{6}$/);
+    // the account is really persisted despite the email failure
+    const [u] = await db.select().from(users).where(eq(users.email, 'agent1@example.com'));
+    expect(u?.id).toBeTruthy();
+  });
+
   it('non-superadmin (admin) → 403 FORBIDDEN', async () => {
     const adminId = await seedUser({ role: 'admin', status: 'approved' });
     mockSession(adminId, 'admin');
@@ -184,18 +239,23 @@ describe('POST /api/admin/accounts (real Postgres)', () => {
     expect((await create({ ...VALID, role: 'advertiser' })).statusCode).toBe(400);
   });
 
-  it('password < 12 → 400', async () => {
+  it('admin password < 12 → 400', async () => {
     mockSession(superId);
-    const res = await create({ ...VALID, password: 'shortpwd' });
+    const res = await create({
+      ...VALID,
+      email: 'admin3@example.com',
+      role: 'admin',
+      password: 'shortpwd',
+    });
     expect(res.statusCode).toBe(400);
     expect(
       res.json<{ fields: { field: string }[] }>().fields.some((f) => f.field === 'password'),
     ).toBe(true);
   });
 
-  it('missing password → 400', async () => {
+  it('admin missing password → 400 (agents are exempt — they generate)', async () => {
     mockSession(superId);
-    const noPw = { email: VALID.email, contact_name: VALID.contact_name, role: VALID.role };
+    const noPw = { email: 'admin4@example.com', contact_name: VALID.contact_name, role: 'admin' };
     expect((await create(noPw)).statusCode).toBe(400);
   });
 });
