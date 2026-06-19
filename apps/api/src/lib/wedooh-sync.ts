@@ -1,7 +1,7 @@
 import { and, eq, inArray } from 'drizzle-orm';
 
 import { db } from '../db/client.js';
-import { governorates, screenhosts, users } from '../db/schema.js';
+import { agentReferrals, agents, governorates, screenhosts, users } from '../db/schema.js';
 import { env } from '../env.js';
 
 import { decryptWifiPassword } from './wifi-crypto.js';
@@ -46,6 +46,20 @@ const decryptWifi = (encrypted: string | null): string | null => {
   }
 };
 
+// The referring agent's canonical code (agents.code) for an owner, via the agent_referrals link
+// (referred_user_id is UNIQUE → at most one). null when the owner has no referral. HB3 uses this to
+// assign the synced place to the referring agent. Resolved per push (in pushOneLocation) so both the
+// owner push AND the sweep re-push carry it — an owner's hosts all resolve to the same code.
+const resolveReferringAgentCode = async (ownerId: string): Promise<string | null> => {
+  const [row] = await db
+    .select({ code: agents.code })
+    .from(agentReferrals)
+    .innerJoin(agents, eq(agents.userId, agentReferrals.agentUserId))
+    .where(eq(agentReferrals.referredUserId, ownerId))
+    .limit(1);
+  return row?.code ?? null;
+};
+
 type ScreenhostRow = typeof screenhosts.$inferSelect;
 type OwnerRow = typeof users.$inferSelect;
 
@@ -53,6 +67,7 @@ export const buildLocationPayload = (
   s: ScreenhostRow,
   owner: OwnerRow,
   governorateName: string | null,
+  agentCode: string | null,
 ) => ({
   location_id: s.id,
   name: s.name,
@@ -66,6 +81,9 @@ export const buildLocationPayload = (
   screen_count: s.screenCount,
   wifi_ssid: s.wifiSsid,
   wifi_password: decryptWifi(s.wifiPasswordEncrypted),
+  // The referring agent's code (agents.code) if this owner signed up via an agent referral, else
+  // null — HB3 assigns the synced place to that agent when present.
+  agent_code: agentCode,
   owner: {
     id: owner.id,
     email: owner.email,
@@ -92,7 +110,8 @@ const pushOneLocation = async (
     .limit(1);
   if (!row || !row.owner) return null; // ownerless screenhost → nothing to transfer
 
-  const payload = buildLocationPayload(row.s, row.owner, row.governorateName);
+  const agentCode = await resolveReferringAgentCode(row.owner.id);
+  const payload = buildLocationPayload(row.s, row.owner, row.governorateName, agentCode);
   try {
     const res = await fetch(`${cfg.ingestUrl}/api/sync/locations`, {
       method: 'POST',

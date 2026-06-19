@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { db, sql } from '../src/db/client.js';
-import { screenhosts, users } from '../src/db/schema.js';
+import { agentReferrals, agents, screenhosts, users } from '../src/db/schema.js';
 import {
   isSyncEnabled,
   pushAgentToHub,
@@ -77,10 +77,40 @@ describe('Edge B2 — pushApprovedOwnerLocations', () => {
     expect(payload.location_id).toBe(hostId);
     expect(payload.wifi_password).toBe('pw'); // decrypted on the wire (privileged transfer)
     expect(payload.owner.email).toBe('o@example.com');
+    expect(payload.agent_code).toBeNull(); // this owner has no referral
 
     const [row] = await db.select().from(screenhosts).where(eq(screenhosts.id, hostId));
     expect(row?.exportStatus).toBe('exported');
     expect(row?.exportedAt).not.toBeNull();
+  });
+
+  it('carries the referring agent code when the owner has a referral (HB3 assignment)', async () => {
+    const { ownerId, hostId } = await seedOwnerWithScreenhost();
+    // A referring screenhost_agent: user + issued code + the (UNIQUE) referral link to the owner.
+    const [agentUser] = await db
+      .insert(users)
+      .values({
+        email: 'agent@example.com',
+        contactName: 'Agent',
+        role: 'screenhost_agent',
+        status: 'approved',
+      })
+      .returning({ id: users.id });
+    await db.insert(agents).values({ userId: agentUser!.id, code: 'SH424242' });
+    await db.insert(agentReferrals).values({
+      agentUserId: agentUser!.id,
+      referredUserId: ownerId,
+      agentCodeUsed: 'sh424242', // raw entered value; the payload carries the canonical agents.code
+    });
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(null, { status: 200 }));
+
+    await pushApprovedOwnerLocations(ownerId, logger, CFG);
+
+    const payload = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
+    expect(payload.location_id).toBe(hostId);
+    expect(payload.agent_code).toBe('SH424242');
   });
 
   it('a non-2xx response stamps failed (the sweep will retry); never throws', async () => {
