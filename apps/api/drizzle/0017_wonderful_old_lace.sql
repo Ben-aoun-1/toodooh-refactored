@@ -1,0 +1,2 @@
+CREATE TYPE "public"."agent_export_status" AS ENUM('pending', 'exported', 'failed');--> statement-breakpoint
+ALTER TABLE "agents" ADD COLUMN "export_status" "agent_export_status" DEFAULT 'pending' NOT NULL;

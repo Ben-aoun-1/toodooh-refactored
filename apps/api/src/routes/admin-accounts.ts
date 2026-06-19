@@ -1,5 +1,5 @@
 import { hashPassword } from 'better-auth/crypto';
-import { eq } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
@@ -262,5 +262,25 @@ export const adminAccountsRoutes: FastifyPluginAsync = async (app) => {
         temp_password: isAgent ? plainPassword : null,
       },
     });
+  });
+
+  // Superadmin-only read of every issued agent + its hub-provisioning status (FX3). This is the
+  // tested "read returns the status" layer for operator monitoring (a hub-down at create-time stamps
+  // export_status='failed' instead of silently stranding). The agent-listing UI that consumes this
+  // is the deferred 2.7 admin repoint — out of this commit. innerJoin agents = agent-only by
+  // construction (admin/owner users have no agents row).
+  app.get('/api/admin/agents', superadminGuard, async (_request, reply) => {
+    const rows = await db
+      .select({
+        email: users.email,
+        contact_name: users.contactName,
+        role: users.role,
+        code: agents.code,
+        export_status: agents.exportStatus,
+      })
+      .from(agents)
+      .innerJoin(users, eq(users.id, agents.userId))
+      .orderBy(desc(agents.createdAt));
+    return reply.status(200).send({ agents: rows });
   });
 };

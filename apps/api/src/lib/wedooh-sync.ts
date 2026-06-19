@@ -195,6 +195,19 @@ export type AgentSyncPayload = {
   role: string;
 };
 
+// Persist an agent's hub-provisioning status (agents.export_status) for operator visibility (FX3) —
+// a hub-down must never SILENTLY strand an agent. Called only on a real push OUTCOME; an env-disabled
+// skip leaves the existing status (default 'pending'). Best-effort: a stamp failure (DB hiccup) must
+// not break the push's non-blocking contract, so it swallows.
+const stampAgentExport = async (userId: string, status: 'exported' | 'failed'): Promise<void> => {
+  try {
+    await db.update(agents).set({ exportStatus: status }).where(eq(agents.userId, userId));
+  } catch {
+    // best-effort visibility — never break the push's non-blocking contract.
+    return;
+  }
+};
+
 export const pushAgentToHub = async (
   agent: AgentSyncPayload,
   logger: Logger,
@@ -219,10 +232,13 @@ export const pushAgentToHub = async (
     });
     if (res.ok) {
       logger.info(`hub agent provisioned: ${agent.code}`);
+      await stampAgentExport(agent.toodooh_user_id, 'exported');
       return;
     }
     logger.error(`hub agent push failed: agent ${agent.code} → ${res.status}`);
+    await stampAgentExport(agent.toodooh_user_id, 'failed');
   } catch (err) {
     logger.error(`hub agent push error: agent ${agent.code} → ${(err as Error).message}`);
+    await stampAgentExport(agent.toodooh_user_id, 'failed');
   }
 };

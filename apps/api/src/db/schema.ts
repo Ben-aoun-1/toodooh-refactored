@@ -399,6 +399,13 @@ export type NewScreenhostAffluence = typeof screenhostAffluence.$inferInsert;
 // A non-match or role-incompatible match links NOTHING — the signup still
 // succeeds and `users.agent_code` still stores the raw entry for admin
 // follow-up. agent_code_used preserves the raw entered value for audit.
+// Hub-provisioning status of an agent (FX3). Same value set as screenhost_export_status, kept as a
+// distinct enum for the agents domain. 'pending' until the first hub push attempt, then 'exported'
+// (synced) or 'failed' (hub unreachable / non-2xx) — surfaced (GET /api/admin/agents) so a hub-down
+// at create-time never SILENTLY strands the agent. A successful reset/change re-push self-heals
+// 'failed' → 'exported'.
+export const agentExportStatus = pgEnum('agent_export_status', ['pending', 'exported', 'failed']);
+
 export const agents = pgTable('agents', {
   // One row per agent user; the PK IS the FK (1:1 with users). ON DELETE CASCADE:
   // deleting the agent user removes its issued code.
@@ -406,6 +413,7 @@ export const agents = pgTable('agents', {
     .primaryKey()
     .references(() => users.id, { onDelete: 'cascade' }),
   code: text('code').notNull().unique(),
+  exportStatus: agentExportStatus('export_status').notNull().default('pending'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

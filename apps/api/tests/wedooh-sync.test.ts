@@ -210,5 +210,55 @@ describe('Edge B2 — pushApprovedOwnerLocations', () => {
         });
       },
     );
+
+    // FX3 visibility: the push stamps agents.export_status so a hub-down is never silent. The stamp
+    // is awaited inside pushAgentToHub, so the DB reflects it right after the call (deterministic).
+    const seedAgent = async (email: string, code: string): Promise<string> => {
+      const [u] = await db
+        .insert(users)
+        .values({ email, contactName: 'Agent', role: 'screenhost_agent', status: 'approved' })
+        .returning({ id: users.id });
+      await db.insert(agents).values({ userId: u!.id, code });
+      return u!.id;
+    };
+
+    it('stamps export_status "exported" on a successful push', async () => {
+      const userId = await seedAgent('exp@example.com', 'SH909090');
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 200 }));
+      await pushAgentToHub(
+        {
+          toodooh_user_id: userId,
+          code: 'SH909090',
+          email: 'exp@example.com',
+          password: 'pw',
+          role: 'screenhost_agent',
+        },
+        logger,
+        CFG,
+      );
+      const [a] = await db.select().from(agents).where(eq(agents.userId, userId));
+      expect(a?.exportStatus).toBe('exported');
+    });
+
+    it('stamps export_status "failed" on a non-2xx push (visibility, not silent)', async () => {
+      const userId = await seedAgent('fail@example.com', 'SC808080');
+      // a freshly-seeded agent starts at the column default
+      const [before] = await db.select().from(agents).where(eq(agents.userId, userId));
+      expect(before?.exportStatus).toBe('pending');
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 502 }));
+      await pushAgentToHub(
+        {
+          toodooh_user_id: userId,
+          code: 'SC808080',
+          email: 'fail@example.com',
+          password: 'pw',
+          role: 'screencast_agent',
+        },
+        logger,
+        CFG,
+      );
+      const [a] = await db.select().from(agents).where(eq(agents.userId, userId));
+      expect(a?.exportStatus).toBe('failed');
+    });
   });
 });

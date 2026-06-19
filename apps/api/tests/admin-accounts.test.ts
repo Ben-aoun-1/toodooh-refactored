@@ -310,4 +310,43 @@ describe('POST /api/admin/accounts (real Postgres)', () => {
     const noPw = { email: 'admin4@example.com', contact_name: VALID.contact_name, role: 'admin' };
     expect((await create(noPw)).statusCode).toBe(400);
   });
+
+  // GET /api/admin/agents — the FX3 "read returns the status" layer (the agent-listing UI is 2.7).
+  it('GET /api/admin/agents returns each agent with its hub export_status (default pending)', async () => {
+    mockSession(superId);
+    await create(VALID); // screenhost_agent; pushAgentToHub is mocked → export_status stays 'pending'
+    const res = await app.inject({ method: 'GET', url: '/api/admin/agents' });
+    expect(res.statusCode).toBe(200);
+    const { agents: list } = res.json<{
+      agents: Array<{
+        email: string;
+        contact_name: string;
+        role: string;
+        code: string;
+        export_status: string;
+      }>;
+    }>();
+    const row = list.find((a) => a.email === 'agent1@example.com');
+    expect(row).toBeDefined();
+    expect(row?.code).toMatch(/^SH\d{6}$/);
+    expect(row?.role).toBe('screenhost_agent');
+    expect(row?.contact_name).toBe('Agent One');
+    expect(row?.export_status).toBe('pending'); // default until a real hub push stamps it
+  });
+
+  it('GET /api/admin/agents excludes non-agent accounts', async () => {
+    mockSession(superId);
+    await create({ ...VALID, email: 'admin8@example.com', role: 'admin' }); // admin → no agents row
+    const res = await app.inject({ method: 'GET', url: '/api/admin/agents' });
+    expect(res.statusCode).toBe(200);
+    const { agents: list } = res.json<{ agents: Array<{ email: string }> }>();
+    expect(list.some((a) => a.email === 'admin8@example.com')).toBe(false);
+  });
+
+  it('GET /api/admin/agents requires superadmin → 403 for a plain admin', async () => {
+    const adminId = await seedUser({ role: 'admin', status: 'approved' });
+    mockSession(adminId, 'admin');
+    const res = await app.inject({ method: 'GET', url: '/api/admin/agents' });
+    expect(res.statusCode).toBe(403);
+  });
 });
