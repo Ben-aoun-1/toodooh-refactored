@@ -269,7 +269,8 @@ export const internalRoutes: FastifyPluginAsync<{ syncKey?: string }> = async (a
           password: await hashPassword(password),
         });
       }
-      const code = await generateUniqueAgentCode(async (candidate) => {
+      // Edge A always provisions a screenhost_agent (role set above) → 'SH'-prefixed code.
+      const code = await generateUniqueAgentCode('SH', async (candidate) => {
         const [hit] = await tx
           .select({ code: agents.code })
           .from(agents)

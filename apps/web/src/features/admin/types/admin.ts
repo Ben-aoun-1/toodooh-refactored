@@ -54,7 +54,9 @@ export type InternalAccountRole = 'admin' | 'screenhost_agent' | 'screencast_age
 
 export interface CreateInternalAccountInput {
   email: string;
-  password: string;
+  // Optional: the agent roles get a SYSTEM-generated password server-side (the field is omitted for
+  // them). Only the admin role sends a typed password (Kais GTM).
+  password?: string;
   contact_name: string;
   role: InternalAccountRole;
 }
@@ -66,6 +68,13 @@ export interface InternalAccount {
   status: string;
   contact_name: string;
   email_verified: boolean;
+  // The agent's OWN issued referral code (agents.code), returned by POST /api/admin/accounts:
+  // present for the agent roles, null for admin. Surfaced after creation so the superadmin can
+  // relay it to the agent.
+  code?: string | null;
+  // The system-generated temporary password, returned ONCE on create for the agent roles (null for
+  // admin, whose password is admin-chosen). Surfaced in the success panel for the admin to relay.
+  temp_password?: string | null;
 }
 
 export interface AdminDashboardStats {

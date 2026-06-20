@@ -907,7 +907,8 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             id="signup-agent-code"
             type="text"
             required
-            inputMode="numeric"
+            // Codes are SH/SC + digits — a text keyboard so the letter prefix is typeable on mobile.
+            inputMode="text"
             value={formData.agent_toodooh}
             onChange={(e) => {
               setAgentCodeError(null);

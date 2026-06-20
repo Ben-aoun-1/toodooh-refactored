@@ -1,10 +1,11 @@
+import { hashPassword } from 'better-auth/crypto';
 import { eq, like } from 'drizzle-orm';
 import Fastify from 'fastify';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { auth, emailSender } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
-import { users, verifications } from '../src/db/schema.js';
+import { accounts, agents, users, verifications } from '../src/db/schema.js';
 import { env } from '../src/env.js';
 import { apiRoutes } from '../src/routes/index.js';
 
@@ -19,6 +20,17 @@ const { sendMailMock } = vi.hoisted(() => ({
 vi.mock('nodemailer', () => ({
   default: { createTransport: vi.fn(() => ({ sendMail: sendMailMock })) },
 }));
+
+// The hub re-push (agent reset propagation) is mocked so we assert the call-site decision (an agent
+// reset propagates with the NEW password; a non-agent does not) without a real hub call. The push's
+// own env-gating/never-throw is covered in wedooh-sync.test.ts.
+const pushAgentSpy = vi.hoisted(() =>
+  vi.fn<(agent: unknown, logger: unknown) => Promise<void>>(() => Promise.resolve()),
+);
+vi.mock('../src/lib/wedooh-sync.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/lib/wedooh-sync.js')>();
+  return { ...actual, pushAgentToHub: pushAgentSpy };
+});
 
 const buildApp = () => Fastify({ logger: false });
 
@@ -40,6 +52,29 @@ const createVerifiedUser = async (email: string): Promise<string> => {
   });
   await db.update(users).set({ emailVerified: true }).where(eq(users.id, res.user.id));
   return res.user.id;
+};
+
+// Seed a sign-in-able AGENT directly (users + credential account + agents code), bypassing the admin
+// route. Verified + approved so reset-request, reset, and sign-in all work.
+const createAgentUser = async (email: string, code: string): Promise<string> => {
+  const [u] = await db
+    .insert(users)
+    .values({
+      email,
+      contactName: 'Agent',
+      role: 'screenhost_agent',
+      status: 'approved',
+      emailVerified: true,
+    })
+    .returning({ id: users.id });
+  await db.insert(accounts).values({
+    accountId: u!.id,
+    providerId: 'credential',
+    userId: u!.id,
+    password: await hashPassword(PASSWORD),
+  });
+  await db.insert(agents).values({ userId: u!.id, code });
+  return u!.id;
 };
 
 // The reset token is a verifications-table ROW (identifier 'reset-password:<token>'), NOT a JWT
@@ -66,6 +101,8 @@ describe('password management: reset-request + reset + change (real Postgres)', 
 
   beforeEach(async () => {
     await resetAuthTables();
+    pushAgentSpy.mockReset();
+    pushAgentSpy.mockResolvedValue(undefined);
     app = buildApp();
     await app.register(apiRoutes);
     await app.ready();
@@ -140,6 +177,7 @@ describe('password management: reset-request + reset + change (real Postgres)', 
       payload: { token, new_password: NEW_PASSWORD },
     });
     expect(res.statusCode).toBe(200);
+    expect(pushAgentSpy).not.toHaveBeenCalled(); // advertiser (non-agent) → no hub propagation
 
     expect((await signin('resetme@example.com', NEW_PASSWORD)).statusCode).toBe(200);
     expect((await signin('resetme@example.com', PASSWORD)).statusCode).toBe(401);
@@ -165,6 +203,47 @@ describe('password management: reset-request + reset + change (real Postgres)', 
     expect(res.json<{ error: string }>().error).toBe('INVALID_INPUT');
   });
 
+  it('an AGENT reset propagates the NEW password to the hub (rotate hub credential)', async () => {
+    await createAgentUser('agentreset@example.com', 'SH777777');
+    expect((await resetRequest('agentreset@example.com')).statusCode).toBe(200);
+    const token = await resetTokenFor();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/password/reset',
+      payload: { token, new_password: NEW_PASSWORD },
+    });
+    expect(res.statusCode).toBe(200);
+    // Pushed with the NEW plaintext (HB2 upsert rotates the hub hash); code = hub username.
+    expect(pushAgentSpy).toHaveBeenCalledTimes(1);
+    expect(pushAgentSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: 'SH777777',
+        email: 'agentreset@example.com',
+        password: NEW_PASSWORD,
+        role: 'screenhost_agent',
+      }),
+      expect.anything(), // request.log
+    );
+  });
+
+  it('an AGENT reset still completes when the hub re-push fails (non-blocking)', async () => {
+    await createAgentUser('agentfail@example.com', 'SH888888');
+    expect((await resetRequest('agentfail@example.com')).statusCode).toBe(200);
+    const token = await resetTokenFor();
+    pushAgentSpy.mockRejectedValueOnce(new Error('hub down'));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/password/reset',
+      payload: { token, new_password: NEW_PASSWORD },
+    });
+    expect(res.statusCode).toBe(200); // reset succeeds despite the failed hub re-push
+    expect(pushAgentSpy).toHaveBeenCalledTimes(1);
+    // the new password really took effect
+    expect((await signin('agentfail@example.com', NEW_PASSWORD)).statusCode).toBe(200);
+  });
+
   // --- change (authenticated) ---
 
   const change = (cookie: string, current: string, next: string) =>
@@ -183,9 +262,42 @@ describe('password management: reset-request + reset + change (real Postgres)', 
 
     const res = await change(cookie, PASSWORD, NEW_PASSWORD);
     expect(res.statusCode).toBe(200);
+    expect(pushAgentSpy).not.toHaveBeenCalled(); // advertiser (non-agent) → no hub propagation
 
     expect((await signin('changeme@example.com', NEW_PASSWORD)).statusCode).toBe(200);
     expect((await signin('changeme@example.com', PASSWORD)).statusCode).toBe(401);
+  });
+
+  it('an AGENT change propagates the NEW password to the hub', async () => {
+    await createAgentUser('agentchange@example.com', 'SH555555');
+    const cookie = cookieHeader(
+      (await signin('agentchange@example.com', PASSWORD)).headers['set-cookie'],
+    );
+
+    const res = await change(cookie, PASSWORD, NEW_PASSWORD);
+    expect(res.statusCode).toBe(200);
+    expect(pushAgentSpy).toHaveBeenCalledTimes(1);
+    expect(pushAgentSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: 'SH555555',
+        email: 'agentchange@example.com',
+        password: NEW_PASSWORD,
+        role: 'screenhost_agent',
+      }),
+      expect.anything(), // request.log
+    );
+  });
+
+  it('an AGENT change still completes when the hub re-push fails (non-blocking)', async () => {
+    await createAgentUser('agentchangefail@example.com', 'SH666666');
+    const cookie = cookieHeader(
+      (await signin('agentchangefail@example.com', PASSWORD)).headers['set-cookie'],
+    );
+    pushAgentSpy.mockRejectedValueOnce(new Error('hub down'));
+
+    const res = await change(cookie, PASSWORD, NEW_PASSWORD);
+    expect(res.statusCode).toBe(200); // change succeeds despite the failed hub re-push
+    expect(pushAgentSpy).toHaveBeenCalledTimes(1);
   });
 
   it('change wrong current → 400 INVALID_CREDENTIALS', async () => {

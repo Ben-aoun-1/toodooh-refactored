@@ -229,7 +229,7 @@ describe('Edge A: POST /api/internal/agents', () => {
     app = undefined;
   });
 
-  it('provisions a screenhost_agent + 8-digit code, and replays idempotently', async () => {
+  it('provisions a screenhost_agent + SH-prefixed code, and replays idempotently', async () => {
     const create = await app!.inject({
       method: 'POST',
       url: '/api/internal/agents',
@@ -242,7 +242,7 @@ describe('Edge A: POST /api/internal/agents', () => {
     });
     expect(create.statusCode).toBe(201);
     const first = create.json<{ user_id: string; code: string }>();
-    expect(first.code).toMatch(/^\d{8}$/);
+    expect(first.code).toMatch(/^SH\d{6}$/); // Edge A always provisions a screenhost_agent
     const [agentRow] = await db.select().from(agents).where(eq(agents.userId, first.user_id));
     expect(agentRow?.code).toBe(first.code);
 

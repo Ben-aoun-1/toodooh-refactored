@@ -8,6 +8,8 @@ import {
   CheckCircle,
   Monitor,
   Cast,
+  Copy,
+  X,
 } from 'lucide-react';
 import React, { useState } from 'react';
 import { toast } from 'react-hot-toast';
@@ -15,7 +17,7 @@ import { useNavigate } from 'react-router-dom';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
 import { useAdminMutations } from '@/features/admin/hooks/useAdmins';
-import type { InternalAccountRole } from '@/features/admin/types/admin';
+import type { InternalAccount, InternalAccountRole } from '@/features/admin/types/admin';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { getErrorMessage } from '@/lib/errors';
 
@@ -35,6 +37,37 @@ const ROLE_LABELS: Record<InternalAccountRole, string> = {
   screencast_agent: 'Agent ScreenCast',
 };
 
+// One copyable credential row (label + monospace value + Copier button) — used in the post-create
+// panel for both the agent code and the temporary password.
+function CopyableCredential({
+  label,
+  value,
+  onCopy,
+}: {
+  label: string;
+  value: string;
+  onCopy: (value: string) => void;
+}) {
+  return (
+    <div className="mt-3">
+      <span className="block text-xs font-medium text-green-900 mb-1">{label}</span>
+      <div className="flex items-center gap-2">
+        <code className="flex-1 min-w-0 break-all px-3 py-2 bg-white border border-green-300 rounded-lg font-mono text-base tracking-wider text-gray-900">
+          {value}
+        </code>
+        <button
+          type="button"
+          onClick={() => onCopy(value)}
+          className="shrink-0 inline-flex items-center px-3 py-2 text-sm font-medium text-green-700 border border-green-300 rounded-lg hover:bg-green-100 transition-colors"
+        >
+          <Copy className="h-4 w-4 mr-1.5" />
+          Copier
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function CreateAdmin() {
   const user = useAuthStore((s) => s.user);
   const role = useAuthStore((s) => s.role);
@@ -49,6 +82,12 @@ export default function CreateAdmin() {
     last_name: '',
     role: 'admin',
   });
+  // The created account surfaced after a successful POST — holds the issued agent code (agent
+  // roles only; null for admin) so the superadmin can relay it. Its role label is kept because
+  // formData.role is reset on success.
+  const [created, setCreated] = useState<{ account: InternalAccount; roleLabel: string } | null>(
+    null,
+  );
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({
@@ -58,16 +97,23 @@ export default function CreateAdmin() {
   };
 
   const validateForm = (): string | null => {
-    if (!formData.email || !formData.password || !formData.first_name || !formData.last_name) {
+    // Agent roles get a system-generated password (the field is hidden) — only name/email are
+    // required for them. The admin role still types + confirms a ≥12 password.
+    const isAgent = formData.role !== 'admin';
+    if (!formData.email || !formData.first_name || !formData.last_name) {
       return 'Tous les champs sont obligatoires';
     }
 
-    if (formData.password.length < 12) {
-      return 'Le mot de passe doit contenir au moins 12 caractères';
-    }
-
-    if (formData.password !== formData.confirmPassword) {
-      return 'Les mots de passe ne correspondent pas';
+    if (!isAgent) {
+      if (!formData.password) {
+        return 'Tous les champs sont obligatoires';
+      }
+      if (formData.password.length < 12) {
+        return 'Le mot de passe doit contenir au moins 12 caractères';
+      }
+      if (formData.password !== formData.confirmPassword) {
+        return 'Les mots de passe ne correspondent pas';
+      }
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -96,14 +142,19 @@ export default function CreateAdmin() {
     try {
       // contact_name is the single name field the apps/api endpoint stores; compose it from the
       // first/last inputs. role/status/verification are server-controlled (created approved +
-      // verified); credentials are delivered out-of-band, so no verification email is sent.
-      await createAdmin.mutateAsync({
+      // verified). Agent roles OMIT the password so the server system-generates it (and emails a
+      // non-blocking welcome); the admin role sends its typed password (no email — Ruling 9).
+      const isAgent = formData.role !== 'admin';
+      const account = await createAdmin.mutateAsync({
         email: formData.email,
-        password: formData.password,
         contact_name: `${formData.first_name} ${formData.last_name}`.trim(),
         role: formData.role,
+        ...(isAgent ? {} : { password: formData.password }),
       });
 
+      // Surface the created account (with its issued agent code, if any) so the superadmin can
+      // relay it; capture the role label now since formData.role is about to be reset.
+      setCreated({ account, roleLabel: ROLE_LABELS[formData.role] });
       toast.success(`${ROLE_LABELS[formData.role]} créé avec succès !`);
 
       // Réinitialiser le formulaire
@@ -119,6 +170,15 @@ export default function CreateAdmin() {
       toast.error(getErrorMessage(error) || 'Erreur lors de la création');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCopy = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success('Copié');
+    } catch {
+      toast.error('Copie impossible — copiez la valeur manuellement');
     }
   };
 
@@ -143,9 +203,49 @@ export default function CreateAdmin() {
     );
   }
 
+  const createdCode = created?.account.code ?? null;
+  const createdPassword = created?.account.temp_password ?? null;
+  const isAgentRole = formData.role !== 'admin';
+
   return (
     <AdminLayout title="Créer un compte" subtitle="Ajouter un administrateur ou un agent">
       <div className="max-w-3xl mx-auto">
+        {/* Confirmation post-création — surface le code agent (rôles agent) à relayer */}
+        {created && (
+          <div className="bg-green-50 border border-green-200 rounded-xl p-6 mb-6">
+            <div className="flex items-start">
+              <CheckCircle className="h-6 w-6 text-green-600 mr-3 mt-0.5 shrink-0" />
+              <div className="flex-1">
+                <h4 className="text-sm font-semibold text-green-900 mb-1">Compte créé</h4>
+                <p className="text-sm text-green-700">
+                  {created.roleLabel} — <span className="font-medium">{created.account.email}</span>
+                </p>
+                {createdCode && (
+                  <CopyableCredential
+                    label="Code agent — à communiquer à l'agent"
+                    value={createdCode}
+                    onCopy={handleCopy}
+                  />
+                )}
+                {createdPassword && (
+                  <CopyableCredential
+                    label="Mot de passe temporaire — à communiquer à l'agent"
+                    value={createdPassword}
+                    onCopy={handleCopy}
+                  />
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setCreated(null)}
+                aria-label="Fermer la confirmation"
+                className="ml-3 text-green-600 hover:text-green-800 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+        )}
         {/* En-tête informatif */}
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
           <div className="flex items-start">
@@ -286,49 +386,65 @@ export default function CreateAdmin() {
               </div>
             </div>
 
-            {/* Mot de passe */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="password">
-                Mot de passe *
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-                <input
-                  type="password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  placeholder="Minimum 12 caractères"
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent"
-                  required
-                  id="password"
-                />
+            {isAgentRole ? (
+              /* Agent roles: the password is system-generated — no input. */
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-700">
+                <p className="font-medium mb-1">Mot de passe généré automatiquement</p>
+                <p>
+                  Un mot de passe temporaire est créé par le système et affiché une fois après la
+                  création — communiquez-le à l'agent (il le reçoit aussi par email).
+                </p>
               </div>
-              <p className="text-xs text-gray-500 mt-1">Minimum 12 caractères</p>
-            </div>
+            ) : (
+              <>
+                {/* Mot de passe */}
+                <div>
+                  <label
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                    htmlFor="password"
+                  >
+                    Mot de passe *
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                    <input
+                      type="password"
+                      name="password"
+                      value={formData.password}
+                      onChange={handleChange}
+                      placeholder="Minimum 12 caractères"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent"
+                      required
+                      id="password"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Minimum 12 caractères</p>
+                </div>
 
-            {/* Confirmation mot de passe */}
-            <div>
-              <label
-                className="block text-sm font-medium text-gray-700 mb-2"
-                htmlFor="confirm-password"
-              >
-                Confirmer le mot de passe *
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-                <input
-                  type="password"
-                  name="confirmPassword"
-                  value={formData.confirmPassword}
-                  onChange={handleChange}
-                  placeholder="Confirmer le mot de passe"
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent"
-                  required
-                  id="confirm-password"
-                />
-              </div>
-            </div>
+                {/* Confirmation mot de passe */}
+                <div>
+                  <label
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                    htmlFor="confirm-password"
+                  >
+                    Confirmer le mot de passe *
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                    <input
+                      type="password"
+                      name="confirmPassword"
+                      value={formData.confirmPassword}
+                      onChange={handleChange}
+                      placeholder="Confirmer le mot de passe"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-transparent"
+                      required
+                      id="confirm-password"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
 
             {/* Message de succès */}
             <div className="bg-green-50 border border-green-200 rounded-lg p-4">
