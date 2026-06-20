@@ -60,9 +60,11 @@ services:
       - '80:80'
       - '443:443'
     volumes:
-      # HTTP-only variant for 1h-app-deploy (no TLS yet). Swaps back to toodooh.conf at 1h-tls,
-      # once /etc/letsencrypt is populated and the 443 servers can bind.
-      - ./nginx/toodooh-http.conf:/etc/nginx/conf.d/default.conf:ro
+      # TLS apex vhost (443 + HSTS + http→https + www→apex). REQUIRES the cert at
+      # /etc/letsencrypt/live/too-dooh.com/ to exist BEFORE this is mounted, or nginx fails to
+      # load and the whole stack (app + hub) goes down. The HTTP-only fallback for the pre-cert
+      # window is ./nginx/toodooh-http.conf (it serves the app on :80 + the ACME challenge).
+      - ./nginx/toodooh.conf:/etc/nginx/conf.d/default.conf:ro
       - ./nginx/proxy_common.conf:/etc/nginx/proxy_common.conf:ro
       # wedooh.too-dooh.com server block (host PM2 app via bridge gateway) — added 2026-06-10
       - ./nginx/wedooh.conf:/etc/nginx/conf.d/wedooh.conf:ro
