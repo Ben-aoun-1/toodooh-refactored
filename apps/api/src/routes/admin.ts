@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 import { emailSender } from '../auth/auth.js';
 import { db } from '../db/client.js';
-import { type User, screenhosts, userDocuments, users } from '../db/schema.js';
+import { type User, screenhosts, sessions, userDocuments, users } from '../db/schema.js';
 import {
   rejectionEmailPlainText,
   rejectionEmailSubject,
@@ -44,6 +44,8 @@ const rejectBodySchema = z.object({
   notes: z.string().trim().min(1),
   topics: z.array(rejectionTopic).min(1),
 });
+// N3 Scenario 2 (fraud) — BANIR. A non-empty reason is required (stored in the trio's validationNotes).
+const banBodySchema = z.object({ notes: z.string().trim().min(1) });
 
 // The snake_case admin view G2 renders: the /api/me projection (identity + business profile)
 // + created_at + the validation trio. The trio is single-state — it describes the CURRENT
@@ -388,6 +390,82 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     return reply
       .status(200)
       .send({ user: toAdminUserView(rejected, presence.get(id) ?? NO_DOCUMENTS) });
+  });
+
+  // POST /api/admin/users/:id/ban — N3 Scenario 2 (fraud). TERMINAL: status→'banned' + the trio
+  // (validationNotes = ban reason). The user's sessions are REVOKED (deleted) so they're kicked
+  // immediately. The user row + user_documents are RETAINED as fraud evidence (operator ruling
+  // 2026-06-20 — NO hard delete). 409 if already banned. Re-registration with this identity is blocked
+  // by RETAIN + the existing email/tax uniqueness (no separate check — a banned-specific error would
+  // leak banned status). Bannable from ANY non-banned state (fraud can surface post-approval).
+  app.post('/api/admin/users/:id/ban', adminGuard, async (request, reply) => {
+    const parsedParams = idParamSchema.safeParse(request.params);
+    if (!parsedParams.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        statusCode: 400,
+        requestId: request.id,
+        fields: [{ field: 'id', reason: 'must be a valid uuid' }],
+      });
+    }
+    const parsedBody = banBodySchema.safeParse(request.body ?? {});
+    if (!parsedBody.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        statusCode: 400,
+        requestId: request.id,
+        fields: parsedBody.error.issues.map((i) => ({
+          field: i.path.join('.'),
+          reason: i.message,
+        })),
+      });
+    }
+
+    const adminId = request.user?.id;
+    if (!adminId) {
+      return reply
+        .status(401)
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+    }
+
+    const { id } = parsedParams.data;
+    const [existing] = await db.select().from(users).where(eq(users.id, id)).limit(1);
+    if (!existing) {
+      return reply.status(404).send({
+        error: 'USER_NOT_FOUND',
+        message: 'No user with that id.',
+        statusCode: 404,
+        requestId: request.id,
+      });
+    }
+    if (existing.status === 'banned') {
+      return sendAlreadyInState(reply, request, existing);
+    }
+
+    const [updated] = await db
+      .update(users)
+      .set({
+        status: 'banned',
+        validatedBy: adminId,
+        validatedAt: new Date(),
+        validationNotes: parsedBody.data.notes,
+        // A ban supersedes any prior reject context — the doc-deficiency topics no longer apply.
+        rejectionTopics: null,
+      })
+      .where(eq(users.id, id))
+      .returning();
+
+    // Revoke the user's sessions so the ban takes effect immediately (mirrors better-auth's
+    // revokeSessionsOnPasswordReset). RETAIN everything else — the user row + user_documents are
+    // fraud evidence and are never deleted.
+    await db.delete(sessions).where(eq(sessions.userId, id));
+
+    const presence = await documentsPresenceFor([id]);
+    return reply
+      .status(200)
+      .send({ user: toAdminUserView(updated as User, presence.get(id) ?? NO_DOCUMENTS) });
   });
 
   // GET /api/admin/users/:id/documents — ALL of a user's documents grouped by category (the

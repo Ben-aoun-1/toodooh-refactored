@@ -134,6 +134,13 @@
       "when": 1782044690561,
       "tag": "0018_calm_polaris",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1782055878016,
+      "tag": "0019_careful_makkari",
+      "breakpoints": true
     }
   ]
 }

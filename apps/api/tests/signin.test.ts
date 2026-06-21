@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 
 import { auth } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
-import { users } from '../src/db/schema.js';
+import { sessions, users } from '../src/db/schema.js';
 import { apiRoutes } from '../src/routes/index.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
@@ -135,6 +135,22 @@ describe('POST /api/signin + /api/signout (real Postgres)', () => {
     expect(res.json<{ user: { validation_notes: string | null } }>().user.validation_notes).toBe(
       null,
     );
+  });
+
+  // N3 Scenario 2 — a banned account is TERMINALLY blocked at signin: 403, the just-minted session is
+  // revoked, and no cookie is forwarded. Distinct from 'rejected' (200, recoverable — see above).
+  it('banned account → 403 ACCOUNT_BANNED, session revoked, no cookie', async () => {
+    const userId = await createVerifiedUser('banned@example.com');
+    await db
+      .update(users)
+      .set({ status: 'banned', validationNotes: 'fraud' })
+      .where(eq(users.id, userId));
+    const res = await signin('banned@example.com', PASSWORD);
+    expect(res.statusCode).toBe(403);
+    expect(res.json<{ error: string }>().error).toBe('ACCOUNT_BANNED');
+    expect(res.headers['set-cookie']).toBeUndefined();
+    const sess = await db.select().from(sessions).where(eq(sessions.userId, userId));
+    expect(sess).toHaveLength(0); // the session signInEmail minted was revoked
   });
 
   it('wrong password → generic 401', async () => {

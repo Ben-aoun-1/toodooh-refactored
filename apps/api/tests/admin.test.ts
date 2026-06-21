@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 
 import { auth, emailSender } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
-import { type NewUser, screenhosts, userDocuments, users } from '../src/db/schema.js';
+import { type NewUser, screenhosts, sessions, userDocuments, users } from '../src/db/schema.js';
 import { encryptWifiPassword } from '../src/lib/wifi-crypto.js';
 import { adminRoutes } from '../src/routes/admin.js';
 import { storage } from '../src/storage/s3-storage.js';
@@ -391,6 +391,71 @@ describe('admin endpoints (real Postgres)', () => {
       const target = await seedUser({ status: 'pending' });
       mockSession(adminId, 'advertiser');
       expect((await reject(target, { notes: 'x' })).statusCode).toBe(403);
+    });
+  });
+
+  describe('POST /api/admin/users/:id/ban', () => {
+    const ban = (id: string, body?: Record<string, unknown>) =>
+      app.inject({ method: 'POST', url: `/api/admin/users/${id}/ban`, payload: body ?? {} });
+
+    it('bans: status banned + trio set + sessions revoked + user & documents RETAINED', async () => {
+      const target = await seedUser({ status: 'pending' });
+      // Seed a live session + a document to prove the ban REVOKES sessions but RETAINS evidence.
+      await db
+        .insert(sessions)
+        .values({ token: `tok-${target}`, userId: target, expiresAt: new Date('2099-01-01') });
+      await db
+        .insert(userDocuments)
+        .values({ userId: target, category: 'cin', position: 1, storageKey: `cin/${target}-1` });
+      mockSession(adminId);
+      const res = await ban(target, { notes: 'Faux documents — fraude avérée' });
+      expect(res.statusCode).toBe(200);
+      const [row] = await db.select().from(users).where(eq(users.id, target));
+      expect(row?.status).toBe('banned');
+      expect(row?.validatedBy).toBe(adminId);
+      expect(row?.validatedAt).not.toBeNull();
+      expect(row?.validationNotes).toBe('Faux documents — fraude avérée');
+      // Sessions revoked (kicked immediately).
+      expect(await db.select().from(sessions).where(eq(sessions.userId, target))).toHaveLength(0);
+      // RETAIN: the user row + its documents survive as fraud evidence (NOT deleted).
+      expect(row?.id).toBe(target);
+      expect(
+        await db.select().from(userDocuments).where(eq(userDocuments.userId, target)),
+      ).toHaveLength(1);
+    });
+
+    it('requires a reason → 400', async () => {
+      const target = await seedUser({ status: 'pending' });
+      mockSession(adminId);
+      expect((await ban(target)).statusCode).toBe(400);
+      expect((await ban(target, { notes: '   ' })).statusCode).toBe(400);
+    });
+
+    it('can ban an APPROVED account (fraud detected post-approval)', async () => {
+      const target = await seedUser({ status: 'approved' });
+      mockSession(adminId);
+      expect((await ban(target, { notes: 'fraude' })).statusCode).toBe(200);
+      const [row] = await db.select().from(users).where(eq(users.id, target));
+      expect(row?.status).toBe('banned');
+    });
+
+    it('already-banned → 409 with prior-state body', async () => {
+      const target = await seedUser({ status: 'banned', validationNotes: 'first ban' });
+      mockSession(adminId);
+      const res = await ban(target, { notes: 'again' });
+      expect(res.statusCode).toBe(409);
+      expect(res.json<{ currentStatus: string }>().currentStatus).toBe('banned');
+    });
+
+    it('unknown id → 404', async () => {
+      mockSession(adminId);
+      expect((await ban(NO_ROW_ID, { notes: 'x' })).statusCode).toBe(404);
+    });
+
+    it('non-admin → 403', async () => {
+      const target = await seedUser({ status: 'pending' });
+      mockSession(adminId, 'advertiser');
+      expect((await ban(target, { notes: 'x' })).statusCode).toBe(403);
     });
   });
 

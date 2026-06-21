@@ -36,7 +36,9 @@ export const userRole = pgEnum('user_role', [
   'screencast_agent',
 ]);
 
-export const userStatus = pgEnum('user_status', ['pending', 'approved', 'rejected']);
+// 'banned' (N3 Scenario 2, fraud) is TERMINAL: the account is retained as evidence but can never
+// sign in or resubmit. The validation trio carries the ban record (validationNotes = ban reason).
+export const userStatus = pgEnum('user_status', ['pending', 'approved', 'rejected', 'banned']);
 
 export const users = pgTable(
   'users',

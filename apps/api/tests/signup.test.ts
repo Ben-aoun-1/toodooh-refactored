@@ -148,6 +148,42 @@ describe('POST /api/signup', () => {
     expect(body.fields[0]?.field).toBe('tax_number');
   });
 
+  // N3 Scenario 2 (re-registration block, ruling A): a BANNED account is retained, so its email/tax
+  // stay unique — re-signup with either is blocked by the SAME paths as a normal duplicate (masked 201
+  // for email, 409 for tax). The responses are identical to a non-banned dupe, so banned status never
+  // leaks. No banned-specific branch exists; these tests prove RETAIN + uniqueness is the blocklist.
+  it('re-registration with a BANNED email → masked 201 + NO new account (non-revealing)', async () => {
+    await app.inject({ method: 'POST', url: '/api/signup', payload: validPayload });
+    await db
+      .update(users)
+      .set({ status: 'banned', validationNotes: 'fraud — fake documents' })
+      .where(eq(users.email, 'owner@example.com'));
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      payload: { ...validPayload, tax_number: '7654321XYZ' },
+    });
+    expect(res.statusCode).toBe(201); // identical to a normal dup-email — no banned leak
+    const rows = await db.select().from(users).where(eq(users.email, 'owner@example.com'));
+    expect(rows).toHaveLength(1); // no new account created
+    expect(rows[0]?.status).toBe('banned'); // the retained evidence row is untouched
+  });
+
+  it('re-registration with a BANNED tax_number (new email) → 409 TAX_NUMBER_TAKEN (non-revealing)', async () => {
+    await app.inject({ method: 'POST', url: '/api/signup', payload: validPayload });
+    await db
+      .update(users)
+      .set({ status: 'banned', validationNotes: 'fraud' })
+      .where(eq(users.email, 'owner@example.com'));
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      payload: { ...validPayload, email: 'fraudster-again@example.com' },
+    });
+    expect(res.statusCode).toBe(409); // identical to a normal dup-tax — no banned leak
+    expect(res.json<{ error: string }>().error).toBe('TAX_NUMBER_TAKEN');
+  });
+
   it('password < 10 → 400 with field detail', async () => {
     const res = await app.inject({
       method: 'POST',

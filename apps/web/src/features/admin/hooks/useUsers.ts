@@ -55,6 +55,11 @@ interface RejectInput {
   topics: string[];
 }
 
+interface BanInput {
+  id: string;
+  notes: string;
+}
+
 /**
  * UserManagement write mutations, repointed onto the Phase-1g G1 admin endpoints. Both invalidate
  * the `['admin','users']` prefix (catching all three per-status queries). The mutations throw
@@ -78,5 +83,10 @@ export function useUserMutations() {
     onSuccess: invalidateUsers,
   });
 
-  return { approveUser, rejectUser };
+  const banUser = useMutation({
+    mutationFn: ({ id, notes }: BanInput) => adminUserService.banUser(id, notes),
+    onSuccess: invalidateUsers,
+  });
+
+  return { approveUser, rejectUser, banUser };
 }
