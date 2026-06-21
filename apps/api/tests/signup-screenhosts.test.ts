@@ -9,6 +9,7 @@ import { decryptWifiPassword } from '../src/lib/wifi-crypto.js';
 import { apiRoutes } from '../src/routes/index.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
+import { signupMultipart } from './helpers/signup-multipart.js';
 
 // nodemailer mocked → the verification hook "sends" without a real SMTP connection.
 const { sendMailMock } = vi.hoisted(() => ({
@@ -69,7 +70,7 @@ describe('POST /api/signup — screenhost location persistence (P3)', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/signup',
-      payload: {
+      ...signupMultipart({
         ...ownerBase,
         profile_type: 'individual_owner',
         street_address: '12 Rue de Test',
@@ -81,7 +82,7 @@ describe('POST /api/signup — screenhost location persistence (P3)', () => {
         longitude: 10.1815,
         wifi_ssid: 'TOODOOH-NET',
         wifi_password: wifiPassword,
-      },
+      }),
     });
     expect(res.statusCode).toBe(201);
 
@@ -112,7 +113,7 @@ describe('POST /api/signup — screenhost location persistence (P3)', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/signup',
-      payload: { ...ownerBase, profile_type: 'individual_owner', city: 'Sfax' },
+      ...signupMultipart({ ...ownerBase, profile_type: 'individual_owner', city: 'Sfax' }),
     });
     expect(res.statusCode).toBe(201);
 
@@ -134,7 +135,7 @@ describe('POST /api/signup — screenhost location persistence (P3)', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/signup',
-      payload: {
+      ...signupMultipart({
         ...ownerBase,
         profile_type: 'fleet_owner',
         fleet_establishments: [
@@ -159,7 +160,7 @@ describe('POST /api/signup — screenhost location persistence (P3)', () => {
             // no coordinates / WiFi → "add later" → NULLs
           },
         ],
-      },
+      }),
     });
     expect(res.statusCode).toBe(201);
 
@@ -204,7 +205,7 @@ describe('POST /api/signup — screenhost location persistence (P3)', () => {
     await app.inject({
       method: 'POST',
       url: '/api/signup',
-      payload: { ...ownerBase, profile_type: 'individual_owner', city: 'Tunis' },
+      ...signupMultipart({ ...ownerBase, profile_type: 'individual_owner', city: 'Tunis' }),
     });
     const ownerId = await userIdByEmail(ownerBase.email);
     expect(
@@ -215,11 +216,11 @@ describe('POST /api/signup — screenhost location persistence (P3)', () => {
     const res2 = await app.inject({
       method: 'POST',
       url: '/api/signup',
-      payload: {
+      ...signupMultipart({
         ...ownerBase,
         profile_type: 'fleet_owner',
         fleet_establishments: [{ name: 'Sneaky Location' }],
-      },
+      }),
     });
     expect(res2.statusCode).toBe(201); // generic, anti-enumeration
     // Still exactly one screenhost total — the synthetic-id guard skipped the insert.

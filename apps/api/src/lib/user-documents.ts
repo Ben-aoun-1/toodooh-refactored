@@ -14,6 +14,12 @@ export const CATEGORY_CAPS = {
 
 export type DocumentCategory = keyof typeof CATEGORY_CAPS;
 
+// Upload guards shared by every document-write surface (post-signin profile-documents.ts AND the
+// owner signup volets — R7/N4). 5 MB matches the frontend cap; the MIME allowlist is the same set
+// busboy/the route enforce. Single source of truth so the two surfaces can't drift.
+export const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
+export const ALLOWED_DOCUMENT_MIME = new Set(['application/pdf', 'image/jpeg', 'image/png']);
+
 export const docView = (row: UserDocument) => ({
   id: row.id,
   category: row.category,

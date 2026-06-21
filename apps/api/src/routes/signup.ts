@@ -1,14 +1,26 @@
+import { randomUUID } from 'node:crypto';
+
+import multipart from '@fastify/multipart';
 import { APIError } from 'better-auth/api';
 import { eq } from 'drizzle-orm';
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyBaseLogger, FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import { auth } from '../auth/auth.js';
 import { db } from '../db/client.js';
-import { accounts, agentReferrals, agents, screenhosts, users } from '../db/schema.js';
+import {
+  accounts,
+  agentReferrals,
+  agents,
+  screenhosts,
+  userDocuments,
+  users,
+} from '../db/schema.js';
 import { env } from '../env.js';
 import { PROFILE_TYPES, fromProfileType } from '../lib/profile-type.js';
+import { ALLOWED_DOCUMENT_MIME, MAX_DOCUMENT_BYTES } from '../lib/user-documents.js';
 import { encryptWifiPassword } from '../lib/wifi-crypto.js';
+import { storage } from '../storage/s3-storage.js';
 import { validatePhone } from '../validation/phone.js';
 import { validateTaxNumber } from '../validation/tax-number.js';
 
@@ -94,9 +106,132 @@ const deleteOrphanUser = async (email: string): Promise<void> => {
   await db.delete(users).where(eq(users.id, u.id));
 };
 
+// ── R7/N4 — owner signup document volets (reverses F5 for owners) ──────────────────────────────
+// Owners post multipart: a `payload` field (the signup JSON) + the volet files. individual_owner →
+// CIN recto (pos1) + verso (pos2); fleet_owner → RNE; both → bank (RIB). Advertisers/agencies still
+// post JSON and submit no documents at signup (F5 stands for them).
+type VoletFile = { buffer: Buffer; mimetype: string; filename: string };
+
+const VOLET_FIELDS = ['cin_recto', 'cin_verso', 'rne', 'bank'] as const;
+type VoletField = (typeof VOLET_FIELDS)[number];
+const isVoletField = (name: string): name is VoletField =>
+  (VOLET_FIELDS as readonly string[]).includes(name);
+
+const isOwnerType = (t: string | undefined): boolean =>
+  t === 'individual_owner' || t === 'fleet_owner';
+
+// Owner volet presence + MIME check (size is already capped by the multipart fileSize limit → 413 on
+// parse). Returns the problems (empty = valid). Mirrors profile-documents' guards via the shared set.
+const ownerVoletErrors = (
+  profileType: string,
+  files: Partial<Record<VoletField, VoletFile>>,
+): { field: string; reason: string }[] => {
+  const required: VoletField[] =
+    profileType === 'individual_owner' ? ['cin_recto', 'cin_verso', 'bank'] : ['rne', 'bank'];
+  const errs: { field: string; reason: string }[] = [];
+  for (const field of required) {
+    const file = files[field];
+    if (!file) {
+      errs.push({ field, reason: 'required' });
+    } else if (!ALLOWED_DOCUMENT_MIME.has(file.mimetype)) {
+      errs.push({ field, reason: `unsupported content type: ${file.mimetype}` });
+    }
+  }
+  return errs;
+};
+
+// Persist one volet AFTER account creation. Storage-FIRST so a row never references a missing object
+// (the profile-documents no-orphan-key rule); on a row-insert failure, best-effort delete the object
+// we just wrote so no orphan object lingers. Degraded, NEVER thrown: a failure leaves the volet absent
+// → the onboarding indicator (C1) shows incomplete → the user finishes via the post-signin
+// /api/profile/documents path. Same storage key format + table as that path (no new storage path).
+const persistVolet = async (
+  userId: string,
+  category: 'cin' | 'rne' | 'bank',
+  position: number,
+  file: VoletFile,
+  log: FastifyBaseLogger,
+): Promise<void> => {
+  const rowId = randomUUID();
+  const key = `${category}/${userId}/${rowId}`;
+  const uploaded = await storage.upload({ key, body: file.buffer, contentType: file.mimetype });
+  if ('error' in uploaded) {
+    log.error({ userId, category, position }, 'signup volet upload failed (degraded)');
+    return;
+  }
+  try {
+    await db.insert(userDocuments).values({
+      userId,
+      category,
+      position,
+      storageKey: key,
+      originalFilename: file.filename,
+      mimeType: file.mimetype,
+      sizeBytes: file.buffer.length,
+    });
+  } catch (err) {
+    // The row didn't land — drop the object we just wrote so it isn't orphaned in MinIO.
+    await storage.delete({ key }).catch(() => undefined);
+    log.error({ userId, category, position, err }, 'signup volet row insert failed (degraded)');
+  }
+};
+
 export const signupRoute: FastifyPluginAsync = async (app) => {
+  // Owners post multipart (a `payload` field + the volet files); advertisers/agencies still post JSON.
+  // Registration is content-type-scoped — JSON requests are parsed by Fastify's JSON parser, unchanged.
+  // files:4 covers cin_recto/cin_verso/rne/bank; the fileSize limit is the shared 5 MB cap.
+  await app.register(multipart, {
+    limits: { fileSize: MAX_DOCUMENT_BYTES, files: 4, fields: 5 },
+  });
+
   app.post('/api/signup', async (request, reply) => {
-    const parsed = signupBodySchema.safeParse(request.body);
+    // Dual-path body source: a multipart owner request carries the signup JSON in a `payload` field +
+    // named volet file parts; a JSON request uses request.body verbatim (advertiser/agency, unchanged).
+    const isMultipart = request.isMultipart();
+    let rawBody: unknown = request.body;
+    const voletFiles: Partial<Record<VoletField, VoletFile>> = {};
+    if (isMultipart) {
+      let payloadRaw: string | undefined;
+      try {
+        for await (const part of request.parts()) {
+          if (part.type === 'file') {
+            const buffer = await part.toBuffer(); // throws past the fileSize limit
+            if (isVoletField(part.fieldname)) {
+              voletFiles[part.fieldname] = {
+                buffer,
+                mimetype: part.mimetype,
+                filename: part.filename,
+              };
+            }
+          } else if (part.fieldname === 'payload') {
+            payloadRaw = part.value as string;
+          }
+        }
+      } catch {
+        return reply.status(413).send({
+          error: 'PAYLOAD_TOO_LARGE',
+          message: `A document exceeds the ${MAX_DOCUMENT_BYTES}-byte limit.`,
+        });
+      }
+      if (payloadRaw === undefined) {
+        return reply.status(400).send({
+          error: 'INVALID_INPUT',
+          message: 'Validation failed',
+          fields: [{ field: 'payload', reason: 'the signup payload field is required' }],
+        });
+      }
+      try {
+        rawBody = JSON.parse(payloadRaw);
+      } catch {
+        return reply.status(400).send({
+          error: 'INVALID_INPUT',
+          message: 'Validation failed',
+          fields: [{ field: 'payload', reason: 'must be valid JSON' }],
+        });
+      }
+    }
+
+    const parsed = signupBodySchema.safeParse(rawBody);
     if (!parsed.success) {
       return reply.status(400).send({
         error: 'INVALID_INPUT',
@@ -129,6 +264,28 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
     } = parsed.data;
     // terms_accepted is enforced `true` by the schema (z.literal); the acceptance time is
     // server-stamped below, never taken from the client.
+
+    // R7/N4 — owners MUST submit their document volets, which only the multipart path carries. An
+    // owner on the JSON path is rejected SERVER-SIDE (not client-only): no silent doc-less account.
+    if (isOwnerType(profile_type) && !isMultipart) {
+      return reply.status(400).send({
+        error: 'DOCUMENTS_REQUIRED',
+        message: 'Owners must submit their documents (multipart/form-data) at signup.',
+        fields: [{ field: 'documents', reason: 'owner signup requires the document volets' }],
+      });
+    }
+    // Validate the volets BEFORE creating the account → 400 with NO account created. individual_owner:
+    // CIN recto+verso; fleet_owner: RNE; both: bank (RIB). Non-owners: no document requirement.
+    if (profile_type && isOwnerType(profile_type)) {
+      const voletErrs = ownerVoletErrors(profile_type, voletFiles);
+      if (voletErrs.length > 0) {
+        return reply.status(400).send({
+          error: 'INVALID_INPUT',
+          message: 'Validation failed',
+          fields: voletErrs,
+        });
+      }
+    }
 
     // tax_number is ours (UNIQUE) — pre-check for a clean 409, but ONLY when provided: it is
     // optional now (owners have no matricule at signup) and the nullable UNIQUE column allows many
@@ -271,6 +428,23 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
               });
             }
           }
+        }
+
+        // R7/N4 — persist the owner's volets now that the account exists (inside the persisted-id
+        // guard, so a duplicate-email signup never uploads). Degraded + never thrown: a storage/db
+        // failure leaves a volet absent → onboarding incomplete (C1), not a failed signup. The
+        // presence guards are redundant after pre-create validation but satisfy the optional types.
+        if (isMultipart && isOwnerType(profile_type)) {
+          if (profile_type === 'individual_owner') {
+            if (voletFiles.cin_recto)
+              await persistVolet(persisted.id, 'cin', 1, voletFiles.cin_recto, request.log);
+            if (voletFiles.cin_verso)
+              await persistVolet(persisted.id, 'cin', 2, voletFiles.cin_verso, request.log);
+          } else if (voletFiles.rne) {
+            await persistVolet(persisted.id, 'rne', 1, voletFiles.rne, request.log);
+          }
+          if (voletFiles.bank)
+            await persistVolet(persisted.id, 'bank', 1, voletFiles.bank, request.log);
         }
       }
 

@@ -7,7 +7,14 @@ import { z } from 'zod';
 
 import { db } from '../db/client.js';
 import { userDocuments } from '../db/schema.js';
-import { CATEGORY_CAPS, docView, groupedDocuments, isRowOwnedKey } from '../lib/user-documents.js';
+import {
+  ALLOWED_DOCUMENT_MIME as ALLOWED_MIME,
+  CATEGORY_CAPS,
+  MAX_DOCUMENT_BYTES as MAX_FILE_BYTES,
+  docView,
+  groupedDocuments,
+  isRowOwnedKey,
+} from '../lib/user-documents.js';
 import { requireAuth } from '../middleware/require-auth.js';
 import { storage } from '../storage/s3-storage.js';
 
@@ -17,9 +24,8 @@ import { storage } from '../storage/s3-storage.js';
 // position REQUIRED), rne ≤2, complementaire ≤10, bank ≤1. Same-slot re-upload REPLACES.
 // New uploads key as `<category>/<userId>/<rowId>` (stable per slot → S3 overwrite on
 // replace); backfilled rows keep their legacy `<type>/<userId>` keys, and those objects
-// are NEVER deleted (the frozen columns still reference them).
-const MAX_FILE_BYTES = 5 * 1024 * 1024; // 5 MB — matches the frontend cap (signup + owner-settings)
-const ALLOWED_MIME = new Set(['application/pdf', 'image/jpeg', 'image/png']);
+// are NEVER deleted (the frozen columns still reference them). MIME/size guards are shared
+// with the owner signup volets (lib/user-documents.ts).
 
 const categoryParamSchema = z.object({
   category: z.enum(['cin', 'rne', 'complementaire', 'bank']),
