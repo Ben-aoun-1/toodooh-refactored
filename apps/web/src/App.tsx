@@ -32,6 +32,7 @@ const ResetPassword = lazy(() => import('@/features/auth/pages/ResetPassword'));
 const UpdatePassword = lazy(() => import('@/features/auth/pages/UpdatePassword'));
 const VerifyEmail = lazy(() => import('@/features/auth/pages/VerifyEmail'));
 const AccountRejected = lazy(() => import('@/features/auth/pages/AccountRejected'));
+const CorrectDocuments = lazy(() => import('@/features/auth/pages/CorrectDocuments'));
 const OwnerScreens = lazy(() => import('@/features/screenhost/pages/OwnerScreens'));
 const OwnerRevenue = lazy(() => import('@/features/screenhost/pages/OwnerRevenue'));
 const OwnerCampaigns = lazy(() => import('@/features/screenhost/pages/OwnerCampaigns'));
@@ -286,6 +287,16 @@ export default function App() {
               element={
                 <RejectedRoute>
                   <AccountRejected />
+                </RejectedRoute>
+              }
+            />
+            {/* N3 Scenario 1 — the rejected account's document-correction surface (reuses the existing
+                managers; same RejectedRoute gate as the status screen). */}
+            <Route
+              path="/account-rejected/documents"
+              element={
+                <RejectedRoute>
+                  <CorrectDocuments />
                 </RejectedRoute>
               }
             />

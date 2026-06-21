@@ -305,6 +305,16 @@ export const authService = {
     }
   },
 
+  // N3 Scenario 1 — a rejected account resubmits for review after correcting its documents. The
+  // server returns it to a pristine 'pending' (rejected-only; 409 otherwise). Caller refreshes /api/me.
+  async resubmitForReview(): Promise<void> {
+    try {
+      await apiClient.post('/profile/resubmit', {});
+    } catch (error) {
+      throw new Error(apiErrorMessage(error));
+    }
+  },
+
   // F-docs Commit 2 — the user's documents grouped by category (cin/rne/complementaire/bank),
   // the multi-document read source. Presence flags in /api/me stay the cheap booleans; this is
   // the full listing the settings manager renders.

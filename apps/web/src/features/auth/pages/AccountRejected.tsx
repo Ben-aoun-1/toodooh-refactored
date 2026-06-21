@@ -1,9 +1,13 @@
-import { XCircle } from 'lucide-react';
+import { FileEdit, Send, XCircle } from 'lucide-react';
 import { useState } from 'react';
+import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 import AuthLayout from '@/features/auth/components/AuthLayout';
+import { authService } from '@/features/auth/services/auth.service';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
+import { resolveHomeRoute } from '@/features/auth/utils/home-route';
+import { getErrorMessage } from '@/lib/errors';
 
 // N3 Scenario 1 — French labels for the deficient document areas the admin flagged (mirrors the
 // rejection email's REJECTION_TOPIC_LABELS_FR on the API side).
@@ -20,14 +24,32 @@ const TOPIC_LABELS_FR: Record<string, string> = {
 export default function AccountRejected() {
   const navigate = useNavigate();
   const logout = useAuthStore((s) => s.logout);
+  const refreshUserStatus = useAuthStore((s) => s.refreshUserStatus);
   const validationNotes = useAuthStore((s) => s.validationNotes);
   const rejectionTopics = useAuthStore((s) => s.rejectionTopics);
   const [signingOut, setSigningOut] = useState(false);
+  const [resubmitting, setResubmitting] = useState(false);
 
   const handleSignOut = async () => {
     setSigningOut(true);
     await logout();
     navigate('/login');
+  };
+
+  // Resubmit for review: the server returns the account to 'pending'; we re-read /api/me so the store
+  // reflects pending, then land on the normal dashboard (resolveHomeRoute routes pending there).
+  const handleResubmit = async () => {
+    setResubmitting(true);
+    try {
+      await authService.resubmitForReview();
+      await refreshUserStatus();
+      const { profileType, role, validationStatus } = useAuthStore.getState();
+      toast.success('Dossier renvoyé pour révision');
+      navigate(resolveHomeRoute(profileType, role, validationStatus));
+    } catch (error) {
+      toast.error(getErrorMessage(error) || 'Erreur lors du renvoi');
+      setResubmitting(false);
+    }
   };
 
   return (
@@ -62,9 +84,26 @@ export default function AccountRejected() {
         ) : null}
         <button
           type="button"
+          onClick={() => navigate('/account-rejected/documents')}
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-primary py-3.5 text-base font-semibold text-brand-deep transition-opacity hover:opacity-90"
+        >
+          <FileEdit className="h-5 w-5" />
+          Corriger mes documents
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleResubmit()}
+          disabled={resubmitting}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-brand-primary bg-white py-3 text-base font-semibold text-brand-primary transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Send className="h-5 w-5" />
+          {resubmitting ? 'Envoi...' : 'Renvoyer pour révision'}
+        </button>
+        <button
+          type="button"
           onClick={() => void handleSignOut()}
           disabled={signingOut}
-          className="block w-full rounded-xl bg-brand-primary py-3.5 text-base font-semibold text-brand-deep transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+          className="text-sm text-gray-500 underline underline-offset-2 transition-colors hover:text-gray-700 disabled:opacity-50"
         >
           {signingOut ? 'Déconnexion...' : 'Se déconnecter'}
         </button>
