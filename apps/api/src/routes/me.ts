@@ -4,6 +4,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { db } from '../db/client.js';
 import { userDocuments, users } from '../db/schema.js';
 import { toProfileType } from '../lib/profile-type.js';
+import { documentPresence } from '../lib/user-documents.js';
 import { requireAuth } from '../middleware/require-auth.js';
 
 // GET /api/me — the cookie-authenticated self-view the FE store rehydrates from on reload
@@ -54,12 +55,12 @@ export const meRoutes: FastifyPluginAsync = async (app) => {
     }
     // Document presence now reads user_documents (F-docs Commit 1) — the users.*_doc_url
     // columns are frozen. The wire shape stays the legacy booleans (the FE store consumes
-    // them); the full grouped listing lives at GET /api/profile/documents.
+    // them); the full grouped listing lives at GET /api/profile/documents. CIN counts present
+    // only when BOTH faces are on file (recto + verso) — see documentPresence (Kais N5).
     const docRows = await db
-      .select({ category: userDocuments.category })
+      .select({ category: userDocuments.category, position: userDocuments.position })
       .from(userDocuments)
       .where(eq(userDocuments.userId, userId));
-    const has = (c: 'cin' | 'rne' | 'bank') => docRows.some((d) => d.category === c);
     return reply.status(200).send({
       user: {
         id: row.id,
@@ -84,11 +85,7 @@ export const meRoutes: FastifyPluginAsync = async (app) => {
         bank_account_holder: row.bankAccountHolder,
         bank_rib: row.bankRib,
         bank_iban: row.bankIban,
-        documents: {
-          registration: has('rne'),
-          cin: has('cin'),
-          bank: has('bank'),
-        },
+        documents: documentPresence(docRows),
         notifications: {
           news_updates: row.notifyNewsUpdates,
           reminders_events: row.notifyRemindersEvents,

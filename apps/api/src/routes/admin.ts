@@ -6,7 +6,12 @@ import { db } from '../db/client.js';
 import { type User, screenhosts, userDocuments, users } from '../db/schema.js';
 import { toProfileType } from '../lib/profile-type.js';
 import { OWNER_ROLES, createMissingScreensForOwner } from '../lib/screens.js';
-import { groupedDocuments } from '../lib/user-documents.js';
+import {
+  type DocumentCategory,
+  type DocumentPresence,
+  documentPresence,
+  groupedDocuments,
+} from '../lib/user-documents.js';
 import { pushApprovedOwnerLocations } from '../lib/wedooh-sync.js';
 import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
 import { storage } from '../storage/s3-storage.js';
@@ -33,26 +38,30 @@ const rejectBodySchema = z.object({ notes: z.string().trim().min(1) });
 // status's validation context, not multi-state history (D4 ruled out an action-log).
 // Document presence per user, read from user_documents (F-docs Commit 1 — the users.*_doc_url
 // columns are frozen). Batch query: the moderation list maps many users in one round-trip.
-const documentsPresenceFor = async (
-  userIds: string[],
-): Promise<Map<string, { registration: boolean; cin: boolean; bank: boolean }>> => {
-  const presence = new Map<string, { registration: boolean; cin: boolean; bank: boolean }>();
+const documentsPresenceFor = async (userIds: string[]): Promise<Map<string, DocumentPresence>> => {
+  const presence = new Map<string, DocumentPresence>();
   if (userIds.length === 0) return presence;
   const rows = await db
-    .select({ userId: userDocuments.userId, category: userDocuments.category })
+    .select({
+      userId: userDocuments.userId,
+      category: userDocuments.category,
+      position: userDocuments.position,
+    })
     .from(userDocuments)
     .where(inArray(userDocuments.userId, userIds));
+  // Group each user's documents, then derive presence per user: CIN counts complete only when BOTH
+  // faces are on file (recto + verso), so the rule needs the whole document set, not a per-row flag.
+  const byUser = new Map<string, { category: DocumentCategory; position: number }[]>();
   for (const row of rows) {
-    const entry = presence.get(row.userId) ?? { registration: false, cin: false, bank: false };
-    if (row.category === 'rne') entry.registration = true;
-    if (row.category === 'cin') entry.cin = true;
-    if (row.category === 'bank') entry.bank = true;
-    presence.set(row.userId, entry);
+    const list = byUser.get(row.userId) ?? [];
+    list.push({ category: row.category, position: row.position });
+    byUser.set(row.userId, list);
   }
+  for (const [userId, docs] of byUser) presence.set(userId, documentPresence(docs));
   return presence;
 };
 
-const NO_DOCUMENTS = { registration: false, cin: false, bank: false };
+const NO_DOCUMENTS: DocumentPresence = { registration: false, cin: false, bank: false };
 
 // A screenhost's WiFi state for the admin user-info view. The password is WRITE-ONLY: only its
 // presence (wifi_password_set) ever crosses the wire — the cipher/plaintext never does (parallel

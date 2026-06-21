@@ -479,20 +479,39 @@ describe('admin endpoints (real Postgres)', () => {
       expect((await presignDoc(stranger, docId)).statusCode).toBe(404);
     });
 
-    it('moderation list document presence reads the table', async () => {
-      const { target } = await seedDoc('cin');
-      mockSession(adminId);
+    // The moderation-list presence map reads user_documents. CIN is the only multi-face category:
+    // it counts complete ONLY when BOTH semantic slots — recto (1) and verso (2) — are present
+    // (Kais N5). registration (rne) and bank stay present-if-any.
+    const presenceOf = async (id: string) => {
       const res = await app.inject({ method: 'GET', url: '/api/admin/users?status=pending' });
       expect(res.statusCode).toBe(200);
-      const row = res
+      return res
         .json<{
           users: {
             id: string;
             documents: { registration: boolean; cin: boolean; bank: boolean };
           }[];
         }>()
-        .users.find((u) => u.id === target);
-      expect(row?.documents).toEqual({ registration: false, cin: true, bank: false });
+        .users.find((u) => u.id === id)?.documents;
+    };
+
+    it('moderation list presence: a single CIN face (recto only) is INCOMPLETE', async () => {
+      const { target } = await seedDoc('cin', 1);
+      mockSession(adminId);
+      expect(await presenceOf(target)).toEqual({ registration: false, cin: false, bank: false });
+    });
+
+    it('moderation list presence: a single CIN face (verso only) is INCOMPLETE', async () => {
+      const { target } = await seedDoc('cin', 2);
+      mockSession(adminId);
+      expect(await presenceOf(target)).toEqual({ registration: false, cin: false, bank: false });
+    });
+
+    it('moderation list presence: CIN is complete only with BOTH faces (recto + verso)', async () => {
+      const { target } = await seedDoc('cin', 1);
+      await seedDoc('cin', 2, target);
+      mockSession(adminId);
+      expect(await presenceOf(target)).toEqual({ registration: false, cin: true, bank: false });
     });
   });
 });

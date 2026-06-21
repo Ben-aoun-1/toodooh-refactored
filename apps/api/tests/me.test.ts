@@ -156,6 +156,33 @@ describe('GET /api/me (real Postgres)', () => {
     expect(user.documents.bank).toBe(true);
   });
 
+  // Kais N5: the onboarding indicator must NOT report CIN complete with one face. The CIN has two
+  // semantic slots (1=recto, 2=verso); presence is true ONLY when BOTH are on file.
+  it('CIN presence is INCOMPLETE with only one face (recto)', async () => {
+    const userId = await createVerifiedUser('me-cin-recto@example.com');
+    await db
+      .insert(userDocuments)
+      .values({ userId, category: 'cin', position: 1, storageKey: `cin/${userId}-1` });
+    const cookie = cookieHeader(
+      (await signin('me-cin-recto@example.com', PASSWORD)).headers['set-cookie'],
+    );
+    const { user } = (await me(cookie)).json<{ user: MeUser }>();
+    expect(user.documents.cin).toBe(false);
+  });
+
+  it('CIN presence is complete only with BOTH faces (recto + verso)', async () => {
+    const userId = await createVerifiedUser('me-cin-both@example.com');
+    await db.insert(userDocuments).values([
+      { userId, category: 'cin', position: 1, storageKey: `cin/${userId}-1` },
+      { userId, category: 'cin', position: 2, storageKey: `cin/${userId}-2` },
+    ]);
+    const cookie = cookieHeader(
+      (await signin('me-cin-both@example.com', PASSWORD)).headers['set-cookie'],
+    );
+    const { user } = (await me(cookie)).json<{ user: MeUser }>();
+    expect(user.documents.cin).toBe(true);
+  });
+
   it('no cookie → 401 UNAUTHENTICATED', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/me' });
     expect(res.statusCode).toBe(401);

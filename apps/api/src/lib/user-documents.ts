@@ -37,6 +37,29 @@ export const groupedDocuments = (rows: UserDocument[]) => {
   return grouped;
 };
 
+// The legacy document-presence shape consumed by GET /api/me (the user onboarding indicator) and
+// the admin moderation presence map. CIN is the only multi-face category: it counts COMPLETE only
+// when BOTH semantic slots are on file — recto (position 1) AND verso (position 2) (Kais N5).
+// registration (rne) and bank are present-if-any-row. Both surfaces share this helper so the
+// "both faces" rule cannot drift between them.
+export interface DocumentPresence {
+  registration: boolean;
+  cin: boolean;
+  bank: boolean;
+}
+
+const CIN_REQUIRED_POSITIONS = [1, 2] as const;
+
+export const documentPresence = (
+  rows: { category: DocumentCategory; position: number }[],
+): DocumentPresence => ({
+  registration: rows.some((r) => r.category === 'rne'),
+  cin: CIN_REQUIRED_POSITIONS.every((pos) =>
+    rows.some((r) => r.category === 'cin' && r.position === pos),
+  ),
+  bank: rows.some((r) => r.category === 'bank'),
+});
+
 // A storage key in the new `<category>/<userId>/<rowId>` format is OWNED by its row and safe
 // to delete with it. Legacy backfilled keys (`<type>/<userId>`) are NOT — the frozen users
 // columns still reference those objects, and the ruling is that they never move or vanish.
