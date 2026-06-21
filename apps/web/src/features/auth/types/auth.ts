@@ -127,9 +127,11 @@ export interface SignUpData {
   number_of_screens?: number; // Nombre d'écrans pour les propriétaires
   number_of_rooms?: number; // Nombre de salles (étape Etablissement)
   company_size?: string; // Nombre d'établissements du parc / taille entreprise
-  registration_doc?: File; // Document (CIN ou RNE) - facultatif
+  registration_doc?: File; // RNE — non-owner picker AND the fleet_owner legal volet (sent as `rne`, R7/N4)
   company_logo?: File; // Logo entreprise/établissement
-  bank_doc?: File; // Relevé d'identité bancaire (propriétaires)
+  bank_doc?: File; // Relevé d'identité bancaire (RIB) — owner volet 2 (sent as `bank`, R7/N4)
+  cin_recto?: File; // individual_owner legal volet — CIN recto (pos1), sent as `cin_recto` (R7/N4)
+  cin_verso?: File; // individual_owner legal volet — CIN verso (pos2), sent as `cin_verso` (R7/N4)
   terms_accepted: boolean;
   // Screenhost geo + WiFi capture (P3) — individual_owner's single location, built server-side from
   // these top-level fields + the street_address/city/zone/… already sent. All optional ("add later").

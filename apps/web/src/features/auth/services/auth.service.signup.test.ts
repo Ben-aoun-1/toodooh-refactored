@@ -23,6 +23,7 @@ vi.mock('@/lib/api-client', async (importActual) => {
 });
 
 const post = vi.mocked(apiClient.post);
+const postForm = vi.mocked(apiClient.postForm);
 const ok = { userId: 'u1', email: 'a@b.c', verificationRequired: true, message: 'ok' };
 
 // A complete advertiser payload (all SignUpData required fields) + files + owner-extras that must be
@@ -53,9 +54,17 @@ const advertiser: SignUpData = {
 };
 
 const body = () => post.mock.calls[0][1] as Record<string, unknown>;
+// R7/N4 — owners now POST multipart (postForm): a `payload` field (the JSON) + the volet file parts.
+const ownerForm = () => postForm.mock.calls[0][1];
+const ownerPayload = () =>
+  JSON.parse(ownerForm().get('payload') as string) as Record<string, unknown>;
+const ownerFile = (name: string) => new File(['x'], name, { type: 'application/pdf' });
 
 describe('authService.signUp → POST /signup (Phase-1f F2)', () => {
-  beforeEach(() => post.mockReset());
+  beforeEach(() => {
+    post.mockReset();
+    postForm.mockReset();
+  });
 
   it('sends the accepted-fields JSON with profile_type (server-mapped)', async () => {
     post.mockResolvedValue(ok);
@@ -106,23 +115,28 @@ describe('authService.signUp → POST /signup (Phase-1f F2)', () => {
     expect(body()).not.toHaveProperty('fonction');
   });
 
-  it('omits tax_number when blank; includes it when present (owner)', async () => {
+  it('omits tax_number when blank (advertiser, JSON path)', async () => {
     post.mockResolvedValue(ok);
     await authService.signUp({ ...advertiser, tax_number: '   ' });
     expect(body()).not.toHaveProperty('tax_number');
+  });
 
-    post.mockReset();
-    post.mockResolvedValue(ok);
+  it('includes tax_number for an owner (in the multipart payload)', async () => {
+    postForm.mockResolvedValue(ok);
     await authService.signUp({
       ...advertiser,
       profile_type: 'individual_owner',
       tax_number: 'OWNER123',
     });
-    expect(body()).toMatchObject({ profile_type: 'individual_owner', tax_number: 'OWNER123' });
+    expect(postForm).toHaveBeenCalledTimes(1);
+    expect(ownerPayload()).toMatchObject({
+      profile_type: 'individual_owner',
+      tax_number: 'OWNER123',
+    });
   });
 
-  it('sends individual_owner location + WiFi top-level when present (P3)', async () => {
-    post.mockResolvedValue(ok);
+  it('sends individual_owner location + WiFi in the multipart payload (P3)', async () => {
+    postForm.mockResolvedValue(ok);
     await authService.signUp({
       ...advertiser,
       profile_type: 'individual_owner',
@@ -131,7 +145,7 @@ describe('authService.signUp → POST /signup (Phase-1f F2)', () => {
       wifi_ssid: 'CafeNet',
       wifi_password: 'hunter2pass',
     });
-    expect(body()).toMatchObject({
+    expect(ownerPayload()).toMatchObject({
       latitude: 36.8065,
       longitude: 10.1815,
       wifi_ssid: 'CafeNet',
@@ -154,7 +168,7 @@ describe('authService.signUp → POST /signup (Phase-1f F2)', () => {
   });
 
   it('maps fleet_establishments to the wire shape — street_address → address, geo/WiFi, blanks omitted (P3)', async () => {
-    post.mockResolvedValue(ok);
+    postForm.mockResolvedValue(ok);
     await authService.signUp({
       ...advertiser,
       profile_type: 'fleet_owner',
@@ -184,7 +198,7 @@ describe('authService.signUp → POST /signup (Phase-1f F2)', () => {
         },
       ],
     });
-    const sent = body().fleet_establishments as Array<Record<string, unknown>>;
+    const sent = ownerPayload().fleet_establishments as Array<Record<string, unknown>>;
     expect(sent).toHaveLength(2);
     expect(sent[0]).toEqual({
       name: 'Café Centre',
@@ -206,6 +220,51 @@ describe('authService.signUp → POST /signup (Phase-1f F2)', () => {
   it('throws a French message when the POST fails', async () => {
     post.mockRejectedValueOnce(new ApiError({ status: 0, code: 'NETWORK', message: '' }));
     await expect(authService.signUp(advertiser)).rejects.toThrow(/connexion/i);
+  });
+
+  // R7/N4 — the owner multipart contract (C5): payload field + the named volet parts; JSON path only
+  // for non-owners.
+  it('advertiser uses the JSON path (post), never multipart', async () => {
+    post.mockResolvedValue(ok);
+    await authService.signUp(advertiser);
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(postForm).not.toHaveBeenCalled();
+  });
+
+  it('individual_owner → multipart: payload + cin_recto + cin_verso + bank parts (no rne)', async () => {
+    postForm.mockResolvedValue(ok);
+    await authService.signUp({
+      ...advertiser,
+      profile_type: 'individual_owner',
+      cin_recto: ownerFile('recto.pdf'),
+      cin_verso: ownerFile('verso.pdf'),
+      bank_doc: ownerFile('rib.pdf'),
+    });
+    expect(post).not.toHaveBeenCalled();
+    expect(postForm).toHaveBeenCalledTimes(1);
+    expect(postForm.mock.calls[0][0]).toBe('/signup');
+    const form = ownerForm();
+    expect(typeof form.get('payload')).toBe('string');
+    expect(form.get('cin_recto')).toBeInstanceOf(File);
+    expect(form.get('cin_verso')).toBeInstanceOf(File);
+    expect(form.get('bank')).toBeInstanceOf(File);
+    expect(form.get('rne')).toBeNull(); // individual owner sends no RNE
+  });
+
+  it('fleet_owner → multipart: payload + rne + bank parts (no CIN)', async () => {
+    postForm.mockResolvedValue(ok);
+    await authService.signUp({
+      ...advertiser,
+      profile_type: 'fleet_owner',
+      registration_doc: ownerFile('rne.pdf'),
+      bank_doc: ownerFile('rib.pdf'),
+    });
+    expect(postForm).toHaveBeenCalledTimes(1);
+    const form = ownerForm();
+    expect(form.get('rne')).toBeInstanceOf(File);
+    expect(form.get('bank')).toBeInstanceOf(File);
+    expect(form.get('cin_recto')).toBeNull();
+    expect(form.get('cin_verso')).toBeNull();
   });
 });
 

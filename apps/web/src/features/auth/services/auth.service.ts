@@ -51,9 +51,11 @@ export const authService = {
   },
 
   async signUp(data: SignUpData): Promise<SignupResponse> {
-    // Accepted-fields JSON (snake wire, Phase-1f F2). NOT sent: files (registration_doc/
-    // company_logo/bank_doc — documents upload post-signin in F5, the endpoint is requireAuth) and
-    // owner-extras (cin/formule/number_of_screens/number_of_rooms/company_size — backend-stripped).
+    // Accepted-fields JSON (snake wire, Phase-1f F2). F5 is REVERSED for owners (R7/N4): owner volet
+    // files (cin_recto/cin_verso/registration_doc=RNE/bank_doc) ARE sent at signup via multipart (see
+    // below). Still NOT sent: company_logo (no signup home) and the owner-extras
+    // (cin/formule/number_of_screens/number_of_rooms/company_size — backend-stripped). Advertisers/
+    // agencies stay JSON, no documents (F5 stands for them).
     // SENT (P3): screenhost geo + WiFi — top-level latitude/longitude/wifi_ssid/wifi_password build
     // the individual_owner's single location; `fleet_establishments` (one per fleet_owner location)
     // each carry the same, with street_address remapped to the endpoint's `address`. Empty optionals
@@ -101,7 +103,24 @@ export const authService = {
       ...(t(data.wifi_password) ? { wifi_password: t(data.wifi_password) } : {}),
       ...(fleetEstablishments?.length ? { fleet_establishments: fleetEstablishments } : {}),
     };
+    // R7/N4 — owners now SEND their document volets (reversing F5 for owners): multipart with a
+    // `payload` field = the accepted-fields JSON string + named file parts (individual_owner →
+    // cin_recto/cin_verso; fleet_owner → rne; both → bank). Advertisers/agencies keep the JSON path
+    // verbatim (no documents at signup). Files never enter `payload` (only scalar fields are spread).
+    const isOwner = data.profile_type === 'individual_owner' || data.profile_type === 'fleet_owner';
     try {
+      if (isOwner) {
+        const form = new FormData();
+        form.append('payload', JSON.stringify(payload));
+        if (data.profile_type === 'individual_owner') {
+          if (data.cin_recto) form.append('cin_recto', data.cin_recto);
+          if (data.cin_verso) form.append('cin_verso', data.cin_verso);
+        } else if (data.registration_doc) {
+          form.append('rne', data.registration_doc);
+        }
+        if (data.bank_doc) form.append('bank', data.bank_doc);
+        return await apiClient.postForm<SignupResponse>('/signup', form);
+      }
       return await apiClient.post<SignupResponse>('/signup', payload);
     } catch (error) {
       throw new Error(apiErrorMessage(error));
