@@ -28,6 +28,7 @@ export const meRoutes: FastifyPluginAsync = async (app) => {
         role: users.role,
         status: users.status,
         validationNotes: users.validationNotes,
+        rejectionTopics: users.rejectionTopics,
         onboardingCompleted: users.onboardingCompleted,
         contactName: users.contactName,
         businessName: users.businessName,
@@ -69,8 +70,10 @@ export const meRoutes: FastifyPluginAsync = async (app) => {
         email_verified: row.emailVerified,
         role: row.role,
         status: row.status,
-        // N3: the rejection reason so the FE status screen renders it after a reload (rehydrate).
+        // N3: the rejection reason + deficient document topics so the FE status screen renders them
+        // after a reload (rehydrate).
         validation_notes: row.validationNotes,
+        rejection_topics: row.rejectionTopics,
         onboarding_completed: row.onboardingCompleted,
         profile_type: toProfileType(row.role, row.businessType),
         contact_name: row.contactName,

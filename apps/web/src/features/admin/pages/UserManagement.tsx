@@ -65,6 +65,8 @@ export default function UserManagement() {
   // Reject-reason modal (G2 D-G2-3) — the backend requires a non-empty rejection note.
   const [rejectTarget, setRejectTarget] = useState<AdminUser | null>(null);
   const [rejectNotes, setRejectNotes] = useState('');
+  // N3 Scenario 1 — deficient document area(s); at least one is required to reject.
+  const [rejectTopics, setRejectTopics] = useState<string[]>([]);
   const [submittingReject, setSubmittingReject] = useState(false);
   // 409 prior-state modal (G2 D-G2-4) — set to the conflicted user's id; the queue is refetched
   // first so the modal reads the now-fresh row from the merged list.
@@ -126,23 +128,31 @@ export default function UserManagement() {
     }
   };
 
-  // The reject flow opens a modal collecting the required reason (G2 D-G2-3); submitReject sends it.
+  // The reject flow opens a modal collecting the required reason + topic(s) (G2 D-G2-3 / N3); submitReject sends them.
   const openReject = (target: AdminUser) => {
     setRejectNotes('');
+    setRejectTopics([]);
     setRejectTarget(target);
+  };
+
+  const toggleRejectTopic = (topic: string) => {
+    setRejectTopics((prev) =>
+      prev.includes(topic) ? prev.filter((t) => t !== topic) : [...prev, topic],
+    );
   };
 
   const submitReject = async () => {
     if (!rejectTarget) return;
     const notes = rejectNotes.trim();
-    if (!notes) return;
+    if (!notes || rejectTopics.length === 0) return;
     setSubmittingReject(true);
     const id = rejectTarget.id;
     try {
-      await rejectUser.mutateAsync({ id, notes });
+      await rejectUser.mutateAsync({ id, notes, topics: rejectTopics });
       toast.success('Utilisateur rejeté');
       setRejectTarget(null);
       setRejectNotes('');
+      setRejectTopics([]);
       setShowDetailsModal(false);
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
@@ -931,11 +941,37 @@ export default function UserManagement() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent text-sm"
                   placeholder="Expliquez la raison du rejet…"
                 />
+                {/* N3 Scenario 1 — which document area(s) are deficient (au moins un). */}
+                <p className="block text-sm text-gray-600 mt-4 mb-2">
+                  Documents à corriger (au moins un)
+                </p>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={rejectTopics.includes('legal')}
+                      onChange={() => toggleRejectTopic('legal')}
+                      className="h-4 w-4 rounded border-gray-300 text-brand-primary focus:ring-brand-primary"
+                    />
+                    Documents légaux (RNE / CIN)
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={rejectTopics.includes('bank')}
+                      onChange={() => toggleRejectTopic('bank')}
+                      className="h-4 w-4 rounded border-gray-300 text-brand-primary focus:ring-brand-primary"
+                    />
+                    Coordonnées bancaires (RIB)
+                  </label>
+                </div>
               </div>
               <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
                 <button
                   onClick={submitReject}
-                  disabled={submittingReject || rejectNotes.trim().length === 0}
+                  disabled={
+                    submittingReject || rejectNotes.trim().length === 0 || rejectTopics.length === 0
+                  }
                   className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed sm:ml-3 sm:w-auto sm:text-sm"
                 >
                   {submittingReject ? 'Rejet…' : 'Rejeter'}

@@ -145,7 +145,7 @@ describe('screens + pair/GPS-link (real Postgres)', () => {
         app.inject({
           method: 'POST',
           url: `/api/admin/users/${owner}/reject`,
-          payload: { notes: 'redo' },
+          payload: { notes: 'redo', topics: ['legal'] },
         });
 
       expect((await approve()).statusCode).toBe(200);

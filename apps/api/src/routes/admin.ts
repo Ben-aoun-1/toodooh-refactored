@@ -2,8 +2,14 @@ import { and, asc, desc, eq, inArray, notInArray } from 'drizzle-orm';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
+import { emailSender } from '../auth/auth.js';
 import { db } from '../db/client.js';
 import { type User, screenhosts, userDocuments, users } from '../db/schema.js';
+import {
+  rejectionEmailPlainText,
+  rejectionEmailSubject,
+  rejectionEmailTemplate,
+} from '../email/rejection-template.js';
 import { toProfileType } from '../lib/profile-type.js';
 import { OWNER_ROLES, createMissingScreensForOwner } from '../lib/screens.js';
 import {
@@ -31,7 +37,13 @@ const docIdParamSchema = z.object({ id: z.uuid(), ref: z.uuid() });
 // non-empty (D-G1-4 — a rejection benefits from feedback; the rebuild establishes the contract
 // the dead-Supabase FE lacked, CF-24 class-b).
 const approveBodySchema = z.object({ notes: z.string().optional() });
-const rejectBodySchema = z.object({ notes: z.string().trim().min(1) });
+// N3 Scenario 1 — a rejection must name at least one deficient document area: 'legal' (RNE/CIN)
+// and/or 'bank' (RIB). Persisted to users.rejection_topics (text[]); the user is notified by email.
+const rejectionTopic = z.enum(['legal', 'bank']);
+const rejectBodySchema = z.object({
+  notes: z.string().trim().min(1),
+  topics: z.array(rejectionTopic).min(1),
+});
 
 // The snake_case admin view G2 renders: the /api/me projection (identity + business profile)
 // + created_at + the validation trio. The trio is single-state — it describes the CURRENT
@@ -339,14 +351,43 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
         validatedBy: adminId,
         validatedAt: new Date(),
         validationNotes: parsedBody.data.notes,
+        rejectionTopics: parsedBody.data.topics,
       })
       .where(eq(users.id, id))
       .returning();
+    const rejected = updated as User;
+
+    // N3 Scenario 1 — notify the rejected user (reason + topics). Non-blocking, never-throw (mirrors
+    // the agent-welcome email): the reject has ALREADY committed, so a send failure is logged but
+    // must never fail the response. The user stays able to sign in (C2) to read this and resubmit.
+    const emailFields = {
+      name: rejected.contactName,
+      notes: parsedBody.data.notes,
+      topics: parsedBody.data.topics,
+    };
+    try {
+      const result = await emailSender.send({
+        to: rejected.email,
+        subject: rejectionEmailSubject,
+        html: rejectionEmailTemplate(emailFields),
+        text: rejectionEmailPlainText(emailFields),
+      });
+      if ('error' in result) {
+        request.log.error({ to: rejected.email, error: result.error }, 'rejection email failed');
+      } else {
+        request.log.info(
+          { to: rejected.email, messageId: result.messageId },
+          'rejection email sent',
+        );
+      }
+    } catch (err) {
+      request.log.error({ to: rejected.email, err }, 'rejection email threw (swallowed)');
+    }
 
     const presence = await documentsPresenceFor([id]);
     return reply
       .status(200)
-      .send({ user: toAdminUserView(updated as User, presence.get(id) ?? NO_DOCUMENTS) });
+      .send({ user: toAdminUserView(rejected, presence.get(id) ?? NO_DOCUMENTS) });
   });
 
   // GET /api/admin/users/:id/documents — ALL of a user's documents grouped by category (the

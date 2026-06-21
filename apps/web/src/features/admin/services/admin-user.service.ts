@@ -154,8 +154,9 @@ export const adminUserService = {
     await apiClient.post(`/admin/users/${id}/approve`, notes ? { notes } : {});
   },
 
-  async rejectUser(id: string, notes: string): Promise<void> {
-    await apiClient.post(`/admin/users/${id}/reject`, { notes });
+  // topics = deficient document areas ('legal' RNE/CIN, 'bank' RIB), ≥1 required (N3 Scenario 1).
+  async rejectUser(id: string, notes: string, topics: string[]): Promise<void> {
+    await apiClient.post(`/admin/users/${id}/reject`, { notes, topics });
   },
 
   // All of a user's documents, grouped by category (the multi-doc review surface — F-docs Commit 3).

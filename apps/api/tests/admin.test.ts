@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import Fastify from 'fastify';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { auth } from '../src/auth/auth.js';
+import { auth, emailSender } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
 import { type NewUser, screenhosts, userDocuments, users } from '../src/db/schema.js';
 import { encryptWifiPassword } from '../src/lib/wifi-crypto.js';
@@ -10,6 +10,16 @@ import { adminRoutes } from '../src/routes/admin.js';
 import { storage } from '../src/storage/s3-storage.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
+
+// The reject route now sends a non-blocking notification email (N3 Scenario 1). Mock nodemailer so
+// no real SMTP is attempted (mirrors the me/signin suites); the email-specific tests spy on
+// emailSender.send to assert invocation / simulate a send failure.
+const { sendMailMock } = vi.hoisted(() => ({
+  sendMailMock: vi.fn().mockResolvedValue({ messageId: 'test-msg-id' }),
+}));
+vi.mock('nodemailer', () => ({
+  default: { createTransport: vi.fn(() => ({ sendMail: sendMailMock })) },
+}));
 
 // Integration suite — real Postgres (DATABASE_URL); the doc-review happy paths also need real
 // MinIO (STORAGE_*), exactly like profile-documents.test.ts. auth.api.getSession is mocked (its
@@ -297,17 +307,50 @@ describe('admin endpoints (real Postgres)', () => {
     const reject = (id: string, body?: Record<string, unknown>) =>
       app.inject({ method: 'POST', url: `/api/admin/users/${id}/reject`, payload: body ?? {} });
 
-    it('happy → rejected + trio, onboarding_completed untouched', async () => {
+    it('happy → rejected + trio + topics, onboarding_completed untouched', async () => {
       const target = await seedUser({ status: 'pending', onboardingCompleted: false });
       mockSession(adminId);
-      const res = await reject(target, { notes: 'missing CIN' });
+      const res = await reject(target, { notes: 'missing CIN', topics: ['legal'] });
       expect(res.statusCode).toBe(200);
       const [row] = await db.select().from(users).where(eq(users.id, target));
       expect(row?.status).toBe('rejected');
       expect(row?.validatedBy).toBe(adminId);
       expect(row?.validatedAt).not.toBeNull();
       expect(row?.validationNotes).toBe('missing CIN');
+      expect(row?.rejectionTopics).toEqual(['legal']);
       expect(row?.onboardingCompleted).toBe(false);
+    });
+
+    it('stores BOTH topics and sends the notification email', async () => {
+      const target = await seedUser({ status: 'pending' });
+      mockSession(adminId);
+      const sendSpy = vi.spyOn(emailSender, 'send');
+      const res = await reject(target, {
+        notes: 'CIN illisible + RIB manquant',
+        topics: ['legal', 'bank'],
+      });
+      expect(res.statusCode).toBe(200);
+      const [row] = await db.select().from(users).where(eq(users.id, target));
+      expect(row?.rejectionTopics).toEqual(['legal', 'bank']);
+      expect(sendSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('without a topic → 400 (at least one required)', async () => {
+      const target = await seedUser({ status: 'pending' });
+      mockSession(adminId);
+      expect((await reject(target, { notes: 'x' })).statusCode).toBe(400);
+      expect((await reject(target, { notes: 'x', topics: [] })).statusCode).toBe(400);
+    });
+
+    it('an email-send failure does NOT fail the reject (non-blocking — it still records)', async () => {
+      const target = await seedUser({ status: 'pending' });
+      mockSession(adminId);
+      vi.spyOn(emailSender, 'send').mockResolvedValueOnce({ error: 'smtp down' });
+      const res = await reject(target, { notes: 'x', topics: ['legal'] });
+      expect(res.statusCode).toBe(200);
+      const [row] = await db.select().from(users).where(eq(users.id, target));
+      expect(row?.status).toBe('rejected');
+      expect(row?.rejectionTopics).toEqual(['legal']);
     });
 
     it('missing notes → 400', async () => {
@@ -324,7 +367,7 @@ describe('admin endpoints (real Postgres)', () => {
 
     it('unknown id → 404 USER_NOT_FOUND', async () => {
       mockSession(adminId);
-      const res = await reject(NO_ROW_ID, { notes: 'x' });
+      const res = await reject(NO_ROW_ID, { notes: 'x', topics: ['legal'] });
       expect(res.statusCode).toBe(404);
       expect(res.json<{ error: string }>().error).toBe('USER_NOT_FOUND');
     });
@@ -337,7 +380,7 @@ describe('admin endpoints (real Postgres)', () => {
         validationNotes: 'first reject',
       });
       mockSession(adminId);
-      const res = await reject(target, { notes: 'again' });
+      const res = await reject(target, { notes: 'again', topics: ['legal'] });
       expect(res.statusCode).toBe(409);
       const body = res.json<{ error: string; currentStatus: string }>();
       expect(body.error).toBe('CONFLICT');

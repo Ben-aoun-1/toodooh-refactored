@@ -32,6 +32,7 @@ const approved: SessionUser = {
   role: 'advertiser',
   status: 'approved',
   validation_notes: null,
+  rejection_topics: null,
   onboarding_completed: true,
   business_type: null,
   profile_type: 'advertiser',
@@ -43,6 +44,7 @@ const pendingOwner: SessionUser = {
   role: 'individual_owner',
   status: 'pending',
   validation_notes: null,
+  rejection_topics: null,
   onboarding_completed: false,
   business_type: null,
   profile_type: 'individual_owner',
@@ -54,6 +56,7 @@ const rejected: SessionUser = {
   role: 'advertiser',
   status: 'rejected',
   validation_notes: 'Documents illisibles, merci de renvoyer.',
+  rejection_topics: ['legal', 'bank'],
   onboarding_completed: false,
   business_type: null,
   profile_type: 'advertiser',
@@ -113,6 +116,7 @@ describe('auth.store — rehydration (initialize → /api/me)', () => {
     expect(s.validationStatus).toBe('rejected');
     expect(s.needsApproval).toBe(true);
     expect(s.validationNotes).toBe('Documents illisibles, merci de renvoyer.');
+    expect(s.rejectionTopics).toEqual(['legal', 'bank']);
   });
 
   it('401 (null) → logged-out, initialized, no error', async () => {

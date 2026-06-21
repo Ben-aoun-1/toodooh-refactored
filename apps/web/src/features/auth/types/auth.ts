@@ -206,6 +206,8 @@ export interface SessionUser {
   status: 'pending' | 'approved' | 'rejected';
   /** The admin's moderation note. For a `rejected` account this is the rejection reason (N3). */
   validation_notes: string | null;
+  /** Deficient document areas on a rejection: 'legal' (RNE/CIN) and/or 'bank' (RIB) (N3 Scenario 1). */
+  rejection_topics: string[] | null;
   onboarding_completed: boolean;
   business_type: string | null;
   profile_type: string | null;

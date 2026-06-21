@@ -52,6 +52,7 @@ interface ApproveInput {
 interface RejectInput {
   id: string;
   notes: string;
+  topics: string[];
 }
 
 /**
@@ -72,7 +73,8 @@ export function useUserMutations() {
   });
 
   const rejectUser = useMutation({
-    mutationFn: ({ id, notes }: RejectInput) => adminUserService.rejectUser(id, notes),
+    mutationFn: ({ id, notes, topics }: RejectInput) =>
+      adminUserService.rejectUser(id, notes, topics),
     onSuccess: invalidateUsers,
   });
 

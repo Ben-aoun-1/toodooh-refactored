@@ -60,6 +60,7 @@ interface MeUser {
   role: string;
   status: string;
   validation_notes: string | null;
+  rejection_topics: string[] | null;
   onboarding_completed: boolean;
   profile_type: string | null;
   contact_name: string | null;
@@ -184,11 +185,11 @@ describe('GET /api/me (real Postgres)', () => {
     expect(user.documents.cin).toBe(true);
   });
 
-  it('rejected account: /api/me carries status + the rejection reason (validation_notes)', async () => {
+  it('rejected account: /api/me carries status + the rejection reason + topics', async () => {
     const userId = await createVerifiedUser('me-rejected@example.com');
     await db
       .update(users)
-      .set({ status: 'rejected', validationNotes: 'CIN illisible.' })
+      .set({ status: 'rejected', validationNotes: 'CIN illisible.', rejectionTopics: ['legal'] })
       .where(eq(users.id, userId));
     const cookie = cookieHeader(
       (await signin('me-rejected@example.com', PASSWORD)).headers['set-cookie'],
@@ -196,6 +197,7 @@ describe('GET /api/me (real Postgres)', () => {
     const { user } = (await me(cookie)).json<{ user: MeUser }>();
     expect(user.status).toBe('rejected');
     expect(user.validation_notes).toBe('CIN illisible.');
+    expect(user.rejection_topics).toEqual(['legal']);
   });
 
   it('non-rejected account: /api/me validation_notes is null', async () => {

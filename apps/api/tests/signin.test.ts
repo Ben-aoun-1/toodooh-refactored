@@ -112,13 +112,20 @@ describe('POST /api/signin + /api/signout (real Postgres)', () => {
     const userId = await createVerifiedUser('rejected@example.com');
     await db
       .update(users)
-      .set({ status: 'rejected', validationNotes: 'Documents illisibles, merci de renvoyer.' })
+      .set({
+        status: 'rejected',
+        validationNotes: 'Documents illisibles, merci de renvoyer.',
+        rejectionTopics: ['legal', 'bank'],
+      })
       .where(eq(users.id, userId));
     const res = await signin('rejected@example.com', PASSWORD);
     expect(res.statusCode).toBe(200);
-    const { user } = res.json<{ user: { status: string; validation_notes: string | null } }>();
+    const { user } = res.json<{
+      user: { status: string; validation_notes: string | null; rejection_topics: string[] | null };
+    }>();
     expect(user.status).toBe('rejected');
     expect(user.validation_notes).toBe('Documents illisibles, merci de renvoyer.');
+    expect(user.rejection_topics).toEqual(['legal', 'bank']);
     expect(res.headers['set-cookie']).toBeDefined();
   });
 
