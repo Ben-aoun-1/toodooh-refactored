@@ -77,6 +77,7 @@ export const signinRoutes: FastifyPluginAsync = async (app) => {
         email: users.email,
         role: users.role,
         status: users.status,
+        validationNotes: users.validationNotes,
         onboardingCompleted: users.onboardingCompleted,
         businessType: users.businessType,
         contactName: users.contactName,
@@ -94,6 +95,9 @@ export const signinRoutes: FastifyPluginAsync = async (app) => {
         email: row.email,
         role: row.role,
         status: row.status,
+        // N3: the rejection reason rides the signin response so the FE status screen can show it
+        // immediately on login (rejection gates the app, not authentication).
+        validation_notes: row.validationNotes,
         onboarding_completed: row.onboardingCompleted,
         business_type: row.businessType,
         profile_type: toProfileType(row.role, row.businessType),

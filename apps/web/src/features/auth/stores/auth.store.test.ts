@@ -31,6 +31,7 @@ const approved: SessionUser = {
   email: 'a@b.c',
   role: 'advertiser',
   status: 'approved',
+  validation_notes: null,
   onboarding_completed: true,
   business_type: null,
   profile_type: 'advertiser',
@@ -41,10 +42,22 @@ const pendingOwner: SessionUser = {
   email: 'o@b.c',
   role: 'individual_owner',
   status: 'pending',
+  validation_notes: null,
   onboarding_completed: false,
   business_type: null,
   profile_type: 'individual_owner',
   contact_name: 'Omar',
+};
+const rejected: SessionUser = {
+  id: 'u3',
+  email: 'r@b.c',
+  role: 'advertiser',
+  status: 'rejected',
+  validation_notes: 'Documents illisibles, merci de renvoyer.',
+  onboarding_completed: false,
+  business_type: null,
+  profile_type: 'advertiser',
+  contact_name: 'Rania',
 };
 
 beforeAll(async () => {
@@ -91,6 +104,15 @@ describe('auth.store — rehydration (initialize → /api/me)', () => {
     expect(s.profileType).toBe('individual_owner');
     expect(s.validationStatus).toBe('pending');
     expect(s.needsApproval).toBe(true);
+  });
+
+  it('200 (rejected) → needsApproval true + the rejection reason mapped to the store (N3)', async () => {
+    vi.mocked(authService.getCurrentUser).mockResolvedValue(rejected);
+    await useAuthStore.getState().initialize();
+    const s = useAuthStore.getState();
+    expect(s.validationStatus).toBe('rejected');
+    expect(s.needsApproval).toBe(true);
+    expect(s.validationNotes).toBe('Documents illisibles, merci de renvoyer.');
   });
 
   it('401 (null) → logged-out, initialized, no error', async () => {

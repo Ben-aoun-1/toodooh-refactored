@@ -26,4 +26,25 @@ describe('resolveHomeRoute', () => {
     expect(resolveHomeRoute(null, null)).toBe('/dashboard');
     expect(resolveHomeRoute(null)).toBe('/dashboard');
   });
+
+  // N3 — a rejected end-user account is gated out of the app onto the status screen, whatever its
+  // profile. approved/pending land on their normal dashboard (pending is unchanged: still the app).
+  it('routes a rejected account to the status screen, whatever the profile', () => {
+    expect(resolveHomeRoute('advertiser', 'advertiser', 'rejected')).toBe('/account-rejected');
+    expect(resolveHomeRoute('individual_owner', 'screen_owner', 'rejected')).toBe(
+      '/account-rejected',
+    );
+  });
+
+  it('leaves approved and pending accounts on their normal dashboard', () => {
+    expect(resolveHomeRoute('advertiser', 'advertiser', 'approved')).toBe('/dashboard');
+    expect(resolveHomeRoute('advertiser', 'advertiser', 'pending')).toBe('/dashboard');
+    expect(resolveHomeRoute('individual_owner', 'screen_owner', 'pending')).toBe(
+      '/owner-dashboard',
+    );
+  });
+
+  it('keeps agents in the agent workspace even if rejected (status gate is end-user only)', () => {
+    expect(resolveHomeRoute(null, 'screenhost_agent', 'rejected')).toBe('/agent');
+  });
 });

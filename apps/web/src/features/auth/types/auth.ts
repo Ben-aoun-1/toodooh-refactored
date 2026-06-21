@@ -204,6 +204,8 @@ export interface SessionUser {
   email: string;
   role: string;
   status: 'pending' | 'approved' | 'rejected';
+  /** The admin's moderation note. For a `rejected` account this is the rejection reason (N3). */
+  validation_notes: string | null;
   onboarding_completed: boolean;
   business_type: string | null;
   profile_type: string | null;

@@ -38,6 +38,8 @@ interface AuthState {
   shouldOnboard?: boolean;
   needsApproval?: boolean;
   validationStatus?: string;
+  /** The admin moderation note; the rejection reason when `validationStatus === 'rejected'` (N3). */
+  validationNotes?: string | null;
   /** users.role from /api/me|/api/signin (Phase-1g) — admin identity is a role on the user (D1). */
   role: string | null;
   login: (email: string, password: string) => Promise<void>;
@@ -56,6 +58,7 @@ const mapRouting = (u: SessionUser) => ({
   onboardingCompleted: u.onboarding_completed,
   shouldOnboard: !u.onboarding_completed,
   validationStatus: u.status,
+  validationNotes: u.validation_notes,
   needsApproval: u.status !== 'approved',
   role: u.role,
 });
@@ -69,6 +72,7 @@ const LOGGED_OUT = {
   shouldOnboard: false,
   needsApproval: false,
   validationStatus: undefined,
+  validationNotes: null,
   role: null,
 };
 
@@ -85,6 +89,7 @@ export const useAuthStore = create<AuthState>()(
       shouldOnboard: false,
       needsApproval: false,
       validationStatus: undefined,
+      validationNotes: null,
       role: null,
 
       // Rehydrate identity on app load/reload from the cookie via GET /api/me (D3).
@@ -173,6 +178,7 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({
         profileType: state.profileType,
         validationStatus: state.validationStatus,
+        validationNotes: state.validationNotes,
         contactName: state.contactName,
         onboardingCompleted: state.onboardingCompleted,
         role: state.role,

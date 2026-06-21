@@ -31,6 +31,7 @@ const SignUpSuccess = lazy(() => import('@/features/auth/pages/SignUpSuccess'));
 const ResetPassword = lazy(() => import('@/features/auth/pages/ResetPassword'));
 const UpdatePassword = lazy(() => import('@/features/auth/pages/UpdatePassword'));
 const VerifyEmail = lazy(() => import('@/features/auth/pages/VerifyEmail'));
+const AccountRejected = lazy(() => import('@/features/auth/pages/AccountRejected'));
 const OwnerScreens = lazy(() => import('@/features/screenhost/pages/OwnerScreens'));
 const OwnerRevenue = lazy(() => import('@/features/screenhost/pages/OwnerRevenue'));
 const OwnerCampaigns = lazy(() => import('@/features/screenhost/pages/OwnerCampaigns'));
@@ -75,7 +76,7 @@ const ReactQueryDevtools = import.meta.env.DEV
   : null;
 
 function AdvertiserRoute({ children }: { children: React.ReactNode }) {
-  const { user, initialized, profileType, role } = useAuthStore();
+  const { user, initialized, profileType, role, validationStatus } = useAuthStore();
   if (!initialized) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
@@ -88,6 +89,11 @@ function AdvertiserRoute({ children }: { children: React.ReactNode }) {
   }
   if (!user) {
     return <Navigate to="/login" />;
+  }
+
+  // N3 — a rejected account is gated out of the app (defense for a direct nav to a protected route).
+  if (validationStatus === 'rejected') {
+    return <Navigate to="/account-rejected" replace />;
   }
 
   // Les utilisateurs en attente peuvent accéder au dashboard
@@ -106,7 +112,7 @@ function AdvertiserRoute({ children }: { children: React.ReactNode }) {
 }
 
 function OwnerRoute({ children }: { children: React.ReactNode }) {
-  const { user, initialized, profileType } = useAuthStore();
+  const { user, initialized, profileType, validationStatus } = useAuthStore();
   if (!initialized) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
@@ -121,6 +127,11 @@ function OwnerRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" />;
   }
 
+  // N3 — a rejected account is gated out of the app (defense for a direct nav to a protected route).
+  if (validationStatus === 'rejected') {
+    return <Navigate to="/account-rejected" replace />;
+  }
+
   // Les utilisateurs en attente peuvent accéder au dashboard
   // mais les fonctionnalités seront grisées/désactivées via isDisabled
 
@@ -133,7 +144,7 @@ function OwnerRoute({ children }: { children: React.ReactNode }) {
 }
 
 function PublicRoute({ children }: { children: React.ReactNode }) {
-  const { user, initialized, profileType, role } = useAuthStore();
+  const { user, initialized, profileType, role, validationStatus } = useAuthStore();
 
   if (!initialized) {
     return (
@@ -147,11 +158,36 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   }
 
   // Si un utilisateur est connecté, le rediriger vers son espace (agent/owner/advertiser) via le
-  // résolveur unique — même s'il est en attente de validation (les fonctionnalités seront grisées).
+  // résolveur unique — même s'il est en attente de validation (les fonctionnalités seront grisées),
+  // ou vers l'écran de statut si le compte a été rejeté (resolveHomeRoute décide).
   if (user) {
-    return <Navigate to={resolveHomeRoute(profileType, role)} />;
+    return <Navigate to={resolveHomeRoute(profileType, role, validationStatus)} />;
   }
 
+  return <>{children}</>;
+}
+
+// N3 — the /account-rejected status screen is reachable only by a signed-in REJECTED account. Anyone
+// else is bounced: signed-out → /login; pending/approved → their normal landing (so the screen can't
+// be sat on once an account is later approved). Mirrors the rejected redirect in the app guards.
+function RejectedRoute({ children }: { children: React.ReactNode }) {
+  const { user, initialized, profileType, role, validationStatus } = useAuthStore();
+  if (!initialized) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-brand-primary mx-auto mb-4"></div>
+          <p className="text-gray-600">Chargement...</p>
+        </div>
+      </div>
+    );
+  }
+  if (!user) {
+    return <Navigate to="/login" />;
+  }
+  if (validationStatus !== 'rejected') {
+    return <Navigate to={resolveHomeRoute(profileType, role, validationStatus)} replace />;
+  }
   return <>{children}</>;
 }
 
@@ -243,6 +279,16 @@ export default function App() {
             {/* Verify-email result (Phase-1f F3): the better-auth callbackURL target. Standalone —
                 the just-verified user is logged out and must always see the result. */}
             <Route path="/verify-email" element={<VerifyEmail />} />
+
+            {/* N3 — account-status screen for a rejected end-user (gated to a signed-in rejected account). */}
+            <Route
+              path="/account-rejected"
+              element={
+                <RejectedRoute>
+                  <AccountRejected />
+                </RejectedRoute>
+              }
+            />
 
             {/* Slice-2 E / P2 — agent referred-clients workspace (role-gated, both agent roles) */}
             <Route

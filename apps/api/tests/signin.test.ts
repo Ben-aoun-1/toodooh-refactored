@@ -106,6 +106,30 @@ describe('POST /api/signin + /api/signout (real Postgres)', () => {
     expect(res.headers['set-cookie']).toBeDefined();
   });
 
+  it('rejected account: signin still SUCCEEDS and returns status + rejection reason', async () => {
+    // N3: rejection gates the APP, not authentication. The rejected user must be able to sign in so
+    // they can later fix + resubmit (C3). signin therefore returns 200 with status + validation_notes.
+    const userId = await createVerifiedUser('rejected@example.com');
+    await db
+      .update(users)
+      .set({ status: 'rejected', validationNotes: 'Documents illisibles, merci de renvoyer.' })
+      .where(eq(users.id, userId));
+    const res = await signin('rejected@example.com', PASSWORD);
+    expect(res.statusCode).toBe(200);
+    const { user } = res.json<{ user: { status: string; validation_notes: string | null } }>();
+    expect(user.status).toBe('rejected');
+    expect(user.validation_notes).toBe('Documents illisibles, merci de renvoyer.');
+    expect(res.headers['set-cookie']).toBeDefined();
+  });
+
+  it('non-rejected account: validation_notes is null', async () => {
+    await createVerifiedUser('clean@example.com');
+    const res = await signin('clean@example.com', PASSWORD);
+    expect(res.json<{ user: { validation_notes: string | null } }>().user.validation_notes).toBe(
+      null,
+    );
+  });
+
   it('wrong password → generic 401', async () => {
     await createVerifiedUser('pw@example.com');
     const res = await signin('pw@example.com', 'wrong-passw0rd!!');

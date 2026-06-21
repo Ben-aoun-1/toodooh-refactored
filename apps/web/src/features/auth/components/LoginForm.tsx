@@ -24,8 +24,8 @@ export default function LoginForm() {
 
     try {
       await login(formData.email, formData.password);
-      const { profileType, role } = useAuthStore.getState();
-      navigate(resolveHomeRoute(profileType, role));
+      const { profileType, role, validationStatus } = useAuthStore.getState();
+      navigate(resolveHomeRoute(profileType, role, validationStatus));
       toast.success('Connexion réussie');
     } catch (error) {
       toast.error(getErrorMessage(error) || "Une erreur inattendue s'est produite");

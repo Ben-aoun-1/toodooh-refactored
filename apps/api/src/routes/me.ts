@@ -27,6 +27,7 @@ export const meRoutes: FastifyPluginAsync = async (app) => {
         emailVerified: users.emailVerified,
         role: users.role,
         status: users.status,
+        validationNotes: users.validationNotes,
         onboardingCompleted: users.onboardingCompleted,
         contactName: users.contactName,
         businessName: users.businessName,
@@ -68,6 +69,8 @@ export const meRoutes: FastifyPluginAsync = async (app) => {
         email_verified: row.emailVerified,
         role: row.role,
         status: row.status,
+        // N3: the rejection reason so the FE status screen renders it after a reload (rehydrate).
+        validation_notes: row.validationNotes,
         onboarding_completed: row.onboardingCompleted,
         profile_type: toProfileType(row.role, row.businessType),
         contact_name: row.contactName,

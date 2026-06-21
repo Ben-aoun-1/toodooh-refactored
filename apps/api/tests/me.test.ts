@@ -59,6 +59,7 @@ interface MeUser {
   email_verified: boolean;
   role: string;
   status: string;
+  validation_notes: string | null;
   onboarding_completed: boolean;
   profile_type: string | null;
   contact_name: string | null;
@@ -181,6 +182,29 @@ describe('GET /api/me (real Postgres)', () => {
     );
     const { user } = (await me(cookie)).json<{ user: MeUser }>();
     expect(user.documents.cin).toBe(true);
+  });
+
+  it('rejected account: /api/me carries status + the rejection reason (validation_notes)', async () => {
+    const userId = await createVerifiedUser('me-rejected@example.com');
+    await db
+      .update(users)
+      .set({ status: 'rejected', validationNotes: 'CIN illisible.' })
+      .where(eq(users.id, userId));
+    const cookie = cookieHeader(
+      (await signin('me-rejected@example.com', PASSWORD)).headers['set-cookie'],
+    );
+    const { user } = (await me(cookie)).json<{ user: MeUser }>();
+    expect(user.status).toBe('rejected');
+    expect(user.validation_notes).toBe('CIN illisible.');
+  });
+
+  it('non-rejected account: /api/me validation_notes is null', async () => {
+    await createVerifiedUser('me-clean@example.com');
+    const cookie = cookieHeader(
+      (await signin('me-clean@example.com', PASSWORD)).headers['set-cookie'],
+    );
+    const { user } = (await me(cookie)).json<{ user: MeUser }>();
+    expect(user.validation_notes).toBe(null);
   });
 
   it('no cookie → 401 UNAUTHENTICATED', async () => {
