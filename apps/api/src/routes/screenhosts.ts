@@ -6,7 +6,7 @@ import { db } from '../db/client.js';
 import { screenhosts, users } from '../db/schema.js';
 import { pushApprovedOwnerLocations } from '../lib/wedooh-sync.js';
 import { encryptWifiPassword } from '../lib/wifi-crypto.js';
-import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
+import { requireActiveAccount, requireAdmin, requireAuth } from '../middleware/require-auth.js';
 
 // Owner- and admin-facing WiFi maintenance for screenhosts. A venue's WiFi can change after
 // signup (Kais 2026-06), so SSID + password are editable here by the owner (their own
@@ -84,10 +84,14 @@ const applyWifiPatch = async (
 };
 
 const adminGuard = { preHandler: [requireAuth, requireAdmin] };
+// The owner app surface (GET /mine, PATCH /:id/wifi) is status-gated (N3): a rejected/banned owner
+// is 403'd server-side, closing the FE-only enforcement gap. pending/approved pass (pending = the
+// in-review carve-out). The admin route keeps adminGuard. Recovery routes live on other routers.
+const ownerGuard = { preHandler: [requireAuth, requireActiveAccount] };
 
 export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/screenhosts/mine — the caller's screenhosts, password-redacted.
-  app.get('/api/screenhosts/mine', { preHandler: requireAuth }, async (request, reply) => {
+  app.get('/api/screenhosts/mine', ownerGuard, async (request, reply) => {
     const userId = request.user?.id;
     if (!userId) {
       return reply
@@ -103,7 +107,7 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // PATCH /api/screenhosts/:id/wifi — owner-scoped edit + approved-owner re-push.
-  app.patch('/api/screenhosts/:id/wifi', { preHandler: requireAuth }, async (request, reply) => {
+  app.patch('/api/screenhosts/:id/wifi', ownerGuard, async (request, reply) => {
     const parsedParams = idParamSchema.safeParse(request.params);
     if (!parsedParams.success) {
       return reply.status(400).send({

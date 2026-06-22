@@ -59,6 +59,8 @@ interface MeUser {
   email_verified: boolean;
   role: string;
   status: string;
+  validation_notes: string | null;
+  rejection_topics: string[] | null;
   onboarding_completed: boolean;
   profile_type: string | null;
   contact_name: string | null;
@@ -154,6 +156,57 @@ describe('GET /api/me (real Postgres)', () => {
     expect(user.bank_rib).toBe('12345678901234567890');
     expect(user.bank_iban).toBe('TN5912345678901234567890');
     expect(user.documents.bank).toBe(true);
+  });
+
+  // Kais N5: the onboarding indicator must NOT report CIN complete with one face. The CIN has two
+  // semantic slots (1=recto, 2=verso); presence is true ONLY when BOTH are on file.
+  it('CIN presence is INCOMPLETE with only one face (recto)', async () => {
+    const userId = await createVerifiedUser('me-cin-recto@example.com');
+    await db
+      .insert(userDocuments)
+      .values({ userId, category: 'cin', position: 1, storageKey: `cin/${userId}-1` });
+    const cookie = cookieHeader(
+      (await signin('me-cin-recto@example.com', PASSWORD)).headers['set-cookie'],
+    );
+    const { user } = (await me(cookie)).json<{ user: MeUser }>();
+    expect(user.documents.cin).toBe(false);
+  });
+
+  it('CIN presence is complete only with BOTH faces (recto + verso)', async () => {
+    const userId = await createVerifiedUser('me-cin-both@example.com');
+    await db.insert(userDocuments).values([
+      { userId, category: 'cin', position: 1, storageKey: `cin/${userId}-1` },
+      { userId, category: 'cin', position: 2, storageKey: `cin/${userId}-2` },
+    ]);
+    const cookie = cookieHeader(
+      (await signin('me-cin-both@example.com', PASSWORD)).headers['set-cookie'],
+    );
+    const { user } = (await me(cookie)).json<{ user: MeUser }>();
+    expect(user.documents.cin).toBe(true);
+  });
+
+  it('rejected account: /api/me carries status + the rejection reason + topics', async () => {
+    const userId = await createVerifiedUser('me-rejected@example.com');
+    await db
+      .update(users)
+      .set({ status: 'rejected', validationNotes: 'CIN illisible.', rejectionTopics: ['legal'] })
+      .where(eq(users.id, userId));
+    const cookie = cookieHeader(
+      (await signin('me-rejected@example.com', PASSWORD)).headers['set-cookie'],
+    );
+    const { user } = (await me(cookie)).json<{ user: MeUser }>();
+    expect(user.status).toBe('rejected');
+    expect(user.validation_notes).toBe('CIN illisible.');
+    expect(user.rejection_topics).toEqual(['legal']);
+  });
+
+  it('non-rejected account: /api/me validation_notes is null', async () => {
+    await createVerifiedUser('me-clean@example.com');
+    const cookie = cookieHeader(
+      (await signin('me-clean@example.com', PASSWORD)).headers['set-cookie'],
+    );
+    const { user } = (await me(cookie)).json<{ user: MeUser }>();
+    expect(user.validation_notes).toBe(null);
   });
 
   it('no cookie → 401 UNAUTHENTICATED', async () => {

@@ -18,6 +18,7 @@ import {
   Trash2,
   CreditCard,
   Wifi,
+  Ban,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
@@ -36,7 +37,7 @@ export default function UserManagement() {
   const location = useLocation();
   const queryClient = useQueryClient();
   const { users, loading, isError: usersError } = useUsers();
-  const { approveUser, rejectUser } = useUserMutations();
+  const { approveUser, rejectUser, banUser } = useUserMutations();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>(
     'all',
@@ -65,7 +66,13 @@ export default function UserManagement() {
   // Reject-reason modal (G2 D-G2-3) — the backend requires a non-empty rejection note.
   const [rejectTarget, setRejectTarget] = useState<AdminUser | null>(null);
   const [rejectNotes, setRejectNotes] = useState('');
+  // N3 Scenario 1 — deficient document area(s); at least one is required to reject.
+  const [rejectTopics, setRejectTopics] = useState<string[]>([]);
   const [submittingReject, setSubmittingReject] = useState(false);
+  // BANIR (N3 Scenario 2, fraud) — terminal + irreversible; a non-empty reason is required.
+  const [banTarget, setBanTarget] = useState<AdminUser | null>(null);
+  const [banNotes, setBanNotes] = useState('');
+  const [submittingBan, setSubmittingBan] = useState(false);
   // 409 prior-state modal (G2 D-G2-4) — set to the conflicted user's id; the queue is refetched
   // first so the modal reads the now-fresh row from the merged list.
   const [conflictId, setConflictId] = useState<string | null>(null);
@@ -126,23 +133,31 @@ export default function UserManagement() {
     }
   };
 
-  // The reject flow opens a modal collecting the required reason (G2 D-G2-3); submitReject sends it.
+  // The reject flow opens a modal collecting the required reason + topic(s) (G2 D-G2-3 / N3); submitReject sends them.
   const openReject = (target: AdminUser) => {
     setRejectNotes('');
+    setRejectTopics([]);
     setRejectTarget(target);
+  };
+
+  const toggleRejectTopic = (topic: string) => {
+    setRejectTopics((prev) =>
+      prev.includes(topic) ? prev.filter((t) => t !== topic) : [...prev, topic],
+    );
   };
 
   const submitReject = async () => {
     if (!rejectTarget) return;
     const notes = rejectNotes.trim();
-    if (!notes) return;
+    if (!notes || rejectTopics.length === 0) return;
     setSubmittingReject(true);
     const id = rejectTarget.id;
     try {
-      await rejectUser.mutateAsync({ id, notes });
+      await rejectUser.mutateAsync({ id, notes, topics: rejectTopics });
       toast.success('Utilisateur rejeté');
       setRejectTarget(null);
       setRejectNotes('');
+      setRejectTopics([]);
       setShowDetailsModal(false);
     } catch (error) {
       if (error instanceof ApiError && error.status === 409) {
@@ -153,6 +168,37 @@ export default function UserManagement() {
       }
     } finally {
       setSubmittingReject(false);
+    }
+  };
+
+  // BANIR — opens the destructive confirmation collecting the required reason; submitBan bans the
+  // account (terminal). Evidence is retained server-side; sessions are revoked.
+  const openBan = (target: AdminUser) => {
+    setBanNotes('');
+    setBanTarget(target);
+  };
+
+  const submitBan = async () => {
+    if (!banTarget) return;
+    const notes = banNotes.trim();
+    if (!notes) return;
+    setSubmittingBan(true);
+    const id = banTarget.id;
+    try {
+      await banUser.mutateAsync({ id, notes });
+      toast.success('Compte banni');
+      setBanTarget(null);
+      setBanNotes('');
+      setShowDetailsModal(false);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 409) {
+        setBanTarget(null);
+        await handleConflict(id);
+      } else {
+        toast.error(`Erreur lors du bannissement: ${apiErrorMessage(error)}`);
+      }
+    } finally {
+      setSubmittingBan(false);
     }
   };
 
@@ -172,6 +218,7 @@ export default function UserManagement() {
       pending: { color: 'bg-yellow-100 text-yellow-800', icon: Clock, text: 'En attente' },
       approved: { color: 'bg-green-100 text-green-800', icon: Check, text: 'Approuvé' },
       rejected: { color: 'bg-red-100 text-red-800', icon: X, text: 'Rejeté' },
+      banned: { color: 'bg-red-100 text-red-900', icon: Ban, text: 'Banni' },
     };
 
     const config = statusConfig[status as keyof typeof statusConfig];
@@ -434,6 +481,17 @@ export default function UserManagement() {
                             <UserX className="h-4 w-4" />
                           </button>
                         </>
+                      )}
+                      {/* BANIR (fraud) — available for any non-banned account (fraud can surface
+                          post-approval); opens a destructive confirmation requiring a reason. */}
+                      {user.status !== 'banned' && (
+                        <button
+                          onClick={() => openBan(user)}
+                          className="text-red-800 hover:text-red-950"
+                          title="Bannir (fraude)"
+                        >
+                          <Ban className="h-4 w-4" />
+                        </button>
                       )}
 
                       {/* Suppression — bientôt disponible (endpoint backend à venir, slice future) */}
@@ -931,11 +989,37 @@ export default function UserManagement() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent text-sm"
                   placeholder="Expliquez la raison du rejet…"
                 />
+                {/* N3 Scenario 1 — which document area(s) are deficient (au moins un). */}
+                <p className="block text-sm text-gray-600 mt-4 mb-2">
+                  Documents à corriger (au moins un)
+                </p>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={rejectTopics.includes('legal')}
+                      onChange={() => toggleRejectTopic('legal')}
+                      className="h-4 w-4 rounded border-gray-300 text-brand-primary focus:ring-brand-primary"
+                    />
+                    Documents légaux (RNE / CIN)
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={rejectTopics.includes('bank')}
+                      onChange={() => toggleRejectTopic('bank')}
+                      className="h-4 w-4 rounded border-gray-300 text-brand-primary focus:ring-brand-primary"
+                    />
+                    Coordonnées bancaires (RIB)
+                  </label>
+                </div>
               </div>
               <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
                 <button
                   onClick={submitReject}
-                  disabled={submittingReject || rejectNotes.trim().length === 0}
+                  disabled={
+                    submittingReject || rejectNotes.trim().length === 0 || rejectTopics.length === 0
+                  }
                   className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed sm:ml-3 sm:w-auto sm:text-sm"
                 >
                   {submittingReject ? 'Rejet…' : 'Rejeter'}
@@ -943,6 +1027,56 @@ export default function UserManagement() {
                 <button
                   onClick={() => setRejectTarget(null)}
                   disabled={submittingReject}
+                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
+                >
+                  Annuler
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal — BANIR (N3 Scenario 2, fraud). Destructive + irreversible; reason required. */}
+      {banTarget && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+              <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
+            </div>
+            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+              <div className="bg-white px-4 pt-5 pb-4 sm:p-6">
+                <h3 className="text-lg leading-6 font-medium text-red-700 mb-2 flex items-center gap-2">
+                  <Ban className="h-5 w-5" />
+                  Bannir {banTarget.contact_name} ?
+                </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Action irréversible. Le compte sera définitivement bloqué (connexion impossible).
+                  Les données et documents sont conservés comme preuve.
+                </p>
+                <label htmlFor="ban-notes" className="block text-sm text-gray-600 mb-2">
+                  Motif du bannissement (obligatoire)
+                </label>
+                <textarea
+                  id="ban-notes"
+                  value={banNotes}
+                  onChange={(e) => setBanNotes(e.target.value)}
+                  rows={4}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-sm"
+                  placeholder="Expliquez le motif (fraude, faux documents…)"
+                />
+              </div>
+              <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                <button
+                  onClick={submitBan}
+                  disabled={submittingBan || banNotes.trim().length === 0}
+                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-700 text-base font-medium text-white hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-600 disabled:opacity-50 disabled:cursor-not-allowed sm:ml-3 sm:w-auto sm:text-sm"
+                >
+                  {submittingBan ? 'Bannissement…' : 'Bannir définitivement'}
+                </button>
+                <button
+                  onClick={() => setBanTarget(null)}
+                  disabled={submittingBan}
                   className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
                 >
                   Annuler

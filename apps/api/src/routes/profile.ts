@@ -286,4 +286,48 @@ export const profileRoutes: FastifyPluginAsync = async (app) => {
       bankIban: updated?.bankIban ?? null,
     });
   });
+
+  // POST /api/profile/resubmit — N3 Scenario 1 completion. A REJECTED account corrects its documents
+  // (via the existing /api/profile/documents + /api/profile/bank surfaces, both requireAuth-only) and
+  // resubmits for review. Allowed ONLY when the account is currently rejected — checked against the DB,
+  // not the session token (which could be stale). Returns to a PRISTINE pending: the whole validation
+  // trio (validatedBy/validatedAt/validationNotes) + rejectionTopics are cleared so re-review starts
+  // fresh. A non-rejected caller is a 409 no-op (idempotent-safe). onboarding_completed is untouched.
+  app.post('/api/profile/resubmit', { preHandler: requireAuth }, async (request, reply) => {
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply
+        .status(401)
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+    }
+    const [existing] = await db
+      .select({ status: users.status })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (!existing) {
+      return reply.status(500).send({ error: 'INTERNAL_ERROR', message: 'Account lookup failed.' });
+    }
+    if (existing.status !== 'rejected') {
+      return reply.status(409).send({
+        error: 'CONFLICT',
+        message: 'Only a rejected account can be resubmitted for review.',
+        statusCode: 409,
+        requestId: request.id,
+        currentStatus: existing.status,
+      });
+    }
+    const [updated] = await db
+      .update(users)
+      .set({
+        status: 'pending',
+        validatedBy: null,
+        validatedAt: null,
+        validationNotes: null,
+        rejectionTopics: null,
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    return reply.status(200).send({ status: updated?.status ?? 'pending' });
+  });
 };

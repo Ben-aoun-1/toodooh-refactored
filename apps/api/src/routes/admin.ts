@@ -2,11 +2,22 @@ import { and, asc, desc, eq, inArray, notInArray } from 'drizzle-orm';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
+import { emailSender } from '../auth/auth.js';
 import { db } from '../db/client.js';
-import { type User, screenhosts, userDocuments, users } from '../db/schema.js';
+import { type User, screenhosts, sessions, userDocuments, users } from '../db/schema.js';
+import {
+  rejectionEmailPlainText,
+  rejectionEmailSubject,
+  rejectionEmailTemplate,
+} from '../email/rejection-template.js';
 import { toProfileType } from '../lib/profile-type.js';
 import { OWNER_ROLES, createMissingScreensForOwner } from '../lib/screens.js';
-import { groupedDocuments } from '../lib/user-documents.js';
+import {
+  type DocumentCategory,
+  type DocumentPresence,
+  documentPresence,
+  groupedDocuments,
+} from '../lib/user-documents.js';
 import { pushApprovedOwnerLocations } from '../lib/wedooh-sync.js';
 import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
 import { storage } from '../storage/s3-storage.js';
@@ -26,33 +37,45 @@ const docIdParamSchema = z.object({ id: z.uuid(), ref: z.uuid() });
 // non-empty (D-G1-4 — a rejection benefits from feedback; the rebuild establishes the contract
 // the dead-Supabase FE lacked, CF-24 class-b).
 const approveBodySchema = z.object({ notes: z.string().optional() });
-const rejectBodySchema = z.object({ notes: z.string().trim().min(1) });
+// N3 Scenario 1 — a rejection must name at least one deficient document area: 'legal' (RNE/CIN)
+// and/or 'bank' (RIB). Persisted to users.rejection_topics (text[]); the user is notified by email.
+const rejectionTopic = z.enum(['legal', 'bank']);
+const rejectBodySchema = z.object({
+  notes: z.string().trim().min(1),
+  topics: z.array(rejectionTopic).min(1),
+});
+// N3 Scenario 2 (fraud) — BANIR. A non-empty reason is required (stored in the trio's validationNotes).
+const banBodySchema = z.object({ notes: z.string().trim().min(1) });
 
 // The snake_case admin view G2 renders: the /api/me projection (identity + business profile)
 // + created_at + the validation trio. The trio is single-state — it describes the CURRENT
 // status's validation context, not multi-state history (D4 ruled out an action-log).
 // Document presence per user, read from user_documents (F-docs Commit 1 — the users.*_doc_url
 // columns are frozen). Batch query: the moderation list maps many users in one round-trip.
-const documentsPresenceFor = async (
-  userIds: string[],
-): Promise<Map<string, { registration: boolean; cin: boolean; bank: boolean }>> => {
-  const presence = new Map<string, { registration: boolean; cin: boolean; bank: boolean }>();
+const documentsPresenceFor = async (userIds: string[]): Promise<Map<string, DocumentPresence>> => {
+  const presence = new Map<string, DocumentPresence>();
   if (userIds.length === 0) return presence;
   const rows = await db
-    .select({ userId: userDocuments.userId, category: userDocuments.category })
+    .select({
+      userId: userDocuments.userId,
+      category: userDocuments.category,
+      position: userDocuments.position,
+    })
     .from(userDocuments)
     .where(inArray(userDocuments.userId, userIds));
+  // Group each user's documents, then derive presence per user: CIN counts complete only when BOTH
+  // faces are on file (recto + verso), so the rule needs the whole document set, not a per-row flag.
+  const byUser = new Map<string, { category: DocumentCategory; position: number }[]>();
   for (const row of rows) {
-    const entry = presence.get(row.userId) ?? { registration: false, cin: false, bank: false };
-    if (row.category === 'rne') entry.registration = true;
-    if (row.category === 'cin') entry.cin = true;
-    if (row.category === 'bank') entry.bank = true;
-    presence.set(row.userId, entry);
+    const list = byUser.get(row.userId) ?? [];
+    list.push({ category: row.category, position: row.position });
+    byUser.set(row.userId, list);
   }
+  for (const [userId, docs] of byUser) presence.set(userId, documentPresence(docs));
   return presence;
 };
 
-const NO_DOCUMENTS = { registration: false, cin: false, bank: false };
+const NO_DOCUMENTS: DocumentPresence = { registration: false, cin: false, bank: false };
 
 // A screenhost's WiFi state for the admin user-info view. The password is WRITE-ONLY: only its
 // presence (wifi_password_set) ever crosses the wire — the cipher/plaintext never does (parallel
@@ -240,6 +263,11 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
         requestId: request.id,
       });
     }
+    // 'banned' is TERMINAL — refuse the transition and leave the ban record intact (an un-ban is a
+    // deliberate future endpoint, not this path). Mirrors /ban's same-state guard.
+    if (existing.status === 'banned') {
+      return sendAlreadyInState(reply, request, existing);
+    }
     if (existing.status === 'approved') {
       return sendAlreadyInState(reply, request, existing);
     }
@@ -319,6 +347,11 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
         requestId: request.id,
       });
     }
+    // 'banned' is TERMINAL — refuse the transition and leave the ban record intact (no banned →
+    // rejected → resubmit escape hatch). Mirrors /ban's same-state guard.
+    if (existing.status === 'banned') {
+      return sendAlreadyInState(reply, request, existing);
+    }
     if (existing.status === 'rejected') {
       return sendAlreadyInState(reply, request, existing);
     }
@@ -330,9 +363,114 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
         validatedBy: adminId,
         validatedAt: new Date(),
         validationNotes: parsedBody.data.notes,
+        rejectionTopics: parsedBody.data.topics,
       })
       .where(eq(users.id, id))
       .returning();
+    const rejected = updated as User;
+
+    // N3 Scenario 1 — notify the rejected user (reason + topics). Non-blocking, never-throw (mirrors
+    // the agent-welcome email): the reject has ALREADY committed, so a send failure is logged but
+    // must never fail the response. The user stays able to sign in (C2) to read this and resubmit.
+    const emailFields = {
+      name: rejected.contactName,
+      notes: parsedBody.data.notes,
+      topics: parsedBody.data.topics,
+    };
+    try {
+      const result = await emailSender.send({
+        to: rejected.email,
+        subject: rejectionEmailSubject,
+        html: rejectionEmailTemplate(emailFields),
+        text: rejectionEmailPlainText(emailFields),
+      });
+      if ('error' in result) {
+        request.log.error({ to: rejected.email, error: result.error }, 'rejection email failed');
+      } else {
+        request.log.info(
+          { to: rejected.email, messageId: result.messageId },
+          'rejection email sent',
+        );
+      }
+    } catch (err) {
+      request.log.error({ to: rejected.email, err }, 'rejection email threw (swallowed)');
+    }
+
+    const presence = await documentsPresenceFor([id]);
+    return reply
+      .status(200)
+      .send({ user: toAdminUserView(rejected, presence.get(id) ?? NO_DOCUMENTS) });
+  });
+
+  // POST /api/admin/users/:id/ban — N3 Scenario 2 (fraud). TERMINAL: status→'banned' + the trio
+  // (validationNotes = ban reason). The user's sessions are REVOKED (deleted) so they're kicked
+  // immediately. The user row + user_documents are RETAINED as fraud evidence (operator ruling
+  // 2026-06-20 — NO hard delete). 409 if already banned. Re-registration with this identity is blocked
+  // by RETAIN + the existing email/tax uniqueness (no separate check — a banned-specific error would
+  // leak banned status). Bannable from ANY non-banned state (fraud can surface post-approval).
+  app.post('/api/admin/users/:id/ban', adminGuard, async (request, reply) => {
+    const parsedParams = idParamSchema.safeParse(request.params);
+    if (!parsedParams.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        statusCode: 400,
+        requestId: request.id,
+        fields: [{ field: 'id', reason: 'must be a valid uuid' }],
+      });
+    }
+    const parsedBody = banBodySchema.safeParse(request.body ?? {});
+    if (!parsedBody.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        statusCode: 400,
+        requestId: request.id,
+        fields: parsedBody.error.issues.map((i) => ({
+          field: i.path.join('.'),
+          reason: i.message,
+        })),
+      });
+    }
+
+    const adminId = request.user?.id;
+    if (!adminId) {
+      return reply
+        .status(401)
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+    }
+
+    const { id } = parsedParams.data;
+    const [existing] = await db.select().from(users).where(eq(users.id, id)).limit(1);
+    if (!existing) {
+      return reply.status(404).send({
+        error: 'USER_NOT_FOUND',
+        message: 'No user with that id.',
+        statusCode: 404,
+        requestId: request.id,
+      });
+    }
+    if (existing.status === 'banned') {
+      return sendAlreadyInState(reply, request, existing);
+    }
+
+    const [updated] = await db
+      .update(users)
+      .set({
+        status: 'banned',
+        validatedBy: adminId,
+        validatedAt: new Date(),
+        validationNotes: parsedBody.data.notes,
+        // A ban supersedes any prior reject context — the doc-deficiency topics no longer apply.
+        rejectionTopics: null,
+      })
+      .where(eq(users.id, id))
+      .returning();
+
+    // Revoke the user's sessions so the ban takes effect immediately (mirrors better-auth's
+    // revokeSessionsOnPasswordReset). RETAIN everything else — the user row + user_documents are
+    // fraud evidence and are never deleted.
+    await db.delete(sessions).where(eq(sessions.userId, id));
 
     const presence = await documentsPresenceFor([id]);
     return reply

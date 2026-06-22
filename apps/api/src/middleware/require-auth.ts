@@ -58,6 +58,32 @@ export const requireRole =
     }
   };
 
+// Statuses that have LOST app access: 'rejected' (recoverable via the resubmit loop, but no app
+// surface) and 'banned' (terminal). 'pending' and 'approved' pass — a pending owner keeps its
+// in-review dashboard/screenhost access (explicit product carve-out). Composes AFTER requireAuth.
+const INACTIVE_STATUSES = new Set(['rejected', 'banned']);
+
+// Account-status gate (N3 — server-side enforcement). Closes the FE-only gap: requireAuth attaches
+// request.user.status (fresh — getSession is DB-backed, no cookieCache) but never gates on it, so a
+// rejected owner with a still-valid session could call app-surface routes directly. Applied
+// SURGICALLY (this commit: the screenhost app surface) — NOT to the rejected RECOVERY routes
+// (/api/me, /api/profile/resubmit, /api/profile/documents*, PATCH /api/profile/bank), which a
+// rejected user needs to fix + resubmit. Reads request.user.status, mirroring requireAdmin/requireRole.
+export const requireActiveAccount = async (
+  request: FastifyRequest,
+  reply: FastifyReply,
+): Promise<void> => {
+  if (INACTIVE_STATUSES.has(request.user?.status ?? '')) {
+    await reply.status(403).send({
+      error: 'ACCOUNT_NOT_ACTIVE',
+      message: 'Your account does not have access to this resource.',
+      statusCode: 403,
+      requestId: request.id,
+    });
+    return;
+  }
+};
+
 const ADMIN_ROLES = new Set(['admin', 'superadmin']);
 
 // Admin role gate. Composes AFTER requireAuth in a preHandler array

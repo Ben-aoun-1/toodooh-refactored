@@ -11,12 +11,16 @@ import {
   agents,
   businessSectors,
   governorates,
+  userDocuments,
   users,
 } from '../src/db/schema.js';
 import { env } from '../src/env.js';
+import { isRowOwnedKey } from '../src/lib/user-documents.js';
 import { apiRoutes } from '../src/routes/index.js';
+import { storage } from '../src/storage/s3-storage.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
+import { signupMultipart } from './helpers/signup-multipart.js';
 
 // nodemailer mocked → the verification hook "sends" without a real SMTP
 // connection (Q1: no external network in CI).
@@ -148,6 +152,42 @@ describe('POST /api/signup', () => {
     expect(body.fields[0]?.field).toBe('tax_number');
   });
 
+  // N3 Scenario 2 (re-registration block, ruling A): a BANNED account is retained, so its email/tax
+  // stay unique — re-signup with either is blocked by the SAME paths as a normal duplicate (masked 201
+  // for email, 409 for tax). The responses are identical to a non-banned dupe, so banned status never
+  // leaks. No banned-specific branch exists; these tests prove RETAIN + uniqueness is the blocklist.
+  it('re-registration with a BANNED email → masked 201 + NO new account (non-revealing)', async () => {
+    await app.inject({ method: 'POST', url: '/api/signup', payload: validPayload });
+    await db
+      .update(users)
+      .set({ status: 'banned', validationNotes: 'fraud — fake documents' })
+      .where(eq(users.email, 'owner@example.com'));
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      payload: { ...validPayload, tax_number: '7654321XYZ' },
+    });
+    expect(res.statusCode).toBe(201); // identical to a normal dup-email — no banned leak
+    const rows = await db.select().from(users).where(eq(users.email, 'owner@example.com'));
+    expect(rows).toHaveLength(1); // no new account created
+    expect(rows[0]?.status).toBe('banned'); // the retained evidence row is untouched
+  });
+
+  it('re-registration with a BANNED tax_number (new email) → 409 TAX_NUMBER_TAKEN (non-revealing)', async () => {
+    await app.inject({ method: 'POST', url: '/api/signup', payload: validPayload });
+    await db
+      .update(users)
+      .set({ status: 'banned', validationNotes: 'fraud' })
+      .where(eq(users.email, 'owner@example.com'));
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      payload: { ...validPayload, email: 'fraudster-again@example.com' },
+    });
+    expect(res.statusCode).toBe(409); // identical to a normal dup-tax — no banned leak
+    expect(res.json<{ error: string }>().error).toBe('TAX_NUMBER_TAKEN');
+  });
+
   it('password < 10 → 400 with field detail', async () => {
     const res = await app.inject({
       method: 'POST',
@@ -270,21 +310,21 @@ describe('POST /api/signup', () => {
   });
 
   it('full individual_owner signup → role=individual_owner', async () => {
-    const payload = await fullProfile({ profile_type: 'individual_owner' });
-    await app.inject({ method: 'POST', url: '/api/signup', payload });
+    const body = await fullProfile({ profile_type: 'individual_owner' });
+    await app.inject({ method: 'POST', url: '/api/signup', ...signupMultipart(body) });
     const [u] = await db.select().from(users).where(eq(users.email, 'owner@example.com'));
     expect(u?.role).toBe('individual_owner');
   });
 
   it('full fleet_owner signup → role=fleet_owner', async () => {
-    const payload = await fullProfile({ profile_type: 'fleet_owner' });
-    await app.inject({ method: 'POST', url: '/api/signup', payload });
+    const body = await fullProfile({ profile_type: 'fleet_owner' });
+    await app.inject({ method: 'POST', url: '/api/signup', ...signupMultipart(body) });
     const [u] = await db.select().from(users).where(eq(users.email, 'owner@example.com'));
     expect(u?.role).toBe('fleet_owner');
   });
 
   it('owner-extras in the body are stripped (no column, no error) → 201', async () => {
-    const payload = await fullProfile({
+    const body = await fullProfile({
       profile_type: 'individual_owner',
       cin: '12345678',
       formule: 'revenue_share',
@@ -293,16 +333,16 @@ describe('POST /api/signup', () => {
       company_size: '10-50',
       fleet_establishments: [{ name: 'X' }],
     });
-    const res = await app.inject({ method: 'POST', url: '/api/signup', payload });
+    const res = await app.inject({ method: 'POST', url: '/api/signup', ...signupMultipart(body) });
     expect(res.statusCode).toBe(201);
     const [u] = await db.select().from(users).where(eq(users.email, 'owner@example.com'));
     expect(u?.role).toBe('individual_owner'); // the known fields still applied
   });
 
   it('tax_number omitted (owner) → 201 (now optional)', async () => {
-    const payload = await fullProfile({ profile_type: 'individual_owner' });
-    delete (payload as { tax_number?: string }).tax_number;
-    const res = await app.inject({ method: 'POST', url: '/api/signup', payload });
+    const body = await fullProfile({ profile_type: 'individual_owner' });
+    delete (body as { tax_number?: string }).tax_number;
+    const res = await app.inject({ method: 'POST', url: '/api/signup', ...signupMultipart(body) });
     expect(res.statusCode).toBe(201);
     const [u] = await db.select().from(users).where(eq(users.email, 'owner@example.com'));
     expect(u?.taxNumber).toBeNull();
@@ -332,17 +372,21 @@ describe('POST /api/signup', () => {
     await app.inject({
       method: 'POST',
       url: '/api/signup',
-      payload: await fullProfile({ profile_type: 'individual_owner', agent_toodooh: 'FIRST' }),
+      ...signupMultipart(
+        await fullProfile({ profile_type: 'individual_owner', agent_toodooh: 'FIRST' }),
+      ),
     });
     // Then a duplicate-email signup trying to flip role=fleet_owner + a new agent_code.
     const res2 = await app.inject({
       method: 'POST',
       url: '/api/signup',
-      payload: await fullProfile({
-        profile_type: 'fleet_owner',
-        agent_toodooh: 'ATTACKER',
-        tax_number: '7654321XYZ',
-      }),
+      ...signupMultipart(
+        await fullProfile({
+          profile_type: 'fleet_owner',
+          agent_toodooh: 'ATTACKER',
+          tax_number: '7654321XYZ',
+        }),
+      ),
     });
     expect(res2.statusCode).toBe(201); // generic
     const rows = await db.select().from(users).where(eq(users.email, 'owner@example.com'));
@@ -382,7 +426,9 @@ describe('POST /api/signup', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/signup',
-      payload: await fullProfile({ profile_type: 'individual_owner', agent_toodooh: ' hostcode ' }),
+      ...signupMultipart(
+        await fullProfile({ profile_type: 'individual_owner', agent_toodooh: ' hostcode ' }),
+      ),
     });
     expect(res.statusCode).toBe(201);
     const refs = await referralsFor('owner@example.com');
@@ -398,7 +444,9 @@ describe('POST /api/signup', () => {
     await app.inject({
       method: 'POST',
       url: '/api/signup',
-      payload: await fullProfile({ profile_type: 'fleet_owner', agent_toodooh: 'HOSTCODE' }),
+      ...signupMultipart(
+        await fullProfile({ profile_type: 'fleet_owner', agent_toodooh: 'HOSTCODE' }),
+      ),
     });
     const refs = await referralsFor('owner@example.com');
     expect(refs).toHaveLength(1);
@@ -446,7 +494,9 @@ describe('POST /api/signup', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/signup',
-      payload: await fullProfile({ profile_type: 'individual_owner', agent_toodooh: 'NOSUCH99' }),
+      ...signupMultipart(
+        await fullProfile({ profile_type: 'individual_owner', agent_toodooh: 'NOSUCH99' }),
+      ),
     });
     expect(res.statusCode).toBe(201);
     expect(await referralsFor('owner@example.com')).toHaveLength(0);
@@ -455,9 +505,9 @@ describe('POST /api/signup', () => {
   });
 
   it('absent agent_toodooh → no lookup, no link', async () => {
-    const payload = await fullProfile({ profile_type: 'individual_owner' });
-    delete (payload as { agent_toodooh?: string }).agent_toodooh;
-    const res = await app.inject({ method: 'POST', url: '/api/signup', payload });
+    const body = await fullProfile({ profile_type: 'individual_owner' });
+    delete (body as { agent_toodooh?: string }).agent_toodooh;
+    const res = await app.inject({ method: 'POST', url: '/api/signup', ...signupMultipart(body) });
     expect(res.statusCode).toBe(201);
     expect(await referralsFor('owner@example.com')).toHaveLength(0);
   });
@@ -468,20 +518,163 @@ describe('POST /api/signup', () => {
     await app.inject({
       method: 'POST',
       url: '/api/signup',
-      payload: await fullProfile({ profile_type: 'individual_owner' }),
+      ...signupMultipart(await fullProfile({ profile_type: 'individual_owner' })),
     });
     // Duplicate-email signup with an OTHERWISE-compatible code: the synthetic-id guard
     // skips the whole post-create block, so no referral is written.
     const res2 = await app.inject({
       method: 'POST',
       url: '/api/signup',
-      payload: await fullProfile({
-        profile_type: 'individual_owner',
-        agent_toodooh: 'DUPCODE1',
-        tax_number: '7654321XYZ',
-      }),
+      ...signupMultipart(
+        await fullProfile({
+          profile_type: 'individual_owner',
+          agent_toodooh: 'DUPCODE1',
+          tax_number: '7654321XYZ',
+        }),
+      ),
     });
     expect(res2.statusCode).toBe(201);
     expect(await referralsFor('owner@example.com')).toHaveLength(0);
+  });
+
+  // ── R7/N4 — owner document volets persisted at signup (reverses F5 for owners) ──
+  const docsFor = async (userId: string) =>
+    db.select().from(userDocuments).where(eq(userDocuments.userId, userId));
+  const usersByEmail = async (email: string) =>
+    db.select().from(users).where(eq(users.email, email));
+
+  it('valid individual_owner (CIN recto+verso + bank) → 201 + user_documents rows', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      ...signupMultipart(await fullProfile({ profile_type: 'individual_owner' })),
+    });
+    expect(res.statusCode).toBe(201);
+    const userId = res.json<{ userId: string }>().userId;
+    const docs = await docsFor(userId);
+    expect(
+      docs
+        .filter((d) => d.category === 'cin')
+        .map((d) => d.position)
+        .sort(),
+    ).toEqual([1, 2]); // both faces
+    expect(docs.some((d) => d.category === 'bank' && d.position === 1)).toBe(true);
+  });
+
+  // Regression lock (C8): each signup volet row's id MUST equal the UUID embedded in its storageKey,
+  // so isRowOwnedKey holds — otherwise a later DELETE/REPLACE skips storage.delete and orphans MinIO.
+  it('signup volet rows are row-owned-key: storageKey === <cat>/<uid>/<row.id>', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      ...signupMultipart(await fullProfile({ profile_type: 'individual_owner' })),
+    });
+    expect(res.statusCode).toBe(201);
+    const docs = await docsFor(res.json<{ userId: string }>().userId);
+    expect(docs).toHaveLength(3); // cin recto + verso + bank
+    for (const row of docs) {
+      expect(row.storageKey).toBe(`${row.category}/${row.userId}/${row.id}`);
+      expect(isRowOwnedKey(row)).toBe(true);
+    }
+  });
+
+  it('a signup volet deletes WITHOUT orphaning storage (isRowOwnedKey → storage.delete fires)', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      ...signupMultipart(await fullProfile({ profile_type: 'individual_owner' })),
+    });
+    const userId = res.json<{ userId: string }>().userId;
+    const [doc] = await docsFor(userId);
+    // Authenticate as the new (pending) owner for the post-signin DELETE — the recovery surface.
+    vi.spyOn(auth.api, 'getSession').mockResolvedValue({
+      session: {},
+      user: { id: userId, role: 'individual_owner', status: 'pending' },
+    } as unknown as Awaited<ReturnType<typeof auth.api.getSession>>);
+    const delSpy = vi.spyOn(storage, 'delete');
+    const del = await app.inject({ method: 'DELETE', url: `/api/profile/documents/${doc?.id}` });
+    expect(del.statusCode).toBe(200);
+    expect(delSpy).toHaveBeenCalledWith({ key: doc?.storageKey }); // no orphan: the gate fired
+  });
+
+  it('valid fleet_owner (RNE + bank) → 201 + user_documents rows', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      ...signupMultipart(await fullProfile({ profile_type: 'fleet_owner' })),
+    });
+    expect(res.statusCode).toBe(201);
+    const docs = await docsFor(res.json<{ userId: string }>().userId);
+    expect(docs.some((d) => d.category === 'rne' && d.position === 1)).toBe(true);
+    expect(docs.some((d) => d.category === 'bank' && d.position === 1)).toBe(true);
+    expect(docs.some((d) => d.category === 'cin')).toBe(false);
+  });
+
+  it('owner via JSON (no multipart) → 400 DOCUMENTS_REQUIRED, NO account', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      payload: await fullProfile({ profile_type: 'individual_owner' }),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ error: string }>().error).toBe('DOCUMENTS_REQUIRED');
+    expect(await usersByEmail('owner@example.com')).toHaveLength(0);
+  });
+
+  it('owner missing a volet (bank) → 400, NO account created', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      ...signupMultipart(await fullProfile({ profile_type: 'individual_owner' }), {
+        omit: ['bank'],
+      }),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ fields: { field: string }[] }>().fields.some((f) => f.field === 'bank')).toBe(
+      true,
+    );
+    expect(await usersByEmail('owner@example.com')).toHaveLength(0);
+  });
+
+  it('individual_owner with only one CIN face (recto, no verso) → 400, NO account', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      ...signupMultipart(await fullProfile({ profile_type: 'individual_owner' }), {
+        omit: ['cin_verso'],
+      }),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(
+      res.json<{ fields: { field: string }[] }>().fields.some((f) => f.field === 'cin_verso'),
+    ).toBe(true);
+    expect(await usersByEmail('owner@example.com')).toHaveLength(0);
+  });
+
+  it('advertiser JSON signup (no docs) → still 201, unchanged', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      payload: await fullProfile({ profile_type: 'advertiser' }),
+    });
+    expect(res.statusCode).toBe(201);
+    const [u] = await usersByEmail('owner@example.com');
+    expect(u?.role).toBe('advertiser');
+    expect(await docsFor(u?.id ?? '')).toHaveLength(0); // no docs at signup for advertisers
+  });
+
+  it('post-create storage failure → account still created (degraded), surfaced not thrown', async () => {
+    vi.spyOn(storage, 'upload').mockResolvedValue({ error: 'disk full' });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      ...signupMultipart(await fullProfile({ profile_type: 'individual_owner' })),
+    });
+    expect(res.statusCode).toBe(201); // the account is created despite the upload failures
+    const userId = res.json<{ userId: string }>().userId;
+    const [u] = await usersByEmail('owner@example.com');
+    expect(u?.role).toBe('individual_owner');
+    // Degraded: no volet rows (uploads failed) → onboarding shows incomplete; user finishes post-signin.
+    expect(await docsFor(userId)).toHaveLength(0);
   });
 });

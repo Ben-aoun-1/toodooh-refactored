@@ -36,7 +36,9 @@ export const userRole = pgEnum('user_role', [
   'screencast_agent',
 ]);
 
-export const userStatus = pgEnum('user_status', ['pending', 'approved', 'rejected']);
+// 'banned' (N3 Scenario 2, fraud) is TERMINAL: the account is retained as evidence but can never
+// sign in or resubmit. The validation trio carries the ban record (validationNotes = ban reason).
+export const userStatus = pgEnum('user_status', ['pending', 'approved', 'rejected', 'banned']);
 
 export const users = pgTable(
   'users',
@@ -56,6 +58,10 @@ export const users = pgTable(
     validatedBy: uuid('validated_by').references((): AnyPgColumn => users.id),
     validatedAt: timestamp('validated_at', { withTimezone: true }),
     validationNotes: text('validation_notes'),
+    // N3 Scenario 1 — which document area(s) a rejection flags as deficient: 'legal' (RNE/CIN)
+    // and/or 'bank' (RIB). MULTI (text[]); the reject route validates the allowed values with a zod
+    // enum, mirroring the businessType "text column + zod-at-route" convention. Null unless rejected.
+    rejectionTopics: text('rejection_topics').array(),
     // business profile (subset; rest land in Phase 1c onboarding)
     businessName: text('business_name'),
     taxNumber: text('tax_number').unique(),

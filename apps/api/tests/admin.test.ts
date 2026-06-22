@@ -2,14 +2,24 @@ import { eq } from 'drizzle-orm';
 import Fastify from 'fastify';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { auth } from '../src/auth/auth.js';
+import { auth, emailSender } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
-import { type NewUser, screenhosts, userDocuments, users } from '../src/db/schema.js';
+import { type NewUser, screenhosts, sessions, userDocuments, users } from '../src/db/schema.js';
 import { encryptWifiPassword } from '../src/lib/wifi-crypto.js';
 import { adminRoutes } from '../src/routes/admin.js';
 import { storage } from '../src/storage/s3-storage.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
+
+// The reject route now sends a non-blocking notification email (N3 Scenario 1). Mock nodemailer so
+// no real SMTP is attempted (mirrors the me/signin suites); the email-specific tests spy on
+// emailSender.send to assert invocation / simulate a send failure.
+const { sendMailMock } = vi.hoisted(() => ({
+  sendMailMock: vi.fn().mockResolvedValue({ messageId: 'test-msg-id' }),
+}));
+vi.mock('nodemailer', () => ({
+  default: { createTransport: vi.fn(() => ({ sendMail: sendMailMock })) },
+}));
 
 // Integration suite — real Postgres (DATABASE_URL); the doc-review happy paths also need real
 // MinIO (STORAGE_*), exactly like profile-documents.test.ts. auth.api.getSession is mocked (its
@@ -270,6 +280,22 @@ describe('admin endpoints (real Postgres)', () => {
       expect(body.validationNotes).toBe('first pass');
     });
 
+    it('banned SOURCE → approve refused (409, terminal — status + ban record stay)', async () => {
+      const target = await seedUser({
+        status: 'banned',
+        validatedBy: adminId,
+        validatedAt: new Date(),
+        validationNotes: 'fraud',
+      });
+      mockSession(adminId);
+      const res = await approve(target, {});
+      expect(res.statusCode).toBe(409);
+      expect(res.json<{ currentStatus: string }>().currentStatus).toBe('banned');
+      const [row] = await db.select().from(users).where(eq(users.id, target));
+      expect(row?.status).toBe('banned'); // unchanged — banned is terminal
+      expect(row?.validationNotes).toBe('fraud'); // ban record intact
+    });
+
     it('rejected → approve allowed (different target state)', async () => {
       const target = await seedUser({ status: 'rejected', validationNotes: 'was rejected' });
       mockSession(adminId);
@@ -297,17 +323,50 @@ describe('admin endpoints (real Postgres)', () => {
     const reject = (id: string, body?: Record<string, unknown>) =>
       app.inject({ method: 'POST', url: `/api/admin/users/${id}/reject`, payload: body ?? {} });
 
-    it('happy → rejected + trio, onboarding_completed untouched', async () => {
+    it('happy → rejected + trio + topics, onboarding_completed untouched', async () => {
       const target = await seedUser({ status: 'pending', onboardingCompleted: false });
       mockSession(adminId);
-      const res = await reject(target, { notes: 'missing CIN' });
+      const res = await reject(target, { notes: 'missing CIN', topics: ['legal'] });
       expect(res.statusCode).toBe(200);
       const [row] = await db.select().from(users).where(eq(users.id, target));
       expect(row?.status).toBe('rejected');
       expect(row?.validatedBy).toBe(adminId);
       expect(row?.validatedAt).not.toBeNull();
       expect(row?.validationNotes).toBe('missing CIN');
+      expect(row?.rejectionTopics).toEqual(['legal']);
       expect(row?.onboardingCompleted).toBe(false);
+    });
+
+    it('stores BOTH topics and sends the notification email', async () => {
+      const target = await seedUser({ status: 'pending' });
+      mockSession(adminId);
+      const sendSpy = vi.spyOn(emailSender, 'send');
+      const res = await reject(target, {
+        notes: 'CIN illisible + RIB manquant',
+        topics: ['legal', 'bank'],
+      });
+      expect(res.statusCode).toBe(200);
+      const [row] = await db.select().from(users).where(eq(users.id, target));
+      expect(row?.rejectionTopics).toEqual(['legal', 'bank']);
+      expect(sendSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('without a topic → 400 (at least one required)', async () => {
+      const target = await seedUser({ status: 'pending' });
+      mockSession(adminId);
+      expect((await reject(target, { notes: 'x' })).statusCode).toBe(400);
+      expect((await reject(target, { notes: 'x', topics: [] })).statusCode).toBe(400);
+    });
+
+    it('an email-send failure does NOT fail the reject (non-blocking — it still records)', async () => {
+      const target = await seedUser({ status: 'pending' });
+      mockSession(adminId);
+      vi.spyOn(emailSender, 'send').mockResolvedValueOnce({ error: 'smtp down' });
+      const res = await reject(target, { notes: 'x', topics: ['legal'] });
+      expect(res.statusCode).toBe(200);
+      const [row] = await db.select().from(users).where(eq(users.id, target));
+      expect(row?.status).toBe('rejected');
+      expect(row?.rejectionTopics).toEqual(['legal']);
     });
 
     it('missing notes → 400', async () => {
@@ -324,7 +383,7 @@ describe('admin endpoints (real Postgres)', () => {
 
     it('unknown id → 404 USER_NOT_FOUND', async () => {
       mockSession(adminId);
-      const res = await reject(NO_ROW_ID, { notes: 'x' });
+      const res = await reject(NO_ROW_ID, { notes: 'x', topics: ['legal'] });
       expect(res.statusCode).toBe(404);
       expect(res.json<{ error: string }>().error).toBe('USER_NOT_FOUND');
     });
@@ -337,17 +396,99 @@ describe('admin endpoints (real Postgres)', () => {
         validationNotes: 'first reject',
       });
       mockSession(adminId);
-      const res = await reject(target, { notes: 'again' });
+      const res = await reject(target, { notes: 'again', topics: ['legal'] });
       expect(res.statusCode).toBe(409);
       const body = res.json<{ error: string; currentStatus: string }>();
       expect(body.error).toBe('CONFLICT');
       expect(body.currentStatus).toBe('rejected');
     });
 
+    it('banned SOURCE → reject refused (409, terminal — no banned→rejected→resubmit escape)', async () => {
+      const target = await seedUser({
+        status: 'banned',
+        validatedBy: adminId,
+        validatedAt: new Date(),
+        validationNotes: 'fraud',
+      });
+      mockSession(adminId);
+      const res = await reject(target, { notes: 'x', topics: ['legal'] });
+      expect(res.statusCode).toBe(409);
+      expect(res.json<{ currentStatus: string }>().currentStatus).toBe('banned');
+      const [row] = await db.select().from(users).where(eq(users.id, target));
+      expect(row?.status).toBe('banned'); // unchanged
+      expect(row?.validationNotes).toBe('fraud'); // ban reason NOT overwritten by reject
+      expect(row?.rejectionTopics).toBeNull(); // reject never ran
+    });
+
     it('non-admin → 403', async () => {
       const target = await seedUser({ status: 'pending' });
       mockSession(adminId, 'advertiser');
       expect((await reject(target, { notes: 'x' })).statusCode).toBe(403);
+    });
+  });
+
+  describe('POST /api/admin/users/:id/ban', () => {
+    const ban = (id: string, body?: Record<string, unknown>) =>
+      app.inject({ method: 'POST', url: `/api/admin/users/${id}/ban`, payload: body ?? {} });
+
+    it('bans: status banned + trio set + sessions revoked + user & documents RETAINED', async () => {
+      const target = await seedUser({ status: 'pending' });
+      // Seed a live session + a document to prove the ban REVOKES sessions but RETAINS evidence.
+      await db
+        .insert(sessions)
+        .values({ token: `tok-${target}`, userId: target, expiresAt: new Date('2099-01-01') });
+      await db
+        .insert(userDocuments)
+        .values({ userId: target, category: 'cin', position: 1, storageKey: `cin/${target}-1` });
+      mockSession(adminId);
+      const res = await ban(target, { notes: 'Faux documents — fraude avérée' });
+      expect(res.statusCode).toBe(200);
+      const [row] = await db.select().from(users).where(eq(users.id, target));
+      expect(row?.status).toBe('banned');
+      expect(row?.validatedBy).toBe(adminId);
+      expect(row?.validatedAt).not.toBeNull();
+      expect(row?.validationNotes).toBe('Faux documents — fraude avérée');
+      // Sessions revoked (kicked immediately).
+      expect(await db.select().from(sessions).where(eq(sessions.userId, target))).toHaveLength(0);
+      // RETAIN: the user row + its documents survive as fraud evidence (NOT deleted).
+      expect(row?.id).toBe(target);
+      expect(
+        await db.select().from(userDocuments).where(eq(userDocuments.userId, target)),
+      ).toHaveLength(1);
+    });
+
+    it('requires a reason → 400', async () => {
+      const target = await seedUser({ status: 'pending' });
+      mockSession(adminId);
+      expect((await ban(target)).statusCode).toBe(400);
+      expect((await ban(target, { notes: '   ' })).statusCode).toBe(400);
+    });
+
+    it('can ban an APPROVED account (fraud detected post-approval)', async () => {
+      const target = await seedUser({ status: 'approved' });
+      mockSession(adminId);
+      expect((await ban(target, { notes: 'fraude' })).statusCode).toBe(200);
+      const [row] = await db.select().from(users).where(eq(users.id, target));
+      expect(row?.status).toBe('banned');
+    });
+
+    it('already-banned → 409 with prior-state body', async () => {
+      const target = await seedUser({ status: 'banned', validationNotes: 'first ban' });
+      mockSession(adminId);
+      const res = await ban(target, { notes: 'again' });
+      expect(res.statusCode).toBe(409);
+      expect(res.json<{ currentStatus: string }>().currentStatus).toBe('banned');
+    });
+
+    it('unknown id → 404', async () => {
+      mockSession(adminId);
+      expect((await ban(NO_ROW_ID, { notes: 'x' })).statusCode).toBe(404);
+    });
+
+    it('non-admin → 403', async () => {
+      const target = await seedUser({ status: 'pending' });
+      mockSession(adminId, 'advertiser');
+      expect((await ban(target, { notes: 'x' })).statusCode).toBe(403);
     });
   });
 
@@ -479,20 +620,39 @@ describe('admin endpoints (real Postgres)', () => {
       expect((await presignDoc(stranger, docId)).statusCode).toBe(404);
     });
 
-    it('moderation list document presence reads the table', async () => {
-      const { target } = await seedDoc('cin');
-      mockSession(adminId);
+    // The moderation-list presence map reads user_documents. CIN is the only multi-face category:
+    // it counts complete ONLY when BOTH semantic slots — recto (1) and verso (2) — are present
+    // (Kais N5). registration (rne) and bank stay present-if-any.
+    const presenceOf = async (id: string) => {
       const res = await app.inject({ method: 'GET', url: '/api/admin/users?status=pending' });
       expect(res.statusCode).toBe(200);
-      const row = res
+      return res
         .json<{
           users: {
             id: string;
             documents: { registration: boolean; cin: boolean; bank: boolean };
           }[];
         }>()
-        .users.find((u) => u.id === target);
-      expect(row?.documents).toEqual({ registration: false, cin: true, bank: false });
+        .users.find((u) => u.id === id)?.documents;
+    };
+
+    it('moderation list presence: a single CIN face (recto only) is INCOMPLETE', async () => {
+      const { target } = await seedDoc('cin', 1);
+      mockSession(adminId);
+      expect(await presenceOf(target)).toEqual({ registration: false, cin: false, bank: false });
+    });
+
+    it('moderation list presence: a single CIN face (verso only) is INCOMPLETE', async () => {
+      const { target } = await seedDoc('cin', 2);
+      mockSession(adminId);
+      expect(await presenceOf(target)).toEqual({ registration: false, cin: false, bank: false });
+    });
+
+    it('moderation list presence: CIN is complete only with BOTH faces (recto + verso)', async () => {
+      const { target } = await seedDoc('cin', 1);
+      await seedDoc('cin', 2, target);
+      mockSession(adminId);
+      expect(await presenceOf(target)).toEqual({ registration: false, cin: true, bank: false });
     });
   });
 });

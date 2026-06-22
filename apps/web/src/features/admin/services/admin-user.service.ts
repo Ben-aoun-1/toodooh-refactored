@@ -1,7 +1,7 @@
 import type { ScreenhostWifi } from '@/features/screenhost/services/screenhost.service';
 import { apiClient } from '@/lib/api-client';
 
-export type UserStatus = 'pending' | 'approved' | 'rejected';
+export type UserStatus = 'pending' | 'approved' | 'rejected' | 'banned';
 export type AdminProfileType = 'individual_owner' | 'fleet_owner' | 'advertiser' | 'agency';
 
 // The admin view of an end-user, repointed onto GET /api/admin/users (Phase-1g G2). Shape mirrors
@@ -154,8 +154,14 @@ export const adminUserService = {
     await apiClient.post(`/admin/users/${id}/approve`, notes ? { notes } : {});
   },
 
-  async rejectUser(id: string, notes: string): Promise<void> {
-    await apiClient.post(`/admin/users/${id}/reject`, { notes });
+  // topics = deficient document areas ('legal' RNE/CIN, 'bank' RIB), ≥1 required (N3 Scenario 1).
+  async rejectUser(id: string, notes: string, topics: string[]): Promise<void> {
+    await apiClient.post(`/admin/users/${id}/reject`, { notes, topics });
+  },
+
+  // BANIR (N3 Scenario 2, fraud) — terminal: bans + retains evidence + revokes sessions. Reason required.
+  async banUser(id: string, notes: string): Promise<void> {
+    await apiClient.post(`/admin/users/${id}/ban`, { notes });
   },
 
   // All of a user's documents, grouped by category (the multi-doc review surface — F-docs Commit 3).

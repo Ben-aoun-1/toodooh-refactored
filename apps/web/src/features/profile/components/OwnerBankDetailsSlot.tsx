@@ -17,6 +17,11 @@ import {
 interface OwnerBankDetailsSlotProps {
   profile: BusinessProfile;
   userId: string;
+  /**
+   * Post-save behaviour. Default (settings use) navigates to the owner dashboard. The rejected-account
+   * correction flow passes its own handler so a rejected user isn't bounced by the route guards (N3).
+   */
+  onSaveSuccess?: () => void;
 }
 
 const INPUT_CLASS =
@@ -35,7 +40,11 @@ function formatFileSize(bytes: number) {
  * lane: both repointed off Supabase onto apps/api — PATCH /api/profile/bank +
  * the `bank` document type).
  */
-export default function OwnerBankDetailsSlot({ profile, userId }: OwnerBankDetailsSlotProps) {
+export default function OwnerBankDetailsSlot({
+  profile,
+  userId,
+  onSaveSuccess,
+}: OwnerBankDetailsSlotProps) {
   const navigate = useNavigate();
   const saveBankDetailsMutation = useSaveBankDetails();
 
@@ -124,7 +133,11 @@ export default function OwnerBankDetailsSlot({ profile, userId }: OwnerBankDetai
       });
       setBankDocFile(null);
       toast.success('Coordonnées bancaires enregistrées');
-      navigate('/owner-dashboard');
+      if (onSaveSuccess) {
+        onSaveSuccess();
+      } else {
+        navigate('/owner-dashboard');
+      }
     } catch (err: unknown) {
       // Clear the optimistic file so a failed save leaves no false "saved" RIB badge.
       setBankDocFile(null);

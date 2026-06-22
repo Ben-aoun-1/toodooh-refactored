@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { auth } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
 import { businessSectors, governorates, users } from '../src/db/schema.js';
+import { meRoutes } from '../src/routes/me.js';
 import { profileRoutes } from '../src/routes/profile.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
@@ -447,6 +448,118 @@ describe('PATCH /api/profile/bank', () => {
   it('empty body → 400', async () => {
     mockSession(userId);
     expect((await patch({})).statusCode).toBe(400);
+  });
+});
+
+describe('POST /api/profile/resubmit', () => {
+  let app: ReturnType<typeof buildApp>;
+
+  // A rejected account with a full validation context (an admin validator + notes + topics) so the
+  // "trio cleared" assertions are meaningful (not vacuously null).
+  const seedRejected = async (): Promise<string> => {
+    const [admin] = await db
+      .insert(users)
+      .values({
+        email: 'validator@example.com',
+        contactName: 'Validator',
+        role: 'superadmin',
+        status: 'approved',
+      })
+      .returning();
+    const [u] = await db
+      .insert(users)
+      .values({
+        email: 'rejected-resubmit@example.com',
+        contactName: 'Rejected User',
+        status: 'rejected',
+        validatedBy: admin?.id ?? null,
+        validatedAt: new Date('2026-06-01T00:00:00Z'),
+        validationNotes: 'CIN illisible.',
+        rejectionTopics: ['legal'],
+      })
+      .returning();
+    return u?.id ?? '';
+  };
+
+  const seed = async (status: 'pending' | 'approved' | 'banned'): Promise<string> => {
+    const [u] = await db
+      .insert(users)
+      .values({ email: `${status}-resubmit@example.com`, contactName: 'User', status })
+      .returning();
+    return u?.id ?? '';
+  };
+
+  beforeEach(async () => {
+    await resetAuthTables();
+    app = buildApp();
+    await app.register(profileRoutes);
+    await app.register(meRoutes);
+    await app.ready();
+  });
+
+  afterEach(async () => {
+    await app.close();
+    vi.restoreAllMocks();
+  });
+
+  const resubmit = () => app.inject({ method: 'POST', url: '/api/profile/resubmit' });
+
+  it('rejected → 200, status pending, whole validation trio + topics cleared', async () => {
+    const userId = await seedRejected();
+    mockSession(userId);
+    const res = await resubmit();
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ status: string }>().status).toBe('pending');
+    const [row] = await db.select().from(users).where(eq(users.id, userId));
+    expect(row?.status).toBe('pending');
+    expect(row?.validatedBy).toBeNull();
+    expect(row?.validatedAt).toBeNull();
+    expect(row?.validationNotes).toBeNull();
+    expect(row?.rejectionTopics).toBeNull();
+  });
+
+  it('after resubmit, GET /api/me reflects pending (notes + topics null)', async () => {
+    const userId = await seedRejected();
+    mockSession(userId);
+    await resubmit();
+    const meRes = await app.inject({ method: 'GET', url: '/api/me' });
+    const { user } = meRes.json<{
+      user: { status: string; validation_notes: string | null; rejection_topics: string[] | null };
+    }>();
+    expect(user.status).toBe('pending');
+    expect(user.validation_notes).toBeNull();
+    expect(user.rejection_topics).toBeNull();
+  });
+
+  it('pending caller → 409 (only a rejected account can resubmit)', async () => {
+    const userId = await seed('pending');
+    mockSession(userId);
+    const res = await resubmit();
+    expect(res.statusCode).toBe(409);
+    expect(res.json<{ currentStatus: string }>().currentStatus).toBe('pending');
+  });
+
+  it('approved caller → 409 no-op', async () => {
+    const userId = await seed('approved');
+    mockSession(userId);
+    expect((await resubmit()).statusCode).toBe(409);
+  });
+
+  // Locks 'banned' as terminal on the recovery path (the !== 'rejected' allowlist already 409s a
+  // banned caller; this guards it now that banned-handling is security-relevant — no resubmit escape).
+  it('banned caller → 409, status stays banned (terminal — no resubmit escape)', async () => {
+    const userId = await seed('banned');
+    mockSession(userId);
+    const res = await resubmit();
+    expect(res.statusCode).toBe(409);
+    expect(res.json<{ currentStatus: string }>().currentStatus).toBe('banned');
+    const [row] = await db.select().from(users).where(eq(users.id, userId));
+    expect(row?.status).toBe('banned'); // unchanged
+  });
+
+  it('unauthenticated → 401', async () => {
+    vi.spyOn(auth.api, 'getSession').mockResolvedValue(null);
+    expect((await resubmit()).statusCode).toBe(401);
   });
 });
 

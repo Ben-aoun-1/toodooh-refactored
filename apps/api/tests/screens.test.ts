@@ -12,6 +12,16 @@ import { screensRoutes } from '../src/routes/screens.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
 
+// The admin reject route sends a non-blocking notification email (N3 Scenario 1). Mock nodemailer so
+// the re-approve test's intermediate reject doesn't make a real (slow, flaky) SMTP connection —
+// mirrors admin/me/signin suites.
+const { sendMailMock } = vi.hoisted(() => ({
+  sendMailMock: vi.fn().mockResolvedValue({ messageId: 'test-msg-id' }),
+}));
+vi.mock('nodemailer', () => ({
+  default: { createTransport: vi.fn(() => ({ sendMail: sendMailMock })) },
+}));
+
 // Integration suite — real Postgres. Device sessions are seeded directly (login mechanics
 // live in device-auth.test.ts); the admin approve→generation path runs the REAL admin route
 // with a mocked admin session, mirroring admin.test.ts.
@@ -145,7 +155,7 @@ describe('screens + pair/GPS-link (real Postgres)', () => {
         app.inject({
           method: 'POST',
           url: `/api/admin/users/${owner}/reject`,
-          payload: { notes: 'redo' },
+          payload: { notes: 'redo', topics: ['legal'] },
         });
 
       expect((await approve()).statusCode).toBe(200);

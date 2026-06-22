@@ -1,4 +1,4 @@
-import { Upload, FileText, X, Building2, MapPin, MoreVertical, Trash2 } from 'lucide-react';
+import { FileText, X, Building2, MapPin, MoreVertical, Trash2 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
@@ -33,10 +33,16 @@ import {
   isValidAgentCode,
   normalizeAgentCode,
 } from '@/features/auth/utils/agent-code';
+import {
+  emptyOwnerVolets,
+  ownerVoletsComplete,
+  type OwnerVoletFiles,
+} from '@/features/auth/utils/owner-signup-volets';
 import { isValidPassword, passwordChecks } from '@/features/auth/utils/password';
 import { getErrorMessage } from '@/lib/errors';
 
 import SignupDocumentSlots from './SignupDocumentSlots';
+import SignupOwnerDocuments from './SignupOwnerDocuments';
 
 type ProfileType = 'advertiser' | 'agency' | 'individual_owner' | 'fleet_owner';
 
@@ -165,8 +171,10 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
   const [rneFiles, setRneFiles] = useState<File[]>([]);
   const [complementaireFiles, setComplementaireFiles] = useState<File[]>([]);
   const [addDocumentLater, setAddDocumentLater] = useState(false);
-  const [addBankLater, setAddBankLater] = useState(false);
-  const [bankDocFile, setBankDocFile] = useState<File | null>(null);
+  // R7/N4 — owner document volets (individual_owner: CIN recto/verso; fleet_owner: RNE; both: RIB).
+  // Both volets are MANDATORY now — the F5 "add bank later" skip is removed for owners (the C5
+  // backend requires the documents at signup). Sent as multipart by authService.signUp.
+  const [ownerVolets, setOwnerVolets] = useState<OwnerVoletFiles>(emptyOwnerVolets());
   const [ownerCertificationAccepted, setOwnerCertificationAccepted] = useState(false);
   const [etablissementName, setEtablissementName] = useState('');
   const [etablissementScreens, setEtablissementScreens] = useState<string>('');
@@ -628,6 +636,11 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
       toast.error('Veuillez certifier que vous êtes autorisé(e) à inscrire cet établissement.');
       return;
     }
+    // R7/N4 — owners must provide their volets (mirrors the server; submit is also gated below).
+    if (isOwner && !ownerVoletsComplete(selectedProfileType, ownerVolets)) {
+      toast.error('Veuillez fournir les documents requis (pièce légale + RIB).');
+      return;
+    }
     setLoading(true);
     try {
       const composedContactName = `${firstName} ${lastName}`.trim();
@@ -636,9 +649,25 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
         contact_name: composedContactName,
         profile_type: selectedProfileType,
         fonction: fonction.trim() || undefined,
-        registration_doc: !isOwner ? rneFiles[0] || undefined : undefined,
+        // R7/N4 — owner legal volet: fleet_owner → RNE (sent as `rne`); individual_owner → CIN
+        // recto/verso (sent as cin_recto/cin_verso). Non-owner keeps the existing RNE pick (JSON,
+        // dropped server-side). bank_doc is the owner RIB volet (mandatory; gated above).
+        registration_doc:
+          selectedProfileType === 'fleet_owner'
+            ? ownerVolets.rne || undefined
+            : !isOwner
+              ? rneFiles[0] || undefined
+              : undefined,
+        cin_recto:
+          selectedProfileType === 'individual_owner'
+            ? ownerVolets.cinRecto || undefined
+            : undefined,
+        cin_verso:
+          selectedProfileType === 'individual_owner'
+            ? ownerVolets.cinVerso || undefined
+            : undefined,
         company_logo: companyLogo || undefined,
-        bank_doc: isOwner && !addBankLater ? bankDocFile || undefined : undefined,
+        bank_doc: isOwner ? ownerVolets.bank || undefined : undefined,
         // F6 — individual_owner's single screenhost location/WiFi (optional). The service omits any
         // blank field; the endpoint only consumes these for the individual_owner role. Dual-source
         // ruling (2026-06-11): signup MAY send coordinates; the TV's first-login GPS fills only
@@ -1749,72 +1778,20 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
         <div className="w-16 h-16 rounded-full bg-[#e8f8ee] flex items-center justify-center mx-auto mb-3">
           <FileText className="w-8 h-8 text-gray-700" />
         </div>
-        <h2 className="text-xl font-bold text-gray-900">Coordonnées bancaires</h2>
+        <h2 className="text-xl font-bold text-gray-900">Documents requis</h2>
         <p className="text-sm text-gray-500">
-          Téléchargez vos coordonnées bancaires pour recevoir les revenus de vos campagnes
+          Ajoutez votre pièce légale et votre relevé d&apos;identité bancaire (RIB) pour finaliser
+          votre inscription.
         </p>
       </div>
 
-      <div className="rounded-2xl p-5" style={{ background: '#F5F5F5' }}>
-        <label
-          className="flex items-start cursor-pointer gap-3"
-          aria-label="J'ajouterai mes coordonnées bancaires plus tard"
-        >
-          <input
-            type="checkbox"
-            checked={addBankLater}
-            onChange={(e) => {
-              setAddBankLater(e.target.checked);
-              if (e.target.checked) setBankDocFile(null);
-            }}
-            className="h-5 w-5 text-brand-primary focus:ring-brand-primary border-gray-300 rounded mt-0.5 flex-shrink-0"
-          />
-          <div>
-            <p className="text-sm font-semibold text-gray-900">
-              J&apos;ajouterai mes coordonnées bancaires plus tard
-            </p>
-            <p className="text-xs text-gray-500 mt-1">
-              Vous pourrez uploader vos documents depuis votre profil après inscription.
-            </p>
-          </div>
-        </label>
-      </div>
-
-      {!addBankLater && (
-        <div
-          className="border-2 border-dashed border-gray-300 rounded-2xl p-8 text-center"
-          style={{ background: '#FAFAFA' }}
-        >
-          <div className="w-14 h-14 rounded-full bg-[#e8f8ee] flex items-center justify-center mx-auto mb-4">
-            <Upload className="h-7 w-7 text-gray-700" />
-          </div>
-          <h4 className="font-medium text-gray-900 mb-1">
-            Ajouter le relevé d&apos;identité bancaire de votre établissement
-          </h4>
-          <p className="text-xs text-gray-500 mb-5">
-            Formats acceptés : PDF, JPG, JPEG, PNG (Max 5 MB)
-          </p>
-          <label className="inline-block cursor-pointer px-6 py-2.5 border border-gray-300 rounded-xl text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors">
-            Parcourir les fichiers
-            <input
-              type="file"
-              accept=".pdf,.jpg,.jpeg,.png"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  if (file.size > 5 * 1024 * 1024) {
-                    toast.error('Fichier trop volumineux (max 5 MB)');
-                    return;
-                  }
-                  setBankDocFile(file);
-                }
-              }}
-            />
-          </label>
-          {bankDocFile && <p className="mt-3 text-sm text-gray-600">{bankDocFile.name}</p>}
-        </div>
-      )}
+      {/* R7/N4 — the two mandatory owner volets (CIN recto/verso OR RNE, + RIB). Replaces the F5
+          "add bank later" skip: documents are now collected + sent at signup. */}
+      <SignupOwnerDocuments
+        profileType={selectedProfileType}
+        files={ownerVolets}
+        onChange={(patch) => setOwnerVolets((v) => ({ ...v, ...patch }))}
+      />
 
       <div className="space-y-4 pt-2">
         {/* CGU trigger lives OUTSIDE the acceptance label: opening the terms must never toggle
@@ -2243,7 +2220,10 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
               type="button"
               onClick={handleSubmit}
               disabled={
-                loading || !formData.terms_accepted || (isOwner && !ownerCertificationAccepted)
+                loading ||
+                !formData.terms_accepted ||
+                (isOwner && !ownerCertificationAccepted) ||
+                (isOwner && !ownerVoletsComplete(selectedProfileType, ownerVolets))
               }
               className="flex-1 py-3.5 rounded-xl font-semibold text-sm text-brand-deep transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               style={{ background: '#76E6AB' }}

@@ -6,7 +6,7 @@ import { z } from 'zod';
 
 import { auth } from '../auth/auth.js';
 import { db } from '../db/client.js';
-import { users } from '../db/schema.js';
+import { sessions, users } from '../db/schema.js';
 import { toProfileType } from '../lib/profile-type.js';
 import { requireAuth } from '../middleware/require-auth.js';
 
@@ -67,16 +67,17 @@ export const signinRoutes: FastifyPluginAsync = async (app) => {
       });
     }
 
-    forwardSetCookie(reply, result.headers);
-
     // businessType + onboardingCompleted are columns, not better-auth additionalFields, so they
-    // are not on result.response.user — read the full routing set from the users row (§2.4).
+    // are not on result.response.user — read the full routing set from the users row (§2.4). Read
+    // BEFORE forwarding the cookie so a banned account never receives a session cookie.
     const [row] = await db
       .select({
         id: users.id,
         email: users.email,
         role: users.role,
         status: users.status,
+        validationNotes: users.validationNotes,
+        rejectionTopics: users.rejectionTopics,
         onboardingCompleted: users.onboardingCompleted,
         businessType: users.businessType,
         contactName: users.contactName,
@@ -88,12 +89,29 @@ export const signinRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(500).send({ error: 'INTERNAL_ERROR', message: 'Account lookup failed.' });
     }
 
+    // N3 Scenario 2 — a banned account is TERMINALLY blocked: revoke the session signInEmail just
+    // minted and 403, never forwarding the cookie. Distinct from 'rejected', which signs in 200 and
+    // stays recoverable (C2/C3b). The DB row is authoritative (the password matched, so it's their
+    // account — surfacing the suspension is not enumeration).
+    if (row.status === 'banned') {
+      await db.delete(sessions).where(eq(sessions.userId, row.id));
+      return reply
+        .status(403)
+        .send({ error: 'ACCOUNT_BANNED', message: 'Votre compte a été suspendu.' });
+    }
+
+    forwardSetCookie(reply, result.headers);
+
     return reply.status(200).send({
       user: {
         id: row.id,
         email: row.email,
         role: row.role,
         status: row.status,
+        // N3: the rejection reason + deficient document topics ride the signin response so the FE
+        // status screen can show them immediately on login (rejection gates the app, not auth).
+        validation_notes: row.validationNotes,
+        rejection_topics: row.rejectionTopics,
         onboarding_completed: row.onboardingCompleted,
         business_type: row.businessType,
         profile_type: toProfileType(row.role, row.businessType),

@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 
 import { auth } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
-import { users } from '../src/db/schema.js';
+import { sessions, users } from '../src/db/schema.js';
 import { apiRoutes } from '../src/routes/index.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
@@ -104,6 +104,53 @@ describe('POST /api/signin + /api/signout (real Postgres)', () => {
     expect(body.user.profile_type).toBe('advertiser');
     expect(body.user.contact_name).toBe('Sign In User');
     expect(res.headers['set-cookie']).toBeDefined();
+  });
+
+  it('rejected account: signin still SUCCEEDS and returns status + rejection reason', async () => {
+    // N3: rejection gates the APP, not authentication. The rejected user must be able to sign in so
+    // they can later fix + resubmit (C3). signin therefore returns 200 with status + validation_notes.
+    const userId = await createVerifiedUser('rejected@example.com');
+    await db
+      .update(users)
+      .set({
+        status: 'rejected',
+        validationNotes: 'Documents illisibles, merci de renvoyer.',
+        rejectionTopics: ['legal', 'bank'],
+      })
+      .where(eq(users.id, userId));
+    const res = await signin('rejected@example.com', PASSWORD);
+    expect(res.statusCode).toBe(200);
+    const { user } = res.json<{
+      user: { status: string; validation_notes: string | null; rejection_topics: string[] | null };
+    }>();
+    expect(user.status).toBe('rejected');
+    expect(user.validation_notes).toBe('Documents illisibles, merci de renvoyer.');
+    expect(user.rejection_topics).toEqual(['legal', 'bank']);
+    expect(res.headers['set-cookie']).toBeDefined();
+  });
+
+  it('non-rejected account: validation_notes is null', async () => {
+    await createVerifiedUser('clean@example.com');
+    const res = await signin('clean@example.com', PASSWORD);
+    expect(res.json<{ user: { validation_notes: string | null } }>().user.validation_notes).toBe(
+      null,
+    );
+  });
+
+  // N3 Scenario 2 — a banned account is TERMINALLY blocked at signin: 403, the just-minted session is
+  // revoked, and no cookie is forwarded. Distinct from 'rejected' (200, recoverable — see above).
+  it('banned account → 403 ACCOUNT_BANNED, session revoked, no cookie', async () => {
+    const userId = await createVerifiedUser('banned@example.com');
+    await db
+      .update(users)
+      .set({ status: 'banned', validationNotes: 'fraud' })
+      .where(eq(users.id, userId));
+    const res = await signin('banned@example.com', PASSWORD);
+    expect(res.statusCode).toBe(403);
+    expect(res.json<{ error: string }>().error).toBe('ACCOUNT_BANNED');
+    expect(res.headers['set-cookie']).toBeUndefined();
+    const sess = await db.select().from(sessions).where(eq(sessions.userId, userId));
+    expect(sess).toHaveLength(0); // the session signInEmail minted was revoked
   });
 
   it('wrong password → generic 401', async () => {
