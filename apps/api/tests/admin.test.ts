@@ -280,6 +280,22 @@ describe('admin endpoints (real Postgres)', () => {
       expect(body.validationNotes).toBe('first pass');
     });
 
+    it('banned SOURCE → approve refused (409, terminal — status + ban record stay)', async () => {
+      const target = await seedUser({
+        status: 'banned',
+        validatedBy: adminId,
+        validatedAt: new Date(),
+        validationNotes: 'fraud',
+      });
+      mockSession(adminId);
+      const res = await approve(target, {});
+      expect(res.statusCode).toBe(409);
+      expect(res.json<{ currentStatus: string }>().currentStatus).toBe('banned');
+      const [row] = await db.select().from(users).where(eq(users.id, target));
+      expect(row?.status).toBe('banned'); // unchanged — banned is terminal
+      expect(row?.validationNotes).toBe('fraud'); // ban record intact
+    });
+
     it('rejected → approve allowed (different target state)', async () => {
       const target = await seedUser({ status: 'rejected', validationNotes: 'was rejected' });
       mockSession(adminId);
@@ -385,6 +401,23 @@ describe('admin endpoints (real Postgres)', () => {
       const body = res.json<{ error: string; currentStatus: string }>();
       expect(body.error).toBe('CONFLICT');
       expect(body.currentStatus).toBe('rejected');
+    });
+
+    it('banned SOURCE → reject refused (409, terminal — no banned→rejected→resubmit escape)', async () => {
+      const target = await seedUser({
+        status: 'banned',
+        validatedBy: adminId,
+        validatedAt: new Date(),
+        validationNotes: 'fraud',
+      });
+      mockSession(adminId);
+      const res = await reject(target, { notes: 'x', topics: ['legal'] });
+      expect(res.statusCode).toBe(409);
+      expect(res.json<{ currentStatus: string }>().currentStatus).toBe('banned');
+      const [row] = await db.select().from(users).where(eq(users.id, target));
+      expect(row?.status).toBe('banned'); // unchanged
+      expect(row?.validationNotes).toBe('fraud'); // ban reason NOT overwritten by reject
+      expect(row?.rejectionTopics).toBeNull(); // reject never ran
     });
 
     it('non-admin → 403', async () => {

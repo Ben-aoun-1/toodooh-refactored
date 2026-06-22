@@ -481,7 +481,7 @@ describe('POST /api/profile/resubmit', () => {
     return u?.id ?? '';
   };
 
-  const seed = async (status: 'pending' | 'approved'): Promise<string> => {
+  const seed = async (status: 'pending' | 'approved' | 'banned'): Promise<string> => {
     const [u] = await db
       .insert(users)
       .values({ email: `${status}-resubmit@example.com`, contactName: 'User', status })
@@ -543,6 +543,18 @@ describe('POST /api/profile/resubmit', () => {
     const userId = await seed('approved');
     mockSession(userId);
     expect((await resubmit()).statusCode).toBe(409);
+  });
+
+  // Locks 'banned' as terminal on the recovery path (the !== 'rejected' allowlist already 409s a
+  // banned caller; this guards it now that banned-handling is security-relevant — no resubmit escape).
+  it('banned caller → 409, status stays banned (terminal — no resubmit escape)', async () => {
+    const userId = await seed('banned');
+    mockSession(userId);
+    const res = await resubmit();
+    expect(res.statusCode).toBe(409);
+    expect(res.json<{ currentStatus: string }>().currentStatus).toBe('banned');
+    const [row] = await db.select().from(users).where(eq(users.id, userId));
+    expect(row?.status).toBe('banned'); // unchanged
   });
 
   it('unauthenticated → 401', async () => {

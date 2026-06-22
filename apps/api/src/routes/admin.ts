@@ -263,6 +263,11 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
         requestId: request.id,
       });
     }
+    // 'banned' is TERMINAL — refuse the transition and leave the ban record intact (an un-ban is a
+    // deliberate future endpoint, not this path). Mirrors /ban's same-state guard.
+    if (existing.status === 'banned') {
+      return sendAlreadyInState(reply, request, existing);
+    }
     if (existing.status === 'approved') {
       return sendAlreadyInState(reply, request, existing);
     }
@@ -341,6 +346,11 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
         statusCode: 404,
         requestId: request.id,
       });
+    }
+    // 'banned' is TERMINAL — refuse the transition and leave the ban record intact (no banned →
+    // rejected → resubmit escape hatch). Mirrors /ban's same-state guard.
+    if (existing.status === 'banned') {
+      return sendAlreadyInState(reply, request, existing);
     }
     if (existing.status === 'rejected') {
       return sendAlreadyInState(reply, request, existing);
