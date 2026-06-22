@@ -70,4 +70,27 @@ describe('screenhostService', () => {
     patchMock.mockRejectedValue(new Error('boom'));
     await expect(screenhostService.updateWifi('a', { wifi_password: 'p' })).rejects.toThrow('boom');
   });
+
+  it('revealWifi GETs /screenhosts/:id/wifi/reveal and returns { wifi_password }', async () => {
+    getMock.mockResolvedValue({ wifi_password: 'super-secret' });
+
+    const result = await screenhostService.revealWifi('a');
+
+    expect(getMock).toHaveBeenCalledWith('/screenhosts/a/wifi/reveal');
+    expect(result).toEqual({ wifi_password: 'super-secret' });
+  });
+
+  it('revealWifi surfaces a null password (no password set)', async () => {
+    getMock.mockResolvedValue({ wifi_password: null });
+
+    const result = await screenhostService.revealWifi('b');
+
+    expect(getMock).toHaveBeenCalledWith('/screenhosts/b/wifi/reveal');
+    expect(result).toEqual({ wifi_password: null });
+  });
+
+  it('revealWifi propagates apiClient errors (never swallows)', async () => {
+    getMock.mockRejectedValue(new Error('nope'));
+    await expect(screenhostService.revealWifi('a')).rejects.toThrow('nope');
+  });
 });

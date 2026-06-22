@@ -5,15 +5,18 @@ import { z } from 'zod';
 import { db } from '../db/client.js';
 import { screenhosts, users } from '../db/schema.js';
 import { pushApprovedOwnerLocations } from '../lib/wedooh-sync.js';
-import { encryptWifiPassword } from '../lib/wifi-crypto.js';
+import { decryptWifiPassword, encryptWifiPassword } from '../lib/wifi-crypto.js';
 import { requireActiveAccount, requireAdmin, requireAuth } from '../middleware/require-auth.js';
 
 // Owner- and admin-facing WiFi maintenance for screenhosts. A venue's WiFi can change after
 // signup (Kais 2026-06), so SSID + password are editable here by the owner (their own
-// screenhosts) and by an admin (any screenhost). The password is WRITE-ONLY: it is stored
-// re-encrypted via encryptWifiPassword and NEVER returned, logged, or echoed — the read shape
-// exposes only `wifi_password_set`. Every successful edit re-pushes the owner's approved
-// screenhosts to wedooh (S-T1 Edge B2) so the hub's stored credentials stay current.
+// screenhosts) and by an admin (any screenhost). The password stays write-only on the LIST + EDIT
+// responses (GET /mine, PATCH /:id/wifi): those expose only `wifi_password_set`, never the secret.
+// The ONE exception is the explicit per-screenhost reveal (GET /:id/wifi/reveal, owner-scoped; admin
+// mirror at /api/admin/screenhosts/:id/wifi/reveal), which decrypts and returns the plaintext on
+// demand for the venue's own owner (R1, Kais QA) — and for admins. The plaintext and the key are
+// NEVER logged or echoed. Every successful edit re-pushes the owner's approved screenhosts to wedooh
+// (S-T1 Edge B2) so the hub's stored credentials stay current.
 const idParamSchema = z.object({ id: z.uuid() });
 
 // SSID: set when provided (min 1; use null to clear). Password: a non-empty string is the new
@@ -53,6 +56,16 @@ const wifiView = (
   name: row.name,
   wifi_ssid: row.wifiSsid,
   wifi_password_set: row.wifiPasswordEncrypted !== null,
+});
+
+// Explicit-reveal projection — decrypts the stored secret on demand (null when none is set). Used
+// ONLY by the per-screenhost reveal endpoints, never by the list/edit views, so the redaction
+// elsewhere is preserved. The plaintext is returned but never logged.
+const revealView = (row: {
+  wifiPasswordEncrypted: string | null;
+}): { wifi_password: string | null } => ({
+  wifi_password:
+    row.wifiPasswordEncrypted === null ? null : decryptWifiPassword(row.wifiPasswordEncrypted),
 });
 
 // Wire body → drizzle columns, applying the write-only password rules above.
@@ -154,6 +167,39 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
     return reply.status(200).send(wifiView(result.row));
   });
 
+  // GET /api/screenhosts/:id/wifi/reveal — owner-scoped, explicit on-demand reveal of the CURRENT
+  // WiFi password (R1, Kais QA). Same guard + owner-scoping as the PATCH: a foreign/missing id → 404,
+  // indistinguishable. Decrypts and returns { wifi_password } (null when none set). The LIST stays
+  // redacted; only this per-screenhost reveal returns plaintext, and it is never logged or echoed.
+  app.get('/api/screenhosts/:id/wifi/reveal', ownerGuard, async (request, reply) => {
+    const parsedParams = idParamSchema.safeParse(request.params);
+    if (!parsedParams.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: [{ field: 'id', reason: 'must be a uuid' }],
+      });
+    }
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply
+        .status(401)
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+    }
+
+    // Owner scoping in the WHERE: a foreign screenhost id is indistinguishable from a missing one.
+    const [existing] = await db
+      .select({ wifiPasswordEncrypted: screenhosts.wifiPasswordEncrypted })
+      .from(screenhosts)
+      .where(and(eq(screenhosts.id, parsedParams.data.id), eq(screenhosts.ownerId, userId)))
+      .limit(1);
+    if (!existing) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
+    }
+
+    return reply.status(200).send(revealView(existing));
+  });
+
   // PATCH /api/admin/screenhosts/:id/wifi — admin edit of ANY screenhost + re-push for its
   // approved owner. Same write-only password rules; goes through the toodooh API (NOT the
   // legacy Supabase admin-screens surface).
@@ -193,5 +239,30 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       });
     }
     return reply.status(200).send(wifiView(result.row));
+  });
+
+  // GET /api/admin/screenhosts/:id/wifi/reveal — admin reveal of ANY screenhost's current WiFi
+  // password (mirrors the owner reveal; adminGuard, no owner scoping). Same { wifi_password | null }
+  // shape; the plaintext is never logged or echoed.
+  app.get('/api/admin/screenhosts/:id/wifi/reveal', adminGuard, async (request, reply) => {
+    const parsedParams = idParamSchema.safeParse(request.params);
+    if (!parsedParams.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: [{ field: 'id', reason: 'must be a uuid' }],
+      });
+    }
+
+    const [existing] = await db
+      .select({ wifiPasswordEncrypted: screenhosts.wifiPasswordEncrypted })
+      .from(screenhosts)
+      .where(eq(screenhosts.id, parsedParams.data.id))
+      .limit(1);
+    if (!existing) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
+    }
+
+    return reply.status(200).send(revealView(existing));
   });
 };

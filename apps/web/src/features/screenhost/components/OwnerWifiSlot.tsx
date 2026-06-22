@@ -1,3 +1,4 @@
+import { useRevealScreenhostWifi } from '../hooks/useRevealScreenhostWifi';
 import { useScreenhostsMine } from '../hooks/useScreenhostsMine';
 import { useUpdateScreenhostWifi } from '../hooks/useUpdateScreenhostWifi';
 
@@ -12,6 +13,7 @@ import ScreenhostWifiEditorCard from './ScreenhostWifiEditorCard';
 export default function OwnerWifiSlot({ userId }: { userId: string }) {
   const { data: screenhosts, isLoading, isError } = useScreenhostsMine(userId);
   const updateWifi = useUpdateScreenhostWifi();
+  const revealWifi = useRevealScreenhostWifi();
 
   if (isLoading) {
     return (
@@ -44,6 +46,7 @@ export default function OwnerWifiSlot({ userId }: { userId: string }) {
               .mutateAsync({ userId, screenhostId: sh.id, wifi: patch })
               .then(() => undefined)
           }
+          onReveal={() => revealWifi.mutateAsync(sh.id).then((r) => r.wifi_password)}
         />
       ))}
     </div>
