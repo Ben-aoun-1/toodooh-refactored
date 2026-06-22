@@ -187,29 +187,34 @@ describe('Edge B2 — pushApprovedOwnerLocations', () => {
       role: z.enum(['agent']),
     });
 
-    it.each([['screenhost_agent'], ['screencast_agent']])(
-      'normalizes role to the hub-accepted "agent" for a %s',
-      async (role) => {
-        const fetchSpy = vi
-          .spyOn(globalThis, 'fetch')
-          .mockResolvedValue(new Response(null, { status: 200 }));
-        await pushAgentToHub(
-          { toodooh_user_id: 'u1', code: 'SH123456', email: 'a@b.com', password: 'pw', role },
-          logger,
-          CFG,
-        );
-        const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
-        expect(body.role).toBe('agent'); // NOT the raw user_role — that 400s on the hub
-        expect(() => hubAgentSyncSchema.parse(body)).not.toThrow();
-        expect(body).toMatchObject({
+    // Only screenhost agents reach the wire now (screencast is skipped at the source — R4 below), so
+    // the normalization contract guard runs on screenhost_agent.
+    it('normalizes role to the hub-accepted "agent" for a screenhost_agent', async () => {
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(new Response(null, { status: 200 }));
+      await pushAgentToHub(
+        {
           toodooh_user_id: 'u1',
           code: 'SH123456',
           email: 'a@b.com',
           password: 'pw',
-          role: 'agent',
-        });
-      },
-    );
+          role: 'screenhost_agent',
+        },
+        logger,
+        CFG,
+      );
+      const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
+      expect(body.role).toBe('agent'); // NOT the raw user_role — that 400s on the hub
+      expect(() => hubAgentSyncSchema.parse(body)).not.toThrow();
+      expect(body).toMatchObject({
+        toodooh_user_id: 'u1',
+        code: 'SH123456',
+        email: 'a@b.com',
+        password: 'pw',
+        role: 'agent',
+      });
+    });
 
     // FX3 visibility: the push stamps agents.export_status so a hub-down is never silent. The stamp
     // is awaited inside pushAgentToHub, so the DB reflects it right after the call (deterministic).
@@ -241,7 +246,7 @@ describe('Edge B2 — pushApprovedOwnerLocations', () => {
     });
 
     it('stamps export_status "failed" on a non-2xx push (visibility, not silent)', async () => {
-      const userId = await seedAgent('fail@example.com', 'SC808080');
+      const userId = await seedAgent('fail@example.com', 'SH808080');
       // a freshly-seeded agent starts at the column default
       const [before] = await db.select().from(agents).where(eq(agents.userId, userId));
       expect(before?.exportStatus).toBe('pending');
@@ -249,16 +254,61 @@ describe('Edge B2 — pushApprovedOwnerLocations', () => {
       await pushAgentToHub(
         {
           toodooh_user_id: userId,
-          code: 'SC808080',
+          code: 'SH808080',
           email: 'fail@example.com',
           password: 'pw',
-          role: 'screencast_agent',
+          role: 'screenhost_agent',
         },
         logger,
         CFG,
       );
       const [a] = await db.select().from(agents).where(eq(agents.userId, userId));
       expect(a?.exportStatus).toBe('failed');
+    });
+
+    // R4 — screencast agents must NEVER be provisioned to the hub. pushAgentToHub short-circuits on
+    // the raw role BEFORE any POST, and leaves export_status untouched (no 'exported'/'failed').
+    it('does NOT POST a screencast agent and does not stamp "exported" (R4)', async () => {
+      const userId = await seedAgent('cast@example.com', 'SC123456');
+      const fetchSpy = vi.spyOn(globalThis, 'fetch');
+      await pushAgentToHub(
+        {
+          toodooh_user_id: userId,
+          code: 'SC123456',
+          email: 'cast@example.com',
+          password: 'pw',
+          role: 'screencast_agent',
+        },
+        logger,
+        CFG,
+      );
+      // The hub is never called from the source.
+      expect(fetchSpy).not.toHaveBeenCalled();
+      const [a] = await db.select().from(agents).where(eq(agents.userId, userId));
+      // Never provisioned → export_status stays at its default; not stamped 'exported'.
+      expect(a?.exportStatus).toBe('pending');
+      expect(a?.exportStatus).not.toBe('exported');
+    });
+
+    it('still POSTs a screenhost agent and stamps "exported" (R4 regression)', async () => {
+      const userId = await seedAgent('host@example.com', 'SH123456');
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(new Response(null, { status: 200 }));
+      await pushAgentToHub(
+        {
+          toodooh_user_id: userId,
+          code: 'SH123456',
+          email: 'host@example.com',
+          password: 'pw',
+          role: 'screenhost_agent',
+        },
+        logger,
+        CFG,
+      );
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      const [a] = await db.select().from(agents).where(eq(agents.userId, userId));
+      expect(a?.exportStatus).toBe('exported');
     });
   });
 });
