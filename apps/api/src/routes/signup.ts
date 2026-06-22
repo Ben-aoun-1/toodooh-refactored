@@ -161,6 +161,10 @@ const persistVolet = async (
   }
   try {
     await db.insert(userDocuments).values({
+      // The row id MUST equal the UUID embedded in storageKey (<cat>/<uid>/<rowId>) so isRowOwnedKey
+      // holds — else a later DELETE/REPLACE via /api/profile/documents skips storage.delete and
+      // orphans the object. Mirrors profile-documents.ts's `.values({ id: rowId, ... })`.
+      id: rowId,
       userId,
       category,
       position,

@@ -15,6 +15,7 @@ import {
   users,
 } from '../src/db/schema.js';
 import { env } from '../src/env.js';
+import { isRowOwnedKey } from '../src/lib/user-documents.js';
 import { apiRoutes } from '../src/routes/index.js';
 import { storage } from '../src/storage/s3-storage.js';
 
@@ -558,6 +559,42 @@ describe('POST /api/signup', () => {
         .sort(),
     ).toEqual([1, 2]); // both faces
     expect(docs.some((d) => d.category === 'bank' && d.position === 1)).toBe(true);
+  });
+
+  // Regression lock (C8): each signup volet row's id MUST equal the UUID embedded in its storageKey,
+  // so isRowOwnedKey holds — otherwise a later DELETE/REPLACE skips storage.delete and orphans MinIO.
+  it('signup volet rows are row-owned-key: storageKey === <cat>/<uid>/<row.id>', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      ...signupMultipart(await fullProfile({ profile_type: 'individual_owner' })),
+    });
+    expect(res.statusCode).toBe(201);
+    const docs = await docsFor(res.json<{ userId: string }>().userId);
+    expect(docs).toHaveLength(3); // cin recto + verso + bank
+    for (const row of docs) {
+      expect(row.storageKey).toBe(`${row.category}/${row.userId}/${row.id}`);
+      expect(isRowOwnedKey(row)).toBe(true);
+    }
+  });
+
+  it('a signup volet deletes WITHOUT orphaning storage (isRowOwnedKey → storage.delete fires)', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      ...signupMultipart(await fullProfile({ profile_type: 'individual_owner' })),
+    });
+    const userId = res.json<{ userId: string }>().userId;
+    const [doc] = await docsFor(userId);
+    // Authenticate as the new (pending) owner for the post-signin DELETE — the recovery surface.
+    vi.spyOn(auth.api, 'getSession').mockResolvedValue({
+      session: {},
+      user: { id: userId, role: 'individual_owner', status: 'pending' },
+    } as unknown as Awaited<ReturnType<typeof auth.api.getSession>>);
+    const delSpy = vi.spyOn(storage, 'delete');
+    const del = await app.inject({ method: 'DELETE', url: `/api/profile/documents/${doc?.id}` });
+    expect(del.statusCode).toBe(200);
+    expect(delSpy).toHaveBeenCalledWith({ key: doc?.storageKey }); // no orphan: the gate fired
   });
 
   it('valid fleet_owner (RNE + bank) → 201 + user_documents rows', async () => {
