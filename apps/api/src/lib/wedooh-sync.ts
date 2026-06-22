@@ -213,6 +213,18 @@ export const pushAgentToHub = async (
   logger: Logger,
   override?: Partial<SyncConfig>,
 ): Promise<void> => {
+  // R4 — a screencast agent must NEVER exist on the hub. The hub already defends (login 403 + ingest
+  // skip); this closes the SOURCE. Filter on the SEMANTIC raw role — both callers (admin create,
+  // password propagation) pass users.role verbatim and pushAgentToHub is the only place that
+  // normalizes it to the wire 'agent', so the raw role is reliably available here (preferred over the
+  // 'SC' code prefix). No POST; and export_status is left UNTOUCHED — neither 'exported' nor 'failed'
+  // is true, the enum has no "not-applicable" value, and there is no agent sweep, so a
+  // never-provisioned screencast agent simply stays at its 'pending' default (inert).
+  if (agent.role === 'screencast_agent') {
+    logger.info(`screencast agent ${agent.code} — not provisioned to hub (R4)`);
+    return;
+  }
+
   const cfg = resolveConfig(override);
   if (!cfg) {
     logger.warn(`hub agent sync disabled: agent ${agent.code} not provisioned (sync env unset)`);
