@@ -260,6 +260,76 @@ describe('screenhost WiFi (owner + admin, real Postgres)', () => {
     expect(pushSpy).not.toHaveBeenCalled();
   });
 
+  // ── GET /api/screenhosts/:id/wifi/reveal (owner) ────────────────────────────
+  it('owner reveals their OWN screenhost password — round-trips what PATCH set (200)', async () => {
+    const ownerId = await seedUser();
+    const shId = await seedScreenhost(ownerId, { password: 'original' });
+    mockSession(ownerId);
+
+    // What PATCH writes is exactly what reveal returns (encrypt → decrypt round-trip).
+    const patch = await app.inject({
+      method: 'PATCH',
+      url: `/api/screenhosts/${shId}/wifi`,
+      payload: { wifi_password: 'rotated-secret' },
+    });
+    expect(patch.statusCode).toBe(200);
+
+    const res = await app.inject({ method: 'GET', url: `/api/screenhosts/${shId}/wifi/reveal` });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as Record<string, unknown>;
+    expect(body).toEqual({ wifi_password: 'rotated-secret' });
+    // The reveal shape is exactly { wifi_password } — no ciphertext or other column leaks.
+    expect(Object.keys(body)).toEqual(['wifi_password']);
+  });
+
+  it('owner reveal returns { wifi_password: null } when no password is set', async () => {
+    const ownerId = await seedUser();
+    const shId = await seedScreenhost(ownerId, { ssid: 'NET', password: null });
+    mockSession(ownerId);
+
+    const res = await app.inject({ method: 'GET', url: `/api/screenhosts/${shId}/wifi/reveal` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ wifi_password: null });
+  });
+
+  it('owner reveal of ANOTHER owner’s screenhost → 404 (owner-scope, no leak)', async () => {
+    const me = await seedUser();
+    const other = await seedUser();
+    const foreign = await seedScreenhost(other, { password: 'theirs' });
+    mockSession(me);
+
+    const res = await app.inject({ method: 'GET', url: `/api/screenhosts/${foreign}/wifi/reveal` });
+    expect(res.statusCode).toBe(404);
+    expect(JSON.stringify(res.json())).not.toContain('theirs');
+  });
+
+  it('owner reveal requires authentication (401)', async () => {
+    const ownerId = await seedUser();
+    const shId = await seedScreenhost(ownerId, { password: 'p' });
+    mockNoSession();
+
+    const res = await app.inject({ method: 'GET', url: `/api/screenhosts/${shId}/wifi/reveal` });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('a REJECTED owner cannot reveal (403, ownerGuard)', async () => {
+    const ownerId = await seedUser({ status: 'rejected' });
+    const shId = await seedScreenhost(ownerId, { password: 'p' });
+    mockSession(ownerId, 'individual_owner', 'rejected');
+
+    const res = await app.inject({ method: 'GET', url: `/api/screenhosts/${shId}/wifi/reveal` });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('a BANNED owner cannot reveal (403, ownerGuard)', async () => {
+    const ownerId = await seedUser({ status: 'banned' });
+    const shId = await seedScreenhost(ownerId, { password: 'p' });
+    mockSession(ownerId, 'individual_owner', 'banned');
+
+    const res = await app.inject({ method: 'GET', url: `/api/screenhosts/${shId}/wifi/reveal` });
+    expect(res.statusCode).toBe(403);
+  });
+
   // ── PATCH /api/admin/screenhosts/:id/wifi (admin) ───────────────────────────
   it('admin updates WiFi on ANY screenhost (200, re-encrypted)', async () => {
     const ownerId = await seedUser({ status: 'approved' });
@@ -322,5 +392,48 @@ describe('screenhost WiFi (owner + admin, real Postgres)', () => {
       payload: { wifi_password: 'nope' },
     });
     expect(res.statusCode).toBe(403);
+  });
+
+  // ── GET /api/admin/screenhosts/:id/wifi/reveal (admin) ──────────────────────
+  it('admin reveals ANY screenhost’s password (200, round-trips the stored secret)', async () => {
+    const ownerId = await seedUser({ status: 'approved' });
+    const shId = await seedScreenhost(ownerId, { password: 'owner-secret' });
+    const adminId = await seedUser({ role: 'superadmin' });
+    mockSession(adminId, 'superadmin', 'approved');
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/admin/screenhosts/${shId}/wifi/reveal`,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ wifi_password: 'owner-secret' });
+  });
+
+  it('admin reveal returns null when the screenhost has no password', async () => {
+    const ownerId = await seedUser();
+    const shId = await seedScreenhost(ownerId, { password: null });
+    const adminId = await seedUser({ role: 'superadmin' });
+    mockSession(adminId, 'superadmin', 'approved');
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/admin/screenhosts/${shId}/wifi/reveal`,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ wifi_password: null });
+  });
+
+  it('forbids a non-admin from the admin reveal route (403)', async () => {
+    const ownerId = await seedUser();
+    const shId = await seedScreenhost(ownerId, { password: 'secret' });
+    const intruder = await seedUser();
+    mockSession(intruder, 'individual_owner', 'approved');
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/admin/screenhosts/${shId}/wifi/reveal`,
+    });
+    expect(res.statusCode).toBe(403);
+    expect(JSON.stringify(res.json())).not.toContain('secret');
   });
 });
