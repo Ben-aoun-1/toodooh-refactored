@@ -27,6 +27,10 @@ const buildApp = (nodeEnv: 'development' | 'production') => {
       STORAGE_SECRET_KEY: 'minioadmin',
       STORAGE_BUCKET: 'toodooh-documents',
       STORAGE_REGION: 'us-east-1',
+      FACTURE_BANK_BENEFICIARY: 'TOODOOH',
+      FACTURE_BANK_NAME: '—',
+      FACTURE_BANK_RIB: '—',
+      FACTURE_BANK_IBAN: '—',
     }),
   );
   app.setNotFoundHandler(buildNotFoundHandler());

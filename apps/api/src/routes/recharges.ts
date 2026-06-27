@@ -5,7 +5,9 @@ import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
 import { db } from '../db/client.js';
-import { recharges } from '../db/schema.js';
+import { recharges, users } from '../db/schema.js';
+import { env } from '../env.js';
+import { factureBankDetailsFromEnv, renderFacturePdf } from '../lib/facture.js';
 import {
   MAX_RECHARGE_TND,
   isValidAmount,
@@ -21,6 +23,7 @@ import { requireAuth } from '../middleware/require-auth.js';
 // receipt (routes/admin-recharges.ts) to credit the DERIVED balance. Every read/write is owner-scoped
 // to the authenticated advertiser (a foreign recharge is indistinguishable from a missing one → 404).
 
+const idParamSchema = z.object({ id: z.uuid() });
 const listQuerySchema = z.object({
   status: z.enum(['pending', 'confirmed', 'rejected']).optional(),
 });
@@ -93,5 +96,41 @@ export const rechargesRoutes: FastifyPluginAsync = async (app) => {
     const userId = request.user?.id;
     if (!userId) return sendUnauthenticated(reply);
     return reply.status(200).send(await walletBalance(userId));
+  });
+
+  // GET /api/recharges/:id/facture — stream the invoice PDF (owner-scoped; 404 on a foreign/missing
+  // id). The facture is a deterministic render of the recharge row + the advertiser's name + our
+  // static bank coordinates (env), so it is generated on-the-fly — no stored object to orphan.
+  app.get('/api/recharges/:id/facture', advertiserGuard, async (request, reply) => {
+    const parsed = idParamSchema.safeParse(request.params);
+    if (!parsed.success) return invalidField(reply, 'id', 'must be a uuid');
+    const userId = request.user?.id;
+    if (!userId) return sendUnauthenticated(reply);
+    const [row] = await db
+      .select({
+        reference: recharges.reference,
+        amountTnd: recharges.amountTnd,
+        createdAt: recharges.createdAt,
+        contactName: users.contactName,
+        businessName: users.businessName,
+      })
+      .from(recharges)
+      .innerJoin(users, eq(users.id, recharges.advertiserId))
+      .where(and(eq(recharges.id, parsed.data.id), eq(recharges.advertiserId, userId)))
+      .limit(1);
+    if (!row) return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such recharge.' });
+
+    const pdf = await renderFacturePdf({
+      reference: row.reference,
+      amountTnd: Number(row.amountTnd),
+      advertiserName: row.businessName ?? row.contactName,
+      issuedAt: row.createdAt,
+      bank: factureBankDetailsFromEnv(env),
+    });
+    return reply
+      .status(200)
+      .header('content-type', 'application/pdf')
+      .header('content-disposition', `inline; filename="facture-${row.reference}.pdf"`)
+      .send(pdf);
   });
 };
