@@ -1,16 +1,11 @@
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import type { FastifyBaseLogger } from 'fastify';
 import { z } from 'zod';
 
 import { db } from '../../db/client.js';
-import {
-  campaignDispatchAllocation,
-  campaignDispatchPlan,
-  campaigns,
-  proofOfPlay,
-  screens,
-} from '../../db/schema.js';
+import { proofOfPlay, screens } from '../../db/schema.js';
 
+import { activeAllocationsForScreenhost } from './active-allocations.js';
 import { type ScreenEventMessage } from './ws-protocol.js';
 
 export interface ScreenContext {
@@ -22,10 +17,26 @@ const asString = (v: unknown): string | null => (typeof v === 'string' ? v : nul
 const asNumber = (v: unknown): number | null =>
   typeof v === 'number' && Number.isFinite(v) ? v : null;
 
-// Resolve the played video_id (= the campaign id we sent) back to the campaign + creative — but ONLY
-// if that campaign is actually dispatch-allocated to this screen's screenhost (defensive: never
-// record proof for a campaign this screen wasn't serving). Then persist the proof row. Unresolvable
-// or malformed events are logged + ignored (the proof_of_play substrate stays clean for L-redisp).
+// Anti-spam (billing substrate): played_duration_ms is bounded to a sane ceiling so a malicious /
+// buggy player can't inflate proof. A real play is at most the creative length; allow a tolerance
+// for loop/buffer slack. A null/absent creative duration falls back to FALLBACK_DURATION_SECONDS.
+const DURATION_TOLERANCE = 2;
+const FALLBACK_DURATION_SECONDS = 300;
+export const boundDurationMs = (
+  raw: number | null,
+  creativeDurationSeconds: number | null,
+): number | null => {
+  if (raw === null || raw < 0) return null;
+  const ceilingMs =
+    (creativeDurationSeconds ?? FALLBACK_DURATION_SECONDS) * 1000 * DURATION_TOLERANCE;
+  return Math.min(raw, ceilingMs);
+};
+
+// Resolve the played video_id (= the campaign id we sent) back to its campaign + creative through the
+// SAME airability gate the playlist uses (activeAllocationsForScreenhost) — a screen only records
+// proof for content the server authorized it to air (ACCEPTE + campaign active + creative approved +
+// window covers now). Unresolvable or malformed events are logged + ignored (no orphan proof, no
+// crash). VIDEO_ENDED carries played_duration_ms (bounded); VIDEO_STARTED records null duration.
 const recordProof = async (
   msg: ScreenEventMessage,
   ctx: ScreenContext,
@@ -41,19 +52,11 @@ const recordProof = async (
     return;
   }
 
-  const [resolved] = await db
-    .select({ campaignId: campaigns.id, creativeId: campaigns.creativeId })
-    .from(campaignDispatchAllocation)
-    .innerJoin(campaignDispatchPlan, eq(campaignDispatchAllocation.planId, campaignDispatchPlan.id))
-    .innerJoin(campaigns, eq(campaignDispatchPlan.campaignId, campaigns.id))
-    .where(
-      and(eq(campaignDispatchAllocation.screenhostId, ctx.screenhostId), eq(campaigns.id, videoId)),
-    )
-    .limit(1);
-  if (!resolved || !resolved.creativeId) {
+  const [resolved] = await activeAllocationsForScreenhost(ctx.screenhostId, new Date(), videoId);
+  if (!resolved) {
     log.warn(
       { event: eventType, videoId, screenhostId: ctx.screenhostId },
-      'screen-ws: proof for an unallocated / creative-less campaign ignored',
+      'screen-ws: proof for a non-airable campaign ignored',
     );
     return;
   }
@@ -67,7 +70,7 @@ const recordProof = async (
     creativeId: resolved.creativeId,
     videoIdAsSent: videoId,
     eventType,
-    playedDurationMs: durationRaw !== null && durationRaw >= 0 ? durationRaw : null,
+    playedDurationMs: boundDurationMs(durationRaw, resolved.durationSeconds),
     eventTs: tsMs !== null ? new Date(tsMs) : null,
   });
 };

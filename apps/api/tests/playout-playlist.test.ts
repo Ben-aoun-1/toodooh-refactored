@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import { buildPlaylist, isWindowActive } from '../src/lib/playout/playlist.js';
 
-describe('isWindowActive — campaign window covers now (V1 active rule)', () => {
-  const now = new Date(2026, 6, 15); // local 2026-07-15
+describe('isWindowActive — campaign window covers now (V1 active rule, Africa/Tunis)', () => {
+  // Anchored to a UTC instant (firmly 2026-07-15 in Africa/Tunis, UTC+1) so the assertion is
+  // independent of the test runner's local timezone.
+  const now = new Date('2026-07-15T12:00:00Z');
 
   it('is true within the window (inclusive boundaries)', () => {
     expect(isWindowActive('2026-07-01', '2026-07-31', now)).toBe(true);
@@ -15,6 +17,13 @@ describe('isWindowActive — campaign window covers now (V1 active rule)', () =>
     expect(isWindowActive('2026-07-01', '2026-07-14', now)).toBe(false);
     expect(isWindowActive(null, '2026-07-31', now)).toBe(false);
     expect(isWindowActive('2026-07-01', null, now)).toBe(false);
+  });
+
+  it('"today" is pinned to Africa/Tunis, not UTC (midnight boundary)', () => {
+    // 23:30Z is still 2026-07-15 in UTC but already 2026-07-16 in Tunis (UTC+1).
+    const lateUtc = new Date('2026-07-15T23:30:00Z');
+    expect(isWindowActive('2026-07-16', '2026-07-16', lateUtc)).toBe(true); // Tunis sees the 16th
+    expect(isWindowActive('2026-07-15', '2026-07-15', lateUtc)).toBe(false);
   });
 });
 
