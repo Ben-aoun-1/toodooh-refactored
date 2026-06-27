@@ -190,6 +190,13 @@
       "when": 1782592344368,
       "tag": "0026_campaign_dispatch",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1782597473978,
+      "tag": "0027_recharges",
+      "breakpoints": true
     }
   ]
 }
