@@ -3,7 +3,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import { db } from '../db/client.js';
-import { screenhostAffluence, screenhosts, users } from '../db/schema.js';
+import { businessSectors, screenhostAffluence, screenhosts, users } from '../db/schema.js';
 import { pushApprovedOwnerLocations } from '../lib/wedooh-sync.js';
 import { decryptWifiPassword, encryptWifiPassword } from '../lib/wifi-crypto.js';
 import { requireActiveAccount, requireAdmin, requireAuth } from '../middleware/require-auth.js';
@@ -94,6 +94,57 @@ const applyWifiPatch = async (
     .where(eq(screenhosts.id, existing.id))
     .returning(wifiSelection);
   return { changed: true, row: updated ?? existing };
+};
+
+// ── L-inv eligibility (admin population of the per-venue dispatch inputs) ─────────────────────────
+// SPS is intentionally NOT settable here — it carries a neutral default and its computation is
+// deferred to L-playout. Admin sets category/class/horaires/capacity; null clears a field.
+const eligibilitySelection = {
+  businessSectorId: screenhosts.businessSectorId,
+  class: screenhosts.class,
+  openingHour: screenhosts.openingHour,
+  closingHour: screenhosts.closingHour,
+  broadcastCapacity: screenhosts.broadcastCapacity,
+  sps: screenhosts.sps,
+};
+
+type EligibilityRow = Pick<
+  typeof screenhosts.$inferSelect,
+  'businessSectorId' | 'class' | 'openingHour' | 'closingHour' | 'broadcastCapacity' | 'sps'
+>;
+
+// Wire shape is snake_case. sps is exposed as a number (drizzle returns numeric as a string).
+const eligibilityView = (row: EligibilityRow) => ({
+  business_sector_id: row.businessSectorId,
+  class: row.class,
+  opening_hour: row.openingHour,
+  closing_hour: row.closingHour,
+  broadcast_capacity: row.broadcastCapacity,
+  sps: Number(row.sps),
+});
+
+const eligibilityPatchSchema = z
+  .object({
+    business_sector_id: z.uuid().nullable(),
+    class: z.enum(['populaire', 'moyen', 'premium']).nullable(),
+    opening_hour: z.number().int().min(0).max(23).nullable(),
+    closing_hour: z.number().int().min(0).max(23).nullable(),
+    broadcast_capacity: z.number().int().positive().nullable(),
+  })
+  .partial()
+  .refine((b) => Object.keys(b).length > 0, { message: 'At least one field is required' });
+type EligibilityPatchInput = z.infer<typeof eligibilityPatchSchema>;
+
+const buildEligibilityPatch = (
+  data: EligibilityPatchInput,
+): Partial<typeof screenhosts.$inferInsert> => {
+  const patch: Partial<typeof screenhosts.$inferInsert> = {};
+  if (data.business_sector_id !== undefined) patch.businessSectorId = data.business_sector_id;
+  if (data.class !== undefined) patch.class = data.class;
+  if (data.opening_hour !== undefined) patch.openingHour = data.opening_hour;
+  if (data.closing_hour !== undefined) patch.closingHour = data.closing_hour;
+  if (data.broadcast_capacity !== undefined) patch.broadcastCapacity = data.broadcast_capacity;
+  return patch;
 };
 
 const adminGuard = { preHandler: [requireAuth, requireAdmin] };
@@ -316,5 +367,85 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
     }
 
     return reply.status(200).send(revealView(existing));
+  });
+
+  // GET /api/admin/screenhosts/:id/eligibility — admin reads the venue's L-disp eligibility inputs
+  // (category/class/horaires/capacity + the SPS baseline). 404 on a missing screenhost.
+  app.get('/api/admin/screenhosts/:id/eligibility', adminGuard, async (request, reply) => {
+    const parsedParams = idParamSchema.safeParse(request.params);
+    if (!parsedParams.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: [{ field: 'id', reason: 'must be a uuid' }],
+      });
+    }
+    const [row] = await db
+      .select(eligibilitySelection)
+      .from(screenhosts)
+      .where(eq(screenhosts.id, parsedParams.data.id))
+      .limit(1);
+    if (!row) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
+    }
+    return reply.status(200).send(eligibilityView(row));
+  });
+
+  // PATCH /api/admin/screenhosts/:id/eligibility — admin sets category/class/horaires/capacity
+  // (null clears a field). A non-null category must be a real OWNER business sector (the same source
+  // L-target matches against). SPS is not settable (defaulted; computation deferred).
+  app.patch('/api/admin/screenhosts/:id/eligibility', adminGuard, async (request, reply) => {
+    const parsedParams = idParamSchema.safeParse(request.params);
+    if (!parsedParams.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: [{ field: 'id', reason: 'must be a uuid' }],
+      });
+    }
+    const parsed = eligibilityPatchSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: parsed.error.issues.map((i) => ({ field: i.path.join('.'), reason: i.message })),
+      });
+    }
+
+    const [existing] = await db
+      .select({ id: screenhosts.id })
+      .from(screenhosts)
+      .where(eq(screenhosts.id, parsedParams.data.id))
+      .limit(1);
+    if (!existing) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
+    }
+
+    if (parsed.data.business_sector_id != null) {
+      const [sector] = await db
+        .select({ id: businessSectors.id })
+        .from(businessSectors)
+        .where(
+          and(
+            eq(businessSectors.id, parsed.data.business_sector_id),
+            eq(businessSectors.audience, 'owner'),
+          ),
+        )
+        .limit(1);
+      if (!sector) {
+        return reply.status(400).send({
+          error: 'INVALID_INPUT',
+          message: 'Validation failed',
+          fields: [{ field: 'business_sector_id', reason: 'must be a valid venue category' }],
+        });
+      }
+    }
+
+    const [updated] = await db
+      .update(screenhosts)
+      .set(buildEligibilityPatch(parsed.data))
+      .where(eq(screenhosts.id, existing.id))
+      .returning(eligibilitySelection);
+    return reply.status(200).send(eligibilityView(updated as EligibilityRow));
   });
 };

@@ -168,6 +168,15 @@ describe('db schema', () => {
     expect(cols['screenhostId']).toBeUndefined();
   });
 
+  it('screenhosts exposes the L-inv eligibility columns (per-venue dispatch inputs)', () => {
+    expect(screenhosts.businessSectorId).toBeDefined(); // per-venue category
+    expect(screenhosts.class).toBeDefined(); // venue tier (targeting_class)
+    expect(screenhosts.openingHour).toBeDefined();
+    expect(screenhosts.closingHour).toBeDefined();
+    expect(screenhosts.broadcastCapacity).toBeDefined();
+    expect(screenhosts.sps).toBeDefined(); // neutral default 50; computation deferred
+  });
+
   it('campaign_status enum mirrors the status convention (draft → pending → active → rejected)', () => {
     expect(campaignStatus.enumValues).toEqual(['draft', 'pending', 'active', 'rejected']);
   });
