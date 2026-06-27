@@ -3,6 +3,7 @@ import {
   type AnyPgColumn,
   boolean,
   check,
+  date,
   index,
   integer,
   numeric,
@@ -560,3 +561,44 @@ export const userDocuments = pgTable(
 
 export type UserDocument = typeof userDocuments.$inferSelect;
 export type NewUserDocument = typeof userDocuments.$inferInsert;
+
+// ── campaigns (C1 — advertiser draft lifecycle) ────────────────────────────
+// Greenfield campaign entity. The existing 6-step NewCampaign wizard is Supabase-backed; C1
+// builds the Drizzle/PG foundation only (no video, targeting, map, owner-approval, or pricing —
+// those land in later lanes and add their own columns/tables). One row per advertiser-created
+// campaign; advertiser_id is the creator and the owner-scope key for every read/write.
+// status mirrors the lowercase *_status enum convention (users.status, screenhost_export_status):
+// draft (advertiser editing) → pending (submitted) → active | rejected. submitted_at stamps the
+// draft→pending transition. Approval is BIFURCATED and lives elsewhere — an admin validates the
+// VIDEO (validation fields on the later videos table) and screenhost owners approve placements via
+// campaign_owner_approvals — so a campaign's activation is DERIVED, not a single campaign-level
+// admin validation. Hence there are NO validated_by/at/notes columns on campaigns.
+export const campaignStatus = pgEnum('campaign_status', ['draft', 'pending', 'active', 'rejected']);
+
+export const campaigns = pgTable(
+  'campaigns',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    // The advertiser who created the campaign — creator/owner for owner-scoped reads + writes.
+    advertiserId: uuid('advertiser_id')
+      .notNull()
+      .references(() => users.id),
+    name: text('name').notNull(),
+    campaignType: text('campaign_type').notNull(),
+    status: campaignStatus('status').notNull().default('draft'),
+    // Nullable while a draft; the route enforces presence at submit time in a later lane.
+    startDate: date('start_date'),
+    endDate: date('end_date'),
+    description: text('description'),
+    submittedAt: timestamp('submitted_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [index('campaigns_advertiser_id_idx').on(table.advertiserId)],
+);
+
+export type Campaign = typeof campaigns.$inferSelect;
+export type NewCampaign = typeof campaigns.$inferInsert;
