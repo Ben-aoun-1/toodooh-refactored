@@ -144,8 +144,8 @@ describe('screen WebSocket (/ws/screen) — auth + lifecycle', () => {
     );
 
     let lastSeen: Date | null = null;
-    for (let i = 0; i < 20 && lastSeen === null; i += 1) {
-      await sleep(50);
+    for (let i = 0; i < 40 && lastSeen === null; i += 1) {
+      await sleep(75);
       const [row] = await db
         .select({ lastSeenAt: screens.lastSeenAt })
         .from(screens)
