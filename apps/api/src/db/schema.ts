@@ -590,11 +590,11 @@ export const campaigns = pgTable(
     startDate: date('start_date'),
     endDate: date('end_date'),
     description: text('description'),
-    // Links the campaign to ONE advertiser video (C2). Nullable — a draft has no video yet.
-    // onDelete 'set null': deleting a video must NOT delete the campaign; it falls back to the
-    // no-video state. content_validation_status is DERIVED from the linked video at read time
-    // (C2 commit 3) — there is NO validation column here (bifurcated approval, see above).
-    videoId: uuid('video_id').references(() => videos.id, { onDelete: 'set null' }),
+    // Links the campaign to ONE advertiser creative (video|photo). Nullable — a draft has no
+    // creative yet. onDelete 'set null': deleting a creative must NOT delete the campaign; it falls
+    // back to the no-creative state. content_validation_status is DERIVED from the linked creative
+    // at read time (L-spot) — there is NO validation column here (bifurcated approval, see above).
+    creativeId: uuid('creative_id').references(() => creatives.id, { onDelete: 'set null' }),
     submittedAt: timestamp('submitted_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
@@ -608,46 +608,51 @@ export const campaigns = pgTable(
 export type Campaign = typeof campaigns.$inferSelect;
 export type NewCampaign = typeof campaigns.$inferInsert;
 
-// ── videos (C2 — advertiser video library + admin moderation) ───────────────
-// Advertiser-OWNED media library, independent of campaigns. An advertiser uploads a video
-// (object stored in MinIO under videos/<advertiserId>/<videoId>; the KEY lives in storage_key);
-// the ADMIN moderates it (validation_status pending → approved | rejected) via the admin video
-// routes (C2 commit 3), mirroring the user_documents review pattern. A campaign links ONE video
-// via campaigns.video_id and its content gate is DERIVED at read time as "is the linked video
+// ── creatives (L-spot — advertiser creative library + admin moderation) ─────
+// Advertiser-OWNED media library, independent of campaigns (renamed from the #54 `videos` table —
+// a campaign's creative is VIDEO OR PHOTO per the screencaster WF spec). An advertiser uploads a
+// creative (object stored in MinIO under creatives/<advertiserId>/<creativeId>; the KEY lives in
+// storage_key); the ADMIN moderates it (validation_status pending → approved | rejected) via the
+// admin creative routes, mirroring the user_documents review pattern. A campaign links ONE creative
+// via campaigns.creative_id and its content gate is DERIVED at read time as "is the linked creative
 // approved" — there is NO content/validation column on campaigns (bifurcated approval).
 // Storage model: store the object KEY and presign on read (house pattern, like user_documents) —
-// the file is NOT served from a persisted URL (public-vs-presigned deferred to the playout phase).
-// Column names use house conventions (advertiser_id / original_filename / size_bytes); the existing
-// Supabase frontend uses uploaded_by / filename / file_size and persists a `url` — the later C6
-// frontend repoint maps those names and switches to presigned reads.
-export const videoValidationStatus = pgEnum('video_validation_status', [
+// the file is NOT served from a persisted URL.
+// creative_type discriminates VIDEO vs PHOTO. duration_seconds is the diffusion duration: a VIDEO's
+// length (≤ 30s) or a PHOTO's chosen slot (∈ {10,20,30}). The numeric bound is enforced in the
+// upload route (server-side on the stored value); authoritative video-file probing (ffprobe) is a
+// later follow-up — the route accepts a client-asserted duration.
+export const creativeType = pgEnum('creative_type', ['video', 'photo']);
+
+export const creativeValidationStatus = pgEnum('creative_validation_status', [
   'pending',
   'approved',
   'rejected',
 ]);
 
-export const videos = pgTable(
-  'videos',
+export const creatives = pgTable(
+  'creatives',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    // Owner/uploader — creator and owner-scope key for every read/write (frontend: uploaded_by).
+    // Owner/uploader — creator and owner-scope key for every read/write.
     advertiserId: uuid('advertiser_id')
       .notNull()
       .references(() => users.id),
-    // Optional display title. The Supabase frontend has no title (it shows filename); nullable so
-    // the upload route / future repoint can leave it null (the C2 plan lists title; the FE has none).
+    // VIDEO or PHOTO. Default 'video' is a migration backstop only — the upload route always sets it.
+    creativeType: creativeType('creative_type').notNull().default('video'),
+    // Optional display title; nullable (the FE shows the filename).
     title: text('title'),
-    // MinIO object key (videos/<advertiserId>/<videoId>); presigned on read. NOT a persisted URL.
+    // MinIO object key (creatives/<advertiserId>/<creativeId>); presigned on read. NOT a persisted URL.
     storageKey: text('storage_key').notNull(),
-    // Integer seconds; nullable — the frontend supplies it conditionally and patches it later.
+    // Diffusion duration in seconds (video ≤ 30; photo ∈ {10,20,30}). Bound enforced in the route.
     durationSeconds: integer('duration_seconds'),
-    // Admin moderation state. Default 'pending' matches the frontend always inserting 'pending'.
-    validationStatus: videoValidationStatus('validation_status').notNull().default('pending'),
+    // Admin moderation state. Default 'pending' — a fresh upload is unmoderated.
+    validationStatus: creativeValidationStatus('validation_status').notNull().default('pending'),
     // Admin-validation audit trio — cross-table FK to the moderating admin; nullable until moderated.
     validatedBy: uuid('validated_by').references(() => users.id),
     validatedAt: timestamp('validated_at', { withTimezone: true }),
     validationNotes: text('validation_notes'),
-    // Upload metadata — nullable, mirroring user_documents (frontend: filename / mime_type / file_size).
+    // Upload metadata — nullable, mirroring user_documents.
     originalFilename: text('original_filename'),
     mimeType: text('mime_type'),
     sizeBytes: integer('size_bytes'),
@@ -658,10 +663,10 @@ export const videos = pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
-    index('videos_advertiser_id_idx').on(table.advertiserId),
-    index('videos_validation_status_idx').on(table.validationStatus),
+    index('creatives_advertiser_id_idx').on(table.advertiserId),
+    index('creatives_validation_status_idx').on(table.validationStatus),
   ],
 );
 
-export type Video = typeof videos.$inferSelect;
-export type NewVideo = typeof videos.$inferInsert;
+export type Creative = typeof creatives.$inferSelect;
+export type NewCreative = typeof creatives.$inferInsert;

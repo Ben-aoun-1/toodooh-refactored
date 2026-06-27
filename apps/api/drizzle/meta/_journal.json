@@ -155,6 +155,20 @@
       "when": 1782577568593,
       "tag": "0021_videos",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1782579342408,
+      "tag": "0022_campaigns_creatives_rename",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1782579383887,
+      "tag": "0023_creative_type",
+      "breakpoints": true
     }
   ]
 }
