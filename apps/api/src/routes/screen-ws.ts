@@ -2,6 +2,7 @@ import websocket from '@fastify/websocket';
 import type { FastifyPluginAsync } from 'fastify';
 
 import { handleScreenEvent } from '../lib/playout/ingest.js';
+import { computeScreenPlaylist } from '../lib/playout/playlist-service.js';
 import { screenRegistry } from '../lib/playout/registry.js';
 import { authenticateScreenWs } from '../lib/playout/ws-auth.js';
 import { parseScreenEvent, serverMessage } from '../lib/playout/ws-protocol.js';
@@ -29,7 +30,16 @@ export const screenWsRoutes: FastifyPluginAsync = async (app) => {
 
     screenRegistry.add(screenId, socket);
     socket.send(serverMessage('CONNECTED', null));
-    // (Commit 2) push UPDATE_PLAYLIST here, and on a STATUS_REQUEST event.
+
+    // Push the screen's playlist on connect (derived from its screenhost's active dispatch
+    // allocations → approved creatives → presigned MinIO urls). Live re-push on plan change is
+    // deferred (V1: push on connect only).
+    try {
+      const playlist = await computeScreenPlaylist(screenhostId, new Date());
+      socket.send(serverMessage('UPDATE_PLAYLIST', playlist));
+    } catch (err) {
+      request.log.warn({ err }, 'screen-ws: playlist push failed');
+    }
 
     socket.on('message', (raw: Buffer) => {
       const msg = parseScreenEvent(raw.toString());
