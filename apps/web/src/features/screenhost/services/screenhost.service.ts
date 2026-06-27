@@ -20,6 +20,16 @@ export interface ScreenhostWifiReveal {
 }
 
 /**
+ * Affluence response (L-aff-view). `grid` is a 7×24 weekday×hour matrix of the venue's estimated
+ * audience (grid[0]=Monday … grid[6]=Sunday, hour 0–23); `has_data` is false until the hub has
+ * pushed any slots.
+ */
+export interface ScreenhostAffluence {
+  grid: number[][];
+  has_data: boolean;
+}
+
+/**
  * PATCH body. SSID: omit to leave, `null` to clear, string to set. Password:
  * omit (or blank, dropped by the caller) to leave, `null` to clear, non-empty
  * string to set the new secret.
@@ -47,5 +57,10 @@ export const screenhostService = {
    */
   revealWifi(id: string): Promise<ScreenhostWifiReveal> {
     return apiClient.get<ScreenhostWifiReveal>(`/screenhosts/${id}/wifi/reveal`);
+  },
+
+  /** GET /api/screenhosts/:id/affluence — owner-scoped weekday×hour audience grid (L-aff-view). */
+  getAffluence(id: string): Promise<ScreenhostAffluence> {
+    return apiClient.get<ScreenhostAffluence>(`/screenhosts/${id}/affluence`);
   },
 };

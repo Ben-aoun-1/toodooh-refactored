@@ -24,6 +24,7 @@ import { useSectors } from '@/features/auth/hooks/useSectors';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { useOwnerCampaignApprovals } from '@/features/campaigns/hooks/useOwnerCampaignApprovals';
 import AddScreen from '@/features/screenhost/components/AddScreen';
+import { OwnerAffluenceSection } from '@/features/screenhost/components/OwnerAffluenceSection';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
 import OwnerNotificationsBell from '@/features/screenhost/components/OwnerNotificationsBell';
 import {
@@ -667,6 +668,11 @@ export default function OwnerDashboard() {
                   </p>
                   <p className="text-xs mt-1 text-red-500">-22% Année précédente</p>
                 </div>
+              </div>
+
+              {/* Votre audience (affluence — L-aff-view) */}
+              <div className="mt-6">
+                <OwnerAffluenceSection />
               </div>
 
               {/* Pour bien commencer (propriétaire) */}
