@@ -22,6 +22,8 @@ import {
   predefinedZones,
   screenhostExportStatus,
   screenhosts,
+  proofOfPlay,
+  proofOfPlayEvent,
   screens,
   sessions,
   targetingClass,
@@ -268,6 +270,19 @@ describe('db schema', () => {
     expect(campaignDispatchAllocation.revenuPrevisionnel).toBeDefined();
     expect(campaignDispatchAllocation.statutAcceptation).toBeDefined();
     expect(campaignDispatchAllocation.creneaux).toBeDefined();
+  });
+
+  it('proof_of_play exposes the proof columns + event enum (L-playout substrate)', () => {
+    expect(proofOfPlayEvent.enumValues).toEqual(['VIDEO_STARTED', 'VIDEO_ENDED']);
+    expect(proofOfPlay.screenId).toBeDefined();
+    expect(proofOfPlay.screenhostId).toBeDefined();
+    expect(proofOfPlay.campaignId).toBeDefined();
+    expect(proofOfPlay.creativeId).toBeDefined();
+    expect(proofOfPlay.videoIdAsSent).toBeDefined();
+    expect(proofOfPlay.eventType).toBeDefined();
+    expect(proofOfPlay.playedDurationMs).toBeDefined();
+    expect(proofOfPlay.eventTs).toBeDefined();
+    expect(proofOfPlay.receivedAt).toBeDefined();
   });
 });
 

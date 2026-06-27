@@ -11,6 +11,7 @@ import { isSyncEnabled, sweepUnexported } from './lib/wedooh-sync.js';
 import { buildLoggerConfig } from './logger.js';
 import { healthRoute } from './routes/health.js';
 import { apiRoutes } from './routes/index.js';
+import { screenWsRoutes } from './routes/screen-ws.js';
 import { storage } from './storage/s3-storage.js';
 
 const app: FastifyInstance = Fastify({
@@ -54,6 +55,8 @@ const start = async (): Promise<void> => {
     await app.register(authPlugin);
     await app.register(apiRoutes);
     await app.register(healthRoute);
+    // L-playout — raw screen WebSocket (/ws/screen). Self-registers @fastify/websocket.
+    await app.register(screenWsRoutes);
     // Pre-create the storage bucket so the first document upload doesn't pay the
     // head-then-create round-trip. Non-fatal: if storage is briefly unreachable at boot,
     // the api still serves; the retry-safe lazy path re-attempts on the first upload.
