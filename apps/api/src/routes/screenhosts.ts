@@ -3,7 +3,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import { db } from '../db/client.js';
-import { screenhosts, users } from '../db/schema.js';
+import { screenhostAffluence, screenhosts, users } from '../db/schema.js';
 import { pushApprovedOwnerLocations } from '../lib/wedooh-sync.js';
 import { decryptWifiPassword, encryptWifiPassword } from '../lib/wifi-crypto.js';
 import { requireActiveAccount, requireAdmin, requireAuth } from '../middleware/require-auth.js';
@@ -198,6 +198,58 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
     }
 
     return reply.status(200).send(revealView(existing));
+  });
+
+  // GET /api/screenhosts/:id/affluence — owner-scoped read of the venue's audience pattern: the
+  // "typical week" weekday × hour grid of estimated audience the hub pushes via POST
+  // /api/internal/affluence (this is the first READER of screenhost_affluence — the ingest is
+  // unchanged). Same owner-scoping as the WiFi routes: a foreign/missing id is a 404. Returns a
+  // zero-filled 7×24 grid (grid[0]=Monday … grid[6]=Sunday; hour index 0–23, matching wedooh's
+  // 1=Mon…7=Sun / 0–23 slots) + has_data, so the dashboard can show an empty state. Summaries
+  // (peak day/hour, daily average, weekly total) are derived client-side from the grid.
+  app.get('/api/screenhosts/:id/affluence', ownerGuard, async (request, reply) => {
+    const parsedParams = idParamSchema.safeParse(request.params);
+    if (!parsedParams.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: [{ field: 'id', reason: 'must be a uuid' }],
+      });
+    }
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply
+        .status(401)
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+    }
+
+    // Owner scoping in the WHERE: a foreign screenhost id is indistinguishable from a missing one.
+    const [owned] = await db
+      .select({ id: screenhosts.id })
+      .from(screenhosts)
+      .where(and(eq(screenhosts.id, parsedParams.data.id), eq(screenhosts.ownerId, userId)))
+      .limit(1);
+    if (!owned) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
+    }
+
+    const slots = await db
+      .select({
+        dayOfWeek: screenhostAffluence.dayOfWeek,
+        hour: screenhostAffluence.hour,
+        estimatedImpressions: screenhostAffluence.estimatedImpressions,
+      })
+      .from(screenhostAffluence)
+      .where(eq(screenhostAffluence.screenhostId, owned.id));
+
+    // Zero-filled 7×24 grid (Monday-first); day_of_week 1=Mon…7=Sun → row 0…6.
+    const grid: number[][] = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
+    for (const slot of slots) {
+      const row = grid[slot.dayOfWeek - 1];
+      if (row && slot.hour >= 0 && slot.hour <= 23) row[slot.hour] = slot.estimatedImpressions;
+    }
+
+    return reply.status(200).send({ grid, has_data: slots.length > 0 });
   });
 
   // PATCH /api/admin/screenhosts/:id/wifi — admin edit of ANY screenhost + re-push for its
