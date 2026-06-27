@@ -127,6 +127,9 @@ export const apiClient = {
   patch<T>(path: string, body?: unknown, opts?: RequestOptions): Promise<T> {
     return request<T>('PATCH', path, { ...opts, body });
   },
+  put<T>(path: string, body?: unknown, opts?: RequestOptions): Promise<T> {
+    return request<T>('PUT', path, { ...opts, body });
+  },
   del<T>(path: string, opts?: RequestOptions): Promise<T> {
     return request<T>('DELETE', path, opts);
   },
