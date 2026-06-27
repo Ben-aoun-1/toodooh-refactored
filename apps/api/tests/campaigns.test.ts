@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 
 import { auth } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
-import { type NewUser, campaigns, users } from '../src/db/schema.js';
+import { type NewUser, campaigns, creatives, users } from '../src/db/schema.js';
 import { campaignsRoutes } from '../src/routes/campaigns.js';
 import { apiRoutes } from '../src/routes/index.js';
 
@@ -330,6 +330,47 @@ describe('campaigns draft lifecycle (advertiser, real Postgres)', () => {
     const res = await app.inject({ method: 'DELETE', url: `/api/campaigns/${foreign}` });
     expect(res.statusCode).toBe(404);
     expect(await readCampaign(foreign)).toBeDefined();
+  });
+
+  // ── derived content gate (L-spot, bifurcated approval) ───────────────────────
+  it('derives content_validation_status = null when no creative is linked', async () => {
+    const me = await seedUser();
+    const id = await seedCampaign(me);
+    mockSession(me);
+    const res = await app.inject({ method: 'GET', url: `/api/campaigns/${id}` });
+    expect(res.statusCode).toBe(200);
+    expect(
+      (res.json() as { content_validation_status: string | null }).content_validation_status,
+    ).toBeNull();
+  });
+
+  it('derives content_validation_status from the linked creative (reflects approval)', async () => {
+    const me = await seedUser();
+    const [creative] = await db
+      .insert(creatives)
+      .values({
+        advertiserId: me,
+        creativeType: 'video',
+        storageKey: `creatives/${me}/c`,
+        durationSeconds: 20,
+        validationStatus: 'approved',
+      })
+      .returning();
+    const [campaign] = await db
+      .insert(campaigns)
+      .values({
+        advertiserId: me,
+        name: 'Linked',
+        campaignType: 'standard',
+        creativeId: creative?.id,
+      })
+      .returning();
+    mockSession(me);
+    const res = await app.inject({ method: 'GET', url: `/api/campaigns/${campaign?.id}` });
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as { content_validation_status: string }).content_validation_status).toBe(
+      'approved',
+    );
   });
 
   // ── apiRoutes wiring ─────────────────────────────────────────────────────────

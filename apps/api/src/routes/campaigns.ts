@@ -3,7 +3,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import { db } from '../db/client.js';
-import { campaigns } from '../db/schema.js';
+import { campaigns, creatives } from '../db/schema.js';
 import { requireAdvertiser } from '../middleware/require-advertiser.js';
 import { requireAuth } from '../middleware/require-auth.js';
 
@@ -60,8 +60,13 @@ type CampaignRow = Pick<
   | 'updatedAt'
 >;
 
+// content_validation_status is the DERIVED content gate (bifurcated approval): the validation_status
+// of the linked creative, or null when no creative is linked. It is NEVER a stored campaign column —
+// reads LEFT JOIN creatives to compute it. CRUD writes never link a creative (creative_id is set in
+// a later lane), so a created/edited/submitted campaign always derives null here.
 const campaignView = (
   row: CampaignRow,
+  contentValidationStatus: string | null = null,
 ): {
   id: string;
   name: string;
@@ -70,6 +75,7 @@ const campaignView = (
   start_date: string | null;
   end_date: string | null;
   description: string | null;
+  content_validation_status: string | null;
   submitted_at: Date | null;
   created_at: Date;
   updated_at: Date;
@@ -81,6 +87,7 @@ const campaignView = (
   start_date: row.startDate,
   end_date: row.endDate,
   description: row.description,
+  content_validation_status: contentValidationStatus,
   submitted_at: row.submittedAt,
   created_at: row.createdAt,
   updated_at: row.updatedAt,
@@ -147,11 +154,12 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
     }
     const rows = await db
-      .select(campaignSelection)
+      .select({ ...campaignSelection, contentValidationStatus: creatives.validationStatus })
       .from(campaigns)
+      .leftJoin(creatives, eq(campaigns.creativeId, creatives.id))
       .where(eq(campaigns.advertiserId, userId))
       .orderBy(desc(campaigns.createdAt));
-    return reply.status(200).send(rows.map(campaignView));
+    return reply.status(200).send(rows.map((r) => campaignView(r, r.contentValidationStatus)));
   });
 
   // GET /api/campaigns/:id — owner-scoped read (404 on a foreign or missing id).
@@ -165,14 +173,15 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
     }
     const [row] = await db
-      .select(campaignSelection)
+      .select({ ...campaignSelection, contentValidationStatus: creatives.validationStatus })
       .from(campaigns)
+      .leftJoin(creatives, eq(campaigns.creativeId, creatives.id))
       .where(and(eq(campaigns.id, parsedParams.data.id), eq(campaigns.advertiserId, userId)))
       .limit(1);
     if (!row) {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such campaign.' });
     }
-    return reply.status(200).send(campaignView(row));
+    return reply.status(200).send(campaignView(row, row.contentValidationStatus));
   });
 
   // PATCH /api/campaigns/:id — owner-scoped edit, draft-only (409 once submitted).
