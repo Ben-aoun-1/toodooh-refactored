@@ -29,6 +29,24 @@ export const screenWsRoutes: FastifyPluginAsync = async (app) => {
     const { screenId, screenhostId } = auth;
 
     screenRegistry.add(screenId, socket);
+
+    // Attach the event listeners SYNCHRONOUSLY — before the playlist push (which awaits). Otherwise a
+    // message the player sends right after CONNECTED could arrive before the listener is attached and
+    // be dropped by ws (no buffering).
+    socket.on('message', (raw: Buffer) => {
+      const msg = parseScreenEvent(raw.toString());
+      if (!msg) {
+        request.log.warn('screen-ws: malformed message ignored');
+        return;
+      }
+      void handleScreenEvent(msg, { screenId, screenhostId }, request.log).catch((err: unknown) =>
+        request.log.warn({ err }, 'screen-ws: event handler error'),
+      );
+    });
+    const cleanup = (): void => screenRegistry.remove(screenId, socket);
+    socket.on('close', cleanup);
+    socket.on('error', cleanup);
+
     socket.send(serverMessage('CONNECTED', null));
 
     // Push the screen's playlist on connect (derived from its screenhost's active dispatch
@@ -40,20 +58,5 @@ export const screenWsRoutes: FastifyPluginAsync = async (app) => {
     } catch (err) {
       request.log.warn({ err }, 'screen-ws: playlist push failed');
     }
-
-    socket.on('message', (raw: Buffer) => {
-      const msg = parseScreenEvent(raw.toString());
-      if (!msg) {
-        request.log.warn('screen-ws: malformed message ignored');
-        return;
-      }
-      void handleScreenEvent(msg, { screenId, screenhostId }, request.log).catch((err: unknown) =>
-        request.log.warn({ err }, 'screen-ws: event handler error'),
-      );
-    });
-
-    const cleanup = (): void => screenRegistry.remove(screenId, socket);
-    socket.on('close', cleanup);
-    socket.on('error', cleanup);
   });
 };
