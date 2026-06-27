@@ -1,5 +1,5 @@
 {
-  "id": "b1f07949-bab2-4d73-b248-a7a11a4f8ab3",
+  "id": "5b7f7346-b256-4fd3-9c22-696a6f2d0fc8",
   "prevId": "d66b76c1-9bce-4e14-964e-8ba0f96e37de",
   "version": "7",
   "dialect": "postgresql",
@@ -1488,7 +1488,7 @@
           "tableTo": "screens",
           "columnsFrom": ["screen_id"],
           "columnsTo": ["id"],
-          "onDelete": "cascade",
+          "onDelete": "restrict",
           "onUpdate": "no action"
         },
         "proof_of_play_screenhost_id_screenhosts_id_fk": {
@@ -1497,7 +1497,7 @@
           "tableTo": "screenhosts",
           "columnsFrom": ["screenhost_id"],
           "columnsTo": ["id"],
-          "onDelete": "cascade",
+          "onDelete": "restrict",
           "onUpdate": "no action"
         },
         "proof_of_play_campaign_id_campaigns_id_fk": {
@@ -1506,7 +1506,7 @@
           "tableTo": "campaigns",
           "columnsFrom": ["campaign_id"],
           "columnsTo": ["id"],
-          "onDelete": "cascade",
+          "onDelete": "restrict",
           "onUpdate": "no action"
         },
         "proof_of_play_creative_id_creatives_id_fk": {
@@ -1515,7 +1515,7 @@
           "tableTo": "creatives",
           "columnsFrom": ["creative_id"],
           "columnsTo": ["id"],
-          "onDelete": "no action",
+          "onDelete": "restrict",
           "onUpdate": "no action"
         }
       },

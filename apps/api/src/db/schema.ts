@@ -908,18 +908,21 @@ export const proofOfPlay = pgTable(
   'proof_of_play',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    // ON DELETE RESTRICT on every FK: proof_of_play is BILLING EVIDENCE — deleting a screen /
+    // screenhost / campaign / creative must NOT destroy the proof it aired. The referenced row can't
+    // be deleted while proof exists (retain-as-evidence; a real teardown archives proof first).
     screenId: uuid('screen_id')
       .notNull()
-      .references(() => screens.id, { onDelete: 'cascade' }),
+      .references(() => screens.id, { onDelete: 'restrict' }),
     screenhostId: uuid('screenhost_id')
       .notNull()
-      .references(() => screenhosts.id, { onDelete: 'cascade' }),
+      .references(() => screenhosts.id, { onDelete: 'restrict' }),
     campaignId: uuid('campaign_id')
       .notNull()
-      .references(() => campaigns.id, { onDelete: 'cascade' }),
+      .references(() => campaigns.id, { onDelete: 'restrict' }),
     creativeId: uuid('creative_id')
       .notNull()
-      .references(() => creatives.id),
+      .references(() => creatives.id, { onDelete: 'restrict' }),
     videoIdAsSent: text('video_id_as_sent').notNull(),
     eventType: proofOfPlayEvent('event_type').notNull(),
     playedDurationMs: integer('played_duration_ms'), // null for VIDEO_STARTED; set on VIDEO_ENDED
