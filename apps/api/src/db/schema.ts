@@ -590,6 +590,11 @@ export const campaigns = pgTable(
     startDate: date('start_date'),
     endDate: date('end_date'),
     description: text('description'),
+    // Links the campaign to ONE advertiser video (C2). Nullable — a draft has no video yet.
+    // onDelete 'set null': deleting a video must NOT delete the campaign; it falls back to the
+    // no-video state. content_validation_status is DERIVED from the linked video at read time
+    // (C2 commit 3) — there is NO validation column here (bifurcated approval, see above).
+    videoId: uuid('video_id').references(() => videos.id, { onDelete: 'set null' }),
     submittedAt: timestamp('submitted_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
@@ -602,3 +607,61 @@ export const campaigns = pgTable(
 
 export type Campaign = typeof campaigns.$inferSelect;
 export type NewCampaign = typeof campaigns.$inferInsert;
+
+// ── videos (C2 — advertiser video library + admin moderation) ───────────────
+// Advertiser-OWNED media library, independent of campaigns. An advertiser uploads a video
+// (object stored in MinIO under videos/<advertiserId>/<videoId>; the KEY lives in storage_key);
+// the ADMIN moderates it (validation_status pending → approved | rejected) via the admin video
+// routes (C2 commit 3), mirroring the user_documents review pattern. A campaign links ONE video
+// via campaigns.video_id and its content gate is DERIVED at read time as "is the linked video
+// approved" — there is NO content/validation column on campaigns (bifurcated approval).
+// Storage model: store the object KEY and presign on read (house pattern, like user_documents) —
+// the file is NOT served from a persisted URL (public-vs-presigned deferred to the playout phase).
+// Column names use house conventions (advertiser_id / original_filename / size_bytes); the existing
+// Supabase frontend uses uploaded_by / filename / file_size and persists a `url` — the later C6
+// frontend repoint maps those names and switches to presigned reads.
+export const videoValidationStatus = pgEnum('video_validation_status', [
+  'pending',
+  'approved',
+  'rejected',
+]);
+
+export const videos = pgTable(
+  'videos',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    // Owner/uploader — creator and owner-scope key for every read/write (frontend: uploaded_by).
+    advertiserId: uuid('advertiser_id')
+      .notNull()
+      .references(() => users.id),
+    // Optional display title. The Supabase frontend has no title (it shows filename); nullable so
+    // the upload route / future repoint can leave it null (the C2 plan lists title; the FE has none).
+    title: text('title'),
+    // MinIO object key (videos/<advertiserId>/<videoId>); presigned on read. NOT a persisted URL.
+    storageKey: text('storage_key').notNull(),
+    // Integer seconds; nullable — the frontend supplies it conditionally and patches it later.
+    durationSeconds: integer('duration_seconds'),
+    // Admin moderation state. Default 'pending' matches the frontend always inserting 'pending'.
+    validationStatus: videoValidationStatus('validation_status').notNull().default('pending'),
+    // Admin-validation audit trio — cross-table FK to the moderating admin; nullable until moderated.
+    validatedBy: uuid('validated_by').references(() => users.id),
+    validatedAt: timestamp('validated_at', { withTimezone: true }),
+    validationNotes: text('validation_notes'),
+    // Upload metadata — nullable, mirroring user_documents (frontend: filename / mime_type / file_size).
+    originalFilename: text('original_filename'),
+    mimeType: text('mime_type'),
+    sizeBytes: integer('size_bytes'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index('videos_advertiser_id_idx').on(table.advertiserId),
+    index('videos_validation_status_idx').on(table.validationStatus),
+  ],
+);
+
+export type Video = typeof videos.$inferSelect;
+export type NewVideo = typeof videos.$inferInsert;
