@@ -197,6 +197,13 @@
       "when": 1782597473978,
       "tag": "0027_recharges",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1782599004471,
+      "tag": "0028_proof_of_play",
+      "breakpoints": true
     }
   ]
 }

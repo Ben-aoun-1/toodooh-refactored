@@ -895,3 +895,46 @@ export const recharges = pgTable(
 
 export type Recharge = typeof recharges.$inferSelect;
 export type NewRecharge = typeof recharges.$inferInsert;
+
+// ── proof_of_play (L-playout — the proof-of-play / billing substrate) ────────
+// The TV player reports VIDEO_STARTED / VIDEO_ENDED over the screen WebSocket; each is resolved to
+// its (campaign, creative) for the screen's screenhost and recorded here. VIDEO_ENDED carries
+// played_duration_ms — the binary "it aired" proof the spec values for L-redisp reconciliation.
+// video_id_as_sent is the playlist entry id we sent the player (V1 = the campaign id). event_ts is
+// the player's client timestamp (nullable); received_at is server-stamped.
+export const proofOfPlayEvent = pgEnum('proof_of_play_event', ['VIDEO_STARTED', 'VIDEO_ENDED']);
+
+export const proofOfPlay = pgTable(
+  'proof_of_play',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    screenId: uuid('screen_id')
+      .notNull()
+      .references(() => screens.id, { onDelete: 'cascade' }),
+    screenhostId: uuid('screenhost_id')
+      .notNull()
+      .references(() => screenhosts.id, { onDelete: 'cascade' }),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    creativeId: uuid('creative_id')
+      .notNull()
+      .references(() => creatives.id),
+    videoIdAsSent: text('video_id_as_sent').notNull(),
+    eventType: proofOfPlayEvent('event_type').notNull(),
+    playedDurationMs: integer('played_duration_ms'), // null for VIDEO_STARTED; set on VIDEO_ENDED
+    eventTs: timestamp('event_ts', { withTimezone: true }), // player client timestamp (nullable)
+    receivedAt: timestamp('received_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('proof_of_play_screenhost_id_idx').on(table.screenhostId),
+    index('proof_of_play_campaign_id_idx').on(table.campaignId),
+    index('proof_of_play_screen_id_idx').on(table.screenId),
+    check(
+      'proof_of_play_duration_nonneg',
+      sql`${table.playedDurationMs} IS NULL OR ${table.playedDurationMs} >= 0`,
+    ),
+  ],
+);
+
+export type ProofOfPlay = typeof proofOfPlay.$inferSelect;
