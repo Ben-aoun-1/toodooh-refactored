@@ -6,6 +6,8 @@ import * as schema from '../src/db/schema.js';
 import {
   accounts,
   businessSectors,
+  campaignStatus,
+  campaigns,
   deviceSessions,
   documentCategory,
   governorates,
@@ -159,6 +161,30 @@ describe('db schema', () => {
     const cols = screenhosts as unknown as Record<string, unknown>;
     expect(cols['createdBy']).toBeUndefined();
     expect(cols['screenhostId']).toBeUndefined();
+  });
+
+  it('campaign_status enum mirrors the status convention (draft → pending → active → rejected)', () => {
+    expect(campaignStatus.enumValues).toEqual(['draft', 'pending', 'active', 'rejected']);
+  });
+
+  it('campaigns exposes the draft-lifecycle + approval-audit columns (C1)', () => {
+    expect(campaigns.advertiserId).toBeDefined();
+    expect(campaigns.name).toBeDefined();
+    expect(campaigns.campaignType).toBeDefined();
+    expect(campaigns.status).toBeDefined();
+    expect(campaigns.startDate).toBeDefined();
+    expect(campaigns.endDate).toBeDefined();
+    expect(campaigns.description).toBeDefined();
+    expect(campaigns.submittedAt).toBeDefined();
+    expect(campaigns.createdAt).toBeDefined();
+    expect(campaigns.updatedAt).toBeDefined();
+    // Bifurcated approval (C1 Commit 3): the campaign-level validation trio was removed — an admin
+    // validates the video (videos table) and owners approve via campaign_owner_approvals, so a
+    // campaign's activation is derived, not a single campaign-level admin validation.
+    const cols = campaigns as unknown as Record<string, unknown>;
+    expect(cols['validatedBy']).toBeUndefined();
+    expect(cols['validatedAt']).toBeUndefined();
+    expect(cols['validationNotes']).toBeUndefined();
   });
 });
 

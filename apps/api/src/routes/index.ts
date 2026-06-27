@@ -3,6 +3,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { adminAccountsRoutes } from './admin-accounts.js';
 import { adminRoutes } from './admin.js';
 import { agentRoutes } from './agent.js';
+import { campaignsRoutes } from './campaigns.js';
 import { deviceAuthRoutes } from './device-auth.js';
 import { emailAvailabilityRoute } from './email-availability.js';
 import { internalRoutes } from './internal.js';
@@ -38,6 +39,9 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   // owner's approved screenhosts to wedooh (S-T1 Edge B2) so the hub's credentials stay current.
   await app.register(screenhostsRoutes);
   await app.register(meRoutes);
+  // C1 — advertiser campaign draft lifecycle (greenfield): create/list/get/edit/submit/delete,
+  // owner-scoped to the authenticated advertiser. Targeting/video/map/pricing land in later lanes.
+  await app.register(campaignsRoutes);
   await app.register(profileRoutes);
   await app.register(profileDocumentsRoutes);
   await app.register(passwordRoutes);
