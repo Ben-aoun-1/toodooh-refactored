@@ -3,6 +3,7 @@ import type { FastifyPluginAsync } from 'fastify';
 
 import { db } from '../db/client.js';
 import { userDocuments, users } from '../db/schema.js';
+import { lookupAgentCode } from '../lib/agent-account.js';
 import { toProfileType } from '../lib/profile-type.js';
 import { documentPresence } from '../lib/user-documents.js';
 import { requireAuth } from '../middleware/require-auth.js';
@@ -63,6 +64,8 @@ export const meRoutes: FastifyPluginAsync = async (app) => {
       .select({ category: userDocuments.category, position: userDocuments.position })
       .from(userDocuments)
       .where(eq(userDocuments.userId, userId));
+    // R5 — the caller agent's own referral code for the dashboard CODE AGENT card; null for non-agents.
+    const agentCode = await lookupAgentCode(userId, row.role);
     return reply.status(200).send({
       user: {
         id: row.id,
@@ -77,6 +80,8 @@ export const meRoutes: FastifyPluginAsync = async (app) => {
         onboarding_completed: row.onboardingCompleted,
         profile_type: toProfileType(row.role, row.businessType),
         contact_name: row.contactName,
+        // R5 — the agent's own issued code (agents.code); null for non-agent roles.
+        agent_code: agentCode,
         business_name: row.businessName,
         tax_number: row.taxNumber,
         contact_phone: row.contactPhone,

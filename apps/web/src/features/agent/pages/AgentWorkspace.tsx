@@ -7,6 +7,7 @@ import { useAgentClients } from '@/features/agent/hooks/useAgentClients';
 import {
   AGENT_DASHBOARD_PLACEHOLDER,
   agentAudienceLabels,
+  agentCodeDisplay,
   agentKpiCards,
 } from '@/features/agent/utils/agent-dashboard';
 import { toReferenceLookup } from '@/features/agent/utils/client-display';
@@ -57,6 +58,7 @@ function PlaceholderSection({ title }: { title: string }) {
 export default function AgentWorkspace() {
   const contactName = useAuthStore((s) => s.contactName);
   const role = useAuthStore((s) => s.role);
+  const agentCode = useAuthStore((s) => s.agentCode);
   const labels = agentAudienceLabels(role);
   const clientsQuery = useAgentClients();
 
@@ -100,17 +102,16 @@ export default function AgentWorkspace() {
             <p className="mt-1 text-xs text-white/60">Bientôt disponible</p>
           </div>
 
-          {/* CODE AGENT — the agent's own issued code. No FE-consumable API exposes it today (see
-              CF-9), so it is an HONEST placeholder rather than a fabricated/derived value. */}
+          {/* CODE AGENT — the agent's own issued code, LIVE from /api/me|/api/signin (store.agentCode).
+              Absent (non-agent / not yet provisioned) → the placeholder glyph, never fabricated. */}
           <div className="flex min-h-[140px] flex-col justify-center rounded-2xl bg-brand-primary p-6 shadow-sm">
             <div className="flex items-center gap-2 text-brand-deep/80">
               <KeyRound className="h-5 w-5" />
               <p className="text-sm font-medium">Code agent</p>
             </div>
             <p className="mt-3 text-2xl font-bold tracking-wide text-brand-deep">
-              {AGENT_DASHBOARD_PLACEHOLDER}
+              {agentCodeDisplay(agentCode)}
             </p>
-            <p className="mt-1 text-xs text-brand-deep/70">Bientôt disponible</p>
           </div>
         </div>
 

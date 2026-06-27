@@ -214,4 +214,6 @@ export interface SessionUser {
   business_type: string | null;
   profile_type: string | null;
   contact_name: string | null;
+  /** R5 — the agent's OWN issued referral code (agents.code); null for non-agent roles. */
+  agent_code: string | null;
 }

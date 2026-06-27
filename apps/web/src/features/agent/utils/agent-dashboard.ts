@@ -10,6 +10,12 @@
 
 export const AGENT_DASHBOARD_PLACEHOLDER = '—';
 
+// The CODE AGENT card value: the agent's own issued code (from /api/me|/api/signin) when present, else
+// the placeholder glyph — never fabricated. Absence = a non-agent or a code not yet provisioned.
+export function agentCodeDisplay(agentCode: string | null | undefined): string {
+  return agentCode && agentCode.trim() ? agentCode : AGENT_DASHBOARD_PLACEHOLDER;
+}
+
 // The wording bundle for one agent role. A screenhost_agent refers screen OWNERS ("Screenhosts");
 // a screencast_agent refers advertisers ("Screencasters"). One source of truth so the dashboard and
 // the sidebar can't drift. Anything that is not screencast_agent falls back to the Screenhost noun.

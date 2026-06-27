@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { auth } from '../auth/auth.js';
 import { db } from '../db/client.js';
 import { sessions, users } from '../db/schema.js';
+import { lookupAgentCode } from '../lib/agent-account.js';
 import { toProfileType } from '../lib/profile-type.js';
 import { requireAuth } from '../middleware/require-auth.js';
 
@@ -102,6 +103,10 @@ export const signinRoutes: FastifyPluginAsync = async (app) => {
 
     forwardSetCookie(reply, result.headers);
 
+    // R5 — signin parity with /api/me: the agent's own code rides the login response so the dashboard
+    // CODE AGENT card is live immediately, not only after a reload. Null for non-agent roles.
+    const agentCode = await lookupAgentCode(row.id, row.role);
+
     return reply.status(200).send({
       user: {
         id: row.id,
@@ -116,6 +121,8 @@ export const signinRoutes: FastifyPluginAsync = async (app) => {
         business_type: row.businessType,
         profile_type: toProfileType(row.role, row.businessType),
         contact_name: row.contactName,
+        // R5 — the agent's own issued code (agents.code); null for non-agent roles.
+        agent_code: agentCode,
       },
     });
   });

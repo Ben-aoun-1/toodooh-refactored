@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { AGENT_DASHBOARD_PLACEHOLDER, agentAudienceLabels, agentKpiCards } from './agent-dashboard';
+import {
+  AGENT_DASHBOARD_PLACEHOLDER,
+  agentAudienceLabels,
+  agentCodeDisplay,
+  agentKpiCards,
+} from './agent-dashboard';
 
 // R5 — the variant label selection (Screenhosts↔Screencasters) and the LIVE-vs-PLACEHOLDER KPI split.
 describe('agentAudienceLabels — screenhost vs screencast wording', () => {
@@ -57,4 +62,18 @@ describe('agentKpiCards — LIVE vs PLACEHOLDER split', () => {
       expect(card?.value).toBe(AGENT_DASHBOARD_PLACEHOLDER);
     }
   });
+});
+
+describe('agentCodeDisplay — code vs placeholder', () => {
+  it('renders the agent code when present', () => {
+    expect(agentCodeDisplay('SH123456')).toBe('SH123456');
+    expect(agentCodeDisplay('SC000001')).toBe('SC000001');
+  });
+
+  it.each([null, undefined, '', '   '])(
+    'renders the placeholder glyph when the code is absent/blank (%s)',
+    (value) => {
+      expect(agentCodeDisplay(value)).toBe(AGENT_DASHBOARD_PLACEHOLDER);
+    },
+  );
 });
