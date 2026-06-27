@@ -4,6 +4,7 @@ import { adminAccountsRoutes } from './admin-accounts.js';
 import { adminCreativesRoutes } from './admin-creatives.js';
 import { adminRoutes } from './admin.js';
 import { agentRoutes } from './agent.js';
+import { campaignDispatchRoutes } from './campaign-dispatch.js';
 import { campaignTargetingRoutes } from './campaign-targeting.js';
 import { campaignsRoutes } from './campaigns.js';
 import { creativesRoutes } from './creatives.js';
@@ -51,6 +52,8 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   // L-target — campaign audience targeting (category × class lines, ALL=toutes); owner-scoped to the
   // campaign's advertiser, replace-set write, draft-only. Dedup + category validation server-side.
   await app.register(campaignTargetingRoutes);
+  // L-disp — admin/internal dispatch entrypoint: builds + freezes the PlanDiffusion (A.7).
+  await app.register(campaignDispatchRoutes);
   await app.register(profileRoutes);
   await app.register(profileDocumentsRoutes);
   await app.register(passwordRoutes);
