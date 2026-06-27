@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 
 import { auth } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
-import { sessions, users } from '../src/db/schema.js';
+import { agents, sessions, users } from '../src/db/schema.js';
 import { apiRoutes } from '../src/routes/index.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
@@ -104,6 +104,26 @@ describe('POST /api/signin + /api/signout (real Postgres)', () => {
     expect(body.user.profile_type).toBe('advertiser');
     expect(body.user.contact_name).toBe('Sign In User');
     expect(res.headers['set-cookie']).toBeDefined();
+  });
+
+  // R5 — signin parity with /api/me: an agent's OWN code rides the login response so the dashboard
+  // CODE AGENT card is live immediately (not only after a reload). Non-agents → null.
+  it('agent signin → response carries agent_code (parity with /api/me)', async () => {
+    const userId = await createVerifiedUser('agent-signin@example.com', {
+      role: 'screencast_agent',
+    });
+    await db.insert(agents).values({ userId, code: 'SC654321' });
+    const res = await signin('agent-signin@example.com', PASSWORD);
+    expect(res.statusCode).toBe(200);
+    const { user } = res.json<{ user: { role: string; agent_code: string | null } }>();
+    expect(user.role).toBe('screencast_agent');
+    expect(user.agent_code).toBe('SC654321');
+  });
+
+  it('non-agent signin → agent_code is null', async () => {
+    await createVerifiedUser('plain-signin@example.com'); // advertiser default, no agents row
+    const res = await signin('plain-signin@example.com', PASSWORD);
+    expect(res.json<{ user: { agent_code: string | null } }>().user.agent_code).toBeNull();
   });
 
   it('rejected account: signin still SUCCEEDS and returns status + rejection reason', async () => {

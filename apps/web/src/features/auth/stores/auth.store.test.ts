@@ -37,6 +37,7 @@ const approved: SessionUser = {
   business_type: null,
   profile_type: 'advertiser',
   contact_name: 'Alice',
+  agent_code: null,
 };
 const pendingOwner: SessionUser = {
   id: 'u2',
@@ -49,6 +50,7 @@ const pendingOwner: SessionUser = {
   business_type: null,
   profile_type: 'individual_owner',
   contact_name: 'Omar',
+  agent_code: null,
 };
 const rejected: SessionUser = {
   id: 'u3',
@@ -61,6 +63,21 @@ const rejected: SessionUser = {
   business_type: null,
   profile_type: 'advertiser',
   contact_name: 'Rania',
+  agent_code: null,
+};
+// R5 — an agent session carries its own issued code (agents.code), threaded into the store.
+const agentSession: SessionUser = {
+  id: 'u4',
+  email: 'agent@b.c',
+  role: 'screenhost_agent',
+  status: 'approved',
+  validation_notes: null,
+  rejection_topics: null,
+  onboarding_completed: true,
+  business_type: null,
+  profile_type: null,
+  contact_name: 'Sami',
+  agent_code: 'SH123456',
 };
 
 beforeAll(async () => {
@@ -98,6 +115,18 @@ describe('auth.store — rehydration (initialize → /api/me)', () => {
     expect(s.needsApproval).toBe(false);
     expect(s.initialized).toBe(true);
     expect(s.rehydrateError).toBe(false);
+  });
+
+  it('200 (agent) → the agent code is threaded into the store (R5)', async () => {
+    vi.mocked(authService.getCurrentUser).mockResolvedValue(agentSession);
+    await useAuthStore.getState().initialize();
+    expect(useAuthStore.getState().agentCode).toBe('SH123456');
+  });
+
+  it('200 (non-agent) → agentCode is null', async () => {
+    vi.mocked(authService.getCurrentUser).mockResolvedValue(approved);
+    await useAuthStore.getState().initialize();
+    expect(useAuthStore.getState().agentCode).toBeNull();
   });
 
   it('200 (pending owner) → needsApproval true (status-derived, D5)', async () => {

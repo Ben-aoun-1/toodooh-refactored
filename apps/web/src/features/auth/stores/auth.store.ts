@@ -44,6 +44,8 @@ interface AuthState {
   rejectionTopics?: string[] | null;
   /** users.role from /api/me|/api/signin (Phase-1g) — admin identity is a role on the user (D1). */
   role: string | null;
+  /** R5 — the caller agent's OWN issued code (agents.code) from /api/me|/api/signin; null for non-agents. */
+  agentCode: string | null;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   initialize: () => Promise<void>;
@@ -64,6 +66,7 @@ const mapRouting = (u: SessionUser) => ({
   rejectionTopics: u.rejection_topics,
   needsApproval: u.status !== 'approved',
   role: u.role,
+  agentCode: u.agent_code ?? null,
 });
 
 // The logged-out routing reset (user falsy → guards redirect to /login).
@@ -78,6 +81,7 @@ const LOGGED_OUT = {
   validationNotes: null,
   rejectionTopics: null,
   role: null,
+  agentCode: null,
 };
 
 export const useAuthStore = create<AuthState>()(
@@ -96,6 +100,7 @@ export const useAuthStore = create<AuthState>()(
       validationNotes: null,
       rejectionTopics: null,
       role: null,
+      agentCode: null,
 
       // Rehydrate identity on app load/reload from the cookie via GET /api/me (D3).
       initialize: async () => {
@@ -188,6 +193,7 @@ export const useAuthStore = create<AuthState>()(
         contactName: state.contactName,
         onboardingCompleted: state.onboardingCompleted,
         role: state.role,
+        agentCode: state.agentCode,
       }),
     },
   ),

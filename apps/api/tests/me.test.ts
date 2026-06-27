@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 
 import { auth } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
-import { userDocuments, users } from '../src/db/schema.js';
+import { agents, userDocuments, users } from '../src/db/schema.js';
 import { apiRoutes } from '../src/routes/index.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
@@ -64,6 +64,7 @@ interface MeUser {
   onboarding_completed: boolean;
   profile_type: string | null;
   contact_name: string | null;
+  agent_code: string | null;
   business_name: string | null;
   tax_number: string | null;
   contact_phone: string | null;
@@ -213,6 +214,26 @@ describe('GET /api/me (real Postgres)', () => {
     const res = await app.inject({ method: 'GET', url: '/api/me' });
     expect(res.statusCode).toBe(401);
     expect(res.json<{ error: string }>().error).toBe('UNAUTHENTICATED');
+  });
+
+  // R5 — the caller agent's OWN issued code rides /api/me so the dashboard CODE AGENT card is live.
+  it('agent role → /api/me carries the agent_code (agents.code)', async () => {
+    const userId = await createVerifiedUser('me-agent@example.com', { role: 'screenhost_agent' });
+    await db.insert(agents).values({ userId, code: 'SH123456' });
+    const cookie = cookieHeader(
+      (await signin('me-agent@example.com', PASSWORD)).headers['set-cookie'],
+    );
+    const { user } = (await me(cookie)).json<{ user: MeUser }>();
+    expect(user.role).toBe('screenhost_agent');
+    expect(user.agent_code).toBe('SH123456');
+  });
+
+  it('non-agent role → /api/me agent_code is null', async () => {
+    await createVerifiedUser('me-noagent@example.com'); // advertiser default, no agents row
+    const cookie = cookieHeader(
+      (await signin('me-noagent@example.com', PASSWORD)).headers['set-cookie'],
+    );
+    expect((await me(cookie)).json<{ user: MeUser }>().user.agent_code).toBeNull();
   });
 
   it('profile_type parity: agency (advertiser + business_type=agency)', async () => {
