@@ -59,6 +59,75 @@ const seedToken = async (userId: string): Promise<string> => {
   return token;
 };
 
+// Seed a screen whose screenhost has ONE ACCEPTE allocation → plan → campaign → creative, fully
+// airable by default. Overrides flip a single gate input to prove the playout gate excludes it.
+interface AllocOverrides {
+  campaignStatus?: 'draft' | 'pending' | 'active' | 'rejected';
+  validationStatus?: 'pending' | 'approved' | 'rejected';
+}
+const seedAllocated = async (
+  o: AllocOverrides = {},
+): Promise<{ screenId: string; token: string; campaignId: string }> => {
+  const owner = await seedUser({ role: 'individual_owner' });
+  const [sh] = await db.insert(screenhosts).values({ name: 'Venue', ownerId: owner }).returning();
+  const [screen] = await db
+    .insert(screens)
+    .values({ screenhostId: sh?.id ?? '', name: 'Screen' })
+    .returning();
+  const token = await seedToken(owner);
+  const advertiser = await seedUser({ role: 'advertiser' });
+  const [creative] = await db
+    .insert(creatives)
+    .values({
+      advertiserId: advertiser,
+      creativeType: 'video',
+      storageKey: `creatives/${advertiser}/c1`,
+      durationSeconds: 30,
+      validationStatus: o.validationStatus ?? 'approved',
+    })
+    .returning();
+  const [campaign] = await db
+    .insert(campaigns)
+    .values({
+      advertiserId: advertiser,
+      name: 'Promo',
+      campaignType: 'standard',
+      status: o.campaignStatus ?? 'active',
+      startDate: '2020-01-01',
+      endDate: '2999-12-31',
+      creativeId: creative?.id,
+    })
+    .returning();
+  const [plan] = await db
+    .insert(campaignDispatchPlan)
+    .values({
+      campaignId: campaign?.id ?? '',
+      iCible: 20000,
+      cpm: '10',
+      sSpotSeconds: 10,
+      tTierCoef: '0.8',
+      seuilDiffusable: 1000,
+      sMin: '10',
+      gJour: '3.33',
+      fMaxSeconds: 300,
+      rMinEfficace: 2,
+      couvert: 20000,
+      nMin: 1,
+      nMax: 20,
+      nRetenus: 1,
+    })
+    .returning();
+  await db.insert(campaignDispatchAllocation).values({
+    planId: plan?.id ?? '',
+    screenhostId: sh?.id ?? '',
+    iiPotentiel: 20000,
+    rI: 5,
+    revenuPrevisionnel: '200',
+    creneaux: [],
+  });
+  return { screenId: screen?.id ?? '', token, campaignId: campaign?.id ?? '' };
+};
+
 const nextMessage = (ws: WebSocket): Promise<{ cmd: string; data: unknown }> =>
   new Promise((resolve, reject) => {
     ws.once('message', (d: Buffer) => resolve(JSON.parse(d.toString())));
@@ -179,6 +248,15 @@ describe('screen WebSocket — UPDATE_PLAYLIST from dispatch allocations', () =>
     const token = await seedToken(owner);
 
     const ws = connect(`screen_id=${screen?.id}&token=${token}`);
+    await nextMessage(ws); // CONNECTED
+    const playlistMsg = await nextMessage(ws);
+    expect(playlistMsg.cmd).toBe('UPDATE_PLAYLIST');
+    expect((playlistMsg.data as PlaylistData).videos).toHaveLength(0);
+  }, 10_000);
+
+  it('excludes a non-active campaign even with a frozen plan + approved creative + active window', async () => {
+    const { screenId, token } = await seedAllocated({ campaignStatus: 'pending' });
+    const ws = connect(`screen_id=${screenId}&token=${token}`);
     await nextMessage(ws); // CONNECTED
     const playlistMsg = await nextMessage(ws);
     expect(playlistMsg.cmd).toBe('UPDATE_PLAYLIST');

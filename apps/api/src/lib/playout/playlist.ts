@@ -1,4 +1,8 @@
-import { format } from 'date-fns';
+import { formatInTimeZone } from 'date-fns-tz';
+
+// The network is Grand-Tunis; "today" for the playout window is pinned to Africa/Tunis so a campaign
+// window doesn't slip a day at the server-local midnight boundary.
+const PLAYOUT_TZ = 'Africa/Tunis';
 
 // Playlist shape sent to the screen (UPDATE_PLAYLIST.data) — matches CommandProtocol.kt VideoEntry.
 export interface PlaylistVideo {
@@ -22,15 +26,16 @@ export interface PlaylistSource {
   priority?: number;
 }
 
-// A frozen plan feeds a screen today iff its campaign window covers `now` (V1 rule). Date-only
-// ISO strings compare lexically = chronologically; a campaign without both bounds is not active.
+// A frozen plan feeds a screen today iff its campaign window covers `now` (V1 rule), with "today"
+// taken in Africa/Tunis. Date-only ISO strings compare lexically = chronologically; a campaign
+// without both bounds is not active.
 export const isWindowActive = (
   startDate: string | null,
   endDate: string | null,
   now: Date,
 ): boolean => {
   if (!startDate || !endDate) return false;
-  const today = format(now, 'yyyy-MM-dd');
+  const today = formatInTimeZone(now, PLAYOUT_TZ, 'yyyy-MM-dd');
   return startDate <= today && today <= endDate;
 };
 

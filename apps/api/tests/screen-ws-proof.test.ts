@@ -56,7 +56,16 @@ interface Chain {
   campaignId: string;
   creativeId: string;
 }
-const seedChain = async (): Promise<Chain> => {
+// The chain is seeded fully airable by default (ACCEPTE allocation + active campaign + approved
+// creative + open window). Overrides let a test flip ONE gate input to prove the proof-ingest gate
+// is identical to the playout gate (a non-airable campaign records NO proof).
+interface SeedOverrides {
+  campaignStatus?: 'draft' | 'pending' | 'active' | 'rejected';
+  validationStatus?: 'pending' | 'approved' | 'rejected';
+  startDate?: string;
+  endDate?: string;
+}
+const seedChain = async (overrides: SeedOverrides = {}): Promise<Chain> => {
   const owner = await seedUser({ role: 'individual_owner' });
   const [sh] = await db.insert(screenhosts).values({ name: 'Venue', ownerId: owner }).returning();
   const [screen] = await db
@@ -79,7 +88,7 @@ const seedChain = async (): Promise<Chain> => {
       creativeType: 'video',
       storageKey: `creatives/${advertiser}/c`,
       durationSeconds: 30,
-      validationStatus: 'approved',
+      validationStatus: overrides.validationStatus ?? 'approved',
     })
     .returning();
   const [campaign] = await db
@@ -88,9 +97,9 @@ const seedChain = async (): Promise<Chain> => {
       advertiserId: advertiser,
       name: 'Promo',
       campaignType: 'standard',
-      status: 'active',
-      startDate: '2020-01-01',
-      endDate: '2999-12-31',
+      status: overrides.campaignStatus ?? 'active',
+      startDate: overrides.startDate ?? '2020-01-01',
+      endDate: overrides.endDate ?? '2999-12-31',
       creativeId: creative?.id,
     })
     .returning();
@@ -236,5 +245,54 @@ describe('screen WebSocket — proof-of-play ingest', () => {
       .from(proofOfPlay)
       .where(and(eq(proofOfPlay.screenId, chain.screenId)));
     expect(rows).toHaveLength(0);
+  }, 10_000);
+
+  // The proof-ingest gate is IDENTICAL to the playout gate: a campaign the screen was never
+  // authorized to air records NO proof, even though it is dispatch-allocated to the screenhost.
+  const expectNoProof = async (overrides: SeedOverrides): Promise<void> => {
+    const chain = await seedChain(overrides);
+    const ws = await connectAndDrain(chain);
+    ws.send(
+      JSON.stringify({
+        event: 'VIDEO_ENDED',
+        data: { screen_id: chain.screenId, video_id: chain.campaignId, played_duration_ms: 5000 },
+      }),
+    );
+    await sleep(400);
+    const rows = await db
+      .select()
+      .from(proofOfPlay)
+      .where(eq(proofOfPlay.screenId, chain.screenId));
+    expect(rows).toHaveLength(0);
+  };
+
+  it('non-active campaign (allocated, approved, in-window) → no proof', async () => {
+    await expectNoProof({ campaignStatus: 'pending' });
+  }, 10_000);
+
+  it('unapproved creative → no proof', async () => {
+    await expectNoProof({ validationStatus: 'pending' });
+  }, 10_000);
+
+  it('out-of-window campaign → no proof', async () => {
+    await expectNoProof({ startDate: '2020-01-01', endDate: '2020-12-31' });
+  }, 10_000);
+
+  it('an absurd played_duration_ms is clamped to the creative-duration ceiling', async () => {
+    const chain = await seedChain(); // creative is 30s → ceiling 30 × 1000 × 2 = 60_000 ms
+    const ws = await connectAndDrain(chain);
+    ws.send(
+      JSON.stringify({
+        event: 'VIDEO_ENDED',
+        data: {
+          screen_id: chain.screenId,
+          video_id: chain.campaignId,
+          played_duration_ms: 999_999_999,
+        },
+      }),
+    );
+    const rows = await waitProof(chain.screenId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.playedDurationMs).toBe(60_000);
   }, 10_000);
 });
