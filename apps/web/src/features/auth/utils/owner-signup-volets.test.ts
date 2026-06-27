@@ -50,3 +50,24 @@ describe('owner signup volets validation', () => {
     expect(ownerVoletsComplete('advertiser', emptyOwnerVolets())).toBe(true);
   });
 });
+
+// Kais QA 2026-06-24 — these helpers are now a NON-BLOCKING completeness signal: documents are OPTIONAL
+// at signup. An incomplete/empty set is reported as such (drives an informational hint) but no longer
+// blocks submit — the SignUpForm gate was removed (the "submit allows finishing without docs" path is
+// component-level, build-verified). The completeness rule (both CIN faces + RIB) is unchanged.
+describe('owner signup volets — completeness is a non-blocking signal (docs optional)', () => {
+  it('no documents → reported incomplete (informational only; submit is still allowed)', () => {
+    expect(ownerVoletsComplete('individual_owner', emptyOwnerVolets())).toBe(false);
+    expect(missingOwnerVolets('individual_owner', emptyOwnerVolets())).toEqual([
+      'cin_recto',
+      'cin_verso',
+      'bank',
+    ]);
+  });
+
+  it('a partial set (only the CIN recto) → still incomplete, only the attached volet counts as provided', () => {
+    const partial: OwnerVoletFiles = { ...emptyOwnerVolets(), cinRecto: file() };
+    expect(missingOwnerVolets('individual_owner', partial)).toEqual(['cin_verso', 'bank']);
+    expect(ownerVoletsComplete('individual_owner', partial)).toBe(false);
+  });
+});

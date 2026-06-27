@@ -171,10 +171,11 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
   const [rneFiles, setRneFiles] = useState<File[]>([]);
   const [complementaireFiles, setComplementaireFiles] = useState<File[]>([]);
   const [addDocumentLater, setAddDocumentLater] = useState(false);
-  // R7/N4 — owner document volets (individual_owner: CIN recto/verso; fleet_owner: RNE; both: RIB).
-  // Both volets are MANDATORY now — the F5 "add bank later" skip is removed for owners (the C5
-  // backend requires the documents at signup). Sent as multipart by authService.signUp.
+  // R7/N4 (reversed — Kais QA 2026-06-24) — owner document volets (individual_owner: CIN recto/verso;
+  // fleet_owner: RNE; both: RIB). OPTIONAL at signup (provide-later): the "fournir plus tard" toggle
+  // skips them, and a partial set never blocks submit. Sent as multipart by authService.signUp.
   const [ownerVolets, setOwnerVolets] = useState<OwnerVoletFiles>(emptyOwnerVolets());
+  const [addOwnerDocsLater, setAddOwnerDocsLater] = useState(false);
   const [ownerCertificationAccepted, setOwnerCertificationAccepted] = useState(false);
   const [etablissementName, setEtablissementName] = useState('');
   const [etablissementScreens, setEtablissementScreens] = useState<string>('');
@@ -636,11 +637,6 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
       toast.error('Veuillez certifier que vous êtes autorisé(e) à inscrire cet établissement.');
       return;
     }
-    // R7/N4 — owners must provide their volets (mirrors the server; submit is also gated below).
-    if (isOwner && !ownerVoletsComplete(selectedProfileType, ownerVolets)) {
-      toast.error('Veuillez fournir les documents requis (pièce légale + RIB).');
-      return;
-    }
     setLoading(true);
     try {
       const composedContactName = `${firstName} ${lastName}`.trim();
@@ -649,9 +645,10 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
         contact_name: composedContactName,
         profile_type: selectedProfileType,
         fonction: fonction.trim() || undefined,
-        // R7/N4 — owner legal volet: fleet_owner → RNE (sent as `rne`); individual_owner → CIN
-        // recto/verso (sent as cin_recto/cin_verso). Non-owner keeps the existing RNE pick (JSON,
-        // dropped server-side). bank_doc is the owner RIB volet (mandatory; gated above).
+        // R7/N4 (reversed) — owner legal volet: fleet_owner → RNE (sent as `rne`); individual_owner →
+        // CIN recto/verso (sent as cin_recto/cin_verso). Non-owner keeps the existing RNE pick (JSON,
+        // dropped server-side). bank_doc is the owner RIB volet. All optional now — any blank volet is
+        // omitted by the service (|| undefined), so an owner can finalize with no documents.
         registration_doc:
           selectedProfileType === 'fleet_owner'
             ? ownerVolets.rne || undefined
@@ -1771,27 +1768,66 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
       ? renderEtablissementFleet()
       : renderEtablissementIndividual();
 
-  /* ═══════ Step 4 (owner): Coordonnées bancaires ═══════ */
+  /* ═══════ Step 4 (owner): Documents (optionnels — provide-later) ═══════ */
   const renderCoordonneesBancaires = () => (
     <div className="max-w-3xl mx-auto w-full space-y-6">
       <div className="text-center mb-2">
         <div className="w-16 h-16 rounded-full bg-[#e8f8ee] flex items-center justify-center mx-auto mb-3">
           <FileText className="w-8 h-8 text-gray-700" />
         </div>
-        <h2 className="text-xl font-bold text-gray-900">Documents requis</h2>
+        <h2 className="text-xl font-bold text-gray-900">Documents</h2>
         <p className="text-sm text-gray-500">
-          Ajoutez votre pièce légale et votre relevé d&apos;identité bancaire (RIB) pour finaliser
-          votre inscription.
+          Ajoutez votre pièce légale et votre relevé d&apos;identité bancaire (RIB), ou
+          fournissez-les plus tard depuis votre profil.
         </p>
       </div>
 
-      {/* R7/N4 — the two mandatory owner volets (CIN recto/verso OR RNE, + RIB). Replaces the F5
-          "add bank later" skip: documents are now collected + sent at signup. */}
-      <SignupOwnerDocuments
-        profileType={selectedProfileType}
-        files={ownerVolets}
-        onChange={(patch) => setOwnerVolets((v) => ({ ...v, ...patch }))}
-      />
+      {/* R7/N4 reversed (Kais QA 2026-06-24) — owner documents are OPTIONAL at signup again. The
+          "fournir plus tard" toggle restores the pre-C6 skip; checking it clears + hides the volets.
+          When left unchecked, the two-volet structure (CIN recto/verso OR RNE, + RIB) is collected and
+          sent — but a partial/empty set never blocks submit. (bg-neutral-100 = the sibling step's
+          #F5F5F5, as a Tailwind token.) */}
+      <div className="rounded-2xl bg-neutral-100 p-5">
+        <label
+          className="flex items-start cursor-pointer gap-3"
+          aria-label="Je fournirai mes documents plus tard"
+        >
+          <input
+            type="checkbox"
+            checked={addOwnerDocsLater}
+            onChange={(e) => {
+              setAddOwnerDocsLater(e.target.checked);
+              if (e.target.checked) setOwnerVolets(emptyOwnerVolets());
+            }}
+            className="h-5 w-5 text-brand-primary focus:ring-brand-primary border-gray-300 rounded mt-0.5 flex-shrink-0"
+          />
+          <div>
+            <p className="text-sm font-semibold text-gray-900">
+              Je fournirai mes documents plus tard
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              Vous pourrez les ajouter depuis votre profil après inscription. Votre compte sera
+              validé une fois tous les documents fournis.
+            </p>
+          </div>
+        </label>
+      </div>
+
+      {!addOwnerDocsLater && (
+        <>
+          <SignupOwnerDocuments
+            profileType={selectedProfileType}
+            files={ownerVolets}
+            onChange={(patch) => setOwnerVolets((v) => ({ ...v, ...patch }))}
+          />
+          {!ownerVoletsComplete(selectedProfileType, ownerVolets) && (
+            <p className="text-xs text-gray-500">
+              Vous pouvez finaliser votre inscription dès maintenant et compléter les documents
+              manquants plus tard depuis votre profil.
+            </p>
+          )}
+        </>
+      )}
 
       <div className="space-y-4 pt-2">
         {/* CGU trigger lives OUTSIDE the acceptance label: opening the terms must never toggle
@@ -2220,10 +2256,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
               type="button"
               onClick={handleSubmit}
               disabled={
-                loading ||
-                !formData.terms_accepted ||
-                (isOwner && !ownerCertificationAccepted) ||
-                (isOwner && !ownerVoletsComplete(selectedProfileType, ownerVolets))
+                loading || !formData.terms_accepted || (isOwner && !ownerCertificationAccepted)
               }
               className="flex-1 py-3.5 rounded-xl font-semibold text-sm text-brand-deep transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               style={{ background: '#76E6AB' }}
