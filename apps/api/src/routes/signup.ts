@@ -120,20 +120,18 @@ const isVoletField = (name: string): name is VoletField =>
 const isOwnerType = (t: string | undefined): boolean =>
   t === 'individual_owner' || t === 'fleet_owner';
 
-// Owner volet presence + MIME check (size is already capped by the multipart fileSize limit → 413 on
-// parse). Returns the problems (empty = valid). Mirrors profile-documents' guards via the shared set.
-const ownerVoletErrors = (
-  profileType: string,
+// Owner documents are OPTIONAL at signup (provide-later — Kais QA 2026-06-24): presence/completeness
+// is an approval signal via documentPresence, NOT a signup-submit gate. So we never reject a missing
+// or partial volet — only the MIME of an ATTACHED file is validated (size is already capped by the
+// multipart fileSize limit → 413 on parse). Mirrors profile-documents' MIME guard via the shared set.
+// Returns the problems (empty = valid).
+const attachedVoletErrors = (
   files: Partial<Record<VoletField, VoletFile>>,
 ): { field: string; reason: string }[] => {
-  const required: VoletField[] =
-    profileType === 'individual_owner' ? ['cin_recto', 'cin_verso', 'bank'] : ['rne', 'bank'];
   const errs: { field: string; reason: string }[] = [];
-  for (const field of required) {
+  for (const field of VOLET_FIELDS) {
     const file = files[field];
-    if (!file) {
-      errs.push({ field, reason: 'required' });
-    } else if (!ALLOWED_DOCUMENT_MIME.has(file.mimetype)) {
+    if (file && !ALLOWED_DOCUMENT_MIME.has(file.mimetype)) {
       errs.push({ field, reason: `unsupported content type: ${file.mimetype}` });
     }
   }
@@ -269,19 +267,14 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
     // terms_accepted is enforced `true` by the schema (z.literal); the acceptance time is
     // server-stamped below, never taken from the client.
 
-    // R7/N4 — owners MUST submit their document volets, which only the multipart path carries. An
-    // owner on the JSON path is rejected SERVER-SIDE (not client-only): no silent doc-less account.
-    if (isOwnerType(profile_type) && !isMultipart) {
-      return reply.status(400).send({
-        error: 'DOCUMENTS_REQUIRED',
-        message: 'Owners must submit their documents (multipart/form-data) at signup.',
-        fields: [{ field: 'documents', reason: 'owner signup requires the document volets' }],
-      });
-    }
-    // Validate the volets BEFORE creating the account → 400 with NO account created. individual_owner:
-    // CIN recto+verso; fleet_owner: RNE; both: bank (RIB). Non-owners: no document requirement.
-    if (profile_type && isOwnerType(profile_type)) {
-      const voletErrs = ownerVoletErrors(profile_type, voletFiles);
+    // R7/N4 reversed (Kais QA 2026-06-24): owner documents are OPTIONAL at signup (provide-later via
+    // the post-signin /api/profile/documents surface). An owner may finalize with NO documents — on
+    // the JSON path or an empty multipart → 201. We do NOT 400 a missing or partial volet; completeness
+    // (both CIN faces + RIB) is enforced as an approval signal via documentPresence, not a submit gate.
+    // Only the MIME of any ATTACHED file is validated BEFORE create → 400 with NO account (the FE caps
+    // MIME at pick, so this is a defensive guard for a malformed upload, never for absence).
+    if (isMultipart) {
+      const voletErrs = attachedVoletErrors(voletFiles);
       if (voletErrs.length > 0) {
         return reply.status(400).send({
           error: 'INVALID_INPUT',
@@ -434,10 +427,11 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
           }
         }
 
-        // R7/N4 — persist the owner's volets now that the account exists (inside the persisted-id
-        // guard, so a duplicate-email signup never uploads). Degraded + never thrown: a storage/db
-        // failure leaves a volet absent → onboarding incomplete (C1), not a failed signup. The
-        // presence guards are redundant after pre-create validation but satisfy the optional types.
+        // R7/N4 — persist whatever owner volets WERE provided, now that the account exists (inside the
+        // persisted-id guard, so a duplicate-email signup never uploads). Documents are optional at
+        // signup, so the per-file presence guards below are load-bearing: only attached volets persist;
+        // a missing one simply leaves onboarding incomplete (C1). Degraded + never thrown: a storage/db
+        // failure also leaves a volet absent, not a failed signup.
         if (isMultipart && isOwnerType(profile_type)) {
           if (profile_type === 'individual_owner') {
             if (voletFiles.cin_recto)

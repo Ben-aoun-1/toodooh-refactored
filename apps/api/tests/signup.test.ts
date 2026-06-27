@@ -610,18 +610,35 @@ describe('POST /api/signup', () => {
     expect(docs.some((d) => d.category === 'cin')).toBe(false);
   });
 
-  it('owner via JSON (no multipart) → 400 DOCUMENTS_REQUIRED, NO account', async () => {
+  // ── R7/N4 REVERSED (Kais QA 2026-06-24): owner documents are OPTIONAL at signup (provide-later).
+  // An owner may finalize with NO / partial documents → 201; whatever IS provided still persists.
+  it('owner via JSON (no documents) → 201, account created, no document rows (provide-later)', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/signup',
       payload: await fullProfile({ profile_type: 'individual_owner' }),
     });
-    expect(res.statusCode).toBe(400);
-    expect(res.json<{ error: string }>().error).toBe('DOCUMENTS_REQUIRED');
-    expect(await usersByEmail('owner@example.com')).toHaveLength(0);
+    expect(res.statusCode).toBe(201);
+    const [u] = await usersByEmail('owner@example.com');
+    expect(u?.role).toBe('individual_owner');
+    expect(await docsFor(u?.id ?? '')).toHaveLength(0); // optional at signup — none provided
   });
 
-  it('owner missing a volet (bank) → 400, NO account created', async () => {
+  it('owner via multipart with NO volet files (fournir plus tard) → 201, no document rows', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      ...signupMultipart(await fullProfile({ profile_type: 'fleet_owner' }), {
+        omit: ['rne', 'bank'],
+      }),
+    });
+    expect(res.statusCode).toBe(201);
+    const [u] = await usersByEmail('owner@example.com');
+    expect(u?.role).toBe('fleet_owner');
+    expect(await docsFor(u?.id ?? '')).toHaveLength(0);
+  });
+
+  it('owner missing a volet (bank) → 201, the provided volets persist (partial set is allowed)', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/signup',
@@ -629,14 +646,19 @@ describe('POST /api/signup', () => {
         omit: ['bank'],
       }),
     });
-    expect(res.statusCode).toBe(400);
-    expect(res.json<{ fields: { field: string }[] }>().fields.some((f) => f.field === 'bank')).toBe(
-      true,
-    );
-    expect(await usersByEmail('owner@example.com')).toHaveLength(0);
+    expect(res.statusCode).toBe(201);
+    const docs = await docsFor(res.json<{ userId: string }>().userId);
+    // The two CIN faces persist; the omitted bank volet is simply absent (no longer a 400).
+    expect(
+      docs
+        .filter((d) => d.category === 'cin')
+        .map((d) => d.position)
+        .sort(),
+    ).toEqual([1, 2]);
+    expect(docs.some((d) => d.category === 'bank')).toBe(false);
   });
 
-  it('individual_owner with only one CIN face (recto, no verso) → 400, NO account', async () => {
+  it('individual_owner with only one CIN face (recto, no verso) → 201, the recto persists (incomplete, not blocked)', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/signup',
@@ -644,11 +666,11 @@ describe('POST /api/signup', () => {
         omit: ['cin_verso'],
       }),
     });
-    expect(res.statusCode).toBe(400);
-    expect(
-      res.json<{ fields: { field: string }[] }>().fields.some((f) => f.field === 'cin_verso'),
-    ).toBe(true);
-    expect(await usersByEmail('owner@example.com')).toHaveLength(0);
+    expect(res.statusCode).toBe(201);
+    const docs = await docsFor(res.json<{ userId: string }>().userId);
+    // Only the recto (position 1) lands → documentPresence reads CIN as INCOMPLETE (ITEM 4, see
+    // user-documents.test.ts). A partial CIN is persisted, never blocked.
+    expect(docs.filter((d) => d.category === 'cin').map((d) => d.position)).toEqual([1]);
   });
 
   it('advertiser JSON signup (no docs) → still 201, unchanged', async () => {

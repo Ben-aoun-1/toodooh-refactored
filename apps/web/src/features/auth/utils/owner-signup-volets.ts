@@ -1,7 +1,8 @@
-// R7/N4 — the owner signup document volets the wizard collects + sends as multipart (mirrors the C5
-// backend contract). individual_owner: CIN recto + verso (volet 1) + RIB/bank (volet 2). fleet_owner:
-// RNE (volet 1) + RIB/bank (volet 2). Advertisers/agencies submit no documents at signup. The client
-// validation here mirrors the server so submit is blocked until the mandatory volets are present.
+// R7/N4 (reversed by Kais QA 2026-06-24) — the owner signup document volets the wizard collects +
+// sends as multipart. individual_owner: CIN recto + verso (volet 1) + RIB/bank (volet 2). fleet_owner:
+// RNE (volet 1) + RIB/bank (volet 2). Advertisers/agencies submit no documents at signup. Documents
+// are OPTIONAL at signup now (provide-later): these helpers are a COMPLETENESS signal (mirrors the
+// server's documentPresence) used only for a NON-BLOCKING hint — they no longer gate submit.
 export interface OwnerVoletFiles {
   cinRecto: File | null;
   cinVerso: File | null;
@@ -16,8 +17,9 @@ export const emptyOwnerVolets = (): OwnerVoletFiles => ({
   bank: null,
 });
 
-// The volet fields still missing for this profile (empty = ready to submit). The names match the
-// server's multipart parts (cin_recto/cin_verso/rne/bank). Non-owner profiles require no documents.
+// The volet fields not yet provided for this profile (empty = a complete set). The names match the
+// server's multipart parts (cin_recto/cin_verso/rne/bank). Non-owner profiles need no documents.
+// Informational only — a non-empty result no longer blocks signup (docs are optional, provide-later).
 export const missingOwnerVolets = (
   profileType: string | undefined,
   files: OwnerVoletFiles,
