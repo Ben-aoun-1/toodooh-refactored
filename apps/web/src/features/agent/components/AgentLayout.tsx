@@ -1,7 +1,8 @@
-import { LogOut, Menu, Users, X } from 'lucide-react';
+import { Calendar, LayoutDashboard, LogOut, Megaphone, Menu, Users, X } from 'lucide-react';
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
+import { agentAudienceLabels } from '@/features/agent/utils/agent-dashboard';
 import { agentRoleLabel } from '@/features/agent/utils/agent-roles';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { logger } from '@/lib/logger';
@@ -23,7 +24,20 @@ export default function AgentLayout({ children, title, subtitle }: AgentLayoutPr
   const role = useAuthStore((s) => s.role);
   const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
+  const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // R5 — the Figma sidebar. Dashboard is the only real route (/agent); "Mes {noun} affiliés" anchors
+  // to the live affiliated-clients section ON the dashboard; "Mes campagnes" + "Mon calendrier" are
+  // greenfield → visibly DISABLED with an "à venir" pill (no fake routes, no dead links). The noun
+  // swaps Screenhosts↔Screencasters by role.
+  const noun = agentAudienceLabels(role).noun;
+  const dashboardActive = location.pathname === '/agent';
+  const closeSidebar = () => setSidebarOpen(false);
+  const goTo = (to: string) => {
+    closeSidebar();
+    navigate(to);
+  };
 
   const handleLogout = async () => {
     try {
@@ -86,10 +100,51 @@ export default function AgentLayout({ children, title, subtitle }: AgentLayoutPr
             </div>
 
             <nav className="mt-8 px-4 space-y-2 flex-1">
-              <span className="group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl bg-brand-primary text-brand-deep shadow-lg shadow-brand-primary/25">
-                <Users className="mr-3 h-5 w-5" />
-                Clients référés
+              <button
+                type="button"
+                onClick={() => goTo('/agent')}
+                aria-current={dashboardActive ? 'page' : undefined}
+                className={`group flex w-full items-center rounded-xl px-4 py-3 text-sm font-medium transition-colors ${
+                  dashboardActive
+                    ? 'bg-brand-primary text-brand-deep shadow-lg shadow-brand-primary/25'
+                    : 'text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <LayoutDashboard className="mr-3 h-5 w-5" />
+                Dashboard
+              </button>
+
+              {/* Greenfield — clearly disabled, never a fake route. */}
+              <span
+                aria-disabled="true"
+                className="group flex w-full cursor-not-allowed items-center rounded-xl px-4 py-3 text-sm font-medium text-gray-400"
+              >
+                <Megaphone className="mr-3 h-5 w-5" />
+                Mes campagnes
+                <span className="ml-auto rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
+                  à venir
+                </span>
               </span>
+              <span
+                aria-disabled="true"
+                className="group flex w-full cursor-not-allowed items-center rounded-xl px-4 py-3 text-sm font-medium text-gray-400"
+              >
+                <Calendar className="mr-3 h-5 w-5" />
+                Mon calendrier
+                <span className="ml-auto rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
+                  à venir
+                </span>
+              </span>
+
+              {/* Anchors to the live affiliated-clients section on the dashboard. */}
+              <a
+                href="#affilies"
+                onClick={closeSidebar}
+                className="group flex w-full items-center rounded-xl px-4 py-3 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100"
+              >
+                <Users className="mr-3 h-5 w-5" />
+                Mes {noun} affiliés
+              </a>
             </nav>
 
             <div className="p-4 border-t border-gray-200">
