@@ -60,6 +60,16 @@ const EnvSchema = z.object({
   WEDOOH_SYNC_KEY: z.string().min(16).optional(),
   TOODOOH_SYNC_KEY: z.string().min(16).optional(),
   WEDOOH_INGEST_URL: z.url().optional(),
+  // FACTURE (invoice) bank-transfer coordinates printed on the recharge facture, so the advertiser
+  // knows where to wire the MANUAL transfer (L-wallet — no online gateway). OPTIONAL with placeholder
+  // defaults for the SAME eager-parse reason as the WEDOOH_* block above: a required bank var would
+  // fail-fast every entrypoint (server, migrate, every vitest file). The operator provisions the real
+  // values in .env at switch-on; account numbers are NEVER hardcoded in source. Until then the facture
+  // prints the '—' placeholders (the wallet mechanics are pricing/coordinate-independent).
+  FACTURE_BANK_BENEFICIARY: z.string().min(1).default('TOODOOH'),
+  FACTURE_BANK_NAME: z.string().min(1).default('—'),
+  FACTURE_BANK_RIB: z.string().min(1).default('—'),
+  FACTURE_BANK_IBAN: z.string().min(1).default('—'),
 });
 
 export type Env = z.infer<typeof EnvSchema> & {
