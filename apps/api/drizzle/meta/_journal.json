@@ -183,6 +183,13 @@
       "when": 1782590650499,
       "tag": "0025_screenhost_eligibility",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1782592344368,
+      "tag": "0026_campaign_dispatch",
+      "breakpoints": true
     }
   ]
 }

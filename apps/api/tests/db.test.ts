@@ -6,6 +6,8 @@ import * as schema from '../src/db/schema.js';
 import {
   accounts,
   businessSectors,
+  campaignDispatchAllocation,
+  campaignDispatchPlan,
   campaignStatus,
   campaignTargeting,
   campaigns,
@@ -13,6 +15,8 @@ import {
   creativeValidationStatus,
   creatives,
   deviceSessions,
+  dispatchAcceptation,
+  dispatchConfig,
   documentCategory,
   governorates,
   predefinedZones,
@@ -236,6 +240,34 @@ describe('db schema', () => {
     expect(campaignTargeting.categoryId).toBeDefined();
     expect(campaignTargeting.class).toBeDefined();
     expect(campaignTargeting.createdAt).toBeDefined();
+  });
+
+  it('dispatch_config exposes the calibratable thresholds (S_min/G_jour are NOT stored)', () => {
+    expect(dispatchConfig.seuilDiffusable).toBeDefined();
+    expect(dispatchConfig.gMois).toBeDefined();
+    expect(dispatchConfig.joursActifs).toBeDefined();
+    expect(dispatchConfig.rMinEfficace).toBeDefined();
+    expect(dispatchConfig.fMaxSeconds).toBeDefined();
+    const cols = dispatchConfig as unknown as Record<string, unknown>;
+    expect(cols['sMin']).toBeUndefined(); // derived, never stored
+    expect(cols['gJour']).toBeUndefined();
+  });
+
+  it('dispatch_acceptation enum + the frozen-plan tables expose their columns (L-disp A.7)', () => {
+    expect(dispatchAcceptation.enumValues).toEqual(['ACCEPTE', 'REFUSE']);
+    expect(campaignDispatchPlan.campaignId).toBeDefined();
+    expect(campaignDispatchPlan.iCible).toBeDefined();
+    expect(campaignDispatchPlan.seuilDiffusable).toBeDefined();
+    expect(campaignDispatchPlan.sMin).toBeDefined();
+    expect(campaignDispatchPlan.gJour).toBeDefined();
+    expect(campaignDispatchPlan.couvert).toBeDefined();
+    expect(campaignDispatchPlan.isPartial).toBeDefined();
+    expect(campaignDispatchPlan.isTooThin).toBeDefined();
+    expect(campaignDispatchAllocation.iiPotentiel).toBeDefined();
+    expect(campaignDispatchAllocation.rI).toBeDefined();
+    expect(campaignDispatchAllocation.revenuPrevisionnel).toBeDefined();
+    expect(campaignDispatchAllocation.statutAcceptation).toBeDefined();
+    expect(campaignDispatchAllocation.creneaux).toBeDefined();
   });
 });
 

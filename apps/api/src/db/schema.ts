@@ -6,6 +6,7 @@ import {
   date,
   index,
   integer,
+  jsonb,
   numeric,
   pgEnum,
   pgTable,
@@ -744,3 +745,103 @@ export const campaignTargeting = pgTable(
 
 export type CampaignTargeting = typeof campaignTargeting.$inferSelect;
 export type NewCampaignTargeting = typeof campaignTargeting.$inferInsert;
+
+// ── dispatch config (L-disp — the calibratable thresholds, wired once) ───────
+// Singleton row holding the POC-calibratable thresholds (Youssef's spec §2). S_min and G_jour are
+// DERIVED at dispatch time (S_min = seuil_diffusable × CPM ÷ 1000; G_jour = g_mois ÷ jours_actifs)
+// and snapshotted onto each plan — NEVER stored denormalized here (they can't drift). F=300s is a
+// constant per the spec but kept here so it's wired, not hardcoded in the algorithm.
+export const dispatchConfig = pgTable(
+  'dispatch_config',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    // Singleton guard — a unique constant column ⇒ at most one config row.
+    singleton: boolean('singleton').notNull().default(true),
+    seuilDiffusable: integer('seuil_diffusable').notNull(), // min impressions worth airing
+    gMois: numeric('g_mois', { precision: 12, scale: 2 }).notNull(), // monthly SH dignity target (TND)
+    joursActifs: integer('jours_actifs').notNull(), // divisor for G_jour = g_mois / jours_actifs
+    rMinEfficace: integer('r_min_efficace').notNull(), // reps/hr floor (efficient cadence)
+    fMaxSeconds: integer('f_max_seconds').notNull().default(300), // F — hourly broadcast cap (s)
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [uniqueIndex('dispatch_config_singleton_uq').on(table.singleton)],
+);
+
+export type DispatchConfig = typeof dispatchConfig.$inferSelect;
+
+// ── frozen dispatch plan (L-disp A.7 — PlanDiffusion, irrevocable) ───────────
+// One plan per campaign (unique campaign_id). Snapshots the inputs (I_cible/CPM/S/T) + the wired
+// seuils (seuil_diffusable, S_min, G_jour, F, R_min_efficace) at build time, plus the OUTPUTS of
+// SÉLECTION + validation (couvert, N_min, N_max, N retained) and the two clôture flags.
+export const dispatchAcceptation = pgEnum('dispatch_acceptation', ['ACCEPTE', 'REFUSE']);
+
+export const campaignDispatchPlan = pgTable(
+  'campaign_dispatch_plan',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    // Frozen inputs (pricing supplies I_cible/CPM/S/T later; synthetic for now).
+    iCible: integer('i_cible').notNull(),
+    cpm: numeric('cpm', { precision: 10, scale: 3 }).notNull(),
+    sSpotSeconds: integer('s_spot_seconds').notNull(),
+    tTierCoef: numeric('t_tier_coef', { precision: 4, scale: 3 }).notNull(),
+    // Wired-seuils snapshot (A.7) — what this plan was built against.
+    seuilDiffusable: integer('seuil_diffusable').notNull(),
+    sMin: numeric('s_min', { precision: 14, scale: 4 }).notNull(),
+    gJour: numeric('g_jour', { precision: 14, scale: 4 }).notNull(),
+    fMaxSeconds: integer('f_max_seconds').notNull(),
+    rMinEfficace: integer('r_min_efficace').notNull(),
+    // Outputs.
+    couvert: integer('couvert').notNull(),
+    nMin: integer('n_min').notNull(),
+    nMax: integer('n_max').notNull(),
+    nRetenus: integer('n_retenus').notNull(),
+    isPartial: boolean('is_partial').notNull().default(false), // clôture 1 (advertiser alert)
+    isTooThin: boolean('is_too_thin').notNull().default(false), // clôture 2 (renvoi curseur)
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex('campaign_dispatch_plan_campaign_uq').on(table.campaignId)],
+);
+
+export type CampaignDispatchPlan = typeof campaignDispatchPlan.$inferSelect;
+
+// A.7 créneau — one broadcastable (date, hour) with planned reps + potential impressions. Stored as
+// JSON per allocation (the frozen plan is written once + read back whole; no per-créneau querying).
+export interface DispatchCreneau {
+  date: string; // ISO calendar date YYYY-MM-DD
+  hour: number; // 0–23
+  reps: number; // R_i for the hour
+  impressions: number; // potential impressions for the slot (affluence × reps)
+}
+
+export const campaignDispatchAllocation = pgTable(
+  'campaign_dispatch_allocation',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    planId: uuid('plan_id')
+      .notNull()
+      .references(() => campaignDispatchPlan.id, { onDelete: 'cascade' }),
+    screenhostId: uuid('screenhost_id')
+      .notNull()
+      .references(() => screenhosts.id),
+    iiPotentiel: integer('ii_potentiel').notNull(), // a_i — impressions allocated to this SH
+    rI: integer('r_i').notNull(), // reps/hr planned at this SH
+    revenuPrevisionnel: numeric('revenu_previsionnel', { precision: 14, scale: 4 }).notNull(),
+    statutAcceptation: dispatchAcceptation('statut_acceptation').notNull().default('ACCEPTE'),
+    creneaux: jsonb('creneaux').$type<DispatchCreneau[]>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('campaign_dispatch_allocation_plan_sh_uq').on(table.planId, table.screenhostId),
+    index('campaign_dispatch_allocation_plan_id_idx').on(table.planId),
+    index('campaign_dispatch_allocation_screenhost_id_idx').on(table.screenhostId),
+  ],
+);
+
+export type CampaignDispatchAllocation = typeof campaignDispatchAllocation.$inferSelect;
