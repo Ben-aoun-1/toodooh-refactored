@@ -8,6 +8,9 @@ import {
   businessSectors,
   campaignStatus,
   campaigns,
+  creativeType,
+  creativeValidationStatus,
+  creatives,
   deviceSessions,
   documentCategory,
   governorates,
@@ -178,13 +181,38 @@ describe('db schema', () => {
     expect(campaigns.submittedAt).toBeDefined();
     expect(campaigns.createdAt).toBeDefined();
     expect(campaigns.updatedAt).toBeDefined();
+    // Links to ONE creative (L-spot rename of video_id → creative_id).
+    expect(campaigns.creativeId).toBeDefined();
     // Bifurcated approval (C1 Commit 3): the campaign-level validation trio was removed — an admin
-    // validates the video (videos table) and owners approve via campaign_owner_approvals, so a
-    // campaign's activation is derived, not a single campaign-level admin validation.
+    // validates the CREATIVE (creatives table) and owners approve via campaign_owner_approvals, so
+    // a campaign's activation is derived, not a single campaign-level admin validation.
     const cols = campaigns as unknown as Record<string, unknown>;
     expect(cols['validatedBy']).toBeUndefined();
     expect(cols['validatedAt']).toBeUndefined();
     expect(cols['validationNotes']).toBeUndefined();
+    // The #54 column was renamed; the old name must be gone.
+    expect(cols['videoId']).toBeUndefined();
+  });
+
+  it('creative_type + creative_validation_status enums mirror the spec (video|photo; pending→approved→rejected)', () => {
+    expect(creativeType.enumValues).toEqual(['video', 'photo']);
+    expect(creativeValidationStatus.enumValues).toEqual(['pending', 'approved', 'rejected']);
+  });
+
+  it('creatives exposes the media + admin-moderation columns (L-spot, renamed from videos)', () => {
+    expect(creatives.advertiserId).toBeDefined();
+    expect(creatives.creativeType).toBeDefined();
+    expect(creatives.title).toBeDefined();
+    expect(creatives.storageKey).toBeDefined();
+    expect(creatives.durationSeconds).toBeDefined();
+    expect(creatives.validationStatus).toBeDefined();
+    // Admin-validation audit trio lives HERE (the bifurcated content gate).
+    expect(creatives.validatedBy).toBeDefined();
+    expect(creatives.validatedAt).toBeDefined();
+    expect(creatives.validationNotes).toBeDefined();
+    expect(creatives.originalFilename).toBeDefined();
+    expect(creatives.mimeType).toBeDefined();
+    expect(creatives.sizeBytes).toBeDefined();
   });
 });
 

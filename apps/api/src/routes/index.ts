@@ -4,6 +4,7 @@ import { adminAccountsRoutes } from './admin-accounts.js';
 import { adminRoutes } from './admin.js';
 import { agentRoutes } from './agent.js';
 import { campaignsRoutes } from './campaigns.js';
+import { creativesRoutes } from './creatives.js';
 import { deviceAuthRoutes } from './device-auth.js';
 import { emailAvailabilityRoute } from './email-availability.js';
 import { internalRoutes } from './internal.js';
@@ -42,6 +43,9 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   // C1 — advertiser campaign draft lifecycle (greenfield): create/list/get/edit/submit/delete,
   // owner-scoped to the authenticated advertiser. Targeting/video/map/pricing land in later lanes.
   await app.register(campaignsRoutes);
+  // L-spot — advertiser creative library (greenfield): upload (video|photo) + owner-scoped reads.
+  // MinIO storage-first/no-orphan; admin moderation lives in admin-creatives.
+  await app.register(creativesRoutes);
   await app.register(profileRoutes);
   await app.register(profileDocumentsRoutes);
   await app.register(passwordRoutes);
