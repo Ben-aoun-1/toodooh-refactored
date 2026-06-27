@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 
 import { adminAccountsRoutes } from './admin-accounts.js';
 import { adminCreativesRoutes } from './admin-creatives.js';
+import { adminRechargesRoutes } from './admin-recharges.js';
 import { adminRoutes } from './admin.js';
 import { agentRoutes } from './agent.js';
 import { campaignDispatchRoutes } from './campaign-dispatch.js';
@@ -16,6 +17,7 @@ import { passwordRoutes } from './password.js';
 import { predefinedZonesRoutes } from './predefined-zones.js';
 import { profileDocumentsRoutes } from './profile-documents.js';
 import { profileRoutes } from './profile.js';
+import { rechargesRoutes } from './recharges.js';
 import { referenceRoutes } from './reference.js';
 import { screenhostsRoutes } from './screenhosts.js';
 import { screensRoutes } from './screens.js';
@@ -54,6 +56,9 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   await app.register(campaignTargetingRoutes);
   // L-disp — admin/internal dispatch entrypoint: builds + freezes the PlanDiffusion (A.7).
   await app.register(campaignDispatchRoutes);
+  // L-wallet — advertiser wallet surface: POST recharge (manual bank-transfer top-up → pending +
+  // facture reference), GET own recharges, GET /api/wallet/balance (derived from confirmed recharges).
+  await app.register(rechargesRoutes);
   await app.register(profileRoutes);
   await app.register(profileDocumentsRoutes);
   await app.register(passwordRoutes);
@@ -61,6 +66,9 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   // L-spot — admin creative content-moderation (approve/reject + audit trio); the bifurcated
   // content gate. A campaign's content_validation_status is derived from its linked creative.
   await app.register(adminCreativesRoutes);
+  // L-wallet — admin recharge moderation: the manual-payment queue + confirm (credits the balance,
+  // idempotent) / reject (with a reason). The money-confirmation step of the offline top-up flow.
+  await app.register(adminRechargesRoutes);
   // Superadmin-only internal-account creation (staff admins + agents) — slice-2 A.
   await app.register(adminAccountsRoutes);
   // S-T1 — service-authenticated toodooh↔wedooh sync surface (/api/internal/*): B1 locations read,
