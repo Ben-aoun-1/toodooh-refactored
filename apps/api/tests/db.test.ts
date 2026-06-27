@@ -7,6 +7,7 @@ import {
   accounts,
   businessSectors,
   campaignStatus,
+  campaignTargeting,
   campaigns,
   creativeType,
   creativeValidationStatus,
@@ -19,6 +20,7 @@ import {
   screenhosts,
   screens,
   sessions,
+  targetingClass,
   userDocuments,
   userRole,
   users,
@@ -213,6 +215,18 @@ describe('db schema', () => {
     expect(creatives.originalFilename).toBeDefined();
     expect(creatives.mimeType).toBeDefined();
     expect(creatives.sizeBytes).toBeDefined();
+  });
+
+  it('targeting_class enum mirrors the spec (populaire → moyen → premium)', () => {
+    expect(targetingClass.enumValues).toEqual(['populaire', 'moyen', 'premium']);
+  });
+
+  it('campaign_targeting exposes category × class line columns (L-target)', () => {
+    expect(campaignTargeting.campaignId).toBeDefined();
+    // category_id + class are NULLABLE — null = "toutes" (ALL); the null/null line = whole network.
+    expect(campaignTargeting.categoryId).toBeDefined();
+    expect(campaignTargeting.class).toBeDefined();
+    expect(campaignTargeting.createdAt).toBeDefined();
   });
 });
 

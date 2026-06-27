@@ -1,0 +1,173 @@
+import { and, asc, eq, inArray } from 'drizzle-orm';
+import type { FastifyPluginAsync, FastifyReply } from 'fastify';
+import { z } from 'zod';
+
+import { db } from '../db/client.js';
+import { businessSectors, campaignTargeting, campaigns } from '../db/schema.js';
+import { requireAdvertiser } from '../middleware/require-advertiser.js';
+import { requireAuth } from '../middleware/require-auth.js';
+
+// Campaign targeting (L-target) — the screencaster's audience lines, built CATEGORY × CLASS. Owner-
+// scoped to the campaign's advertiser (a foreign/missing campaign is a 404, never a leak); the write
+// is draft-only (409 once submitted), mirroring the campaign CRUD. NULL on either axis = "toutes"
+// (ALL); the NULL/NULL line = target the whole network. Lines are deduped (a repeated category×class
+// is a 409) and categories are validated against the OWNER business sectors (audience='owner').
+// The write is a REPLACE-SET: PUT the full list, it atomically replaces the campaign's lines.
+
+const idParamSchema = z.object({ id: z.uuid() });
+
+const lineSchema = z.object({
+  category_id: z.uuid().nullable(),
+  class: z.enum(['populaire', 'moyen', 'premium']).nullable(),
+});
+const putSchema = z.object({ lines: z.array(lineSchema).max(100) });
+type Line = z.infer<typeof lineSchema>;
+
+const invalidId = {
+  error: 'INVALID_INPUT',
+  message: 'Validation failed',
+  fields: [{ field: 'id', reason: 'must be a uuid' }],
+};
+
+const sendUnauthenticated = (reply: FastifyReply) =>
+  reply.status(401).send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+
+// A line's identity for dedup — category_id|class with a sentinel for NULL (ALL) so two ALL lines
+// collide (matches the DB's NULLS NOT DISTINCT unique).
+const lineKey = (l: Line): string => `${l.category_id ?? '∅'}::${l.class ?? '∅'}`;
+
+// Read the campaign's lines joined to category names, insertion order. Shape is the wire contract for
+// both GET and the PUT echo.
+const readLines = async (campaignId: string) => {
+  const rows = await db
+    .select({
+      category_id: campaignTargeting.categoryId,
+      category_name: businessSectors.name,
+      class: campaignTargeting.class,
+    })
+    .from(campaignTargeting)
+    .leftJoin(businessSectors, eq(campaignTargeting.categoryId, businessSectors.id))
+    .where(eq(campaignTargeting.campaignId, campaignId))
+    .orderBy(asc(campaignTargeting.createdAt), asc(campaignTargeting.id));
+  return rows;
+};
+
+export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
+  const advertiserGuard = { preHandler: [requireAuth, requireAdvertiser] };
+
+  // Owner-scoped campaign lookup (id + status); null when foreign/missing (→ caller sends 404).
+  const findOwnedCampaign = async (campaignId: string, advertiserId: string) => {
+    const [row] = await db
+      .select({ id: campaigns.id, status: campaigns.status })
+      .from(campaigns)
+      .where(and(eq(campaigns.id, campaignId), eq(campaigns.advertiserId, advertiserId)))
+      .limit(1);
+    return row;
+  };
+
+  // GET /api/campaigns/:id/targeting — owner-scoped read (any status).
+  app.get('/api/campaigns/:id/targeting', advertiserGuard, async (request, reply) => {
+    const parsedParams = idParamSchema.safeParse(request.params);
+    if (!parsedParams.success) return reply.status(400).send(invalidId);
+    const userId = request.user?.id;
+    if (!userId) return sendUnauthenticated(reply);
+
+    const campaign = await findOwnedCampaign(parsedParams.data.id, userId);
+    if (!campaign) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such campaign.' });
+    }
+    return reply.status(200).send({ lines: await readLines(campaign.id) });
+  });
+
+  // PUT /api/campaigns/:id/targeting — replace-set the campaign's targeting lines (draft-only).
+  app.put('/api/campaigns/:id/targeting', advertiserGuard, async (request, reply) => {
+    const parsedParams = idParamSchema.safeParse(request.params);
+    if (!parsedParams.success) return reply.status(400).send(invalidId);
+    const parsed = putSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: parsed.error.issues.map((i) => ({ field: i.path.join('.'), reason: i.message })),
+      });
+    }
+    const userId = request.user?.id;
+    if (!userId) return sendUnauthenticated(reply);
+
+    const campaign = await findOwnedCampaign(parsedParams.data.id, userId);
+    if (!campaign) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such campaign.' });
+    }
+    if (campaign.status !== 'draft') {
+      return reply.status(409).send({
+        error: 'CONFLICT',
+        message: 'Only a draft campaign can be retargeted.',
+        statusCode: 409,
+      });
+    }
+
+    const { lines } = parsed.data;
+
+    // Dedup: a category×class line may appear at most once (ALL counts as a value).
+    const seen = new Set<string>();
+    for (const line of lines) {
+      const key = lineKey(line);
+      if (seen.has(key)) {
+        return reply.status(409).send({
+          error: 'CONFLICT',
+          message: 'Cette combinaison est déjà ciblée.',
+          statusCode: 409,
+        });
+      }
+      seen.add(key);
+    }
+
+    // "Tout le réseau" (NULL/NULL) is exhaustive — it cannot be combined with specific lines.
+    const hasAllAll = lines.some((l) => l.category_id === null && l.class === null);
+    if (hasAllAll && lines.length > 1) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: [{ field: 'lines', reason: '“tout le réseau” must be the only line' }],
+      });
+    }
+
+    // Validate categories: every non-null category_id must be a real OWNER business sector.
+    const categoryIds = [
+      ...new Set(lines.map((l) => l.category_id).filter((c): c is string => c !== null)),
+    ];
+    if (categoryIds.length > 0) {
+      const valid = await db
+        .select({ id: businessSectors.id })
+        .from(businessSectors)
+        .where(
+          and(inArray(businessSectors.id, categoryIds), eq(businessSectors.audience, 'owner')),
+        );
+      if (valid.length !== categoryIds.length) {
+        return reply.status(400).send({
+          error: 'INVALID_INPUT',
+          message: 'Validation failed',
+          fields: [{ field: 'category_id', reason: 'must be a valid venue category' }],
+        });
+      }
+    }
+
+    // Replace-set atomically: clear the campaign's lines, insert the new set.
+    await db.transaction(async (tx) => {
+      await tx.delete(campaignTargeting).where(eq(campaignTargeting.campaignId, campaign.id));
+      if (lines.length > 0) {
+        await tx
+          .insert(campaignTargeting)
+          .values(
+            lines.map((l) => ({
+              campaignId: campaign.id,
+              categoryId: l.category_id,
+              class: l.class,
+            })),
+          );
+      }
+    });
+
+    return reply.status(200).send({ lines: await readLines(campaign.id) });
+  });
+};

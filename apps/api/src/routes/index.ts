@@ -4,6 +4,7 @@ import { adminAccountsRoutes } from './admin-accounts.js';
 import { adminCreativesRoutes } from './admin-creatives.js';
 import { adminRoutes } from './admin.js';
 import { agentRoutes } from './agent.js';
+import { campaignTargetingRoutes } from './campaign-targeting.js';
 import { campaignsRoutes } from './campaigns.js';
 import { creativesRoutes } from './creatives.js';
 import { deviceAuthRoutes } from './device-auth.js';
@@ -47,6 +48,9 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   // L-spot — advertiser creative library (greenfield): upload (video|photo) + owner-scoped reads.
   // MinIO storage-first/no-orphan; admin moderation lives in admin-creatives.
   await app.register(creativesRoutes);
+  // L-target — campaign audience targeting (category × class lines, ALL=toutes); owner-scoped to the
+  // campaign's advertiser, replace-set write, draft-only. Dedup + category validation server-side.
+  await app.register(campaignTargetingRoutes);
   await app.register(profileRoutes);
   await app.register(profileDocumentsRoutes);
   await app.register(passwordRoutes);
