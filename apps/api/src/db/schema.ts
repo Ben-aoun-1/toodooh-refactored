@@ -12,6 +12,7 @@ import {
   smallint,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
@@ -670,3 +671,38 @@ export const creatives = pgTable(
 
 export type Creative = typeof creatives.$inferSelect;
 export type NewCreative = typeof creatives.$inferInsert;
+
+// ── campaign_targeting (L-target — category × class audience lines) ──────────
+// The screencaster builds targeting LINE BY LINE (WS-screencaster spec): each line = a venue
+// CATEGORY × a CLASS. category_id references the OWNER business sectors (audience='owner') — the
+// venue types a screen sits in; class is the venue tier. ALL ("toutes") is represented as NULL on
+// either axis: category_id NULL = all categories, class NULL = all classes, and the NULL/NULL line
+// = "tout le réseau" (target everything). The UNIQUE index uses NULLS NOT DISTINCT (PG15+) so NULL
+// counts as a value — a line can appear at most once (dedup). Deleting a campaign cascades its lines.
+export const targetingClass = pgEnum('targeting_class', ['populaire', 'moyen', 'premium']);
+
+export const campaignTargeting = pgTable(
+  'campaign_targeting',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    // NULL = "toutes les catégories" (ALL). Otherwise an owner business sector (validated in the route).
+    categoryId: uuid('category_id').references(() => businessSectors.id),
+    // NULL = "toutes les classes" (ALL).
+    class: targetingClass('class'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    // Dedup: one line per (campaign, category, class). NULLS NOT DISTINCT → NULL (ALL) is a value,
+    // so e.g. two "Restaurant · toutes classes" lines collide. Backs the server-side 409 dedup check.
+    unique('campaign_targeting_line_uq')
+      .on(table.campaignId, table.categoryId, table.class)
+      .nullsNotDistinct(),
+    index('campaign_targeting_campaign_id_idx').on(table.campaignId),
+  ],
+);
+
+export type CampaignTargeting = typeof campaignTargeting.$inferSelect;
+export type NewCampaignTargeting = typeof campaignTargeting.$inferInsert;
