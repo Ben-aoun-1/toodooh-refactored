@@ -312,6 +312,10 @@ export const screenhostExportStatus = pgEnum('screenhost_export_status', [
 //     env, provisioned later) — stored as text, no crypto wired this slice.
 //   - export_status mirrors the users.status enum convention; the export trigger is owner approval.
 // created_by is dropped — the approver is audited on users.validated_by, not here.
+// Venue tier — REUSED by both a campaign's targeting line (campaign_targeting.class) and a
+// screenhost's own class (L-inv eligibility), so a targeting line's class matches a venue's class.
+export const targetingClass = pgEnum('targeting_class', ['populaire', 'moyen', 'premium']);
+
 export const screenhosts = pgTable(
   'screenhosts',
   {
@@ -335,6 +339,25 @@ export const screenhosts = pgTable(
     wifiPasswordEncrypted: text('wifi_password_encrypted'),
     exportStatus: screenhostExportStatus('export_status').notNull().default('pending'),
     exportedAt: timestamp('exported_at', { withTimezone: true }),
+    // ── L-inv eligibility (per-venue dispatch inputs for L-disp) ─────────────
+    // Per-venue category for matching L-target's category lines. A fleet owner has mixed venues, so
+    // this is the venue's OWN sector (not the owner's). FK → business_sectors (owner-audience,
+    // validated in the admin route); nullable until an admin sets it.
+    businessSectorId: uuid('business_sector_id').references(() => businessSectors.id, {
+      onDelete: 'set null',
+    }),
+    // Venue tier — reuses targeting_class so a targeting line's class matches the venue's class.
+    class: targetingClass('class'),
+    // Broadcast operating hours — V1 = one daily window [opening_hour, closing_hour); nullable until
+    // set. Per-weekday hours + overnight (closing ≤ opening) semantics are deferred to L-disp.
+    openingHour: integer('opening_hour'),
+    closingHour: integer('closing_hour'),
+    // Broadcast capacity (concurrent spot slots) the dispatcher allocates against; nullable until set.
+    broadcastCapacity: integer('broadcast_capacity'),
+    // SPS — Screenhost Priority Score (qualité/fiabilité), 0–100. NEUTRAL default 50 for every row;
+    // the real computation (TxActivité/TxRespect from proof-of-play) is DEFERRED to L-playout, so in
+    // V1 all rows tie on SPS and L-disp falls to the ancienneté tiebreak (correct for V1).
+    sps: numeric('sps', { precision: 5, scale: 2 }).notNull().default('50'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
@@ -346,12 +369,27 @@ export const screenhosts = pgTable(
     index('screenhosts_is_active_idx').on(table.isActive),
     index('screenhosts_governorate_id_idx').on(table.governorateId),
     index('screenhosts_export_status_idx').on(table.exportStatus),
+    // L-disp filters the eligible pool by venue category — index it.
+    index('screenhosts_business_sector_id_idx').on(table.businessSectorId),
     check('screenhosts_latitude_range', sql`${table.latitude} >= -90 AND ${table.latitude} <= 90`),
     check(
       'screenhosts_longitude_range',
       sql`${table.longitude} >= -180 AND ${table.longitude} <= 180`,
     ),
     check('screenhosts_screen_count_nonneg', sql`${table.screenCount} >= 0`),
+    check(
+      'screenhosts_opening_hour_range',
+      sql`${table.openingHour} IS NULL OR (${table.openingHour} >= 0 AND ${table.openingHour} <= 23)`,
+    ),
+    check(
+      'screenhosts_closing_hour_range',
+      sql`${table.closingHour} IS NULL OR (${table.closingHour} >= 0 AND ${table.closingHour} <= 23)`,
+    ),
+    check(
+      'screenhosts_broadcast_capacity_pos',
+      sql`${table.broadcastCapacity} IS NULL OR ${table.broadcastCapacity} > 0`,
+    ),
+    check('screenhosts_sps_range', sql`${table.sps} >= 0 AND ${table.sps} <= 100`),
   ],
 );
 
@@ -679,7 +717,7 @@ export type NewCreative = typeof creatives.$inferInsert;
 // either axis: category_id NULL = all categories, class NULL = all classes, and the NULL/NULL line
 // = "tout le réseau" (target everything). The UNIQUE index uses NULLS NOT DISTINCT (PG15+) so NULL
 // counts as a value — a line can appear at most once (dedup). Deleting a campaign cascades its lines.
-export const targetingClass = pgEnum('targeting_class', ['populaire', 'moyen', 'premium']);
+// (the targeting_class enum is declared above screenhosts — it is shared by the venue's class column.)
 
 export const campaignTargeting = pgTable(
   'campaign_targeting',
