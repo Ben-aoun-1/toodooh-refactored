@@ -845,3 +845,53 @@ export const campaignDispatchAllocation = pgTable(
 );
 
 export type CampaignDispatchAllocation = typeof campaignDispatchAllocation.$inferSelect;
+
+// ── recharges + wallet (L-wallet — manual/offline top-up) ───────────────────
+// A screencaster (the `advertiser` role) tops up their wallet by BANK TRANSFER — there is NO online
+// gateway (operator ruling 2026-06-27, "fake money"/manual). The flow: POST /api/recharges creates a
+// PENDING recharge + a human invoice `reference`, and a FACTURE (invoice PDF) becomes downloadable;
+// the advertiser wires the amount; an ADMIN confirms receipt (→ 'confirmed', crediting the balance)
+// or rejects it (→ 'rejected', with a reason). status mirrors the lowercase *_status enum convention.
+//
+// The wallet BALANCE is DERIVED, not stored — it is SUM(amount_tnd) over the caller's 'confirmed'
+// recharges. There is deliberately NO wallet_balance row: the recharges ledger is the single source
+// of truth, so the idempotent admin re-confirm can never double-credit (re-confirming an already-
+// confirmed row is a no-op on the SUM). DEBITS (campaign spend) need pricing and are DEFERRED — the
+// balance seam is credited(confirmed) − debited(0 today); a future debit ledger subtracts its own
+// SUM at the same point (lib/recharges.ts walletBalance). confirmed_by/at audit the confirming admin.
+export const rechargeStatus = pgEnum('recharge_status', ['pending', 'confirmed', 'rejected']);
+
+export const recharges = pgTable(
+  'recharges',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    // The topping-up advertiser (screencaster) — creator and owner-scope key for every read/write.
+    advertiserId: uuid('advertiser_id')
+      .notNull()
+      .references(() => users.id),
+    // Amount in Tunisian dinars; money-adjacent → numeric (exact), never float. The route validates
+    // > 0 with at most 2 decimals; the CHECK is DB-level defense-in-depth. SUM(...) stays exact.
+    amountTnd: numeric('amount_tnd', { precision: 12, scale: 2 }).notNull(),
+    status: rechargeStatus('status').notNull().default('pending'),
+    // Human invoice reference printed on the facture (derived from the id at creation, FCT-XXXXXXXX).
+    // UNIQUE — it is the advertiser-facing handle the operator reconciles a bank transfer against.
+    reference: text('reference').notNull().unique(),
+    // Admin confirm/reject audit. confirmed_by/at are stamped on confirm; reject_reason on reject.
+    confirmedBy: uuid('confirmed_by').references(() => users.id),
+    confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
+    rejectReason: text('reject_reason'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index('recharges_advertiser_id_idx').on(table.advertiserId),
+    index('recharges_status_idx').on(table.status),
+    check('recharges_amount_positive', sql`${table.amountTnd} > 0`),
+  ],
+);
+
+export type Recharge = typeof recharges.$inferSelect;
+export type NewRecharge = typeof recharges.$inferInsert;
