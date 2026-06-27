@@ -26,9 +26,13 @@ const createSchema = z.object({
   description: z.string().max(2000).nullable().optional(),
 });
 
-// Edit accepts any subset of the create fields; an empty body is a 400 (mirrors profile/screenhosts).
+// Edit accepts any subset of the create fields plus creative_id (link/unlink the campaign's creative
+// — PATCH-only, NOT a create field); an empty body is a 400 (mirrors profile/screenhosts). A non-null
+// creative_id must reference a creative owned by the same advertiser (validated in the handler); an
+// explicit null unlinks (gate back to null).
 const updateSchema = createSchema
   .partial()
+  .extend({ creative_id: z.uuid().nullable().optional() })
   .refine((b) => Object.keys(b).length > 0, { message: 'At least one field is required' });
 type UpdateInput = z.infer<typeof updateSchema>;
 
@@ -102,6 +106,8 @@ const buildUpdatePatch = (data: UpdateInput): Partial<typeof campaigns.$inferIns
   if (data.start_date !== undefined) patch.startDate = data.start_date;
   if (data.end_date !== undefined) patch.endDate = data.end_date;
   if (data.description !== undefined) patch.description = data.description;
+  // null clears the link (gate back to null); a uuid links (existence/ownership checked in the handler).
+  if (data.creative_id !== undefined) patch.creativeId = data.creative_id;
   return patch;
 };
 
@@ -217,6 +223,18 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         message: 'Only a draft campaign can be edited.',
         statusCode: 409,
       });
+    }
+    // Linking a creative: it must EXIST and belong to the SAME advertiser — owner-scoped 404 (a
+    // foreign or nonexistent creative is indistinguishable from missing). null unlinks (no lookup).
+    if (parsed.data.creative_id != null) {
+      const [creative] = await db
+        .select({ id: creatives.id })
+        .from(creatives)
+        .where(and(eq(creatives.id, parsed.data.creative_id), eq(creatives.advertiserId, userId)))
+        .limit(1);
+      if (!creative) {
+        return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such creative.' });
+      }
     }
     const [updated] = await db
       .update(campaigns)
