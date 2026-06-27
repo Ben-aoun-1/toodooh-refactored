@@ -23,4 +23,7 @@ export const screenhostKeys = {
 
   /** The owner's screenhosts WiFi list (GET /api/screenhosts/mine). */
   screenhostsMine: (userId: string) => [...screenhostKeys.all, 'screenhostsMine', userId] as const,
+
+  /** A screenhost's weekday×hour audience grid (L-aff-view — GET /:id/affluence). */
+  affluence: (screenhostId: string) => [...screenhostKeys.all, 'affluence', screenhostId] as const,
 };
