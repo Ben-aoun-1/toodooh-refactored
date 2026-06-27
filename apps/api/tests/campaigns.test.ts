@@ -70,6 +70,24 @@ const readCampaign = async (id: string): Promise<typeof campaigns.$inferSelect |
   return c;
 };
 
+const seedCreative = async (
+  advertiserId: string,
+  status: 'pending' | 'approved' | 'rejected' = 'pending',
+): Promise<string> => {
+  seq += 1;
+  const [c] = await db
+    .insert(creatives)
+    .values({
+      advertiserId,
+      creativeType: 'video',
+      storageKey: `creatives/${advertiserId}/seed${seq}`,
+      durationSeconds: 20,
+      validationStatus: status,
+    })
+    .returning();
+  return c?.id ?? '';
+};
+
 describe('campaigns draft lifecycle (advertiser, real Postgres)', () => {
   let app: ReturnType<typeof buildApp>;
 
@@ -371,6 +389,83 @@ describe('campaigns draft lifecycle (advertiser, real Postgres)', () => {
     expect((res.json() as { content_validation_status: string }).content_validation_status).toBe(
       'approved',
     );
+  });
+
+  // ── PATCH creative_id (link / unlink the creative) ───────────────────────────
+  it('links an own creative via PATCH (200); GET then derives its content_validation_status', async () => {
+    const me = await seedUser();
+    const campaignId = await seedCampaign(me);
+    const creativeId = await seedCreative(me, 'approved');
+    mockSession(me);
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/campaigns/${campaignId}`,
+      payload: { creative_id: creativeId },
+    });
+    expect(res.statusCode).toBe(200);
+    const get = await app.inject({ method: 'GET', url: `/api/campaigns/${campaignId}` });
+    expect((get.json() as { content_validation_status: string }).content_validation_status).toBe(
+      'approved',
+    );
+  });
+
+  it('returns 404 linking another advertiser’s creative (owner-scope)', async () => {
+    const me = await seedUser();
+    const other = await seedUser();
+    const campaignId = await seedCampaign(me);
+    const foreign = await seedCreative(other, 'approved');
+    mockSession(me);
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/campaigns/${campaignId}`,
+      payload: { creative_id: foreign },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('returns 404 linking a nonexistent creative', async () => {
+    const me = await seedUser();
+    const campaignId = await seedCampaign(me);
+    mockSession(me);
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/campaigns/${campaignId}`,
+      payload: { creative_id: '00000000-0000-0000-0000-000000000000' },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('returns 409 linking a creative on a non-draft campaign', async () => {
+    const me = await seedUser();
+    const campaignId = await seedCampaign(me, { status: 'pending' });
+    const creativeId = await seedCreative(me);
+    mockSession(me);
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/campaigns/${campaignId}`,
+      payload: { creative_id: creativeId },
+    });
+    expect(res.statusCode).toBe(409);
+  });
+
+  it('unlinks with creative_id=null (200) → content gate back to null', async () => {
+    const me = await seedUser();
+    const creativeId = await seedCreative(me, 'approved');
+    const [campaign] = await db
+      .insert(campaigns)
+      .values({ advertiserId: me, name: 'Linked', campaignType: 'standard', creativeId })
+      .returning();
+    mockSession(me);
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/campaigns/${campaign?.id}`,
+      payload: { creative_id: null },
+    });
+    expect(res.statusCode).toBe(200);
+    const get = await app.inject({ method: 'GET', url: `/api/campaigns/${campaign?.id}` });
+    expect(
+      (get.json() as { content_validation_status: string | null }).content_validation_status,
+    ).toBeNull();
   });
 
   // ── apiRoutes wiring ─────────────────────────────────────────────────────────
