@@ -1,0 +1,202 @@
+import { eq } from 'drizzle-orm';
+import Fastify from 'fastify';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { auth } from '../src/auth/auth.js';
+import { db, sql } from '../src/db/client.js';
+import { type Creative, type NewUser, creatives, users } from '../src/db/schema.js';
+import { adminCreativesRoutes } from '../src/routes/admin-creatives.js';
+
+import { resetAuthTables } from './helpers/db-test-setup.js';
+
+// Integration suite — real Postgres. getSession is mocked to drive the admin identity. The presign
+// URL route signs OFFLINE (no MinIO object required). Moderation flips validation_status + stamps
+// the audit trio; mirrors the admin account/document review (admin.ts).
+type GetSessionResult = Awaited<ReturnType<typeof auth.api.getSession>>;
+
+const buildApp = () => Fastify({ logger: false });
+
+const mockSession = (userId: string, role = 'admin', status = 'approved'): void => {
+  vi.spyOn(auth.api, 'getSession').mockResolvedValue({
+    session: {},
+    user: { id: userId, role, status },
+  } as unknown as GetSessionResult);
+};
+
+let seq = 0;
+const seedUser = async (values: Partial<NewUser> = {}): Promise<string> => {
+  seq += 1;
+  const [u] = await db
+    .insert(users)
+    .values({
+      email: `adcr${seq}@example.com`,
+      contactName: `User ${seq}`,
+      role: 'advertiser',
+      status: 'approved',
+      ...values,
+    })
+    .returning();
+  return u?.id ?? '';
+};
+
+const seedCreative = async (
+  advertiserId: string,
+  opts: { type?: 'video' | 'photo'; status?: 'pending' | 'approved' | 'rejected' } = {},
+): Promise<Creative> => {
+  seq += 1;
+  const [c] = await db
+    .insert(creatives)
+    .values({
+      advertiserId,
+      creativeType: opts.type ?? 'video',
+      storageKey: `creatives/${advertiserId}/seed${seq}`,
+      durationSeconds: 20,
+      validationStatus: opts.status ?? 'pending',
+    })
+    .returning();
+  if (!c) throw new Error('seedCreative failed');
+  return c;
+};
+
+describe('admin creative moderation (real Postgres)', () => {
+  let app: ReturnType<typeof buildApp>;
+
+  beforeEach(async () => {
+    await resetAuthTables();
+    app = buildApp();
+    await app.register(adminCreativesRoutes);
+    await app.ready();
+  });
+
+  afterEach(async () => {
+    await app.close();
+    vi.restoreAllMocks();
+  });
+
+  afterAll(async () => {
+    await sql.end();
+  });
+
+  it('forbids a non-admin (advertiser) from the moderation queue (403)', async () => {
+    const advertiser = await seedUser();
+    mockSession(advertiser, 'advertiser');
+    const res = await app.inject({ method: 'GET', url: '/api/admin/creatives' });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('lists the moderation queue and filters by status', async () => {
+    const adv = await seedUser();
+    await seedCreative(adv, { status: 'pending' });
+    await seedCreative(adv, { status: 'pending' });
+    await seedCreative(adv, { status: 'approved' });
+    const admin = await seedUser({ role: 'admin' });
+    mockSession(admin);
+
+    const all = await app.inject({ method: 'GET', url: '/api/admin/creatives' });
+    expect(all.statusCode).toBe(200);
+    expect((all.json() as unknown[]).length).toBe(3);
+
+    const pending = await app.inject({ method: 'GET', url: '/api/admin/creatives?status=pending' });
+    expect((pending.json() as unknown[]).length).toBe(2);
+  });
+
+  it('approves a creative → approved + stamps the audit trio (200)', async () => {
+    const adv = await seedUser();
+    const creative = await seedCreative(adv);
+    const admin = await seedUser({ role: 'admin' });
+    mockSession(admin);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/admin/creatives/${creative.id}/approve`,
+      payload: { notes: 'looks good' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as { validation_status: string }).validation_status).toBe('approved');
+
+    const [row] = await db.select().from(creatives).where(eq(creatives.id, creative.id)).limit(1);
+    expect(row?.validationStatus).toBe('approved');
+    expect(row?.validatedBy).toBe(admin);
+    expect(row?.validatedAt).not.toBeNull();
+    expect(row?.validationNotes).toBe('looks good');
+  });
+
+  it('approves without notes (notes optional) (200)', async () => {
+    const adv = await seedUser();
+    const creative = await seedCreative(adv);
+    const admin = await seedUser({ role: 'admin' });
+    mockSession(admin);
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/admin/creatives/${creative.id}/approve`,
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('rejects WITHOUT a reason → 400 (notes required)', async () => {
+    const adv = await seedUser();
+    const creative = await seedCreative(adv);
+    const admin = await seedUser({ role: 'admin' });
+    mockSession(admin);
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/admin/creatives/${creative.id}/reject`,
+      payload: {},
+    });
+    expect(res.statusCode).toBe(400);
+    const [row] = await db.select().from(creatives).where(eq(creatives.id, creative.id)).limit(1);
+    expect(row?.validationStatus).toBe('pending'); // unchanged
+  });
+
+  it('rejects WITH a reason → rejected + stores the reason (200)', async () => {
+    const adv = await seedUser();
+    const creative = await seedCreative(adv);
+    const admin = await seedUser({ role: 'admin' });
+    mockSession(admin);
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/admin/creatives/${creative.id}/reject`,
+      payload: { notes: 'contains a competitor logo' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as { validation_status: string }).validation_status).toBe('rejected');
+    const [row] = await db.select().from(creatives).where(eq(creatives.id, creative.id)).limit(1);
+    expect(row?.validationStatus).toBe('rejected');
+    expect(row?.validationNotes).toBe('contains a competitor logo');
+    expect(row?.validatedBy).toBe(admin);
+  });
+
+  it('approving/rejecting an unknown id → 404', async () => {
+    const admin = await seedUser({ role: 'admin' });
+    mockSession(admin);
+    const missing = '00000000-0000-0000-0000-000000000000';
+    expect(
+      (await app.inject({ method: 'POST', url: `/api/admin/creatives/${missing}/approve` }))
+        .statusCode,
+    ).toBe(404);
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: `/api/admin/creatives/${missing}/reject`,
+          payload: { notes: 'x' },
+        })
+      ).statusCode,
+    ).toBe(404);
+  });
+
+  it('presigns a creative for review (200) and 404s an unknown id', async () => {
+    const adv = await seedUser();
+    const creative = await seedCreative(adv);
+    const admin = await seedUser({ role: 'admin' });
+    mockSession(admin);
+    const url = await app.inject({ method: 'GET', url: `/api/admin/creatives/${creative.id}/url` });
+    expect(url.statusCode).toBe(200);
+    expect((url.json() as { url: string }).url).toContain('http');
+    const missing = await app.inject({
+      method: 'GET',
+      url: '/api/admin/creatives/00000000-0000-0000-0000-000000000000/url',
+    });
+    expect(missing.statusCode).toBe(404);
+  });
+});

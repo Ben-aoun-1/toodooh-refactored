@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 
 import { adminAccountsRoutes } from './admin-accounts.js';
+import { adminCreativesRoutes } from './admin-creatives.js';
 import { adminRoutes } from './admin.js';
 import { agentRoutes } from './agent.js';
 import { campaignsRoutes } from './campaigns.js';
@@ -50,6 +51,9 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   await app.register(profileDocumentsRoutes);
   await app.register(passwordRoutes);
   await app.register(adminRoutes);
+  // L-spot — admin creative content-moderation (approve/reject + audit trio); the bifurcated
+  // content gate. A campaign's content_validation_status is derived from its linked creative.
+  await app.register(adminCreativesRoutes);
   // Superadmin-only internal-account creation (staff admins + agents) — slice-2 A.
   await app.register(adminAccountsRoutes);
   // S-T1 — service-authenticated toodooh↔wedooh sync surface (/api/internal/*): B1 locations read,
