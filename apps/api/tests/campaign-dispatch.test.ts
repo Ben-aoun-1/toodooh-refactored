@@ -7,6 +7,7 @@ import { db, sql } from '../src/db/client.js';
 import {
   type NewUser,
   businessSectors,
+  campaignDispatchPlan,
   campaignTargeting,
   campaigns,
   screenhostAffluence,
@@ -179,6 +180,85 @@ describe('campaign dispatch entrypoint (L-disp, real Postgres)', () => {
     const body = res.json() as PlanResponse;
     expect(body.plan.is_partial).toBe(true);
     expect(body.plan.couvert).toBeLessThan(200000);
+  });
+
+  it('too-thin → 422 NOT_DELIVERABLE, not frozen, re-dispatchable (never 409-locks)', async () => {
+    const admin = await seedUser({ role: 'admin' });
+    const advertiser = await seedUser({ role: 'advertiser' });
+    const owner = await seedUser({ role: 'individual_owner' });
+    const cat = await ownerSectorId();
+    const campaignId = await seedCampaign(advertiser);
+    await seedTargeting(campaignId, cat, 'premium');
+    await seedEligibleScreenhost(owner, cat, 'premium', 1); // capacité = ⌊1·20·30⌋ = 600 < seuil 1000
+    mockSession(admin);
+
+    // N_min ⌈1500/600⌉=3 > N_max ⌊1500/1000⌋=1 → too thin → clôture alert, NOT frozen.
+    const res = await dispatch(campaignId, { i_cible: 1500, cpm: 10, s: 10, t: 0.8 });
+    expect(res.statusCode).toBe(422);
+    expect((res.json() as { reason: string }).reason).toBe('too_thin');
+
+    // Nothing was persisted...
+    const plans = await db
+      .select({ id: campaignDispatchPlan.id })
+      .from(campaignDispatchPlan)
+      .where(eq(campaignDispatchPlan.campaignId, campaignId));
+    expect(plans).toHaveLength(0);
+
+    // ...so a re-dispatch is the SAME 422 (renvoi curseur), never a 409 irrevocable lock.
+    expect((await dispatch(campaignId, { i_cible: 1500, cpm: 10, s: 10, t: 0.8 })).statusCode).toBe(
+      422,
+    );
+  });
+
+  it('non-uniform affluence does not crash persistence (integer couvert/ii_potentiel)', async () => {
+    const admin = await seedUser({ role: 'admin' });
+    const advertiser = await seedUser({ role: 'advertiser' });
+    const owner = await seedUser({ role: 'individual_owner' });
+    const cat = await ownerSectorId();
+    const campaignId = await seedCampaign(advertiser);
+    await seedTargeting(campaignId, cat, 'premium');
+    // 20 broadcast slots; total 2001 → avg 100.05 → capacité = ⌊100.05·20·30⌋ = 60030. The raw FP
+    // product is 60030.0000…7, which would crash an `integer` column if persisted unrounded.
+    const [sh] = await db
+      .insert(screenhosts)
+      .values({
+        name: 'NonUniform',
+        ownerId: owner,
+        businessSectorId: cat,
+        class: 'premium' as never,
+        openingHour: 8,
+        closingHour: 18,
+        broadcastCapacity: 4,
+      })
+      .returning();
+    const rows: {
+      screenhostId: string;
+      dayOfWeek: number;
+      hour: number;
+      estimatedImpressions: number;
+    }[] = [];
+    let bumped = false;
+    for (const dow of [1, 2])
+      for (let h = 8; h < 18; h += 1) {
+        rows.push({
+          screenhostId: sh?.id ?? '',
+          dayOfWeek: dow,
+          hour: h,
+          estimatedImpressions: bumped ? 100 : 101, // one slot 101, the rest 100 → total 2001
+        });
+        bumped = true;
+      }
+    await db.insert(screenhostAffluence).values(rows);
+    mockSession(admin);
+
+    // i_cible 100000 > capacité 60030 → the SH's full residual is allocated (the fractional path).
+    const res = await dispatch(campaignId, { i_cible: 100000, cpm: 10, s: 10, t: 0.8 });
+    expect(res.statusCode).toBe(201);
+    const body = res.json() as PlanResponse;
+    expect(Number.isInteger(body.plan.couvert)).toBe(true);
+    expect(body.plan.couvert).toBe(60030);
+    expect(body.plan.is_partial).toBe(true);
+    expect(Number.isInteger(body.allocations[0]?.ii_potentiel ?? -1)).toBe(true);
   });
 
   it('400 when the campaign has no targeting', async () => {

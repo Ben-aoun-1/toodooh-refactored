@@ -48,9 +48,15 @@ const poolEntry = (
 const base = { iCible: 20000, cpm: 10, s: 10, t: 0.8, ...CFG, windowDays: WINDOW };
 
 describe('computeBounds (A.4)', () => {
-  it('N_min = ⌈I_cible/max capacité_utile⌉, N_max = ⌊Budget_SH/S_min⌋', () => {
-    expect(computeBounds(20000, 10, 72000, 10)).toEqual({ nMin: 1, nMax: 20 });
-    expect(computeBounds(1500, 10, 600, 10)).toEqual({ nMin: 3, nMax: 1 });
+  it('N_min = ⌈I_cible/max capacité_utile⌉, N_max = ⌊I_cible/seuil_diffusable⌋ (CPM cancels)', () => {
+    expect(computeBounds(20000, 72000, 1000)).toEqual({ nMin: 1, nMax: 20 });
+    expect(computeBounds(1500, 600, 1000)).toEqual({ nMin: 3, nMax: 1 });
+  });
+
+  it('N_max is the exact integer floor (no FP off-by-one) and 0 when seuil ≤ 0', () => {
+    expect(computeBounds(3000, 999999, 1000).nMax).toBe(3); // ⌊3000/1000⌋ — exact, CPM-free
+    expect(computeBounds(2500, 1, 1000).nMax).toBe(2); // ⌊2500/1000⌋
+    expect(computeBounds(1000, 1, 0).nMax).toBe(0); // guarded against seuil ≤ 0
   });
 });
 

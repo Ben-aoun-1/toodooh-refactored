@@ -13,8 +13,10 @@ import { runDispatch } from '../lib/dispatch/dispatch-service.js';
 import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
 
 // Dispatch entrypoint (L-disp). Admin/internal trigger — synthetic I_cible/CPM/S/T inputs for now
-// (pricing supplies them in a later lane). Builds + FREEZES the PlanDiffusion (A.7) or returns the
-// clôture alert (partial / too-thin). The real on-activation trigger wires later.
+// (pricing supplies them in a later lane). Builds + FREEZES the PlanDiffusion (A.7) when deliverable,
+// or returns a clôture alert (too-thin / no-eligible → 422, NOT frozen, re-dispatchable).
+// TODO (activation): this synthetic admin trigger dispatches regardless of campaign state. The real
+// on-activation trigger must gate on approved-creative + confirmed-payment + draft→active first.
 
 const idParamSchema = z.object({ id: z.uuid() });
 const bodySchema = z.object({
@@ -108,6 +110,25 @@ export const campaignDispatchRoutes: FastifyPluginAsync = async (app) => {
         error: 'CONFLICT',
         message: 'Campaign already has a frozen dispatch plan.',
         statusCode: 409,
+      });
+    }
+    // Clôture alerts — NOT frozen, so the campaign stays re-dispatchable (renvoi curseur):
+    if (result.status === 'TOO_THIN') {
+      return reply.status(422).send({
+        error: 'NOT_DELIVERABLE',
+        reason: 'too_thin',
+        message:
+          'Covering I_cible would exceed materiality (N_min > N_max). Lower the cursor or broaden targeting, then re-dispatch.',
+        n_min: result.nMin,
+        n_max: result.nMax,
+      });
+    }
+    if (result.status === 'NO_ELIGIBLE') {
+      return reply.status(422).send({
+        error: 'NOT_DELIVERABLE',
+        reason: 'no_eligible',
+        message:
+          'No eligible screenhost could be allocated. Adjust targeting/window, then re-dispatch.',
       });
     }
 

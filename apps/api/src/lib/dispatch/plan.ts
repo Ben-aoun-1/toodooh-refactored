@@ -65,14 +65,14 @@ export interface BuiltPlan {
 // oversell); N_max = ⌊Budget_SH / S_min⌋ (anti-miettes), Budget_SH = I_cible·CPM/1000.
 export const computeBounds = (
   iCible: number,
-  cpm: number,
   maxCapaciteUtile: number,
-  sMin: number,
+  seuilDiffusable: number,
 ): { nMin: number; nMax: number } => {
   const nMin =
     maxCapaciteUtile > 0 ? Math.ceil(iCible / maxCapaciteUtile) : Number.POSITIVE_INFINITY;
-  const budgetSH = (iCible * cpm) / 1000;
-  const nMax = sMin > 0 ? Math.floor(budgetSH / sMin) : 0;
+  // N_max = ⌊Budget_SH / S_min⌋ = ⌊I_cible / seuil_diffusable⌋ — CPM cancels, so compute it
+  // DIRECTLY: exact (no FP off-by-one at integer boundaries) and self-evidently CPM-free.
+  const nMax = seuilDiffusable > 0 ? Math.floor(iCible / seuilDiffusable) : 0;
   return { nMin, nMax };
 };
 
@@ -96,7 +96,7 @@ export const buildCreneaux = (
         date: day.date,
         hour: slot.hour,
         reps: rI,
-        impressions: slot.affluence * rI,
+        impressions: Math.round(slot.affluence * rI), // whole impressions
       });
     }
   }
@@ -111,7 +111,7 @@ export const buildPlan = (input: BuildPlanInput): BuiltPlan => {
   const r = computeR(s, t, fMaxSeconds);
 
   const maxCap = input.pool.reduce((m, p) => Math.max(m, p.capaciteUtile), 0);
-  const { nMin, nMax } = computeBounds(iCible, cpm, maxCap, sMin);
+  const { nMin, nMax } = computeBounds(iCible, maxCap, seuilDiffusable);
 
   const eligible: EligibleScreenhost[] = input.pool.map((p) => ({
     id: p.id,

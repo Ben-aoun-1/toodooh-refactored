@@ -32,6 +32,8 @@ export type DispatchResult =
   | { status: 'NO_WINDOW' }
   | { status: 'NO_TARGETING' }
   | { status: 'ALREADY_DISPATCHED' }
+  | { status: 'TOO_THIN'; nMin: number; nMax: number }
+  | { status: 'NO_ELIGIBLE' }
   | { status: 'OK'; plan: CampaignDispatchPlan; allocationCount: number };
 
 // Assemble the eligible pool from the DB, run the pure pipeline, and persist the frozen plan
@@ -129,14 +131,20 @@ export const runDispatch = async (
         totalAffluence += affByKey.get(`${sh.id}:${day.dayOfWeek}:${hour}`) ?? 0;
     }
     const avgAffluence = hours > 0 ? totalAffluence / hours : 0;
-    const capacite = capaciteUtile(avgAffluence, hours, r);
+    // Floor to whole impressions: capaciteUtile round-trips through FP (avgAffluence = total/hours
+    // → ×hours), so non-uniform affluence yields e.g. 60030.0000000007. Flooring at the source keeps
+    // residual/ai/couvert/ii_potentiel integers (the persisted columns are `integer`).
+    const capacite = Math.floor(capaciteUtile(avgAffluence, hours, r));
     const residualCapacity = Math.max(0, capacite - (engagedById.get(sh.id) ?? 0));
     if (residualCapacity <= 0) continue; // residual capacity > 0 hard filter
     pool.push({
       id: sh.id,
       sps: Number(sh.sps),
-      anciennete: 0, // V1: derived from the registre (no prior plans → ties)
-      revenuJour: 0, // V1: no prior plans today
+      // V1 STUB (hardcoded — NOT registre-derived): no last-service / per-day-revenue registre
+      // exists yet, so the dignity rule + ancienneté tiebreak are INERT until one does. Only
+      // `engagements` (above) is genuinely derived from stored plans. TODO: wire a registre.
+      anciennete: 0,
+      revenuJour: 0,
       activeToday: false,
       avgAffluence,
       hours,
@@ -160,44 +168,59 @@ export const runDispatch = async (
     pool,
   });
 
-  // Persist the frozen plan + allocations atomically.
-  const plan = await db.transaction(async (tx) => {
-    const [planRow] = await tx
-      .insert(campaignDispatchPlan)
-      .values({
-        campaignId: campaign.id,
-        iCible: inputs.iCible,
-        cpm: String(inputs.cpm),
-        sSpotSeconds: inputs.s,
-        tTierCoef: String(inputs.t),
-        seuilDiffusable: config.seuilDiffusable,
-        sMin: String(built.sMin),
-        gJour: String(built.gJour),
-        fMaxSeconds: config.fMaxSeconds,
-        rMinEfficace: config.rMinEfficace,
-        couvert: built.couvert,
-        nMin: built.nMin,
-        nMax: built.nMax,
-        nRetenus: built.nRetenus,
-        isPartial: built.isPartial,
-        isTooThin: built.isTooThin,
-      })
-      .returning();
-    if (!planRow) throw new Error('dispatch plan insert failed');
-    if (built.allocations.length > 0) {
-      await tx.insert(campaignDispatchAllocation).values(
-        built.allocations.map((a) => ({
-          planId: planRow.id,
-          screenhostId: a.screenhostId,
-          iiPotentiel: a.iiPotentiel,
-          rI: a.rI,
-          revenuPrevisionnel: String(a.revenuPrevisionnel),
-          creneaux: a.creneaux,
-        })),
-      );
-    }
-    return planRow;
-  });
+  // Clôture: a too-thin (N_min>N_max / empty pool) or no-allocation result is NOT a deliverable
+  // plan — do NOT freeze it. Freezing an empty plan + the unique index would lock the campaign
+  // forever; instead return the clôture alert so the advertiser can adjust the cursor / targeting
+  // and re-dispatch (renvoi curseur). A genuine PARTIAL (nRetenus>0, not too-thin) IS delivered → frozen.
+  if (built.isTooThin) return { status: 'TOO_THIN', nMin: built.nMin, nMax: built.nMax };
+  if (built.nRetenus === 0) return { status: 'NO_ELIGIBLE' };
 
-  return { status: 'OK', plan, allocationCount: built.allocations.length };
+  // Persist the frozen plan + allocations atomically.
+  const inserted = await db
+    .transaction(async (tx) => {
+      const [planRow] = await tx
+        .insert(campaignDispatchPlan)
+        .values({
+          campaignId: campaign.id,
+          iCible: inputs.iCible,
+          cpm: String(inputs.cpm),
+          sSpotSeconds: inputs.s,
+          tTierCoef: String(inputs.t),
+          seuilDiffusable: config.seuilDiffusable,
+          sMin: String(built.sMin),
+          gJour: String(built.gJour),
+          fMaxSeconds: config.fMaxSeconds,
+          rMinEfficace: config.rMinEfficace,
+          couvert: built.couvert,
+          nMin: built.nMin,
+          nMax: built.nMax,
+          nRetenus: built.nRetenus,
+          isPartial: built.isPartial,
+          isTooThin: built.isTooThin,
+        })
+        .returning();
+      if (!planRow) throw new Error('dispatch plan insert failed');
+      if (built.allocations.length > 0) {
+        await tx.insert(campaignDispatchAllocation).values(
+          built.allocations.map((a) => ({
+            planId: planRow.id,
+            screenhostId: a.screenhostId,
+            iiPotentiel: a.iiPotentiel,
+            rI: a.rI,
+            revenuPrevisionnel: String(a.revenuPrevisionnel),
+            creneaux: a.creneaux,
+          })),
+        );
+      }
+      return planRow;
+    })
+    .catch((err: unknown) => {
+      // Lost the check-then-insert race against the unique index (campaign_dispatch_plan_campaign_uq):
+      // a concurrent dispatch already froze the plan. Surface the irrevocable conflict, not a 500.
+      if ((err as { code?: string }).code === '23505') return null;
+      throw err;
+    });
+  if (inserted === null) return { status: 'ALREADY_DISPATCHED' };
+
+  return { status: 'OK', plan: inserted, allocationCount: built.allocations.length };
 };
