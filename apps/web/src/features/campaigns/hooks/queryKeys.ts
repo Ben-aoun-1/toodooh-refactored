@@ -31,8 +31,7 @@ export const campaignsKeys = {
   detail: (id: string) => [...campaignsKeys.all, 'detail', id] as const,
 
   /** Persisted `campaign_categories` rows for a campaign (edit-mode hydration). */
-  categories: (campaignId: string) =>
-    [...campaignsKeys.all, 'categories', campaignId] as const,
+  categories: (campaignId: string) => [...campaignsKeys.all, 'categories', campaignId] as const,
 
   /** Hydrated `CampaignLocation[]` for a set of selected location IDs. */
   locations: (locationIds: readonly string[]) =>
@@ -46,21 +45,21 @@ export const campaignsKeys = {
   video: (videoId: string) => [...campaignsKeys.all, 'video', videoId] as const,
 
   /** The signed-in advertiser's approved videos (`Step5` picker source). */
-  myApprovedVideos: (userId: string) =>
-    [...campaignsKeys.all, 'myApprovedVideos', userId] as const,
+  myApprovedVideos: (userId: string) => [...campaignsKeys.all, 'myApprovedVideos', userId] as const,
 
   /** Special events overlapping a campaign's period (post-cart recommendations). */
   recommendedEvents: (startIso: string, endIso: string, excludeEventId: string) =>
     [...campaignsKeys.all, 'recommendedEvents', startIso, endIso, excludeEventId] as const,
 
   /** Persisted `campaign_locations` for a campaign (edit-mode zone hydration). */
-  zonesForEdit: (campaignId: string) =>
-    [...campaignsKeys.all, 'zonesForEdit', campaignId] as const,
+  zonesForEdit: (campaignId: string) => [...campaignsKeys.all, 'zonesForEdit', campaignId] as const,
 
   /**
    * Campaigns awaiting a screen owner's approval. `campaign-owner-approval`
    * service is campaigns-owned (D6), so the owner-side consumer keys here.
    */
-  ownerApprovals: (ownerId: string) =>
-    [...campaignsKeys.all, 'ownerApprovals', ownerId] as const,
+  ownerApprovals: (ownerId: string) => [...campaignsKeys.all, 'ownerApprovals', ownerId] as const,
+
+  /** A campaign's audience targeting lines (L-target — category × class). */
+  targeting: (campaignId: string) => [...campaignsKeys.all, 'targeting', campaignId] as const,
 };
