@@ -3,7 +3,14 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import { db } from '../db/client.js';
-import { businessSectors, screenhostAffluence, screenhosts, users } from '../db/schema.js';
+import {
+  businessSectors,
+  screenhostAffluence,
+  screenhostMonthlyStats,
+  screenhosts,
+  users,
+} from '../db/schema.js';
+import { renderMonthlyReportPdf } from '../lib/report.js';
 import { pushApprovedOwnerLocations } from '../lib/wedooh-sync.js';
 import { decryptWifiPassword, encryptWifiPassword } from '../lib/wifi-crypto.js';
 import { requireActiveAccount, requireAdmin, requireAuth } from '../middleware/require-auth.js';
@@ -301,6 +308,84 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
     }
 
     return reply.status(200).send({ grid, has_data: slots.length > 0 });
+  });
+
+  // GET /api/screenhosts/:id/monthly-report?month=YYYY-MM — owner-scoped branded PDF of the hub's
+  // ACTUAL monthly stats for that venue/month (renders on-the-fly, never stored — like the facture).
+  // Same owner-scoping as the affluence read: a foreign/missing id is a 404; a month with no stored
+  // stats is also a 404 (nothing to render yet). Auto-at-month-end notification is DEFERRED — the
+  // report is downloadable as soon as the hub's stats arrive.
+  app.get('/api/screenhosts/:id/monthly-report', ownerGuard, async (request, reply) => {
+    const parsedParams = idParamSchema.safeParse(request.params);
+    if (!parsedParams.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: [{ field: 'id', reason: 'must be a uuid' }],
+      });
+    }
+    const parsedQuery = z
+      .object({ month: z.string().regex(/^\d{4}-\d{2}$/) })
+      .safeParse(request.query);
+    if (!parsedQuery.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: [{ field: 'month', reason: 'must be YYYY-MM' }],
+      });
+    }
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply
+        .status(401)
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+    }
+
+    // Owner scoping in the WHERE (foreign id → 404); join the owner for the report's branded names.
+    const [owned] = await db
+      .select({
+        venueName: screenhosts.name,
+        contactName: users.contactName,
+        businessName: users.businessName,
+      })
+      .from(screenhosts)
+      .innerJoin(users, eq(screenhosts.ownerId, users.id))
+      .where(and(eq(screenhosts.id, parsedParams.data.id), eq(screenhosts.ownerId, userId)))
+      .limit(1);
+    if (!owned) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
+    }
+
+    const [stats] = await db
+      .select()
+      .from(screenhostMonthlyStats)
+      .where(
+        and(
+          eq(screenhostMonthlyStats.screenhostId, parsedParams.data.id),
+          eq(screenhostMonthlyStats.month, parsedQuery.data.month),
+        ),
+      )
+      .limit(1);
+    if (!stats) {
+      return reply
+        .status(404)
+        .send({ error: 'NOT_FOUND', message: 'No stats for that month yet.' });
+    }
+
+    const pdf = await renderMonthlyReportPdf({
+      ownerName: owned.businessName ?? owned.contactName,
+      venueName: owned.venueName,
+      month: stats.month,
+      totalAudience: stats.totalAudience,
+      daily: stats.daily,
+      peakDayOfWeek: stats.peakDayOfWeek,
+      peakHour: stats.peakHour,
+    });
+    return reply
+      .status(200)
+      .header('content-type', 'application/pdf')
+      .header('content-disposition', `inline; filename="rapport-${stats.month}.pdf"`)
+      .send(pdf);
   });
 
   // PATCH /api/admin/screenhosts/:id/wifi — admin edit of ANY screenhost + re-push for its
