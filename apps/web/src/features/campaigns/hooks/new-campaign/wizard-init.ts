@@ -1,5 +1,6 @@
 import { parseCampaignUiDate, toLocalDateOnlyString } from '@/features/campaigns/lib/wizard-dates';
 
+import { CART_BUDGET_DEFAULT_TND } from './cart-budget';
 import type { WizardState } from './wizard-types';
 
 /**
@@ -34,7 +35,8 @@ export function buildInitialWizardState(args: BuildInitialWizardStateArgs): Wiza
     startDate: startRaw ? toLocalDateOnlyString(startRaw) : null,
     endDate: endRaw ? toLocalDateOnlyString(endRaw) : null,
     creativeId: c?.creative_id ?? null,
-    requestedBudget: c?.requested_budget ?? null,
+    // Interim budget slider defaults to its MAX position; an edit-mode record keeps its saved value.
+    requestedBudget: c?.requested_budget ?? CART_BUDGET_DEFAULT_TND,
     draftCampaignId: c?.id ?? '',
   };
 }
