@@ -5,12 +5,9 @@ import {
   TrendingUp,
   DollarSign,
   Activity,
-  Eye,
-  Calendar,
   AlertCircle,
   CheckCircle,
   Clock,
-  Star,
   BarChart3,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -19,16 +16,21 @@ import AdminLayout from '@/features/admin/components/AdminLayout';
 import { usePlatformStats } from '@/features/admin/hooks/usePlatformStats';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 
+// De-Supabase: every figure below comes from GET /api/admin/platform-stats (new engine). Fields the
+// new engine does NOT yet model — events, per-screen revenue (the legacy Top-5 table), occupancy/
+// uptime, revenue growth-rate, daily revenue, average-revenue-per-screen, campaign views — have been
+// REMOVED from this dashboard rather than faked. They return when their data source is built.
 export default function AdminDashboard() {
   const user = useAuthStore((s) => s.user);
   const contactName = useAuthStore((s) => s.contactName);
   const navigate = useNavigate();
-  const { data: platformStats, loading } = usePlatformStats();
-  const globalStats = platformStats?.global ?? null;
-  const revenueStats = platformStats?.revenue ?? null;
-  const occupancyStats = platformStats?.occupancy ?? null;
-  const campaignsPerf = platformStats?.campaigns ?? null;
-  const topScreens = platformStats?.top ?? [];
+  const { data: stats, loading } = usePlatformStats();
+
+  const usersStats = stats?.users;
+  const screensStats = stats?.screens;
+  const campaignsStats = stats?.campaigns;
+  const creativesStats = stats?.creatives;
+  const revenueStats = stats?.revenue;
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('fr-FR', {
@@ -74,16 +76,16 @@ export default function AdminDashboard() {
         </p>
       </div>
 
-      {/* Chiffres clés - Ligne 1 : Revenus */}
+      {/* Revenus — total + mensuel (recharges confirmées) + budget campagnes */}
       <div className="mb-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">💰 Revenus Globaux</h3>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-sm p-6 text-white">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-green-100">Revenu Total</p>
                 <p className="text-3xl font-bold mt-2">
-                  {formatCurrency(revenueStats?.total_revenue || 0)}
+                  {formatCurrency(revenueStats?.total_tnd ?? 0)}
                 </p>
               </div>
               <DollarSign className="h-12 w-12 text-green-200" />
@@ -95,29 +97,10 @@ export default function AdminDashboard() {
               <div>
                 <p className="text-sm font-medium text-gray-600">Revenu Mensuel</p>
                 <p className="text-2xl font-bold text-gray-900 mt-2">
-                  {formatCurrency(revenueStats?.monthly_revenue || 0)}
+                  {formatCurrency(revenueStats?.monthly_tnd ?? 0)}
                 </p>
               </div>
               <TrendingUp className="h-10 w-10 text-green-500" />
-            </div>
-            <div className="mt-3 flex items-center text-sm">
-              <TrendingUp className="h-4 w-4 text-green-500 mr-1" />
-              <span className="text-green-600 font-medium">
-                +{revenueStats?.revenue_growth_rate || 0}%
-              </span>
-              <span className="text-gray-500 ml-1">vs mois dernier</span>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Revenu Quotidien</p>
-                <p className="text-2xl font-bold text-gray-900 mt-2">
-                  {formatCurrency(revenueStats?.daily_revenue || 0)}
-                </p>
-              </div>
-              <Activity className="h-10 w-10 text-blue-500" />
             </div>
           </div>
 
@@ -126,7 +109,7 @@ export default function AdminDashboard() {
               <div>
                 <p className="text-sm font-medium text-gray-600">Budget Campagnes</p>
                 <p className="text-2xl font-bold text-gray-900 mt-2">
-                  {formatCurrency(revenueStats?.total_campaigns_budget || 0)}
+                  {formatCurrency(campaignsStats?.total_budget_tnd ?? 0)}
                 </p>
               </div>
               <BarChart3 className="h-10 w-10 text-purple-500" />
@@ -135,7 +118,7 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Chiffres clés - Ligne 2 : Utilisateurs et Écrans */}
+      {/* Utilisateurs et Écrans */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <div>
           <h3 className="text-lg font-semibold text-gray-900 mb-4">👥 Utilisateurs</h3>
@@ -147,9 +130,7 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Total</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {globalStats?.total_users || 0}
-                  </p>
+                  <p className="text-2xl font-bold text-gray-900">{usersStats?.total ?? 0}</p>
                 </div>
                 <Users className="h-8 w-8 text-gray-400" />
               </div>
@@ -161,9 +142,7 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">En attente</p>
-                  <p className="text-2xl font-bold text-yellow-600">
-                    {globalStats?.pending_users || 0}
-                  </p>
+                  <p className="text-2xl font-bold text-yellow-600">{usersStats?.pending ?? 0}</p>
                 </div>
                 <Clock className="h-8 w-8 text-yellow-500" />
               </div>
@@ -172,9 +151,7 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Propriétaires</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {globalStats?.owners_count || 0}
-                  </p>
+                  <p className="text-2xl font-bold text-gray-900">{usersStats?.owners ?? 0}</p>
                 </div>
                 <Monitor className="h-8 w-8 text-blue-500" />
               </div>
@@ -183,9 +160,7 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Annonceurs</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {globalStats?.advertisers_count || 0}
-                  </p>
+                  <p className="text-2xl font-bold text-gray-900">{usersStats?.advertisers ?? 0}</p>
                 </div>
                 <Users className="h-8 w-8 text-purple-500" />
               </div>
@@ -200,9 +175,7 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Total</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {globalStats?.total_screens || 0}
-                  </p>
+                  <p className="text-2xl font-bold text-gray-900">{screensStats?.total ?? 0}</p>
                 </div>
                 <Monitor className="h-8 w-8 text-gray-400" />
               </div>
@@ -210,41 +183,17 @@ export default function AdminDashboard() {
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">En ligne</p>
-                  <p className="text-2xl font-bold text-green-600">
-                    {globalStats?.online_screens || 0}
-                  </p>
+                  <p className="text-sm font-medium text-gray-600">Actifs</p>
+                  <p className="text-2xl font-bold text-green-600">{screensStats?.active ?? 0}</p>
                 </div>
                 <CheckCircle className="h-8 w-8 text-green-500" />
-              </div>
-            </div>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Taux d'occupation</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {occupancyStats?.occupancy_rate || 0}%
-                  </p>
-                </div>
-                <Activity className="h-8 w-8 text-brand-primary" />
-              </div>
-            </div>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Uptime moyen</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {occupancyStats?.average_uptime || 0}%
-                  </p>
-                </div>
-                <CheckCircle className="h-8 w-8 text-blue-500" />
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Ligne 3 : Campagnes et Vidéos */}
+      {/* Campagnes et Créatives */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         <div>
           <h3 className="text-lg font-semibold text-gray-900 mb-4">🎬 Campagnes</h3>
@@ -256,9 +205,7 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Total</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {campaignsPerf?.total_campaigns || 0}
-                  </p>
+                  <p className="text-2xl font-bold text-gray-900">{campaignsStats?.total ?? 0}</p>
                 </div>
                 <Video className="h-8 w-8 text-gray-400" />
               </div>
@@ -270,30 +217,31 @@ export default function AdminDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-600">Actives</p>
-                  <p className="text-2xl font-bold text-green-600">
-                    {campaignsPerf?.active_campaigns || 0}
-                  </p>
+                  <p className="text-2xl font-bold text-green-600">{campaignsStats?.active ?? 0}</p>
                 </div>
                 <CheckCircle className="h-8 w-8 text-green-500" />
+              </div>
+            </button>
+            <button
+              onClick={() => navigate('/admin-campaigns?status=pending')}
+              className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-md hover:border-yellow-400 transition-all cursor-pointer text-left w-full"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">En attente</p>
+                  <p className="text-2xl font-bold text-yellow-600">
+                    {campaignsStats?.pending ?? 0}
+                  </p>
+                </div>
+                <Clock className="h-8 w-8 text-yellow-500" />
               </div>
             </button>
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Vues totales</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {campaignsPerf?.total_views?.toLocaleString('fr-FR') || 0}
-                  </p>
-                </div>
-                <Eye className="h-8 w-8 text-blue-500" />
-              </div>
-            </div>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-              <div className="flex items-center justify-between">
-                <div>
                   <p className="text-sm font-medium text-gray-600">Budget moyen</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {formatCurrency(campaignsPerf?.average_budget || 0)}
+                    {formatCurrency(campaignsStats?.average_budget_tnd ?? 0)}
                   </p>
                 </div>
                 <DollarSign className="h-8 w-8 text-purple-500" />
@@ -303,7 +251,7 @@ export default function AdminDashboard() {
         </div>
 
         <div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">📹 Créatives & Événements</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">📹 Créatives</h3>
           <div className="grid grid-cols-2 gap-4">
             <button
               onClick={() => navigate('/admin-creatives')}
@@ -311,10 +259,8 @@ export default function AdminDashboard() {
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Créatives totales</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {globalStats?.total_videos || 0}
-                  </p>
+                  <p className="text-sm font-medium text-gray-600">Total</p>
+                  <p className="text-2xl font-bold text-gray-900">{creativesStats?.total ?? 0}</p>
                 </div>
                 <Video className="h-8 w-8 text-gray-400" />
               </div>
@@ -327,153 +273,17 @@ export default function AdminDashboard() {
                 <div>
                   <p className="text-sm font-medium text-gray-600">À valider</p>
                   <p className="text-2xl font-bold text-yellow-600">
-                    {globalStats?.pending_videos || 0}
+                    {creativesStats?.pending ?? 0}
                   </p>
                 </div>
                 <Clock className="h-8 w-8 text-yellow-500" />
               </div>
             </button>
-            <button
-              onClick={() => navigate('/admin-events')}
-              className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-md hover:border-brand-primary transition-all cursor-pointer text-left w-full"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Événements</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {globalStats?.total_events || 0}
-                  </p>
-                </div>
-                <Calendar className="h-8 w-8 text-gray-400" />
-              </div>
-            </button>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">À venir</p>
-                  <p className="text-2xl font-bold text-blue-600">
-                    {globalStats?.upcoming_events || 0}
-                  </p>
-                </div>
-                <Calendar className="h-8 w-8 text-blue-500" />
-              </div>
-            </div>
           </div>
         </div>
       </div>
 
-      {/* Ligne 4 : Recharges */}
-      <div className="mb-6">
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">💰 Recharges</h3>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <button
-              onClick={() => navigate('/admin-recharges')}
-              className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-md hover:border-brand-primary transition-all cursor-pointer text-left w-full"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Total</p>
-                  <p className="text-2xl font-bold text-gray-900">-</p>
-                </div>
-                <DollarSign className="h-8 w-8 text-gray-400" />
-              </div>
-            </button>
-            <button
-              onClick={() => navigate('/admin-recharges?status=pending')}
-              className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-md hover:border-yellow-400 transition-all cursor-pointer text-left w-full"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">En attente</p>
-                  <p className="text-2xl font-bold text-yellow-600">-</p>
-                </div>
-                <Clock className="h-8 w-8 text-yellow-500" />
-              </div>
-            </button>
-            <button
-              onClick={() => navigate('/admin-recharges?status=completed')}
-              className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-md hover:border-green-400 transition-all cursor-pointer text-left w-full"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Validées</p>
-                  <p className="text-2xl font-bold text-green-600">-</p>
-                </div>
-                <CheckCircle className="h-8 w-8 text-green-500" />
-              </div>
-            </button>
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Montant total</p>
-                  <p className="text-2xl font-bold text-brand-primary">-</p>
-                </div>
-                <TrendingUp className="h-8 w-8 text-brand-primary" />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Top écrans performants */}
-      <div className="mb-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          ⭐ Top 5 Écrans les Plus Rentables
-        </h3>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Rang
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Écran
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Propriétaire
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Revenu Total
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Revenu Mensuel
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {topScreens.map((screen, idx) => (
-                <tr key={screen.screen_id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      {idx === 0 && (
-                        <Star className="h-5 w-5 text-yellow-500 fill-yellow-500 mr-2" />
-                      )}
-                      <span className="text-sm font-medium text-gray-900">#{idx + 1}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm font-medium text-gray-900">{screen.screen_name}</div>
-                    <div className="text-xs text-gray-500">{screen.location}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {screen.owner_business_name}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-green-600">
-                    {formatCurrency(screen.total_revenue)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {formatCurrency(screen.monthly_revenue)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Aperçu rapide */}
+      {/* Validations en attente */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <h4 className="text-sm font-semibold text-gray-900 mb-4 flex items-center">
@@ -483,71 +293,57 @@ export default function AdminDashboard() {
           <div className="space-y-3">
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-600">Utilisateurs</span>
-              <span className="font-semibold text-gray-900">{globalStats?.pending_users || 0}</span>
+              <span className="font-semibold text-gray-900">{usersStats?.pending ?? 0}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Vidéos</span>
-              <span className="font-semibold text-gray-900">
-                {globalStats?.pending_videos || 0}
-              </span>
+              <span className="text-sm text-gray-600">Créatives</span>
+              <span className="font-semibold text-gray-900">{creativesStats?.pending ?? 0}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-600">Campagnes</span>
-              <span className="font-semibold text-gray-900">
-                {globalStats?.pending_campaigns || 0}
-              </span>
+              <span className="font-semibold text-gray-900">{campaignsStats?.pending ?? 0}</span>
             </div>
           </div>
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <h4 className="text-sm font-semibold text-gray-900 mb-4 flex items-center">
-            <Monitor className="h-5 w-5 mr-2 text-brand-primary" />
-            Performance Écrans
+            <Activity className="h-5 w-5 mr-2 text-brand-primary" />
+            Activité campagnes
           </h4>
           <div className="space-y-3">
             <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Taux d'occupation</span>
-              <span className="font-semibold text-brand-primary">
-                {occupancyStats?.occupancy_rate || 0}%
-              </span>
+              <span className="text-sm text-gray-600">Brouillons</span>
+              <span className="font-semibold text-gray-900">{campaignsStats?.draft ?? 0}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Disponibles</span>
-              <span className="font-semibold text-gray-900">
-                {occupancyStats?.available_screens || 0}
-              </span>
+              <span className="text-sm text-gray-600">Actives</span>
+              <span className="font-semibold text-green-600">{campaignsStats?.active ?? 0}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Revenu moyen/écran</span>
-              <span className="font-semibold text-gray-900">
-                {formatCurrency(revenueStats?.average_revenue_per_screen || 0)}
-              </span>
+              <span className="text-sm text-gray-600">Rejetées</span>
+              <span className="font-semibold text-gray-900">{campaignsStats?.rejected ?? 0}</span>
             </div>
           </div>
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <h4 className="text-sm font-semibold text-gray-900 mb-4 flex items-center">
-            <TrendingUp className="h-5 w-5 mr-2 text-green-500" />
-            Croissance
+            <Monitor className="h-5 w-5 mr-2 text-blue-500" />
+            Réseau
           </h4>
           <div className="space-y-3">
             <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Revenus</span>
-              <span className="font-semibold text-green-600">
-                +{revenueStats?.revenue_growth_rate || 0}%
-              </span>
+              <span className="text-sm text-gray-600">Écrans actifs</span>
+              <span className="font-semibold text-gray-900">{screensStats?.active ?? 0}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Nouveaux utilisateurs</span>
-              <span className="font-semibold text-gray-900">{globalStats?.pending_users || 0}</span>
+              <span className="text-sm text-gray-600">Propriétaires</span>
+              <span className="font-semibold text-gray-900">{usersStats?.owners ?? 0}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600">Nouvelles campagnes</span>
-              <span className="font-semibold text-gray-900">
-                {globalStats?.pending_campaigns || 0}
-              </span>
+              <span className="text-sm text-gray-600">Annonceurs</span>
+              <span className="font-semibold text-gray-900">{usersStats?.advertisers ?? 0}</span>
             </div>
           </div>
         </div>

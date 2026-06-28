@@ -4,6 +4,7 @@ import { adminAccountsRoutes } from './admin-accounts.js';
 import { adminCampaignsRoutes } from './admin-campaigns.js';
 import { adminCreativesRoutes } from './admin-creatives.js';
 import { adminDispatchConfigRoutes } from './admin-dispatch-config.js';
+import { adminPlatformStatsRoutes } from './admin-platform-stats.js';
 import { adminRechargesRoutes } from './admin-recharges.js';
 import { adminReconcileRoutes } from './admin-reconcile.js';
 import { adminRoutes } from './admin.js';
@@ -83,6 +84,9 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   // CPM CONFIG — admin-editable dispatch CPM (standard/event TND-per-1000). The activation
   // derivation reads it to compute I_cible = ⌊budget·1000/cpm⌋; editable without a migration.
   await app.register(adminDispatchConfigRoutes);
+  // ADMIN DASHBOARD STATS — headline platform numbers derived from the new-engine tables
+  // (de-Supabase of the dead platform-stats RPCs). Read-only aggregation.
+  await app.register(adminPlatformStatsRoutes);
   // L-redisp — admin reconciliation: value plan-promised vs proof-aired at clôture, settle the
   // screencaster wallet (the spend) + record screenhost earnings. Idempotent per campaign.
   await app.register(adminReconcileRoutes);

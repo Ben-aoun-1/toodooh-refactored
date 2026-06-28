@@ -1,80 +1,38 @@
-// Types pour les statistiques consolidées de la plateforme (Super Admin Dashboard)
+// Admin dashboard platform-stats — the wire shape of GET /api/admin/platform-stats (new engine).
+// De-Supabase: the legacy PlatformGlobalStats/RevenueStats/OccupancyStats/CampaignsPerformance/
+// TopPerformingScreen/RecentActivity shapes (Supabase RPCs + business_profiles) are GONE. Fields the
+// new engine does NOT yet model — events, per-screen revenue (top screens), occupancy/uptime, revenue
+// growth-rate, daily-revenue, average-revenue-per-screen, campaign impressions/views — are NOT in this
+// payload; the dashboard renders them as 0/—/empty (never faked).
 
-export interface PlatformGlobalStats {
-  // Utilisateurs
-  total_users: number;
-  pending_users: number;
-  approved_users: number;
-  owners_count: number;
-  advertisers_count: number;
-
-  // Écrans
-  total_screens: number;
-  active_screens: number;
-  inactive_screens: number;
-  online_screens: number;
-
-  // Campagnes
-  total_campaigns: number;
-  active_campaigns: number;
-  pending_campaigns: number;
-
-  // Vidéos
-  total_videos: number;
-  pending_videos: number;
-  approved_videos: number;
-
-  // Événements
-  total_events: number;
-  active_events: number;
-  upcoming_events: number;
-}
-
-export interface PlatformRevenueStats {
-  total_revenue: number;
-  monthly_revenue: number;
-  daily_revenue: number;
-  average_revenue_per_screen: number;
-  revenue_growth_rate: number;
-  total_campaigns_budget: number;
-}
-
-export interface ScreensOccupancyStats {
-  total_screens: number;
-  screens_with_campaigns: number;
-  occupancy_rate: number;
-  available_screens: number;
-  average_uptime: number;
-}
-
-export interface CampaignsPerformance {
-  total_campaigns: number;
-  active_campaigns: number;
-  total_views: number;
-  total_budget: number;
-  average_budget: number;
-  campaigns_by_status: {
+export interface PlatformStats {
+  users: {
+    total: number;
+    pending: number;
+    approved: number;
+    owners: number;
+    advertisers: number;
+  };
+  screens: {
+    total: number;
+    active: number;
+  };
+  campaigns: {
+    total: number;
     draft: number;
     pending: number;
     active: number;
-    paused: number;
-    completed: number;
     rejected: number;
+    total_budget_tnd: number;
+    average_budget_tnd: number;
   };
-}
-
-export interface TopPerformingScreen {
-  screen_id: string;
-  screen_name: string;
-  location: string;
-  total_revenue: number;
-  monthly_revenue: number;
-  owner_business_name: string;
-}
-
-export interface RecentActivity {
-  activity_date: string;
-  activity_type: string;
-  description: string;
-  user_name: string;
+  creatives: {
+    total: number;
+    pending: number;
+    approved: number;
+  };
+  revenue: {
+    total_tnd: number;
+    monthly_tnd: number;
+  };
 }
