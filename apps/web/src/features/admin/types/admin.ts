@@ -76,27 +76,3 @@ export interface InternalAccount {
   // admin, whose password is admin-chosen). Surfaced in the success panel for the admin to relay.
   temp_password?: string | null;
 }
-
-export interface AdminDashboardStats {
-  totalUsers: number;
-  totalOwners: number;
-  totalAdvertisers: number;
-  totalScreens: number;
-  totalRevenue: number;
-  monthlyRevenue: number;
-  pendingVerifications: number;
-  activeCampaigns: number;
-}
-
-export interface AdminActivity {
-  id: string;
-  admin_id: string;
-  admin_name: string;
-  action: string;
-  resource: string;
-  resource_id?: string;
-  details?: unknown;
-  ip_address?: string;
-  user_agent?: string;
-  created_at: string;
-}
