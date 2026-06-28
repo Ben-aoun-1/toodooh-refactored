@@ -432,6 +432,51 @@ export const screenhostAffluence = pgTable(
 export type ScreenhostAffluence = typeof screenhostAffluence.$inferSelect;
 export type NewScreenhostAffluence = typeof screenhostAffluence.$inferInsert;
 
+// Monthly screenhost stats — the ACTUAL monthly audience the hub pushes (operator ruling: real
+// monthly figures, NOT toodooh's rolling weekly affluence average). One row per (screenhost, month);
+// the owner downloads a branded PDF report from it. UNIQUE(screenhost, month) → latest-value-wins
+// upsert via POST /api/internal/monthly-stats (mirrors the affluence ingest).
+export interface MonthlyStatsDaily {
+  date: string; // YYYY-MM-DD
+  audience: number;
+}
+
+export const screenhostMonthlyStats = pgTable(
+  'screenhost_monthly_stats',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    screenhostId: uuid('screenhost_id')
+      .notNull()
+      .references(() => screenhosts.id, { onDelete: 'cascade' }),
+    month: text('month').notNull(), // 'YYYY-MM'
+    totalAudience: integer('total_audience').notNull(),
+    daily: jsonb('daily').$type<MonthlyStatsDaily[]>().notNull(), // [{date, audience}] per calendar day
+    peakDayOfWeek: integer('peak_day_of_week').notNull(), // 1=Mon … 7=Sun
+    peakHour: integer('peak_hour').notNull(), // 0–23
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    uniqueIndex('screenhost_monthly_stats_sh_month_uq').on(table.screenhostId, table.month),
+    check('screenhost_monthly_stats_month_fmt', sql`${table.month} ~ '^\\d{4}-\\d{2}$'`),
+    check(
+      'screenhost_monthly_stats_peak_dow_range',
+      sql`${table.peakDayOfWeek} >= 1 AND ${table.peakDayOfWeek} <= 7`,
+    ),
+    check(
+      'screenhost_monthly_stats_peak_hour_range',
+      sql`${table.peakHour} >= 0 AND ${table.peakHour} <= 23`,
+    ),
+    check('screenhost_monthly_stats_total_nonneg', sql`${table.totalAudience} >= 0`),
+  ],
+);
+
+export type ScreenhostMonthlyStats = typeof screenhostMonthlyStats.$inferSelect;
+export type NewScreenhostMonthlyStats = typeof screenhostMonthlyStats.$inferInsert;
+
 // ── agents + agent_referrals (P1 — agent unique codes + referral linkage) ──
 // Each agent user (role screenhost_agent | screencast_agent) owns ONE issued
 // referral code, held here in `agents.code`. This is the agent's OWN code and

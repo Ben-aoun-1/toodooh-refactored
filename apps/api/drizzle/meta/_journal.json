@@ -218,6 +218,13 @@
       "when": 1782606676165,
       "tag": "0030_reconciliation",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1782612903905,
+      "tag": "0031_monthly_stats",
+      "breakpoints": true
     }
   ]
 }
