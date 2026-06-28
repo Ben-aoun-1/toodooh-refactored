@@ -26,6 +26,11 @@ export const adminKeys = {
   videos: (status: string) => [...adminKeys.all, 'videos', status] as const,
   videoStats: () => [...adminKeys.all, 'videoStats'] as const,
 
+  /** Creative-moderation list (NEW pipeline), filtered by status (`adminCreativesService.list`). */
+  creatives: (status: string) => [...adminKeys.all, 'creatives', status] as const,
+  /** Prefix for invalidating every creative-list variant. */
+  creativesAll: () => [...adminKeys.all, 'creatives'] as const,
+
   monitoringCampaigns: () => [...adminKeys.all, 'monitoringCampaigns'] as const,
   monitoringStats: () => [...adminKeys.all, 'monitoringStats'] as const,
   monitoringCategories: () => [...adminKeys.all, 'monitoringCategories'] as const,
