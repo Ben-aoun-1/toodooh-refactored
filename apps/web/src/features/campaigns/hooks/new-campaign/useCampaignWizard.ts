@@ -1,111 +1,106 @@
 import { useCallback, useMemo, useState } from 'react';
 
-import { campaignService } from '@/features/campaigns/services/campaign.service';
-import { useCartStore } from '@/features/campaigns/stores/cart.store';
 import { useWizard } from '@/hooks/useWizard';
-import { supabase } from '@/lib/supabase';
-import { balanceService } from '@/services/balance.service';
 
-import {
-  performAddToCart,
-  performSaveDraft,
-  type AddToCartDeps,
-  type AddToCartOptions,
-} from './wizard-serialize';
+import { performCreateDraft, performSubmit } from './wizard-serialize';
 import { canStepBeReached, getStepList } from './wizard-steps';
 import type {
-  AddToCartResult,
-  SaveDraftResult,
+  CreateDraftResult,
+  SubmitResult,
   UseCampaignWizardOptions,
   UseCampaignWizardReturn,
   WizardState,
 } from './wizard-types';
 
-async function revertCampaignToDraft(campaignId: string): Promise<{ error: unknown }> {
-  const { error } = await supabase
-    .from('campaigns')
-    .update({ status: 'draft' })
-    .eq('id', campaignId);
-  return { error };
-}
-
 /**
- * Campaign-wizard state + navigation + persistence. Composes the generic
- * useWizard for the step index; owns WizardState; exposes pure-tested
- * saveDraft / addToCart wrappers that thread the runtime services through.
+ * Campaign-wizard state + navigation + persistence on the campaigns REST engine.
  *
- * Consumers pass `initialState` (fresh blank or reconstructed from edit
- * mode) and the few non-state inputs the persistence layer needs
- * (cpmTnd, eventId, eventName, clientRequired, fallbackLocation).
+ * The hook owns WizardState and composes the generic useWizard for the step index. It implements
+ * CREATE-EARLY: the first forward move past Basics POSTs the draft (idempotent `ensureDraft`) and
+ * threads the id into state, so the targeting / creative / cart panels all attach to a real draft.
+ * Navigation past Basics therefore awaits the draft create; `goToStep` / `nextStep` are async.
+ *
+ * The runtime REST calls are injected (`createDraft` / `updateCampaign` / `submitCampaign`) so the
+ * pure persistence helpers (performCreateDraft / performSubmit) stay unit-testable.
  */
 export function useCampaignWizard(opts: UseCampaignWizardOptions): UseCampaignWizardReturn {
   const [state, setStateImpl] = useState<WizardState>(opts.initialState);
+  const [creatingDraft, setCreatingDraft] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const setState = useCallback((updater: (prev: WizardState) => WizardState) => {
     setStateImpl(updater);
   }, []);
 
-  const stepList = useMemo(
-    () => getStepList(opts.campaignType, { clientRequired: opts.clientRequired }),
-    [opts.campaignType, opts.clientRequired],
-  );
+  const stepList = useMemo(() => getStepList(), []);
   const totalSteps = stepList.length;
 
+  // Pure breadcrumb enabled-state — validators only. The create-early draft requirement for steps
+  // beyond Basics is enforced procedurally in goToStep, not here (so the predicate stays pure and the
+  // breadcrumb does not flicker on the async draft write).
   const canGoToStep = useCallback(
     (n: number): boolean => canStepBeReached(state, n, stepList),
     [state, stepList],
   );
 
-  const canNavigateTo = useCallback(
-    (stepId: number, _currentStep: number): boolean => canGoToStep(stepId),
-    [canGoToStep],
+  // useWizard drives only the index; we re-validate ourselves and advance via its raw setter so the
+  // async draft-create can complete before the move (avoiding a stale-closure predicate race).
+  const wiz = useWizard({ totalSteps });
+
+  const { createDraft, updateCampaign, submitCampaign } = opts;
+
+  const ensureDraft = useCallback(async (): Promise<CreateDraftResult> => {
+    if (state.draftCampaignId) return { kind: 'success', id: state.draftCampaignId };
+    setCreatingDraft(true);
+    try {
+      const result = await performCreateDraft({ state, deps: { create: createDraft } });
+      if (result.kind === 'success') {
+        setStateImpl((prev) => ({ ...prev, draftCampaignId: result.id }));
+      }
+      return result;
+    } finally {
+      setCreatingDraft(false);
+    }
+  }, [state, createDraft]);
+
+  const goToStep = useCallback(
+    async (target: number): Promise<boolean> => {
+      if (target < 1 || target > totalSteps) return false;
+      if (!canStepBeReached(state, target, stepList)) return false;
+      // A move past Basics requires the create-early draft to exist.
+      if (target > 1 && !state.draftCampaignId) {
+        const created = await ensureDraft();
+        if (created.kind !== 'success') return false;
+      }
+      wiz.setCurrentStep(target);
+      return true;
+    },
+    [state, stepList, totalSteps, ensureDraft, wiz],
   );
 
-  const wiz = useWizard({ totalSteps, canNavigateTo });
-
-  const serializeOpts = useMemo(
-    () => ({
-      campaignType: opts.campaignType,
-      cpmTnd: opts.cpmTnd,
-      eventId: opts.eventId,
-      fallbackLocation: opts.fallbackLocation,
-    }),
-    [opts.campaignType, opts.cpmTnd, opts.eventId, opts.fallbackLocation],
+  const nextStep = useCallback(
+    (): Promise<boolean> => goToStep(wiz.currentStep + 1),
+    [goToStep, wiz],
   );
 
-  const saveDraft = useCallback(async (): Promise<SaveDraftResult> => {
-    const result = await performSaveDraft({
-      state,
-      options: serializeOpts,
-      deps: {
-        saveCampaignDraft: (data, campaignId) =>
-          campaignService.saveCampaignDraft(data, campaignId) as Promise<{ id: string }>,
-      },
-    });
-    if (result.kind === 'success' && !state.draftCampaignId) {
-      setStateImpl((prev) => ({ ...prev, draftCampaignId: result.id }));
-    }
-    return result;
-  }, [state, serializeOpts]);
+  const prevStep = useCallback((): boolean => {
+    const target = wiz.currentStep - 1;
+    if (target < 1) return false;
+    wiz.setCurrentStep(target);
+    return true;
+  }, [wiz]);
 
-  const addToCart = useCallback(async (): Promise<AddToCartResult> => {
-    const addToCartOptions: AddToCartOptions = {
-      ...serializeOpts,
-      eventName: opts.eventName,
-    };
-    const deps: AddToCartDeps = {
-      saveCampaignDraft: (data, campaignId) =>
-        campaignService.saveCampaignDraft(data, campaignId) as Promise<{ id: string }>,
-      checkCampaignBalance: (campaignId) => balanceService.checkCampaignBalance(campaignId),
-      revertToDraft: revertCampaignToDraft,
-      addCartItem: (item) => useCartStore.getState().addItem(item),
-    };
-    const result = await performAddToCart({ state, options: addToCartOptions, deps });
-    if (result.kind === 'success' && !state.draftCampaignId) {
-      setStateImpl((prev) => ({ ...prev, draftCampaignId: result.campaignId }));
+  const submit = useCallback(async (): Promise<SubmitResult> => {
+    setSubmitting(true);
+    try {
+      return await performSubmit({
+        state,
+        deps: { update: updateCampaign, submit: submitCampaign },
+      });
+    } finally {
+      setSubmitting(false);
     }
-    return result;
-  }, [state, serializeOpts, opts.eventName]);
+  }, [state, updateCampaign, submitCampaign]);
 
   return {
     state,
@@ -113,11 +108,13 @@ export function useCampaignWizard(opts: UseCampaignWizardOptions): UseCampaignWi
     currentStep: wiz.currentStep,
     totalSteps,
     stepList,
-    goToStep: wiz.goToStep,
-    nextStep: wiz.nextStep,
-    prevStep: wiz.prevStep,
+    goToStep,
+    nextStep,
+    prevStep,
     canGoToStep,
-    saveDraft,
-    addToCart,
+    ensureDraft,
+    submit,
+    creatingDraft,
+    submitting,
   };
 }
