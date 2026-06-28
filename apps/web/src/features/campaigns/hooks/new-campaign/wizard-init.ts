@@ -1,63 +1,40 @@
 import { parseCampaignUiDate, toLocalDateOnlyString } from '@/features/campaigns/lib/wizard-dates';
-import type { SpecialEvent } from '@/features/events/types/event';
 
 import type { WizardState } from './wizard-types';
 
 /**
- * Loose shape for `location.state.campaign` in edit mode. The router payload
- * is untyped today (TODO #15 — phase-1 typed campaign records); fields are
- * widened to optional unknowns and narrowed at use site.
+ * Loose shape for an edit-mode campaign record. Accepts both the campaigns-engine wire shape
+ * (snake_case `start_date` / `creative_id` / `requested_budget`) and the camelCase router payload, so
+ * the wizard can prefill from either MyCampaigns navigation state or a fetched CampaignView.
  */
 export interface CampaignEditRecord {
   id?: string;
   name?: string;
-  client?: string;
-  category?: string;
-  startDate?: string;
-  start_date?: string;
-  endDate?: string;
-  end_date?: string;
-  event_id?: string;
+  startDate?: string | Date | null;
+  start_date?: string | null;
+  endDate?: string | Date | null;
+  end_date?: string | null;
+  creative_id?: string | null;
+  requested_budget?: number | null;
 }
 
 export interface BuildInitialWizardStateArgs {
-  campaignType: 'standard' | 'event';
   campaignToEdit: CampaignEditRecord | null;
-  eventFromState: SpecialEvent | undefined;
 }
 
-/**
- * Construct the initial WizardState from edit-mode / event / fresh inputs.
- * Mirrors the inline useState initializers at NewCampaign.tsx:185–224 prior
- * to the Commit 6 adoption.
- */
+/** Construct the initial WizardState from an edit-mode record (or a fresh blank). */
 export function buildInitialWizardState(args: BuildInitialWizardStateArgs): WizardState {
-  const { campaignType, campaignToEdit, eventFromState } = args;
+  const c = args.campaignToEdit;
 
-  const startDateRaw = parseCampaignUiDate(
-    campaignToEdit?.startDate ?? campaignToEdit?.start_date,
-  ) ?? parseCampaignUiDate(eventFromState?.start_date);
-  const endDateRaw = parseCampaignUiDate(
-    campaignToEdit?.endDate ?? campaignToEdit?.end_date,
-  ) ?? parseCampaignUiDate(eventFromState?.end_date);
+  const startRaw = parseCampaignUiDate(c?.startDate ?? c?.start_date ?? null);
+  const endRaw = parseCampaignUiDate(c?.endDate ?? c?.end_date ?? null);
 
   return {
-    campaignType,
-    campaignName: campaignToEdit?.name || eventFromState?.name || '',
-    client: campaignToEdit?.client || '',
-    categories: campaignToEdit?.category ? [campaignToEdit.category] : [],
-    diffusionType: 'toodooh',
-    selectedParcIds: [],
-    startDate: startDateRaw ? toLocalDateOnlyString(startDateRaw) : null,
-    endDate: endDateRaw ? toLocalDateOnlyString(endDateRaw) : null,
-    geographicZones: [],
-    adjustedBudget: 0,
-    calculatedImpressions: 0,
-    customMinBudget: null,
-    customMaxBudget: null,
-    uploadedVideoId: '',
-    uploadedVideoUrl: '',
-    existingVideoId: null,
-    draftCampaignId: campaignToEdit?.id ?? '',
+    campaignName: c?.name ?? '',
+    startDate: startRaw ? toLocalDateOnlyString(startRaw) : null,
+    endDate: endRaw ? toLocalDateOnlyString(endRaw) : null,
+    creativeId: c?.creative_id ?? null,
+    requestedBudget: c?.requested_budget ?? null,
+    draftCampaignId: c?.id ?? '',
   };
 }
