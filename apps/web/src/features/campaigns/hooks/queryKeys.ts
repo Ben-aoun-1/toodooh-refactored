@@ -62,4 +62,10 @@ export const campaignsKeys = {
 
   /** A campaign's audience targeting lines (L-target — category × class). */
   targeting: (campaignId: string) => [...campaignsKeys.all, 'targeting', campaignId] as const,
+
+  /** The signed-in advertiser's creative library (L-spot — the Creative step picker source). */
+  myCreatives: (userId: string) => [...campaignsKeys.all, 'myCreatives', userId] as const,
+
+  /** A single creative by id (upload seeds this cache; the picker reads it). */
+  creative: (creativeId: string) => [...campaignsKeys.all, 'creative', creativeId] as const,
 };

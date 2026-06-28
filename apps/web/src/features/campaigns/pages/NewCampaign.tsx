@@ -26,6 +26,7 @@ import {
 } from '@/features/campaigns/hooks/useCampaignApi';
 import { parseCampaignUiDate, toLocalDateOnlyString } from '@/features/campaigns/lib/wizard-dates';
 import StepBasics from '@/features/campaigns/pages/new-campaign/StepBasics';
+import StepCreative from '@/features/campaigns/pages/new-campaign/StepCreative';
 import StepTargeting from '@/features/campaigns/pages/new-campaign/StepTargeting';
 import { getErrorMessage } from '@/lib/errors';
 import { logger } from '@/lib/logger';
@@ -116,6 +117,23 @@ export default function NewCampaign() {
     }
   }, [wiz, state.draftCampaignId]);
 
+  const handleSelectCreative = useCallback(
+    async (creativeId: string) => {
+      if (!state.draftCampaignId) return;
+      try {
+        await updateCampaign.mutateAsync({
+          id: state.draftCampaignId,
+          input: { creative_id: creativeId },
+        });
+        setState((prev) => ({ ...prev, creativeId }));
+      } catch (error) {
+        toast.error(getErrorMessage(error) || 'Erreur lors de l’association de la création');
+        log.error({ err: error }, 'link creative failed');
+      }
+    },
+    [state.draftCampaignId, updateCampaign, setState],
+  );
+
   const handleBreadcrumbClick = useCallback(
     (target: number) => {
       void wiz.goToStep(target).then((moved) => {
@@ -156,9 +174,23 @@ export default function NewCampaign() {
         />
       );
     }
-    // Creative / Cart are wired on in C4 / C5. Until then they render an inline placeholder over the
-    // live create-early draft id.
-    const placeholderTitle = stepId === 'creative' ? 'Création' : 'Budget & validation';
+    if (stepId === 'creative') {
+      return (
+        <StepCreative
+          draftCampaignId={state.draftCampaignId || null}
+          userId={user?.id}
+          selectedCreativeId={state.creativeId}
+          onSelectCreative={handleSelectCreative}
+          linking={updateCampaign.isPending}
+          onNext={() => {
+            void wiz.nextStep();
+          }}
+          onBack={() => wiz.prevStep()}
+        />
+      );
+    }
+    // Cart is wired on in C5. Until then it renders an inline placeholder over the live draft id.
+    const placeholderTitle = 'Budget & validation';
     return (
       <div className="space-y-6">
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 text-center">
