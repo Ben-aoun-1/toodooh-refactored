@@ -49,6 +49,7 @@ const AdminLogin = lazy(() => import('@/features/admin/pages/AdminLogin'));
 const AdminDashboard = lazy(() => import('@/features/admin/pages/AdminDashboard'));
 const UserManagement = lazy(() => import('@/features/admin/pages/UserManagement'));
 const VideoManagement = lazy(() => import('@/features/admin/pages/VideoManagement'));
+const CreativeManagement = lazy(() => import('@/features/admin/pages/CreativeManagement'));
 const EventManagement = lazy(() => import('@/features/admin/pages/EventManagement'));
 const CampaignMonitoring = lazy(() => import('@/features/admin/pages/CampaignMonitoring'));
 const CreateAdmin = lazy(() => import('@/features/admin/pages/CreateAdmin'));
@@ -518,6 +519,14 @@ export default function App() {
               element={
                 <AdminRoute>
                   <VideoManagement />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin-creatives"
+              element={
+                <AdminRoute>
+                  <CreativeManagement />
                 </AdminRoute>
               }
             />
