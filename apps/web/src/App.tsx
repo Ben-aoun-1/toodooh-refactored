@@ -36,6 +36,7 @@ const CorrectDocuments = lazy(() => import('@/features/auth/pages/CorrectDocumen
 const OwnerScreens = lazy(() => import('@/features/screenhost/pages/OwnerScreens'));
 const OwnerRevenue = lazy(() => import('@/features/screenhost/pages/OwnerRevenue'));
 const OwnerCampaigns = lazy(() => import('@/features/screenhost/pages/OwnerCampaigns'));
+const OwnerAllocations = lazy(() => import('@/features/screenhost/pages/OwnerAllocations'));
 const OwnerPerformance = lazy(() => import('@/features/screenhost/pages/OwnerPerformance'));
 const OwnerCalendarDevices = lazy(() => import('@/features/screenhost/pages/OwnerCalendarDevices'));
 const OwnerStatementsPage = lazy(() => import('@/features/screenhost/pages/OwnerStatementsPage'));
@@ -436,6 +437,14 @@ export default function App() {
               element={
                 <OwnerRoute>
                   <OwnerCampaigns />
+                </OwnerRoute>
+              }
+            />
+            <Route
+              path="/owner-allocations"
+              element={
+                <OwnerRoute>
+                  <OwnerAllocations />
                 </OwnerRoute>
               }
             />
