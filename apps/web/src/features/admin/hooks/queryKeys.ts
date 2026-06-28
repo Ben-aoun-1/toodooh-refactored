@@ -42,6 +42,9 @@ export const adminKeys = {
 
   globalConfiguration: () => [...adminKeys.all, 'globalConfiguration'] as const,
 
+  /** Resolved dispatch CPM config (admin-editable, new engine: `adminDispatchConfigService.get`). */
+  dispatchConfig: () => [...adminKeys.all, 'dispatchConfig'] as const,
+
   /** End-user list for UserManagement (`adminUserService.getUsers`). */
   users: () => [...adminKeys.all, 'users'] as const,
   /** One user's grouped documents for the review modal (`adminUserService.getUserDocuments`). */
