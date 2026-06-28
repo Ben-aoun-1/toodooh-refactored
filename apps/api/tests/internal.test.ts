@@ -7,6 +7,7 @@ import {
   agents,
   governorates,
   screenhostAffluence,
+  screenhostMonthlyStats,
   screenhosts,
   screens,
   users,
@@ -211,6 +212,76 @@ describe('C1: POST /api/internal/affluence', () => {
             estimated_impressions: 1,
           },
         ],
+      },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+describe('C2: POST /api/internal/monthly-stats', () => {
+  let app: ReturnType<typeof buildApp> | undefined;
+  beforeEach(async () => {
+    await resetAuthTables();
+    app = buildApp();
+    await app.ready();
+  });
+  afterEach(async () => {
+    if (app) await app.close();
+    app = undefined;
+  });
+
+  const stat = (locationId: string, totalAudience: number) => ({
+    location_id: locationId,
+    month: '2026-05',
+    total_audience: totalAudience,
+    daily: [
+      { date: '2026-05-01', audience: 40 },
+      { date: '2026-05-02', audience: 60 },
+    ],
+    peak_day_of_week: 6,
+    peak_hour: 19,
+  });
+
+  it('upserts known stats and reports unknown location_ids (never fails the batch)', async () => {
+    const [host] = await db
+      .insert(screenhosts)
+      .values({ name: 'Place A' })
+      .returning({ id: screenhosts.id });
+    const unknownId = '11111111-1111-4111-8111-111111111111';
+
+    const first = await app!.inject({
+      method: 'POST',
+      url: '/api/internal/monthly-stats',
+      headers: auth(),
+      payload: { stats: [stat(host!.id, 1000), stat(unknownId, 500)] },
+    });
+    expect(first.statusCode).toBe(200);
+    expect(first.json<{ upserted: number; unknown_locations: string[] }>()).toEqual({
+      upserted: 1,
+      unknown_locations: [unknownId],
+    });
+
+    // Same (screenhost, month) again → latest-value-wins upsert (no duplicate row).
+    const second = await app!.inject({
+      method: 'POST',
+      url: '/api/internal/monthly-stats',
+      headers: auth(),
+      payload: { stats: [stat(host!.id, 2500)] },
+    });
+    expect(second.statusCode).toBe(200);
+    const rows = await db.select().from(screenhostMonthlyStats);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.totalAudience).toBe(2500);
+    expect(rows[0]!.peakHour).toBe(19);
+  });
+
+  it('400 on a malformed month', async () => {
+    const res = await app!.inject({
+      method: 'POST',
+      url: '/api/internal/monthly-stats',
+      headers: auth(),
+      payload: {
+        stats: [{ ...stat('22222222-2222-4222-8222-222222222222', 1), month: 'May-2026' }],
       },
     });
     expect(res.statusCode).toBe(400);
