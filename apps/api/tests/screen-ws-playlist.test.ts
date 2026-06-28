@@ -124,6 +124,9 @@ const seedAllocated = async (
     rI: 5,
     revenuPrevisionnel: '200',
     creneaux: [],
+    // Allocations now default EN_ATTENTE; the airability gate requires ACCEPTE, so a playlist-push
+    // scenario must seed an accepted allocation (the owner has accepted it).
+    statutAcceptation: 'ACCEPTE',
   });
   return { screenId: screen?.id ?? '', token, campaignId: campaign?.id ?? '' };
 };
@@ -228,6 +231,9 @@ describe('screen WebSocket — UPDATE_PLAYLIST from dispatch allocations', () =>
       rI: 5,
       revenuPrevisionnel: '200',
       creneaux: [],
+      // Allocations now default EN_ATTENTE; the airability gate requires ACCEPTE, so this aired
+      // playlist scenario seeds an accepted allocation.
+      statutAcceptation: 'ACCEPTE',
     });
 
     const ws = connect(`screen_id=${screen?.id}&token=${token}`);

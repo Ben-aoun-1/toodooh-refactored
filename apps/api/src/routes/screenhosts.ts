@@ -1,10 +1,14 @@
-import { and, asc, eq } from 'drizzle-orm';
-import type { FastifyPluginAsync } from 'fastify';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import { db } from '../db/client.js';
 import {
   businessSectors,
+  campaignDispatchAllocation,
+  campaignDispatchPlan,
+  campaigns,
+  type DispatchAcceptation,
   screenhostAffluence,
   screenhostMonthlyStats,
   screenhosts,
@@ -533,4 +537,126 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       .returning(eligibilitySelection);
     return reply.status(200).send(eligibilityView(updated as EligibilityRow));
   });
+
+  // ── dispatch allocation accept/reject (owner-scoped) ───────────────────────────────────────────
+  // After a campaign is dispatched, each allocation lands EN_ATTENTE (the new default): it does NOT
+  // air until the screenhost OWNER accepts it (the playout airability gate requires ACCEPTE, so
+  // EN_ATTENTE/REFUSE simply never air). These routes let the owner of the allocation's screenhost
+  // accept (→ ACCEPTE) or reject (→ REFUSE) it. Owner-scoping is enforced IN the UPDATE's WHERE via
+  // a subselect of the caller's screenhosts, so a cross-owner allocation id can never be written —
+  // a foreign/missing id is an indistinguishable 404. The list read mirrors the same scoping.
+
+  // GET /api/screenhosts/allocations — the owner's EN_ATTENTE allocations awaiting their decision,
+  // joined to campaign (name/window) + screenhost (name) for the accept/reject surface. Newest first.
+  app.get('/api/screenhosts/allocations', ownerGuard, async (request, reply) => {
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply
+        .status(401)
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+    }
+    const rows = await db
+      .select({
+        id: campaignDispatchAllocation.id,
+        campaignId: campaigns.id,
+        campaignName: campaigns.name,
+        startDate: campaigns.startDate,
+        endDate: campaigns.endDate,
+        screenhostId: screenhosts.id,
+        screenhostName: screenhosts.name,
+        iiPotentiel: campaignDispatchAllocation.iiPotentiel,
+        rI: campaignDispatchAllocation.rI,
+        revenuPrevisionnel: campaignDispatchAllocation.revenuPrevisionnel,
+        createdAt: campaignDispatchAllocation.createdAt,
+      })
+      .from(campaignDispatchAllocation)
+      .innerJoin(screenhosts, eq(campaignDispatchAllocation.screenhostId, screenhosts.id))
+      .innerJoin(
+        campaignDispatchPlan,
+        eq(campaignDispatchAllocation.planId, campaignDispatchPlan.id),
+      )
+      .innerJoin(campaigns, eq(campaignDispatchPlan.campaignId, campaigns.id))
+      .where(
+        and(
+          eq(screenhosts.ownerId, userId),
+          eq(campaignDispatchAllocation.statutAcceptation, 'EN_ATTENTE'),
+        ),
+      )
+      .orderBy(desc(campaignDispatchAllocation.createdAt));
+
+    return reply.status(200).send(
+      rows.map((r) => ({
+        id: r.id,
+        campaign_id: r.campaignId,
+        campaign_name: r.campaignName,
+        start_date: r.startDate,
+        end_date: r.endDate,
+        screenhost_id: r.screenhostId,
+        screenhost_name: r.screenhostName,
+        ii_potentiel: r.iiPotentiel,
+        r_i: r.rI,
+        revenu_previsionnel: Number(r.revenuPrevisionnel),
+        created_at: r.createdAt.toISOString(),
+      })),
+    );
+  });
+
+  // Shared accept/reject body: owner-scoped status write. The WHERE subselect (the caller's own
+  // screenhosts) makes a foreign allocation id indistinguishable from a missing one (404).
+  const decideAllocation = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+    statut: DispatchAcceptation,
+  ) => {
+    const parsedParams = idParamSchema.safeParse(request.params);
+    if (!parsedParams.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: [{ field: 'id', reason: 'must be a uuid' }],
+      });
+    }
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply
+        .status(401)
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+    }
+
+    const [updated] = await db
+      .update(campaignDispatchAllocation)
+      .set({ statutAcceptation: statut })
+      .where(
+        and(
+          eq(campaignDispatchAllocation.id, parsedParams.data.id),
+          inArray(
+            campaignDispatchAllocation.screenhostId,
+            db
+              .select({ id: screenhosts.id })
+              .from(screenhosts)
+              .where(eq(screenhosts.ownerId, userId)),
+          ),
+        ),
+      )
+      .returning({
+        id: campaignDispatchAllocation.id,
+        statutAcceptation: campaignDispatchAllocation.statutAcceptation,
+      });
+    if (!updated) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such allocation.' });
+    }
+    return reply
+      .status(200)
+      .send({ id: updated.id, statut_acceptation: updated.statutAcceptation });
+  };
+
+  // POST /api/screenhosts/allocations/:id/accept — owner accepts (→ ACCEPTE); the campaign may air.
+  app.post('/api/screenhosts/allocations/:id/accept', ownerGuard, (request, reply) =>
+    decideAllocation(request, reply, 'ACCEPTE'),
+  );
+
+  // POST /api/screenhosts/allocations/:id/reject — owner rejects (→ REFUSE); it stays off-air.
+  app.post('/api/screenhosts/allocations/:id/reject', ownerGuard, (request, reply) =>
+    decideAllocation(request, reply, 'REFUSE'),
+  );
 };

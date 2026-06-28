@@ -256,7 +256,7 @@ describe('db schema', () => {
   });
 
   it('dispatch_acceptation enum + the frozen-plan tables expose their columns (L-disp A.7)', () => {
-    expect(dispatchAcceptation.enumValues).toEqual(['ACCEPTE', 'REFUSE']);
+    expect(dispatchAcceptation.enumValues).toEqual(['EN_ATTENTE', 'ACCEPTE', 'REFUSE']);
     expect(campaignDispatchPlan.campaignId).toBeDefined();
     expect(campaignDispatchPlan.iCible).toBeDefined();
     expect(campaignDispatchPlan.seuilDiffusable).toBeDefined();
