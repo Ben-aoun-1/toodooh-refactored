@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { apiClient } from '@/lib/api-client';
 
 export interface RevenueData {
   id: string;
@@ -42,300 +42,163 @@ export interface ScreenRevenue {
   revenue_history: RevenueData[];
 }
 
+/**
+ * Wire shape of `GET /api/screenhosts/earnings` (owner-scoped). One `line` per
+ * reconciled (campaign × screenhost) payout — the diffused-impressions earnings
+ * the engine recorded at admin reconciliation (L-redisp). `total_tnd` is the
+ * owner's grand total; numerics are already coerced server-side.
+ */
+interface EarningsLine {
+  campaign_id: string;
+  campaign_name: string;
+  screenhost_id: string;
+  screenhost_name: string;
+  expected_imp: number;
+  delivered_imp: number;
+  earnings_tnd: number;
+  reconciled_at: string;
+}
+
+interface EarningsView {
+  total_tnd: number;
+  lines: EarningsLine[];
+}
+
+const isInCurrentMonth = (iso: string): boolean => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return false;
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+};
+
+/**
+ * Owner earnings, served by the engine (`GET /api/screenhosts/earnings`, cookie-auth, owner-scoped
+ * server-side). De-Supabased: the former service queried `screens` and FABRICATED revenue with
+ * `Math.random()`; every figure below is now derived from REAL reconciled payouts (or an honest
+ * zero where the legacy mock had no real source). The endpoint is session-scoped, so no userId is
+ * passed here — the hook keeps it only for cache-keying.
+ */
 class RevenueService {
-  // Récupérer les revenus par écran
+  private fetchEarnings(): Promise<EarningsView> {
+    return apiClient.get<EarningsView>('/screenhosts/earnings');
+  }
+
+  // Revenus repliés par écran (établissement). Pas de consommateur live aujourd'hui — on replie
+  // fidèlement les lignes par screenhost (le type de retour est conservé pour export.service).
   async getRevenueByScreen(
     _period: 'monthly' | 'quarterly' | 'yearly' = 'monthly',
   ): Promise<ScreenRevenue[]> {
-    // Récupérer l'utilisateur connecté
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      return [];
-    }
-
-    // Récupérer UNIQUEMENT les écrans du propriétaire connecté
-    const { data: screens, error: screensError } = await supabase
-      .from('screens')
-      .select('*')
-      .eq('owner_id', user.id) // Filtrer par propriétaire
-      .order('name');
-
-    if (screensError) throw screensError;
-
-    // Simuler des données de revenus détaillées
-    const screenRevenues: ScreenRevenue[] = screens.map((screen) => {
-      const baseRevenue = screen.monthly_revenue;
-      const totalRevenue = screen.total_revenue;
-
-      // Générer un historique de revenus pour les 12 derniers mois
-      const revenueHistory: RevenueData[] = [];
-      const now = new Date();
-
-      for (let i = 11; i >= 0; i--) {
-        const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        const monthRevenue = baseRevenue * (0.8 + Math.random() * 0.4); // Variation ±20%
-
-        revenueHistory.push({
-          id: `rev_${screen.id}_${i}`,
-          screen_id: screen.id,
-          screen_name: screen.name,
-          location: screen.location,
-          amount: Math.round(monthRevenue),
-          period: 'monthly',
-          date: date.toISOString().split('T')[0],
-          created_at: date.toISOString(),
-          updated_at: date.toISOString(),
-        });
+    const { lines } = await this.fetchEarnings();
+    const byScreen = new Map<string, ScreenRevenue>();
+    for (const line of lines) {
+      let entry = byScreen.get(line.screenhost_id);
+      if (!entry) {
+        entry = {
+          screen_id: line.screenhost_id,
+          screen_name: line.screenhost_name,
+          location: line.screenhost_name,
+          total_revenue: 0,
+          monthly_revenue: 0,
+          average_revenue: 0,
+          revenue_history: [],
+        };
+        byScreen.set(line.screenhost_id, entry);
       }
-
-      return {
-        screen_id: screen.id,
-        screen_name: screen.name,
-        location: screen.location,
-        total_revenue: totalRevenue,
-        monthly_revenue: baseRevenue,
-        average_revenue: Math.round(totalRevenue / 12),
-        revenue_history: revenueHistory,
-      };
-    });
-
-    return screenRevenues;
-  }
-
-  // Récupérer les revenus par période
-  async getRevenueByPeriod(period: 'monthly' | 'quarterly' | 'yearly'): Promise<RevenueData[]> {
-    // Récupérer l'utilisateur connecté
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      return [];
-    }
-
-    // Récupérer UNIQUEMENT les écrans du propriétaire connecté
-    const { data: screens, error: screensError } = await supabase
-      .from('screens')
-      .select('*')
-      .eq('owner_id', user.id); // Filtrer par propriétaire
-
-    if (screensError) throw screensError;
-
-    const revenueData: RevenueData[] = [];
-    const now = new Date();
-
-    if (period === 'monthly') {
-      // Données mensuelles pour les 12 derniers mois
-      for (let i = 11; i >= 0; i--) {
-        const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        const monthTotal = screens.reduce((sum, screen) => {
-          const monthRevenue = screen.monthly_revenue * (0.8 + Math.random() * 0.4);
-          return sum + monthRevenue;
-        }, 0);
-
-        revenueData.push({
-          id: `month_${i}`,
-          screen_id: 'all',
-          screen_name: 'Tous les écrans',
-          location: 'Toutes les locations',
-          amount: Math.round(monthTotal),
-          period: 'monthly',
-          date: date.toISOString().split('T')[0],
-          created_at: date.toISOString(),
-          updated_at: date.toISOString(),
-        });
-      }
-    } else if (period === 'quarterly') {
-      // Données trimestrielles pour les 4 derniers trimestres
-      for (let i = 3; i >= 0; i--) {
-        const quarterStart = new Date(
-          now.getFullYear(),
-          Math.floor(now.getMonth() / 3) * 3 - i * 3,
-          1,
-        );
-        const quarterTotal = screens.reduce((sum, screen) => {
-          const quarterRevenue = screen.monthly_revenue * 3 * (0.8 + Math.random() * 0.4);
-          return sum + quarterRevenue;
-        }, 0);
-
-        revenueData.push({
-          id: `quarter_${i}`,
-          screen_id: 'all',
-          screen_name: 'Tous les écrans',
-          location: 'Toutes les locations',
-          amount: Math.round(quarterTotal),
-          period: 'quarterly',
-          date: quarterStart.toISOString().split('T')[0],
-          created_at: quarterStart.toISOString(),
-          updated_at: quarterStart.toISOString(),
-        });
-      }
-    } else {
-      // Données annuelles pour les 3 dernières années
-      for (let i = 2; i >= 0; i--) {
-        const yearStart = new Date(now.getFullYear() - i, 0, 1);
-        const yearTotal = screens.reduce((sum, screen) => {
-          const yearRevenue = screen.monthly_revenue * 12 * (0.8 + Math.random() * 0.4);
-          return sum + yearRevenue;
-        }, 0);
-
-        revenueData.push({
-          id: `year_${i}`,
-          screen_id: 'all',
-          screen_name: 'Tous les écrans',
-          location: 'Toutes les locations',
-          amount: Math.round(yearTotal),
-          period: 'yearly',
-          date: yearStart.toISOString().split('T')[0],
-          created_at: yearStart.toISOString(),
-          updated_at: yearStart.toISOString(),
-        });
-      }
-    }
-
-    return revenueData;
-  }
-
-  // Récupérer les statistiques globales
-  async getRevenueStats(): Promise<RevenueStats> {
-    // Récupérer l'utilisateur connecté
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      return {
-        totalRevenue: 0,
-        monthlyRevenue: 0,
-        quarterlyRevenue: 0,
-        yearlyRevenue: 0,
-        averagePerScreen: 0,
-        topPerformingScreen: 'Aucun',
-        growthRate: 0,
-        activeScreens: 0,
-        totalScreens: 0,
-        loyaltyPoints: 0,
-      };
-    }
-
-    // Récupérer UNIQUEMENT les écrans du propriétaire connecté
-    const { data: screens, error: screensError } = await supabase
-      .from('screens')
-      .select('*')
-      .eq('owner_id', user.id); // Filtrer par propriétaire
-
-    if (screensError) throw screensError;
-
-    // Gérer le cas où il n'y a pas d'écrans
-    if (screens.length === 0) {
-      return {
-        totalRevenue: 0,
-        monthlyRevenue: 0,
-        quarterlyRevenue: 0,
-        yearlyRevenue: 0,
-        averagePerScreen: 0,
-        topPerformingScreen: 'Aucun écran',
-        growthRate: 0,
-        activeScreens: 0,
-        totalScreens: 0,
-        loyaltyPoints: 0,
-      };
-    }
-
-    const totalRevenue = screens.reduce((sum, screen) => sum + screen.total_revenue, 0);
-    const monthlyRevenue = screens.reduce((sum, screen) => sum + screen.monthly_revenue, 0);
-    const quarterlyRevenue = monthlyRevenue * 3;
-    const yearlyRevenue = monthlyRevenue * 12;
-    const averagePerScreen = totalRevenue / screens.length;
-
-    // Trouver l'écran le plus performant
-    const topScreen = screens.reduce((max, screen) =>
-      screen.total_revenue > max.total_revenue ? screen : max,
-    );
-
-    // Calculer le taux de croissance (simulation)
-    const growthRate = 12.5; // +12.5% par rapport au mois précédent
-
-    const activeScreens = screens.filter((screen) => screen.status === 'active').length;
-    const totalScreens = screens.length;
-    const loyaltyPoints = screens.reduce((sum, screen) => sum + screen.loyalty_points, 0);
-
-    const stats: RevenueStats = {
-      totalRevenue,
-      monthlyRevenue,
-      quarterlyRevenue,
-      yearlyRevenue,
-      averagePerScreen: Math.round(averagePerScreen),
-      topPerformingScreen: topScreen.name,
-      growthRate,
-      activeScreens,
-      totalScreens,
-      loyaltyPoints,
-    };
-
-    return stats;
-  }
-
-  // Récupérer les comparaisons mensuelles pour les graphiques
-  async getMonthlyComparison(): Promise<MonthlyComparison[]> {
-    // Récupérer l'utilisateur connecté
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      return [];
-    }
-
-    // Récupérer UNIQUEMENT les écrans du propriétaire connecté
-    const { data: screens, error: screensError } = await supabase
-      .from('screens')
-      .select('*')
-      .eq('owner_id', user.id); // Filtrer par propriétaire
-
-    if (screensError) throw screensError;
-
-    const months = [
-      'Janvier',
-      'Février',
-      'Mars',
-      'Avril',
-      'Mai',
-      'Juin',
-      'Juillet',
-      'Août',
-      'Septembre',
-      'Octobre',
-      'Novembre',
-      'Décembre',
-    ];
-
-    const now = new Date();
-    const comparisons: MonthlyComparison[] = [];
-
-    for (let i = 11; i >= 0; i--) {
-      const monthIndex = (now.getMonth() - i + 12) % 12;
-      const monthRevenue = screens.reduce((sum, screen) => {
-        const baseRevenue = screen.monthly_revenue;
-        const variation = 0.8 + Math.random() * 0.4; // Variation ±20%
-        return sum + baseRevenue * variation;
-      }, 0);
-
-      const previousMonthRevenue =
-        i < 11 ? comparisons[comparisons.length - 1]?.revenue || monthRevenue : monthRevenue;
-      const growth =
-        previousMonthRevenue > 0
-          ? ((monthRevenue - previousMonthRevenue) / previousMonthRevenue) * 100
-          : 0;
-
-      comparisons.push({
-        month: months[monthIndex],
-        revenue: Math.round(monthRevenue),
-        screens: screens.length,
-        growth: Math.round(growth * 100) / 100,
+      entry.total_revenue += line.earnings_tnd;
+      if (isInCurrentMonth(line.reconciled_at)) entry.monthly_revenue += line.earnings_tnd;
+      entry.revenue_history.push({
+        id: `${line.campaign_id}-${line.screenhost_id}`,
+        screen_id: line.screenhost_id,
+        screen_name: line.campaign_name || line.screenhost_name,
+        location: line.screenhost_name,
+        amount: line.earnings_tnd,
+        period: 'monthly',
+        date: line.reconciled_at,
+        created_at: line.reconciled_at,
+        updated_at: line.reconciled_at,
       });
     }
+    for (const entry of byScreen.values()) {
+      entry.average_revenue =
+        entry.revenue_history.length > 0
+          ? Math.round(entry.total_revenue / entry.revenue_history.length)
+          : 0;
+    }
+    return [...byScreen.values()];
+  }
 
-    return comparisons;
+  // Une RevenueData par ligne de paie (campagne × écran). Alimente le tableau des transactions de
+  // OwnerRevenue (qui lit id, amount, date). Ce sont des crédits POSITIFs — le filtre 'Dépenses'
+  // (montant < 0) reste donc vide (à confirmer côté produit, cf. risque #6 du plan).
+  async getRevenueByPeriod(_period: 'monthly' | 'quarterly' | 'yearly'): Promise<RevenueData[]> {
+    const { lines } = await this.fetchEarnings();
+    return lines.map((line) => ({
+      id: `${line.campaign_id}-${line.screenhost_id}`,
+      screen_id: line.screenhost_id,
+      screen_name: line.campaign_name || line.screenhost_name,
+      location: line.screenhost_name,
+      amount: line.earnings_tnd,
+      period: 'monthly',
+      date: line.reconciled_at,
+      created_at: line.reconciled_at,
+      updated_at: line.reconciled_at,
+    }));
+  }
+
+  // Statistiques globales. Seuls les champs reconstructibles depuis les paies réelles sont calculés
+  // (total, revenu du mois courant, nombre d'écrans distincts, meilleur écran) ; les champs qui
+  // n'existaient qu'en mock (trimestriel/annuel/croissance/points de fidélité) tombent à 0 — on ne
+  // fabrique PLUS de chiffres.
+  async getRevenueStats(): Promise<RevenueStats> {
+    const { total_tnd, lines } = await this.fetchEarnings();
+
+    const monthlyRevenue = lines
+      .filter((line) => isInCurrentMonth(line.reconciled_at))
+      .reduce((sum, line) => sum + line.earnings_tnd, 0);
+
+    const earningsByScreen = new Map<string, { name: string; total: number }>();
+    for (const line of lines) {
+      const current = earningsByScreen.get(line.screenhost_id);
+      if (current) {
+        current.total += line.earnings_tnd;
+      } else {
+        earningsByScreen.set(line.screenhost_id, {
+          name: line.screenhost_name,
+          total: line.earnings_tnd,
+        });
+      }
+    }
+
+    let topPerformingScreen = '';
+    let topTotal = -Infinity;
+    for (const { name, total } of earningsByScreen.values()) {
+      if (total > topTotal) {
+        topTotal = total;
+        topPerformingScreen = name;
+      }
+    }
+
+    const screenCount = earningsByScreen.size;
+
+    return {
+      totalRevenue: total_tnd,
+      monthlyRevenue,
+      quarterlyRevenue: 0,
+      yearlyRevenue: 0,
+      averagePerScreen: screenCount > 0 ? Math.round(total_tnd / screenCount) : 0,
+      topPerformingScreen,
+      growthRate: 0,
+      activeScreens: screenCount,
+      totalScreens: screenCount,
+      loyaltyPoints: 0,
+    };
+  }
+
+  // Comparaison mensuelle — aucun consommateur live ; la série temporelle mock (Math.random sur 12
+  // mois) n'a pas d'équivalent dans les paies réelles. On renvoie [] (le type est conservé pour
+  // export.service) plutôt que d'inventer un historique.
+  async getMonthlyComparison(): Promise<MonthlyComparison[]> {
+    return [];
   }
 }
 

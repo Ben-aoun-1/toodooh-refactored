@@ -181,7 +181,9 @@ export default function OwnerRevenue() {
     );
     return sorted.map((r, index) => ({
       id: r.id,
-      label: 'Versement mensuel',
+      // r.screen_name porte désormais le nom de la campagne (revenue.service) — un revenu = la part
+      // de cette campagne diffusée dans l'établissement, plus parlant que l'ancien libellé figé.
+      label: r.screen_name || 'Versement',
       amount: r.amount,
       date: r.date,
       paymentMode: index === 0 ? 'Virement' : '',
