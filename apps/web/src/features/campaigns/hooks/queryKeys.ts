@@ -63,6 +63,9 @@ export const campaignsKeys = {
   /** A campaign's audience targeting lines (L-target — category × class). */
   targeting: (campaignId: string) => [...campaignsKeys.all, 'targeting', campaignId] as const,
 
+  /** Screenhosts matching a campaign's targeting — the Couverture-step coverage map. */
+  coverage: (campaignId: string) => [...campaignsKeys.all, 'coverage', campaignId] as const,
+
   /** The signed-in advertiser's creative library (L-spot — the Creative step picker source). */
   myCreatives: (userId: string) => [...campaignsKeys.all, 'myCreatives', userId] as const,
 

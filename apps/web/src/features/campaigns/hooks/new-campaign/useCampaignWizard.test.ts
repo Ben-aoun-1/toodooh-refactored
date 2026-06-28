@@ -13,6 +13,7 @@ import {
   getStepList,
   validateBasics,
   validateCart,
+  validateCoverage,
   validateCreative,
   validateTargeting,
 } from './wizard-steps';
@@ -58,10 +59,10 @@ function fakeCampaign(overrides: Partial<CampaignView> = {}): CampaignView {
 }
 
 describe('getStepList', () => {
-  it('returns the 4 REST-engine steps in order', () => {
+  it('returns the 5 REST-engine steps in order', () => {
     const steps = getStepList();
-    expect(steps.map((s) => s.id)).toEqual(['basics', 'targeting', 'creative', 'cart']);
-    expect(steps.map((s) => s.index)).toEqual([1, 2, 3, 4]);
+    expect(steps.map((s) => s.id)).toEqual(['basics', 'targeting', 'coverage', 'creative', 'cart']);
+    expect(steps.map((s) => s.index)).toEqual([1, 2, 3, 4, 5]);
   });
 });
 
@@ -79,6 +80,10 @@ describe('validators', () => {
     expect(validateTargeting(blankState())).toBe(true);
   });
 
+  it('validateCoverage is always satisfiable (read-only map preview, no gate)', () => {
+    expect(validateCoverage(blankState())).toBe(true);
+  });
+
   it('validateCreative requires a linked creative id', () => {
     expect(validateCreative(blankState())).toBe(false);
     expect(validateCreative(blankState({ creativeId: 'crv-1' }))).toBe(true);
@@ -94,24 +99,25 @@ describe('validators', () => {
 describe('canStepBeReached', () => {
   it('blocks a step when a prior gate fails', () => {
     const stepList = getStepList();
-    // Basics valid → targeting (always-true) reachable; creative blocked (no creative).
+    // Basics valid → targeting + coverage (always-true) reachable; cart blocked (no creative).
     const state = validBasics();
     expect(canStepBeReached(state, 1, stepList)).toBe(true);
     expect(canStepBeReached(state, 2, stepList)).toBe(true);
-    expect(canStepBeReached(state, 3, stepList)).toBe(true); // targeting gate is always true
-    expect(canStepBeReached(state, 4, stepList)).toBe(false); // creative gate fails
+    expect(canStepBeReached(state, 3, stepList)).toBe(true); // targeting gate is always true → coverage
+    expect(canStepBeReached(state, 4, stepList)).toBe(true); // coverage gate is always true → creative
+    expect(canStepBeReached(state, 5, stepList)).toBe(false); // creative gate fails → cart blocked
   });
 
   it('reaches the last step when every prior gate passes', () => {
     const stepList = getStepList();
     const state = validBasics({ creativeId: 'crv-1' });
-    expect(canStepBeReached(state, 4, stepList)).toBe(true);
+    expect(canStepBeReached(state, 5, stepList)).toBe(true);
   });
 
   it('returns false for out-of-range indices', () => {
     const stepList = getStepList();
     expect(canStepBeReached(validBasics(), 0, stepList)).toBe(false);
-    expect(canStepBeReached(validBasics(), 5, stepList)).toBe(false);
+    expect(canStepBeReached(validBasics(), 6, stepList)).toBe(false);
   });
 });
 

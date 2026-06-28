@@ -16,6 +16,14 @@ export function validateTargeting(_state: WizardState): boolean {
   return true;
 }
 
+/**
+ * Couverture is a read-only coverage-map PREVIEW (the screenhosts matching the targeting). It gates
+ * nothing — like Targeting, navigation past it is always allowed.
+ */
+export function validateCoverage(_state: WizardState): boolean {
+  return true;
+}
+
 /** Creative gate: a creative must be linked (PATCH creative_id) before budgeting/submit. */
 export function validateCreative(state: WizardState): boolean {
   return Boolean(state.creativeId);
@@ -29,14 +37,16 @@ export function validateCart(state: WizardState): boolean {
 const STEP_TEMPLATE: ReadonlyArray<Omit<StepDescriptor, 'validate'>> = [
   { index: 1, id: 'basics', label: 'Informations de base' },
   { index: 2, id: 'targeting', label: 'Ciblage' },
-  { index: 3, id: 'creative', label: 'Création' },
-  { index: 4, id: 'cart', label: 'Budget & validation' },
+  { index: 3, id: 'coverage', label: 'Couverture' },
+  { index: 4, id: 'creative', label: 'Création' },
+  { index: 5, id: 'cart', label: 'Budget & validation' },
 ];
 
 export function getStepList(): StepDescriptor[] {
   const validators: Record<string, (state: WizardState) => boolean> = {
     basics: validateBasics,
     targeting: validateTargeting,
+    coverage: validateCoverage,
     creative: validateCreative,
     cart: validateCart,
   };
