@@ -3,6 +3,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { adminAccountsRoutes } from './admin-accounts.js';
 import { adminCampaignsRoutes } from './admin-campaigns.js';
 import { adminCreativesRoutes } from './admin-creatives.js';
+import { adminDispatchConfigRoutes } from './admin-dispatch-config.js';
 import { adminRechargesRoutes } from './admin-recharges.js';
 import { adminReconcileRoutes } from './admin-reconcile.js';
 import { adminRoutes } from './admin.js';
@@ -75,6 +76,9 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   // approved creative + funded, then dispatch → status='active') / reject. The keystone that lets
   // the dispatch → playout → proof-of-play chain run end-to-end.
   await app.register(adminCampaignsRoutes);
+  // CPM CONFIG — admin-editable dispatch CPM (standard/event TND-per-1000). The activation
+  // derivation reads it to compute I_cible = ⌊budget·1000/cpm⌋; editable without a migration.
+  await app.register(adminDispatchConfigRoutes);
   // L-redisp — admin reconciliation: value plan-promised vs proof-aired at clôture, settle the
   // screencaster wallet (the spend) + record screenhost earnings. Idempotent per campaign.
   await app.register(adminReconcileRoutes);

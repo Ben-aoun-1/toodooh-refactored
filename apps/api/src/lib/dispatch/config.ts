@@ -9,6 +9,9 @@ export interface ResolvedDispatchConfig {
   joursActifs: number;
   rMinEfficace: number;
   fMaxSeconds: number;
+  // Admin-editable CPM (TND/1000) — the activation derivation picks one by campaign type.
+  standardCpmTnd: number;
+  eventCpmTnd: number;
 }
 
 // Read the singleton dispatch config (numeric columns come back as strings → coerce to numbers).
@@ -22,6 +25,8 @@ export const getDispatchConfig = async (): Promise<ResolvedDispatchConfig> => {
         joursActifs: row.joursActifs,
         rMinEfficace: row.rMinEfficace,
         fMaxSeconds: row.fMaxSeconds,
+        standardCpmTnd: Number(row.standardCpmTnd),
+        eventCpmTnd: Number(row.eventCpmTnd),
       }
     : { ...DISPATCH_CONFIG_DEFAULTS };
   // seuil_diffusable is the materiality divisor (N_max = ⌊I_cible/seuil⌋) and the no-crumb floor;

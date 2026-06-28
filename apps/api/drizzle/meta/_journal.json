@@ -232,6 +232,13 @@
       "when": 1782615935515,
       "tag": "0032_campaign_requested_budget",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1782678135731,
+      "tag": "0033_campaign_cpm_config",
+      "breakpoints": true
     }
   ]
 }
