@@ -58,9 +58,13 @@ export default function UserManagement() {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   // The reviewed user's documents, grouped by category (F-docs Commit 3). Fetched only while a user
   // is selected; presigning a single document is the imperative getDocumentUrlById call below.
-  const { documents: userDocuments, loading: documentsLoading } = useUserDocuments(
-    selectedUser?.id ?? null,
-  );
+  // documentsError is surfaced in the modal so a failed/forbidden grouped fetch reads differently
+  // from a genuine "no documents" (otherwise both render an identical "Non fourni").
+  const {
+    documents: userDocuments,
+    loading: documentsLoading,
+    isError: documentsError,
+  } = useUserDocuments(selectedUser?.id ?? null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
   // Reject-reason modal (G2 D-G2-3) — the backend requires a non-empty rejection note.
@@ -659,90 +663,61 @@ export default function UserManagement() {
                               </span>
                             </div>
 
-                            {/* Documents selon le type de profil */}
-
-                            {/* CIN pour les propriétaires individuels */}
+                            {/* Champs spécifiques au profil (scalaires, NON documentaires) — restent
+                                associés au type. Le numéro CIN n'existe que pour le proprio individuel;
+                                zone + nombre d'écrans pour les propriétaires. */}
                             {selectedUser.profile_type === 'individual_owner' && (
-                              <>
-                                <div className="flex justify-between items-center pt-2 border-t border-gray-200 mt-2">
-                                  <span className="text-gray-600">Numéro CIN:</span>
+                              <div className="flex justify-between items-center pt-2 border-t border-gray-200 mt-2">
+                                <span className="text-gray-600">Numéro CIN:</span>
+                                <span className="font-medium text-gray-900">
+                                  {selectedUser.cin || 'Non fourni'}
+                                </span>
+                              </div>
+                            )}
+                            {isOwnerProfile(selectedUser.profile_type) && selectedUser.zone && (
+                              <div className="flex justify-between items-center pt-2">
+                                <span className="text-gray-600">Zone:</span>
+                                <span className="font-medium text-gray-900">
+                                  {selectedUser.zone}
+                                </span>
+                              </div>
+                            )}
+                            {isOwnerProfile(selectedUser.profile_type) &&
+                              selectedUser.number_of_screens !== undefined &&
+                              selectedUser.number_of_screens !== null && (
+                                <div className="flex justify-between items-center pt-2">
+                                  <span className="text-gray-600">Nombre d'écrans:</span>
                                   <span className="font-medium text-gray-900">
-                                    {selectedUser.cin || 'Non fourni'}
+                                    {selectedUser.number_of_screens}
                                   </span>
                                 </div>
-                                <UserDocumentReviewGroup
-                                  label="Document CIN"
-                                  cin
-                                  docs={userDocuments?.cin ?? []}
-                                  loading={documentsLoading}
-                                  onView={(docId) => handleViewDocument(selectedUser.id, docId)}
-                                />
-                                {selectedUser.zone && (
-                                  <div className="flex justify-between items-center pt-2">
-                                    <span className="text-gray-600">Zone:</span>
-                                    <span className="font-medium text-gray-900">
-                                      {selectedUser.zone}
-                                    </span>
-                                  </div>
-                                )}
-                                {/* Nombre d'écrans */}
-                                {selectedUser.number_of_screens !== undefined &&
-                                  selectedUser.number_of_screens !== null && (
-                                    <div className="flex justify-between items-center pt-2">
-                                      <span className="text-gray-600">Nombre d'écrans:</span>
-                                      <span className="font-medium text-gray-900">
-                                        {selectedUser.number_of_screens}
-                                      </span>
-                                    </div>
-                                  )}
-                              </>
-                            )}
+                              )}
 
-                            {/* RNE pour les propriétaires de parc */}
-                            {selectedUser.profile_type === 'fleet_owner' && (
-                              <>
-                                <UserDocumentReviewGroup
-                                  label="Registre de commerce"
-                                  topBorder
-                                  docs={userDocuments?.rne ?? []}
-                                  loading={documentsLoading}
-                                  onView={(docId) => handleViewDocument(selectedUser.id, docId)}
-                                />
-                                {selectedUser.zone && (
-                                  <div className="flex justify-between items-center pt-2">
-                                    <span className="text-gray-600">Zone:</span>
-                                    <span className="font-medium text-gray-900">
-                                      {selectedUser.zone}
-                                    </span>
-                                  </div>
-                                )}
-                                {/* Nombre d'écrans */}
-                                {selectedUser.number_of_screens !== undefined &&
-                                  selectedUser.number_of_screens !== null && (
-                                    <div className="flex justify-between items-center pt-2">
-                                      <span className="text-gray-600">Nombre d'écrans:</span>
-                                      <span className="font-medium text-gray-900">
-                                        {selectedUser.number_of_screens}
-                                      </span>
-                                    </div>
-                                  )}
-                              </>
-                            )}
-
-                            {/* RNE pour les annonceurs */}
-                            {selectedUser.profile_type === 'advertiser' && (
-                              <>
-                                <UserDocumentReviewGroup
-                                  label="Registre de commerce"
-                                  topBorder
-                                  docs={userDocuments?.rne ?? []}
-                                  loading={documentsLoading}
-                                  onView={(docId) => handleViewDocument(selectedUser.id, docId)}
-                                />
-                              </>
-                            )}
-
-                            {/* Documents complémentaires — toutes catégories de profil (F-docs) */}
+                            {/* Documents (CIN / RNE / complémentaire / bancaire) — pilotés PAR LES
+                                DONNÉES renvoyées par l'endpoint groupé (userDocuments.<catégorie>),
+                                JAMAIS par profile_type. Avant, chaque groupe était conditionné au
+                                profile_type surfacé : un proprio ScreenHost classé advertiser/agency
+                                (ou un rôle null coalescé en 'advertiser') voyait l'API renvoyer ses
+                                volets, mais le modal ne rendait pas la catégorie → "Non fourni"/vide.
+                                En rendant les quatre groupes inconditionnellement, tout volet persisté
+                                est affiché et presignable ("Voir") quel que soit le classement du
+                                profil. Chaque groupe s'auto-rend "Non fourni" quand sa catégorie est
+                                vide. */}
+                            <UserDocumentReviewGroup
+                              label="Document CIN"
+                              cin
+                              topBorder
+                              docs={userDocuments?.cin ?? []}
+                              loading={documentsLoading}
+                              onView={(docId) => handleViewDocument(selectedUser.id, docId)}
+                            />
+                            <UserDocumentReviewGroup
+                              label="Registre de commerce"
+                              topBorder
+                              docs={userDocuments?.rne ?? []}
+                              loading={documentsLoading}
+                              onView={(docId) => handleViewDocument(selectedUser.id, docId)}
+                            />
                             <UserDocumentReviewGroup
                               label="Documents complémentaires"
                               topBorder
@@ -750,6 +725,27 @@ export default function UserManagement() {
                               loading={documentsLoading}
                               onView={(docId) => handleViewDocument(selectedUser.id, docId)}
                             />
+                            {/* Le relevé bancaire (volet) est INCONDITIONNEL — un annonceur/agence qui a
+                                téléversé un RIB doit aussi le voir. La carte "Coordonnées bancaires"
+                                ci-dessous (lecture seule, F6) conserve, elle, son gate propriétaire. */}
+                            <UserDocumentReviewGroup
+                              label="Relevé d'identité bancaire"
+                              single
+                              topBorder
+                              docs={userDocuments?.bank ?? []}
+                              loading={documentsLoading}
+                              onView={(docId) => handleViewDocument(selectedUser.id, docId)}
+                            />
+                            {/* Un échec/refus du fetch groupé doit être visiblement distinct d'un
+                                "aucun document" (sinon les deux rendent un identique "Non fourni"). */}
+                            {documentsError && (
+                              <div className="flex justify-between items-center pt-2 border-t border-gray-200 mt-2">
+                                <span className="text-xs text-red-600">
+                                  Échec du chargement des documents — réessayez ou vérifiez vos
+                                  droits.
+                                </span>
+                              </div>
+                            )}
 
                             {/* Code agent (proprio/annonceur) */}
                             {(isOwnerProfile(selectedUser.profile_type) ||
@@ -798,14 +794,8 @@ export default function UserManagement() {
                                   {selectedUser.bank_iban || 'Non fourni'}
                                 </span>
                               </div>
-                              <UserDocumentReviewGroup
-                                label="Relevé d'identité bancaire"
-                                single
-                                topBorder
-                                docs={userDocuments?.bank ?? []}
-                                loading={documentsLoading}
-                                onView={(docId) => handleViewDocument(selectedUser.id, docId)}
-                              />
+                              {/* Le volet "Relevé d'identité bancaire" est rendu inconditionnellement
+                                  dans la section Documents ci-dessus (pour tout profil), pas ici. */}
                             </div>
                           </div>
                         )}
