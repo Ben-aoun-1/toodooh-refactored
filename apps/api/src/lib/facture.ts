@@ -15,9 +15,10 @@ const log = logger.child({ module: 'facture' });
 
 // Brand palette. In the React app #00B3A6 is the Tailwind `brand` token; a server-rendered PDF has no
 // Tailwind/token layer, so the hex lives here (the styling rule is a frontend rule). Flagged.
-const BRAND = '#00b3a6';
-const INK = '#1a1a1a';
-const MUTED = '#6b7280';
+// Exported as the shared PDF brand seam (lib/report.ts reuses them — same wordmark/palette/logo).
+export const BRAND = '#00b3a6';
+export const INK = '#1a1a1a';
+export const MUTED = '#6b7280';
 
 export interface FactureBankDetails {
   beneficiary: string;
@@ -46,7 +47,7 @@ export const factureBankDetailsFromEnv = (e: Env): FactureBankDetails => ({
 // from both src/ (tsx/vitest) and dist/ (compiled) — assets/ is a sibling of both. Read once + cached;
 // a missing/unreadable asset degrades to a text wordmark (never fails the facture).
 let logoCache: Buffer | null | undefined;
-const loadLogo = (): Buffer | null => {
+export const loadLogo = (): Buffer | null => {
   if (logoCache !== undefined) return logoCache;
   try {
     logoCache = readFileSync(fileURLToPath(new URL('../../assets/logo.png', import.meta.url)));

@@ -3,7 +3,13 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 
 import { auth } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
-import { type NewUser, screenhostAffluence, screenhosts, users } from '../src/db/schema.js';
+import {
+  type NewUser,
+  screenhostAffluence,
+  screenhostMonthlyStats,
+  screenhosts,
+  users,
+} from '../src/db/schema.js';
 import { screenhostsRoutes } from '../src/routes/screenhosts.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
@@ -63,6 +69,11 @@ const seedAffluence = async (
   );
 };
 
+// sql is shared across both describes — close it ONCE at the file level.
+afterAll(async () => {
+  await sql.end();
+});
+
 describe('screenhost affluence read (owner-scoped, real Postgres)', () => {
   let app: ReturnType<typeof buildApp>;
 
@@ -76,10 +87,6 @@ describe('screenhost affluence read (owner-scoped, real Postgres)', () => {
   afterEach(async () => {
     await app.close();
     vi.restoreAllMocks();
-  });
-
-  afterAll(async () => {
-    await sql.end();
   });
 
   const get = (id: string) =>
@@ -156,5 +163,72 @@ describe('screenhost affluence read (owner-scoped, real Postgres)', () => {
     const sh = await seedScreenhost(me);
     mockSession(me, 'individual_owner', 'rejected');
     expect((await get(sh)).statusCode).toBe(403);
+  });
+});
+
+describe('screenhost monthly-report PDF download (owner-scoped, real Postgres)', () => {
+  let app: ReturnType<typeof buildApp>;
+
+  beforeEach(async () => {
+    await resetAuthTables();
+    app = buildApp();
+    await app.register(screenhostsRoutes);
+    await app.ready();
+  });
+  afterEach(async () => {
+    await app.close();
+    vi.restoreAllMocks();
+  });
+  const seedMonthlyStats = async (screenhostId: string, month: string): Promise<void> => {
+    await db.insert(screenhostMonthlyStats).values({
+      screenhostId,
+      month,
+      totalAudience: 5000,
+      daily: [
+        { date: `${month}-01`, audience: 200 },
+        { date: `${month}-02`, audience: 300 },
+      ],
+      peakDayOfWeek: 5,
+      peakHour: 18,
+    });
+  };
+  const report = (id: string, month: string) =>
+    app.inject({ method: 'GET', url: `/api/screenhosts/${id}/monthly-report?month=${month}` });
+
+  it('streams the branded PDF for the owner’s own screenhost + month', async () => {
+    const me = await seedUser();
+    const sh = await seedScreenhost(me);
+    await seedMonthlyStats(sh, '2026-05');
+    mockSession(me);
+
+    const res = await report(sh, '2026-05');
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('application/pdf');
+    expect(res.rawPayload.length).toBeGreaterThan(0);
+    expect(res.rawPayload.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+  });
+
+  it('404 for a month with no stored stats', async () => {
+    const me = await seedUser();
+    const sh = await seedScreenhost(me);
+    await seedMonthlyStats(sh, '2026-05');
+    mockSession(me);
+    expect((await report(sh, '2026-04')).statusCode).toBe(404); // no stats for April
+  });
+
+  it('404 for another owner’s screenhost (owner-scope)', async () => {
+    const me = await seedUser();
+    const other = await seedUser();
+    const foreign = await seedScreenhost(other);
+    await seedMonthlyStats(foreign, '2026-05');
+    mockSession(me);
+    expect((await report(foreign, '2026-05')).statusCode).toBe(404);
+  });
+
+  it('400 on a malformed month', async () => {
+    const me = await seedUser();
+    const sh = await seedScreenhost(me);
+    mockSession(me);
+    expect((await report(sh, 'May-2026')).statusCode).toBe(400);
   });
 });
