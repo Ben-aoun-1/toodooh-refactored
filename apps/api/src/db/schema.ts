@@ -636,6 +636,13 @@ export const campaigns = pgTable(
     // at read time (L-spot) — there is NO validation column here (bifurcated approval, see above).
     creativeId: uuid('creative_id').references(() => creatives.id, { onDelete: 'set null' }),
     submittedAt: timestamp('submitted_at', { withTimezone: true }),
+    // Admin moderation audit (activation wiring). activated_at/by stamp the admin approval that flips
+    // pending → active (and triggers dispatch); rejected_at/reject_reason stamp a pending → rejected.
+    // All nullable — only one branch is ever taken, and a draft/pending campaign has neither set.
+    activatedAt: timestamp('activated_at', { withTimezone: true }),
+    activatedBy: uuid('activated_by').references(() => users.id),
+    rejectedAt: timestamp('rejected_at', { withTimezone: true }),
+    rejectReason: text('reject_reason'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
