@@ -1,4 +1,4 @@
-import { eq, inArray } from 'drizzle-orm';
+import { asc, eq, inArray } from 'drizzle-orm';
 
 import { db } from '../db/client.js';
 import { screenhosts, screens } from '../db/schema.js';
@@ -40,4 +40,35 @@ export const createMissingScreensForOwner = async (userId: string): Promise<void
       })),
     );
   if (rows.length > 0) await db.insert(screens).values(rows);
+};
+
+// Lane 5 (TV-app login) self-heal. A screenhost owner signs into the TV app expecting the
+// screen they're holding to be openable, but screen rows only get materialized at approval
+// from screen_count (createMissingScreensForOwner) — and an individual_owner's signup leaves
+// screen_count at its 0 default (a fleet venue can also be declared with 0), so an APPROVED
+// owner can end up with ZERO screen rows and an empty GET /api/screens/mine — nothing to pair.
+// This guarantees the device read is never empty for an owner who actually has a venue: if the
+// caller owns at least one screenhost but has no screen rows at all, register a single
+// "Écran 1" on their first screenhost (by name, the order /mine lists in). Idempotent — a
+// no-op the moment ANY screen exists, so it never fights createMissingScreensForOwner or a
+// multi-screen fleet, and never over-provisions venues that already have screens. An owner
+// with zero screenhosts is left untouched (no venue to attach a screen to).
+export const ensureOwnerHasScreen = async (userId: string): Promise<void> => {
+  const [existing] = await db
+    .select({ id: screens.id })
+    .from(screens)
+    .innerJoin(screenhosts, eq(screens.screenhostId, screenhosts.id))
+    .where(eq(screenhosts.ownerId, userId))
+    .limit(1);
+  if (existing) return;
+
+  const [host] = await db
+    .select({ id: screenhosts.id })
+    .from(screenhosts)
+    .where(eq(screenhosts.ownerId, userId))
+    .orderBy(asc(screenhosts.name), asc(screenhosts.createdAt), asc(screenhosts.id))
+    .limit(1);
+  if (!host) return;
+
+  await db.insert(screens).values({ screenhostId: host.id, name: 'Écran 1' });
 };
