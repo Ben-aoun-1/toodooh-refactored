@@ -1,0 +1,2 @@
+ALTER TABLE "dispatch_config" ADD COLUMN "standard_cpm_tnd" numeric(10, 3) DEFAULT '15.000' NOT NULL;--> statement-breakpoint
+ALTER TABLE "dispatch_config" ADD COLUMN "event_cpm_tnd" numeric(10, 3) DEFAULT '30.000' NOT NULL;

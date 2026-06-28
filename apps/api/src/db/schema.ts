@@ -818,6 +818,14 @@ export const dispatchConfig = pgTable(
     joursActifs: integer('jours_actifs').notNull(), // divisor for G_jour = g_mois / jours_actifs
     rMinEfficace: integer('r_min_efficace').notNull(), // reps/hr floor (efficient cadence)
     fMaxSeconds: integer('f_max_seconds').notNull().default(300), // F — hourly broadcast cap (s)
+    // Admin-editable CPM (TND per 1000 impressions). Used to DERIVE a campaign's I_cible at
+    // activation (operator ruling: 15 standard / 30 events). Editable via PATCH
+    // /api/admin/dispatch-config; event campaigns price at event_cpm_tnd, all others at
+    // standard_cpm_tnd. NOT denormalized onto a plan until it freezes (each plan snapshots cpm).
+    standardCpmTnd: numeric('standard_cpm_tnd', { precision: 10, scale: 3 })
+      .notNull()
+      .default('15.000'),
+    eventCpmTnd: numeric('event_cpm_tnd', { precision: 10, scale: 3 }).notNull().default('30.000'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()

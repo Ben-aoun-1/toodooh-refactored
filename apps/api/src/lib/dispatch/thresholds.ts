@@ -13,11 +13,19 @@ export const computeGJour = (gMois: number, joursActifs: number): number =>
   joursActifs > 0 ? gMois / joursActifs : 0;
 
 // V1 POC defaults (Grand Tunis) — calibratable, seeded into dispatch_config by migration 0026 and
-// used as the fallback when no config row exists. F=300s is the spec's constant.
+// used as the fallback when no config row exists. F=300s is the spec's constant. standard/event CPM
+// (TND/1000) are the operator ruling (15/30), admin-editable; columns added by migration 0033.
 export const DISPATCH_CONFIG_DEFAULTS = {
   seuilDiffusable: 1000,
   gMois: 100,
   joursActifs: 30,
   rMinEfficace: 2,
   fMaxSeconds: 300,
+  standardCpmTnd: 15,
+  eventCpmTnd: 30,
 } as const;
+
+// Default tier coefficient T applied at activation when no per-campaign tier is supplied. T scales
+// the per-hour repetition ceiling (R = MIN[(3600/S)·T, F/S]); 1.0 = neutral. Kept a constant (not a
+// config column) until per-tier pricing lands — the activation derivation reads it here.
+export const DEFAULT_TIER_COEF = 1.0;

@@ -9,7 +9,7 @@ describe('getDispatchConfig (seeded singleton, real Postgres)', () => {
     await sql.end();
   });
 
-  it('returns the seeded V1 defaults', async () => {
+  it('returns the seeded V1 defaults (incl. the migration-0033 CPM columns, coerced to numbers)', async () => {
     const cfg = await getDispatchConfig();
     expect(cfg).toMatchObject({
       seuilDiffusable: 1000,
@@ -17,6 +17,11 @@ describe('getDispatchConfig (seeded singleton, real Postgres)', () => {
       joursActifs: 30,
       rMinEfficace: 2,
       fMaxSeconds: 300,
+      standardCpmTnd: 15,
+      eventCpmTnd: 30,
     });
+    // numeric(10,3) columns come back as strings from pg → must be coerced.
+    expect(typeof cfg.standardCpmTnd).toBe('number');
+    expect(typeof cfg.eventCpmTnd).toBe('number');
   });
 });
