@@ -28,7 +28,7 @@ describe('isWindowActive — campaign window covers now (V1 active rule, Africa/
 });
 
 describe('buildPlaylist — sources → UPDATE_PLAYLIST.data', () => {
-  it('maps each source to a video (id = campaign id, default priority 0, loop true)', () => {
+  it('maps each source to a video (id = campaign id, default priority 0, reps 0, loop true)', () => {
     const pl = buildPlaylist([
       { campaignId: 'c1', campaignName: 'Promo', url: 'http://x/v.mp4', durationSeconds: 30 },
     ]);
@@ -40,8 +40,22 @@ describe('buildPlaylist — sources → UPDATE_PLAYLIST.data', () => {
         campaign_name: 'Promo',
         duration_seconds: 30,
         priority: 0,
+        reps_per_hour: 0, // no allocation rI on the source → 0 (player falls back)
       },
     ]);
+  });
+
+  it('carries reps_per_hour (R_i) from the source for spot cadence', () => {
+    const pl = buildPlaylist([
+      {
+        campaignId: 'c1',
+        campaignName: 'Promo',
+        url: 'http://x/v.mp4',
+        durationSeconds: 30,
+        repsPerHour: 6,
+      },
+    ]);
+    expect(pl.videos[0]?.reps_per_hour).toBe(6);
   });
 
   it('empty sources → empty playlist (still loop true)', () => {
