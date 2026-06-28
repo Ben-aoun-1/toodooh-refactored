@@ -15,6 +15,7 @@ import {
   DollarSign,
   MapPin,
   Sliders,
+  Coins,
 } from 'lucide-react';
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -269,17 +270,30 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
               </button> */}
 
               {(role === 'superadmin' || role === 'admin') && (
-                <button
-                  onClick={() => navigate('/admin-global-config')}
-                  className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
-                    location.pathname === '/admin-global-config'
-                      ? 'bg-brand-primary text-brand-deep shadow-lg shadow-brand-primary/25'
-                      : 'text-gray-700 hover:bg-gray-100 hover:text-brand-primary'
-                  }`}
-                >
-                  <Sliders className="mr-3 h-5 w-5" />
-                  Configuration globale
-                </button>
+                <>
+                  <button
+                    onClick={() => navigate('/admin-dispatch-config')}
+                    className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
+                      location.pathname === '/admin-dispatch-config'
+                        ? 'bg-brand-primary text-brand-deep shadow-lg shadow-brand-primary/25'
+                        : 'text-gray-700 hover:bg-gray-100 hover:text-brand-primary'
+                    }`}
+                  >
+                    <Coins className="mr-3 h-5 w-5" />
+                    Tarification (CPM)
+                  </button>
+                  <button
+                    onClick={() => navigate('/admin-global-config')}
+                    className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
+                      location.pathname === '/admin-global-config'
+                        ? 'bg-brand-primary text-brand-deep shadow-lg shadow-brand-primary/25'
+                        : 'text-gray-700 hover:bg-gray-100 hover:text-brand-primary'
+                    }`}
+                  >
+                    <Sliders className="mr-3 h-5 w-5" />
+                    Configuration globale
+                  </button>
+                </>
               )}
             </nav>
 
