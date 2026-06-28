@@ -303,15 +303,15 @@ export default function AdminDashboard() {
         </div>
 
         <div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">📹 Vidéos & Événements</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">📹 Créatives & Événements</h3>
           <div className="grid grid-cols-2 gap-4">
             <button
-              onClick={() => navigate('/admin-videos')}
+              onClick={() => navigate('/admin-creatives')}
               className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-md hover:border-brand-primary transition-all cursor-pointer text-left w-full"
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Vidéos totales</p>
+                  <p className="text-sm font-medium text-gray-600">Créatives totales</p>
                   <p className="text-2xl font-bold text-gray-900">
                     {globalStats?.total_videos || 0}
                   </p>
@@ -320,7 +320,7 @@ export default function AdminDashboard() {
               </div>
             </button>
             <button
-              onClick={() => navigate('/admin-videos?status=pending')}
+              onClick={() => navigate('/admin-creatives?status=pending')}
               className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-md hover:border-yellow-400 transition-all cursor-pointer text-left w-full"
             >
               <div className="flex items-center justify-between">
