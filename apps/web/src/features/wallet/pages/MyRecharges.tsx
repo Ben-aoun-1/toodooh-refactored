@@ -37,11 +37,9 @@ export default function MyRecharges() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<TabFilter>('all');
   const [showNewRechargeModal, setShowNewRechargeModal] = useState(false);
-  const [newRecharge, setNewRecharge] = useState({
-    amount: '',
-    payment_method: 'card',
-    description: '',
-  });
+  // Engine recharges are BANK-TRANSFER only — the advertiser submits an amount, the
+  // facture (with our bank coordinates) is then downloadable from "Mes factures".
+  const [amount, setAmount] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -72,21 +70,8 @@ export default function MyRecharges() {
     setCurrentPage(1);
   }, [activeTab, searchQuery]);
 
-  const getMethodLabel = (method: string) => {
-    switch (method) {
-      case 'card':
-        return 'Carte bancaire';
-      case 'bank':
-        return 'Virement bancaire';
-      case 'cash':
-        return 'Espèces';
-      default:
-        return 'Autre';
-    }
-  };
-
-  const handleQuickRecharge = (amount: number) => {
-    setNewRecharge({ amount: amount.toString(), payment_method: 'card', description: '' });
+  const handleQuickRecharge = (value: number) => {
+    setAmount(value.toString());
     setShowNewRechargeModal(true);
   };
 
@@ -96,21 +81,16 @@ export default function MyRecharges() {
       toast.error('Vous devez être connecté');
       return;
     }
-    if (!newRecharge.amount || parseFloat(newRecharge.amount) < 10) {
+    if (!amount || parseFloat(amount) < 10) {
       toast.error('Le montant minimum est de 10 TND');
       return;
     }
 
     try {
       setSubmitting(true);
-      await createRecharge.mutateAsync({
-        amount: parseFloat(newRecharge.amount),
-        payment_method: newRecharge.payment_method,
-        description:
-          newRecharge.description || `Recharge ${getMethodLabel(newRecharge.payment_method)}`,
-      });
+      await createRecharge.mutateAsync({ amount: parseFloat(amount) });
       toast.success('Recharge créée avec succès ! En attente de validation.');
-      setNewRecharge({ amount: '', payment_method: 'card', description: '' });
+      setAmount('');
       setShowNewRechargeModal(false);
     } catch (_error) {
       toast.error('Erreur lors de la création de la recharge');
@@ -366,8 +346,8 @@ export default function MyRecharges() {
                 </label>
                 <input
                   type="number"
-                  value={newRecharge.amount}
-                  onChange={(e) => setNewRecharge({ ...newRecharge, amount: e.target.value })}
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary/40 focus:border-brand-primary transition-all"
                   placeholder="Entrez le montant"
                   min="10"
@@ -378,53 +358,17 @@ export default function MyRecharges() {
                 <p className="text-xs text-gray-400 mt-1">Montant minimum : 10 TND</p>
               </div>
 
-              <div>
-                <label
-                  className="block text-sm font-medium text-gray-700 mb-2"
-                  htmlFor="payment-method"
-                >
-                  Méthode de paiement *
-                </label>
-                <select
-                  value={newRecharge.payment_method}
-                  onChange={(e) =>
-                    setNewRecharge({ ...newRecharge, payment_method: e.target.value })
-                  }
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary/40 focus:border-brand-primary transition-all"
-                  required
-                  id="payment-method"
-                >
-                  <option value="card">Carte bancaire</option>
-                  <option value="bank">Virement bancaire</option>
-                  <option value="cash">Espèces</option>
-                </select>
-              </div>
-
-              <div>
-                <label
-                  className="block text-sm font-medium text-gray-700 mb-2"
-                  htmlFor="description"
-                >
-                  Description (optionnel)
-                </label>
-                <textarea
-                  value={newRecharge.description}
-                  onChange={(e) => setNewRecharge({ ...newRecharge, description: e.target.value })}
-                  rows={3}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary/40 focus:border-brand-primary transition-all resize-none"
-                  placeholder="Description de la recharge"
-                  id="description"
-                ></textarea>
-              </div>
-
               <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
                 <div className="flex items-start gap-3">
                   <Clock className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-sm text-yellow-800 font-medium">En attente de validation</p>
+                    <p className="text-sm text-yellow-800 font-medium">
+                      Paiement par virement bancaire
+                    </p>
                     <p className="text-xs text-yellow-700 mt-1">
-                      Votre recharge sera validée par un administrateur avant d&apos;être créditée
-                      sur votre compte.
+                      Une facture avec nos coordonnées bancaires sera générée (téléchargeable depuis
+                      « Mes factures »). Votre recharge sera créditée après validation du virement
+                      par un administrateur.
                     </p>
                   </div>
                 </div>
@@ -435,7 +379,7 @@ export default function MyRecharges() {
                   type="button"
                   onClick={() => {
                     setShowNewRechargeModal(false);
-                    setNewRecharge({ amount: '', payment_method: 'card', description: '' });
+                    setAmount('');
                   }}
                   className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-all font-medium"
                   disabled={submitting}
