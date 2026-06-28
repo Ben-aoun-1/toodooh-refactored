@@ -204,6 +204,13 @@
       "when": 1782602153579,
       "tag": "0028_proof_of_play",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1782604730759,
+      "tag": "0029_campaign_activation_audit",
+      "breakpoints": true
     }
   ]
 }
