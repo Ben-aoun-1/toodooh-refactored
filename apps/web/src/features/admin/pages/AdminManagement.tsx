@@ -15,7 +15,6 @@ import { useNavigate } from 'react-router-dom';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
 import { useAdminMutations, useAdmins } from '@/features/admin/hooks/useAdmins';
-import { adminService } from '@/features/admin/services/admin.service';
 import { AdminProfile } from '@/features/admin/types/admin';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 
@@ -68,17 +67,6 @@ export default function AdminManagement() {
       toast.success('Administrateur désactivé avec succès');
       setShowDeactivateModal(false);
       setAdminToDeactivate(null);
-
-      // Log l'activité
-      if (user) {
-        await adminService.logActivity({
-          admin_id: user.id,
-          action: 'deactivate_admin',
-          target_type: 'admin',
-          target_id: adminToDeactivate.id,
-          description: `Désactivation de ${adminToDeactivate.first_name} ${adminToDeactivate.last_name}`,
-        });
-      }
     } catch (_error) {
       toast.error('Erreur lors de la désactivation');
     }
@@ -97,17 +85,6 @@ export default function AdminManagement() {
       toast.success('Administrateur réactivé avec succès');
       setShowReactivateModal(false);
       setAdminToReactivate(null);
-
-      // Log l'activité
-      if (user) {
-        await adminService.logActivity({
-          admin_id: user.id,
-          action: 'reactivate_admin',
-          target_type: 'admin',
-          target_id: adminToReactivate.id,
-          description: `Réactivation de ${adminToReactivate.first_name} ${adminToReactivate.last_name}`,
-        });
-      }
     } catch (_error) {
       toast.error('Erreur lors de la réactivation');
     }
