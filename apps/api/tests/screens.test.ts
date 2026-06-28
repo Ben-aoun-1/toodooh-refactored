@@ -204,6 +204,70 @@ describe('screens + pair/GPS-link (real Postgres)', () => {
     it('no bearer → 401', async () => {
       expect((await app.inject({ method: 'GET', url: '/api/screens/mine' })).statusCode).toBe(401);
     });
+
+    // Lane 5 self-heal: an individual_owner's signup leaves screen_count at 0, so approval
+    // generates NO screens — but they sign into the TV app holding a real screen. /mine must
+    // not hand them an empty list. (Screen creation is source-confirmed: lib/screens —
+    // createMissingScreensForOwner only materializes when screen_count > 0.)
+    it('owner with a screenhost but zero screen rows gets one auto-registered "Écran 1", openable', async () => {
+      const owner = await seedUser({ role: 'individual_owner', status: 'approved' });
+      const host = await seedScreenhost(owner, {
+        name: 'Café Solo',
+        city: 'Tunis',
+        screenCount: 0,
+      });
+      // No createMissingScreensForOwner: screen_count 0 → the owner starts with ZERO screens.
+      expect(await db.select().from(screens).where(eq(screens.screenhostId, host))).toHaveLength(0);
+
+      const token = await seedDeviceToken(owner);
+      const res = await mine(token);
+      expect(res.statusCode).toBe(200);
+      const body = res.json<ScreenView[]>();
+      expect(body).toHaveLength(1);
+      expect(body[0]).toMatchObject({
+        name: 'Écran 1',
+        location: 'Café Solo — Tunis',
+        status: 'active',
+        is_online: false,
+      });
+      // Exactly one row was persisted on the owner's screenhost.
+      expect(await db.select().from(screens).where(eq(screens.screenhostId, host))).toHaveLength(1);
+
+      // Openable: the auto-registered screen pairs like any other.
+      const paired = await pair(token, body[0]?.id ?? '');
+      expect(paired.statusCode).toBe(200);
+      expect(paired.json<{ paired: boolean }>().paired).toBe(true);
+    });
+
+    it('self-heal is idempotent — a second /mine call adds no screen', async () => {
+      const owner = await seedUser({ role: 'individual_owner', status: 'approved' });
+      await seedScreenhost(owner, { name: 'Café Solo', screenCount: 0 });
+      const token = await seedDeviceToken(owner);
+
+      expect((await mine(token)).json<ScreenView[]>()).toHaveLength(1);
+      expect((await mine(token)).json<ScreenView[]>()).toHaveLength(1);
+      const all = await db.select().from(screens);
+      expect(all).toHaveLength(1);
+    });
+
+    it('owner who already has screens gets no extra auto-screen', async () => {
+      const owner = await seedUser({ role: 'fleet_owner', status: 'approved' });
+      await seedScreenhost(owner, { name: 'Hôtel A', screenCount: 2 });
+      await createMissingScreensForOwner(owner);
+      const token = await seedDeviceToken(owner);
+
+      expect((await mine(token)).json<ScreenView[]>()).toHaveLength(2);
+      expect(await db.select().from(screens)).toHaveLength(2);
+    });
+
+    it('owner with zero screenhosts → empty list, nothing created (no crash)', async () => {
+      const owner = await seedUser({ role: 'individual_owner', status: 'approved' });
+      const token = await seedDeviceToken(owner);
+      const res = await mine(token);
+      expect(res.statusCode).toBe(200);
+      expect(res.json<ScreenView[]>()).toHaveLength(0);
+      expect(await db.select().from(screens)).toHaveLength(0);
+    });
   });
 
   describe('POST /api/screens/:id/pair — GPS-link rule', () => {

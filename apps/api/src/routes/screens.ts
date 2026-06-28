@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { db } from '../db/client.js';
 import { screenhosts, screens } from '../db/schema.js';
+import { ensureOwnerHasScreen } from '../lib/screens.js';
 import { requireDeviceAuth } from '../middleware/require-device-auth.js';
 
 // TV-app screen endpoints (MAP M1 commit 2) — device-bearer-guarded. The app's flow:
@@ -27,6 +28,12 @@ export const screensRoutes: FastifyPluginAsync = async (app) => {
         .status(401)
         .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
     }
+
+    // Lane 5 — the device read must never be empty for an owner who has a venue: an
+    // individual_owner whose signup left screen_count at 0 gets no screens at approval, so
+    // self-heal one "Écran 1" here so the TV they're signing in from has something to open +
+    // pair. Idempotent: a no-op once any screen exists. (See lib/screens ensureOwnerHasScreen.)
+    await ensureOwnerHasScreen(userId);
 
     const rows = await db
       .select({
