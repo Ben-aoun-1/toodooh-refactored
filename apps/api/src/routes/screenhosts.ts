@@ -7,6 +7,8 @@ import {
   businessSectors,
   campaignDispatchAllocation,
   campaignDispatchPlan,
+  campaignReconciliation,
+  campaignScreenhostPayout,
   campaigns,
   type DispatchAcceptation,
   screenhostAffluence,
@@ -179,6 +181,58 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       .where(eq(screenhosts.ownerId, userId))
       .orderBy(asc(screenhosts.name));
     return reply.status(200).send(rows.map(wifiView));
+  });
+
+  // GET /api/screenhosts/earnings — the caller's per-(campaign × screenhost) payouts + grand total.
+  // First OWNER-FACING reader of campaign_screenhost_payout (L-redisp writes one row per screenhost
+  // at admin reconciliation; earnings_tnd = delivered_imp × cpm/1000, the diffused part only). Static
+  // route — cannot collide with the deeper /:id/* param routes. Owner-scoping lives in the WHERE
+  // (screenhosts.owner_id = userId) on the INNER JOIN to screenhosts — exactly like the WiFi routes —
+  // so a foreign venue's payout can never bleed in. earnings_tnd is numeric(14,4) → drizzle returns a
+  // STRING; Number() each BEFORE summing (a naïve reduce over strings would concatenate, corrupting
+  // the total). Empty array + 0 total is the honest empty state (nothing reconciled yet).
+  app.get('/api/screenhosts/earnings', ownerGuard, async (request, reply) => {
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply
+        .status(401)
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+    }
+
+    const rows = await db
+      .select({
+        campaignId: campaignScreenhostPayout.campaignId,
+        campaignName: campaigns.name,
+        screenhostId: campaignScreenhostPayout.screenhostId,
+        screenhostName: screenhosts.name,
+        expectedImp: campaignScreenhostPayout.expectedImp,
+        deliveredImp: campaignScreenhostPayout.deliveredImp,
+        earningsTnd: campaignScreenhostPayout.earningsTnd, // numeric → string
+        reconciledAt: campaignReconciliation.reconciledAt,
+      })
+      .from(campaignScreenhostPayout)
+      .innerJoin(screenhosts, eq(screenhosts.id, campaignScreenhostPayout.screenhostId))
+      .innerJoin(campaigns, eq(campaigns.id, campaignScreenhostPayout.campaignId))
+      .innerJoin(
+        campaignReconciliation,
+        eq(campaignReconciliation.id, campaignScreenhostPayout.reconciliationId),
+      )
+      .where(eq(screenhosts.ownerId, userId)) // OWNER SCOPE — only this owner's screenhosts
+      .orderBy(desc(campaignReconciliation.reconciledAt));
+
+    return reply.status(200).send({
+      total_tnd: rows.reduce((s, r) => s + Number(r.earningsTnd), 0),
+      lines: rows.map((r) => ({
+        campaign_id: r.campaignId,
+        campaign_name: r.campaignName,
+        screenhost_id: r.screenhostId,
+        screenhost_name: r.screenhostName,
+        expected_imp: r.expectedImp,
+        delivered_imp: r.deliveredImp,
+        earnings_tnd: Number(r.earningsTnd),
+        reconciled_at: r.reconciledAt,
+      })),
+    });
   });
 
   // PATCH /api/screenhosts/:id/wifi — owner-scoped edit + approved-owner re-push.
