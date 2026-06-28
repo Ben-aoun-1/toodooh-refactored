@@ -58,7 +58,6 @@ export const runDispatch = async (
   if (lines.length === 0) return { status: 'NO_TARGETING' };
 
   const config = await getDispatchConfig();
-  const r = computeR(inputs.s, inputs.t, config.fMaxSeconds);
   const windowDays = buildWindowDays(campaign.startDate, campaign.endDate);
 
   // Hard filters: active + horaires set + capacity present + matches targeting (category × class).
@@ -83,7 +82,8 @@ export const runDispatch = async (
   );
 
   const candidateIds = candidates.map((c) => c.id);
-  // Affluence (Ai) for the candidates; engagements (other plans' allocations) reduce residual.
+  // Affluence (Ai) for the candidates; engaged broadcast SECONDS (other plans' allocations) cap the
+  // per-screen F-budget below.
   const affluenceRows = candidateIds.length
     ? await db
         .select({
@@ -99,18 +99,30 @@ export const runDispatch = async (
     ? await db
         .select({
           screenhostId: campaignDispatchAllocation.screenhostId,
-          iiPotentiel: campaignDispatchAllocation.iiPotentiel,
+          rI: campaignDispatchAllocation.rI,
+          spotSeconds: campaignDispatchPlan.sSpotSeconds,
         })
         .from(campaignDispatchAllocation)
+        .innerJoin(
+          campaignDispatchPlan,
+          eq(campaignDispatchAllocation.planId, campaignDispatchPlan.id),
+        )
         .where(inArray(campaignDispatchAllocation.screenhostId, candidateIds))
     : [];
 
   const affByKey = new Map<string, number>();
   for (const a of affluenceRows)
     affByKey.set(`${a.screenhostId}:${a.dayOfWeek}:${a.hour}`, a.estimatedImpressions);
-  const engagedById = new Map<string, number>();
+  // Engaged broadcast SECONDS/hour per screen = Σ other campaigns' (r_i × their spot duration S).
+  // (This campaign has no allocations yet — ALREADY_DISPATCHED is rejected upstream.) Seconds, not
+  // impressions: the cross-campaign cap is the 300s/hour broadcast budget, and a 30s spot and a 10s
+  // spot cost it differently — impression accounting can't see that.
+  const engagedSecondsById = new Map<string, number>();
   for (const e of engagementRows)
-    engagedById.set(e.screenhostId, (engagedById.get(e.screenhostId) ?? 0) + e.iiPotentiel);
+    engagedSecondsById.set(
+      e.screenhostId,
+      (engagedSecondsById.get(e.screenhostId) ?? 0) + e.rI * e.spotSeconds,
+    );
 
   const windowWeekdays = [...new Set(windowDays.map((d) => d.dayOfWeek))];
 
@@ -134,9 +146,15 @@ export const runDispatch = async (
     // Floor to whole impressions: capaciteUtile round-trips through FP (avgAffluence = total/hours
     // → ×hours), so non-uniform affluence yields e.g. 60030.0000000007. Flooring at the source keeps
     // residual/ai/couvert/ii_potentiel integers (the persisted columns are `integer`).
-    const capacite = Math.floor(capaciteUtile(avgAffluence, hours, r));
-    const residualCapacity = Math.max(0, capacite - (engagedById.get(sh.id) ?? 0));
-    if (residualCapacity <= 0) continue; // residual capacity > 0 hard filter
+    // Per-screen F-second cap: the residual broadcast budget after OTHER campaigns → R_eff. The
+    // cross-campaign cap is SECONDS-based (residual ÷ S), so screens shared by campaigns with
+    // different spot durations never exceed 300s/hour. (First campaign on a screen: engaged 0 →
+    // residual F → R_eff = the unconstrained MIN[(3600/S)·T, F/S] — unchanged behavior.)
+    const residualSeconds = Math.max(0, config.fMaxSeconds - (engagedSecondsById.get(sh.id) ?? 0));
+    const rEff = computeR(inputs.s, inputs.t, residualSeconds); // MIN[(3600/S)·T, ⌊residual/S⌋]
+    const capacite = Math.floor(capaciteUtile(avgAffluence, hours, rEff));
+    const residualCapacity = capacite; // the F-cap is baked into R_eff — no impression subtraction
+    if (residualCapacity <= 0) continue; // no residual broadcast budget (or zero affluence) → skip
     pool.push({
       id: sh.id,
       sps: Number(sh.sps),
@@ -150,6 +168,7 @@ export const runDispatch = async (
       hours,
       capaciteUtile: capacite,
       residualCapacity,
+      repsCap: rEff,
       slots,
     });
   }

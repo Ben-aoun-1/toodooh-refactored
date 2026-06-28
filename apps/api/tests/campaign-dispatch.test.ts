@@ -7,6 +7,7 @@ import { db, sql } from '../src/db/client.js';
 import {
   type NewUser,
   businessSectors,
+  campaignDispatchAllocation,
   campaignDispatchPlan,
   campaignTargeting,
   campaigns,
@@ -305,5 +306,76 @@ describe('campaign dispatch entrypoint (L-disp, real Postgres)', () => {
     expect((await dispatch(campaignId, { i_cible: 1000, cpm: 10, s: 10, t: 0.8 })).statusCode).toBe(
       403,
     );
+  });
+
+  // ── cross-campaign F-second cap (mixed spot durations) ───────────────────────
+  const allocsFor = async (campaignId: string) => {
+    const [plan] = await db
+      .select({ id: campaignDispatchPlan.id })
+      .from(campaignDispatchPlan)
+      .where(eq(campaignDispatchPlan.campaignId, campaignId))
+      .limit(1);
+    return db
+      .select()
+      .from(campaignDispatchAllocation)
+      .where(eq(campaignDispatchAllocation.planId, plan?.id ?? ''));
+  };
+
+  it('a 30s campaign filling the hour (300s) blocks a 10s campaign on the same screen', async () => {
+    const admin = await seedUser({ role: 'admin' });
+    const advA = await seedUser({ role: 'advertiser' });
+    const advB = await seedUser({ role: 'advertiser' });
+    const owner = await seedUser({ role: 'individual_owner' });
+    const cat = await ownerSectorId();
+    await seedEligibleScreenhost(owner, cat, 'premium', 100); // Hi=20; capacity is not the binding limit
+    const a = await seedCampaign(advA);
+    await seedTargeting(a, cat, 'premium');
+    const b = await seedCampaign(advB);
+    await seedTargeting(b, cat, 'premium');
+    mockSession(admin);
+
+    // A: S=30 → R_eff = MIN[(3600/30)·0.8=96, 300/30=10] = 10 → r_i 10 → 10×30 = 300s (full hour).
+    expect((await dispatch(a, { i_cible: 20000, cpm: 10, s: 30, t: 0.8 })).statusCode).toBe(201);
+    const [aAlloc] = await allocsFor(a);
+    expect(aAlloc?.rI).toBe(10);
+    expect((aAlloc?.rI ?? 0) * 30).toBe(300);
+
+    // B: S=10 → the screen's residual budget is 0 → no eligible screenhost → 422 (NOT double-booked
+    // onto the full hour, which the old impression-based residual would have allowed).
+    expect((await dispatch(b, { i_cible: 20000, cpm: 10, s: 10, t: 0.8 })).statusCode).toBe(422);
+  });
+
+  it('mixed durations on a shared screen honour the invariant Σ(r_i × S) ≤ 300', async () => {
+    const admin = await seedUser({ role: 'admin' });
+    const advA = await seedUser({ role: 'advertiser' });
+    const advB = await seedUser({ role: 'advertiser' });
+    const owner = await seedUser({ role: 'individual_owner' });
+    const cat = await ownerSectorId();
+    await seedEligibleScreenhost(owner, cat, 'premium', 100); // Hi=20
+    const a = await seedCampaign(advA);
+    await seedTargeting(a, cat, 'premium');
+    const b = await seedCampaign(advB);
+    await seedTargeting(b, cat, 'premium');
+    mockSession(admin);
+
+    // A: S=30, T=0.05 → R_eff = MIN[(3600/30)·0.05=6, 10] = 6; a huge I_cible fills the SH → r_i 6.
+    expect((await dispatch(a, { i_cible: 10_000_000, cpm: 10, s: 30, t: 0.05 })).statusCode).toBe(
+      201,
+    );
+    const [aAlloc] = await allocsFor(a);
+    expect(aAlloc?.rI).toBe(6); // 6×30 = 180s
+
+    // B: S=10, T=0.8. Engaged 180s → residual 120s → R_eff = MIN[288, ⌊120/10⌋=12] = 12 → r_i 12
+    // (the old impression-residual would have given 24 → 240s → 420s/hr total — the bug).
+    expect((await dispatch(b, { i_cible: 10_000_000, cpm: 10, s: 10, t: 0.8 })).statusCode).toBe(
+      201,
+    );
+    const [bAlloc] = await allocsFor(b);
+    expect(bAlloc?.rI).toBe(12); // 12×10 = 120s
+
+    // INVARIANT: Σ over both campaigns of (reps/hr × S) ≤ 300s/hr on the shared screen.
+    const totalSeconds = (aAlloc?.rI ?? 0) * 30 + (bAlloc?.rI ?? 0) * 10;
+    expect(totalSeconds).toBe(300);
+    expect(totalSeconds).toBeLessThanOrEqual(300);
   });
 });
