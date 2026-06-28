@@ -10,6 +10,30 @@ export interface CreateDraftDeps {
   create: (input: CreateCampaignInput) => Promise<CampaignView>;
 }
 
+/**
+ * Mutable single-slot holder for an in-flight promise. A React `useRef<Promise<T> | null>` IS one of
+ * these (same `{ current }` shape), so the dedup survives across renders.
+ */
+export interface PromiseSlot<T> {
+  current: Promise<T> | null;
+}
+
+/**
+ * Single-flight: while one run is in flight, every concurrent caller shares (awaits) the SAME promise
+ * instead of starting its own. The slot is cleared once the run settles, so a later call starts fresh
+ * (e.g. a retry after a failed create). This is what makes the create-early `ensureDraft` idempotent
+ * under concurrent triggers — N callers issue exactly ONE POST and resolve to the SAME draft id, so
+ * `draftCampaignId` can never churn between two duplicate drafts.
+ */
+export function singleFlight<T>(slot: PromiseSlot<T>, run: () => Promise<T>): Promise<T> {
+  if (slot.current) return slot.current;
+  const flight = run().finally(() => {
+    slot.current = null;
+  });
+  slot.current = flight;
+  return flight;
+}
+
 export interface SubmitDeps {
   update: (id: string, input: UpdateCampaignInput) => Promise<CampaignView>;
   submit: (id: string) => Promise<CampaignView>;

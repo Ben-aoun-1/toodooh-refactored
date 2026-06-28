@@ -1,8 +1,8 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { useWizard } from '@/hooks/useWizard';
 
-import { performCreateDraft, performSubmit } from './wizard-serialize';
+import { performCreateDraft, performSubmit, singleFlight } from './wizard-serialize';
 import { canStepBeReached, getStepList } from './wizard-steps';
 import type {
   CreateDraftResult,
@@ -49,11 +49,18 @@ export function useCampaignWizard(opts: UseCampaignWizardOptions): UseCampaignWi
 
   const { createDraft, updateCampaign, submitCampaign } = opts;
 
+  // In-flight create-early dedup. A useRef holds the single shared POST promise across renders so any
+  // number of concurrent ensureDraft callers (Basics "Suivant" + a breadcrumb click under prod latency)
+  // share ONE POST and resolve to the SAME id — draftCampaignId never churns between duplicate drafts.
+  const draftPromiseRef = useRef<Promise<CreateDraftResult> | null>(null);
+
   const ensureDraft = useCallback(async (): Promise<CreateDraftResult> => {
     if (state.draftCampaignId) return { kind: 'success', id: state.draftCampaignId };
     setCreatingDraft(true);
     try {
-      const result = await performCreateDraft({ state, deps: { create: createDraft } });
+      const result = await singleFlight(draftPromiseRef, () =>
+        performCreateDraft({ state, deps: { create: createDraft } }),
+      );
       if (result.kind === 'success') {
         setStateImpl((prev) => ({ ...prev, draftCampaignId: result.id }));
       }

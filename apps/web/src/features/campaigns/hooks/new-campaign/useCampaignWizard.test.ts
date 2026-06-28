@@ -2,7 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { CampaignView } from '@/features/campaigns/services/campaigns.api';
 
-import { performCreateDraft, performSubmit, serializeCreate } from './wizard-serialize';
+import {
+  performCreateDraft,
+  performSubmit,
+  serializeCreate,
+  singleFlight,
+} from './wizard-serialize';
 import {
   canStepBeReached,
   getStepList,
@@ -198,5 +203,50 @@ describe('performSubmit', () => {
     const result = await performSubmit({ state, deps });
     expect(result.kind).toBe('error');
     if (result.kind === 'error') expect(result.error.message).toBe('submit failed');
+  });
+});
+
+describe('singleFlight (ensureDraft concurrency guard)', () => {
+  it('shares ONE in-flight run across concurrent callers and resolves both to the same value', async () => {
+    const slot: { current: Promise<string> | null } = { current: null };
+    let resolveRun: (v: string) => void = () => undefined;
+    const run = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveRun = resolve;
+        }),
+    );
+
+    // Two concurrent invocations while the first is still in flight (the prod race: "Suivant" + a
+    // breadcrumb click). Only ONE underlying run (= ONE POST /api/campaigns) must fire.
+    const a = singleFlight(slot, run);
+    const b = singleFlight(slot, run);
+    expect(run).toHaveBeenCalledTimes(1);
+
+    resolveRun('cmp-shared');
+    const [ra, rb] = await Promise.all([a, b]);
+    expect(ra).toBe('cmp-shared');
+    expect(rb).toBe('cmp-shared'); // both callers see the SAME draft id — no churn
+    expect(slot.current).toBeNull(); // slot cleared once settled
+  });
+
+  it('starts a fresh run after the previous one has settled (allows retry)', async () => {
+    const slot: { current: Promise<string> | null } = { current: null };
+    const run = vi.fn().mockResolvedValue('cmp-1');
+
+    await singleFlight(slot, run);
+    await singleFlight(slot, run);
+
+    expect(run).toHaveBeenCalledTimes(2);
+  });
+
+  it('clears the slot even when the run rejects (so a retry can proceed)', async () => {
+    const slot: { current: Promise<string> | null } = { current: null };
+    const run = vi.fn().mockRejectedValueOnce(new Error('boom')).mockResolvedValueOnce('cmp-2');
+
+    await expect(singleFlight(slot, run)).rejects.toThrow('boom');
+    expect(slot.current).toBeNull();
+    await expect(singleFlight(slot, run)).resolves.toBe('cmp-2');
+    expect(run).toHaveBeenCalledTimes(2);
   });
 });
