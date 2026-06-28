@@ -26,6 +26,7 @@ import {
 } from '@/features/campaigns/hooks/useCampaignApi';
 import { parseCampaignUiDate, toLocalDateOnlyString } from '@/features/campaigns/lib/wizard-dates';
 import StepBasics from '@/features/campaigns/pages/new-campaign/StepBasics';
+import StepCart from '@/features/campaigns/pages/new-campaign/StepCart';
 import StepCreative from '@/features/campaigns/pages/new-campaign/StepCreative';
 import StepTargeting from '@/features/campaigns/pages/new-campaign/StepTargeting';
 import { getErrorMessage } from '@/lib/errors';
@@ -117,6 +118,22 @@ export default function NewCampaign() {
     }
   }, [wiz, state.draftCampaignId]);
 
+  const setRequestedBudget = useCallback(
+    (value: number | null) => setState((prev) => ({ ...prev, requestedBudget: value })),
+    [setState],
+  );
+
+  const handleSubmit = useCallback(async () => {
+    const result = await wiz.submit();
+    if (result.kind === 'success') {
+      toast.success('Campagne soumise pour validation.');
+      navigate('/my-campaigns?status=pending');
+    } else {
+      toast.error(getErrorMessage(result.error) || 'Erreur lors de la soumission de la campagne');
+      log.error({ err: result.error }, 'campaign submit failed');
+    }
+  }, [wiz, navigate]);
+
   const handleSelectCreative = useCallback(
     async (creativeId: string) => {
       if (!state.draftCampaignId) return;
@@ -189,29 +206,18 @@ export default function NewCampaign() {
         />
       );
     }
-    // Cart is wired on in C5. Until then it renders an inline placeholder over the live draft id.
-    const placeholderTitle = 'Budget & validation';
-    return (
-      <div className="space-y-6">
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 text-center">
-          <h2 className="text-xl font-bold text-[#00263A]">{placeholderTitle}</h2>
-          <p className="mt-2 text-gray-600">Cette étape est branchée dans un prochain commit.</p>
-          {state.draftCampaignId && (
-            <p className="mt-1 text-xs text-gray-400">Brouillon : {state.draftCampaignId}</p>
-          )}
-        </div>
-        <div className="flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() => wiz.prevStep()}
-            className="flex items-center gap-2 px-5 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-all text-sm font-medium"
-          >
-            <ChevronRight className="h-4 w-4 rotate-180" />
-            Retour
-          </button>
-        </div>
-      </div>
-    );
+    if (stepId === 'cart') {
+      return (
+        <StepCart
+          requestedBudget={state.requestedBudget}
+          setRequestedBudget={setRequestedBudget}
+          onBack={() => wiz.prevStep()}
+          onSubmit={handleSubmit}
+          submitting={wiz.submitting}
+        />
+      );
+    }
+    return null;
   }
 
   return (
