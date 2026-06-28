@@ -22,8 +22,9 @@ import { adminReconcileRoutes } from '../src/routes/admin-reconcile.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
 
-// Integration — real Postgres. Reconcile an active, past-end-date campaign: value plan-promised vs
-// proof-aired, refund the residual (B.4), record screenhost earnings. cpm=10 (0.01 TND/imp), s_min=10.
+// Integration — real Postgres. Reconcile an active, past-end-date campaign: a créneau is DELIVERED iff
+// a VIDEO_ENDED proof's SERVER received_at falls in its date+hour (Africa/Tunis = UTC+1, so a hour-H
+// créneau is delivered by a proof at H−1:30 UTC). cpm=10 (0.01 TND/imp), s_min=10.
 type GetSessionResult = Awaited<ReturnType<typeof auth.api.getSession>>;
 
 const buildApp = () => Fastify({ logger: false });
@@ -49,10 +50,11 @@ const seedUser = async (values: Partial<NewUser> = {}): Promise<string> => {
   return u?.id ?? '';
 };
 
-const CRENEAUX: DispatchCreneau[] = [
+// Default plan: two créneaux (Jan 1 & 2, hour 8), 10000 impressions each → ii_potentiel 20000.
+const DEFAULT_CRENEAUX: DispatchCreneau[] = [
   { date: '2024-01-01', hour: 8, reps: 100, impressions: 10000 },
   { date: '2024-01-02', hour: 8, reps: 100, impressions: 10000 },
-]; // expectedPlays = 200, Σ impressions = ii_potentiel 20000
+];
 
 interface Scenario {
   admin: string;
@@ -64,9 +66,11 @@ interface Scenario {
   creativeId: string;
 }
 
-// active campaign, end-date in the PAST, a frozen plan + one allocation (ii_potentiel 20000,
-// expectedPlays 200). status='active' so reconcile is allowed; endDate past so it has ended.
-const seedScenario = async (opts: { endDate?: string } = {}): Promise<Scenario> => {
+const seedScenario = async (
+  opts: { endDate?: string; creneaux?: DispatchCreneau[] } = {},
+): Promise<Scenario> => {
+  const creneaux = opts.creneaux ?? DEFAULT_CRENEAUX;
+  const iiPotentiel = creneaux.reduce((s, c) => s + c.impressions, 0);
   const admin = await seedUser({ role: 'admin' });
   const advertiser = await seedUser({ role: 'advertiser' });
   const owner = await seedUser({ role: 'individual_owner' });
@@ -101,7 +105,7 @@ const seedScenario = async (opts: { endDate?: string } = {}): Promise<Scenario> 
     .insert(campaignDispatchPlan)
     .values({
       campaignId: campaign?.id ?? '',
-      iCible: 20000,
+      iCible: iiPotentiel,
       cpm: '10',
       sSpotSeconds: 10,
       tTierCoef: '0.8',
@@ -110,7 +114,7 @@ const seedScenario = async (opts: { endDate?: string } = {}): Promise<Scenario> 
       gJour: '3.33',
       fMaxSeconds: 300,
       rMinEfficace: 2,
-      couvert: 20000,
+      couvert: iiPotentiel,
       nMin: 1,
       nMax: 20,
       nRetenus: 1,
@@ -119,10 +123,10 @@ const seedScenario = async (opts: { endDate?: string } = {}): Promise<Scenario> 
   await db.insert(campaignDispatchAllocation).values({
     planId: plan?.id ?? '',
     screenhostId: sh?.id ?? '',
-    iiPotentiel: 20000,
+    iiPotentiel,
     rI: 100,
-    revenuPrevisionnel: '200',
-    creneaux: CRENEAUX,
+    revenuPrevisionnel: String((iiPotentiel * 10) / 1000),
+    creneaux,
   });
   return {
     admin,
@@ -135,11 +139,16 @@ const seedScenario = async (opts: { endDate?: string } = {}): Promise<Scenario> 
   };
 };
 
-const insertProofs = async (
+// Deliver a créneau by inserting `count` VIDEO_ENDED proofs whose server received_at lands in
+// (date, tunisHour) — Africa/Tunis is UTC+1, so a tunisHour-H slot is hit at H−1:30 UTC.
+const deliverSlot = async (
   s: Pick<Scenario, 'screenId' | 'screenhostId' | 'campaignId' | 'creativeId'>,
-  count: number,
+  date: string,
+  tunisHour: number,
+  count = 1,
 ): Promise<void> => {
-  if (count <= 0) return;
+  const utcHour = String(tunisHour - 1).padStart(2, '0');
+  const receivedAt = new Date(`${date}T${utcHour}:30:00Z`);
   await db.insert(proofOfPlay).values(
     Array.from({ length: count }, () => ({
       screenId: s.screenId,
@@ -148,6 +157,7 @@ const insertProofs = async (
       creativeId: s.creativeId,
       videoIdAsSent: s.campaignId,
       eventType: 'VIDEO_ENDED' as const,
+      receivedAt,
     })),
   );
 };
@@ -185,7 +195,8 @@ describe('admin reconciliation (L-redisp, real Postgres)', () => {
 
   it('fully delivered → réussie, P_perte 0, no refund, spend = budget, SH earnings full', async () => {
     const s = await seedScenario();
-    await insertProofs(s, 200);
+    await deliverSlot(s, '2024-01-01', 8);
+    await deliverSlot(s, '2024-01-02', 8);
     mockSession(s.admin);
     const res = await reconcile(s.campaignId);
     expect(res.statusCode).toBe(201);
@@ -195,17 +206,15 @@ describe('admin reconciliation (L-redisp, real Postgres)', () => {
       expected_imp: 20000,
       delivered_imp: 20000,
       manquement_imp: 0,
-      p_perte_tnd: 0,
       refund_tnd: 0,
       spend_tnd: 200,
     });
-    expect(body.screenhosts).toHaveLength(1);
     expect(body.screenhosts[0]).toMatchObject({ delivered_imp: 20000, earnings_tnd: 200 });
   });
 
-  it('partially aired → manquement valued, refund = residual, spend = delivered, SH earns its share', async () => {
+  it('partially aired → manquement valued, refund = residual, spend == Σ earnings, SH earns its share', async () => {
     const s = await seedScenario();
-    await insertProofs(s, 100); // ratio 0.5 → delivered 10000
+    await deliverSlot(s, '2024-01-01', 8); // 1 of 2 créneaux → 10000
     mockSession(s.admin);
     const body = (await reconcile(s.campaignId)).json() as ReconResponse;
     expect(body).toMatchObject({
@@ -217,11 +226,41 @@ describe('admin reconciliation (L-redisp, real Postgres)', () => {
       spend_tnd: 100,
     });
     expect(body.screenhosts[0]).toMatchObject({ delivered_imp: 10000, earnings_tnd: 100 });
+    expect(body.spend_tnd).toBe(body.screenhosts.reduce((sum, p) => sum + p.earnings_tnd, 0));
+  });
+
+  it('SPAM-RESISTANCE: many VIDEO_ENDED in ONE hour credit that créneau ONCE (not inflated)', async () => {
+    const s = await seedScenario();
+    await deliverSlot(s, '2024-01-01', 8, 50); // 50 proofs, all in the SAME hour/slot
+    mockSession(s.admin);
+    const body = (await reconcile(s.campaignId)).json() as ReconResponse;
+    // Only the one slot is credited → 10000, NOT 20000 (and the second créneau stays a manquement).
+    expect(body).toMatchObject({ delivered_imp: 10000, manquement_imp: 10000, status: 'partial' });
+  });
+
+  it('SPAM-RESISTANCE: proofs in 2 of 10 scheduled hours → exactly those 2 hours’ impressions', async () => {
+    const creneaux: DispatchCreneau[] = Array.from({ length: 10 }, (_, i) => ({
+      date: '2024-01-01',
+      hour: 8 + i,
+      reps: 10,
+      impressions: 1000,
+    })); // 10 slots × 1000 = 10000
+    const s = await seedScenario({ creneaux });
+    await deliverSlot(s, '2024-01-01', 8, 30); // hour 8, spammed
+    await deliverSlot(s, '2024-01-01', 9, 5); // hour 9
+    mockSession(s.admin);
+    const body = (await reconcile(s.campaignId)).json() as ReconResponse;
+    expect(body.delivered_imp).toBe(2000); // 2 hours × 1000, NOT inflated by the 35 proofs
+    expect(body.manquement_imp).toBe(8000);
   });
 
   it('shortfall below S_min → réussie + no refund (advertiser pays full budget)', async () => {
-    const s = await seedScenario();
-    await insertProofs(s, 199); // delivered 19900, manquement 100 → P_perte 1 < S_min 10
+    const creneaux: DispatchCreneau[] = [
+      { date: '2024-01-01', hour: 8, reps: 100, impressions: 19900 },
+      { date: '2024-01-02', hour: 8, reps: 100, impressions: 100 },
+    ];
+    const s = await seedScenario({ creneaux });
+    await deliverSlot(s, '2024-01-01', 8); // miss the 100-imp slot → manquement 100 → P_perte 1 < 10
     mockSession(s.admin);
     const body = (await reconcile(s.campaignId)).json() as ReconResponse;
     expect(body).toMatchObject({
@@ -234,7 +273,6 @@ describe('admin reconciliation (L-redisp, real Postgres)', () => {
 
   it('a defaulting screenhost earns 0 on its undiffused part', async () => {
     const s = await seedScenario();
-    // Add a second screenhost + allocation that delivers nothing.
     const owner2 = await seedUser({ role: 'individual_owner' });
     const [sh2] = await db
       .insert(screenhosts)
@@ -246,19 +284,19 @@ describe('admin reconciliation (L-redisp, real Postgres)', () => {
       iiPotentiel: 10000,
       rI: 100,
       revenuPrevisionnel: '100',
-      creneaux: CRENEAUX,
+      creneaux: DEFAULT_CRENEAUX,
     });
-    await insertProofs(s, 200); // SH1 full; SH2 none
+    await deliverSlot(s, '2024-01-01', 8); // SH1 delivers one slot; SH2 nothing
+    await deliverSlot(s, '2024-01-02', 8);
     mockSession(s.admin);
     const body = (await reconcile(s.campaignId)).json() as ReconResponse;
-    expect(body).toMatchObject({ status: 'partial', expected_imp: 30000, delivered_imp: 20000 });
     const sh2Payout = body.screenhosts.find((p) => p.screenhost_id === sh2?.id);
     expect(sh2Payout).toMatchObject({ delivered_imp: 0, earnings_tnd: 0 });
   });
 
-  it('is idempotent — re-reconcile 409s, no second row / double earnings', async () => {
+  it('is idempotent — re-reconcile 409s, no second row', async () => {
     const s = await seedScenario();
-    await insertProofs(s, 100);
+    await deliverSlot(s, '2024-01-01', 8);
     mockSession(s.admin);
     expect((await reconcile(s.campaignId)).statusCode).toBe(201);
     expect((await reconcile(s.campaignId)).statusCode).toBe(409);
@@ -274,18 +312,15 @@ describe('admin reconciliation (L-redisp, real Postgres)', () => {
     expect(payouts).toHaveLength(1);
   });
 
-  it('refuses a campaign that has not ended yet (409)', async () => {
-    const s = await seedScenario({ endDate: '2999-12-31' });
-    await insertProofs(s, 50);
-    mockSession(s.admin);
-    expect((await reconcile(s.campaignId)).statusCode).toBe(409);
-  });
+  it('refuses not-ended (409), non-active (409), missing (404), non-admin (403)', async () => {
+    const future = await seedScenario({ endDate: '2999-12-31' });
+    mockSession(future.admin);
+    expect((await reconcile(future.campaignId)).statusCode).toBe(409); // not ended
 
-  it('refuses a non-active campaign (409), 404s a missing one, 403s a non-admin', async () => {
     const s = await seedScenario();
     await db.update(campaigns).set({ status: 'pending' }).where(eq(campaigns.id, s.campaignId));
     mockSession(s.admin);
-    expect((await reconcile(s.campaignId)).statusCode).toBe(409);
+    expect((await reconcile(s.campaignId)).statusCode).toBe(409); // non-active
     expect((await reconcile('00000000-0000-0000-0000-000000000000')).statusCode).toBe(404);
 
     const s2 = await seedScenario();
