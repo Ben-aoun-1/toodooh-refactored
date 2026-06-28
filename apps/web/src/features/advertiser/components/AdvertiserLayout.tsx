@@ -66,7 +66,7 @@ function AdvertiserLayoutChrome({ children, userName }: AdvertiserLayoutProps) {
   const isProfileRoute = location.pathname === '/profile';
 
   return (
-    <div className="min-h-screen bg-white flex flex-col lg:flex-row">
+    <div className="h-screen overflow-hidden bg-white flex flex-col lg:flex-row">
       <aside
         className={`
           ${isMenuOpen ? 'flex' : 'hidden'} lg:flex
@@ -114,7 +114,7 @@ function AdvertiserLayoutChrome({ children, userName }: AdvertiserLayoutProps) {
           </div>
         </div>
 
-        <nav className="flex flex-col flex-1 py-5 gap-2 px-3">
+        <nav className="flex flex-col flex-1 min-h-0 overflow-y-auto py-5 gap-2 px-3">
           <SidebarNavItem
             path="/dashboard"
             label="Dashboard"
