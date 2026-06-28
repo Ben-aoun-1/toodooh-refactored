@@ -79,7 +79,12 @@ export const campaignDispatchRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const [campaign] = await db
-      .select({ id: campaigns.id, startDate: campaigns.startDate, endDate: campaigns.endDate })
+      .select({
+        id: campaigns.id,
+        name: campaigns.name,
+        startDate: campaigns.startDate,
+        endDate: campaigns.endDate,
+      })
       .from(campaigns)
       .where(eq(campaigns.id, parsedParams.data.id))
       .limit(1);

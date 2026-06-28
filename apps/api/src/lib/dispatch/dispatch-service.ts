@@ -7,6 +7,7 @@ import {
   campaignDispatchAllocation,
   campaignDispatchPlan,
   campaignTargeting,
+  notifications,
   screenhostAffluence,
   screenhosts,
 } from '../../db/schema.js';
@@ -39,7 +40,7 @@ export type DispatchResult =
 // Assemble the eligible pool from the DB, run the pure pipeline, and persist the frozen plan
 // (A.7, irrevocable). Owner-scope is N/A (admin/internal entrypoint); the campaign is passed in.
 export const runDispatch = async (
-  campaign: Pick<Campaign, 'id' | 'startDate' | 'endDate'>,
+  campaign: Pick<Campaign, 'id' | 'name' | 'startDate' | 'endDate'>,
   inputs: DispatchInputs,
 ): Promise<DispatchResult> => {
   if (!campaign.startDate || !campaign.endDate) return { status: 'NO_WINDOW' };
@@ -230,6 +231,30 @@ export const runDispatch = async (
             creneaux: a.creneaux,
           })),
         );
+        // PRODUCER — every allocation lands EN_ATTENTE (the new default), so the campaign won't air
+        // until the screenhost OWNER accepts it. Notify each DISTINCT allocated owner once (an owner
+        // with several allocated venues gets a single notification → their accept/reject surface
+        // lists all their EN_ATTENTE allocations). Screenhosts with no owner are skipped. Inside the
+        // same transaction as the freeze: the plan, allocations, and notifications are all-or-nothing.
+        const allocatedScreenhostIds = built.allocations.map((a) => a.screenhostId);
+        const ownerRows = await tx
+          .select({ ownerId: screenhosts.ownerId })
+          .from(screenhosts)
+          .where(inArray(screenhosts.id, allocatedScreenhostIds));
+        const ownerIds = [
+          ...new Set(ownerRows.map((r) => r.ownerId).filter((id): id is string => id !== null)),
+        ];
+        if (ownerIds.length > 0) {
+          await tx.insert(notifications).values(
+            ownerIds.map((ownerId) => ({
+              userId: ownerId,
+              type: 'dispatch_pending_acceptance',
+              title: 'Campagne en attente de votre acceptation',
+              body: `La campagne « ${campaign.name} » attend votre acceptation.`,
+              campaignId: campaign.id,
+            })),
+          );
+        }
       }
       return planRow;
     })
