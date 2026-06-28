@@ -1,9 +1,15 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import { db } from '../db/client.js';
-import { campaigns, creatives } from '../db/schema.js';
+import {
+  businessSectors,
+  campaignReconciliation,
+  campaignTargeting,
+  campaigns,
+  creatives,
+} from '../db/schema.js';
 import { requireAdvertiser } from '../middleware/require-advertiser.js';
 import { requireAuth } from '../middleware/require-auth.js';
 
@@ -165,7 +171,13 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     return reply.status(201).send(campaignView(created as CampaignRow));
   });
 
-  // GET /api/campaigns/mine — the caller's own campaigns, newest first.
+  // GET /api/campaigns/mine — the caller's own campaigns, newest first. Each item is the advertiser
+  // projection PLUS reconciled performance: delivered impressions + the caller's NET SPEND debit
+  // (campaign_reconciliation, 1:1 by unique campaign_id → cannot multiply rows; null until reconciled),
+  // and the campaign's targeting lines (1:many → batched SEPARATELY, never joined into the main SELECT
+  // or it would multiply campaign rows and corrupt the 1:1 spend mapping). Every read is owner-scoped:
+  // the WHERE pins advertiser_id=caller, reconciliation rides that scope via the LEFT JOIN, and the
+  // targeting batch is restricted to the already-owner-filtered ids — no cross-advertiser path.
   app.get('/api/campaigns/mine', advertiserGuard, async (request, reply) => {
     const userId = request.user?.id;
     if (!userId) {
@@ -174,12 +186,59 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
     }
     const rows = await db
-      .select({ ...campaignSelection, contentValidationStatus: creatives.validationStatus })
+      .select({
+        ...campaignSelection,
+        contentValidationStatus: creatives.validationStatus,
+        deliveredImp: campaignReconciliation.deliveredImp,
+        spendTnd: campaignReconciliation.spendTnd,
+        reconciledAt: campaignReconciliation.reconciledAt,
+      })
       .from(campaigns)
       .leftJoin(creatives, eq(campaigns.creativeId, creatives.id))
+      .leftJoin(campaignReconciliation, eq(campaignReconciliation.campaignId, campaigns.id))
       .where(eq(campaigns.advertiserId, userId))
       .orderBy(desc(campaigns.createdAt));
-    return reply.status(200).send(rows.map((r) => campaignView(r, r.contentValidationStatus)));
+
+    // Targeting is 1:many — fetch ALL lines for the owner-scoped ids in ONE batched query (no N+1),
+    // grouped by campaign in JS. inArray over ids that are already advertiser-filtered = no leak.
+    const ids = rows.map((r) => r.id);
+    const targetingByCampaign = new Map<
+      string,
+      { category_id: string | null; category_name: string | null; class: string | null }[]
+    >();
+    if (ids.length > 0) {
+      const lines = await db
+        .select({
+          campaignId: campaignTargeting.campaignId,
+          category_id: campaignTargeting.categoryId,
+          category_name: businessSectors.name,
+          class: campaignTargeting.class,
+        })
+        .from(campaignTargeting)
+        .leftJoin(businessSectors, eq(campaignTargeting.categoryId, businessSectors.id))
+        .where(inArray(campaignTargeting.campaignId, ids))
+        .orderBy(asc(campaignTargeting.createdAt), asc(campaignTargeting.id));
+      for (const line of lines) {
+        const list = targetingByCampaign.get(line.campaignId) ?? [];
+        list.push({
+          category_id: line.category_id,
+          category_name: line.category_name,
+          class: line.class,
+        });
+        targetingByCampaign.set(line.campaignId, list);
+      }
+    }
+
+    return reply.status(200).send(
+      rows.map((r) => ({
+        ...campaignView(r, r.contentValidationStatus),
+        // delivered impressions + net spend come from the 1:1 reconciliation row — null until reconciled.
+        delivered_impressions: r.deliveredImp ?? null,
+        spend_tnd: r.spendTnd == null ? null : Number(r.spendTnd),
+        reconciled_at: r.reconciledAt ?? null,
+        targeting: targetingByCampaign.get(r.id) ?? [],
+      })),
+    );
   });
 
   // GET /api/campaigns/:id — owner-scoped read (404 on a foreign or missing id).
