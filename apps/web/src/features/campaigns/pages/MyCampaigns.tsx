@@ -22,9 +22,8 @@ import 'react-datepicker/dist/react-datepicker.css';
 import campagneIcon from '@/assets/sidebar/campagnes.png';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import CampaignDrawer from '@/features/campaigns/components/CampaignDrawer';
+import { useDeleteCampaign } from '@/features/campaigns/hooks/useCampaignApi';
 import { useMyCampaigns } from '@/features/campaigns/hooks/useMyCampaigns';
-import { useMyCampaignsMutations } from '@/features/campaigns/hooks/useMyCampaignsMutations';
-import { useVideoById } from '@/features/campaigns/hooks/useVideoById';
 import { logger } from '@/lib/logger';
 
 const log = logger.child({ module: 'MyCampaigns' });
@@ -74,7 +73,7 @@ export default function MyCampaigns() {
   // optimistic `setCampaigns` patches dropped (mutations now
   // invalidate-and-refetch), no local mirror is needed.
   const { campaigns, loading, isError } = useMyCampaigns(user?.id);
-  const { deleteCampaign, activateDraftCampaign } = useMyCampaignsMutations();
+  const deleteCampaign = useDeleteCampaign(user?.id);
 
   useEffect(() => {
     if (isError) {
@@ -91,7 +90,7 @@ export default function MyCampaigns() {
       const statusMatch = !filters.status
         ? true
         : filters.status === 'upcoming'
-          ? campaign.startDate > nowForFilter
+          ? campaign.startDate != null && campaign.startDate > nowForFilter
           : campaign.status === filters.status;
       const typeMatch = !filters.campaignType
         ? true
@@ -99,13 +98,13 @@ export default function MyCampaigns() {
           ? Boolean(campaign.event_id)
           : !campaign.event_id;
       return (
-        (!filters.client ||
-          campaign.client?.toLowerCase().includes(filters.client.toLowerCase())) &&
+        (!filters.client || campaign.name.toLowerCase().includes(filters.client.toLowerCase())) &&
         (!filters.category || campaign.category === filters.category) &&
         statusMatch &&
         typeMatch &&
-        (!filters.startDate || campaign.startDate >= filters.startDate) &&
-        (!filters.endDate || campaign.endDate <= filters.endDate)
+        (!filters.startDate ||
+          (campaign.startDate != null && campaign.startDate >= filters.startDate)) &&
+        (!filters.endDate || (campaign.endDate != null && campaign.endDate <= filters.endDate))
       );
     } catch (error) {
       log.error({ error, campaign }, 'Error filtering campaign');
@@ -139,10 +138,6 @@ export default function MyCampaigns() {
   const [selectedCampaign, setSelectedCampaign] = useState<any>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [openActionRowId, setOpenActionRowId] = useState<string | null>(null);
-
-  // Detail-modal video — the shared `useVideoById` consolidation (Commit 7b).
-  // Loads reactively when a campaign with a `video_id` is selected.
-  const { video: campaignVideo } = useVideoById(selectedCampaign?.video_id);
 
   // The slide animation now lives in the shared <Drawer> primitive (B2): close
   // flips `open` (showDetailsModal) immediately; the campaign data is cleared
@@ -191,7 +186,7 @@ export default function MyCampaigns() {
     if (!confirmed) return;
 
     try {
-      await deleteCampaign.mutateAsync({ campaignId: campaign.id, userId: user.id });
+      await deleteCampaign.mutateAsync(campaign.id);
       setOpenActionRowId((prev) => (prev === campaign.id ? null : prev));
       if (selectedCampaign?.id === campaign.id) {
         closeDetailsDrawer();
@@ -199,54 +194,6 @@ export default function MyCampaigns() {
       toast.success('Brouillon supprimé');
     } catch (_e) {
       toast.error('Erreur lors de la suppression du brouillon');
-    }
-  };
-
-  // TODO(phase-1): typed source [supabase] — see #15
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleActivateDraftCampaign = async (campaign: any) => {
-    if (campaign.status !== 'draft') return;
-    if (!user?.id) {
-      toast.error('Utilisateur non connecté');
-      return;
-    }
-
-    try {
-      const outcome = await activateDraftCampaign.mutateAsync({
-        campaign: {
-          id: campaign.id,
-          content_validation_status: campaign.content_validation_status ?? null,
-          video_id: campaign.video_id ?? null,
-        },
-        userId: user.id,
-      });
-
-      if (outcome === 'insufficient') {
-        toast.error('Solde insuffisant pour activer la campagne');
-        setTimeout(() => navigate('/my-recharges'), 1200);
-        return;
-      }
-
-      // Reflect the new status in the open detail modal (modal client state —
-      // the campaigns list itself refreshes via invalidate-and-refetch).
-      if (selectedCampaign?.id === campaign.id) {
-        // TODO(phase-1): typed source [supabase] — see #15
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        setSelectedCampaign((prev: any) =>
-          prev
-            ? {
-                ...prev,
-                status: outcome,
-                content_validation_status: outcome === 'active' ? 'approved' : 'pending',
-              }
-            : prev,
-        );
-      }
-
-      if (outcome === 'active') toast.success('Campagne activée avec succès');
-      else toast('Campagne en attente de validation vidéo admin', { icon: '⏳' });
-    } catch (_error) {
-      toast.error("Erreur lors de l'activation du brouillon");
     }
   };
 
@@ -259,7 +206,7 @@ export default function MyCampaigns() {
   const now = new Date();
   const countTout = campaigns.length;
   const countActive = campaigns.filter((c) => c.status === 'active').length;
-  const countAVenir = campaigns.filter((c) => c.startDate > now).length;
+  const countAVenir = campaigns.filter((c) => c.startDate != null && c.startDate > now).length;
   const countBrouillons = campaigns.filter((c) => c.status === 'draft').length;
   const countEnAttente = campaigns.filter((c) => c.status === 'pending').length;
   const countNonValide = campaigns.filter((c) => c.status === 'rejected').length;
@@ -745,10 +692,10 @@ export default function MyCampaigns() {
                     <>
                       <button
                         type="button"
-                        onClick={() => handleActivateDraftCampaign(campaign)}
+                        onClick={() => handleEditCampaign(campaign)}
                         className="flex-1 py-2 rounded-lg text-sm font-medium inline-flex items-center justify-center gap-1.5 transition-colors bg-[#e3f7ec] text-[#66bc74] hover:bg-[#cceee0]"
                       >
-                        <Rocket className="h-4 w-4" /> Activer
+                        <RotateCcw className="h-4 w-4" /> Reprendre
                       </button>
                       <button
                         type="button"
@@ -1014,11 +961,11 @@ export default function MyCampaigns() {
                                       type="button"
                                       onClick={() => {
                                         setOpenActionRowId(null);
-                                        handleActivateDraftCampaign(campaign);
+                                        handleEditCampaign(campaign);
                                       }}
-                                      className="w-full px-3 py-2 text-left text-sm text-[#1FC16B] hover:bg-green-50"
+                                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
                                     >
-                                      Activer le brouillon
+                                      Reprendre le brouillon
                                     </button>
                                   )}
                                   {canDeleteDraftCampaign(campaign.status) && (
@@ -1141,7 +1088,7 @@ export default function MyCampaigns() {
               open={showDetailsModal}
               onClose={closeDetailsDrawer}
               campaign={selectedCampaign}
-              video={campaignVideo}
+              video={undefined}
               variant="advertiser"
               statusBadge={
                 <span
@@ -1174,12 +1121,16 @@ export default function MyCampaigns() {
                     <>
                       <button
                         type="button"
-                        onClick={() => handleActivateDraftCampaign(selectedCampaign)}
+                        onClick={() => {
+                          const c = selectedCampaign;
+                          closeDetailsDrawer();
+                          setTimeout(() => handleEditCampaign(c), 320);
+                        }}
                         className="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-[10px] border border-[#1FC16B] text-sm font-medium text-[#1FC16B] bg-[#E3F7EC] hover:opacity-90 transition-opacity"
                         style={{ boxShadow: '0px 1px 2px rgba(10, 13, 20, 0.0313726)' }}
                       >
-                        <Rocket className="h-5 w-5" />
-                        Activer le brouillon
+                        <RotateCcw className="h-5 w-5" />
+                        Reprendre le brouillon
                       </button>
                       <button
                         type="button"
