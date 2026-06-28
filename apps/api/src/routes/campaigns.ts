@@ -24,6 +24,9 @@ const createSchema = z.object({
   start_date: z.iso.date().nullable().optional(),
   end_date: z.iso.date().nullable().optional(),
   description: z.string().max(2000).nullable().optional(),
+  // Interim manual cart: an INDICATIVE budget (TND), not the engine inputs. The admin derives
+  // i_cible/cpm/s/t at activation. Nullable; the cart PATCHes it before submit.
+  requested_budget: z.number().positive().max(100_000_000).nullable().optional(),
 });
 
 // Edit accepts any subset of the create fields plus creative_id (link/unlink the campaign's creative
@@ -45,6 +48,7 @@ const campaignSelection = {
   startDate: campaigns.startDate,
   endDate: campaigns.endDate,
   description: campaigns.description,
+  requestedBudget: campaigns.requestedBudget,
   submittedAt: campaigns.submittedAt,
   createdAt: campaigns.createdAt,
   updatedAt: campaigns.updatedAt,
@@ -59,6 +63,7 @@ type CampaignRow = Pick<
   | 'startDate'
   | 'endDate'
   | 'description'
+  | 'requestedBudget'
   | 'submittedAt'
   | 'createdAt'
   | 'updatedAt'
@@ -79,6 +84,7 @@ const campaignView = (
   start_date: string | null;
   end_date: string | null;
   description: string | null;
+  requested_budget: number | null;
   content_validation_status: string | null;
   submitted_at: Date | null;
   created_at: Date;
@@ -91,6 +97,7 @@ const campaignView = (
   start_date: row.startDate,
   end_date: row.endDate,
   description: row.description,
+  requested_budget: row.requestedBudget === null ? null : Number(row.requestedBudget),
   content_validation_status: contentValidationStatus,
   submitted_at: row.submittedAt,
   created_at: row.createdAt,
@@ -106,6 +113,9 @@ const buildUpdatePatch = (data: UpdateInput): Partial<typeof campaigns.$inferIns
   if (data.start_date !== undefined) patch.startDate = data.start_date;
   if (data.end_date !== undefined) patch.endDate = data.end_date;
   if (data.description !== undefined) patch.description = data.description;
+  // numeric column → string|null; the cart PATCHes the indicative budget before submit.
+  if (data.requested_budget !== undefined)
+    patch.requestedBudget = data.requested_budget === null ? null : String(data.requested_budget);
   // null clears the link (gate back to null); a uuid links (existence/ownership checked in the handler).
   if (data.creative_id !== undefined) patch.creativeId = data.creative_id;
   return patch;
@@ -146,6 +156,10 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         startDate: parsed.data.start_date ?? null,
         endDate: parsed.data.end_date ?? null,
         description: parsed.data.description ?? null,
+        requestedBudget:
+          parsed.data.requested_budget === undefined || parsed.data.requested_budget === null
+            ? null
+            : String(parsed.data.requested_budget),
       })
       .returning(campaignSelection);
     return reply.status(201).send(campaignView(created as CampaignRow));

@@ -311,8 +311,12 @@ describe('admin campaign moderation — activation keystone (real Postgres)', ()
     expect((await reject(campaignId, {})).statusCode).toBe(400);
   });
 
-  it('the review queue lists campaigns with content-gate + wallet balance', async () => {
+  it('the review queue lists campaigns with content-gate + wallet balance + requested_budget', async () => {
     const { admin, campaignId } = await seedActivatable({ fundTnd: 300 });
+    await db
+      .update(campaigns)
+      .set({ requestedBudget: '450' }) // the advertiser's indicative ask, surfaced to the operator
+      .where(eq(campaigns.id, campaignId));
     mockSession(admin);
     const res = await app.inject({ method: 'GET', url: '/api/admin/campaigns?status=pending' });
     expect(res.statusCode).toBe(200);
@@ -321,11 +325,13 @@ describe('admin campaign moderation — activation keystone (real Postgres)', ()
       status: string;
       content_validation_status: string | null;
       wallet_balance_tnd: number;
+      requested_budget: number | null;
     }[];
     const mine = rows.find((r) => r.id === campaignId);
     expect(mine?.status).toBe('pending');
     expect(mine?.content_validation_status).toBe('approved');
     expect(mine?.wallet_balance_tnd).toBe(300);
+    expect(mine?.requested_budget).toBe(450);
   });
 
   it('404 for a nonexistent campaign; 403 for a non-admin', async () => {

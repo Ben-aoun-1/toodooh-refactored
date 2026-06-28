@@ -225,6 +225,13 @@
       "when": 1782612903905,
       "tag": "0031_monthly_stats",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1782615935515,
+      "tag": "0032_campaign_requested_budget",
+      "breakpoints": true
     }
   ]
 }
