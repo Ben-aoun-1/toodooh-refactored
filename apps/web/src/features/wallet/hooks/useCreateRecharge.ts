@@ -1,49 +1,36 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { supabase } from '@/lib/supabase';
+import { apiClient } from '@/lib/api-client';
 
 import { walletKeys } from './queryKeys';
 
 export interface CreateRechargeInput {
   amount: number;
-  payment_method: string;
-  description: string;
 }
 
 /**
- * Creates a wallet recharge in `status: 'pending'` (awaiting admin
- * validation). A pending recharge is not yet reflected in the balance or
- * the completed-transactions ledger, so this is effectively a fire-and-
- * forget submission — the original handler ran no post-insert refetch.
+ * Creates a wallet recharge via the engine (`POST /api/recharges`). The new
+ * model is BANK-TRANSFER only (no online gateway, no payment method / free-text
+ * description): the advertiser submits an amount, the engine writes a PENDING
+ * recharge plus a downloadable facture reference, and an admin later confirms
+ * receipt to credit the DERIVED balance. The advertiser is taken from the
+ * session cookie server-side — no `user_id` in the body.
  *
- * onSuccess still invalidates `walletKeys.transactions` so the ledger is
- * the correct invalidation target the day a recharge transitions to
- * `completed` (admin approval — Commit 7). It is a near-no-op today
- * (pending rows are filtered out of the ledger) and is the right
- * invalidation graph regardless. The balance-changing event is the
- * admin-side approval, not this creation — that cross-feature
- * (advertiserKeys.dashboardStats) invalidation belongs to Commit 7.
+ * A pending recharge is not yet reflected in the balance or the ledger, so this
+ * is effectively a fire-and-forget submission. onSuccess still invalidates the
+ * ledger and the invoice list (the facture is downloadable immediately): the
+ * balance-changing event is the admin-side confirmation, not this creation.
  */
 export function useCreateRecharge(userId: string | undefined) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (input: CreateRechargeInput) => {
-      const { error } = await supabase
-        .from('recharges')
-        .insert({
-          user_id: userId,
-          amount: input.amount,
-          payment_method: input.payment_method,
-          status: 'pending',
-          description: input.description,
-        })
-        .select()
-        .single();
-      if (error) throw error;
+      await apiClient.post('/recharges', { amount: input.amount });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: walletKeys.transactions(userId ?? '') });
+      queryClient.invalidateQueries({ queryKey: walletKeys.invoices(userId ?? '') });
     },
   });
 }
