@@ -31,6 +31,11 @@ export const adminKeys = {
   /** Prefix for invalidating every creative-list variant. */
   creativesAll: () => [...adminKeys.all, 'creatives'] as const,
 
+  /** Campaign-review queue (ACTIVATION keystone), filtered by status (`adminCampaignsService.list`). */
+  campaigns: (status: string) => [...adminKeys.all, 'campaigns', status] as const,
+  /** Prefix for invalidating every campaign-review-list variant. */
+  campaignsAll: () => [...adminKeys.all, 'campaigns'] as const,
+
   monitoringCampaigns: () => [...adminKeys.all, 'monitoringCampaigns'] as const,
   monitoringStats: () => [...adminKeys.all, 'monitoringStats'] as const,
   monitoringCategories: () => [...adminKeys.all, 'monitoringCategories'] as const,

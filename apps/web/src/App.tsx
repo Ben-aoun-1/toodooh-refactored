@@ -51,7 +51,7 @@ const UserManagement = lazy(() => import('@/features/admin/pages/UserManagement'
 const VideoManagement = lazy(() => import('@/features/admin/pages/VideoManagement'));
 const CreativeManagement = lazy(() => import('@/features/admin/pages/CreativeManagement'));
 const EventManagement = lazy(() => import('@/features/admin/pages/EventManagement'));
-const CampaignMonitoring = lazy(() => import('@/features/admin/pages/CampaignMonitoring'));
+const CampaignReviewQueue = lazy(() => import('@/features/admin/pages/CampaignReviewQueue'));
 const CreateAdmin = lazy(() => import('@/features/admin/pages/CreateAdmin'));
 const AdminManagement = lazy(() => import('@/features/admin/pages/AdminManagement'));
 const ScreenManagement = lazy(() => import('@/features/admin/pages/ScreenManagement'));
@@ -542,7 +542,7 @@ export default function App() {
               path="/admin-campaigns"
               element={
                 <AdminRoute requiredRoles={['superadmin', 'admin']}>
-                  <CampaignMonitoring />
+                  <CampaignReviewQueue />
                 </AdminRoute>
               }
             />
