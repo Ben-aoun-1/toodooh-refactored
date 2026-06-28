@@ -26,6 +26,7 @@ import {
 } from '@/features/campaigns/hooks/useCampaignApi';
 import { parseCampaignUiDate, toLocalDateOnlyString } from '@/features/campaigns/lib/wizard-dates';
 import StepBasics from '@/features/campaigns/pages/new-campaign/StepBasics';
+import StepTargeting from '@/features/campaigns/pages/new-campaign/StepTargeting';
 import { getErrorMessage } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 
@@ -144,14 +145,20 @@ export default function NewCampaign() {
         />
       );
     }
-    // Targeting / Creative / Cart are wired on in C3 / C4 / C5. Until then they render an inline
-    // placeholder over the live create-early draft id.
-    const placeholderTitle =
-      stepId === 'targeting'
-        ? 'Ciblage'
-        : stepId === 'creative'
-          ? 'Création'
-          : 'Budget & validation';
+    if (stepId === 'targeting') {
+      return (
+        <StepTargeting
+          draftCampaignId={state.draftCampaignId || null}
+          onNext={() => {
+            void wiz.nextStep();
+          }}
+          onBack={() => wiz.prevStep()}
+        />
+      );
+    }
+    // Creative / Cart are wired on in C4 / C5. Until then they render an inline placeholder over the
+    // live create-early draft id.
+    const placeholderTitle = stepId === 'creative' ? 'Création' : 'Budget & validation';
     return (
       <div className="space-y-6">
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 text-center">
