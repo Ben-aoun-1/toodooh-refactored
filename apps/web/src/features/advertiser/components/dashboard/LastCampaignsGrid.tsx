@@ -1,4 +1,4 @@
-import { Calendar, DollarSign, MapPin, Rocket, RotateCcw, TrendingUp } from 'lucide-react';
+import { Calendar, DollarSign, MapPin, Rocket, RotateCcw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 import statIcon5 from '@/assets/stats/5.png';
@@ -24,7 +24,9 @@ export default function LastCampaignsGrid({ campaigns, loading }: LastCampaignsG
   return (
     <div className="mb-10 rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
       <div className="flex flex-row items-center p-0 gap-6 px-5 py-4 border-b border-gray-200 bg-gray-50/50 min-h-[24px]">
-        <h2 className="text-lg font-normal leading-6 text-gray-900 flex-1 order-0">Mes campagnes</h2>
+        <h2 className="text-lg font-normal leading-6 text-gray-900 flex-1 order-0">
+          Mes campagnes
+        </h2>
         <button
           type="button"
           onClick={() => navigate('/my-campaigns')}
@@ -89,6 +91,8 @@ export default function LastCampaignsGrid({ campaigns, loading }: LastCampaignsG
                         </span>
                       ))}
                     </div>
+                    {/* Per-campaign delivered impressions come from reconciliation and have no
+                        advertiser read API yet — that sub-block is omitted rather than faked. */}
                     <div className="flex items-center justify-between gap-4 mb-4 mt-auto">
                       <div>
                         <div className="flex items-center gap-1 text-xs text-gray-500">
@@ -102,17 +106,6 @@ export default function LastCampaignsGrid({ campaigns, loading }: LastCampaignsG
                           }).format(campaign.budget)}{' '}
                           TND
                         </p>
-                      </div>
-                      <div className="flex items-start gap-1.5 justify-end">
-                        <div className="flex flex-col items-start">
-                          <TrendingUp className="h-3.5 w-3.5 text-[#7e51f5] flex-shrink-0" />
-                          <p className="text-base font-bold text-gray-900 tabular-nums mt-0.5">
-                            {(campaign.validated_impressions || 0)
-                              .toLocaleString('fr-FR')
-                              .replace(/\s/g, ' ')}
-                          </p>
-                        </div>
-                        <div className="text-right text-xs text-gray-500 pt-0.5">IMPRESSIONS</div>
                       </div>
                     </div>
                     <div className="flex gap-2 pt-4 mt-4 border-t border-gray-200 -mx-5 px-5">
@@ -145,7 +138,9 @@ export default function LastCampaignsGrid({ campaigns, loading }: LastCampaignsG
           {/* Bloc Gagnez du temps */}
           <div className="rounded-xl bg-[#f5f5f5] border border-gray-200 p-5 shadow-sm flex flex-col items-center justify-center text-center">
             <img src={statIcon5} alt="" className="h-12 w-12 object-contain mb-3" />
-            <h3 className="text-sm font-bold text-gray-900 mb-1 whitespace-nowrap">Gagnez du temps</h3>
+            <h3 className="text-sm font-bold text-gray-900 mb-1 whitespace-nowrap">
+              Gagnez du temps
+            </h3>
             <p className="text-sm text-gray-600 mb-4">
               Capitalisez sur des campagnes enregistrées ou déjà jouées
             </p>

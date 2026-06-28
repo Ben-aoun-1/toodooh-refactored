@@ -39,8 +39,6 @@ export default function AdvertiserDashboard() {
       <FeaturedEventsGrid />
       <StatsGrid
         campaignsDiffused={stats.campaignsDiffused}
-        totalViews={stats.totalViews}
-        totalDurationSeconds={stats.totalDurationSeconds}
         totalBudget={stats.totalBudget}
         loading={loadingStats}
       />
