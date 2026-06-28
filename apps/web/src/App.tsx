@@ -37,6 +37,9 @@ const OwnerScreens = lazy(() => import('@/features/screenhost/pages/OwnerScreens
 const OwnerRevenue = lazy(() => import('@/features/screenhost/pages/OwnerRevenue'));
 const OwnerCampaigns = lazy(() => import('@/features/screenhost/pages/OwnerCampaigns'));
 const OwnerAllocations = lazy(() => import('@/features/screenhost/pages/OwnerAllocations'));
+const OwnerCampaignCalendar = lazy(
+  () => import('@/features/screenhost/pages/OwnerCampaignCalendar'),
+);
 const OwnerPerformance = lazy(() => import('@/features/screenhost/pages/OwnerPerformance'));
 const OwnerCalendarDevices = lazy(() => import('@/features/screenhost/pages/OwnerCalendarDevices'));
 const OwnerStatementsPage = lazy(() => import('@/features/screenhost/pages/OwnerStatementsPage'));
@@ -445,6 +448,14 @@ export default function App() {
               element={
                 <OwnerRoute>
                   <OwnerAllocations />
+                </OwnerRoute>
+              }
+            />
+            <Route
+              path="/owner-campaign-calendar"
+              element={
+                <OwnerRoute>
+                  <OwnerCampaignCalendar />
                 </OwnerRoute>
               }
             />

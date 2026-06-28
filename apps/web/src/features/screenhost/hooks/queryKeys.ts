@@ -30,4 +30,7 @@ export const screenhostKeys = {
   /** The owner's EN_ATTENTE dispatch allocations awaiting accept/reject (GET /allocations). */
   pendingAllocations: (userId: string) =>
     [...screenhostKeys.all, 'pendingAllocations', userId] as const,
+
+  /** The owner's ACCEPTE allocations + créneaux for the diffusion calendar (GET /calendar). */
+  calendar: (userId: string) => [...screenhostKeys.all, 'calendar', userId] as const,
 };
