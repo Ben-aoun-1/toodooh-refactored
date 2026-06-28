@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 
-import { supabase } from '@/lib/supabase';
-import { balanceService } from '@/services/balance.service';
+import { apiClient } from '@/lib/api-client';
 
 import { walletKeys } from './queryKeys';
 
@@ -12,6 +11,23 @@ export interface Transaction {
   amount: number;
   date: Date;
   paymentMethod?: string;
+}
+
+/** Advertiser projection of a recharge (engine `rechargeView`). */
+interface RechargeView {
+  id: string;
+  amount_tnd: number;
+  status: 'pending' | 'confirmed' | 'rejected';
+  reference: string;
+  created_at: string;
+}
+
+/** Engine derived wallet balance (`GET /api/wallet/balance`). */
+interface WalletBalanceView {
+  balance_tnd: number;
+  credited_tnd: number;
+  debited_tnd: number;
+  currency: string;
 }
 
 interface WalletTransactionsData {
@@ -27,71 +43,42 @@ interface UseWalletTransactionsResult {
 }
 
 /**
- * Composite read for MyRecharges: the available balance plus a merged,
- * date-sorted ledger of completed recharges and campaign expenses. Verbatim
- * port of the former `[user]` effect.
+ * Composite read for MyRecharges, now on the engine: the DERIVED available
+ * balance (`GET /api/wallet/balance`) plus the date-sorted ledger of CONFIRMED
+ * recharges (`GET /api/recharges/mine?status=confirmed`).
+ *
+ * FLAG — per-campaign EXPENSE line items have no advertiser read API in the new
+ * engine. The wallet balance exposes only the *aggregate* debit (`debited_tnd`,
+ * summed from campaign_reconciliation, which is admin-only at write time); there
+ * is no owner-scoped read of per-campaign spend. The ledger therefore lists
+ * recharges only and the "Dépenses" tab is empty until a spend-line read API
+ * lands. The former Supabase build derived expenses from `campaigns.budget`,
+ * which is the requested/indicative budget — NOT the reconciled spend — so
+ * reproducing it here would fabricate amounts that disagree with the balance.
  */
-async function fetchWalletTransactions(userId: string): Promise<WalletTransactionsData> {
-  const balanceInfo = await balanceService.getBalanceInfo(userId);
-  const balance = balanceInfo
-    ? balanceInfo.available_balance
-    : await balanceService.getUserBalance(userId);
+async function fetchWalletTransactions(): Promise<WalletTransactionsData> {
+  const [balance, recharges] = await Promise.all([
+    apiClient.get<WalletBalanceView>('/wallet/balance'),
+    apiClient.get<RechargeView[]>('/recharges/mine?status=confirmed'),
+  ]);
 
-  const merged: Transaction[] = [];
+  const transactions: Transaction[] = recharges.map((r) => ({
+    id: `r-${r.id}`,
+    type: 'recharge',
+    designation: 'Rechargement wallet',
+    amount: r.amount_tnd,
+    date: new Date(r.created_at),
+    paymentMethod: 'Virement bancaire',
+  }));
 
-  const { data: rechargesData } = await supabase
-    .from('recharges')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('status', 'completed')
-    .order('created_at', { ascending: false });
-
-  if (rechargesData) {
-    rechargesData.forEach((r) => {
-      merged.push({
-        id: `r-${r.id}`,
-        type: 'recharge',
-        designation: 'Rechargement wallet',
-        amount: parseFloat(r.amount) || 0,
-        date: new Date(r.created_at),
-        paymentMethod:
-          r.payment_method === 'card'
-            ? 'Carte Bancaire'
-            : r.payment_method === 'bank'
-              ? 'Virement'
-              : 'Espèces',
-      });
-    });
-  }
-
-  const { data: campaignsData } = await supabase
-    .from('campaigns')
-    .select('id, name, budget, created_at')
-    .eq('user_id', userId)
-    .in('status', ['active', 'completed'])
-    .order('created_at', { ascending: false });
-
-  if (campaignsData) {
-    campaignsData.forEach((c) => {
-      const budgetTTC = (parseFloat(c.budget) || 0) * 1.19;
-      merged.push({
-        id: `c-${c.id}`,
-        type: 'expense',
-        designation: c.name || 'Campagne',
-        amount: budgetTTC,
-        date: new Date(c.created_at),
-      });
-    });
-  }
-
-  merged.sort((a, b) => b.date.getTime() - a.date.getTime());
-  return { balance, transactions: merged };
+  transactions.sort((a, b) => b.date.getTime() - a.date.getTime());
+  return { balance: balance.balance_tnd, transactions };
 }
 
 export function useWalletTransactions(userId: string | undefined): UseWalletTransactionsResult {
   const query = useQuery({
     queryKey: walletKeys.transactions(userId ?? ''),
-    queryFn: () => fetchWalletTransactions(userId as string),
+    queryFn: fetchWalletTransactions,
     enabled: !!userId,
   });
 
