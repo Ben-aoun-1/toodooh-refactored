@@ -10,7 +10,9 @@ import {
   campaigns,
   creatives,
 } from '../db/schema.js';
+import { getDispatchConfig } from '../lib/dispatch/config.js';
 import { runDispatch } from '../lib/dispatch/dispatch-service.js';
+import { DEFAULT_TIER_COEF } from '../lib/dispatch/thresholds.js';
 import { walletBalance } from '../lib/recharges.js';
 import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
 
@@ -26,21 +28,35 @@ import { planView } from './campaign-dispatch.js';
 //
 // V1 manual money model: activation gates on walletBalance >= budget but does NOT debit — the debit
 // is L-redisp's at reconciliation (it bills actual aired impressions). The seam stays open here.
-// Pricing is gated too: I_cible/CPM/S/T are admin-provided/synthetic until L-price supplies the real
-// I_cible.
+//
+// DERIVED ACTIVATION: the engine inputs are NO LONGER admin-supplied. Approve = activate derives them
+// from the campaign + config so the operator only ever clicks Approve:
+//   cpm     = config CPM by type (event_cpm_tnd for an 'event' campaign, else standard_cpm_tnd)
+//   i_cible = ⌊requested_budget·1000 / cpm⌋        (the advertiser's indicative ask → target impressions)
+//   s       = the linked creative's duration_seconds (the spot length actually airing)
+//   t       = DEFAULT_TIER_COEF                     (neutral; per-tier pricing is a later lane)
+// budget (the funding gate) = requested_budget, the advertiser's stated ask.
 
 const idParamSchema = z.object({ id: z.uuid() });
 const listQuerySchema = z.object({
   status: z.enum(['draft', 'pending', 'active', 'rejected']).optional(),
 });
-// Mirror the dispatch entrypoint's inputs (synthetic admin pricing for V1).
-const activateBodySchema = z.object({
-  i_cible: z.number().int().positive(),
-  cpm: z.number().positive(),
-  s: z.number().int().positive(),
-  t: z.number().positive(),
-});
 const rejectBodySchema = z.object({ reason: z.string().trim().min(1).max(2000) });
+
+// The CPM (TND/1000) a campaign prices at: event campaigns at event_cpm_tnd, everything else at
+// standard_cpm_tnd (operator ruling 15/30). Single source of truth for the list + activate paths.
+const cpmForCampaign = (
+  campaignType: string,
+  cfg: { standardCpmTnd: number; eventCpmTnd: number },
+): number => (campaignType === 'event' ? cfg.eventCpmTnd : cfg.standardCpmTnd);
+
+// Derived I_cible from the indicative budget at the given CPM, or null when un-derivable (no budget /
+// non-positive budget). ⌊budget·1000 / cpm⌋; a sub-CPM budget floors to 0 → null (not deliverable).
+const deriveICible = (requestedBudget: number | null, cpm: number): number | null => {
+  if (requestedBudget === null || requestedBudget <= 0 || cpm <= 0) return null;
+  const iCible = Math.floor((requestedBudget * 1000) / cpm);
+  return iCible >= 1 ? iCible : null;
+};
 
 const invalidField = (reply: FastifyReply, field: string, reason: string) =>
   reply
@@ -103,13 +119,16 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
   const adminGuard = { preHandler: [requireAuth, requireAdmin] };
 
   // GET /api/admin/campaigns[?status=] — the review queue (newest first): each campaign + its derived
-  // content_validation_status (the linked creative's approval) + the advertiser's wallet balance.
+  // content_validation_status (the linked creative's approval) + the advertiser's wallet balance +
+  // the DERIVED pricing the operator approves (cpm_tnd by type, derived_i_cible = ⌊budget·1000/cpm⌋).
+  // derived_i_cible is null when the campaign has no usable budget — the queue shows it can't activate.
   app.get('/api/admin/campaigns', adminGuard, async (request, reply) => {
     const parsedQuery = listQuerySchema.safeParse(request.query);
     if (!parsedQuery.success) {
       return invalidField(reply, 'status', 'must be draft, pending, active or rejected');
     }
     const { status } = parsedQuery.data;
+    const config = await getDispatchConfig();
     const rows = await db
       .select({ campaign: campaigns, contentValidationStatus: creatives.validationStatus })
       .from(campaigns)
@@ -117,30 +136,27 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
       .where(status ? eq(campaigns.status, status) : undefined)
       .orderBy(desc(campaigns.createdAt));
     const out = await Promise.all(
-      rows.map(async (r) => ({
-        ...adminCampaignView(r.campaign, r.contentValidationStatus),
-        wallet_balance_tnd: (await walletBalance(r.campaign.advertiserId)).balance_tnd,
-      })),
+      rows.map(async (r) => {
+        const cpm = cpmForCampaign(r.campaign.campaignType, config);
+        const requestedBudget =
+          r.campaign.requestedBudget === null ? null : Number(r.campaign.requestedBudget);
+        return {
+          ...adminCampaignView(r.campaign, r.contentValidationStatus),
+          wallet_balance_tnd: (await walletBalance(r.campaign.advertiserId)).balance_tnd,
+          cpm_tnd: cpm,
+          derived_i_cible: deriveICible(requestedBudget, cpm),
+        };
+      }),
     );
     return reply.status(200).send(out);
   });
 
-  // POST /api/admin/campaigns/:id/activate { i_cible, cpm, s, t } — the keystone. Gate (pending +
-  // approved creative + funded) then dispatch; activate only on a deliverable plan.
+  // POST /api/admin/campaigns/:id/activate (NO body) — the keystone. Gate (pending + approved
+  // creative) → DERIVE the engine inputs (cpm/i_cible/s/t) from the campaign + config → gate funded →
+  // dispatch; activate only on a deliverable plan.
   app.post('/api/admin/campaigns/:id/activate', adminGuard, async (request, reply) => {
     const parsedParams = idParamSchema.safeParse(request.params);
     if (!parsedParams.success) return invalidField(reply, 'id', 'must be a uuid');
-    const parsedBody = activateBodySchema.safeParse(request.body ?? {});
-    if (!parsedBody.success) {
-      return reply.status(400).send({
-        error: 'INVALID_INPUT',
-        message: 'Validation failed',
-        fields: parsedBody.error.issues.map((i) => ({
-          field: i.path.join('.'),
-          reason: i.message,
-        })),
-      });
-    }
     const adminId = request.user?.id;
     if (!adminId) {
       return reply
@@ -148,18 +164,21 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
         .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
     }
     const { id } = parsedParams.data;
-    const { i_cible: iCible, cpm, s, t } = parsedBody.data;
 
     const [row] = await db
-      .select({ campaign: campaigns, contentValidationStatus: creatives.validationStatus })
+      .select({
+        campaign: campaigns,
+        contentValidationStatus: creatives.validationStatus,
+        creativeDurationSeconds: creatives.durationSeconds,
+      })
       .from(campaigns)
       .leftJoin(creatives, eq(campaigns.creativeId, creatives.id))
       .where(eq(campaigns.id, id))
       .limit(1);
     if (!row) return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such campaign.' });
-    const { campaign, contentValidationStatus } = row;
+    const { campaign, contentValidationStatus, creativeDurationSeconds } = row;
 
-    // GATE — pending → approved creative → funded (balance >= budget). NO debit (deferred to L-redisp).
+    // GATE — pending → approved creative. NO debit (deferred to L-redisp).
     if (campaign.status !== 'pending') {
       return sendNotPending(reply, request, campaign.status, 'activated');
     }
@@ -171,7 +190,46 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
         content_validation_status: contentValidationStatus,
       });
     }
-    const budget = (iCible * cpm) / 1000; // TND; the debit seam (L-redisp bills actual impressions)
+
+    // DERIVE the engine inputs (no admin-supplied pricing). cpm by type → i_cible from budget;
+    // s = creative duration; t = neutral default. Each derivation that can't complete is a 422 with a
+    // machine reason so the queue can tell the operator WHAT to fix (set a budget / a creative duration).
+    const config = await getDispatchConfig();
+    const cpm = cpmForCampaign(campaign.campaignType, config);
+    const requestedBudget =
+      campaign.requestedBudget === null ? null : Number(campaign.requestedBudget);
+    if (requestedBudget === null || requestedBudget <= 0) {
+      return reply.status(422).send({
+        error: 'NOT_ACTIVATABLE',
+        reason: 'no_budget',
+        message: 'The campaign has no indicative budget to derive a target from.',
+        requested_budget: requestedBudget,
+      });
+    }
+    if (creativeDurationSeconds === null || creativeDurationSeconds <= 0) {
+      return reply.status(422).send({
+        error: 'NOT_ACTIVATABLE',
+        reason: 'no_duration',
+        message: 'The linked creative has no diffusion duration to use as the spot length.',
+        duration_seconds: creativeDurationSeconds,
+      });
+    }
+    const iCible = deriveICible(requestedBudget, cpm);
+    if (iCible === null) {
+      return reply.status(422).send({
+        error: 'NOT_ACTIVATABLE',
+        reason: 'budget_too_low',
+        message: 'The indicative budget is below one CPM unit — no impressions can be targeted.',
+        requested_budget: requestedBudget,
+        cpm_tnd: cpm,
+      });
+    }
+    const s = creativeDurationSeconds;
+    const t = DEFAULT_TIER_COEF;
+
+    // Funded gate: balance >= the advertiser's indicative budget (the ask). NO debit (L-redisp bills
+    // actual aired impressions at reconciliation).
+    const budget = requestedBudget;
     const balance = (await walletBalance(campaign.advertiserId)).balance_tnd;
     if (balance < budget) {
       return reply.status(422).send({

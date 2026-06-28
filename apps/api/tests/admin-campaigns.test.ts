@@ -62,6 +62,7 @@ const ownerSectorId = async (): Promise<string> => {
 const seedCreative = async (
   advertiserId: string,
   validationStatus: 'pending' | 'approved' | 'rejected' = 'approved',
+  durationSeconds: number | null = 20,
 ): Promise<string> => {
   const [c] = await db
     .insert(creatives)
@@ -69,7 +70,7 @@ const seedCreative = async (
       advertiserId,
       creativeType: 'video',
       storageKey: `creatives/${advertiserId}/c`,
-      durationSeconds: 20,
+      durationSeconds,
       validationStatus,
     })
     .returning();
@@ -78,18 +79,33 @@ const seedCreative = async (
 
 const seedCampaign = async (
   advertiserId: string,
-  opts: { status?: 'draft' | 'pending' | 'active' | 'rejected'; creativeId?: string | null } = {},
+  opts: {
+    status?: 'draft' | 'pending' | 'active' | 'rejected';
+    creativeId?: string | null;
+    // The advertiser's indicative ask (TND); the activation derives i_cible from it. Defaults to a
+    // budget that yields a coverable target at the standard CPM (300 → ⌊300·1000/15⌋ = 20000). `null`
+    // = no budget (the no_budget gate).
+    requestedBudgetTnd?: number | null;
+    campaignType?: string;
+  } = {},
 ): Promise<string> => {
+  const requestedBudget =
+    opts.requestedBudgetTnd === undefined
+      ? '300'
+      : opts.requestedBudgetTnd === null
+        ? null
+        : String(opts.requestedBudgetTnd);
   const [c] = await db
     .insert(campaigns)
     .values({
       advertiserId,
       name: 'Activate Test',
-      campaignType: 'standard',
+      campaignType: opts.campaignType ?? 'standard',
       status: opts.status ?? 'pending',
       startDate: '2024-01-01', // Mon
       endDate: '2024-01-02', // Tue
       creativeId: opts.creativeId ?? null,
+      requestedBudget,
     })
     .returning();
   return c?.id ?? '';
@@ -142,21 +158,35 @@ const seedActivatable = async (
     validationStatus?: 'pending' | 'approved' | 'rejected';
     fundTnd?: number;
     affluence?: number;
+    requestedBudgetTnd?: number | null;
+    durationSeconds?: number | null;
+    campaignType?: string;
   } = {},
 ): Promise<{ admin: string; advertiser: string; campaignId: string }> => {
   const admin = await seedUser({ role: 'admin' });
   const advertiser = await seedUser({ role: 'advertiser' });
   const owner = await seedUser({ role: 'individual_owner' });
   const cat = await ownerSectorId();
-  const creativeId = await seedCreative(advertiser, over.validationStatus ?? 'approved');
-  const campaignId = await seedCampaign(advertiser, { status: 'pending', creativeId });
+  const creativeId = await seedCreative(
+    advertiser,
+    over.validationStatus ?? 'approved',
+    over.durationSeconds === undefined ? 20 : over.durationSeconds,
+  );
+  const campaignId = await seedCampaign(advertiser, {
+    status: 'pending',
+    creativeId,
+    requestedBudgetTnd: over.requestedBudgetTnd,
+    campaignType: over.campaignType,
+  });
   await seedTargeting(campaignId, cat, 'premium');
   await seedEligibleScreenhost(owner, cat, over.affluence ?? 100);
   if (over.fundTnd !== undefined) await fund(advertiser, over.fundTnd);
   return { admin, advertiser, campaignId };
 };
 
-const ACTIVATE_BODY = { i_cible: 20000, cpm: 10, s: 10, t: 0.8 }; // budget = 200 TND
+// The reshaped activate takes NO body — the engine inputs are derived. The public /dispatch endpoint
+// (used by the ALREADY_DISPATCHED test) is unchanged and still takes explicit inputs.
+const DISPATCH_BODY = { i_cible: 20000, cpm: 10, s: 10, t: 0.8 };
 
 describe('admin campaign moderation — activation keystone (real Postgres)', () => {
   let app: ReturnType<typeof buildApp>;
@@ -176,12 +206,14 @@ describe('admin campaign moderation — activation keystone (real Postgres)', ()
     await sql.end();
   });
 
-  const activate = (id: string, body: Record<string, unknown> = ACTIVATE_BODY) =>
-    app.inject({ method: 'POST', url: `/api/admin/campaigns/${id}/activate`, payload: body });
+  const activate = (id: string) =>
+    app.inject({ method: 'POST', url: `/api/admin/campaigns/${id}/activate` });
   const reject = (id: string, body: Record<string, unknown>) =>
     app.inject({ method: 'POST', url: `/api/admin/campaigns/${id}/reject`, payload: body });
 
   it('activates a pending, approved, funded campaign with a dispatchable plan (→ active + frozen plan)', async () => {
+    // budget 300 @ standard CPM 15 → i_cible 20000; creative duration 20 → s; t 1.0. capacité (s=20)
+    // = ⌊100·20·15⌋ = 30000 ≥ 20000 → covered by 1 allocation.
     const { admin, campaignId } = await seedActivatable({ fundTnd: 500 });
     mockSession(admin);
 
@@ -212,6 +244,12 @@ describe('admin campaign moderation — activation keystone (real Postgres)', ()
       .where(eq(campaignDispatchPlan.campaignId, campaignId))
       .limit(1);
     expect(plan).toBeDefined();
+    // The plan snapshots the DERIVED inputs (not an admin body): i_cible from budget@CPM, cpm=15,
+    // s=creative duration 20, t=1.0.
+    expect(plan?.iCible).toBe(20000);
+    expect(Number(plan?.cpm)).toBe(15);
+    expect(plan?.sSpotSeconds).toBe(20);
+    expect(Number(plan?.tTierCoef)).toBe(1);
     const allocs = await db
       .select()
       .from(campaignDispatchAllocation)
@@ -219,14 +257,53 @@ describe('admin campaign moderation — activation keystone (real Postgres)', ()
     expect(allocs[0]?.statutAcceptation).toBe('ACCEPTE');
   });
 
+  it('prices an event campaign at event_cpm_tnd (plan cpm = 30)', async () => {
+    // event campaign, budget 600 @ event CPM 30 → i_cible 20000 (coverable); funded 700.
+    const { admin, campaignId } = await seedActivatable({
+      fundTnd: 700,
+      requestedBudgetTnd: 600,
+      campaignType: 'event',
+    });
+    mockSession(admin);
+    const res = await activate(campaignId);
+    expect(res.statusCode).toBe(200);
+    const [plan] = await db
+      .select()
+      .from(campaignDispatchPlan)
+      .where(eq(campaignDispatchPlan.campaignId, campaignId))
+      .limit(1);
+    expect(Number(plan?.cpm)).toBe(30);
+    expect(plan?.iCible).toBe(20000);
+  });
+
+  it('blocks activation when the campaign has no indicative budget (422 no_budget; not activated)', async () => {
+    const { admin, campaignId } = await seedActivatable({ fundTnd: 500, requestedBudgetTnd: null });
+    mockSession(admin);
+    const res = await activate(campaignId);
+    expect(res.statusCode).toBe(422);
+    expect((res.json() as { reason: string }).reason).toBe('no_budget');
+    const [c] = await db.select().from(campaigns).where(eq(campaigns.id, campaignId)).limit(1);
+    expect(c?.status).toBe('pending');
+  });
+
+  it('blocks activation when the linked creative has no duration (422 no_duration; not activated)', async () => {
+    const { admin, campaignId } = await seedActivatable({ fundTnd: 500, durationSeconds: null });
+    mockSession(admin);
+    const res = await activate(campaignId);
+    expect(res.statusCode).toBe(422);
+    expect((res.json() as { reason: string }).reason).toBe('no_duration');
+    const [c] = await db.select().from(campaigns).where(eq(campaigns.id, campaignId)).limit(1);
+    expect(c?.status).toBe('pending');
+  });
+
   it('activates a campaign that was already dispatched (ALREADY_DISPATCHED → active)', async () => {
     const { admin, campaignId } = await seedActivatable({ fundTnd: 500 });
     mockSession(admin);
-    // Freeze a plan via the existing entrypoint first (campaign stays pending).
+    // Freeze a plan via the existing (unchanged) entrypoint first (campaign stays pending).
     const pre = await app.inject({
       method: 'POST',
       url: `/api/campaigns/${campaignId}/dispatch`,
-      payload: ACTIVATE_BODY,
+      payload: DISPATCH_BODY,
     });
     expect(pre.statusCode).toBe(201);
 
@@ -249,7 +326,7 @@ describe('admin campaign moderation — activation keystone (real Postgres)', ()
   });
 
   it('blocks when the advertiser is under-funded (422; not activated)', async () => {
-    const { admin, campaignId } = await seedActivatable({ fundTnd: 50 }); // balance 50 < budget 200
+    const { admin, campaignId } = await seedActivatable({ fundTnd: 50 }); // balance 50 < budget 300
     mockSession(admin);
     const res = await activate(campaignId);
     expect(res.statusCode).toBe(422);
@@ -271,10 +348,15 @@ describe('admin campaign moderation — activation keystone (real Postgres)', ()
   });
 
   it('too-thin dispatch → NOT activated; 422 alert; campaign stays pending; no plan frozen', async () => {
-    // affluence 1 → capacité = ⌊1·20·30⌋ = 600 < seuil 1000; i_cible 1500 → N_min 3 > N_max 1.
-    const { admin, campaignId } = await seedActivatable({ fundTnd: 500, affluence: 1 });
+    // affluence 1, s=20 → capacité = ⌊1·20·15⌋ = 300 < seuil 1000. budget 22.5 @ CPM 15 → i_cible
+    // 1500 → N_min ⌈1500/300⌉ = 5 > N_max ⌊1500/1000⌋ = 1 → too thin.
+    const { admin, campaignId } = await seedActivatable({
+      fundTnd: 500,
+      affluence: 1,
+      requestedBudgetTnd: 22.5,
+    });
     mockSession(admin);
-    const res = await activate(campaignId, { i_cible: 1500, cpm: 10, s: 10, t: 0.8 });
+    const res = await activate(campaignId);
     expect(res.statusCode).toBe(422);
     expect((res.json() as { reason: string }).reason).toBe('too_thin');
     const [c] = await db.select().from(campaigns).where(eq(campaigns.id, campaignId)).limit(1);
@@ -311,12 +393,8 @@ describe('admin campaign moderation — activation keystone (real Postgres)', ()
     expect((await reject(campaignId, {})).statusCode).toBe(400);
   });
 
-  it('the review queue lists campaigns with content-gate + wallet balance + requested_budget', async () => {
-    const { admin, campaignId } = await seedActivatable({ fundTnd: 300 });
-    await db
-      .update(campaigns)
-      .set({ requestedBudget: '450' }) // the advertiser's indicative ask, surfaced to the operator
-      .where(eq(campaigns.id, campaignId));
+  it('the review queue lists campaigns with content-gate + wallet balance + requested_budget + derived pricing', async () => {
+    const { admin, campaignId } = await seedActivatable({ fundTnd: 300, requestedBudgetTnd: 450 });
     mockSession(admin);
     const res = await app.inject({ method: 'GET', url: '/api/admin/campaigns?status=pending' });
     expect(res.statusCode).toBe(200);
@@ -326,12 +404,25 @@ describe('admin campaign moderation — activation keystone (real Postgres)', ()
       content_validation_status: string | null;
       wallet_balance_tnd: number;
       requested_budget: number | null;
+      cpm_tnd: number;
+      derived_i_cible: number | null;
     }[];
     const mine = rows.find((r) => r.id === campaignId);
     expect(mine?.status).toBe('pending');
     expect(mine?.content_validation_status).toBe('approved');
     expect(mine?.wallet_balance_tnd).toBe(300);
     expect(mine?.requested_budget).toBe(450);
+    // Derived for the operator: standard CPM 15 → i_cible ⌊450·1000/15⌋ = 30000.
+    expect(mine?.cpm_tnd).toBe(15);
+    expect(mine?.derived_i_cible).toBe(30000);
+  });
+
+  it('the review queue surfaces a null derived_i_cible for a budget-less campaign', async () => {
+    const { admin, campaignId } = await seedActivatable({ requestedBudgetTnd: null });
+    mockSession(admin);
+    const res = await app.inject({ method: 'GET', url: '/api/admin/campaigns?status=pending' });
+    const rows = res.json() as { id: string; derived_i_cible: number | null }[];
+    expect(rows.find((r) => r.id === campaignId)?.derived_i_cible).toBeNull();
   });
 
   it('404 for a nonexistent campaign; 403 for a non-admin', async () => {
