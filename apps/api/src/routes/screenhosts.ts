@@ -659,4 +659,65 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
   app.post('/api/screenhosts/allocations/:id/reject', ownerGuard, (request, reply) =>
     decideAllocation(request, reply, 'REFUSE'),
   );
+
+  // ── dispatch calendar (owner-scoped, ACCEPTE only) ─────────────────────────────────────────────
+  // GET /api/screenhosts/calendar — the owner's ACCEPTE allocations (the ones that actually air),
+  // joined to campaign (name/window) + screenhost (name), each carrying its frozen créneaux so the
+  // owner surface can render an agenda/month calendar of accepted campaigns across their dates.
+  // Owner scoping is IN the WHERE (screenhosts.ownerId = caller) alongside statut = ACCEPTE, so a
+  // foreign owner's allocations are never returned, and EN_ATTENTE/REFUSE are excluded (only accepted
+  // allocations air — the playout gate requires ACCEPTE). Each créneau is projected to
+  // {date, hour, impressions} (reps is an engine internal the calendar doesn't need), mirroring the
+  // reconcile read's créneau projection. Ordered by campaign window then created_at for a stable,
+  // chronological list; the FE regroups by créneau date.
+  app.get('/api/screenhosts/calendar', ownerGuard, async (request, reply) => {
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply
+        .status(401)
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+    }
+    const rows = await db
+      .select({
+        id: campaignDispatchAllocation.id,
+        campaignId: campaigns.id,
+        campaignName: campaigns.name,
+        startDate: campaigns.startDate,
+        endDate: campaigns.endDate,
+        screenhostId: screenhosts.id,
+        screenhostName: screenhosts.name,
+        creneaux: campaignDispatchAllocation.creneaux,
+      })
+      .from(campaignDispatchAllocation)
+      .innerJoin(screenhosts, eq(campaignDispatchAllocation.screenhostId, screenhosts.id))
+      .innerJoin(
+        campaignDispatchPlan,
+        eq(campaignDispatchAllocation.planId, campaignDispatchPlan.id),
+      )
+      .innerJoin(campaigns, eq(campaignDispatchPlan.campaignId, campaigns.id))
+      .where(
+        and(
+          eq(screenhosts.ownerId, userId),
+          eq(campaignDispatchAllocation.statutAcceptation, 'ACCEPTE'),
+        ),
+      )
+      .orderBy(asc(campaigns.startDate), asc(campaignDispatchAllocation.createdAt));
+
+    return reply.status(200).send(
+      rows.map((r) => ({
+        id: r.id,
+        campaign_id: r.campaignId,
+        campaign_name: r.campaignName,
+        start_date: r.startDate,
+        end_date: r.endDate,
+        screenhost_id: r.screenhostId,
+        screenhost_name: r.screenhostName,
+        creneaux: r.creneaux.map((c) => ({
+          date: c.date,
+          hour: c.hour,
+          impressions: c.impressions,
+        })),
+      })),
+    );
+  });
 };
