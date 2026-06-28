@@ -1,12 +1,24 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { AlertCircle, CalendarDays, Clock, Loader2, TrendingUp, Users } from 'lucide-react';
+import {
+  AlertCircle,
+  CalendarDays,
+  Clock,
+  Download,
+  Loader2,
+  TrendingUp,
+  Users,
+} from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { useAuthStore } from '@/features/auth/stores/auth.store';
+import { logger } from '@/lib/logger';
 
 import { useScreenhostAffluence } from '../hooks/useScreenhostAffluence';
 import { useScreenhostsMine } from '../hooks/useScreenhostsMine';
 import { DAY_LABELS, DAY_LABELS_SHORT, formatHour, summarize } from '../lib/affluence-grid';
+import { downloadMonthlyReport, lastCompleteMonth } from '../lib/monthly-report';
+
+const log = logger.child({ module: 'OwnerAffluenceSection' });
 
 function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
@@ -38,6 +50,37 @@ export function OwnerAffluenceSection() {
   const hasData = affluence.data?.has_data ?? false;
   const summary = useMemo(() => summarize(grid), [grid]);
 
+  // Monthly-report download (SEPARATE table from affluence — gated on selectedId only, never on
+  // affluence has_data). Default to the last complete calendar month to maximise the hit rate.
+  const [month, setMonth] = useState(() => lastCompleteMonth());
+  const [downloading, setDownloading] = useState(false);
+  const [reportNotice, setReportNotice] = useState<{ kind: 'info' | 'error'; text: string } | null>(
+    null,
+  );
+
+  // Clear any stale "no report" / error notice when the owner switches venue. This does NOT fetch —
+  // the binary report is only ever requested on an explicit button click.
+  useEffect(() => {
+    setReportNotice(null);
+  }, [selectedId]);
+
+  const handleDownloadReport = async () => {
+    if (!selectedId || downloading) return;
+    setReportNotice(null);
+    setDownloading(true);
+    try {
+      const result = await downloadMonthlyReport(selectedId, month);
+      if (result === 'no-data') {
+        setReportNotice({ kind: 'info', text: 'Pas encore de rapport pour ce mois.' });
+      }
+    } catch (err) {
+      log.error({ err }, 'monthly report download failed');
+      setReportNotice({ kind: 'error', text: 'Échec du téléchargement. Veuillez réessayer.' });
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   // Hide the whole section while we don't yet know the venues, or when there are none.
   if (screenhosts.isLoading) {
     return (
@@ -57,11 +100,51 @@ export function OwnerAffluenceSection() {
 
   return (
     <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-      <header className="mb-1">
-        <h2 className="text-xl font-semibold text-brand-deep">Votre audience</h2>
-        <p className="text-sm text-gray-500">
-          Le profil d’affluence type de votre établissement, par jour et par heure.
-        </p>
+      <header className="mb-1 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-xl font-semibold text-brand-deep">Votre audience</h2>
+          <p className="text-sm text-gray-500">
+            Le profil d’affluence type de votre établissement, par jour et par heure.
+          </p>
+        </div>
+
+        {selectedId && (
+          <div className="flex flex-col gap-1 sm:items-end">
+            <div className="flex items-center gap-2">
+              <input
+                type="month"
+                value={month}
+                max={lastCompleteMonth()}
+                onChange={(e) => setMonth(e.target.value)}
+                aria-label="Mois du rapport mensuel"
+                className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary"
+              />
+              <button
+                type="button"
+                onClick={handleDownloadReport}
+                disabled={downloading}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-brand-deep px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-deep/90 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary"
+              >
+                {downloading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}
+                Télécharger le rapport mensuel
+              </button>
+            </div>
+            {reportNotice && (
+              <p
+                className={`text-xs ${
+                  reportNotice.kind === 'error' ? 'text-red-500' : 'text-gray-500'
+                }`}
+                role="status"
+              >
+                {reportNotice.text}
+              </p>
+            )}
+          </div>
+        )}
       </header>
 
       {isFleet && venues.length > 1 && (
