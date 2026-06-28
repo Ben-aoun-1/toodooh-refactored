@@ -1,49 +1,57 @@
 // Reconciliation valuation (L-redisp, Youssef §B) — PURE money math, no DB. The frozen plan promised
-// potential impressions per (campaign, screenhost); proof_of_play shows what aired. Value the
-// shortfall on the POTENTIAL and apply B.4. Snapshot cpm + s_min are passed in (read from
+// potential impressions per créneau (date, hour); proof_of_play shows what aired. Value the shortfall
+// on the potential and apply B.4. Snapshot cpm + s_min are passed in (read from
 // campaign_dispatch_plan, NEVER recomputed).
 //
-// DELIVERY MODEL (V1 = RATIO, not per-créneau time-match): the V1 player LOOPS the playlist (no
-// per-créneau scheduling) and proof event_ts is a nullable client clock, so a proof cannot be safely
-// attributed to a specific planned (date,hour). Instead delivery_ratio = min(1, delivered_plays /
-// expected_plays), applied to ii_potentiel. delivered_plays = VIDEO_ENDED proofs for the (campaign,
-// screenhost); expected_plays = Σ créneau.reps (the planned plays). This is monotonic, robust to
-// clock skew, and never over-credits (the min(1) cap). Flagged: an exact per-créneau model awaits a
-// scheduling-aware player + a trusted timestamp.
+// DELIVERY MODEL (FIX A — spam-resistant, binary per créneau on the SERVER clock): a créneau is
+// DELIVERED iff ≥1 VIDEO_ENDED proof_of_play for that (campaign, screenhost) has its SERVER received_at
+// in that créneau's date+hour (Africa/Tunis). Binary per slot: many proofs in one hour credit it ONCE,
+// and a screenhost cannot fabricate more delivered slots than there were real broadcast hours — so it
+// can't loop a VIDEO_ENDED to inflate earnings. NOT a raw count, NOT the client event_ts.
+//   delivered_imp = Σ impressions of DELIVERED créneaux; manquement_imp = Σ impressions of UNDELIVERED.
 
-// TND at 4-decimal precision (matches the numeric(14,4) money columns + s_min), so the p_perte ≥
-// s_min threshold never flips on float noise.
+// TND at 4-decimal precision (matches the numeric(14,4) money columns + s_min), so threshold/identity
+// comparisons never flip on float noise.
 const round4 = (n: number): number => Math.round(n * 1e4) / 1e4;
+
+// Stable "date:hour" key — created here and by the ingest side so a proof bucket matches a créneau.
+export const slotKey = (date: string, hour: number): string => `${date}:${hour}`;
+
+export interface ReconCreneau {
+  date: string; // YYYY-MM-DD (Africa/Tunis)
+  hour: number; // 0–23 (Africa/Tunis)
+  impressions: number; // potential impressions for the slot
+}
 
 export interface AllocationInput {
   screenhostId: string;
-  iiPotentiel: number; // a_i — potential impressions allocated to this SH
-  expectedPlays: number; // Σ créneau.reps — planned plays
-  deliveredPlays: number; // VIDEO_ENDED proofs for (campaign, screenhost)
+  creneaux: readonly ReconCreneau[];
+  // The set of slotKey(date,hour) the SH actually aired (≥1 VIDEO_ENDED whose received_at is in it).
+  deliveredSlots: ReadonlySet<string>;
 }
 
 export interface AllocationValuation {
   screenhostId: string;
-  expectedImp: number;
-  deliveredImp: number;
-  manquementImp: number;
-  earningsTnd: number; // delivered_imp × cpm/1000 — the SH payable (NOTHING on the undiffused part)
+  expectedImp: number; // Σ créneau.impressions
+  deliveredImp: number; // Σ impressions of DELIVERED créneaux
+  manquementImp: number; // expected − delivered
+  earningsTnd: number; // round4(delivered_imp × cpm/1000) — the SH payable, the SOURCE OF TRUTH (FIX B)
 }
 
-// delivery_ratio = min(1, delivered/expected). 0 expected → 0 (nothing planned ⇒ nothing valued; also
-// guards divide-by-zero).
-export const deliveryRatio = (deliveredPlays: number, expectedPlays: number): number =>
-  expectedPlays <= 0 ? 0 : Math.min(1, deliveredPlays / expectedPlays);
-
+// Per-(campaign, screenhost): binary per créneau, valued on the potential. Earnings are the rounded
+// per-SH figure — NOTHING on the undiffused part.
 export const valueAllocation = (a: AllocationInput, cpm: number): AllocationValuation => {
-  const ratio = deliveryRatio(a.deliveredPlays, a.expectedPlays);
-  // Floor delivered impressions (conservative: never credit a fractional impression as delivered).
-  const deliveredImp = Math.floor(ratio * a.iiPotentiel);
+  let expectedImp = 0;
+  let deliveredImp = 0;
+  for (const c of a.creneaux) {
+    expectedImp += c.impressions;
+    if (a.deliveredSlots.has(slotKey(c.date, c.hour))) deliveredImp += c.impressions;
+  }
   return {
     screenhostId: a.screenhostId,
-    expectedImp: a.iiPotentiel,
+    expectedImp,
     deliveredImp,
-    manquementImp: a.iiPotentiel - deliveredImp,
+    manquementImp: expectedImp - deliveredImp,
     earningsTnd: round4((deliveredImp * cpm) / 1000),
   };
 };
@@ -59,15 +67,14 @@ export interface CampaignValuation {
   perScreenhost: AllocationValuation[];
 }
 
-// Aggregate per-allocation valuations + apply B.4 (snapshot cpm + s_min):
-//   P_perte    = manquement_imp × cpm/1000
-//   refund     = P_perte ≥ s_min ? P_perte : 0   (a sub-S_min shortfall ⇒ RÉUSSIE, NOT refunded —
-//                "micro-gaps negligible by design"; the advertiser keeps paying the full budget)
-//   budget     = expected_imp × cpm/1000          (the promised spend)
-//   spend      = budget − refund                  (the NET the advertiser pays; the wallet nets this)
-//   status     = refund > 0 ? partial : réussie
-// Net check: refunded (≥S_min) → spend = budget − P_perte = delivered × cpm/1000 (pay for what aired);
-// not refunded (<S_min) → spend = budget (the micro-gap is absorbed). V1 = bill-the-delivered.
+// Aggregate + apply B.4 with MONEY CONSERVATION (FIX B — per-SH rounded earnings are the single source
+// of truth, so the screencaster debit equals Σ screenhost earnings to the cent):
+//   budget  = expected_imp × cpm/1000
+//   P_perte = manquement_imp × cpm/1000                 (the gap value — drives the s_min threshold)
+//   refund  = P_perte ≥ s_min ? (budget − Σ earnings) : 0
+//   spend   = budget − refund
+// ⇒ PARTIAL (P_perte ≥ s_min): spend = Σ earnings EXACTLY (conserves). RÉUSSIE (sub-s_min gap): refund
+//   0, spend = budget — the platform keeps the recorded micro-gap. Snapshot cpm + s_min never recomputed.
 export const reconcileCampaign = (
   allocations: readonly AllocationInput[],
   cpm: number,
@@ -78,8 +85,10 @@ export const reconcileCampaign = (
   const deliveredImp = perScreenhost.reduce((sum, p) => sum + p.deliveredImp, 0);
   const manquementImp = expectedImp - deliveredImp;
   const pPerteTnd = round4((manquementImp * cpm) / 1000);
-  const refundTnd = pPerteTnd >= sMin ? pPerteTnd : 0;
   const budgetTnd = round4((expectedImp * cpm) / 1000);
+  const sumEarningsTnd = round4(perScreenhost.reduce((sum, p) => sum + p.earningsTnd, 0));
+  // refund = budget − Σ earnings (NOT P_perte): makes spend == Σ earnings exactly for a PARTIAL.
+  const refundTnd = pPerteTnd >= sMin ? Math.max(0, round4(budgetTnd - sumEarningsTnd)) : 0;
   const spendTnd = round4(budgetTnd - refundTnd);
   return {
     expectedImp,

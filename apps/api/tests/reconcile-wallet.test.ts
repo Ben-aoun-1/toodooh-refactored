@@ -138,17 +138,18 @@ const fund = async (advertiserId: string, amountTnd: number): Promise<void> => {
     reference: `RW-${seq}`,
   });
 };
-const insertProofs = async (s: S, count: number): Promise<void> => {
-  await db.insert(proofOfPlay).values(
-    Array.from({ length: count }, () => ({
-      screenId: s.screenId,
-      screenhostId: s.screenhostId,
-      campaignId: s.campaignId,
-      creativeId: s.creativeId,
-      videoIdAsSent: s.campaignId,
-      eventType: 'VIDEO_ENDED' as const,
-    })),
-  );
+// Deliver a créneau (date, tunisHour) — Africa/Tunis = UTC+1, so received_at = (H−1):30 UTC.
+const deliverSlot = async (s: S, date: string, tunisHour: number): Promise<void> => {
+  const utcHour = String(tunisHour - 1).padStart(2, '0');
+  await db.insert(proofOfPlay).values({
+    screenId: s.screenId,
+    screenhostId: s.screenhostId,
+    campaignId: s.campaignId,
+    creativeId: s.creativeId,
+    videoIdAsSent: s.campaignId,
+    eventType: 'VIDEO_ENDED' as const,
+    receivedAt: new Date(`${date}T${utcHour}:30:00Z`),
+  });
 };
 
 describe('walletBalance — reconciliation debit seam (real Postgres)', () => {
@@ -180,7 +181,8 @@ describe('walletBalance — reconciliation debit seam (real Postgres)', () => {
   it('a fully-delivered reconciliation debits the full budget', async () => {
     const s = await seed();
     await fund(s.advertiser, 500);
-    await insertProofs(s, 200); // spend = budget 200
+    await deliverSlot(s, '2024-01-01', 8); // both créneaux delivered → spend = budget 200
+    await deliverSlot(s, '2024-01-02', 8);
     mockSession(s.admin);
     expect((await reconcile(s.campaignId)).statusCode).toBe(201);
     const bal = await walletBalance(s.advertiser);
@@ -190,7 +192,7 @@ describe('walletBalance — reconciliation debit seam (real Postgres)', () => {
   it('a partial reconciliation debits only the delivered (the refund is netted in)', async () => {
     const s = await seed();
     await fund(s.advertiser, 500);
-    await insertProofs(s, 100); // delivered 10000 → spend = budget 200 − refund 100 = 100
+    await deliverSlot(s, '2024-01-01', 8); // 1 of 2 créneaux → spend = budget 200 − refund 100 = 100
     mockSession(s.admin);
     expect((await reconcile(s.campaignId)).statusCode).toBe(201);
     const bal = await walletBalance(s.advertiser);
@@ -200,7 +202,7 @@ describe('walletBalance — reconciliation debit seam (real Postgres)', () => {
   it('re-reconcile (409) does not double-debit', async () => {
     const s = await seed();
     await fund(s.advertiser, 500);
-    await insertProofs(s, 100);
+    await deliverSlot(s, '2024-01-01', 8);
     mockSession(s.admin);
     expect((await reconcile(s.campaignId)).statusCode).toBe(201);
     expect((await reconcile(s.campaignId)).statusCode).toBe(409);
