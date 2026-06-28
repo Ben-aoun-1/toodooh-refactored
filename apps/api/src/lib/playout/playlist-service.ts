@@ -21,6 +21,7 @@ export const computeScreenPlaylist = async (
       campaignName: allocation.campaignName,
       url: presigned.url,
       durationSeconds: allocation.durationSeconds,
+      repsPerHour: allocation.repsPerHour,
     });
   }
   return buildPlaylist(sources);

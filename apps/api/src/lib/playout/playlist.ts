@@ -11,6 +11,7 @@ export interface PlaylistVideo {
   campaign_name: string;
   duration_seconds: number | null;
   priority: number;
+  reps_per_hour: number; // R_i — planned plays/hour, so the player can space (cadence) the spot
 }
 
 export interface PlaylistMessage {
@@ -24,6 +25,7 @@ export interface PlaylistSource {
   url: string;
   durationSeconds: number | null;
   priority?: number;
+  repsPerHour?: number; // R_i for this (campaign, screenhost); a spot with no allocation rI → 0
 }
 
 // A frozen plan feeds a screen today iff its campaign window covers `now` (V1 rule), with "today"
@@ -48,6 +50,7 @@ export const buildPlaylist = (sources: readonly PlaylistSource[]): PlaylistMessa
     campaign_name: source.campaignName,
     duration_seconds: source.durationSeconds,
     priority: source.priority ?? 0,
+    reps_per_hour: source.repsPerHour ?? 0, // no allocation rI → 0 (player falls back)
   })),
   loop: true,
 });

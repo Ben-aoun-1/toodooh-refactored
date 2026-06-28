@@ -136,7 +136,13 @@ const nextMessage = (ws: WebSocket): Promise<{ cmd: string; data: unknown }> =>
   });
 
 interface PlaylistData {
-  videos: { id: string; url: string; campaign_name: string; duration_seconds: number | null }[];
+  videos: {
+    id: string;
+    url: string;
+    campaign_name: string;
+    duration_seconds: number | null;
+    reps_per_hour: number;
+  }[];
   loop: boolean;
 }
 
@@ -235,6 +241,7 @@ describe('screen WebSocket — UPDATE_PLAYLIST from dispatch allocations', () =>
     expect(data.videos[0]?.id).toBe(campaign?.id); // id = campaign id
     expect(data.videos[0]?.campaign_name).toBe('Ramadan Promo');
     expect(data.videos[0]?.duration_seconds).toBe(30);
+    expect(data.videos[0]?.reps_per_hour).toBe(5); // R_i from the allocation (cadence hint)
     expect(data.videos[0]?.url).toContain('http'); // presigned MinIO url
   }, 10_000);
 

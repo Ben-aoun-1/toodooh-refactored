@@ -16,6 +16,7 @@ export interface ActiveAllocation {
   creativeId: string;
   storageKey: string;
   durationSeconds: number | null;
+  repsPerHour: number; // R_i — planned reps/hour at this screenhost (cadence hint for the player)
 }
 
 // THE single authorization gate for what a screen may air AND what it may bill proof-of-play for.
@@ -50,6 +51,7 @@ export const activeAllocationsForScreenhost = async (
       creativeId: creatives.id,
       storageKey: creatives.storageKey,
       durationSeconds: creatives.durationSeconds,
+      repsPerHour: campaignDispatchAllocation.rI,
     })
     .from(campaignDispatchAllocation)
     .innerJoin(campaignDispatchPlan, eq(campaignDispatchAllocation.planId, campaignDispatchPlan.id))
@@ -65,5 +67,6 @@ export const activeAllocationsForScreenhost = async (
       creativeId: row.creativeId,
       storageKey: row.storageKey,
       durationSeconds: row.durationSeconds,
+      repsPerHour: row.repsPerHour,
     }));
 };
