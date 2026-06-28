@@ -17,6 +17,13 @@ export interface CampaignView {
   submitted_at: string | null;
   created_at: string;
   updated_at: string;
+  // Reconciled performance + targeting (GET /mine only; optional so other CampaignView readers gain
+  // no required field). delivered_impressions/spend_tnd/reconciled_at are null until reconciliation;
+  // targeting is the campaign's category × class lines (NULL on either axis = "toutes").
+  targeting?: { category_id: string | null; category_name: string | null; class: string | null }[];
+  delivered_impressions?: number | null;
+  spend_tnd?: number | null;
+  reconciled_at?: string | null;
 }
 
 export interface CreateCampaignInput {
