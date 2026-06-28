@@ -948,3 +948,74 @@ export const proofOfPlay = pgTable(
 );
 
 export type ProofOfPlay = typeof proofOfPlay.$inferSelect;
+
+// ── reconciliation + the money ledger (L-redisp, Youssef §B) ─────────────────
+// At campaign clôture, reconcile what the frozen plan PROMISED vs what proof_of_play shows actually
+// AIRED: value the shortfall (manquement) on the POTENTIAL, settle the Screencaster wallet, and
+// record each Screenhost's earnings. ONE campaign_reconciliation row per campaign (unique) — that
+// uniqueness is the idempotency guard: a re-reconcile 409s and can never double-debit/refund/pay.
+//
+// VALUATION (V1): delivery is measured by RATIO, not per-créneau time-match — the V1 player LOOPS the
+// playlist (no per-créneau scheduling) and proof event_ts is a nullable client clock, so a proof
+// can't be safely attributed to a specific planned (date,hour). delivery_ratio = min(1,
+// delivered_plays / expected_plays) applied to ii_potentiel. delivered_plays = VIDEO_ENDED proofs for
+// (campaign, screenhost); expected_plays = Σ créneau.reps. See lib/reconcile/valuation.ts.
+//
+// MONEY (V1 = bill-the-delivered, B.4): p_perte = manquement_imp × cpm/1000; refund = p_perte ≥ s_min
+// ? p_perte : 0 (a sub-S_min gap is RÉUSSIE, NOT refunded — negligible by design); spend = budget −
+// refund where budget = expected_imp × cpm/1000. The wallet nets spend (credited − Σ spend). Snapshot
+// cpm + s_min come from campaign_dispatch_plan — never recomputed. NO pre-debit at activation (the
+// reserve-vs-bill decision is pricing-coupled — flagged, deferred).
+export const reconciliationStatus = pgEnum('reconciliation_status', ['reussie', 'partial']);
+
+export const campaignReconciliation = pgTable('campaign_reconciliation', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  // One reconciliation per campaign — UNIQUE → idempotent (re-reconcile 409s, no double settle).
+  campaignId: uuid('campaign_id')
+    .notNull()
+    .unique()
+    .references(() => campaigns.id, { onDelete: 'restrict' }),
+  expectedImp: integer('expected_imp').notNull(), // Σ ii_potentiel (promised potential)
+  deliveredImp: integer('delivered_imp').notNull(), // Σ per-SH delivered (ratio × ii_potentiel)
+  manquementImp: integer('manquement_imp').notNull(), // expected − delivered
+  pPerteTnd: numeric('p_perte_tnd', { precision: 14, scale: 4 }).notNull(), // manquement × cpm/1000
+  refundTnd: numeric('refund_tnd', { precision: 14, scale: 4 }).notNull(), // p_perte ≥ s_min ? p_perte : 0
+  spendTnd: numeric('spend_tnd', { precision: 14, scale: 4 }).notNull(), // budget − refund (the net debit)
+  status: reconciliationStatus('status').notNull(),
+  reconciledBy: uuid('reconciled_by').references(() => users.id), // the admin who triggered
+  reconciledAt: timestamp('reconciled_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type CampaignReconciliation = typeof campaignReconciliation.$inferSelect;
+
+// Per-(campaign, screenhost) payout breakdown: delivered vs expected + the earnings PAYABLE (its
+// delivered_imp × cpm/1000 — NOTHING on the undiffused part). The actual bank payout is manual/ops;
+// this only RECORDS the payable.
+export const campaignScreenhostPayout = pgTable(
+  'campaign_screenhost_payout',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    reconciliationId: uuid('reconciliation_id')
+      .notNull()
+      .references(() => campaignReconciliation.id, { onDelete: 'cascade' }),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'restrict' }),
+    screenhostId: uuid('screenhost_id')
+      .notNull()
+      .references(() => screenhosts.id, { onDelete: 'restrict' }),
+    expectedImp: integer('expected_imp').notNull(), // ii_potentiel
+    deliveredImp: integer('delivered_imp').notNull(),
+    earningsTnd: numeric('earnings_tnd', { precision: 14, scale: 4 }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('campaign_screenhost_payout_recon_sh_uq').on(
+      table.reconciliationId,
+      table.screenhostId,
+    ),
+    index('campaign_screenhost_payout_screenhost_id_idx').on(table.screenhostId),
+  ],
+);
+
+export type CampaignScreenhostPayout = typeof campaignScreenhostPayout.$inferSelect;
