@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 
 import { auth } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
-import { type NewUser, businessSectors, campaigns, users } from '../src/db/schema.js';
+import { type NewUser, businessSectors, campaigns, screenhosts, users } from '../src/db/schema.js';
 import { campaignTargetingRoutes } from '../src/routes/campaign-targeting.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
@@ -51,6 +51,29 @@ const seedCampaign = async (
   return c?.id ?? '';
 };
 
+type Cls = 'populaire' | 'moyen' | 'premium' | null;
+const seedScreenhost = async (opts: {
+  categoryId: string | null;
+  cls: Cls;
+  name?: string;
+  active?: boolean;
+  lat?: string | null;
+  lng?: string | null;
+}): Promise<string> => {
+  const [sh] = await db
+    .insert(screenhosts)
+    .values({
+      name: opts.name ?? 'Venue',
+      businessSectorId: opts.categoryId,
+      class: opts.cls,
+      isActive: opts.active ?? true,
+      latitude: opts.lat === undefined ? '36.80000000' : opts.lat,
+      longitude: opts.lng === undefined ? '10.18000000' : opts.lng,
+    })
+    .returning();
+  return sh?.id ?? '';
+};
+
 const ownerCategoryIds = async (): Promise<string[]> => {
   const rows = await db
     .select({ id: businessSectors.id })
@@ -81,6 +104,11 @@ describe('campaign targeting (advertiser, real Postgres)', () => {
   const put = (id: string, lines: { category_id: string | null; class: string | null }[]) =>
     app.inject({ method: 'PUT', url: `/api/campaigns/${id}/targeting`, payload: { lines } });
   const get = (id: string) => app.inject({ method: 'GET', url: `/api/campaigns/${id}/targeting` });
+  const coverage = (id: string) =>
+    app.inject({ method: 'GET', url: `/api/campaigns/${id}/coverage` });
+  type CoverageDot = { id: string; name: string; latitude: number; longitude: number };
+  const coverageDots = (res: Awaited<ReturnType<typeof coverage>>): CoverageDot[] =>
+    (res.json() as { screenhosts: CoverageDot[] }).screenhosts;
 
   it('sets lines (200) and GET returns them with category names', async () => {
     const me = await seedUser();
@@ -234,5 +262,85 @@ describe('campaign targeting (advertiser, real Postgres)', () => {
     const id = await seedCampaign(owner);
     mockSession(owner, 'individual_owner');
     expect((await get(id)).statusCode).toBe(403);
+  });
+
+  // ── coverage map (GET /:id/coverage) — active ∩ has-coordinates ∩ matches-targeting ───────────
+  it('coverage returns only ACTIVE, coordinate-bearing screenhosts matching the targeting', async () => {
+    const me = await seedUser();
+    const id = await seedCampaign(me);
+    const [catA, catB] = await ownerCategoryIds();
+    const match = await seedScreenhost({ categoryId: catA ?? null, cls: 'premium', name: 'Match' });
+    await seedScreenhost({ categoryId: catB ?? null, cls: 'premium', name: 'OtherCategory' });
+    await seedScreenhost({ categoryId: catA ?? null, cls: 'moyen', name: 'OtherClass' });
+    await seedScreenhost({
+      categoryId: catA ?? null,
+      cls: 'premium',
+      active: false,
+      name: 'Inactive',
+    });
+    await seedScreenhost({
+      categoryId: catA ?? null,
+      cls: 'premium',
+      lat: null,
+      lng: null,
+      name: 'NoCoords',
+    });
+    mockSession(me);
+    await put(id, [{ category_id: catA ?? null, class: 'premium' }]);
+
+    const res = await coverage(id);
+    expect(res.statusCode).toBe(200);
+    const dots = coverageDots(res);
+    expect(dots).toHaveLength(1);
+    expect(dots[0]?.id).toBe(match);
+    expect(dots[0]?.name).toBe('Match');
+    expect(typeof dots[0]?.latitude).toBe('number');
+    expect(typeof dots[0]?.longitude).toBe('number');
+  });
+
+  it('coverage is empty when the campaign has no targeting lines (nothing matches)', async () => {
+    const me = await seedUser();
+    const id = await seedCampaign(me);
+    const [catA] = await ownerCategoryIds();
+    await seedScreenhost({ categoryId: catA ?? null, cls: 'premium' });
+    mockSession(me);
+    const res = await coverage(id);
+    expect(res.statusCode).toBe(200);
+    expect(coverageDots(res)).toHaveLength(0);
+  });
+
+  it('the ALL/ALL line covers every active, coordinate-bearing venue', async () => {
+    const me = await seedUser();
+    const id = await seedCampaign(me);
+    const [catA, catB] = await ownerCategoryIds();
+    await seedScreenhost({ categoryId: catA ?? null, cls: 'premium' });
+    await seedScreenhost({ categoryId: catB ?? null, cls: 'moyen' });
+    await seedScreenhost({ categoryId: null, cls: null }); // an unclassified venue still matches ALL/ALL
+    mockSession(me);
+    await put(id, [{ category_id: null, class: null }]);
+    const res = await coverage(id);
+    expect(res.statusCode).toBe(200);
+    expect(coverageDots(res)).toHaveLength(3);
+  });
+
+  it('coverage returns 404 on a foreign campaign — no cross-advertiser leak (auth-scoped)', async () => {
+    const me = await seedUser();
+    const other = await seedUser();
+    const foreign = await seedCampaign(other);
+    const [catA] = await ownerCategoryIds();
+    await seedScreenhost({ categoryId: catA ?? null, cls: 'premium' });
+    // The foreign campaign IS targeted (would yield coverage) — proving the 404 is owner-scope, not emptiness.
+    mockSession(other);
+    await put(foreign, [{ category_id: catA ?? null, class: 'premium' }]);
+    mockSession(me);
+    const res = await coverage(foreign);
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('coverage forbids a non-advertiser (403)', async () => {
+    const owner = await seedUser({ role: 'individual_owner' });
+    const id = await seedCampaign(owner);
+    mockSession(owner, 'individual_owner');
+    expect((await coverage(id)).statusCode).toBe(403);
   });
 });
