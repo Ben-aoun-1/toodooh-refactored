@@ -1076,3 +1076,33 @@ export const campaignScreenhostPayout = pgTable(
 );
 
 export type CampaignScreenhostPayout = typeof campaignScreenhostPayout.$inferSelect;
+
+// ── notifications (in-app notification ledger) ───────────────────────────────
+// A per-user notification feed (greenfield — NOT the parked feat/remaining-gaps backend). Rows are
+// created server-side by producers (e.g. the dispatch producer notifies each allocated screenhost
+// owner "Campagne en attente de votre acceptation"); the owner/advertiser bell reads them via
+// GET /api/notifications (session-user-scoped) and marks them read via POST /:id/read (sets
+// read_at). `type` is a free-text discriminator the FE maps to an icon/label — kept un-enumerated
+// so new producers add types without a migration. campaign_id is nullable (not every notification
+// is campaign-bound); ON DELETE set null preserves the notification record if its campaign is
+// removed. user_id cascade: a deleted user's notifications go with them. Indexed on user_id (the
+// only query axis — the feed read filters by the session user).
+export const notifications = pgTable(
+  'notifications',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    type: text('type').notNull(),
+    title: text('title').notNull(),
+    body: text('body').notNull(),
+    campaignId: uuid('campaign_id').references(() => campaigns.id, { onDelete: 'set null' }),
+    readAt: timestamp('read_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('notifications_user_id_idx').on(table.userId)],
+);
+
+export type Notification = typeof notifications.$inferSelect;
+export type NewNotification = typeof notifications.$inferInsert;

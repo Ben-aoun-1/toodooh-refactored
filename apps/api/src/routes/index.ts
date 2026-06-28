@@ -16,6 +16,7 @@ import { deviceAuthRoutes } from './device-auth.js';
 import { emailAvailabilityRoute } from './email-availability.js';
 import { internalRoutes } from './internal.js';
 import { meRoutes } from './me.js';
+import { notificationsRoutes } from './notifications.js';
 import { passwordRoutes } from './password.js';
 import { predefinedZonesRoutes } from './predefined-zones.js';
 import { profileDocumentsRoutes } from './profile-documents.js';
@@ -48,6 +49,9 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   // owner's approved screenhosts to wedooh (S-T1 Edge B2) so the hub's credentials stay current.
   await app.register(screenhostsRoutes);
   await app.register(meRoutes);
+  // In-app notification feed (session-user-scoped): GET /api/notifications + POST /:id/read.
+  // Producers (e.g. the dispatch producer) write rows; the FE bell reads + marks them read.
+  await app.register(notificationsRoutes);
   // C1 — advertiser campaign draft lifecycle (greenfield): create/list/get/edit/submit/delete,
   // owner-scoped to the authenticated advertiser. Targeting/video/map/pricing land in later lanes.
   await app.register(campaignsRoutes);
