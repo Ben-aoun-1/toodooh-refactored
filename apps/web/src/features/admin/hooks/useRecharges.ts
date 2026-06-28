@@ -2,168 +2,91 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
   adminRechargesService,
-  type RechargeStats,
+  type AdminRecharge,
 } from '@/features/admin/services/admin-recharges.service';
+import { adminUserService } from '@/features/admin/services/admin-user.service';
 import { advertiserKeys } from '@/features/advertiser/hooks/queryKeys';
 import { walletKeys } from '@/features/wallet/hooks/queryKeys';
-import { supabase } from '@/lib/supabase';
 
 import { adminKeys } from './queryKeys';
 
-export interface RechargeFilters {
-  status: string;
-  search: string;
-  page: number;
-  perPage: number;
-}
-
-/** Paginated, filtered recharge list. Filters live in the key — changing one refetches. */
-export function useRecharges(filters: RechargeFilters) {
+/**
+ * The FULL recharge moderation queue (newest first) from GET /api/admin/recharges.
+ * The page filters/searches/paginates + derives the stat cards client-side over
+ * this one list (the endpoint has no pagination/search/stats of its own).
+ */
+export function useAdminRecharges() {
   const query = useQuery({
-    queryKey: adminKeys.recharges(filters.status, filters.search, filters.page, filters.perPage),
-    queryFn: () =>
-      adminRechargesService.getRecharges(
-        { status: filters.status, search: filters.search },
-        filters.page,
-        filters.perPage,
-      ),
+    queryKey: adminKeys.rechargesAll(),
+    queryFn: () => adminRechargesService.list(),
   });
-
   return {
-    recharges: query.data?.data ?? [],
-    total: query.data?.total ?? 0,
+    recharges: query.data ?? [],
     loading: query.isLoading,
     isError: query.isError,
     error: query.error,
   };
 }
 
-/** Global recharge counters for the stat cards. */
-export function useRechargeStats(): { stats: RechargeStats | undefined; isError: boolean } {
-  const query = useQuery({
-    queryKey: adminKeys.rechargeStats(),
-    queryFn: () => adminRechargesService.getRechargeStats(),
-  });
-  return { stats: query.data, isError: query.isError };
-}
-
-interface RechargeAdvertiser {
-  user_id: string;
+export interface AdvertiserIdentity {
   business_name: string;
   email: string;
 }
 
-/** Approved-advertiser picker for the manual-recharge form. */
-export function useRechargeAdvertisers(): { advertisers: RechargeAdvertiser[] } {
+/**
+ * Advertiser-identity map for enriching recharge rows (the view carries only
+ * advertiser_id). Sourced from the EXISTING admin users endpoint
+ * (GET /api/admin/users?status=approved), filtered to advertisers.
+ */
+export function useAdvertiserIdentities(): Map<string, AdvertiserIdentity> {
   const query = useQuery({
-    queryKey: adminKeys.rechargeAdvertisers(),
-    queryFn: async (): Promise<RechargeAdvertiser[]> => {
-      const { data, error } = await supabase
-        .from('business_profiles')
-        .select('user_id, business_name, email')
-        .eq('profile_type', 'advertiser')
-        .eq('status', 'approved')
-        .order('business_name');
-      if (error) throw error;
-      return (data ?? []) as RechargeAdvertiser[];
+    queryKey: [...adminKeys.all, 'advertiserIdentities'] as const,
+    queryFn: async () => {
+      const users = await adminUserService.getUsersByStatus('approved');
+      const map = new Map<string, AdvertiserIdentity>();
+      for (const u of users) {
+        if (u.profile_type === 'advertiser') {
+          map.set(u.id, { business_name: u.business_name, email: u.email });
+        }
+      }
+      return map;
     },
   });
-  return { advertisers: query.data ?? [] };
-}
-
-interface ApproveRechargeInput {
-  rechargeId: string;
-  adminId: string;
-  /** The recharge owner's user_id — needed for the cross-feature invalidation. */
-  advertiserUserId: string;
-  notes?: string;
-}
-
-interface RejectRechargeInput {
-  rechargeId: string;
-  adminId: string;
-  reason: string;
-}
-
-interface CreateRechargeInput {
-  userId: string;
-  amount: number;
-  paymentMethod: 'card' | 'bank' | 'cash';
-  description: string;
-  autoValidate: boolean;
-  adminId: string;
-  adminFullName: string;
+  return query.data ?? new Map<string, AdvertiserIdentity>();
 }
 
 /**
- * Recharge write mutations.
+ * Confirm / reject mutations.
  *
- * CF-14 invalidation graph — a recharge reaching `completed` raises the
- * advertiser's balance, so the graph reaches two other features:
- * - `approveRecharge` → `adminKeys.recharges*` + `rechargeStats` (intra) **and**
- *   `walletKeys.transactions(advertiserUserId)` + `advertiserKeys.dashboardStats(
- *   advertiserUserId)` (cross-feature — the advertiser's wallet ledger shows
- *   the now-completed recharge and the dashboard balance moves).
- * - `rejectRecharge` → recharge list + stats only. The advertiser's wallet
- *   ledger filters to `status = 'completed'` and the balance counts only
- *   completed recharges, so a `pending → rejected` transition changes nothing
- *   the advertiser sees — no cross-feature key (CF-14: invalidate only keys
- *   whose user-visible data changes).
- * - `createRecharge` → list + stats always; the cross-feature pair only when
- *   `autoValidate` makes the new row land `completed`.
+ * CF-14 invalidation graph — a confirm reaching `confirmed` credits the
+ * advertiser's derived balance, so it reaches two other features: the admin
+ * recharge list (intra) AND the advertiser's wallet ledger +
+ * dashboard balance (cross-feature, keyed by the recharge's advertiser_id).
+ * A reject changes nothing the advertiser's balance/ledger shows (those count
+ * only confirmed rows) — recharge list only.
  */
 export function useRechargeMutations() {
   const queryClient = useQueryClient();
-
-  const invalidateAdvertiserBalance = (advertiserUserId: string) => {
-    queryClient.invalidateQueries({ queryKey: walletKeys.transactions(advertiserUserId) });
-    queryClient.invalidateQueries({ queryKey: advertiserKeys.dashboardStats(advertiserUserId) });
-  };
-  const invalidateRechargeViews = () => {
+  const invalidateRechargeList = () =>
     queryClient.invalidateQueries({ queryKey: adminKeys.rechargesAll() });
-    queryClient.invalidateQueries({ queryKey: adminKeys.rechargeStats() });
+  const invalidateAdvertiserBalance = (advertiserId: string) => {
+    queryClient.invalidateQueries({ queryKey: walletKeys.transactions(advertiserId) });
+    queryClient.invalidateQueries({ queryKey: advertiserKeys.dashboardStats(advertiserId) });
   };
 
-  const approveRecharge = useMutation({
-    mutationFn: ({ rechargeId, adminId, notes }: ApproveRechargeInput) =>
-      adminRechargesService.approveRecharge(rechargeId, adminId, notes),
-    onSuccess: (_result, { advertiserUserId }) => {
-      invalidateRechargeViews();
-      invalidateAdvertiserBalance(advertiserUserId);
+  const confirmRecharge = useMutation({
+    mutationFn: (id: string) => adminRechargesService.confirm(id),
+    onSuccess: (updated: AdminRecharge) => {
+      invalidateRechargeList();
+      invalidateAdvertiserBalance(updated.advertiser_id);
     },
   });
 
   const rejectRecharge = useMutation({
-    mutationFn: ({ rechargeId, adminId, reason }: RejectRechargeInput) =>
-      adminRechargesService.rejectRecharge(rechargeId, adminId, reason),
-    onSuccess: invalidateRechargeViews,
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      adminRechargesService.reject(id, reason),
+    onSuccess: invalidateRechargeList,
   });
 
-  const createRecharge = useMutation({
-    mutationFn: async (input: CreateRechargeInput) => {
-      const { error } = await supabase
-        .from('recharges')
-        .insert({
-          user_id: input.userId,
-          amount: input.amount,
-          payment_method: input.paymentMethod,
-          status: input.autoValidate ? 'completed' : 'pending',
-          description: input.description || `Recharge manuelle par ${input.adminFullName}`,
-          validated_by: input.autoValidate ? input.adminId : null,
-          validated_at: input.autoValidate ? new Date().toISOString() : null,
-          validation_notes: input.autoValidate
-            ? 'Validation automatique lors de la création'
-            : null,
-        })
-        .select()
-        .single();
-      if (error) throw error;
-    },
-    onSuccess: (_result, input) => {
-      invalidateRechargeViews();
-      if (input.autoValidate) invalidateAdvertiserBalance(input.userId);
-    },
-  });
-
-  return { approveRecharge, rejectRecharge, createRecharge };
+  return { confirmRecharge, rejectRecharge };
 }

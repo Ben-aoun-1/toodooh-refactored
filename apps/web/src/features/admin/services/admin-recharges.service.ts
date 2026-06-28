@@ -1,233 +1,79 @@
-import { logger } from '@/lib/logger';
-import { supabase } from '@/lib/supabase';
+import { apiClient } from '@/lib/api-client';
 
-const log = logger.child({ module: 'admin-recharges.service' });
+// Admin recharge moderation over REST — the manual-payment confirmation queue, repointed off the dead
+// Supabase `recharges`/admin_profiles reads onto the EXISTING new-engine API (GET /api/admin/recharges
+// + POST :id/confirm | :id/reject). apiClient prepends BASE='/api', so paths are WITHOUT the /api
+// prefix; every route is [requireAuth, requireAdmin] server-side. Methods throw ApiError on failure.
+//
+// New-engine status model is pending → confirmed | rejected (the legacy completed/failed/cancelled
+// quartet is gone; confirm CREDITS the derived balance, reject carries a reason). Fields the existing
+// endpoint does NOT expose are FLAGGED, not faked: payment_method (not modelled), the confirming
+// admin's NAME (only confirmed_by id; admins aren't in the moderation user list), and the
+// manual-create flow + advertiser picker (no admin create-recharge endpoint exists — advertisers
+// self-initiate top-ups via POST /api/wallet). Advertiser business_name/email are enriched from
+// GET /api/admin/users?status=approved (see the hook), not from this view.
 
+export type AdminRechargeStatus = 'pending' | 'confirmed' | 'rejected';
+
+// The admin projection (lib/recharges.adminRechargeView): the advertiser-facing fields + advertiser_id
+// + confirmed_by (audit). amount is a number (the numeric column's exact value).
 export interface AdminRecharge {
   id: string;
-  user_id: string;
-  amount: number;
-  payment_method: 'card' | 'bank' | 'cash';
-  status: 'completed' | 'pending' | 'failed' | 'cancelled';
+  advertiser_id: string;
+  amount_tnd: number;
+  status: AdminRechargeStatus;
   reference: string;
-  description?: string;
-  transaction_id?: string;
-  validated_by?: string;
-  validated_at?: string;
-  validation_notes?: string;
+  reject_reason: string | null;
+  confirmed_at: string | null;
+  confirmed_by: string | null;
   created_at: string;
   updated_at: string;
-  // Jointures
-  user_name?: string;
-  user_email?: string;
-  business_name?: string;
-  validator_name?: string;
 }
 
 export interface RechargeStats {
   total_recharges: number;
   pending_count: number;
-  completed_count: number;
-  failed_count: number;
+  confirmed_count: number;
+  rejected_count: number;
   total_amount: number;
   pending_amount: number;
-  completed_amount: number;
+  confirmed_amount: number;
 }
 
-class AdminRechargesService {
-  /**
-   * Récupérer toutes les recharges avec filtres et pagination
-   */
-  async getRecharges(
-    filters?: {
-      status?: string;
-      userId?: string;
-      search?: string;
-    },
-    page: number = 1,
-    perPage: number = 20,
-  ): Promise<{ data: AdminRecharge[]; total: number }> {
-    let query = supabase
-      .from('recharges')
-      .select('*', { count: 'exact' })
-      .order('created_at', { ascending: false });
+// Counters for the stat cards, DERIVED client-side from the full list (the endpoint returns every
+// row when unfiltered, so this mirrors the old Supabase select-then-reduce — no stats endpoint needed).
+export function computeRechargeStats(rows: AdminRecharge[]): RechargeStats {
+  const sumOf = (s: AdminRechargeStatus) =>
+    rows.filter((r) => r.status === s).reduce((acc, r) => acc + r.amount_tnd, 0);
+  return {
+    total_recharges: rows.length,
+    pending_count: rows.filter((r) => r.status === 'pending').length,
+    confirmed_count: rows.filter((r) => r.status === 'confirmed').length,
+    rejected_count: rows.filter((r) => r.status === 'rejected').length,
+    total_amount: rows.reduce((acc, r) => acc + r.amount_tnd, 0),
+    pending_amount: sumOf('pending'),
+    confirmed_amount: sumOf('confirmed'),
+  };
+}
 
-    // Filtrer par statut
-    if (filters?.status && filters.status !== 'all') {
-      query = query.eq('status', filters.status);
-    }
+export const adminRechargesService = {
+  // The moderation queue (newest first, server-ordered); optional status filter. Backend sends the
+  // array directly (not wrapped), so the typed return is AdminRecharge[].
+  async list(status?: AdminRechargeStatus): Promise<AdminRecharge[]> {
+    const qs = status ? `?status=${status}` : '';
+    return apiClient.get<AdminRecharge[]>(`/admin/recharges${qs}`);
+  },
 
-    // Filtrer par utilisateur
-    if (filters?.userId) {
-      query = query.eq('user_id', filters.userId);
-    }
+  // pending → confirmed; credits the advertiser's derived balance (idempotent — a re-confirm 409s).
+  async confirm(id: string): Promise<AdminRecharge> {
+    return apiClient.post<AdminRecharge>(`/admin/recharges/${id}/confirm`);
+  },
 
-    // Recherche par référence
-    if (filters?.search) {
-      query = query.ilike('reference', `%${filters.search}%`);
-    }
+  // pending → rejected; a reason is REQUIRED (surfaced to the advertiser as reject_reason).
+  async reject(id: string, reason: string): Promise<AdminRecharge> {
+    return apiClient.post<AdminRecharge>(`/admin/recharges/${id}/reject`, { reason });
+  },
 
-    // Pagination
-    const start = (page - 1) * perPage;
-    const end = start + perPage - 1;
-    query = query.range(start, end);
-
-    const { data: recharges, error, count } = await query;
-
-    if (error) throw error;
-
-    // Enrichir avec les données utilisateur
-    const enrichedRecharges = await Promise.all(
-      (recharges || []).map(async (recharge) => {
-        // Récupérer les infos utilisateur
-        const { data: profile } = await supabase
-          .from('business_profiles')
-          .select('business_name, contact_name, email')
-          .eq('user_id', recharge.user_id)
-          .single();
-
-        // Récupérer le validateur si existant
-        let validatorName = null;
-        if (recharge.validated_by) {
-          const { data: validator } = await supabase
-            .from('admin_profiles')
-            .select('full_name')
-            .eq('id', recharge.validated_by)
-            .single();
-          validatorName = validator?.full_name;
-        }
-
-        return {
-          ...recharge,
-          business_name: profile?.business_name || 'N/A',
-          user_name: profile?.contact_name || 'N/A',
-          user_email: profile?.email || 'N/A',
-          validator_name: validatorName,
-        } as AdminRecharge;
-      }),
-    );
-
-    return {
-      data: enrichedRecharges,
-      total: count || 0,
-    };
-  }
-
-  /**
-   * Récupérer les statistiques des recharges
-   */
-  async getRechargeStats(): Promise<RechargeStats> {
-    try {
-      const { data, error } = await supabase.from('recharges').select('status, amount');
-
-      if (error) throw error;
-
-      const stats: RechargeStats = {
-        total_recharges: data?.length || 0,
-        pending_count: data?.filter((r) => r.status === 'pending').length || 0,
-        completed_count: data?.filter((r) => r.status === 'completed').length || 0,
-        failed_count: data?.filter((r) => r.status === 'failed').length || 0,
-        total_amount: data?.reduce((sum, r) => sum + parseFloat(r.amount.toString()), 0) || 0,
-        pending_amount:
-          data
-            ?.filter((r) => r.status === 'pending')
-            .reduce((sum, r) => sum + parseFloat(r.amount.toString()), 0) || 0,
-        completed_amount:
-          data
-            ?.filter((r) => r.status === 'completed')
-            .reduce((sum, r) => sum + parseFloat(r.amount.toString()), 0) || 0,
-      };
-
-      return stats;
-    } catch (error) {
-      log.error({ error }, '❌ Erreur récupération stats recharges');
-      return {
-        total_recharges: 0,
-        pending_count: 0,
-        completed_count: 0,
-        failed_count: 0,
-        total_amount: 0,
-        pending_amount: 0,
-        completed_amount: 0,
-      };
-    }
-  }
-
-  /**
-   * Valider une recharge (approuver)
-   */
-  async approveRecharge(rechargeId: string, adminId: string, notes?: string): Promise<void> {
-    const { error } = await supabase
-      .from('recharges')
-      .update({
-        status: 'completed',
-        validated_by: adminId,
-        validated_at: new Date().toISOString(),
-        validation_notes: notes || "Recharge validée par l'administrateur",
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', rechargeId);
-
-    if (error) throw error;
-  }
-
-  /**
-   * Rejeter une recharge
-   */
-  async rejectRecharge(rechargeId: string, adminId: string, reason: string): Promise<void> {
-    const { error } = await supabase
-      .from('recharges')
-      .update({
-        status: 'failed',
-        validated_by: adminId,
-        validated_at: new Date().toISOString(),
-        validation_notes: reason,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', rechargeId);
-
-    if (error) throw error;
-  }
-
-  /**
-   * Annuler une recharge
-   */
-  async cancelRecharge(rechargeId: string, adminId: string, reason: string): Promise<void> {
-    const { error } = await supabase
-      .from('recharges')
-      .update({
-        status: 'cancelled',
-        validated_by: adminId,
-        validated_at: new Date().toISOString(),
-        validation_notes: reason,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', rechargeId);
-
-    if (error) throw error;
-  }
-
-  /**
-   * Récupérer le solde d'un utilisateur
-   */
-  async getUserBalance(userId: string): Promise<number> {
-    try {
-      const { data, error } = await supabase.rpc('get_user_balance', {
-        p_user_id: userId,
-      });
-
-      if (error) throw error;
-
-      return data || 0;
-    } catch (error) {
-      log.error({ error }, '❌ Erreur récupération solde');
-      return 0;
-    }
-  }
-
-  /**
-   * Formater un montant en TND
-   */
   formatAmount(amount: number): string {
     return new Intl.NumberFormat('fr-TN', {
       style: 'currency',
@@ -235,7 +81,5 @@ class AdminRechargesService {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(amount);
-  }
-}
-
-export const adminRechargesService = new AdminRechargesService();
+  },
+};
