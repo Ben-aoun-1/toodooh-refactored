@@ -5,6 +5,7 @@ import {
   Home,
   DollarSign,
   Calendar,
+  CalendarDays,
   ChevronLeft,
   ChevronRight,
   Megaphone,
@@ -64,6 +65,11 @@ const navigation = [
     icon: Megaphone,
     iconSrc: campagneIcon,
     iconSrcActive: campagneIconActive,
+  },
+  {
+    name: 'Calendrier de diffusion',
+    href: '/owner-campaign-calendar',
+    icon: CalendarDays,
   },
   {
     name: 'Mon calendrier et Mes dispositifs de diffusion',
