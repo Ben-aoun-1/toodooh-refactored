@@ -841,7 +841,20 @@ export type DispatchConfig = typeof dispatchConfig.$inferSelect;
 // One plan per campaign (unique campaign_id). Snapshots the inputs (I_cible/CPM/S/T) + the wired
 // seuils (seuil_diffusable, S_min, G_jour, F, R_min_efficace) at build time, plus the OUTPUTS of
 // SÉLECTION + validation (couvert, N_min, N_max, N retained) and the two clôture flags.
-export const dispatchAcceptation = pgEnum('dispatch_acceptation', ['ACCEPTE', 'REFUSE']);
+// EN_ATTENTE is the NEW default (allocations await the screenhost owner's accept/reject before they
+// can air): the playout airability gate already requires ACCEPTE, so EN_ATTENTE/REFUSE simply don't
+// air. EN_ATTENTE is listed FIRST (not appended) so drizzle-kit emits a transaction-safe enum
+// recreate (rename-old + create-new + alter-column + drop-old) rather than an `ALTER TYPE ... ADD
+// VALUE` + `SET DEFAULT <new value>` pair — the latter trips Postgres's "unsafe use of new value"
+// when both run in one transaction against an already-migrated DB (drizzle runs all pending
+// migrations in a single transaction).
+export const dispatchAcceptation = pgEnum('dispatch_acceptation', [
+  'EN_ATTENTE',
+  'ACCEPTE',
+  'REFUSE',
+]);
+
+export type DispatchAcceptation = (typeof dispatchAcceptation.enumValues)[number];
 
 export const campaignDispatchPlan = pgTable(
   'campaign_dispatch_plan',
@@ -897,7 +910,7 @@ export const campaignDispatchAllocation = pgTable(
     iiPotentiel: integer('ii_potentiel').notNull(), // a_i — impressions allocated to this SH
     rI: integer('r_i').notNull(), // reps/hr planned at this SH
     revenuPrevisionnel: numeric('revenu_previsionnel', { precision: 14, scale: 4 }).notNull(),
-    statutAcceptation: dispatchAcceptation('statut_acceptation').notNull().default('ACCEPTE'),
+    statutAcceptation: dispatchAcceptation('statut_acceptation').notNull().default('EN_ATTENTE'),
     creneaux: jsonb('creneaux').$type<DispatchCreneau[]>().notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },

@@ -129,6 +129,9 @@ const seedChain = async (overrides: SeedOverrides = {}): Promise<Chain> => {
     rI: 5,
     revenuPrevisionnel: '200',
     creneaux: [],
+    // Allocations now default EN_ATTENTE; the airability gate requires ACCEPTE, so an aired/proof
+    // scenario must seed an accepted allocation explicitly (the owner has accepted it).
+    statutAcceptation: 'ACCEPTE',
   });
   return {
     screenId: screen?.id ?? '',

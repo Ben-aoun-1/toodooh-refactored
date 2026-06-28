@@ -246,6 +246,13 @@
       "when": 1782680281510,
       "tag": "0034_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1782680514033,
+      "tag": "0035_dispatch_acceptation_en_attente",
+      "breakpoints": true
     }
   ]
 }

@@ -230,8 +230,9 @@ describe('admin campaign moderation — activation keystone (real Postgres)', ()
     expect(body.plan.n_retenus).toBe(1);
     expect(body.allocations).toHaveLength(1);
 
-    // It now satisfies the L-playout gate's campaign side: status='active' + a frozen plan whose
-    // allocation is ACCEPTE (the gate also checks creative-approved + window, asserted/owned elsewhere).
+    // It now satisfies the L-playout gate's campaign side: status='active' + a frozen plan. The
+    // allocation lands EN_ATTENTE (the new default): dispatch no longer auto-airs — the screenhost
+    // owner must accept it first (the gate also checks creative-approved + window, owned elsewhere).
     const [campaign] = await db
       .select()
       .from(campaigns)
@@ -254,7 +255,7 @@ describe('admin campaign moderation — activation keystone (real Postgres)', ()
       .select()
       .from(campaignDispatchAllocation)
       .where(eq(campaignDispatchAllocation.planId, plan?.id ?? ''));
-    expect(allocs[0]?.statutAcceptation).toBe('ACCEPTE');
+    expect(allocs[0]?.statutAcceptation).toBe('EN_ATTENTE');
   });
 
   it('prices an event campaign at event_cpm_tnd (plan cpm = 30)', async () => {
