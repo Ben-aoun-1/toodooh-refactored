@@ -26,7 +26,10 @@ const bodySchema = z.object({
   t: z.number().positive(),
 });
 
-const planView = (plan: CampaignDispatchPlan, allocations: CampaignDispatchAllocation[]) => ({
+export const planView = (
+  plan: CampaignDispatchPlan,
+  allocations: CampaignDispatchAllocation[],
+) => ({
   plan: {
     id: plan.id,
     campaign_id: plan.campaignId,

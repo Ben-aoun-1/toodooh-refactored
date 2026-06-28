@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 
 import { adminAccountsRoutes } from './admin-accounts.js';
+import { adminCampaignsRoutes } from './admin-campaigns.js';
 import { adminCreativesRoutes } from './admin-creatives.js';
 import { adminRechargesRoutes } from './admin-recharges.js';
 import { adminRoutes } from './admin.js';
@@ -69,6 +70,10 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   // L-wallet — admin recharge moderation: the manual-payment queue + confirm (credits the balance,
   // idempotent) / reject (with a reason). The money-confirmation step of the offline top-up flow.
   await app.register(adminRechargesRoutes);
+  // ACTIVATION WIRING — admin campaign moderation: the review queue + activate (gate on pending +
+  // approved creative + funded, then dispatch → status='active') / reject. The keystone that lets
+  // the dispatch → playout → proof-of-play chain run end-to-end.
+  await app.register(adminCampaignsRoutes);
   // Superadmin-only internal-account creation (staff admins + agents) — slice-2 A.
   await app.register(adminAccountsRoutes);
   // S-T1 — service-authenticated toodooh↔wedooh sync surface (/api/internal/*): B1 locations read,
