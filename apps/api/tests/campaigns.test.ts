@@ -4,7 +4,15 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 
 import { auth } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
-import { type NewUser, campaigns, creatives, users } from '../src/db/schema.js';
+import {
+  type NewUser,
+  businessSectors,
+  campaignReconciliation,
+  campaignTargeting,
+  campaigns,
+  creatives,
+  users,
+} from '../src/db/schema.js';
 import { campaignsRoutes } from '../src/routes/campaigns.js';
 import { apiRoutes } from '../src/routes/index.js';
 
@@ -87,6 +95,59 @@ const seedCreative = async (
     .returning();
   return c?.id ?? '';
 };
+
+// An OWNER business sector id from the PRE-SEEDED reference data (audience='owner'). business_sectors
+// is seeded, NOT truncated by resetAuthTables (no FK to users) — so we must READ an existing sector,
+// never INSERT one, or the shared reference table pollutes reference.test.ts's exact-count assertions.
+const ownerSectorId = async (): Promise<string> => {
+  const [s] = await db
+    .select({ id: businessSectors.id })
+    .from(businessSectors)
+    .where(eq(businessSectors.audience, 'owner'))
+    .limit(1);
+  return s?.id ?? '';
+};
+
+// The 1:1 per-campaign settlement row. delivered_imp + spend_tnd are what GET /mine surfaces; the
+// other NOT NULL columns mirror the admin-reconcile seed values (partial-delivery shape).
+const seedReconciliation = async (
+  campaignId: string,
+  opts: { deliveredImp?: number; spendTnd?: string } = {},
+): Promise<void> => {
+  await db.insert(campaignReconciliation).values({
+    campaignId,
+    expectedImp: 20000,
+    deliveredImp: opts.deliveredImp ?? 10000,
+    manquementImp: 10000,
+    pPerteTnd: '100',
+    refundTnd: '100',
+    spendTnd: opts.spendTnd ?? '100',
+    status: 'partial',
+  });
+};
+
+type TargetingClass = 'populaire' | 'moyen' | 'premium' | null;
+const seedTargeting = async (
+  campaignId: string,
+  lines: { categoryId?: string | null; class?: TargetingClass }[],
+): Promise<void> => {
+  await db.insert(campaignTargeting).values(
+    lines.map((l) => ({
+      campaignId,
+      categoryId: l.categoryId ?? null,
+      class: l.class ?? null,
+    })),
+  );
+};
+
+interface MineRow {
+  id: string;
+  name: string;
+  delivered_impressions: number | null;
+  spend_tnd: number | null;
+  reconciled_at: string | null;
+  targeting: { category_id: string | null; category_name: string | null; class: string | null }[];
+}
 
 describe('campaigns draft lifecycle (advertiser, real Postgres)', () => {
   let app: ReturnType<typeof buildApp>;
@@ -244,6 +305,105 @@ describe('campaigns draft lifecycle (advertiser, real Postgres)', () => {
     mockSession(owner, 'fleet_owner', 'approved');
     const res = await app.inject({ method: 'GET', url: '/api/campaigns/mine' });
     expect(res.statusCode).toBe(403);
+  });
+
+  // ── GET /api/campaigns/mine — reconciled performance + targeting (advertiser scope) ──
+  it('surfaces delivered impressions, net spend, reconciled_at + targeting per campaign', async () => {
+    const me = await seedUser();
+    const sector = await ownerSectorId();
+    const campaignId = await seedCampaign(me, { name: 'Reconciled' });
+    await seedReconciliation(campaignId, { deliveredImp: 12000, spendTnd: '150.5000' });
+    await seedTargeting(campaignId, [{ categoryId: sector, class: 'premium' }]);
+    mockSession(me);
+
+    const res = await app.inject({ method: 'GET', url: '/api/campaigns/mine' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as MineRow[];
+    expect(body).toHaveLength(1);
+    const [row] = body;
+    expect(row?.delivered_impressions).toBe(12000);
+    expect(row?.spend_tnd).toBe(150.5); // numeric(14,4) → Number, trailing zeros dropped
+    expect(row?.reconciled_at).not.toBeNull();
+    expect(row?.targeting).toEqual([
+      { category_id: sector, category_name: expect.any(String), class: 'premium' },
+    ]);
+  });
+
+  it('returns nulls + empty targeting for a campaign with no reconciliation', async () => {
+    const me = await seedUser();
+    await seedCampaign(me, { name: 'Unreconciled' });
+    mockSession(me);
+    const res = await app.inject({ method: 'GET', url: '/api/campaigns/mine' });
+    const [row] = res.json() as MineRow[];
+    expect(row?.delivered_impressions).toBeNull();
+    expect(row?.spend_tnd).toBeNull();
+    expect(row?.reconciled_at).toBeNull();
+    expect(row?.targeting).toEqual([]);
+  });
+
+  it('reflects NULL targeting axes (toutes catégories / toutes classes)', async () => {
+    const me = await seedUser();
+    const sector = await ownerSectorId();
+    const campaignId = await seedCampaign(me);
+    await seedTargeting(campaignId, [
+      { categoryId: null, class: 'moyen' }, // toutes catégories · moyen
+      { categoryId: sector, class: null }, // sector · toutes classes
+    ]);
+    mockSession(me);
+    const res = await app.inject({ method: 'GET', url: '/api/campaigns/mine' });
+    const [row] = res.json() as MineRow[];
+    expect(row?.targeting).toHaveLength(2);
+    expect(row?.targeting).toContainEqual({
+      category_id: null,
+      category_name: null,
+      class: 'moyen',
+    });
+    expect(row?.targeting).toContainEqual({
+      category_id: sector,
+      category_name: expect.any(String),
+      class: null,
+    });
+  });
+
+  it('NEVER leaks another advertiser’s reconciliation or targeting (owner-scope)', async () => {
+    const me = await seedUser();
+    const other = await seedUser();
+    const sector = await ownerSectorId();
+    const mine = await seedCampaign(me, { name: 'Mine' });
+    const theirs = await seedCampaign(other, { name: 'Theirs' });
+    await seedReconciliation(mine, { deliveredImp: 5000, spendTnd: '50' });
+    await seedReconciliation(theirs, { deliveredImp: 999999, spendTnd: '9999' });
+    await seedTargeting(mine, [{ categoryId: sector, class: 'populaire' }]);
+    await seedTargeting(theirs, [{ categoryId: sector, class: 'premium' }]);
+    mockSession(me);
+
+    const res = await app.inject({ method: 'GET', url: '/api/campaigns/mine' });
+    const body = res.json() as MineRow[];
+    expect(body).toHaveLength(1);
+    const [row] = body;
+    expect(row?.id).toBe(mine);
+    expect(row?.delivered_impressions).toBe(5000);
+    expect(row?.spend_tnd).toBe(50);
+    expect(row?.targeting.map((t) => t.class)).toEqual(['populaire']);
+  });
+
+  it('does not multiply campaign rows for multiple targeting lines (1:1 spend intact)', async () => {
+    const me = await seedUser();
+    const sector = await ownerSectorId();
+    const campaignId = await seedCampaign(me);
+    await seedReconciliation(campaignId, { deliveredImp: 8000, spendTnd: '80' });
+    await seedTargeting(campaignId, [
+      { categoryId: sector, class: 'populaire' },
+      { categoryId: sector, class: 'moyen' },
+      { categoryId: sector, class: 'premium' },
+    ]);
+    mockSession(me);
+    const res = await app.inject({ method: 'GET', url: '/api/campaigns/mine' });
+    const body = res.json() as MineRow[];
+    expect(body).toHaveLength(1); // NOT 3 — targeting is batched, never joined into the main SELECT
+    const [row] = body;
+    expect(row?.spend_tnd).toBe(80); // spend not multiplied by the 3 lines
+    expect(row?.targeting).toHaveLength(3);
   });
 
   // ── GET /api/campaigns/:id ───────────────────────────────────────────────────
