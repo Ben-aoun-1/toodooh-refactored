@@ -9,6 +9,7 @@ import {
   agents,
   governorates,
   screenhostAffluence,
+  screenhostMonthlyStats,
   screenhosts,
   screens,
   users,
@@ -55,6 +56,28 @@ const affluenceBodySchema = z.object({
       }),
     )
     .max(168 * 64), // generous batch ceiling (a full week is 168 slots/location)
+});
+
+// C2: monthly-stats batch — the ACTUAL monthly audience the hub pushes (operator ruling), upserted
+// latest-value-wins on (screenhost, month). Mirrors the affluence batch shape + tolerance.
+const monthlyStatsBodySchema = z.object({
+  stats: z
+    .array(
+      z.object({
+        location_id: z.uuid(),
+        month: z.string().regex(/^\d{4}-\d{2}$/, 'month must be YYYY-MM'),
+        total_audience: z.number().int().min(0),
+        daily: z.array(
+          z.object({
+            date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD'),
+            audience: z.number().int().min(0),
+          }),
+        ),
+        peak_day_of_week: z.number().int().min(1).max(7),
+        peak_hour: z.number().int().min(0).max(23),
+      }),
+    )
+    .max(64 * 12), // generous ceiling (64 locations × 12 months)
 });
 
 // Privileged-account password floor mirrors admin-accounts (min 12). OPTIONAL: omitted → no
@@ -198,6 +221,67 @@ export const internalRoutes: FastifyPluginAsync<{ syncKey?: string }> = async (a
                 screenhostAffluence.hour,
               ],
               set: { estimatedImpressions: slot.estimated_impressions, updatedAt: new Date() },
+            });
+          upserted += 1;
+        }
+      });
+    }
+
+    return reply.status(200).send({ upserted, unknown_locations: unknownLocations });
+  });
+
+  // ── C2: POST /api/internal/monthly-stats ────────────────────────────────────
+  // Flat batch of {location_id, month, total_audience, daily[], peak_day_of_week, peak_hour}. Latest-
+  // value-wins upsert on (screenhost, month). Unknown location_ids are SKIPPED and reported (never
+  // fail the batch) — same tolerance as the affluence ingest.
+  app.post('/api/internal/monthly-stats', guard, async (request, reply) => {
+    const parsed = monthlyStatsBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        statusCode: 400,
+        requestId: request.id,
+        fields: parsed.error.issues.map((i) => ({ field: i.path.join('.'), reason: i.message })),
+      });
+    }
+    const { stats } = parsed.data;
+    if (stats.length === 0) {
+      return reply.status(200).send({ upserted: 0, unknown_locations: [] });
+    }
+
+    const requestedIds = [...new Set(stats.map((s) => s.location_id))];
+    const known = await db
+      .select({ id: screenhosts.id })
+      .from(screenhosts)
+      .where(inArray(screenhosts.id, requestedIds));
+    const knownIds = new Set(known.map((k) => k.id));
+    const unknownLocations = requestedIds.filter((id) => !knownIds.has(id));
+
+    const toUpsert = stats.filter((s) => knownIds.has(s.location_id));
+    let upserted = 0;
+    if (toUpsert.length > 0) {
+      await db.transaction(async (tx) => {
+        for (const stat of toUpsert) {
+          await tx
+            .insert(screenhostMonthlyStats)
+            .values({
+              screenhostId: stat.location_id,
+              month: stat.month,
+              totalAudience: stat.total_audience,
+              daily: stat.daily,
+              peakDayOfWeek: stat.peak_day_of_week,
+              peakHour: stat.peak_hour,
+            })
+            .onConflictDoUpdate({
+              target: [screenhostMonthlyStats.screenhostId, screenhostMonthlyStats.month],
+              set: {
+                totalAudience: stat.total_audience,
+                daily: stat.daily,
+                peakDayOfWeek: stat.peak_day_of_week,
+                peakHour: stat.peak_hour,
+                updatedAt: new Date(),
+              },
             });
           upserted += 1;
         }
