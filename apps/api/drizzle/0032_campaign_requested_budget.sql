@@ -1,0 +1,1 @@
+ALTER TABLE "campaigns" ADD COLUMN "requested_budget" numeric(12, 2);

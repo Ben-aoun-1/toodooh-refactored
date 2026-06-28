@@ -159,6 +159,38 @@ describe('campaigns draft lifecycle (advertiser, real Postgres)', () => {
     });
   });
 
+  it('persists + updates requested_budget (the interim manual cart budget)', async () => {
+    const me = await seedUser();
+    mockSession(me);
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/campaigns',
+      payload: { name: 'Budgeted', campaign_type: 'standard', requested_budget: 1500 },
+    });
+    expect(created.statusCode).toBe(201);
+    expect((created.json() as Record<string, unknown>)['requested_budget']).toBe(1500);
+    const id = (created.json() as { id: string }).id;
+
+    const patched = await app.inject({
+      method: 'PATCH',
+      url: `/api/campaigns/${id}`,
+      payload: { requested_budget: 2000 },
+    });
+    expect(patched.statusCode).toBe(200);
+    expect((patched.json() as Record<string, unknown>)['requested_budget']).toBe(2000);
+  });
+
+  it('defaults requested_budget to null when omitted', async () => {
+    const me = await seedUser();
+    mockSession(me);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/campaigns',
+      payload: { name: 'NoBudget', campaign_type: 'standard' },
+    });
+    expect((res.json() as Record<string, unknown>)['requested_budget']).toBeNull();
+  });
+
   it('rejects a create missing a required field (400)', async () => {
     const me = await seedUser();
     mockSession(me);

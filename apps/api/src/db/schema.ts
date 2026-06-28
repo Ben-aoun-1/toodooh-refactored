@@ -680,6 +680,10 @@ export const campaigns = pgTable(
     // back to the no-creative state. content_validation_status is DERIVED from the linked creative
     // at read time (L-spot) — there is NO validation column here (bifurcated approval, see above).
     creativeId: uuid('creative_id').references(() => creatives.id, { onDelete: 'set null' }),
+    // Advertiser's INDICATIVE budget (TND) from the interim manual cart — NOT the engine inputs. The
+    // admin sees it in the review queue and derives i_cible/cpm/s/t at activation (the activation
+    // endpoint is unchanged). Nullable; L-price replaces the manual cart with the real cursor.
+    requestedBudget: numeric('requested_budget', { precision: 12, scale: 2 }),
     submittedAt: timestamp('submitted_at', { withTimezone: true }),
     // Admin moderation audit (activation wiring). activated_at/by stamp the admin approval that flips
     // pending → active (and triggers dispatch); rejected_at/reject_reason stamp a pending → rejected.

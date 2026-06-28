@@ -72,6 +72,7 @@ const adminCampaignView = (row: Campaign, contentValidationStatus: string | null
   start_date: row.startDate,
   end_date: row.endDate,
   description: row.description,
+  requested_budget: row.requestedBudget === null ? null : Number(row.requestedBudget),
   creative_id: row.creativeId,
   content_validation_status: contentValidationStatus,
   submitted_at: row.submittedAt,
