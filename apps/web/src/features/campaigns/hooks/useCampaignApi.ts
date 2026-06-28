@@ -64,3 +64,13 @@ export function useSubmitCampaign(userId: string | undefined) {
     },
   });
 }
+
+export function useDeleteCampaign(userId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => campaignsApi.remove(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: campaignsKeys.list(userId ?? '') });
+    },
+  });
+}

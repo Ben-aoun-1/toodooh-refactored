@@ -54,4 +54,7 @@ export const campaignsApi = {
   submit(id: string): Promise<CampaignView> {
     return apiClient.post<CampaignView>(`/campaigns/${id}/submit`);
   },
+  remove(id: string): Promise<void> {
+    return apiClient.del<void>(`/campaigns/${id}`);
+  },
 };
