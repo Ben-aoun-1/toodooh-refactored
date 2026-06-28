@@ -16,8 +16,12 @@ export interface PoolEntry {
   activeToday: boolean;
   avgAffluence: number; // Ai
   hours: number; // Hi — broadcastable slot count over the window
-  capaciteUtile: number; // Ai·Hi·R
-  residualCapacity: number; // capaciteUtile − other campaigns' engagements (capped by F)
+  capaciteUtile: number; // Ai·Hi·R_eff (R_eff already nets other campaigns' engaged seconds, see below)
+  residualCapacity: number; // = capaciteUtile (the seconds-cap is baked into R_eff, not subtracted here)
+  // R_eff = MIN[(3600/S)·T, residual_seconds/S] for THIS screen — the per-screen reps/hour ceiling
+  // after the cross-campaign F-second cap. computeRi clamps r_i to this (not the global F-based R), so
+  // Σ over all campaigns of r_i×S ≤ F on every screen even when campaigns have different spot durations.
+  repsCap: number;
   slots: { dayOfWeek: number; hour: number; affluence: number }[]; // broadcastable (weekday,hour)→Ai
 }
 
@@ -128,7 +132,9 @@ export const buildPlan = (input: BuildPlanInput): BuiltPlan => {
   for (const ret of retenus) {
     const p = byId.get(ret.id);
     if (!p) continue;
-    const rI = computeRi(ret.ai, p.avgAffluence, p.hours, rMinEfficace, r);
+    // Clamp to THIS screen's residual-aware cap (repsCap), not the global F-based r — so r_i never
+    // pushes this screen's total campaign-seconds/hour over F when other campaigns already air there.
+    const rI = computeRi(ret.ai, p.avgAffluence, p.hours, rMinEfficace, p.repsCap);
     allocations.push({
       screenhostId: ret.id,
       iiPotentiel: ret.ai,

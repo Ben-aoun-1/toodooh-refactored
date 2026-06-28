@@ -83,6 +83,14 @@ describe('computeR — R = MIN[(3600/S)·T, F/S] (floored)', () => {
     expect(computeR(60, 0.5, 300)).toBe(5); // min(30, 5)
     expect(computeR(120, 0.8, 300)).toBe(2); // min(24, 2.5) → floor 2
   });
+
+  it('caps at residual_seconds/S when passed a per-screen residual budget (F-cap fix)', () => {
+    // The third arg is a generic seconds budget: with other campaigns engaged the caller passes the
+    // residual (F − engaged) instead of F → R_eff = MIN[(3600/S)·T, ⌊residual/S⌋].
+    expect(computeR(10, 0.8, 120)).toBe(12); // min(288, 12) — residual 120s, 10s spot
+    expect(computeR(10, 0.8, 95)).toBe(9); // min(288, ⌊9.5⌋) → 9
+    expect(computeR(10, 0.8, 0)).toBe(0); // a full screen (residual 0) → no reps
+  });
 });
 
 describe('capaciteUtile + computeRi (A.5)', () => {

@@ -30,6 +30,7 @@ const poolEntry = (
     cap?: number;
     ai?: number;
     hi?: number;
+    repsCap?: number;
     slots?: PoolEntry['slots'];
   },
 ): PoolEntry => ({
@@ -42,6 +43,9 @@ const poolEntry = (
   hours: o.hi ?? 24,
   capaciteUtile: o.cap ?? o.residual,
   residualCapacity: o.residual,
+  // Default = the unconstrained F-based R for s=10,t=0.8 (computeR(10,0.8,300)=30) — first-campaign
+  // behavior, so these pre-F-cap-fix tests keep their semantics. A constrained screen overrides it.
+  repsCap: o.repsCap ?? 30,
   slots: o.slots ?? [],
 });
 
