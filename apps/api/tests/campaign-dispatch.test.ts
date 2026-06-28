@@ -11,6 +11,7 @@ import {
   campaignDispatchPlan,
   campaignTargeting,
   campaigns,
+  notifications,
   screenhostAffluence,
   screenhosts,
   users,
@@ -377,5 +378,62 @@ describe('campaign dispatch entrypoint (L-disp, real Postgres)', () => {
     const totalSeconds = (aAlloc?.rI ?? 0) * 30 + (bAlloc?.rI ?? 0) * 10;
     expect(totalSeconds).toBe(300);
     expect(totalSeconds).toBeLessThanOrEqual(300);
+  });
+
+  // ── PRODUCER — dispatch notifies each allocated screenhost owner ─────────────
+  const notifsFor = (userId: string) =>
+    db.select().from(notifications).where(eq(notifications.userId, userId));
+
+  it('notifies EACH distinct allocated screenhost owner once (pending acceptance)', async () => {
+    const admin = await seedUser({ role: 'admin' });
+    const advertiser = await seedUser({ role: 'advertiser' });
+    const owner1 = await seedUser({ role: 'individual_owner' });
+    const owner2 = await seedUser({ role: 'individual_owner' });
+    const cat = await ownerSectorId();
+    const campaignId = await seedCampaign(advertiser); // name 'Dispatch Test'
+    await seedTargeting(campaignId, cat, 'premium');
+    const sh1 = await seedEligibleScreenhost(owner1, cat, 'premium', 100); // capacité 60000
+    const sh2 = await seedEligibleScreenhost(owner2, cat, 'premium', 100); // capacité 60000
+    mockSession(admin);
+
+    // i_cible 100000 > a single SH's 60000 → N_min=2 → both SHs allocated → both owners notified.
+    const res = await dispatch(campaignId, { i_cible: 100000, cpm: 10, s: 10, t: 0.8 });
+    expect(res.statusCode).toBe(201);
+
+    const allocs = await allocsFor(campaignId);
+    const allocatedScreenhostIds = new Set(allocs.map((a) => a.screenhostId));
+    expect(allocatedScreenhostIds).toEqual(new Set([sh1, sh2]));
+
+    const n1 = await notifsFor(owner1);
+    const n2 = await notifsFor(owner2);
+    expect(n1).toHaveLength(1);
+    expect(n2).toHaveLength(1);
+    expect(n1[0]).toMatchObject({
+      type: 'dispatch_pending_acceptance',
+      title: 'Campagne en attente de votre acceptation',
+      campaignId,
+    });
+    expect(n1[0]?.body).toContain('Dispatch Test');
+    expect(n1[0]?.readAt).toBeNull();
+  });
+
+  it('dedupes — an owner with several allocated venues gets ONE notification', async () => {
+    const admin = await seedUser({ role: 'admin' });
+    const advertiser = await seedUser({ role: 'advertiser' });
+    const owner = await seedUser({ role: 'individual_owner' });
+    const cat = await ownerSectorId();
+    const campaignId = await seedCampaign(advertiser);
+    await seedTargeting(campaignId, cat, 'premium');
+    await seedEligibleScreenhost(owner, cat, 'premium', 100);
+    await seedEligibleScreenhost(owner, cat, 'premium', 100);
+    mockSession(admin);
+
+    const res = await dispatch(campaignId, { i_cible: 100000, cpm: 10, s: 10, t: 0.8 });
+    expect(res.statusCode).toBe(201);
+
+    // Two allocations (both venues), one owner → exactly one notification.
+    const allocs = await allocsFor(campaignId);
+    expect(allocs).toHaveLength(2);
+    expect(await notifsFor(owner)).toHaveLength(1);
   });
 });
