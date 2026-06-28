@@ -34,6 +34,20 @@ export interface MyCampaignRow {
   validated_impressions: number;
 }
 
+/**
+ * A targeting line → a human chip label. NULL on an axis means "toutes" (ALL): category null + class
+ * set = "Toutes catégories · <class>"; category set + class null = just the category; null/null =
+ * "Tout le réseau". Label wording is a product/i18n choice — adjustable.
+ */
+type TargetingLine = NonNullable<CampaignView['targeting']>[number];
+function toChipLabel(line: TargetingLine): string {
+  const { category_name, class: cls } = line;
+  if (category_name && cls) return `${category_name} · ${cls}`;
+  if (!category_name && cls) return `Toutes catégories · ${cls}`;
+  if (category_name && !cls) return category_name;
+  return 'Tout le réseau';
+}
+
 function toRow(c: CampaignView): MyCampaignRow {
   return {
     id: c.id,
@@ -52,9 +66,11 @@ function toRow(c: CampaignView): MyCampaignRow {
     category: null,
     event_id: undefined,
     video_id: null,
-    selected_categories: [],
+    // Targeting chips + delivered impressions now come from the engine (campaign_targeting +
+    // campaign_reconciliation). selected_zones stays empty — the engine has no geographic zones.
+    selected_categories: (c.targeting ?? []).map(toChipLabel),
     selected_zones: [],
-    validated_impressions: 0,
+    validated_impressions: c.delivered_impressions ?? 0,
   };
 }
 
