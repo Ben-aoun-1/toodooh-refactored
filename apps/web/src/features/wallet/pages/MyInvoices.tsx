@@ -12,8 +12,7 @@ import {
 import { useEffect, useState, useMemo } from 'react';
 
 import { useAuthStore } from '@/features/auth/stores/auth.store';
-import { useInvoices } from '@/features/wallet/hooks/useInvoices';
-import { generateInvoicePDF } from '@/features/wallet/services/invoice-pdf.service';
+import { useInvoices, type RechargeInvoice } from '@/features/wallet/hooks/useInvoices';
 import { logger } from '@/lib/logger';
 
 const log = logger.child({ module: 'MyInvoices' });
@@ -28,12 +27,7 @@ export default function MyInvoices() {
   const filtered = useMemo(() => {
     if (!search) return invoices;
     const q = search.toLowerCase();
-    return invoices.filter(
-      (f) =>
-        f.numero?.toLowerCase().includes(q) ||
-        f.description?.toLowerCase().includes(q) ||
-        f.campaign_name?.toLowerCase().includes(q),
-    );
+    return invoices.filter((f) => f.numero?.toLowerCase().includes(q));
   }, [invoices, search]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -46,28 +40,27 @@ export default function MyInvoices() {
     setCurrentPage(1);
   }, [search]);
 
-  // TODO(phase-1): typed source [supabase] — see #15
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleDownloadPDF = async (facture: any) => {
-    if (!user) return;
+  // The facture is server-rendered by the engine (GET /api/recharges/:id/facture,
+  // owner-scoped via the session cookie) — fetch the PDF stream and trigger a download.
+  // apiClient is JSON-only, so a plain credentialed fetch + object URL is used here.
+  const handleDownloadPDF = async (facture: RechargeInvoice) => {
     try {
-      await generateInvoicePDF(
-        {
-          id: facture.id,
-          numero: facture.numero,
-          montant: Number(facture.montant || 0),
-          date_emission: facture.date_emission || new Date(),
-          date_echeance: facture.date_echeance || null,
-          description: facture.description,
-          campaign_name: facture.campaign_name,
-          client_name: facture.client_name,
-          statut: facture.statut || 'payee',
-        },
-        user.id,
-      );
+      const res = await fetch(`/api/recharges/${facture.id}/facture`, {
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `facture-${facture.numero}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
     } catch (error) {
-      log.error({ error }, 'Erreur lors de la génération du PDF');
-      alert('Erreur lors de la génération du PDF. Veuillez réessayer.');
+      log.error({ error }, 'Erreur lors du téléchargement de la facture');
+      alert('Erreur lors du téléchargement de la facture. Veuillez réessayer.');
     }
   };
 
@@ -85,18 +78,14 @@ export default function MyInvoices() {
       amount,
     ) + ' TND';
 
-  // TODO(phase-1): typed source [supabase] — see #15
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const getDesignation = (f: any) => {
-    if (f.description) return f.description;
-    if (f.campaign_name) return f.campaign_name;
+  const getDesignation = (f: RechargeInvoice) => {
     const d = f.date_emission ? new Date(f.date_emission) : null;
     if (d) {
       const month = d.toLocaleDateString('fr-FR', { month: 'long' });
       const year = d.getFullYear();
-      return `Facture ${month.charAt(0).toUpperCase() + month.slice(1)} ${year}`;
+      return `Recharge ${month.charAt(0).toUpperCase() + month.slice(1)} ${year}`;
     }
-    return 'Facture';
+    return 'Recharge';
   };
 
   return (
