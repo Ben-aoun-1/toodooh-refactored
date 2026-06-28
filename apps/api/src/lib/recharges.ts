@@ -1,7 +1,7 @@
 import { and, eq, sql } from 'drizzle-orm';
 
 import { db } from '../db/client.js';
-import { type Recharge, recharges } from '../db/schema.js';
+import { type Recharge, campaignReconciliation, campaigns, recharges } from '../db/schema.js';
 
 // Recharge/wallet helpers (L-wallet) shared by the advertiser routes (routes/recharges.ts) and the
 // admin moderation surface (routes/admin-recharges.ts) — single source of truth so the two can't drift.
@@ -53,15 +53,23 @@ export interface WalletBalance {
 }
 
 // DERIVED wallet balance (no stored wallet_balance row). credited = exact SQL SUM over the caller's
-// CONFIRMED recharges (coalesced to 0); debited is DEFERRED (campaign spend needs pricing). The
-// balance seam is credited − debited — a future debit ledger plugs its own SUM in here, nowhere else.
+// CONFIRMED recharges; debited = exact SQL SUM of campaign_reconciliation.spend_tnd over the caller's
+// RECONCILED campaigns (L-redisp §B.4 plugged the debit seam here). spend_tnd is already the NET the
+// advertiser owes (budget − refund), so balance = credited − debited nets the refund automatically —
+// no separate credit needed. Idempotent: one reconciliation row per campaign (unique) ⇒ a re-reconcile
+// can't double-debit. Both SUMs coalesce to 0. (A future debit ledger plugs its own SUM in here only.)
 export const walletBalance = async (advertiserId: string): Promise<WalletBalance> => {
-  const [row] = await db
+  const [creditRow] = await db
     .select({ credited: sql<string>`coalesce(sum(${recharges.amountTnd}), 0)` })
     .from(recharges)
     .where(and(eq(recharges.advertiserId, advertiserId), eq(recharges.status, 'confirmed')));
-  const credited = Number(row?.credited ?? 0);
-  const debited = 0;
+  const [debitRow] = await db
+    .select({ debited: sql<string>`coalesce(sum(${campaignReconciliation.spendTnd}), 0)` })
+    .from(campaignReconciliation)
+    .innerJoin(campaigns, eq(campaignReconciliation.campaignId, campaigns.id))
+    .where(eq(campaigns.advertiserId, advertiserId));
+  const credited = Number(creditRow?.credited ?? 0);
+  const debited = Number(debitRow?.debited ?? 0);
   return {
     balance_tnd: credited - debited,
     credited_tnd: credited,
