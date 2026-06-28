@@ -26,4 +26,8 @@ export const screenhostKeys = {
 
   /** A screenhost's weekday×hour audience grid (L-aff-view — GET /:id/affluence). */
   affluence: (screenhostId: string) => [...screenhostKeys.all, 'affluence', screenhostId] as const,
+
+  /** The owner's EN_ATTENTE dispatch allocations awaiting accept/reject (GET /allocations). */
+  pendingAllocations: (userId: string) =>
+    [...screenhostKeys.all, 'pendingAllocations', userId] as const,
 };
