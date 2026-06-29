@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { db, sql } from '../src/db/client.js';
 import {
   agents,
+  businessSectors,
   governorates,
   screenhostAffluence,
   screenhostMonthlyStats,
@@ -282,6 +283,163 @@ describe('C2: POST /api/internal/monthly-stats', () => {
       headers: auth(),
       payload: {
         stats: [{ ...stat('22222222-2222-4222-8222-222222222222', 1), month: 'May-2026' }],
+      },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+describe('C3: POST /api/internal/screenhost-eligibility', () => {
+  let app: ReturnType<typeof buildApp> | undefined;
+  beforeEach(async () => {
+    await resetAuthTables();
+    app = buildApp();
+    await app.ready();
+  });
+  afterEach(async () => {
+    if (app) await app.close();
+    app = undefined;
+  });
+
+  // Use a SEEDED owner-audience sector (migration 0003) so we never mutate the reference seed.
+  const ownerSector = async () => {
+    const [sector] = await db
+      .select({ id: businessSectors.id, name: businessSectors.name })
+      .from(businessSectors)
+      .where(eq(businessSectors.audience, 'owner'))
+      .limit(1);
+    return sector!;
+  };
+
+  it('401 on a missing / wrong Bearer key', async () => {
+    const missing = await app!.inject({
+      method: 'POST',
+      url: '/api/internal/screenhost-eligibility',
+      payload: { items: [] },
+    });
+    expect(missing.statusCode).toBe(401);
+    const wrong = await app!.inject({
+      method: 'POST',
+      url: '/api/internal/screenhost-eligibility',
+      headers: auth('not-the-key-xxxxxxxx'),
+      payload: { items: [] },
+    });
+    expect(wrong.statusCode).toBe(401);
+  });
+
+  it('upserts the row (resolves sector NAME → id, sets class + hours) and is latest-value-wins', async () => {
+    const sector = await ownerSector();
+    const [host] = await db
+      .insert(screenhosts)
+      .values({ name: 'Place A' })
+      .returning({ id: screenhosts.id });
+
+    const first = await app!.inject({
+      method: 'POST',
+      url: '/api/internal/screenhost-eligibility',
+      headers: auth(),
+      payload: {
+        items: [
+          {
+            location_id: host!.id,
+            business_sector: sector.name,
+            class: 'moyen',
+            opening_hour: 8,
+            closing_hour: 22,
+            broadcast_capacity: 4,
+          },
+        ],
+      },
+    });
+    expect(first.statusCode).toBe(200);
+    expect(
+      first.json<{ upserted: number; unknown_locations: string[]; unknown_sectors: string[] }>(),
+    ).toEqual({
+      upserted: 1,
+      unknown_locations: [],
+      unknown_sectors: [],
+    });
+
+    const [row1] = await db
+      .select({
+        businessSectorId: screenhosts.businessSectorId,
+        class: screenhosts.class,
+        openingHour: screenhosts.openingHour,
+        closingHour: screenhosts.closingHour,
+        broadcastCapacity: screenhosts.broadcastCapacity,
+      })
+      .from(screenhosts)
+      .where(eq(screenhosts.id, host!.id));
+    expect(row1).toEqual({
+      businessSectorId: sector.id,
+      class: 'moyen',
+      openingHour: 8,
+      closingHour: 22,
+      broadcastCapacity: 4,
+    });
+
+    // Re-push class only → latest-value-wins on class; omitted hours/capacity stay UNTOUCHED.
+    const second = await app!.inject({
+      method: 'POST',
+      url: '/api/internal/screenhost-eligibility',
+      headers: auth(),
+      payload: { items: [{ location_id: host!.id, class: 'premium' }] },
+    });
+    expect(second.statusCode).toBe(200);
+    const [row2] = await db
+      .select({
+        class: screenhosts.class,
+        openingHour: screenhosts.openingHour,
+        broadcastCapacity: screenhosts.broadcastCapacity,
+      })
+      .from(screenhosts)
+      .where(eq(screenhosts.id, host!.id));
+    expect(row2).toEqual({ class: 'premium', openingHour: 8, broadcastCapacity: 4 });
+  });
+
+  it('reports unknown location_ids AND unresolvable sector names (never fails the batch)', async () => {
+    const [host] = await db
+      .insert(screenhosts)
+      .values({ name: 'Place B' })
+      .returning({ id: screenhosts.id });
+    const unknownId = '11111111-1111-4111-8111-111111111111';
+
+    const res = await app!.inject({
+      method: 'POST',
+      url: '/api/internal/screenhost-eligibility',
+      headers: auth(),
+      payload: {
+        items: [
+          { location_id: host!.id, business_sector: 'No Such Sector', class: 'populaire' },
+          { location_id: unknownId, class: 'moyen' },
+        ],
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      upserted: number;
+      unknown_locations: string[];
+      unknown_sectors: string[];
+    }>();
+    expect(body.upserted).toBe(1);
+    expect(body.unknown_locations).toEqual([unknownId]);
+    expect(body.unknown_sectors).toEqual(['No Such Sector']);
+
+    // The class was still written; the unresolvable sector left businessSectorId NULL (untouched).
+    const [row] = await db
+      .select({ class: screenhosts.class, businessSectorId: screenhosts.businessSectorId })
+      .from(screenhosts)
+      .where(eq(screenhosts.id, host!.id));
+    expect(row).toEqual({ class: 'populaire', businessSectorId: null });
+  });
+
+  it('400 on a bad item (class out of enum)', async () => {
+    const res = await app!.inject({
+      method: 'POST',
+      url: '/api/internal/screenhost-eligibility',
+      headers: auth(),
+      payload: {
+        items: [{ location_id: '22222222-2222-4222-8222-222222222222', class: 'gold' }],
       },
     });
     expect(res.statusCode).toBe(400);
