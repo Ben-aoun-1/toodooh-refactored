@@ -14,6 +14,7 @@ import {
   screenhosts,
   users,
 } from '../db/schema.js';
+import { buildEligibilityPatch } from '../lib/eligibility-patch.js';
 import { renderMonthlyReportPdf } from '../lib/report.js';
 import { pushApprovedOwnerLocations } from '../lib/wedooh-sync.js';
 import { decryptWifiPassword, encryptWifiPassword } from '../lib/wifi-crypto.js';
@@ -144,19 +145,8 @@ const eligibilityPatchSchema = z
   })
   .partial()
   .refine((b) => Object.keys(b).length > 0, { message: 'At least one field is required' });
-type EligibilityPatchInput = z.infer<typeof eligibilityPatchSchema>;
 
-const buildEligibilityPatch = (
-  data: EligibilityPatchInput,
-): Partial<typeof screenhosts.$inferInsert> => {
-  const patch: Partial<typeof screenhosts.$inferInsert> = {};
-  if (data.business_sector_id !== undefined) patch.businessSectorId = data.business_sector_id;
-  if (data.class !== undefined) patch.class = data.class;
-  if (data.opening_hour !== undefined) patch.openingHour = data.opening_hour;
-  if (data.closing_hour !== undefined) patch.closingHour = data.closing_hour;
-  if (data.broadcast_capacity !== undefined) patch.broadcastCapacity = data.broadcast_capacity;
-  return patch;
-};
+// The wire→column mapping lives in lib/eligibility-patch.ts (shared with the wedooh ingest).
 
 const adminGuard = { preHandler: [requireAuth, requireAdmin] };
 // The owner app surface (GET /mine, PATCH /:id/wifi) is status-gated (N3): a rejected/banned owner

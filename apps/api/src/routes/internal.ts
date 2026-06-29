@@ -1,5 +1,5 @@
 import { hashPassword } from 'better-auth/crypto';
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
@@ -7,6 +7,7 @@ import { db } from '../db/client.js';
 import {
   accounts,
   agents,
+  businessSectors,
   governorates,
   screenhostAffluence,
   screenhostMonthlyStats,
@@ -16,6 +17,7 @@ import {
 } from '../db/schema.js';
 import { env } from '../env.js';
 import { generateUniqueAgentCode } from '../lib/agent-code.js';
+import { buildEligibilityPatch, type EligibilityPatchInput } from '../lib/eligibility-patch.js';
 import { decryptWifiPassword } from '../lib/wifi-crypto.js';
 import { requireSyncKey } from '../middleware/require-sync-key.js';
 
@@ -78,6 +80,32 @@ const monthlyStatsBodySchema = z.object({
       }),
     )
     .max(64 * 12), // generous ceiling (64 locations × 12 months)
+});
+
+// C3: screenhost-eligibility batch — the hub (wedooh) OWNS the venue class (catégorie × csp_level)
+// per place, so it pushes each place's dispatch eligibility here. Mirrors the affluence batch shape
+// + tolerance: flat {items}, keyed by location_id (= the screenhost id), unknown locations SKIPPED
+// + reported, latest-value-wins UPDATE of the screenhosts row. Two extra tolerances vs affluence:
+//   - `business_sector` is the toodooh owner-sector NAME (the hub holds catégorie NAMES, never
+//     toodooh's UUIDs — name is the only shared key); resolved here → business_sectors.id
+//     (audience='owner'). An unresolvable name leaves that row's sector UNCHANGED and is reported in
+//     `unknown_sectors` (never fails the batch). business_sector_id is NOT a wire field for this reason.
+//   - opening_hour/closing_hour/broadcast_capacity are OPTIONAL: the hub does not hold them today, so
+//     it OMITS them; the partial mapping then leaves any admin-set hours/capacity UNTOUCHED. They are
+//     accepted here so the contract is forward-compatible if the hub ever sources them.
+const eligibilityBodySchema = z.object({
+  items: z
+    .array(
+      z.object({
+        location_id: z.uuid(),
+        business_sector: z.string().min(1).nullable().optional(),
+        class: z.enum(['populaire', 'moyen', 'premium']).nullable().optional(),
+        opening_hour: z.number().int().min(0).max(23).nullable().optional(),
+        closing_hour: z.number().int().min(0).max(23).nullable().optional(),
+        broadcast_capacity: z.number().int().positive().nullable().optional(),
+      }),
+    )
+    .max(64 * 4), // generous ceiling — one eligibility row per screenhost (small fleet)
 });
 
 // Privileged-account password floor mirrors admin-accounts (min 12). OPTIONAL: omitted → no
@@ -289,6 +317,89 @@ export const internalRoutes: FastifyPluginAsync<{ syncKey?: string }> = async (a
     }
 
     return reply.status(200).send({ upserted, unknown_locations: unknownLocations });
+  });
+
+  // ── C3: POST /api/internal/screenhost-eligibility ───────────────────────────
+  // Flat batch of {location_id, business_sector?, class?, opening_hour?, closing_hour?,
+  // broadcast_capacity?}. Latest-value-wins UPDATE of the screenhosts row (the SAME columns the admin
+  // eligibility PATCH writes, via the shared buildEligibilityPatch). Unknown location_ids are SKIPPED
+  // + reported; an unresolvable business_sector NAME leaves that row's sector untouched + is reported
+  // in unknown_sectors — neither fails the batch (same tolerance as the affluence ingest).
+  app.post('/api/internal/screenhost-eligibility', guard, async (request, reply) => {
+    const parsed = eligibilityBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        statusCode: 400,
+        requestId: request.id,
+        fields: parsed.error.issues.map((i) => ({ field: i.path.join('.'), reason: i.message })),
+      });
+    }
+    const { items } = parsed.data;
+    if (items.length === 0) {
+      return reply.status(200).send({ upserted: 0, unknown_locations: [], unknown_sectors: [] });
+    }
+
+    const requestedIds = [...new Set(items.map((i) => i.location_id))];
+    const known = await db
+      .select({ id: screenhosts.id })
+      .from(screenhosts)
+      .where(inArray(screenhosts.id, requestedIds));
+    const knownIds = new Set(known.map((k) => k.id));
+    const unknownLocations = requestedIds.filter((id) => !knownIds.has(id));
+
+    const toUpsert = items.filter((i) => knownIds.has(i.location_id));
+
+    // Resolve the distinct owner-sector NAMES the batch references → ids (audience='owner', the same
+    // source the admin PATCH validates against). Unresolvable names are reported, never written.
+    const sectorNames = [
+      ...new Set(
+        toUpsert.flatMap((i) => (typeof i.business_sector === 'string' ? [i.business_sector] : [])),
+      ),
+    ];
+    const sectorRows = sectorNames.length
+      ? await db
+          .select({ id: businessSectors.id, name: businessSectors.name })
+          .from(businessSectors)
+          .where(
+            and(inArray(businessSectors.name, sectorNames), eq(businessSectors.audience, 'owner')),
+          )
+      : [];
+    const sectorIdByName = new Map(sectorRows.map((r) => [r.name, r.id]));
+    const unknownSectors = sectorNames.filter((n) => !sectorIdByName.has(n));
+
+    let upserted = 0;
+    if (toUpsert.length > 0) {
+      await db.transaction(async (tx) => {
+        for (const item of toUpsert) {
+          const patchInput: EligibilityPatchInput = {};
+          if (item.business_sector === null) {
+            patchInput.business_sector_id = null; // explicit clear
+          } else if (typeof item.business_sector === 'string') {
+            const resolved = sectorIdByName.get(item.business_sector);
+            // Unresolvable name → leave the sector UNCHANGED (omit the key); reported separately.
+            if (resolved !== undefined) patchInput.business_sector_id = resolved;
+          }
+          if (item.class !== undefined) patchInput.class = item.class;
+          if (item.opening_hour !== undefined) patchInput.opening_hour = item.opening_hour;
+          if (item.closing_hour !== undefined) patchInput.closing_hour = item.closing_hour;
+          if (item.broadcast_capacity !== undefined)
+            patchInput.broadcast_capacity = item.broadcast_capacity;
+
+          const patch = buildEligibilityPatch(patchInput);
+          if (Object.keys(patch).length === 0) continue; // nothing to write for this row
+          await tx.update(screenhosts).set(patch).where(eq(screenhosts.id, item.location_id));
+          upserted += 1;
+        }
+      });
+    }
+
+    return reply.status(200).send({
+      upserted,
+      unknown_locations: unknownLocations,
+      unknown_sectors: unknownSectors,
+    });
   });
 
   // ── Edge A: POST /api/internal/agents ───────────────────────────────────────
