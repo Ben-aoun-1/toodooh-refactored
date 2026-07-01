@@ -309,7 +309,7 @@ export default function OwnerCalendarDevices() {
                     <select
                       value={selectedEstablishment}
                       onChange={(e) => setSelectedEstablishment(e.target.value)}
-                      className="h-11 min-w-[220px] rounded-lg border border-gray-200 px-3 text-sm"
+                      className="h-11 w-full sm:w-auto sm:min-w-[220px] rounded-lg border border-gray-200 px-3 text-sm"
                       id="selected-establishment"
                     >
                       <option value="all">Toutes</option>
