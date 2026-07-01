@@ -728,7 +728,7 @@ export default function OwnerCampaigns() {
           }}
         >
           <div
-            className="bg-white rounded-2xl shadow-xl w-full max-w-[760px] p-8 text-center relative"
+            className="bg-white rounded-2xl shadow-xl w-full max-w-[760px] p-4 sm:p-8 text-center relative"
             role="button"
             tabIndex={0}
             onClick={(e) => e.stopPropagation()}
@@ -791,12 +791,12 @@ export default function OwnerCampaigns() {
             onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => e.stopPropagation()}
           >
-            <div className="px-8 py-5 border-b border-[#F1F1F1]">
+            <div className="px-4 sm:px-8 py-5 border-b border-[#F1F1F1]">
               <h3 className="text-[20px] leading-tight font-semibold text-[#171717]">
                 Etes-vous sur de vouloir refuser cette campagne ?
               </h3>
             </div>
-            <div className="px-8 pt-5">
+            <div className="px-4 sm:px-8 pt-5">
               <label
                 htmlFor="reject-reason"
                 className="block text-sm font-medium text-[#171717] mb-2"
@@ -812,14 +812,14 @@ export default function OwnerCampaigns() {
                 className="w-full rounded-xl border border-[#EBEBEB] px-4 py-3 text-sm text-[#171717] placeholder:text-[#A3A3A3] focus:outline-none focus:border-brand-primary resize-none"
               />
             </div>
-            <div className="px-8 py-5 flex items-center justify-center gap-4">
+            <div className="px-4 sm:px-8 py-5 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
               <button
                 type="button"
                 onClick={() => {
                   setShowRejectConfirmModal(false);
                   setRejectReason('');
                 }}
-                className="h-14 min-w-[210px] px-8 rounded-2xl border border-[#EBEBEB] bg-white text-[#5C5C5C] text-[16px] leading-none font-medium hover:bg-[#FAFAFA]"
+                className="h-14 w-full sm:w-auto sm:min-w-[210px] px-4 sm:px-8 rounded-2xl border border-[#EBEBEB] bg-white text-[#5C5C5C] text-[16px] leading-none font-medium hover:bg-[#FAFAFA]"
               >
                 Annuler
               </button>
@@ -827,7 +827,7 @@ export default function OwnerCampaigns() {
                 type="button"
                 onClick={handleRejectSelectedCampaign}
                 disabled={processingDecision === 'reject'}
-                className="h-14 min-w-[250px] px-8 rounded-2xl bg-[#E84E4E] text-white text-[16px] leading-none font-medium hover:opacity-90 disabled:opacity-70"
+                className="h-14 w-full sm:w-auto sm:min-w-[250px] px-4 sm:px-8 rounded-2xl bg-[#E84E4E] text-white text-[16px] leading-none font-medium hover:opacity-90 disabled:opacity-70"
               >
                 {processingDecision === 'reject' ? 'Traitement...' : 'Refuser définitivement'}
               </button>
