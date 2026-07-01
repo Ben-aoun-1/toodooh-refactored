@@ -296,7 +296,7 @@ export default function OwnerPerformance() {
     <div className="min-h-screen bg-white">
       <div className="flex h-screen">
         <OwnerNavigation isDisabled={isDisabled} />
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
           <header className="bg-white border-b border-[#EBEBEB]">
             <div className="w-full px-4 sm:px-6 lg:px-8 py-3">
               <div className="flex items-center justify-between gap-3">

@@ -256,7 +256,7 @@ export default function OwnerCalendarDevices() {
       <div className="flex h-screen">
         <OwnerNavigation isDisabled={isDisabled} />
 
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
           <header className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
               <div className="flex items-center justify-between gap-3">

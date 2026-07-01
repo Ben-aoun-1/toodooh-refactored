@@ -344,7 +344,7 @@ export default function OwnerDashboard() {
         <OwnerNavigation isDisabled={isDisabled} />
 
         {/* Main content */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
           {/* Header (même design que annonceur) */}
           <header className="flex-none h-16 bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
             <div className="h-full w-full px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4 flex-nowrap">
