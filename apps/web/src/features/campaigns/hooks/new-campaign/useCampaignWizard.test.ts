@@ -4,6 +4,7 @@ import type { CampaignView } from '@/features/campaigns/services/campaigns.api';
 
 import {
   performCreateDraft,
+  performSaveDraft,
   performSubmit,
   serializeCreate,
   singleFlight,
@@ -209,6 +210,50 @@ describe('performSubmit', () => {
     const result = await performSubmit({ state, deps });
     expect(result.kind).toBe('error');
     if (result.kind === 'error') expect(result.error.message).toBe('submit failed');
+  });
+});
+
+describe('performSaveDraft (Enregistrer — save without submit)', () => {
+  it('PATCHes the indicative budget and does NOT submit', async () => {
+    const update = vi.fn().mockResolvedValue(fakeCampaign({ requested_budget: 750 }));
+    const state = validBasics({
+      draftCampaignId: 'cmp-9',
+      creativeId: 'crv-1',
+      requestedBudget: 750,
+    });
+    const result = await performSaveDraft({ state, deps: { update } });
+    expect(result.kind).toBe('success');
+    if (result.kind === 'success') expect(result.campaign.status).toBe('draft');
+    expect(update).toHaveBeenCalledWith('cmp-9', { requested_budget: 750 });
+    expect(update).toHaveBeenCalledTimes(1);
+  });
+
+  it('errors without calling the API when there is no draft id', async () => {
+    const update = vi.fn();
+    const result = await performSaveDraft({
+      state: validBasics({ requestedBudget: 750 }),
+      deps: { update },
+    });
+    expect(result.kind).toBe('error');
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('errors without calling the API when the budget is not positive', async () => {
+    const update = vi.fn();
+    const result = await performSaveDraft({
+      state: validBasics({ draftCampaignId: 'cmp-9', requestedBudget: 0 }),
+      deps: { update },
+    });
+    expect(result.kind).toBe('error');
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('surfaces an API error from update', async () => {
+    const update = vi.fn().mockRejectedValue(new Error('save failed'));
+    const state = validBasics({ draftCampaignId: 'cmp-9', requestedBudget: 750 });
+    const result = await performSaveDraft({ state, deps: { update } });
+    expect(result.kind).toBe('error');
+    if (result.kind === 'error') expect(result.error.message).toBe('save failed');
   });
 });
 

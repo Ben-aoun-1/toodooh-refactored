@@ -39,7 +39,7 @@ const STEP_TEMPLATE: ReadonlyArray<Omit<StepDescriptor, 'validate'>> = [
   { index: 2, id: 'targeting', label: 'Ciblage' },
   { index: 3, id: 'coverage', label: 'Couverture' },
   { index: 4, id: 'creative', label: 'Création' },
-  { index: 5, id: 'cart', label: 'Budget & validation' },
+  { index: 5, id: 'cart', label: 'Validation' },
 ];
 
 export function getStepList(): StepDescriptor[] {

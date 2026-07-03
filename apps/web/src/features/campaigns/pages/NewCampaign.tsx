@@ -137,6 +137,17 @@ export default function NewCampaign() {
     }
   }, [wiz, navigate]);
 
+  const handleSaveDraft = useCallback(async () => {
+    const result = await wiz.saveDraft();
+    if (result.kind === 'success') {
+      toast.success('Brouillon enregistré.');
+      navigate('/my-campaigns');
+    } else {
+      toast.error(getErrorMessage(result.error) || 'Erreur lors de l’enregistrement du brouillon');
+      log.error({ err: result.error }, 'save draft failed');
+    }
+  }, [wiz, navigate]);
+
   const handleSelectCreative = useCallback(
     async (creativeId: string) => {
       if (!state.draftCampaignId) return;
@@ -225,9 +236,17 @@ export default function NewCampaign() {
         <StepCart
           requestedBudget={state.requestedBudget}
           setRequestedBudget={setRequestedBudget}
+          campaignName={state.campaignName}
+          startDate={state.startDate}
+          endDate={state.endDate}
+          draftCampaignId={state.draftCampaignId || null}
+          userId={user?.id}
+          creativeId={state.creativeId}
           onBack={() => wiz.prevStep()}
+          onSaveDraft={handleSaveDraft}
           onSubmit={handleSubmit}
           submitting={wiz.submitting}
+          saving={wiz.savingDraft}
         />
       );
     }

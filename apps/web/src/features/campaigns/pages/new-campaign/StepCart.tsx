@@ -1,4 +1,13 @@
-import { ArrowRight, Info, Loader2, Send } from 'lucide-react';
+import {
+  ArrowRight,
+  DollarSign,
+  Info,
+  Loader2,
+  Network,
+  Send,
+  Target,
+  TrendingUp,
+} from 'lucide-react';
 
 import {
   CART_BUDGET_DEFAULT_TND,
@@ -6,106 +15,323 @@ import {
   CART_BUDGET_MIN_TND,
   CART_BUDGET_STEP_TND,
 } from '@/features/campaigns/hooks/new-campaign/cart-budget';
+import { useCampaignCoverage } from '@/features/campaigns/hooks/useCampaignCoverage';
+import { useCreativePreviewUrl, useMyCreatives } from '@/features/campaigns/hooks/useCreativeApi';
+import { usePricingConfig } from '@/features/campaigns/hooks/usePricingConfig';
+import { formatUiDate, inclusiveDayCount } from '@/features/campaigns/lib/campaign-summary';
+import { estimateImpressions } from '@/features/campaigns/lib/impressions';
+import { toChipLabel } from '@/features/campaigns/lib/targeting-chip-label';
+import { useCampaignTargeting } from '@/features/campaigns/targeting/hooks/useCampaignTargeting';
+
+import CreativePreviewTile from './CreativePreviewTile';
 
 interface StepCartProps {
   requestedBudget: number | null;
   setRequestedBudget: (value: number | null) => void;
+  campaignName: string;
+  /** Date-only wizard strings ('YYYY-MM-DD'). */
+  startDate: string | null;
+  endDate: string | null;
+  draftCampaignId: string | null;
+  userId: string | undefined;
+  creativeId: string | null;
   onBack: () => void;
+  /** Enregistrer: PATCH requested_budget only, toast + exit to /my-campaigns (no submit). */
+  onSaveDraft: () => void | Promise<void>;
   onSubmit: () => void | Promise<void>;
   submitting: boolean;
+  saving: boolean;
 }
 
-const tnd = new Intl.NumberFormat('fr-TN', { maximumFractionDigits: 0 });
+// fr-TN money — space thousands, comma decimals (max 2, no forced trailing zeros: the interim slider
+// is integer-stepped so amounts read "5 000 TND"; L-price's fractional bounds would render decimals).
+const tnd = new Intl.NumberFormat('fr-TN', { maximumFractionDigits: 2 });
+const int = new Intl.NumberFormat('fr-TN', { maximumFractionDigits: 0 });
 
 /**
- * Cart step of the de-Supabase wizard (interim manual cart). Collects a single advertiser-facing
- * INDICATIVE budget (TND) via a 0–5000 SLIDER defaulting to its MAX — NOT the engine inputs
- * (i_cible/cpm/s/t, which the admin derives at activation). On submit the orchestrator PATCHes
- * requested_budget onto the draft and POSTs /:id/submit (draft → pending). L-price later replaces
- * this slider with the real cursor (computed min/max + impressions preview).
+ * Validation step of the de-Supabase wizard (interim manual cart). LEFT: a read-only recap of the
+ * campaign (name, diffusion type, targeting chips, période, coverage, spot preview). RIGHT: the
+ * budget cursor with a live budget→impressions estimate priced at the resolved standard CPM. On
+ * submit the orchestrator PATCHes requested_budget then POSTs /:id/submit (draft → pending);
+ * Enregistrer PATCHes the budget and exits without submitting. Diffusion-type chips are STATIC (V1 is
+ * Réseau-only). The estimate + bounds are interim — L-price replaces the numbers, not this layout.
  */
 export default function StepCart({
   requestedBudget,
   setRequestedBudget,
+  campaignName,
+  startDate,
+  endDate,
+  draftCampaignId,
+  userId,
+  creativeId,
   onBack,
+  onSaveDraft,
   onSubmit,
   submitting,
+  saving,
 }: StepCartProps) {
+  const targeting = useCampaignTargeting(draftCampaignId);
+  const coverage = useCampaignCoverage(draftCampaignId);
+  const pricing = usePricingConfig();
+  const { data: creatives = [] } = useMyCreatives(userId);
+  const previewUrl = useCreativePreviewUrl(creativeId);
+
   // Controlled slider. A null budget (an old draft loaded without one) renders at the default MAX
-  // position; the wizard seeds the state to MAX so submit works without the advertiser touching it.
+  // position; the orchestrator seeds the state to MAX so submit works untouched.
   const value = requestedBudget ?? CART_BUDGET_DEFAULT_TND;
-  const canSubmit = !submitting && value > 0;
+  const busy = submitting || saving;
+  const canAct = !busy && value > 0;
+
+  // Impressions estimate — null while the CPM is loading/errored so the tile renders "—", never NaN.
+  const impressions = estimateImpressions(value, pricing.data?.standard_cpm_tnd ?? null);
+
+  const chips = targeting.rows.length ? targeting.rows.map(toChipLabel) : ['Toutes catégories'];
+
+  const durationDays = inclusiveDayCount(startDate, endDate);
+  const linkedCreative = creativeId ? creatives.find((c) => c.id === creativeId) : undefined;
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
-        <div className="p-6 border-b border-gray-200">
-          <h2 className="text-xl font-bold text-[#00263A]">Budget &amp; validation</h2>
-          <p className="text-gray-600 mt-1">Ajustez le budget souhaité pour votre campagne</p>
+      <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm sm:p-8">
+        <div>
+          <h2 className="text-xl font-bold text-gray-900">Validation</h2>
+          <p className="mt-1 text-gray-600">Vérifiez et confirmez votre campagne</p>
         </div>
 
-        <div className="p-6 space-y-6">
-          <div>
-            <label htmlFor="cart-budget" className="block text-sm font-medium text-gray-700 mb-3">
-              Budget indicatif (TND) <span className="text-red-500">*</span>
-            </label>
+        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {/* LEFT — Récapitulatif */}
+          <section className="min-w-0 rounded-2xl border border-gray-200 p-5 sm:p-6">
+            <h3 className="mb-5 text-lg font-bold text-gray-900">Récapitulatif</h3>
 
-            <div className="text-center mb-4">
-              <span className="text-3xl font-bold text-brand-deep">{tnd.format(value)}</span>
-              <span className="ml-1 text-base font-medium text-gray-400">TND</span>
+            <div>
+              <p className="text-sm font-medium text-gray-500">Nom de la campagne</p>
+              <p className="mt-1 font-medium text-gray-900">{campaignName || '—'}</p>
             </div>
 
-            <input
-              id="cart-budget"
-              type="range"
-              min={CART_BUDGET_MIN_TND}
-              max={CART_BUDGET_MAX_TND}
-              step={CART_BUDGET_STEP_TND}
-              value={value}
-              onChange={(e) => setRequestedBudget(Number(e.target.value))}
-              aria-valuetext={`${tnd.format(value)} TND`}
-              className="w-full accent-brand-primary cursor-pointer"
-            />
-            <div className="mt-1 flex justify-between text-xs text-gray-400">
-              <span>{tnd.format(CART_BUDGET_MIN_TND)} TND</span>
-              <span>{tnd.format(CART_BUDGET_MAX_TND)} TND</span>
-            </div>
-          </div>
+            <hr className="my-4 border-gray-100" />
 
-          <div className="flex gap-3 p-4 rounded-xl bg-slate-50/80 border border-slate-100">
-            <div className="flex-shrink-0 w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center">
-              <Info className="w-3.5 h-3.5 text-slate-600" />
+            <div>
+              <p className="mb-2 text-sm font-medium text-gray-500">Type de la campagne</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex items-center gap-2 rounded-xl border-2 border-brand-primary bg-brand-primary/5 px-3 py-3">
+                  <Target className="h-4 w-4 flex-shrink-0 text-brand-deep" />
+                  <span className="truncate text-sm font-medium text-gray-900">Réseau Toodooh</span>
+                </div>
+                <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 opacity-60">
+                  <Network className="h-4 w-4 flex-shrink-0 text-gray-400" />
+                  <span className="truncate text-sm font-medium text-gray-400">Parc TV</span>
+                </div>
+              </div>
             </div>
-            <p className="text-sm text-gray-600">
-              Ce montant est <strong>indicatif</strong> ; la tarification finale est confirmée lors
-              de la revue de votre campagne par notre équipe.
+
+            <hr className="my-4 border-gray-100" />
+
+            <div>
+              <p className="mb-2 text-sm font-medium text-gray-500">Catégorie(s)</p>
+              {targeting.isLoading ? (
+                <div className="h-7 w-40 animate-pulse rounded-lg bg-gray-100" />
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {chips.map((label, i) => (
+                    <span
+                      key={`${label}-${i}`}
+                      className="rounded-lg border border-brand-primary px-3 py-1.5 text-sm font-medium text-brand-deep"
+                    >
+                      {label}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <hr className="my-4 border-gray-100" />
+
+            <div>
+              <p className="mb-2 text-sm font-medium text-gray-500">Période</p>
+              <div className="grid grid-cols-3 gap-2 text-sm">
+                <div className="min-w-0">
+                  <p className="text-gray-500">Début</p>
+                  <p className="mt-0.5 font-medium text-gray-900">{formatUiDate(startDate)}</p>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-gray-500">Fin</p>
+                  <p className="mt-0.5 font-medium text-gray-900">{formatUiDate(endDate)}</p>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-gray-500">Durée</p>
+                  <p className="mt-0.5 font-medium text-gray-900">
+                    {durationDays == null ? '—' : `${durationDays} jours`}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <hr className="my-4 border-gray-100" />
+
+            <div>
+              <p className="mb-2 text-sm font-medium text-gray-500">Couverture</p>
+              <p className="text-sm text-gray-900">
+                <span className="text-gray-500">Écrans correspondants : </span>
+                <span className="font-medium">
+                  {coverage.isLoading ? '…' : coverage.screenhosts.length}
+                </span>
+              </p>
+            </div>
+
+            <hr className="my-4 border-gray-100" />
+
+            <div>
+              <p className="mb-2 text-sm font-medium text-gray-500">Spot</p>
+              <CreativePreviewTile
+                creativeType={linkedCreative?.creative_type}
+                title={linkedCreative?.title ?? null}
+                durationSeconds={linkedCreative?.duration_seconds ?? null}
+                url={previewUrl.data?.url}
+                isLoading={previewUrl.isLoading}
+              />
+            </div>
+          </section>
+
+          {/* RIGHT — Ajuster votre impact */}
+          <section className="min-w-0 rounded-2xl border border-gray-200 p-5 sm:p-6">
+            <h3 className="text-lg font-bold text-gray-900">Ajuster votre impact</h3>
+            <p className="mt-1 text-sm text-gray-600">
+              Déplacez le curseur pour ajuster votre budget et vos impressions estimées
             </p>
-          </div>
+
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <div className="rounded-2xl bg-brand-primary/10 p-4">
+                <span className="mb-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white">
+                  <DollarSign className="h-4 w-4 text-brand-deep" />
+                </span>
+                <p className="text-sm text-gray-600">Montant estimé</p>
+                <p className="mt-0.5 text-lg font-bold text-brand-deep">{tnd.format(value)} TND</p>
+              </div>
+              <div className="rounded-2xl bg-brand-accent/10 p-4">
+                <span className="mb-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white">
+                  <TrendingUp className="h-4 w-4 text-brand-accent" />
+                </span>
+                <p className="text-sm text-gray-600">Impressions potentielles</p>
+                <p className="mt-0.5 text-lg font-bold text-brand-accent">
+                  {impressions == null ? '—' : int.format(impressions)}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-gray-200 p-5">
+              <div className="mb-4 text-center">
+                <span className="text-3xl font-bold text-gray-900">{tnd.format(value)}</span>
+                <span className="ml-1 text-base font-medium text-gray-400">TND</span>
+              </div>
+
+              <input
+                id="cart-budget"
+                type="range"
+                min={CART_BUDGET_MIN_TND}
+                max={CART_BUDGET_MAX_TND}
+                step={CART_BUDGET_STEP_TND}
+                value={value}
+                onChange={(e) => setRequestedBudget(Number(e.target.value))}
+                aria-label="Budget indicatif (TND)"
+                aria-valuetext={`${tnd.format(value)} TND`}
+                className="w-full cursor-pointer accent-brand-primary"
+              />
+              <div className="mt-1 flex justify-between text-xs font-medium text-gray-400">
+                <span>MIN: {tnd.format(CART_BUDGET_MIN_TND)} TND</span>
+                <span>MAX: {tnd.format(CART_BUDGET_MAX_TND)} TND</span>
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="min-w-0">
+                  <label
+                    htmlFor="cart-budget-min"
+                    className="mb-1 block text-xs font-medium text-gray-500"
+                  >
+                    Montant minimum (TND)
+                  </label>
+                  <input
+                    id="cart-budget-min"
+                    type="text"
+                    readOnly
+                    aria-readonly="true"
+                    tabIndex={-1}
+                    value={`Min: ${tnd.format(CART_BUDGET_MIN_TND)} TND`}
+                    className="w-full cursor-not-allowed rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-400"
+                  />
+                </div>
+                <div className="min-w-0">
+                  <label
+                    htmlFor="cart-budget-max"
+                    className="mb-1 block text-xs font-medium text-gray-500"
+                  >
+                    Montant maximum (TND)
+                  </label>
+                  <input
+                    id="cart-budget-max"
+                    type="text"
+                    readOnly
+                    aria-readonly="true"
+                    tabIndex={-1}
+                    value={`Max: ${tnd.format(CART_BUDGET_MAX_TND)} TND`}
+                    className="w-full cursor-not-allowed rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-400"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 flex gap-3 rounded-xl border border-slate-100 bg-slate-50/80 p-4">
+              <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-slate-200">
+                <Info className="h-3.5 w-3.5 text-slate-600" />
+              </div>
+              <p className="text-sm text-gray-600">
+                <strong>Note :</strong> Les impressions sont estimées sur la base du CPM en vigueur.
+                La diffusion intègre la répartition équitable, la durée effective de campagne et les
+                éventuelles indisponibilités.
+              </p>
+            </div>
+          </section>
         </div>
       </div>
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
         <button
           type="button"
           onClick={onBack}
-          className="flex items-center gap-2 px-5 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-all text-sm font-medium"
+          className="flex items-center justify-center gap-2 rounded-xl border border-gray-300 px-5 py-3 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50"
         >
           <ArrowRight className="h-4 w-4 rotate-180" />
           Retour
         </button>
-        <button
-          type="button"
-          onClick={() => void onSubmit()}
-          disabled={!canSubmit}
-          className={`px-6 py-3 rounded-xl font-semibold transition-all flex items-center space-x-2 shadow-lg ${
-            !canSubmit
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : 'bg-gradient-to-r from-brand-primary to-brand-deep text-white hover:from-brand-primary/90 hover:to-brand-deep'
-          }`}
-        >
-          {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          <span>{submitting ? 'Envoi…' : 'Soumettre la campagne'}</span>
-        </button>
+
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <button
+            type="button"
+            onClick={() => void onSaveDraft()}
+            disabled={!canAct}
+            className="flex items-center justify-center gap-2 rounded-xl border border-gray-300 px-6 py-3 text-sm font-semibold text-gray-700 transition-all hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+            <span>{saving ? 'Enregistrement…' : 'Enregistrer'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => void onSubmit()}
+            disabled={!canAct}
+            className={`flex items-center justify-center gap-2 rounded-xl px-6 py-3 font-semibold shadow-lg transition-all ${
+              !canAct
+                ? 'cursor-not-allowed bg-gray-300 text-gray-500'
+                : 'bg-gradient-to-r from-brand-primary to-brand-deep text-white hover:from-brand-primary/90 hover:to-brand-deep'
+            }`}
+          >
+            {submitting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+            <span>{submitting ? 'Envoi…' : 'Soumettre la campagne'}</span>
+          </button>
+        </div>
       </div>
     </div>
   );

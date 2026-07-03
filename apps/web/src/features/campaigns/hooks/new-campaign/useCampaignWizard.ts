@@ -2,10 +2,16 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { useWizard } from '@/hooks/useWizard';
 
-import { performCreateDraft, performSubmit, singleFlight } from './wizard-serialize';
+import {
+  performCreateDraft,
+  performSaveDraft,
+  performSubmit,
+  singleFlight,
+} from './wizard-serialize';
 import { canStepBeReached, getStepList } from './wizard-steps';
 import type {
   CreateDraftResult,
+  SaveDraftResult,
   SubmitResult,
   UseCampaignWizardOptions,
   UseCampaignWizardReturn,
@@ -27,6 +33,7 @@ export function useCampaignWizard(opts: UseCampaignWizardOptions): UseCampaignWi
   const [state, setStateImpl] = useState<WizardState>(opts.initialState);
   const [creatingDraft, setCreatingDraft] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
 
   const setState = useCallback((updater: (prev: WizardState) => WizardState) => {
     setStateImpl(updater);
@@ -109,6 +116,15 @@ export function useCampaignWizard(opts: UseCampaignWizardOptions): UseCampaignWi
     }
   }, [state, updateCampaign, submitCampaign]);
 
+  const saveDraft = useCallback(async (): Promise<SaveDraftResult> => {
+    setSavingDraft(true);
+    try {
+      return await performSaveDraft({ state, deps: { update: updateCampaign } });
+    } finally {
+      setSavingDraft(false);
+    }
+  }, [state, updateCampaign]);
+
   return {
     state,
     setState,
@@ -121,7 +137,9 @@ export function useCampaignWizard(opts: UseCampaignWizardOptions): UseCampaignWi
     canGoToStep,
     ensureDraft,
     submit,
+    saveDraft,
     creatingDraft,
     submitting,
+    savingDraft,
   };
 }
