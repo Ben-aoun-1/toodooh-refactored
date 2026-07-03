@@ -4,7 +4,7 @@ import type {
   UpdateCampaignInput,
 } from '@/features/campaigns/services/campaigns.api';
 
-import type { CreateDraftResult, SubmitResult, WizardState } from './wizard-types';
+import type { CreateDraftResult, SaveDraftResult, SubmitResult, WizardState } from './wizard-types';
 
 export interface CreateDraftDeps {
   create: (input: CreateCampaignInput) => Promise<CampaignView>;
@@ -37,6 +37,10 @@ export function singleFlight<T>(slot: PromiseSlot<T>, run: () => Promise<T>): Pr
 export interface SubmitDeps {
   update: (id: string, input: UpdateCampaignInput) => Promise<CampaignView>;
   submit: (id: string) => Promise<CampaignView>;
+}
+
+export interface SaveDraftDeps {
+  update: (id: string, input: UpdateCampaignInput) => Promise<CampaignView>;
 }
 
 /**
@@ -106,6 +110,34 @@ export async function performSubmit(args: {
   try {
     await deps.update(state.draftCampaignId, { requested_budget: state.requestedBudget });
     const campaign = await deps.submit(state.draftCampaignId);
+    return { kind: 'success', campaign };
+  } catch (e) {
+    return { kind: 'error', error: e instanceof Error ? e : new Error(String(e)) };
+  }
+}
+
+/**
+ * Enregistrer (save-draft, NO submit): PATCH the indicative requested_budget onto the draft and stop
+ * — the campaign stays a draft the advertiser can resume later. Shares performSubmit's guards (a
+ * created draft + a positive budget, both gated by the step validators) so the function is safe to
+ * call directly. The API's requested_budget is strictly positive, so a non-positive budget is
+ * rejected here rather than round-tripping to a 400.
+ */
+export async function performSaveDraft(args: {
+  state: WizardState;
+  deps: SaveDraftDeps;
+}): Promise<SaveDraftResult> {
+  const { state, deps } = args;
+  if (!state.draftCampaignId) {
+    return { kind: 'error', error: new Error('La campagne n’a pas encore été créée') };
+  }
+  if (state.requestedBudget == null || state.requestedBudget <= 0) {
+    return { kind: 'error', error: new Error('Le budget doit être supérieur à 0 dinar') };
+  }
+  try {
+    const campaign = await deps.update(state.draftCampaignId, {
+      requested_budget: state.requestedBudget,
+    });
     return { kind: 'success', campaign };
   } catch (e) {
     return { kind: 'error', error: e instanceof Error ? e : new Error(String(e)) };

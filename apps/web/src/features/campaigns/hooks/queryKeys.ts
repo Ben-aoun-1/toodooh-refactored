@@ -71,4 +71,10 @@ export const campaignsKeys = {
 
   /** A single creative by id (upload seeds this cache; the picker reads it). */
   creative: (creativeId: string) => [...campaignsKeys.all, 'creative', creativeId] as const,
+
+  /** A creative's presigned media URL (GET /:id/url) — the Validation-step Spot preview. */
+  creativeUrl: (creativeId: string) => [...campaignsKeys.all, 'creativeUrl', creativeId] as const,
+
+  /** The advertiser-readable CPM pricing config — the Validation-step impressions estimate. */
+  pricingConfig: () => [...campaignsKeys.all, 'pricingConfig'] as const,
 };

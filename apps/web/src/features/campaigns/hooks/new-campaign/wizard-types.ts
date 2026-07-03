@@ -63,6 +63,10 @@ export type SubmitResult =
   | { kind: 'success'; campaign: CampaignView }
   | { kind: 'error'; error: Error };
 
+export type SaveDraftResult =
+  | { kind: 'success'; campaign: CampaignView }
+  | { kind: 'error'; error: Error };
+
 export interface UseCampaignWizardOptions {
   initialState: WizardState;
   /** Create-early DI: POST /api/campaigns on leaving Basics → the draft id. */
@@ -89,6 +93,9 @@ export interface UseCampaignWizardReturn {
   ensureDraft: () => Promise<CreateDraftResult>;
   /** PATCH requested_budget, then POST /:id/submit. */
   submit: () => Promise<SubmitResult>;
+  /** Enregistrer: PATCH requested_budget only — the campaign stays a draft (no submit). */
+  saveDraft: () => Promise<SaveDraftResult>;
   creatingDraft: boolean;
   submitting: boolean;
+  savingDraft: boolean;
 }

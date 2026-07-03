@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 
+import { toChipLabel } from '@/features/campaigns/lib/targeting-chip-label';
 import type { CampaignView } from '@/features/campaigns/services/campaigns.api';
 
 import { useMyCampaignsList } from './useCampaignApi';
@@ -34,20 +35,8 @@ export interface MyCampaignRow {
   validated_impressions: number;
 }
 
-/**
- * A targeting line → a human chip label. NULL on an axis means "toutes" (ALL): category null + class
- * set = "Toutes catégories · <class>"; category set + class null = just the category; null/null =
- * "Tout le réseau". Label wording is a product/i18n choice — adjustable.
- */
-type TargetingLine = NonNullable<CampaignView['targeting']>[number];
-function toChipLabel(line: TargetingLine): string {
-  const { category_name, class: cls } = line;
-  if (category_name && cls) return `${category_name} · ${cls}`;
-  if (!category_name && cls) return `Toutes catégories · ${cls}`;
-  if (category_name && !cls) return category_name;
-  return 'Tout le réseau';
-}
-
+// Targeting chip labels come from the shared lib (`toChipLabel`) so this list and the wizard's
+// Validation recap render them identically.
 function toRow(c: CampaignView): MyCampaignRow {
   return {
     id: c.id,
