@@ -264,7 +264,7 @@ export default function OwnerRevenue() {
                   </div>
                   <div className="min-w-0">
                     <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Mes Revenus</h1>
-                    <p className="text-sm text-gray-500 mt-1 leading-snug max-w-3xl">
+                    <p className="text-sm text-gray-500 mt-1 leading-snug max-w-3xl hidden sm:block">
                       Consultez les revenus générés par les campagnes diffusées au sein de votre
                       établissement
                     </p>
@@ -274,10 +274,12 @@ export default function OwnerRevenue() {
                   <button
                     type="button"
                     onClick={() => navigate('/owner-calendar-devices')}
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-brand-primary hover:bg-brand-primary/90 text-[#101010] text-sm font-semibold transition-colors"
+                    aria-label="Piloter mon calendrier de diffusion"
+                    title="Piloter mon calendrier de diffusion"
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-brand-primary hover:bg-brand-primary/90 text-[#101010] text-sm font-semibold transition-colors flex-shrink-0 whitespace-nowrap"
                   >
-                    <Calendar className="h-4 w-4" />
-                    Piloter mon calendrier de diffusion
+                    <Calendar className="h-4 w-4 flex-shrink-0" />
+                    <span className="hidden lg:inline">Piloter mon calendrier de diffusion</span>
                   </button>
                   <OwnerNotificationsBell userId={user?.id} />
                 </div>

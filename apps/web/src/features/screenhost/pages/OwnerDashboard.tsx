@@ -348,8 +348,8 @@ export default function OwnerDashboard() {
           {/* Header (même design que annonceur) */}
           <header className="flex-none h-16 bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
             <div className="h-full w-full px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4 flex-nowrap">
-              <div className="flex items-center gap-3 min-w-0 flex-shrink-0">
-                <div className="flex items-center justify-center flex-shrink-0 w-10 h-10 rounded-full border border-gray-200 bg-white">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className="hidden sm:flex items-center justify-center flex-shrink-0 w-10 h-10 rounded-full border border-gray-200 bg-white">
                   <LayoutGrid className="h-5 w-5 text-gray-600" strokeWidth={1.5} />
                 </div>
                 <div className="min-w-0 flex-1">
@@ -366,7 +366,7 @@ export default function OwnerDashboard() {
                 {/* Message de validation en attente ou badge actif */}
                 {needsApproval && validationStatus === 'pending' ? (
                   // En attente de validation admin
-                  <div className="flex items-center px-4 py-2 bg-blue-100 text-blue-800 rounded-lg border border-blue-300">
+                  <div className="flex items-center px-4 py-2 bg-blue-100 text-blue-800 rounded-lg border border-blue-300 flex-shrink-0">
                     <svg
                       className="h-4 w-4 mr-2 animate-spin"
                       xmlns="http://www.w3.org/2000/svg"
@@ -387,13 +387,13 @@ export default function OwnerDashboard() {
                         d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                       ></path>
                     </svg>
-                    <span className="text-sm font-medium">
+                    <span className="text-sm font-medium hidden sm:inline">
                       Votre compte est en cours de validation par un administrateur
                     </span>
                   </div>
                 ) : !needsApproval && validationStatus === 'approved' ? (
                   // Compte validé
-                  <div className="flex items-center px-4 py-2 bg-green-100 text-green-800 rounded-lg border border-green-300">
+                  <div className="flex items-center px-4 py-2 bg-green-100 text-green-800 rounded-lg border border-green-300 flex-shrink-0 whitespace-nowrap">
                     <svg
                       className="h-4 w-4 mr-2"
                       xmlns="http://www.w3.org/2000/svg"
