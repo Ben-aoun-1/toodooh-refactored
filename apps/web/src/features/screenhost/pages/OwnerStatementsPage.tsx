@@ -99,21 +99,23 @@ export default function OwnerStatementsPage() {
                 <button
                   type="button"
                   onClick={() => navigate('/owner-revenue')}
-                  className="inline-flex items-center gap-2 text-base font-semibold text-[#171717] hover:opacity-80"
+                  className="inline-flex items-center gap-2 text-base font-semibold text-[#171717] hover:opacity-80 min-w-0"
                 >
-                  <Wallet className="w-5 h-5 text-[#5C5C5C]" />
-                  <span>Mes revenus</span>
-                  <ChevronRight className="w-5 h-5 text-[#9CA3AF]" />
-                  <span>Mes relevés</span>
+                  <Wallet className="w-5 h-5 text-[#5C5C5C] flex-shrink-0" />
+                  <span className="hidden sm:inline">Mes revenus</span>
+                  <ChevronRight className="w-5 h-5 text-[#9CA3AF] flex-shrink-0 hidden sm:inline" />
+                  <span className="truncate">Mes relevés</span>
                 </button>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-shrink-0">
                   <button
                     type="button"
                     onClick={() => navigate('/owner-calendar-devices')}
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-brand-primary hover:bg-brand-primary/90 text-gray-900 text-sm font-medium transition-colors"
+                    aria-label="Piloter mon calendrier de diffusion"
+                    title="Piloter mon calendrier de diffusion"
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-brand-primary hover:bg-brand-primary/90 text-gray-900 text-sm font-medium transition-colors flex-shrink-0 whitespace-nowrap"
                   >
-                    <Calendar className="h-4 w-4" />
-                    Piloter mon calendrier de diffusion
+                    <Calendar className="h-4 w-4 flex-shrink-0" />
+                    <span className="hidden lg:inline">Piloter mon calendrier de diffusion</span>
                   </button>
                   <OwnerNotificationsBell userId={user?.id} />
                 </div>

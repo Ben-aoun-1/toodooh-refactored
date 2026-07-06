@@ -300,20 +300,22 @@ export default function OwnerPerformance() {
           <header className="bg-white border-b border-[#EBEBEB]">
             <div className="w-full px-4 sm:px-6 lg:px-8 py-3">
               <div className="flex items-center justify-between gap-3">
-                <div>
+                <div className="min-w-0 flex-1">
                   <h1 className="text-xl font-semibold text-[#171717]">Mes performances</h1>
-                  <p className="text-sm text-[#5C5C5C]">
+                  <p className="text-sm text-[#5C5C5C] hidden sm:block">
                     Analysez la performance de vos campagnes en un coup d&apos;oeil
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-shrink-0">
                   <button
                     type="button"
                     onClick={() => navigate('/owner-calendar-devices')}
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-brand-primary hover:bg-brand-primary/90 text-[#101010] text-sm font-semibold transition-colors"
+                    aria-label="Piloter mon calendrier de diffusion"
+                    title="Piloter mon calendrier de diffusion"
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-brand-primary hover:bg-brand-primary/90 text-[#101010] text-sm font-semibold transition-colors flex-shrink-0 whitespace-nowrap"
                   >
-                    <Calendar className="h-4 w-4" />
-                    Piloter mon calendrier de diffusion
+                    <Calendar className="h-4 w-4 flex-shrink-0" />
+                    <span className="hidden lg:inline">Piloter mon calendrier de diffusion</span>
                   </button>
                   <OwnerNotificationsBell userId={user?.id} />
                 </div>
