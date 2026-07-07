@@ -93,6 +93,21 @@ const monthlyStatsBodySchema = z.object({
 //   - opening_hour/closing_hour/broadcast_capacity are OPTIONAL: the hub does not hold them today, so
 //     it OMITS them; the partial mapping then leaves any admin-set hours/capacity UNTOUCHED. They are
 //     accepted here so the contract is forward-compatible if the hub ever sources them.
+//   - `ratios` (Lane D) is the assigned class's demographic split, OPTIONAL per item: absent → the
+//     six columns untouched; explicit null → all six cleared; object present → ALL SIX required (a
+//     partial ratio object is a 400), each 0–100. Sum-to-100 stays HUB-side (the catalog validates
+//     at class creation) — the receiver checks ranges only. Handled ROUTE-LOCALLY by ruling: the
+//     shared buildEligibilityPatch is NOT extended (the admin PATCH must never gain a ratios
+//     surface; ratios come only from the hub catalog).
+const ratioPct = z.number().min(0).max(100);
+const eligibilityRatiosSchema = z.object({
+  gender_male_pct: ratioPct,
+  gender_female_pct: ratioPct,
+  age_17_30_pct: ratioPct,
+  age_31_45_pct: ratioPct,
+  age_46_60_pct: ratioPct,
+  age_60_plus_pct: ratioPct,
+});
 const eligibilityBodySchema = z.object({
   items: z
     .array(
@@ -103,6 +118,7 @@ const eligibilityBodySchema = z.object({
         opening_hour: z.number().int().min(0).max(23).nullable().optional(),
         closing_hour: z.number().int().min(0).max(23).nullable().optional(),
         broadcast_capacity: z.number().int().positive().nullable().optional(),
+        ratios: eligibilityRatiosSchema.nullable().optional(),
       }),
     )
     .max(64 * 4), // generous ceiling — one eligibility row per screenhost (small fleet)
@@ -321,10 +337,11 @@ export const internalRoutes: FastifyPluginAsync<{ syncKey?: string }> = async (a
 
   // ── C3: POST /api/internal/screenhost-eligibility ───────────────────────────
   // Flat batch of {location_id, business_sector?, class?, opening_hour?, closing_hour?,
-  // broadcast_capacity?}. Latest-value-wins UPDATE of the screenhosts row (the SAME columns the admin
-  // eligibility PATCH writes, via the shared buildEligibilityPatch). Unknown location_ids are SKIPPED
-  // + reported; an unresolvable business_sector NAME leaves that row's sector untouched + is reported
-  // in unknown_sectors — neither fails the batch (same tolerance as the affluence ingest).
+  // broadcast_capacity?, ratios?}. Latest-value-wins UPDATE of the screenhosts row (the SAME columns
+  // the admin eligibility PATCH writes, via the shared buildEligibilityPatch — except `ratios`,
+  // which is hub-only and merged route-locally). Unknown location_ids are SKIPPED + reported; an
+  // unresolvable business_sector NAME leaves that row's sector untouched + is reported in
+  // unknown_sectors — neither fails the batch (same tolerance as the affluence ingest).
   app.post('/api/internal/screenhost-eligibility', guard, async (request, reply) => {
     const parsed = eligibilityBodySchema.safeParse(request.body);
     if (!parsed.success) {
@@ -388,6 +405,18 @@ export const internalRoutes: FastifyPluginAsync<{ syncKey?: string }> = async (a
             patchInput.broadcast_capacity = item.broadcast_capacity;
 
           const patch = buildEligibilityPatch(patchInput);
+          // Lane D ratios — merged ROUTE-LOCALLY, never via the shared patch (the admin PATCH has
+          // no ratios surface). Absent key → untouched; explicit null → all six cleared. Drizzle
+          // numeric takes a string on write (the lat/lng convention), hence toString().
+          if (item.ratios !== undefined) {
+            const r = item.ratios;
+            patch.genderMalePct = r === null ? null : r.gender_male_pct.toString();
+            patch.genderFemalePct = r === null ? null : r.gender_female_pct.toString();
+            patch.age17To30Pct = r === null ? null : r.age_17_30_pct.toString();
+            patch.age31To45Pct = r === null ? null : r.age_31_45_pct.toString();
+            patch.age46To60Pct = r === null ? null : r.age_46_60_pct.toString();
+            patch.age60PlusPct = r === null ? null : r.age_60_plus_pct.toString();
+          }
           if (Object.keys(patch).length === 0) continue; // nothing to write for this row
           await tx.update(screenhosts).set(patch).where(eq(screenhosts.id, item.location_id));
           upserted += 1;
