@@ -359,6 +359,17 @@ export const screenhosts = pgTable(
     // the real computation (TxActivité/TxRespect from proof-of-play) is DEFERRED to L-playout, so in
     // V1 all rows tie on SPS and L-disp falls to the ancienneté tiebreak (correct for V1).
     sps: numeric('sps', { precision: 5, scale: 2 }).notNull().default('50'),
+    // ── Lane D demographics — the assigned class's audience ratios (hub-owned) ──
+    // Six nullable percentages (0–100; numeric(5,2) like sps), null = never synced. Column names
+    // mirror the hub's ratio fields verbatim — they are the C3 wire vocabulary. Written ONLY by
+    // the C3 ingest (internal.ts): ratios come from the hub catalog, never from a toodooh admin
+    // form, so the shared buildEligibilityPatch has no ratios surface.
+    genderMalePct: numeric('gender_male_pct', { precision: 5, scale: 2 }),
+    genderFemalePct: numeric('gender_female_pct', { precision: 5, scale: 2 }),
+    age17To30Pct: numeric('age_17_30_pct', { precision: 5, scale: 2 }),
+    age31To45Pct: numeric('age_31_45_pct', { precision: 5, scale: 2 }),
+    age46To60Pct: numeric('age_46_60_pct', { precision: 5, scale: 2 }),
+    age60PlusPct: numeric('age_60_plus_pct', { precision: 5, scale: 2 }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
