@@ -79,7 +79,7 @@ const navigation = [
     iconSrcActive: parcTvIconActive,
   },
   {
-    name: 'Mes performance',
+    name: 'Mes performances',
     href: '/owner-performance',
     icon: BarChart3,
     iconSrc: performanceIcon,
