@@ -33,4 +33,18 @@ export const screenhostKeys = {
 
   /** The owner's ACCEPTE allocations + créneaux for the diffusion calendar (GET /calendar). */
   calendar: (userId: string) => [...screenhostKeys.all, 'calendar', userId] as const,
+
+  /** Lane F — a venue's identity card (GET /:id/profile: sector, class, hours, sps, ratios). */
+  profile: (screenhostId: string) => [...screenhostKeys.all, 'profile', screenhostId] as const,
+
+  /** Lane F — a venue's hub-pushed monthly audience stats (GET /:id/monthly-stats). */
+  monthlyStats: (screenhostId: string) =>
+    [...screenhostKeys.all, 'monthlyStats', screenhostId] as const,
+
+  /** Lane F — a venue's delivered impressions per day (GET /:id/impressions-daily?from&to). */
+  impressionsDaily: (screenhostId: string, from: string, to: string) =>
+    [...screenhostKeys.all, 'impressionsDaily', screenhostId, from, to] as const,
+
+  /** Lane F — the owner's payout lines incl. campaign metadata (GET /earnings). */
+  earnings: (userId: string) => [...screenhostKeys.all, 'earnings', userId] as const,
 };
