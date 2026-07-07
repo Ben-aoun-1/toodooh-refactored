@@ -1,320 +1,258 @@
-import {
-  ArrowDown,
-  ArrowUp,
-  Calendar,
-  Clock3,
-  Eye,
-  MapPin,
-  Monitor,
-  Users,
-  Wallet,
-} from 'lucide-react';
-import React, { useEffect, useMemo, useState } from 'react';
+import { Calendar, Loader2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
-import {
-  AreaChart,
-  Area,
-  BarChart,
-  Bar,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
 
-import performanceIntroIcon from '@/assets/performance/1.png';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
-import { usePerformanceDataset } from '@/features/performances/hooks/usePerformanceDataset';
-import { performanceService } from '@/features/performances/services/performance.service';
-import type {
-  PerformanceCategoryPoint,
-  PerformanceFilters,
-  PerformanceKpis,
-  PerformancePeriodPreset,
-  PerformanceTrendPoint,
-} from '@/features/performances/types/performance';
-import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
-import OwnerNotificationsBell from '@/features/screenhost/components/OwnerNotificationsBell';
+import { logger } from '@/lib/logger';
 
-const presetButtons: { key: PerformancePeriodPreset; label: string }[] = [
-  { key: 'month', label: 'Ce mois' },
-  { key: 'quarter', label: 'Trimestre' },
-  { key: 'year', label: 'Année' },
-  { key: 'custom', label: 'Personnalisé' },
-];
+import OwnerNavigation from '../components/OwnerNavigation';
+import OwnerNotificationsBell from '../components/OwnerNotificationsBell';
+import { AudienceKpisSection } from '../components/performance/AudienceKpisSection';
+import {
+  CampaignsSection,
+  type CampaignTableRow,
+} from '../components/performance/CampaignsSection';
+import { DemographicsSection } from '../components/performance/DemographicsSection';
+import { DownloadCta } from '../components/performance/DownloadCta';
+import { ImpressionsChartSection } from '../components/performance/ImpressionsChartSection';
+import { MonthlyReportCard } from '../components/performance/MonthlyReportCard';
+import { OptimisationSection } from '../components/performance/OptimisationSection';
+import { PeakHoursHeatmap } from '../components/performance/PeakHoursHeatmap';
+import { PeriodFilters } from '../components/performance/PeriodFilters';
+import { ProgressHero } from '../components/performance/ProgressHero';
+import { ReportIntro } from '../components/performance/ReportIntro';
+import { ReportsHistorySection } from '../components/performance/ReportsHistorySection';
+import { RevenueSection, type RevenueRow } from '../components/performance/RevenueSection';
+import { SpsSection } from '../components/performance/SpsSection';
+import {
+  useOwnerEarnings,
+  useVenueImpressionsDaily,
+  useVenueMonthlyStats,
+  useVenueProfile,
+} from '../hooks/usePerformanceReads';
+import { useScreenhostAffluence } from '../hooks/useScreenhostAffluence';
+import { useScreenhostsMine } from '../hooks/useScreenhostsMine';
+import { downloadMonthlyReport } from '../lib/monthly-report';
+import {
+  audienceKpis,
+  campaignStatut,
+  categoryLabel,
+  cumulativeSeries,
+  dailyAudienceWithin,
+  demographicBreakdown,
+  formatTndCellFr,
+  formatTndFr,
+  impressionsOfMonth,
+  lineInPeriod,
+  linesEndingInMonth,
+  openHoursPerDay,
+} from '../lib/performance-derive';
+import {
+  type PeriodKey,
+  formatCompactPeriod,
+  formatTablePeriod,
+  impressionsFetchWindow,
+  inRange,
+  isoDate,
+  resolvePeriodRange,
+} from '../lib/performance-period';
 
-const safeNumber = (value: unknown): number => {
-  const n = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(n) ? n : 0;
-};
+const log = logger.child({ module: 'OwnerPerformance' });
 
-const formatInt = (value: number) => safeNumber(value).toLocaleString('fr-FR').replace(/\s/g, ' ');
-const formatCurrency = (value: number) =>
-  `${safeNumber(value).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TND`;
-const formatDuration = (seconds: number) => {
-  const s = Math.max(0, Math.round(safeNumber(seconds)));
-  const hours = Math.floor(s / 3600);
-  const mins = Math.floor((s % 3600) / 60);
-  const secs = s % 60;
-  return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-};
+const typeLabelFr = (raw: string): string =>
+  raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : '—';
 
-const statusBadgeClass = (status: string) => {
-  if (status === 'Active') return 'bg-[#DDF7E5] text-[#2F9E63]';
-  if (status === 'Passée') return 'bg-gray-100 text-gray-500';
-  return 'bg-gray-100 text-gray-600';
-};
-
-const percentageDiff = (current: number, previous: number) => {
-  const safeCurrent = safeNumber(current);
-  const safePrevious = safeNumber(previous);
-  if (safePrevious === 0) return safeCurrent === 0 ? 0 : 100;
-  return safeNumber(((safeCurrent - safePrevious) / safePrevious) * 100);
-};
-
-const toIsoDate = (date: Date) => date.toISOString().split('T')[0];
-const getPresetRange = (preset: PerformancePeriodPreset) => {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  if (preset === 'year')
-    return { startDate: toIsoDate(new Date(today.getFullYear(), 0, 1)), endDate: toIsoDate(today) };
-  if (preset === 'quarter') {
-    const quarterStartMonth = Math.floor(today.getMonth() / 3) * 3;
-    return {
-      startDate: toIsoDate(new Date(today.getFullYear(), quarterStartMonth, 1)),
-      endDate: toIsoDate(today),
-    };
-  }
-  return {
-    startDate: toIsoDate(new Date(today.getFullYear(), today.getMonth(), 1)),
-    endDate: toIsoDate(today),
-  };
-};
-
-type TemporalGranularity = 'hour' | 'day' | 'week' | 'month';
-type AgeSegment = 'all' | 'u25' | '25_40' | '40_60' | '60p';
-type SexSegment = 'all' | 'male' | 'female';
-
-function KpiCard({
-  title,
-  value,
-  diff,
-  icon,
-}: {
-  title: string;
-  value: string;
-  diff: number;
-  icon: React.ReactNode;
-}) {
-  const positive = safeNumber(diff) >= 0;
-  return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-4">
-      <div className="mb-2 flex items-center justify-between">
-        <p className="text-sm font-semibold text-gray-700">{title}</p>
-        <span className="text-gray-500">{icon}</span>
-      </div>
-      <p className="text-3xl font-medium leading-none tracking-tight text-gray-900">{value}</p>
-      <div className="mt-3 flex items-center gap-1">
-        {positive ? (
-          <ArrowUp className="h-4 w-4 text-emerald-500" />
-        ) : (
-          <ArrowDown className="h-4 w-4 text-rose-500" />
-        )}
-        <span
-          className={`text-sm font-semibold ${positive ? 'text-emerald-500' : 'text-rose-500'}`}
-        >
-          {`${positive ? '+' : ''}${safeNumber(diff).toFixed(0)}%`}
-        </span>
-        <span className="text-sm text-gray-500">Le mois dernier</span>
-      </div>
-    </div>
-  );
-}
-
+/**
+ * "Mes performances" (Lane F) — rebuilt per the two design mockups, entirely on the engine's
+ * owner reads (profile / monthly-stats / impressions-daily / earnings / affluence). NO Supabase.
+ * Every section is per-selected-venue; the period pills filter CLIENT-SIDE below them.
+ */
 export default function OwnerPerformance() {
   const navigate = useNavigate();
   const { user, needsApproval, validationStatus } = useAuthStore();
   const isDisabled = needsApproval && validationStatus === 'pending';
 
-  const [filters, setFilters] = useState<PerformanceFilters>(
-    performanceService.buildDefaultFilters(),
-  );
-  const [temporalGranularity, setTemporalGranularity] = useState<TemporalGranularity>('day');
-  const [ageSegment, setAgeSegment] = useState<AgeSegment>('all');
-  const [sexSegment, setSexSegment] = useState<SexSegment>('all');
+  // "today" is anchored once per mount; all date maths live in the lib.
+  const today = useMemo(() => new Date(), []);
+  const todayIso = isoDate(today);
+  const fetchWindow = useMemo(() => impressionsFetchWindow(today), [today]);
 
-  const {
-    dataset,
-    loading,
-    isError,
-    refetch: refetchDataset,
-  } = usePerformanceDataset(user?.id, filters);
-  const error = isError ? 'Impossible de charger les performances pour le moment.' : '';
-
-  // Resynchronise les filtres avec les dates normalisées renvoyées par le service.
+  const screenhosts = useScreenhostsMine(user?.id);
+  const venues = useMemo(() => screenhosts.data ?? [], [screenhosts.data]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   useEffect(() => {
-    if (dataset) {
-      setFilters(dataset.filters);
-    }
-  }, [dataset]);
+    if (selectedId === null && venues.length > 0) setSelectedId(venues[0]?.id ?? null);
+  }, [venues, selectedId]);
 
-  const onFilterChange = (key: keyof PerformanceFilters, value: string) =>
-    setFilters((prev) => ({ ...prev, [key]: value }));
-  const applyPreset = (preset: PerformancePeriodPreset) => {
-    if (preset === 'month' || preset === 'quarter' || preset === 'year') {
-      const range = getPresetRange(preset);
-      setFilters((prev) => ({
-        ...prev,
-        preset,
-        startDate: range.startDate,
-        endDate: range.endDate,
-      }));
-      return;
+  const profile = useVenueProfile(selectedId);
+  const monthlyStats = useVenueMonthlyStats(selectedId);
+  const impressions = useVenueImpressionsDaily(selectedId, fetchWindow.from, fetchWindow.to);
+  const earnings = useOwnerEarnings(user?.id);
+  const affluence = useScreenhostAffluence(selectedId);
+
+  // Period pills — custom only applies on "Actualiser la recherche".
+  const [period, setPeriod] = useState<PeriodKey>('28d');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+  const [appliedCustom, setAppliedCustom] = useState<{ from: string; to: string } | undefined>();
+  const range = useMemo(
+    () => resolvePeriodRange(period, today, appliedCustom),
+    [period, today, appliedCustom],
+  );
+
+  // ── Per-venue datasets ──────────────────────────────────────────────────────
+  const months = useMemo(() => monthlyStats.data?.months ?? [], [monthlyStats.data]);
+  const days = useMemo(() => impressions.data?.days ?? [], [impressions.data]);
+  const venueLines = useMemo(
+    () => (earnings.data?.lines ?? []).filter((l) => l.screenhost_id === selectedId),
+    [earnings.data, selectedId],
+  );
+
+  const latestMonth = months[0] ?? null;
+  const historyRows = useMemo(
+    () =>
+      months.slice(1).map((m) => ({
+        month: m.month,
+        totalAudience: m.total_audience,
+        impressions: impressionsOfMonth(days, m.month),
+      })),
+    [months, days],
+  );
+
+  // ── Hero (unfiltered, "depuis le début") ────────────────────────────────────
+  const revenueTotal = useMemo(
+    () => venueLines.reduce((sum, l) => sum + l.earnings_tnd, 0),
+    [venueLines],
+  );
+  const revenueSeries = useMemo(
+    () =>
+      cumulativeSeries(
+        venueLines.map((l) => ({
+          date: l.campaign_end ?? l.reconciled_at.slice(0, 10),
+          value: l.earnings_tnd,
+        })),
+      ),
+    [venueLines],
+  );
+  const audienceTotal = useMemo(
+    () => months.reduce((sum, m) => sum + m.total_audience, 0),
+    [months],
+  );
+  const audienceSeries = useMemo(
+    () => cumulativeSeries(months.map((m) => ({ date: `${m.month}-01`, value: m.total_audience }))),
+    [months],
+  );
+
+  // ── Period-driven derivations ───────────────────────────────────────────────
+  const periodLines = useMemo(
+    () => venueLines.filter((l) => lineInPeriod(l, range)),
+    [venueLines, range],
+  );
+  const periodAudience = useMemo(() => dailyAudienceWithin(months, range), [months, range]);
+  const kpis = useMemo(
+    () =>
+      audienceKpis(
+        periodAudience,
+        openHoursPerDay(profile.data?.opening_hour ?? null, profile.data?.closing_hour ?? null),
+      ),
+    [periodAudience, profile.data],
+  );
+  const periodDays = useMemo(() => days.filter((d) => inRange(d.date, range)), [days, range]);
+  const category = categoryLabel(
+    profile.data?.business_sector ?? null,
+    profile.data?.class ?? null,
+  );
+  const breakdown = useMemo(
+    () => (profile.data?.ratios ? demographicBreakdown(profile.data.ratios, kpis.global) : null),
+    [profile.data, kpis.global],
+  );
+  const revenueRows: RevenueRow[] = useMemo(
+    () =>
+      periodLines.map((l) => ({
+        id: `${l.campaign_id}-${l.screenhost_id}`,
+        name: l.campaign_name,
+        period: formatCompactPeriod(l.campaign_start, l.campaign_end),
+        amountLabel: `${formatTndFr(l.earnings_tnd)} TND`,
+      })),
+    [periodLines],
+  );
+  const campaignRows: CampaignTableRow[] = useMemo(
+    () =>
+      periodLines.map((l) => ({
+        id: `${l.campaign_id}-${l.screenhost_id}`,
+        name: l.campaign_name,
+        period: formatTablePeriod(l.campaign_start, l.campaign_end),
+        typeLabel: typeLabelFr(l.campaign_type),
+        statut: campaignStatut(l, todayIso),
+        impressions: l.delivered_imp,
+        revenueLabel: formatTndCellFr(l.earnings_tnd),
+      })),
+    [periodLines, todayIso],
+  );
+  const top3 = useMemo(
+    () =>
+      [...periodLines]
+        .sort((a, b) => b.delivered_imp - a.delivered_imp)
+        .slice(0, 3)
+        .map((l) => l.campaign_name),
+    [periodLines],
+  );
+  const cumulativeImpressions = useMemo(
+    () => periodLines.reduce((sum, l) => sum + l.delivered_imp, 0),
+    [periodLines],
+  );
+
+  // ── Monthly report actions ──────────────────────────────────────────────────
+  const [downloading, setDownloading] = useState(false);
+  const consultMonth = (month: string) => {
+    if (!selectedId) return;
+    window.open(
+      `/api/screenhosts/${selectedId}/monthly-report?month=${encodeURIComponent(month)}`,
+      '_blank',
+      'noopener',
+    );
+  };
+  const downloadMonth = async (month: string) => {
+    if (!selectedId || downloading) return;
+    setDownloading(true);
+    try {
+      const result = await downloadMonthlyReport(selectedId, month);
+      if (result === 'no-data') toast('Pas encore de rapport pour ce mois.');
+    } catch (err) {
+      log.error({ err }, 'monthly report download failed');
+      toast.error('Échec du téléchargement. Veuillez réessayer.');
+    } finally {
+      setDownloading(false);
     }
-    setFilters((prev) => ({ ...prev, preset }));
   };
 
-  const kpiValues = useMemo(() => {
-    const current: PerformanceKpis = dataset?.kpis || {
-      diffusionSeconds: 0,
-      impressions: 0,
-      affluence: 0,
-      activeScreens: 0,
-      spend: 0,
-    };
-    const previous = dataset?.previousKpis || current;
-    return [
-      {
-        title: 'Durée de diffusion',
-        value: formatDuration(current.diffusionSeconds),
-        diff: percentageDiff(current.diffusionSeconds, previous.diffusionSeconds),
-        icon: <Clock3 className="h-4 w-4" />,
-      },
-      {
-        title: 'Impressions générées',
-        value: formatInt(current.impressions),
-        diff: percentageDiff(current.impressions, previous.impressions),
-        icon: <Eye className="h-4 w-4" />,
-      },
-      {
-        title: "Analyse de l'affluence",
-        value: formatInt(current.affluence),
-        diff: percentageDiff(current.affluence, previous.affluence),
-        icon: <Users className="h-4 w-4" />,
-      },
-      {
-        title: 'Écrans actifs',
-        value: formatInt(current.activeScreens),
-        diff: percentageDiff(current.activeScreens, previous.activeScreens),
-        icon: <Monitor className="h-4 w-4" />,
-      },
-      {
-        title: 'Dépenses ce mois',
-        value: formatCurrency(current.spend),
-        diff: percentageDiff(current.spend, previous.spend),
-        icon: <Wallet className="h-4 w-4" />,
-      },
-    ];
-  }, [dataset]);
-
-  const showCustomDate = filters.preset === 'custom';
-
-  const trendData = useMemo<PerformanceTrendPoint[]>(() => {
-    const base = dataset?.trend || [];
-    if (base.length === 0) return [];
-
-    if (temporalGranularity === 'day') return base;
-
-    if (temporalGranularity === 'week') {
-      const result: PerformanceTrendPoint[] = [];
-      for (let i = 0; i < base.length; i += 7) {
-        const chunk = base.slice(i, i + 7);
-        result.push({
-          label: `S${Math.floor(i / 7) + 1}`,
-          current: chunk.reduce((sum, p) => sum + safeNumber(p.current), 0),
-          previous: chunk.reduce((sum, p) => sum + safeNumber(p.previous), 0),
-        });
-      }
-      return result;
-    }
-
-    if (temporalGranularity === 'month') {
-      const byMonth = new Map<string, { current: number; previous: number }>();
-      base.forEach((p) => {
-        const month = String(p.label || '').split('/')[1] || p.label;
-        const agg = byMonth.get(month) || { current: 0, previous: 0 };
-        agg.current += safeNumber(p.current);
-        agg.previous += safeNumber(p.previous);
-        byMonth.set(month, agg);
-      });
-      return Array.from(byMonth.entries()).map(([month, agg]) => ({
-        label: month,
-        current: agg.current,
-        previous: agg.previous,
-      }));
-    }
-
-    const totalCurrent = base.reduce((sum, p) => sum + safeNumber(p.current), 0);
-    const totalPrevious = base.reduce((sum, p) => sum + safeNumber(p.previous), 0);
-    const avgCurrentHour = totalCurrent / (base.length * 24);
-    const avgPreviousHour = totalPrevious / (base.length * 24);
-    return Array.from({ length: 24 }).map((_, h) => ({
-      label: `${String(h).padStart(2, '0')}h`,
-      current: avgCurrentHour,
-      previous: avgPreviousHour,
-    }));
-  }, [dataset?.trend, temporalGranularity]);
-
-  const segmentedCategoryData = useMemo<PerformanceCategoryPoint[]>(() => {
-    const base = dataset?.categoryPerformance || [];
-    if (base.length === 0) return [];
-
-    let filtered = base;
-
-    if (ageSegment !== 'all') {
-      const agePatterns: Record<Exclude<AgeSegment, 'all'>, RegExp> = {
-        u25: /-?\s*25|moins de 25|u25|<\s*25/i,
-        '25_40': /25\s*[-<]\s*40|25\s*-\s*40|25\s*à\s*40/i,
-        '40_60': /40\s*[-<]\s*60|40\s*-\s*60|40\s*à\s*60/i,
-        '60p': /60\s*\+|60 ans|plus de 60/i,
-      };
-      const ageFiltered = filtered.filter((item) => agePatterns[ageSegment].test(item.category));
-      if (ageFiltered.length > 0) filtered = ageFiltered;
-    }
-
-    if (sexSegment !== 'all') {
-      const sexPattern = sexSegment === 'male' ? /homme|male|masculin/i : /femme|female|feminin/i;
-      const sexFiltered = filtered.filter((item) => sexPattern.test(item.category));
-      if (sexFiltered.length > 0) filtered = sexFiltered;
-    }
-
-    return filtered;
-  }, [dataset?.categoryPerformance, ageSegment, sexSegment]);
+  const anyError =
+    profile.isError || monthlyStats.isError || impressions.isError || earnings.isError;
 
   return (
     <div className="min-h-screen bg-white">
       <div className="flex h-screen">
         <OwnerNavigation isDisabled={isDisabled} />
-        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-          <header className="bg-white border-b border-[#EBEBEB]">
-            <div className="w-full px-4 sm:px-6 lg:px-8 py-3">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <header className="border-b border-gray-100 bg-white">
+            <div className="w-full px-4 py-3 sm:px-6 lg:px-8">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <h1 className="text-xl font-semibold text-[#171717]">Mes performances</h1>
-                  <p className="text-sm text-[#5C5C5C] hidden sm:block">
-                    Analysez la performance de vos campagnes en un coup d&apos;oeil
+                  <h1 className="text-xl font-semibold text-brand-deep">Mes performances</h1>
+                  <p className="hidden text-sm text-gray-500 sm:block">
+                    Analysez l'activité de votre établissement et développez vos revenus
                   </p>
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="flex flex-shrink-0 items-center gap-2">
                   <button
                     type="button"
                     onClick={() => navigate('/owner-calendar-devices')}
                     aria-label="Piloter mon calendrier de diffusion"
                     title="Piloter mon calendrier de diffusion"
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-brand-primary hover:bg-brand-primary/90 text-[#101010] text-sm font-semibold transition-colors flex-shrink-0 whitespace-nowrap"
+                    className="inline-flex flex-shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-2xl bg-brand-primary px-4 py-2.5 text-sm font-semibold text-brand-deep transition-colors hover:bg-brand-primary/90"
                   >
-                    <Calendar className="h-4 w-4 flex-shrink-0" />
+                    <Calendar className="h-4 w-4 flex-shrink-0" aria-hidden />
                     <span className="hidden lg:inline">Piloter mon calendrier de diffusion</span>
                   </button>
                   <OwnerNotificationsBell userId={user?.id} />
@@ -324,597 +262,125 @@ export default function OwnerPerformance() {
           </header>
 
           <div className="flex-1 overflow-y-auto">
-            <div className="w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-              <div className="rounded-2xl border border-gray-200 bg-white p-5">
-                <div className="mb-5 flex items-center gap-2 text-sm font-semibold text-gray-800">
-                  <img src={performanceIntroIcon} alt="" className="h-10 w-10 object-contain" />
-                  <span>Sélectionnez vos paramètres pour analyser vos performances</span>
+            <div className="w-full space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+              {screenhosts.isLoading ? (
+                <div className="flex items-center justify-center gap-2 py-16 text-gray-400">
+                  <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+                  <span className="text-sm">Chargement…</span>
                 </div>
-
-                <div className="rounded-2xl border border-gray-100 p-4 mb-4">
-                  <h3 className="text-xl font-medium text-gray-900 mb-4">Par Campagne</h3>
-                  <p className="mb-2 text-sm font-semibold text-gray-800">Période d&apos;analyse</p>
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {presetButtons.map((button) => (
-                      <button
-                        key={button.key}
-                        type="button"
-                        onClick={() => applyPreset(button.key)}
-                        className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${
-                          filters.preset === button.key
-                            ? 'bg-white text-gray-900 ring-1 ring-gray-300'
-                            : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                        }`}
-                      >
-                        {button.label}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-                    <div>
-                      <label
-                        className="mb-1 block text-sm font-semibold text-gray-700"
-                        htmlFor="campaign-id"
-                      >
-                        Campagne
-                      </label>
-                      <select
-                        value={filters.campaignId}
-                        onChange={(e) => onFilterChange('campaignId', e.target.value)}
-                        className="h-11 w-full rounded-lg border border-gray-200 px-3 text-sm"
-                        id="campaign-id"
-                      >
-                        <option value="">Toutes</option>
-                        {(dataset?.options.campaigns || []).map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label
-                        className="mb-1 block text-sm font-semibold text-gray-700"
-                        htmlFor="start-date"
-                      >
-                        Date de début
-                      </label>
-                      <input
-                        type="date"
-                        value={filters.startDate}
-                        onChange={(e) => onFilterChange('startDate', e.target.value)}
-                        disabled={!showCustomDate}
-                        className="h-11 w-full rounded-lg border border-gray-200 px-3 text-sm disabled:bg-gray-50"
-                        id="start-date"
-                      />
-                    </div>
-                    <div>
-                      <label
-                        className="mb-1 block text-sm font-semibold text-gray-700"
-                        htmlFor="end-date"
-                      >
-                        Date de fin
-                      </label>
-                      <input
-                        type="date"
-                        value={filters.endDate}
-                        onChange={(e) => onFilterChange('endDate', e.target.value)}
-                        disabled={!showCustomDate}
-                        className="h-11 w-full rounded-lg border border-gray-200 px-3 text-sm disabled:bg-gray-50"
-                        id="end-date"
-                      />
-                    </div>
-                    <div className="flex justify-end">
-                      <button
-                        type="button"
-                        onClick={() => refetchDataset()}
-                        className="inline-flex items-center rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-[#165f2c] hover:bg-brand-primary/90"
-                      >
-                        Actualiser la recherche
-                      </button>
-                    </div>
-                  </div>
+              ) : venues.length === 0 ? (
+                <div className="rounded-2xl border-2 border-dashed border-gray-200 px-6 py-16 text-center text-sm text-gray-500">
+                  Aucun établissement associé à votre compte.
                 </div>
-
-                <div className="rounded-2xl border border-gray-100 p-4 mb-4">
-                  <h3 className="text-xl font-medium text-gray-900 mb-4">Par Établissement</h3>
-                  <p className="mb-2 text-sm font-semibold text-gray-800">Période d&apos;analyse</p>
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {presetButtons.map((button) => (
-                      <button
-                        key={`loc-${button.key}`}
-                        type="button"
-                        onClick={() => applyPreset(button.key)}
-                        className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${
-                          filters.preset === button.key
-                            ? 'bg-white text-gray-900 ring-1 ring-gray-300'
-                            : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                        }`}
-                      >
-                        {button.label}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end">
-                    <div>
-                      <label
-                        className="mb-1 block text-sm font-semibold text-gray-700"
-                        htmlFor="location-id"
-                      >
-                        Établissement
-                      </label>
-                      <select
-                        value={filters.locationId}
-                        onChange={(e) => onFilterChange('locationId', e.target.value)}
-                        className="h-11 w-full rounded-lg border border-gray-200 px-3 text-sm"
-                        id="location-id"
-                      >
-                        <option value="">Toutes</option>
-                        {(dataset?.options.locations || []).map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label
-                        className="mb-1 block text-sm font-semibold text-gray-700"
-                        htmlFor="start-date-2"
-                      >
-                        Date de début
-                      </label>
-                      <input
-                        type="date"
-                        value={filters.startDate}
-                        onChange={(e) => onFilterChange('startDate', e.target.value)}
-                        disabled={!showCustomDate}
-                        className="h-11 w-full rounded-lg border border-gray-200 px-3 text-sm disabled:bg-gray-50"
-                        id="start-date-2"
-                      />
-                    </div>
-                    <div>
-                      <label
-                        className="mb-1 block text-sm font-semibold text-gray-700"
-                        htmlFor="end-date-2"
-                      >
-                        Date de fin
-                      </label>
-                      <input
-                        type="date"
-                        value={filters.endDate}
-                        onChange={(e) => onFilterChange('endDate', e.target.value)}
-                        disabled={!showCustomDate}
-                        className="h-11 w-full rounded-lg border border-gray-200 px-3 text-sm disabled:bg-gray-50"
-                        id="end-date-2"
-                      />
-                    </div>
-                    <div>
-                      <label
-                        className="mb-1 block text-sm font-semibold text-gray-700"
-                        htmlFor="zone-id"
-                      >
-                        Zone
-                      </label>
-                      <select
-                        value={filters.zoneId}
-                        onChange={(e) => onFilterChange('zoneId', e.target.value)}
-                        className="h-11 w-full rounded-lg border border-gray-200 px-3 text-sm"
-                        id="zone-id"
-                      >
-                        <option value="">Toutes</option>
-                        {(dataset?.options.zones || []).map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="flex justify-end">
-                      <button
-                        type="button"
-                        onClick={() => refetchDataset()}
-                        className="inline-flex items-center rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-[#165f2c] hover:bg-brand-primary/90"
-                      >
-                        Actualiser la recherche
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {error ? <p className="text-sm font-medium text-rose-500">{error}</p> : null}
-              {loading ? (
-                <p className="text-sm text-gray-500">Chargement des performances...</p>
-              ) : null}
-
-              {!loading && !error ? (
+              ) : (
                 <>
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
-                    {kpiValues.map((kpi) => (
-                      <KpiCard
-                        key={kpi.title}
-                        title={kpi.title}
-                        value={kpi.value}
-                        diff={kpi.diff}
-                        icon={kpi.icon}
-                      />
-                    ))}
-                  </div>
-
-                  <div className="rounded-2xl border border-gray-200 bg-white p-4">
-                    <h3 className="text-lg font-medium text-gray-900 mb-4">Filtres</h3>
-                    <div className="flex flex-wrap gap-2 mb-3">
-                      <button
-                        type="button"
-                        className="rounded-lg px-4 py-1.5 text-sm font-medium bg-[#dfe8ff] text-[#2c4c8a]"
-                      >
-                        Evolution temporel
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setTemporalGranularity('hour')}
-                        className={`rounded-lg px-4 py-1.5 text-sm font-medium border ${temporalGranularity === 'hour' ? 'bg-white border-gray-300 text-gray-800' : 'bg-white border-gray-200 text-gray-500'}`}
-                      >
-                        Par heure
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setTemporalGranularity('day')}
-                        className={`rounded-lg px-4 py-1.5 text-sm font-medium border ${temporalGranularity === 'day' ? 'bg-white border-gray-300 text-gray-800' : 'bg-white border-gray-200 text-gray-500'}`}
-                      >
-                        Par jour
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setTemporalGranularity('week')}
-                        className={`rounded-lg px-4 py-1.5 text-sm font-medium border ${temporalGranularity === 'week' ? 'bg-white border-gray-300 text-gray-800' : 'bg-white border-gray-200 text-gray-500'}`}
-                      >
-                        Par semaine
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setTemporalGranularity('month')}
-                        className={`rounded-lg px-4 py-1.5 text-sm font-medium border ${temporalGranularity === 'month' ? 'bg-white border-gray-300 text-gray-800' : 'bg-white border-gray-200 text-gray-500'}`}
-                      >
-                        Par mois
-                      </button>
-                    </div>
-                    <div className="flex flex-wrap gap-2 mb-3">
-                      <button
-                        type="button"
-                        className="rounded-lg px-4 py-1.5 text-sm font-medium bg-[#dfe8ff] text-[#2c4c8a]"
-                      >
-                        Segmentation par âge
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAgeSegment('u25')}
-                        className={`rounded-lg px-4 py-1.5 text-sm font-medium border ${ageSegment === 'u25' ? 'bg-white border-gray-300 text-gray-800' : 'bg-white border-gray-200 text-gray-500'}`}
-                      >
-                        - 25 ans
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAgeSegment('25_40')}
-                        className={`rounded-lg px-4 py-1.5 text-sm font-medium border ${ageSegment === '25_40' ? 'bg-white border-gray-300 text-gray-800' : 'bg-white border-gray-200 text-gray-500'}`}
-                      >
-                        25&lt;40 ans
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAgeSegment('40_60')}
-                        className={`rounded-lg px-4 py-1.5 text-sm font-medium border ${ageSegment === '40_60' ? 'bg-white border-gray-300 text-gray-800' : 'bg-white border-gray-200 text-gray-500'}`}
-                      >
-                        40&lt;60 ans
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAgeSegment('60p')}
-                        className={`rounded-lg px-4 py-1.5 text-sm font-medium border ${ageSegment === '60p' ? 'bg-white border-gray-300 text-gray-800' : 'bg-white border-gray-200 text-gray-500'}`}
-                      >
-                        60 ans et +
-                      </button>
-                    </div>
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      <button
-                        type="button"
-                        className="rounded-lg px-4 py-1.5 text-sm font-medium bg-[#dfe8ff] text-[#2c4c8a]"
-                      >
-                        Segmentation par sexe
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSexSegment('male')}
-                        className={`rounded-lg px-4 py-1.5 text-sm font-medium border ${sexSegment === 'male' ? 'bg-white border-gray-300 text-gray-800' : 'bg-white border-gray-200 text-gray-500'}`}
-                      >
-                        Hommes
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSexSegment('female')}
-                        className={`rounded-lg px-4 py-1.5 text-sm font-medium border ${sexSegment === 'female' ? 'bg-white border-gray-300 text-gray-800' : 'bg-white border-gray-200 text-gray-500'}`}
-                      >
-                        Femmes
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSexSegment('all')}
-                        className={`rounded-lg px-4 py-1.5 text-sm font-medium border ${sexSegment === 'all' ? 'bg-white border-gray-300 text-gray-800' : 'bg-white border-gray-200 text-gray-500'}`}
-                      >
-                        Tous
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAgeSegment('all')}
-                        className={`rounded-lg px-4 py-1.5 text-sm font-medium border ${ageSegment === 'all' ? 'bg-white border-gray-300 text-gray-800' : 'bg-white border-gray-200 text-gray-500'}`}
-                      >
-                        Tous âges
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                      <div>
-                        <label
-                          className="mb-1 block text-sm font-semibold text-gray-700"
-                          htmlFor="campaign-id-2"
-                        >
-                          Campagne
-                        </label>
-                        <select
-                          value={filters.campaignId}
-                          onChange={(e) => onFilterChange('campaignId', e.target.value)}
-                          className="h-11 w-full rounded-lg border border-gray-200 px-3 text-sm"
-                          id="campaign-id-2"
-                        >
-                          <option value="">Toutes</option>
-                          {(dataset?.options.campaigns || []).map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label
-                          className="mb-1 block text-sm font-semibold text-gray-700"
-                          htmlFor="start-date-3"
-                        >
-                          Date de début
-                        </label>
-                        <input
-                          type="date"
-                          value={filters.startDate}
-                          onChange={(e) => onFilterChange('startDate', e.target.value)}
-                          disabled={!showCustomDate}
-                          className="h-11 w-full rounded-lg border border-gray-200 px-3 text-sm disabled:bg-gray-50"
-                          id="start-date-3"
-                        />
-                      </div>
-                      <div>
-                        <label
-                          className="mb-1 block text-sm font-semibold text-gray-700"
-                          htmlFor="end-date-3"
-                        >
-                          Date de fin
-                        </label>
-                        <input
-                          type="date"
-                          value={filters.endDate}
-                          onChange={(e) => onFilterChange('endDate', e.target.value)}
-                          disabled={!showCustomDate}
-                          className="h-11 w-full rounded-lg border border-gray-200 px-3 text-sm disabled:bg-gray-50"
-                          id="end-date-3"
-                        />
-                      </div>
-                      <div>
-                        <label
-                          className="mb-1 block text-sm font-semibold text-gray-700"
-                          htmlFor="zone-id-2"
-                        >
-                          Zone
-                        </label>
-                        <select
-                          value={filters.zoneId}
-                          onChange={(e) => onFilterChange('zoneId', e.target.value)}
-                          className="h-11 w-full rounded-lg border border-gray-200 px-3 text-sm"
-                          id="zone-id-2"
-                        >
-                          <option value="">Toutes</option>
-                          {(dataset?.options.zones || []).map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                    <div className="rounded-2xl border border-gray-200 bg-white p-4">
-                      <h3 className="text-lg font-medium text-gray-900">
-                        Évolution de l&apos;audience
-                      </h3>
-                      <p className="mb-4 text-sm text-gray-500">Comparaison entre deux périodes</p>
-                      <div className="h-[270px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart data={trendData}>
-                            <defs>
-                              <linearGradient id="ownerCurrentArea" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#8D95F8" stopOpacity={0.35} />
-                                <stop offset="95%" stopColor="#8D95F8" stopOpacity={0.05} />
-                              </linearGradient>
-                              <linearGradient id="ownerPreviousArea" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#CBD5E1" stopOpacity={0.25} />
-                                <stop offset="95%" stopColor="#CBD5E1" stopOpacity={0.03} />
-                              </linearGradient>
-                            </defs>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#eef2ff" />
-                            <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#64748b' }} />
-                            <YAxis tick={{ fontSize: 11, fill: '#64748b' }} />
-                            <Tooltip />
-                            <Area
-                              type="monotone"
-                              dataKey="current"
-                              stroke="#8D95F8"
-                              strokeWidth={2}
-                              fill="url(#ownerCurrentArea)"
-                              name="2025"
-                            />
-                            <Area
-                              type="monotone"
-                              dataKey="previous"
-                              stroke="#94A3B8"
-                              strokeWidth={2}
-                              fill="url(#ownerPreviousArea)"
-                              name="2026"
-                            />
-                          </AreaChart>
-                        </ResponsiveContainer>
-                      </div>
-                    </div>
-                    <div className="rounded-2xl border border-gray-200 bg-white p-4">
-                      <h3 className="text-lg font-medium text-gray-900">
-                        {sexSegment !== 'all' ? 'Impact par sexe' : 'Impact par âge'}
-                      </h3>
-                      <p className="mb-4 text-sm text-gray-500">Impressions générées par âge</p>
-                      <div className="h-[270px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={segmentedCategoryData}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#eef2ff" />
-                            <XAxis dataKey="category" tick={{ fontSize: 11, fill: '#64748b' }} />
-                            <YAxis tick={{ fontSize: 11, fill: '#64748b' }} />
-                            <Tooltip />
-                            <Bar dataKey="impressions" fill="#8D95F8" radius={[8, 8, 0, 0]} />
-                          </BarChart>
-                        </ResponsiveContainer>
-                      </div>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    className="rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-[#165f2c] hover:bg-brand-primary/90"
-                  >
-                    Générer rapport de la recherche
-                  </button>
-
-                  <h3 className="text-xl font-medium text-gray-900">Vos performances globales</h3>
-                  <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                    <div className="rounded-2xl border border-gray-200 bg-white p-4">
-                      <h4 className="text-lg font-medium text-gray-900">Top campagnes</h4>
-                      <p className="mb-4 text-sm text-gray-500">Meilleures performances par ROI</p>
-                      <div className="space-y-3">
-                        {(dataset?.topCampaigns || []).map((campaign, idx) => (
-                          <div
-                            key={campaign.id}
-                            className="rounded-xl border border-gray-100 px-3 py-3 flex items-center justify-between"
+                  {venues.length > 1 && (
+                    <div className="flex flex-wrap gap-2">
+                      {venues.map((v) => {
+                        const active = v.id === selectedId;
+                        return (
+                          <button
+                            key={v.id}
+                            type="button"
+                            onClick={() => setSelectedId(v.id)}
+                            aria-pressed={active}
+                            className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary ${
+                              active
+                                ? 'bg-brand-deep text-white'
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }`}
                           >
-                            <div className="flex items-center gap-3 min-w-0">
-                              <div className="h-7 w-7 rounded-full bg-gray-100 flex items-center justify-center text-sm font-semibold">
-                                {idx + 1}
-                              </div>
-                              <div className="min-w-0">
-                                <p className="truncate text-base font-medium text-gray-900">
-                                  {campaign.name}
-                                </p>
-                                <div className="mt-1 flex items-center gap-2 text-xs text-gray-500">
-                                  <span
-                                    className={`rounded-full px-2 py-0.5 font-semibold ${statusBadgeClass(campaign.status)}`}
-                                  >
-                                    {campaign.status}
-                                  </span>
-                                  <span>{formatInt(campaign.impressions)} impressions</span>
-                                </div>
-                              </div>
-                            </div>
-                            <p className="text-lg font-medium text-[#1FC16B]">
-                              {campaign.roi.toFixed(1)} TND
-                            </p>
-                          </div>
-                        ))}
-                      </div>
+                            {v.name}
+                          </button>
+                        );
+                      })}
                     </div>
-                    <div className="rounded-2xl border border-gray-200 bg-white p-4">
-                      <h4 className="text-lg font-medium text-gray-900">
-                        Audience globale par sexe
-                      </h4>
-                      <p className="mb-4 text-sm text-gray-500">Distribution géographique</p>
-                      <div className="space-y-3">
-                        {(dataset?.zonePerformance || []).map((zone) => (
-                          <div key={zone.zoneId} className="rounded-xl border border-gray-100 p-3">
-                            <div className="mb-2 flex items-center justify-between">
-                              <div className="flex items-center gap-2 text-sm font-semibold">
-                                <MapPin className="h-4 w-4" />
-                                {zone.zoneName}
-                              </div>
-                              <div className="text-sm text-gray-500">
-                                {zone.sharePercent.toFixed(1)}%
-                              </div>
-                            </div>
-                            <div className="text-sm font-semibold text-gray-900 mb-2">
-                              {formatInt(zone.impressions)} impressions
-                            </div>
-                            <div className="h-2 rounded-full bg-gray-100">
-                              <div
-                                className="h-2 rounded-full bg-[#9EEBB5]"
-                                style={{
-                                  width: `${Math.max(0, Math.min(100, zone.sharePercent))}%`,
-                                }}
-                              />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
+                  )}
 
-                  <div className="rounded-2xl border border-[#96E3B0] bg-[#F5FAF8] p-4">
-                    <h4 className="text-lg font-medium text-gray-900">Métriques détaillées</h4>
-                    <p className="mb-4 text-sm text-gray-500">
-                      Indicateurs de performance complémentaires
+                  {anyError && (
+                    <p className="text-sm font-medium text-rose-500">
+                      Impossible de charger les performances pour le moment.
                     </p>
-                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-                      <div className="rounded-xl border border-brand-primary bg-white p-4">
-                        <p className="text-xs font-semibold text-gray-900">Durée moyenne</p>
-                        <p className="mt-2 text-2xl font-medium">
-                          {formatInt(dataset?.detailedMetrics.averageDurationDays || 0)} jours
-                        </p>
-                        <p className="mt-2 text-sm text-gray-500">Campagne en 2026</p>
-                      </div>
-                      <div className="rounded-xl border border-brand-primary bg-white p-4">
-                        <p className="text-xs font-semibold text-gray-900">Impressions touchés</p>
-                        <p className="mt-2 text-2xl font-medium">
-                          {formatInt(dataset?.kpis.impressions || 0)}
-                        </p>
-                        <p className="mt-2 text-sm text-gray-500">Personnes</p>
-                      </div>
-                      <div className="rounded-xl border border-brand-primary bg-white p-4">
-                        <p className="text-xs font-semibold text-gray-900">Revenu total</p>
-                        <p className="mt-2 text-2xl font-medium">
-                          {formatCurrency(dataset?.detailedMetrics.totalBudget || 0)}
-                        </p>
-                        <p className="mt-2 text-sm text-gray-500">En 2026</p>
-                      </div>
-                      <div className="rounded-xl border border-brand-primary bg-white p-4">
-                        <p className="text-xs font-semibold text-gray-900">
-                          Taux d&apos;occupation
-                        </p>
-                        <p className="mt-2 text-2xl font-medium">
-                          {safeNumber(dataset?.detailedMetrics.completionRate || 0).toFixed(0)}%
-                        </p>
-                        <p className="mt-2 text-sm text-gray-500">Ecrans disponibles</p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      className="mt-4 rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-[#165f2c] hover:bg-brand-primary/90"
-                    >
-                      Générer rapport global
-                    </button>
-                  </div>
+                  )}
+
+                  <MonthlyReportCard
+                    latestMonth={latestMonth}
+                    monthImpressions={latestMonth ? impressionsOfMonth(days, latestMonth.month) : 0}
+                    campaignsCount={
+                      latestMonth ? linesEndingInMonth(venueLines, latestMonth.month).length : 0
+                    }
+                    onConsult={() => latestMonth && consultMonth(latestMonth.month)}
+                    onDownload={() => latestMonth && void downloadMonth(latestMonth.month)}
+                    downloading={downloading}
+                  />
+
+                  <ReportsHistorySection
+                    rows={historyRows}
+                    onConsult={consultMonth}
+                    onDownload={(month) => void downloadMonth(month)}
+                  />
+
+                  <ProgressHero
+                    revenueTotal={revenueTotal}
+                    revenueSeries={revenueSeries}
+                    audienceTotal={audienceTotal}
+                    audienceSeries={audienceSeries}
+                  />
+
+                  <PeriodFilters
+                    active={period}
+                    onSelect={setPeriod}
+                    customFrom={customFrom}
+                    customTo={customTo}
+                    onCustomFromChange={setCustomFrom}
+                    onCustomToChange={setCustomTo}
+                    onApplyCustom={() => setAppliedCustom({ from: customFrom, to: customTo })}
+                  />
+
+                  <ReportIntro
+                    venueName={venues.find((v) => v.id === selectedId)?.name ?? '—'}
+                    range={range}
+                    category={category}
+                    campaignsCount={periodLines.length}
+                  />
+
+                  <AudienceKpisSection kpis={kpis} />
+
+                  <PeakHoursHeatmap
+                    grid={affluence.data?.grid ?? []}
+                    hasData={affluence.data?.has_data ?? false}
+                    openingHour={profile.data?.opening_hour ?? null}
+                    closingHour={profile.data?.closing_hour ?? null}
+                  />
+
+                  <ImpressionsChartSection days={periodDays} />
+
+                  <DemographicsSection breakdown={breakdown} category={category} />
+
+                  <RevenueSection
+                    total={periodLines.reduce((sum, l) => sum + l.earnings_tnd, 0)}
+                    count={periodLines.length}
+                    rows={revenueRows}
+                  />
+
+                  <CampaignsSection
+                    count={periodLines.length}
+                    cumulativeImpressions={cumulativeImpressions}
+                    top3={top3}
+                    rows={campaignRows}
+                  />
+
+                  <OptimisationSection />
+
+                  <SpsSection />
+
+                  <DownloadCta
+                    latestMonth={latestMonth?.month ?? null}
+                    downloading={downloading}
+                    onDownload={() => latestMonth && void downloadMonth(latestMonth.month)}
+                  />
                 </>
-              ) : null}
+              )}
             </div>
           </div>
         </div>

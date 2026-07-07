@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { performancesKeys } from '@/features/performances/hooks/queryKeys';
 import {
   predefinedZonesService,
   type PredefinedZone,
@@ -61,14 +60,11 @@ interface UploadZoneImageInput {
 /**
  * Zone write mutations.
  *
- * CF-14 invalidation graph:
- * - (a) `screensKeys.predefinedZones()` — the admin GeographicZones list, in
- *   this session.
- * - (b) `performancesKeys.all` — `OwnerPerformance`'s dataset embeds a
- *   `predefined_zones` read. Cross-session (admin ≠ owner): a no-op here, kept
- *   for intent + defence. NewCampaign / the campaign wizard also read zones but
- *   have no React Query key yet — that is a Commit 7 prerequisite, not an entry
- *   that can be invalidated today.
+ * CF-14 invalidation graph: `screensKeys.predefinedZones()` — the admin
+ * GeographicZones list, in this session. (The former `performancesKeys.all`
+ * defensive invalidation targeted the Supabase-era OwnerPerformance dataset,
+ * retired by Lane F — the rebuilt page reads engine endpoints under
+ * `screenhostKeys` and embeds no zones read.)
  *
  * `uploadZoneImage` only uploads + returns a URL (the page folds it into form
  * state; the zone row is persisted by a subsequent `create`/`update`) — no
@@ -79,7 +75,6 @@ export function useZoneMutations() {
 
   const invalidateZones = () => {
     queryClient.invalidateQueries({ queryKey: screensKeys.predefinedZones() });
-    queryClient.invalidateQueries({ queryKey: performancesKeys.all });
   };
 
   const createZone = useMutation({
