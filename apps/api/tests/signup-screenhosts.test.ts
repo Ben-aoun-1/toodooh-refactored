@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 
 import { authPlugin } from '../src/auth/plugin.js';
 import { db, sql } from '../src/db/client.js';
-import { governorates, screenhosts, users } from '../src/db/schema.js';
+import { businessSectors, governorates, screenhosts, users } from '../src/db/schema.js';
 import { decryptWifiPassword } from '../src/lib/wifi-crypto.js';
 import { apiRoutes } from '../src/routes/index.js';
 
@@ -59,6 +59,15 @@ describe('POST /api/signup — screenhost location persistence (P3)', () => {
     return gov?.id ?? '';
   };
 
+  const anOwnerSector = async (): Promise<string> => {
+    const [sector] = await db
+      .select({ id: businessSectors.id })
+      .from(businessSectors)
+      .where(eq(businessSectors.audience, 'owner'))
+      .limit(1);
+    return sector?.id ?? '';
+  };
+
   const userIdByEmail = async (email: string): Promise<string> => {
     const [u] = await db.select({ id: users.id }).from(users).where(eq(users.email, email));
     return u?.id ?? '';
@@ -66,6 +75,7 @@ describe('POST /api/signup — screenhost location persistence (P3)', () => {
 
   it('individual_owner → persists exactly ONE screenhost with mapped fields, encrypted WiFi, owner_id', async () => {
     const governorateId = await aGovernorate();
+    const sectorId = await anOwnerSector();
     const wifiPassword = 'wifi-secret-pw';
     const res = await app.inject({
       method: 'POST',
@@ -73,6 +83,7 @@ describe('POST /api/signup — screenhost location persistence (P3)', () => {
       ...signupMultipart({
         ...ownerBase,
         profile_type: 'individual_owner',
+        business_sector_id: sectorId,
         street_address: '12 Rue de Test',
         city: 'Tunis',
         postal_code: '1000',
@@ -100,6 +111,8 @@ describe('POST /api/signup — screenhost location persistence (P3)', () => {
     expect(Number(row?.longitude)).toBeCloseTo(10.1815, 4);
     expect(row?.wifiSsid).toBe('TOODOOH-NET');
     expect(row?.ownerId).toBe(ownerId); // app-enforced not-null
+    // The venue inherits the owner's signup sector (Lane B).
+    expect(row?.businessSectorId).toBe(sectorId);
     // export_status keeps its 'pending' default — no export wired this lane.
     expect(row?.exportStatus).toBe('pending');
     expect(row?.exportedAt).toBeNull();
@@ -127,17 +140,21 @@ describe('POST /api/signup — screenhost location persistence (P3)', () => {
     expect(row?.wifiSsid).toBeNull();
     expect(row?.wifiPasswordEncrypted).toBeNull();
     expect(row?.ownerId).toBe(ownerId);
+    // No sector declared at signup → the venue's stays NULL (no inheritance to apply).
+    expect(row?.businessSectorId).toBeNull();
     expect(row?.exportStatus).toBe('pending');
   });
 
   it('fleet_owner → persists ONE screenhost per fleet establishment, each with owner_id + encrypted WiFi', async () => {
     const governorateId = await aGovernorate();
+    const sectorId = await anOwnerSector();
     const res = await app.inject({
       method: 'POST',
       url: '/api/signup',
       ...signupMultipart({
         ...ownerBase,
         profile_type: 'fleet_owner',
+        business_sector_id: sectorId,
         fleet_establishments: [
           {
             name: 'Café du Lac',
@@ -187,6 +204,11 @@ describe('POST /api/signup — screenhost location persistence (P3)', () => {
     expect(resto?.wifiSsid).toBeNull();
     expect(resto?.wifiPasswordEncrypted).toBeNull();
     expect(resto?.ownerId).toBe(ownerId);
+
+    // Lane B V1: EVERY venue of the fleet inherits the SAME owner sector
+    // (per-venue divergence comes later via the admin eligibility PATCH).
+    expect(cafe?.businessSectorId).toBe(sectorId);
+    expect(resto?.businessSectorId).toBe(sectorId);
   });
 
   it('advertiser signup → no screenhost rows (only owners get locations)', async () => {
