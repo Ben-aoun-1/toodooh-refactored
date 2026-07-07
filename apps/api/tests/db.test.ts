@@ -306,11 +306,11 @@ describe('reference-table seeds (Postgres)', () => {
     expect(zone?.name).toBe('GRAND TUNIS');
   });
 
-  it('business_sectors seed = 29 rows (25 advertiser + 4 owner)', async () => {
+  it('business_sectors seed = 30 rows (25 advertiser + 5 owner after 0036)', async () => {
     const rows = await db.select({ audience: businessSectors.audience }).from(businessSectors);
-    expect(rows).toHaveLength(29);
+    expect(rows).toHaveLength(30);
     expect(rows.filter((r) => r.audience === 'advertiser')).toHaveLength(25);
-    expect(rows.filter((r) => r.audience === 'owner')).toHaveLength(4);
+    expect(rows.filter((r) => r.audience === 'owner')).toHaveLength(5);
     expect(rows.every((r) => r.audience === 'advertiser' || r.audience === 'owner')).toBe(true);
   });
 
