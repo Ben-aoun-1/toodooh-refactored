@@ -72,10 +72,14 @@ const seedScreenhost = async (ownerId: string | null, name = 'Café Test'): Prom
   return s?.id ?? '';
 };
 
-const seedCampaign = async (advertiserId: string, name: string): Promise<string> => {
+const seedCampaign = async (
+  advertiserId: string,
+  name: string,
+  values: Partial<typeof campaigns.$inferInsert> = {},
+): Promise<string> => {
   const [c] = await db
     .insert(campaigns)
-    .values({ advertiserId, name, campaignType: 'standard', status: 'active' })
+    .values({ advertiserId, name, campaignType: 'standard', status: 'active', ...values })
     .returning();
   return c?.id ?? '';
 };
@@ -217,6 +221,66 @@ describe('screenhost earnings read (owner-scoped, real Postgres)', () => {
       delivered_imp: 5000,
       earnings_tnd: 50.25,
     });
+  });
+
+  it('Lane F additivity: lines gain campaign_start/_end/_type/_status; the OLD keys are unchanged', async () => {
+    const me = await seedUser();
+    const advertiser = await seedUser({ role: 'advertiser' });
+    const admin = await seedUser({ role: 'admin' });
+    const mySh = await seedScreenhost(me, 'Mon Café');
+    const campaign = await seedCampaign(advertiser, 'Campagne Datée', {
+      startDate: '2026-05-01',
+      endDate: '2026-05-31',
+      campaignType: 'standard',
+      status: 'active',
+    });
+    const recon = await seedReconciliation(campaign, admin, new Date('2026-06-01T10:00:00Z'));
+    await seedPayout({
+      reconciliationId: recon,
+      campaignId: campaign,
+      screenhostId: mySh,
+      expectedImp: 10000,
+      deliveredImp: 8000,
+      earningsTnd: '80.5000',
+    });
+    mockSession(me);
+
+    const res = await get();
+    expect(res.statusCode).toBe(200);
+    const line = (res.json() as EarningsResponse).lines[0] as unknown as Record<string, unknown>;
+
+    // Old contract byte-identical (OwnerRevenue + OwnerDashboard consume these).
+    expect(line).toMatchObject({
+      campaign_id: campaign,
+      campaign_name: 'Campagne Datée',
+      screenhost_id: mySh,
+      screenhost_name: 'Mon Café',
+      expected_imp: 10000,
+      delivered_imp: 8000,
+      earnings_tnd: 80.5,
+    });
+    // The additive Lane F keys.
+    expect(line).toMatchObject({
+      campaign_start: '2026-05-01',
+      campaign_end: '2026-05-31',
+      campaign_type: 'standard',
+      campaign_status: 'active',
+    });
+    // The FULL key set is pinned — an accidental rename/removal of an old key fails here.
+    expect(Object.keys(line).sort()).toEqual([
+      'campaign_end',
+      'campaign_id',
+      'campaign_name',
+      'campaign_start',
+      'campaign_status',
+      'campaign_type',
+      'delivered_imp',
+      'earnings_tnd',
+      'expected_imp',
+      'reconciled_at',
+      'screenhost_id',
+      'screenhost_name',
+    ]);
   });
 
   it('returns an empty list + zero total when nothing is reconciled (honest empty state)', async () => {

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
@@ -11,6 +11,7 @@ import {
   campaignScreenhostPayout,
   campaigns,
   type DispatchAcceptation,
+  proofOfPlay,
   screenhostAffluence,
   screenhostMonthlyStats,
   screenhosts,
@@ -32,6 +33,14 @@ import { requireActiveAccount, requireAdmin, requireAuth } from '../middleware/r
 // NEVER logged or echoed. Every successful edit re-pushes the owner's approved screenhosts to wedooh
 // (S-T1 Edge B2) so the hub's stored credentials stay current.
 const idParamSchema = z.object({ id: z.uuid() });
+
+// Drizzle numeric → JS string; Number() NaN-guarded (the internal.ts lat/lng convention) so the
+// owner reads put real numbers on the wire.
+const num = (value: string | null): number | null => {
+  if (value === null) return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+};
 
 // SSID: set when provided (min 1; use null to clear). Password: a non-empty string is the new
 // secret; '' or omitted means "leave unchanged" (the form is write-only — blank ≠ clear);
@@ -199,6 +208,10 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         deliveredImp: campaignScreenhostPayout.deliveredImp,
         earningsTnd: campaignScreenhostPayout.earningsTnd, // numeric → string
         reconciledAt: campaignReconciliation.reconciledAt,
+        campaignStart: campaigns.startDate,
+        campaignEnd: campaigns.endDate,
+        campaignType: campaigns.campaignType,
+        campaignStatus: campaigns.status,
       })
       .from(campaignScreenhostPayout)
       .innerJoin(screenhosts, eq(screenhosts.id, campaignScreenhostPayout.screenhostId))
@@ -210,6 +223,8 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       .where(eq(screenhosts.ownerId, userId)) // OWNER SCOPE — only this owner's screenhosts
       .orderBy(desc(campaignReconciliation.reconciledAt));
 
+    // Lane F extends the line ADDITIVELY (campaign_start/_end/_type/_status) — OwnerRevenue and
+    // OwnerDashboard consume this route, so the pre-existing keys are contract-frozen.
     return reply.status(200).send({
       total_tnd: rows.reduce((s, r) => s + Number(r.earningsTnd), 0),
       lines: rows.map((r) => ({
@@ -221,6 +236,10 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         delivered_imp: r.deliveredImp,
         earnings_tnd: Number(r.earningsTnd),
         reconciled_at: r.reconciledAt,
+        campaign_start: r.campaignStart,
+        campaign_end: r.campaignEnd,
+        campaign_type: r.campaignType,
+        campaign_status: r.campaignStatus,
       })),
     });
   });
@@ -356,6 +375,204 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
     }
 
     return reply.status(200).send({ grid, has_data: slots.length > 0 });
+  });
+
+  // GET /api/screenhosts/:id/profile — owner-scoped venue identity card (Lane F, the performances
+  // page): sector NAME + class + operating hours + SPS + the hub-synced demographic ratios. Same
+  // owner-scoping as the WiFi/affluence reads (foreign/missing id → 404). Drizzle numeric → string,
+  // so every numeric is Number()-ed (NaN-guarded). `ratios` is null unless ALL six columns are set —
+  // a partial object never reaches the wire (the C3 ingest writes all-or-null, but a drifted row
+  // must not leak a partial shape).
+  app.get('/api/screenhosts/:id/profile', ownerGuard, async (request, reply) => {
+    const parsedParams = idParamSchema.safeParse(request.params);
+    if (!parsedParams.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: [{ field: 'id', reason: 'must be a uuid' }],
+      });
+    }
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply
+        .status(401)
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+    }
+
+    // Owner scoping in the WHERE: a foreign screenhost id is indistinguishable from a missing one.
+    const [row] = await db
+      .select({
+        name: screenhosts.name,
+        sectorName: businessSectors.name,
+        class: screenhosts.class,
+        openingHour: screenhosts.openingHour,
+        closingHour: screenhosts.closingHour,
+        sps: screenhosts.sps,
+        genderMalePct: screenhosts.genderMalePct,
+        genderFemalePct: screenhosts.genderFemalePct,
+        age17To30Pct: screenhosts.age17To30Pct,
+        age31To45Pct: screenhosts.age31To45Pct,
+        age46To60Pct: screenhosts.age46To60Pct,
+        age60PlusPct: screenhosts.age60PlusPct,
+      })
+      .from(screenhosts)
+      .leftJoin(businessSectors, eq(screenhosts.businessSectorId, businessSectors.id))
+      .where(and(eq(screenhosts.id, parsedParams.data.id), eq(screenhosts.ownerId, userId)))
+      .limit(1);
+    if (!row) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
+    }
+
+    const ratioValues = {
+      gender_male_pct: num(row.genderMalePct),
+      gender_female_pct: num(row.genderFemalePct),
+      age_17_30_pct: num(row.age17To30Pct),
+      age_31_45_pct: num(row.age31To45Pct),
+      age_46_60_pct: num(row.age46To60Pct),
+      age_60_plus_pct: num(row.age60PlusPct),
+    };
+    const ratios = Object.values(ratioValues).every((v) => v !== null) ? ratioValues : null;
+
+    return reply.status(200).send({
+      name: row.name,
+      business_sector: row.sectorName,
+      class: row.class,
+      opening_hour: row.openingHour,
+      closing_hour: row.closingHour,
+      sps: num(row.sps),
+      ratios,
+    });
+  });
+
+  // GET /api/screenhosts/:id/monthly-stats — the JSON read of the hub's ACTUAL monthly audience
+  // (screenhost_monthly_stats; the C2 ingest is the only writer — until now its sole reader was the
+  // per-month PDF below). Month desc, so the FE's "latest month" is months[0]. Owner-scoped like the
+  // affluence read.
+  app.get('/api/screenhosts/:id/monthly-stats', ownerGuard, async (request, reply) => {
+    const parsedParams = idParamSchema.safeParse(request.params);
+    if (!parsedParams.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: [{ field: 'id', reason: 'must be a uuid' }],
+      });
+    }
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply
+        .status(401)
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+    }
+
+    // Owner scoping in the WHERE: a foreign screenhost id is indistinguishable from a missing one.
+    const [owned] = await db
+      .select({ id: screenhosts.id })
+      .from(screenhosts)
+      .where(and(eq(screenhosts.id, parsedParams.data.id), eq(screenhosts.ownerId, userId)))
+      .limit(1);
+    if (!owned) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
+    }
+
+    const rows = await db
+      .select({
+        month: screenhostMonthlyStats.month,
+        totalAudience: screenhostMonthlyStats.totalAudience,
+        daily: screenhostMonthlyStats.daily,
+        peakDayOfWeek: screenhostMonthlyStats.peakDayOfWeek,
+        peakHour: screenhostMonthlyStats.peakHour,
+      })
+      .from(screenhostMonthlyStats)
+      .where(eq(screenhostMonthlyStats.screenhostId, owned.id))
+      .orderBy(desc(screenhostMonthlyStats.month)); // 'YYYY-MM' sorts correctly as text
+
+    return reply.status(200).send({
+      months: rows.map((r) => ({
+        month: r.month,
+        total_audience: r.totalAudience,
+        daily: r.daily,
+        peak_day_of_week: r.peakDayOfWeek,
+        peak_hour: r.peakHour,
+      })),
+    });
+  });
+
+  // GET /api/screenhosts/:id/impressions-daily?from=YYYY-MM-DD&to=YYYY-MM-DD — the venue's real
+  // DELIVERED pressure per day: COUNT of proof_of_play VIDEO_ENDED rows bucketed by received_at in
+  // Africa/Tunis (the reconcile convention), aggregated IN SQL — proof_of_play can be large, so rows
+  // never reach JS. Days with zero proofs are simply absent. The range is bounded (≤ 400 days) to
+  // keep the scan sane. Owner-scoped like the affluence read.
+  app.get('/api/screenhosts/:id/impressions-daily', ownerGuard, async (request, reply) => {
+    const parsedParams = idParamSchema.safeParse(request.params);
+    if (!parsedParams.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: [{ field: 'id', reason: 'must be a uuid' }],
+      });
+    }
+    const parsedQuery = z
+      .object({
+        from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      })
+      .safeParse(request.query);
+    if (!parsedQuery.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: parsedQuery.error.issues.map((i) => ({
+          field: i.path.join('.'),
+          reason: i.message,
+        })),
+      });
+    }
+    const { from, to } = parsedQuery.data;
+    // ISO dates parse as UTC midnight — span in whole days. Rejects reversed ranges and
+    // regex-passing non-dates ('2026-13-45' → NaN) alike.
+    const spanDays = (Date.parse(to) - Date.parse(from)) / 86_400_000;
+    if (!Number.isFinite(spanDays) || spanDays < 0 || spanDays > 400) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: [{ field: 'to', reason: 'from ≤ to and the range must not exceed 400 days' }],
+      });
+    }
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply
+        .status(401)
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+    }
+
+    // Owner scoping in the WHERE: a foreign screenhost id is indistinguishable from a missing one.
+    const [owned] = await db
+      .select({ id: screenhosts.id })
+      .from(screenhosts)
+      .where(and(eq(screenhosts.id, parsedParams.data.id), eq(screenhosts.ownerId, userId)))
+      .limit(1);
+    if (!owned) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
+    }
+
+    const tunisDay = sql<string>`to_char(${proofOfPlay.receivedAt} at time zone 'Africa/Tunis', 'YYYY-MM-DD')`;
+    const rows = await db
+      .select({ date: tunisDay, impressions: count() })
+      .from(proofOfPlay)
+      .where(
+        and(
+          eq(proofOfPlay.screenhostId, owned.id),
+          eq(proofOfPlay.eventType, 'VIDEO_ENDED'),
+          gte(tunisDay, from),
+          lte(tunisDay, to),
+        ),
+      )
+      .groupBy(tunisDay)
+      .orderBy(tunisDay);
+
+    return reply.status(200).send({
+      days: rows.map((r) => ({ date: r.date, impressions: r.impressions })),
+    });
   });
 
   // GET /api/screenhosts/:id/monthly-report?month=YYYY-MM — owner-scoped branded PDF of the hub's
