@@ -5,7 +5,8 @@ import { sql } from '../src/db/client.js';
 import { apiRoutes } from '../src/routes/index.js';
 
 // Integration suite — real Postgres with the Phase-1c reference seeds (governorates 24,
-// business_sectors 29 = 25 advertiser + 4 owner). These tables are seeded, not truncated by
+// business_sectors 30 = 25 advertiser + 5 owner after the 0036 canonical owner taxonomy).
+// These tables are seeded, not truncated by
 // resetAuthTables, so no per-test setup is needed. No auth: the routes are public (the wizard
 // fetches them pre-session) — every inject below omits a cookie, which IS the public-access proof.
 const buildApp = () => Fastify({ logger: false });
@@ -37,12 +38,12 @@ describe('reference-data GETs (public, real Postgres seeds)', () => {
     expect(typeof rows[0]?.name).toBe('string');
   });
 
-  it('GET /api/business-sectors (no param) → 200, 29 rows, {id,name,audience,display_order}', async () => {
+  it('GET /api/business-sectors (no param) → 200, 30 rows, {id,name,audience,display_order}', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/business-sectors' });
     expect(res.statusCode).toBe(200);
     const rows =
       res.json<{ id: string; name: string; audience: string; display_order: number | null }[]>();
-    expect(rows).toHaveLength(29);
+    expect(rows).toHaveLength(30);
     expect(Object.keys(rows[0] ?? {}).sort()).toEqual(['audience', 'display_order', 'id', 'name']);
   });
 
@@ -57,11 +58,18 @@ describe('reference-data GETs (public, real Postgres seeds)', () => {
     expect(rows.every((r) => r.audience === 'advertiser')).toBe(true);
   });
 
-  it('GET /api/business-sectors?audience=owner → 200, 4, all owner', async () => {
+  it('GET /api/business-sectors?audience=owner → 200, the canonical 5 in display_order', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/business-sectors?audience=owner' });
     expect(res.statusCode).toBe(200);
-    const rows = res.json<{ audience: string }[]>();
-    expect(rows).toHaveLength(4);
+    const rows = res.json<{ name: string; audience: string }[]>();
+    // Pinned by name: the 0036 canonical owner taxonomy, in display_order.
+    expect(rows.map((r) => r.name)).toEqual([
+      'Café',
+      'Resto/Bar',
+      'Resto',
+      'Salle de sport',
+      'Espace de loisir',
+    ]);
     expect(rows.every((r) => r.audience === 'owner')).toBe(true);
   });
 

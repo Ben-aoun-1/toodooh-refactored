@@ -253,6 +253,13 @@
       "when": 1782680514033,
       "tag": "0035_dispatch_acceptation_en_attente",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1783424411972,
+      "tag": "0036_owner_sectors_canonical",
+      "breakpoints": true
     }
   ]
 }
