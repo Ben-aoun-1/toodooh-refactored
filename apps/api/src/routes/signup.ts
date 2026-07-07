@@ -356,6 +356,9 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
         // stays nullable on disk by design. Coordinates/WiFi are stored when provided,
         // else NULL ("add later"). The WiFi password is encrypted at rest (recoverable);
         // the plaintext is never logged. export_status keeps its 'pending' default.
+        // Every venue INHERITS the owner's signup sector (Lane B V1: a fleet's venues
+        // all carry the SAME owner sector; per-venue divergence comes later via the
+        // admin eligibility PATCH) — null when the owner declared none.
         if (mappedRole === 'individual_owner') {
           await db.insert(screenhosts).values({
             name: business_name,
@@ -368,6 +371,7 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
             longitude: longitude !== undefined ? longitude.toString() : null,
             wifiSsid: wifi_ssid ?? null,
             wifiPasswordEncrypted: wifi_password ? encryptWifiPassword(wifi_password) : null,
+            businessSectorId: business_sector_id ?? null,
             ownerId: persisted.id,
           });
         } else if (mappedRole === 'fleet_owner' && fleet_establishments?.length) {
@@ -388,6 +392,7 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
               wifiPasswordEncrypted: establishment.wifi_password
                 ? encryptWifiPassword(establishment.wifi_password)
                 : null,
+              businessSectorId: business_sector_id ?? null,
               ownerId: persisted.id,
             })),
           );
