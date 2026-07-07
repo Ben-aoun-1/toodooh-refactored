@@ -3,7 +3,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { z } from 'zod';
 
 import { db, sql } from '../src/db/client.js';
-import { agentReferrals, agents, screenhosts, users } from '../src/db/schema.js';
+import { agentReferrals, agents, businessSectors, screenhosts, users } from '../src/db/schema.js';
 import {
   isSyncEnabled,
   pushAgentToHub,
@@ -19,7 +19,7 @@ import { resetAuthTables } from './helpers/db-test-setup.js';
 const CFG = { ingestUrl: 'https://hub.example', syncKey: 'k'.repeat(16) };
 const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
-const seedOwnerWithScreenhost = async () => {
+const seedOwnerWithScreenhost = async (businessSectorId: string | null = null) => {
   const [owner] = await db
     .insert(users)
     .values({
@@ -36,6 +36,7 @@ const seedOwnerWithScreenhost = async () => {
       ownerId: owner!.id,
       wifiSsid: 'Net',
       wifiPasswordEncrypted: encryptWifiPassword('pw'),
+      businessSectorId,
     })
     .returning({ id: screenhosts.id });
   return { ownerId: owner!.id, hostId: host!.id };
@@ -81,10 +82,34 @@ describe('Edge B2 — pushApprovedOwnerLocations', () => {
     expect(payload.wifi_password).toBe('pw'); // decrypted on the wire (privileged transfer)
     expect(payload.owner.email).toBe('o@example.com');
     expect(payload.agent_code).toBeNull(); // this owner has no referral
+    // Sectorless venue → the key is PRESENT with an explicit null (never omitted — wedooh's
+    // receiver is .strict() with all keys required).
+    expect(payload).toHaveProperty('business_sector');
+    expect(payload.business_sector).toBeNull();
 
     const [row] = await db.select().from(screenhosts).where(eq(screenhosts.id, hostId));
     expect(row?.exportStatus).toBe('exported');
     expect(row?.exportedAt).not.toBeNull();
+  });
+
+  it('carries the venue business_sector NAME when the venue has a sector (Lane B)', async () => {
+    const [sector] = await db
+      .select({ id: businessSectors.id, name: businessSectors.name })
+      .from(businessSectors)
+      .where(eq(businessSectors.audience, 'owner'))
+      .limit(1);
+    expect(sector).toBeDefined();
+    const { hostId, ownerId } = await seedOwnerWithScreenhost(sector!.id);
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(null, { status: 200 }));
+
+    await pushApprovedOwnerLocations(ownerId, logger, CFG);
+
+    const payload = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
+    expect(payload.location_id).toBe(hostId);
+    // The NAME rides the wire (hub taxonomy = the same canonical 5 strings — identity mapping).
+    expect(payload.business_sector).toBe(sector!.name);
   });
 
   it('carries the referring agent code when the owner has a referral (HB3 assignment)', async () => {

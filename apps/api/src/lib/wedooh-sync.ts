@@ -1,7 +1,14 @@
 import { and, eq, inArray } from 'drizzle-orm';
 
 import { db } from '../db/client.js';
-import { agentReferrals, agents, governorates, screenhosts, users } from '../db/schema.js';
+import {
+  agentReferrals,
+  agents,
+  businessSectors,
+  governorates,
+  screenhosts,
+  users,
+} from '../db/schema.js';
 import { env } from '../env.js';
 
 import { decryptWifiPassword } from './wifi-crypto.js';
@@ -72,6 +79,7 @@ export const buildLocationPayload = (
   owner: OwnerRow,
   governorateName: string | null,
   agentCode: string | null,
+  businessSectorName: string | null,
 ) => ({
   location_id: s.id,
   name: s.name,
@@ -83,6 +91,10 @@ export const buildLocationPayload = (
   zone: s.zone,
   governorate: governorateName,
   screen_count: s.screenCount,
+  // The venue's SIGNUP category (Lane B) — the sector NAME, since the hub taxonomy is the same
+  // canonical 5 strings (identity mapping, no id translation). Explicit null when the venue has
+  // no sector, per the locked keys-always-present convention of wedooh's .strict() receiver.
+  business_sector: businessSectorName,
   wifi_ssid: s.wifiSsid,
   wifi_password: decryptWifi(s.wifiPasswordEncrypted),
   // The referring agent's code (agents.code) if this owner signed up via an agent referral, else
@@ -106,16 +118,28 @@ const pushOneLocation = async (
   logger: Logger,
 ): Promise<boolean | null> => {
   const [row] = await db
-    .select({ s: screenhosts, governorateName: governorates.name, owner: users })
+    .select({
+      s: screenhosts,
+      governorateName: governorates.name,
+      owner: users,
+      businessSectorName: businessSectors.name,
+    })
     .from(screenhosts)
     .leftJoin(governorates, eq(screenhosts.governorateId, governorates.id))
     .leftJoin(users, eq(screenhosts.ownerId, users.id))
+    .leftJoin(businessSectors, eq(screenhosts.businessSectorId, businessSectors.id))
     .where(eq(screenhosts.id, screenhostId))
     .limit(1);
   if (!row || !row.owner) return null; // ownerless screenhost → nothing to transfer
 
   const agentCode = await resolveReferringAgentCode(row.owner.id);
-  const payload = buildLocationPayload(row.s, row.owner, row.governorateName, agentCode);
+  const payload = buildLocationPayload(
+    row.s,
+    row.owner,
+    row.governorateName,
+    agentCode,
+    row.businessSectorName,
+  );
   try {
     const res = await fetch(`${cfg.ingestUrl}/api/sync/locations`, {
       method: 'POST',
