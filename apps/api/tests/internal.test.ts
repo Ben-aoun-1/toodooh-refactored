@@ -444,6 +444,121 @@ describe('C3: POST /api/internal/screenhost-eligibility', () => {
     });
     expect(res.statusCode).toBe(400);
   });
+
+  // ── Lane D: the assigned class's demographic ratios ride the same C3 edge ──
+  const RATIOS = {
+    gender_male_pct: 55.5,
+    gender_female_pct: 44.5,
+    age_17_30_pct: 30,
+    age_31_45_pct: 40,
+    age_46_60_pct: 20.25,
+    age_60_plus_pct: 9.75,
+  };
+
+  const selectRatios = async (id: string) => {
+    const [row] = await db
+      .select({
+        genderMalePct: screenhosts.genderMalePct,
+        genderFemalePct: screenhosts.genderFemalePct,
+        age17To30Pct: screenhosts.age17To30Pct,
+        age31To45Pct: screenhosts.age31To45Pct,
+        age46To60Pct: screenhosts.age46To60Pct,
+        age60PlusPct: screenhosts.age60PlusPct,
+        class: screenhosts.class,
+        businessSectorId: screenhosts.businessSectorId,
+      })
+      .from(screenhosts)
+      .where(eq(screenhosts.id, id));
+    return row!;
+  };
+
+  it('a ratios-ONLY item (no class/sector) stores all six columns; unknown locations still skipped', async () => {
+    const [host] = await db
+      .insert(screenhosts)
+      .values({ name: 'Place R' })
+      .returning({ id: screenhosts.id });
+    const unknownId = '33333333-3333-4333-8333-333333333333';
+
+    const res = await app!.inject({
+      method: 'POST',
+      url: '/api/internal/screenhost-eligibility',
+      headers: auth(),
+      payload: {
+        items: [
+          { location_id: host!.id, ratios: RATIOS },
+          { location_id: unknownId, ratios: RATIOS }, // unknown → skipped + reported, never written
+        ],
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ upserted: number; unknown_locations: string[] }>();
+    expect(body.upserted).toBe(1);
+    expect(body.unknown_locations).toEqual([unknownId]);
+
+    const row = await selectRatios(host!.id);
+    // Drizzle numeric → JS string; Number() the stored values (the lat/lng convention).
+    expect(Number(row.genderMalePct)).toBeCloseTo(55.5, 2);
+    expect(Number(row.genderFemalePct)).toBeCloseTo(44.5, 2);
+    expect(Number(row.age17To30Pct)).toBeCloseTo(30, 2);
+    expect(Number(row.age31To45Pct)).toBeCloseTo(40, 2);
+    expect(Number(row.age46To60Pct)).toBeCloseTo(20.25, 2);
+    expect(Number(row.age60PlusPct)).toBeCloseTo(9.75, 2);
+    // A ratios-only item touches nothing else.
+    expect(row.class).toBeNull();
+    expect(row.businessSectorId).toBeNull();
+  });
+
+  it('absent ratios key → the six columns untouched; explicit null → all six cleared', async () => {
+    const [host] = await db
+      .insert(screenhosts)
+      .values({ name: 'Place S' })
+      .returning({ id: screenhosts.id });
+    const post = (item: Record<string, unknown>) =>
+      app!.inject({
+        method: 'POST',
+        url: '/api/internal/screenhost-eligibility',
+        headers: auth(),
+        payload: { items: [{ location_id: host!.id, ...item }] },
+      });
+
+    await post({ ratios: RATIOS });
+    // Re-push WITHOUT the ratios key (class only) → ratios stay.
+    expect((await post({ class: 'moyen' })).statusCode).toBe(200);
+    const afterAbsent = await selectRatios(host!.id);
+    expect(Number(afterAbsent.genderMalePct)).toBeCloseTo(55.5, 2);
+    expect(Number(afterAbsent.age60PlusPct)).toBeCloseTo(9.75, 2);
+    expect(afterAbsent.class).toBe('moyen');
+
+    // Explicit null → all six cleared; the other columns stay.
+    expect((await post({ ratios: null })).statusCode).toBe(200);
+    const afterNull = await selectRatios(host!.id);
+    expect(afterNull.genderMalePct).toBeNull();
+    expect(afterNull.genderFemalePct).toBeNull();
+    expect(afterNull.age17To30Pct).toBeNull();
+    expect(afterNull.age31To45Pct).toBeNull();
+    expect(afterNull.age46To60Pct).toBeNull();
+    expect(afterNull.age60PlusPct).toBeNull();
+    expect(afterNull.class).toBe('moyen');
+  });
+
+  it('400 on a partial ratios object and on an out-of-range ratio', async () => {
+    const id = '22222222-2222-4222-8222-222222222222';
+    const partial = await app!.inject({
+      method: 'POST',
+      url: '/api/internal/screenhost-eligibility',
+      headers: auth(),
+      payload: { items: [{ location_id: id, ratios: { gender_male_pct: 50 } }] },
+    });
+    expect(partial.statusCode).toBe(400);
+
+    const outOfRange = await app!.inject({
+      method: 'POST',
+      url: '/api/internal/screenhost-eligibility',
+      headers: auth(),
+      payload: { items: [{ location_id: id, ratios: { ...RATIOS, gender_male_pct: 100.01 } }] },
+    });
+    expect(outOfRange.statusCode).toBe(400);
+  });
 });
 
 describe('Edge A: POST /api/internal/agents', () => {
