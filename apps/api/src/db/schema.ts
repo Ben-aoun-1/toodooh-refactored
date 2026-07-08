@@ -488,6 +488,30 @@ export const screenhostMonthlyStats = pgTable(
 export type ScreenhostMonthlyStats = typeof screenhostMonthlyStats.$inferSelect;
 export type NewScreenhostMonthlyStats = typeof screenhostMonthlyStats.$inferInsert;
 
+// Stored monthly report artifacts (R1) — one MinIO PDF per (screenhost, month), written by the
+// month-end job (reports/<screenhostId>/<YYYY-MM>.pdf); GET /:id/monthly-report serves the stored
+// artifact through the api (owner-auth). UNIQUE(screenhost, month) is the job's idempotency lock:
+// a second tick (or a concurrent one) can never double-generate a month.
+export const screenhostMonthlyReports = pgTable(
+  'screenhost_monthly_reports',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    screenhostId: uuid('screenhost_id')
+      .notNull()
+      .references(() => screenhosts.id, { onDelete: 'cascade' }),
+    month: text('month').notNull(), // 'YYYY-MM'
+    storageKey: text('storage_key').notNull(),
+    generatedAt: timestamp('generated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('screenhost_monthly_reports_sh_month_uq').on(table.screenhostId, table.month),
+    check('screenhost_monthly_reports_month_fmt', sql`${table.month} ~ '^\\d{4}-\\d{2}$'`),
+  ],
+);
+
+export type ScreenhostMonthlyReport = typeof screenhostMonthlyReports.$inferSelect;
+export type NewScreenhostMonthlyReport = typeof screenhostMonthlyReports.$inferInsert;
+
 // ── agents + agent_referrals (P1 — agent unique codes + referral linkage) ──
 // Each agent user (role screenhost_agent | screencast_agent) owns ONE issued
 // referral code, held here in `agents.code`. This is the agent's OWN code and

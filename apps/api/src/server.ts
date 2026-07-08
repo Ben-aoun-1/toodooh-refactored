@@ -7,6 +7,7 @@ import { authPlugin } from './auth/plugin.js';
 import { db, sql } from './db/client.js';
 import { env } from './env.js';
 import { buildErrorHandler, buildNotFoundHandler } from './error-handler.js';
+import { startMonthlyReportJob } from './lib/report/monthly-job.js';
 import { isSyncEnabled, sweepUnexported } from './lib/wedooh-sync.js';
 import { buildLoggerConfig } from './logger.js';
 import { healthRoute } from './routes/health.js';
@@ -83,6 +84,11 @@ const start = async (): Promise<void> => {
     } else {
       app.log.warn('wedooh B2 sync disabled (WEDOOH_INGEST_URL / TOODOOH_SYNC_KEY unset)');
     }
+
+    // R1 — month-end report job: boot sweep + hourly unref'd interval (the sweepUnexported
+    // pattern, no cron dependency). Generates + stores the previous CLOSED month's PDF per venue
+    // with data, once (UNIQUE lock), and notifies the owner. No chromium → warns and no-ops.
+    startMonthlyReportJob(app.log);
   } catch (err) {
     app.log.error(err);
     process.exit(1);

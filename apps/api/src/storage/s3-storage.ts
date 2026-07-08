@@ -13,7 +13,13 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { env, type Env } from '../env.js';
 import { logger } from '../logger.js';
 
-import type { DeleteResult, PresignResult, StorageProvider, UploadResult } from './provider.js';
+import type {
+  DeleteResult,
+  DownloadResult,
+  PresignResult,
+  StorageProvider,
+  UploadResult,
+} from './provider.js';
 
 const log = logger.child({ module: 's3-storage' });
 
@@ -189,6 +195,21 @@ export class S3Storage implements StorageProvider {
     } catch (err) {
       const error = err instanceof Error ? err.message : 'unknown storage error';
       log.error({ key: params.key, error }, 'storage delete failed');
+      return { error };
+    }
+  }
+
+  async download(params: { key: string }): Promise<DownloadResult> {
+    try {
+      const res = await this.client.send(
+        new GetObjectCommand({ Bucket: this.bucket, Key: params.key }),
+      );
+      const bytes = await res.Body?.transformToByteArray();
+      if (!bytes) return { error: 'empty object body' };
+      return { body: Buffer.from(bytes), contentType: res.ContentType };
+    } catch (err) {
+      const error = err instanceof Error ? err.message : 'unknown storage error';
+      log.error({ key: params.key, error }, 'storage download failed');
       return { error };
     }
   }
