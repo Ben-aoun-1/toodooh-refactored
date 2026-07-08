@@ -1,6 +1,7 @@
 import { type DateRange, formatDateFr } from '../../lib/performance-period';
 
 import { PENDING_LABEL } from './Pending';
+import { Var } from './Var';
 
 interface ReportIntroProps {
   venueName: string;
@@ -13,31 +14,37 @@ interface ReportIntroProps {
 /** §7 — the intro strip: Commerce / Période analysée / Catégorie / Campagnes incluses. */
 export function ReportIntro({ venueName, range, category, campaignsCount }: ReportIntroProps) {
   const cells: { label: string; value: React.ReactNode }[] = [
-    { label: 'Commerce', value: venueName },
+    { label: 'Commerce', value: <Var>{venueName}</Var> },
     {
       label: 'Période analysée',
-      value: `${formatDateFr(range.from)} – ${formatDateFr(range.to)}`,
+      value: (
+        <>
+          <Var>{formatDateFr(range.from)}</Var> – <Var>{formatDateFr(range.to)}</Var>
+        </>
+      ),
     },
-    { label: 'Catégorie', value: category },
+    { label: 'Catégorie', value: <Var>{category}</Var> },
     {
       label: 'Campagnes incluses',
-      value:
-        campaignsCount > 0 ? (
-          String(campaignsCount)
-        ) : (
-          <span className="text-sm font-medium italic text-gray-400">{PENDING_LABEL}</span>
-        ),
+      value: campaignsCount > 0 ? <Var>{String(campaignsCount)}</Var> : <Var>{PENDING_LABEL}</Var>,
     },
   ];
 
   return (
-    <div className="grid grid-cols-1 gap-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm sm:grid-cols-2 lg:grid-cols-4">
-      {cells.map((cell) => (
-        <div key={cell.label} className="min-w-0">
-          <div className="text-xs font-medium uppercase tracking-wider text-gray-400">
+    <div className="mb-16 grid grid-cols-2 gap-y-5 border-y border-perf-line py-[22px] lg:grid-cols-4 lg:gap-y-0">
+      {cells.map((cell, idx) => (
+        <div
+          key={cell.label}
+          className={`min-w-0 px-4 odd:pl-0 lg:px-5 lg:first:pl-0 lg:last:border-r-0 ${
+            idx < cells.length - 1 ? 'lg:border-r lg:border-r-perf-soft' : ''
+          }`}
+        >
+          <div className="perf-mono text-[10px] uppercase tracking-[0.08em] text-perf-mist">
             {cell.label}
           </div>
-          <div className="mt-1 truncate font-semibold text-brand-deep">{cell.value}</div>
+          <div className="mt-2 text-[17px] font-semibold tracking-[-0.012em] text-perf-ink">
+            {cell.value}
+          </div>
         </div>
       ))}
     </div>

@@ -1,8 +1,10 @@
-import { Info, Wallet } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 
 import { formatTndFr } from '../../lib/performance-derive';
 
+import { BrandMark } from './BrandMark';
 import { SectionHeading } from './SectionHeading';
+import { Var } from './Var';
 
 export interface RevenueRow {
   id: string;
@@ -21,76 +23,89 @@ interface RevenueSectionProps {
 export function RevenueSection({ total, count, rows }: RevenueSectionProps) {
   const empty = count === 0;
   return (
-    <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+    <section className="mb-[76px]">
       <SectionHeading
         num="Section 05"
         title="Vos revenus de la période"
         lead="Voici le total de vos revenus pour la période analysée, avec le détail des campagnes qui les ont générés."
       />
 
-      <div className="mt-5 rounded-2xl border border-gray-100 p-4 sm:p-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-primary/15 text-brand-deep">
-              <Wallet className="h-5 w-5" aria-hidden />
+      <div className="mt-8 rounded-xl border border-perf-line bg-white p-[30px]">
+        <div className="mb-[26px] flex flex-wrap items-start justify-between gap-4 border-b border-perf-line pb-[22px]">
+          <div className="flex items-center gap-[13px]">
+            <div className="flex h-[38px] w-[38px] flex-shrink-0 items-center justify-center rounded-[10px] bg-perf-lavender text-brand-accent">
+              <BrandMark className="h-[18px] w-[18px]" />
             </div>
             <div>
-              <div className="text-xs font-medium uppercase tracking-wider text-gray-400">
+              <div className="perf-mono text-[10px] uppercase tracking-[0.08em] text-perf-mist">
                 Revenu cumulé
               </div>
               {empty ? (
                 <>
-                  <div className="text-2xl font-bold text-gray-400">À venir</div>
-                  <p className="text-xs text-gray-500">
+                  <div className="mt-1.5 text-[30px] font-semibold leading-tight text-perf-ink">
+                    À venir
+                  </div>
+                  <p className="mt-1 text-xs italic text-perf-mist">
                     Vos premiers gains arrivent dès le lancement des campagnes.
                   </p>
                 </>
               ) : (
-                <div className="text-2xl font-bold tabular-nums text-brand-deep">
-                  {formatTndFr(total)}{' '}
-                  <span className="text-sm font-medium text-gray-400">TND</span>
+                <div className="mt-1.5 text-[30px] font-semibold leading-tight text-brand-accent">
+                  {formatTndFr(total)}
+                  <span className="ml-1 text-[15px] font-normal text-perf-grey">TND</span>
                 </div>
               )}
             </div>
           </div>
-          <div>
-            <div className="text-xs font-medium uppercase tracking-wider text-gray-400">
+          <div className="text-right">
+            <div className="perf-mono text-[10px] uppercase tracking-[0.08em] text-perf-mist">
               Campagnes
             </div>
-            <div className="text-2xl font-bold tabular-nums text-brand-deep">
-              {count}{' '}
-              <span className="text-sm font-medium text-gray-400">
-                {empty ? "pour l'instant" : 'diffusées'}
-              </span>
-            </div>
+            {empty ? (
+              <div className="mt-1.5 text-lg font-semibold text-perf-ink">
+                0 <span className="text-[13px] font-medium text-perf-mist">pour l'instant</span>
+              </div>
+            ) : (
+              <div className="mt-1.5 text-lg font-semibold text-perf-ink">
+                <Var>{count}</Var> diffusées
+              </div>
+            )}
           </div>
         </div>
 
         {empty ? (
-          <div className="mt-4 flex items-start gap-2 rounded-xl border border-brand-primary/40 bg-brand-primary/10 p-3 text-sm text-gray-600">
-            <Info className="mt-0.5 h-4 w-4 flex-shrink-0 text-brand-deep" aria-hidden />
-            <p>
-              <strong className="font-semibold text-brand-deep">
+          <div className="flex items-start gap-3 rounded-md border border-perf-line border-l-[3px] border-l-perf-green bg-[#E8F6ED] p-4 px-5 text-[13px] leading-[1.6] text-perf-ink">
+            <CheckCircle2
+              className="mt-0.5 h-[17px] w-[17px] flex-shrink-0 text-perf-green"
+              aria-hidden
+            />
+            <div>
+              <strong className="font-semibold">
                 Vos écrans sont prêts à recevoir nos annonceurs.
               </strong>{' '}
               Conservez un score de priorité élevé pour capter les premiers budgets dès leur
               déploiement.
-            </p>
+            </div>
           </div>
         ) : (
-          <div className="mt-4">
-            <div className="flex items-baseline justify-between text-xs font-medium uppercase tracking-wider text-gray-400">
+          <div>
+            <div className="perf-mono mb-2.5 flex items-baseline justify-between text-[10px] uppercase tracking-[0.08em] text-perf-mist">
               <span>Détail par campagne</span>
               <span>Votre revenu</span>
             </div>
-            <div className="mt-2 divide-y divide-gray-100">
+            <div>
               {rows.map((row) => (
-                <div key={row.id} className="flex flex-wrap items-baseline gap-x-4 gap-y-1 py-2.5">
-                  <div className="min-w-0 flex-1 truncate font-medium text-brand-deep">
+                <div
+                  key={row.id}
+                  className="grid grid-cols-[1fr_auto] items-center gap-x-[18px] gap-y-0.5 border-b border-perf-soft py-[13px] last:border-b-0 sm:grid-cols-[1fr_auto_auto]"
+                >
+                  <div className="min-w-0 truncate text-[13.5px] font-medium text-perf-ink">
                     {row.name}
                   </div>
-                  <div className="text-xs text-gray-400">{row.period}</div>
-                  <div className="font-semibold tabular-nums text-brand-deep">
+                  <div className="perf-mono order-3 col-span-2 whitespace-nowrap text-[11px] text-perf-mist sm:order-none sm:col-span-1">
+                    {row.period}
+                  </div>
+                  <div className="perf-mono whitespace-nowrap text-[13.5px] font-semibold text-brand-accent">
                     {row.amountLabel}
                   </div>
                 </div>
@@ -99,8 +114,8 @@ export function RevenueSection({ total, count, rows }: RevenueSectionProps) {
           </div>
         )}
 
-        <div className="mt-4 flex items-center gap-1.5 text-xs text-gray-400">
-          <Info className="h-3.5 w-3.5 flex-shrink-0" aria-hidden />
+        <div className="mt-[18px] flex items-center gap-2 text-[11.5px] text-perf-mist">
+          <BrandMark className="h-[11px] w-[11px] flex-shrink-0 opacity-70" />
           Calculé sur les impressions effectivement servies dans votre lieu pendant chaque campagne
         </div>
       </div>

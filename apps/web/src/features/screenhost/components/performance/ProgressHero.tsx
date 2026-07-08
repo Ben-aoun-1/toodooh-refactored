@@ -4,7 +4,7 @@ import { type CumulativePoint, formatIntFr, formatTndFr } from '../../lib/perfor
 import { formatDateFr } from '../../lib/performance-period';
 
 import { CHART_ACCENT, CHART_GREEN } from './chart-colors';
-import { CHART_PENDING_LABEL, PENDING_LABEL } from './Pending';
+import { ChartPlaceholder, PENDING_LABEL } from './Pending';
 
 interface HeroCardProps {
   label: string;
@@ -17,45 +17,49 @@ interface HeroCardProps {
 
 function HeroCard({ label, value, suffix, series, color, gradientId }: HeroCardProps) {
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-      <div className="text-xs font-medium uppercase tracking-wider text-gray-500">{label}</div>
+    <div className="rounded-[14px] border border-perf-line bg-white p-6 pb-[18px] transition-shadow hover:shadow-[0_4px_18px_rgba(16,37,26,0.05)]">
+      <div className="text-[12.5px] font-medium text-perf-grey">{label}</div>
       {value !== null ? (
-        <div className="mt-1 text-3xl font-bold tabular-nums text-brand-deep">
-          {value} <span className="text-base font-medium text-gray-400">{suffix}</span>
+        <div className="mt-2.5 text-[32px] font-semibold tracking-[-0.02em] text-perf-ink">
+          {value}
+          <span className="ml-1 text-[15px] font-medium tracking-normal text-perf-mist">
+            {suffix}
+          </span>
         </div>
       ) : (
-        <div className="mt-1 text-sm font-medium italic text-gray-400">
-          {PENDING_LABEL} <span className="not-italic text-gray-300">{suffix}</span>
+        <div className="mt-2.5 text-base font-semibold italic text-perf-mist">
+          {PENDING_LABEL}
+          <span className="ml-1 text-[15px] font-medium not-italic">{suffix}</span>
         </div>
       )}
-      <div className="mt-4 h-32">
+      <div className="mt-3.5">
         {series.length > 0 ? (
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={series} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
-              <defs>
-                <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={color} stopOpacity={0.3} />
-                  <stop offset="95%" stopColor={color} stopOpacity={0.02} />
-                </linearGradient>
-              </defs>
-              <XAxis dataKey="date" hide />
-              <Tooltip
-                formatter={(v) => [formatIntFr(Number(v)), label]}
-                labelFormatter={(d) => formatDateFr(String(d))}
-              />
-              <Area
-                type="monotone"
-                dataKey="cumulative"
-                stroke={color}
-                strokeWidth={2}
-                fill={`url(#${gradientId})`}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        ) : (
-          <div className="flex h-full items-center justify-center rounded-xl border-2 border-dashed border-gray-200 text-xs italic text-gray-400">
-            {CHART_PENDING_LABEL}
+          <div className="aspect-[400/130] w-full rounded-xl border border-perf-line bg-white px-3 py-2.5">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={series} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
+                <defs>
+                  <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={color} stopOpacity={0.2} />
+                    <stop offset="100%" stopColor={color} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="date" hide />
+                <Tooltip
+                  formatter={(v) => [formatIntFr(Number(v)), label]}
+                  labelFormatter={(d) => formatDateFr(String(d))}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="cumulative"
+                  stroke={color}
+                  strokeWidth={2.2}
+                  fill={`url(#${gradientId})`}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
+        ) : (
+          <ChartPlaceholder className="aspect-[400/130]" />
         )}
       </div>
     </div>
@@ -77,14 +81,14 @@ export function ProgressHero({
   audienceSeries,
 }: ProgressHeroProps) {
   return (
-    <section>
-      <div className="text-xs font-semibold uppercase tracking-widest text-brand-accent">
+    <section className="mb-10">
+      <div className="perf-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-perf-green">
         Évolution
       </div>
-      <h2 className="mt-1 text-xl font-semibold text-brand-deep">
+      <h2 className="mt-2.5 text-2xl font-semibold tracking-[-0.012em] text-perf-ink">
         Votre progression depuis le début
       </h2>
-      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="mt-[22px] grid grid-cols-1 gap-[18px] lg:grid-cols-2">
         <HeroCard
           label="Revenu généré depuis le début"
           value={revenueSeries.length > 0 ? formatTndFr(revenueTotal) : null}

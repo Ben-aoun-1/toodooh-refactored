@@ -1,8 +1,34 @@
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* "Mes performances" — the mockups' Geist stack, applied ONLY under the page root so no other
+   page shifts. The :where() rule (zero added specificity, so Tailwind utilities still win)
+   restores inheritance on the elements that the legacy global rules below (h1–h6 / label, p,
+   span, a, li) would otherwise pin to Poppins + fixed colors. .perf-mono is the eyebrow/label/
+   meta/tabular-value face and must come AFTER the :where() rule. */
+@layer components {
+  .perf-page {
+    font-family:
+      'Geist',
+      -apple-system,
+      system-ui,
+      sans-serif;
+    font-feature-settings: 'ss01', 'ss02', 'cv01';
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  .perf-page :where(h1, h2, h3, h4, h5, h6, p, span, a, li, label) {
+    font-family: inherit;
+    color: inherit;
+  }
+  .perf-mono {
+    font-family: 'Geist Mono', 'SF Mono', Monaco, monospace;
+  }
+}
 
 /* Impression relevé propriétaire : masquer navigation et barre d’actions */
 @media print {

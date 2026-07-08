@@ -52,51 +52,51 @@ export function PeakHoursHeatmap({
   }, [grid, hasData, openingHour, closingHour]);
 
   return (
-    <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+    <section className="mb-[76px]">
       <SectionHeading
         num="Section 02"
         title="Vos peak hours"
         lead="Audience moyenne croisant les jours de la semaine et les heures d'ouverture, sur l'ensemble de la période. Plus la couleur est vive, plus l'audience est élevée. Les zones rayées correspondent à vos heures de fermeture."
       />
 
-      <div className="mt-5 overflow-x-auto">
-        <div className="min-w-[560px]">
-          <div className="grid grid-cols-[2.5rem_repeat(14,minmax(0,1fr))] gap-1">
-            <div />
-            {HEATMAP_HOURS.map((hour) => (
-              <div key={hour} className="text-center text-[10px] font-medium text-gray-400">
-                {hour}h
+      <div className="mt-8 overflow-x-auto rounded-xl border border-perf-line bg-white p-[26px]">
+        <div className="grid min-w-[680px] grid-cols-[52px_repeat(14,minmax(0,1fr))] gap-1">
+          <div />
+          {HEATMAP_HOURS.map((hour) => (
+            <div key={hour} className="perf-mono pb-2 text-center text-[10px] text-perf-mist">
+              {hour}h
+            </div>
+          ))}
+          {DAY_LABELS_SHORT.map((label, day) => (
+            <Fragment key={label}>
+              <div className="perf-mono self-center pr-1.5 text-[11px] uppercase tracking-[0.05em] text-perf-grey">
+                {label}
               </div>
-            ))}
-            {DAY_LABELS_SHORT.map((label, day) => (
-              <Fragment key={label}>
-                <div className="flex items-center text-xs font-medium text-gray-500">{label}</div>
-                {HEATMAP_HOURS.map((hour) => {
-                  const closed = closedHour(hour, hasData, openingHour, closingHour);
-                  const value = grid[day]?.[hour] ?? 0;
-                  const level = intensityLevel(value, thresholds);
-                  return (
-                    <div
-                      key={`${label}-${hour}`}
-                      title={closed ? 'Fermé' : `${label} ${hour}h — ${value}`}
-                      className={`h-6 rounded ${closed ? HEATMAP_CLOSED_CLASS : HEATMAP_LEVEL_CLASSES[level - 1]}`}
-                    />
-                  );
-                })}
-              </Fragment>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-4 flex items-center gap-2 text-xs text-gray-500">
-        <span>Faible</span>
-        <div className="flex gap-1">
-          {HEATMAP_LEVEL_CLASSES.map((cls) => (
-            <div key={cls} className={`h-3 w-6 rounded ${cls}`} />
+              {HEATMAP_HOURS.map((hour) => {
+                const closed = closedHour(hour, hasData, openingHour, closingHour);
+                const value = grid[day]?.[hour] ?? 0;
+                const level = intensityLevel(value, thresholds);
+                return (
+                  <div
+                    key={`${label}-${hour}`}
+                    title={closed ? 'Fermé' : `${label} ${hour}h — ${value}`}
+                    className={`h-[26px] rounded ${closed ? HEATMAP_CLOSED_CLASS : HEATMAP_LEVEL_CLASSES[level - 1]}`}
+                  />
+                );
+              })}
+            </Fragment>
           ))}
         </div>
-        <span>Élevée</span>
+
+        <div className="perf-mono mt-[18px] flex items-center gap-2.5 text-[10px] uppercase tracking-[0.04em] text-perf-grey">
+          <span>Faible</span>
+          <div className="flex gap-[3px]">
+            {HEATMAP_LEVEL_CLASSES.map((cls) => (
+              <div key={cls} className={`h-3.5 w-3.5 rounded-[3px] ${cls}`} />
+            ))}
+          </div>
+          <span>Élevée</span>
+        </div>
       </div>
     </section>
   );

@@ -2,6 +2,7 @@ import { formatIntFr } from '../../lib/performance-derive';
 
 import { PendingValue } from './Pending';
 import { SectionHeading } from './SectionHeading';
+import { Var } from './Var';
 
 export interface CampaignTableRow {
   id: string;
@@ -20,6 +21,15 @@ interface CampaignsSectionProps {
   rows: CampaignTableRow[];
 }
 
+function KpiLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="perf-mono flex items-center gap-2 text-[10px] uppercase tracking-[0.1em] text-perf-mist">
+      <span className="h-[5px] w-[5px] rounded-full bg-perf-mist opacity-70" aria-hidden />
+      {children}
+    </div>
+  );
+}
+
 /** S06 — "Vos campagnes": KPI trio (count / cumulative impressions / top 3) + the history table. */
 export function CampaignsSection({
   count,
@@ -29,67 +39,64 @@ export function CampaignsSection({
 }: CampaignsSectionProps) {
   const empty = count === 0;
   return (
-    <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+    <section className="mb-[76px]">
       <SectionHeading
         num="Section 06"
         title="Vos campagnes"
         lead="Synthèse et historique des campagnes diffusées dans votre lieu sur la période analysée."
       />
 
-      <h3 className="mt-5 font-semibold text-brand-deep">Vos campagnes en chiffres</h3>
-      <p className="text-sm text-gray-500">
+      <h3 className="mt-8 text-[19px] font-semibold tracking-[-0.01em] text-perf-ink">
+        Vos campagnes en chiffres
+      </h3>
+      <p className="mt-1.5 max-w-[560px] text-[13.5px] text-perf-grey">
         Synthèse des campagnes diffusées dans votre lieu sur la période analysée.
       </p>
-      <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-4">
-          <div className="flex items-center gap-2 text-xs font-medium text-gray-500">
-            <span className="h-1.5 w-1.5 rounded-full bg-brand-primary" aria-hidden />
-            Campagnes diffusées
-          </div>
-          <div className="mt-2">
+      <div className="mt-6 grid grid-cols-1 border-t-2 border-t-perf-green md:grid-cols-3 md:border-b md:border-b-perf-line">
+        <div className="border-b border-perf-line py-[22px] md:border-b-0 md:border-r md:border-r-perf-soft md:py-[26px] md:pr-6">
+          <KpiLabel>Campagnes diffusées</KpiLabel>
+          <div className="mt-4">
             {empty ? (
               <PendingValue />
             ) : (
-              <span className="text-2xl font-bold tabular-nums text-brand-deep">{count}</span>
+              <span className="text-[46px] font-semibold leading-none tracking-[-0.03em] text-perf-ink">
+                {count}
+              </span>
             )}
           </div>
-          <p className="mt-2 text-xs text-gray-500">
+          <p className="mt-2.5 text-[12.5px] leading-[1.45] text-perf-grey">
             Nombre de campagnes ayant tourné dans votre lieu sur la période
           </p>
         </div>
-        <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-4">
-          <div className="flex items-center gap-2 text-xs font-medium text-gray-500">
-            <span className="h-1.5 w-1.5 rounded-full bg-brand-primary" aria-hidden />
-            Impressions cumulées
-          </div>
-          <div className="mt-2">
+        <div className="border-b border-perf-line py-[22px] md:border-b-0 md:border-r md:border-r-perf-soft md:py-[26px] md:pl-6 md:pr-6">
+          <KpiLabel>Impressions cumulées</KpiLabel>
+          <div className="mt-4">
             {empty ? (
               <PendingValue />
             ) : (
-              <span className="text-2xl font-bold tabular-nums text-brand-deep">
+              <span className="text-[46px] font-semibold leading-none tracking-[-0.03em] text-perf-ink">
                 {formatIntFr(cumulativeImpressions)}
               </span>
             )}
           </div>
-          <p className="mt-2 text-xs text-gray-500">
+          <p className="mt-2.5 text-[12.5px] leading-[1.45] text-perf-grey">
             Total des impressions servies sur la période analysée
           </p>
         </div>
-        <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-4">
-          <div className="flex items-center gap-2 text-xs font-medium text-gray-500">
-            <span className="h-1.5 w-1.5 rounded-full bg-brand-primary" aria-hidden />
-            Top 3 campagnes
-          </div>
-          <div className="mt-2 space-y-1.5">
+        <div className="py-[22px] md:py-[26px] md:pl-6">
+          <KpiLabel>Top 3 campagnes</KpiLabel>
+          <div className="mt-4 flex flex-col gap-3.5">
             {[0, 1, 2].map((idx) => (
-              <div key={idx} className="flex items-center gap-2">
-                <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-brand-deep text-[10px] font-bold text-white">
+              <div key={idx} className="flex items-baseline gap-[11px]">
+                <span
+                  className={`w-4 flex-shrink-0 text-base font-semibold ${
+                    idx === 0 ? 'text-perf-green' : 'text-perf-mist'
+                  }`}
+                >
                   {idx + 1}
                 </span>
-                <span
-                  className={`truncate text-sm ${top3[idx] ? 'font-medium text-brand-deep' : 'italic text-gray-400'}`}
-                >
-                  {top3[idx] ?? 'Nom de la campagne'}
+                <span className="truncate text-[13.5px] text-perf-ink">
+                  <Var>{top3[idx] ?? 'Nom de la campagne'}</Var>
                 </span>
               </div>
             ))}
@@ -97,49 +104,67 @@ export function CampaignsSection({
         </div>
       </div>
 
-      <h3 className="mt-6 font-semibold text-brand-deep">Historique des campagnes</h3>
-      <p className="text-sm text-gray-500">
+      <h3 className="mt-[38px] text-[19px] font-semibold tracking-[-0.01em] text-perf-ink">
+        Historique des campagnes
+      </h3>
+      <p className="mt-1.5 max-w-[560px] text-[13.5px] text-perf-grey">
         Détail campagne par campagne sur la période analysée, avec leurs principaux indicateurs de
         performance.
       </p>
       {empty ? (
-        <div className="mt-3 rounded-xl border-2 border-dashed border-gray-200 px-4 py-8 text-center text-sm italic text-gray-400">
+        <div className="mt-6 rounded-xl border border-perf-line bg-white px-5 py-[34px] text-center text-[13.5px] italic text-perf-mist">
           En attente du premier deal.
         </div>
       ) : (
-        <div className="mt-3 overflow-x-auto">
-          <table className="w-full min-w-[640px] text-left text-sm">
+        <div className="mt-6 overflow-x-auto">
+          <table className="w-full min-w-[640px] border-collapse text-left text-[13px]">
             <thead>
-              <tr className="border-b border-gray-100 text-xs font-medium uppercase tracking-wider text-gray-400">
-                <th className="py-2 pr-3 font-medium">Campagne</th>
-                <th className="py-2 pr-3 font-medium">Période</th>
-                <th className="py-2 pr-3 font-medium">Type</th>
-                <th className="py-2 pr-3 font-medium">Statut</th>
-                <th className="py-2 pr-3 font-medium">Impressions</th>
-                <th className="py-2 font-medium">Revenu</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {rows.map((row) => (
-                <tr key={row.id}>
-                  <td className="py-2.5 pr-3 font-medium text-brand-deep">{row.name}</td>
-                  <td className="py-2.5 pr-3 text-gray-500">{row.period}</td>
-                  <td className="py-2.5 pr-3 text-gray-500">{row.typeLabel}</td>
-                  <td className="py-2.5 pr-3">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                        row.statut === 'Active'
-                          ? 'bg-brand-primary/20 text-brand-deep'
-                          : 'bg-gray-100 text-gray-500'
+              <tr>
+                {['Campagne', 'Période', 'Type', 'Statut', 'Impressions', 'Revenu'].map(
+                  (th, idx, arr) => (
+                    <th
+                      key={th}
+                      className={`perf-mono border-b-2 border-brand-deep pb-3 pr-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-perf-mist ${
+                        idx === arr.length - 1 ? 'pr-0 text-right' : ''
                       }`}
                     >
+                      {th}
+                    </th>
+                  ),
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.id}>
+                  <td className="border-b border-perf-soft py-[13px] pr-3 align-middle text-perf-ink">
+                    {row.name}
+                  </td>
+                  <td className="border-b border-perf-soft py-[13px] pr-3 align-middle text-perf-ink">
+                    {row.period}
+                  </td>
+                  <td className="border-b border-perf-soft py-[13px] pr-3 align-middle text-perf-ink">
+                    {row.typeLabel}
+                  </td>
+                  <td className="border-b border-perf-soft py-[13px] pr-3 align-middle">
+                    <span
+                      className={`perf-mono inline-flex items-center gap-1.5 text-[11px] ${
+                        row.statut === 'Active' ? 'text-perf-green' : 'text-perf-grey'
+                      }`}
+                    >
+                      <span
+                        className={`h-1.5 w-1.5 rounded-full ${
+                          row.statut === 'Active' ? 'bg-perf-green' : 'bg-perf-mist'
+                        }`}
+                        aria-hidden
+                      />
                       {row.statut}
                     </span>
                   </td>
-                  <td className="py-2.5 pr-3 tabular-nums text-gray-600">
+                  <td className="border-b border-perf-soft py-[13px] pr-3 align-middle text-perf-ink">
                     {formatIntFr(row.impressions)}
                   </td>
-                  <td className="py-2.5 tabular-nums font-medium text-brand-deep">
+                  <td className="perf-mono border-b border-perf-soft py-[13px] text-right align-middle font-semibold text-brand-accent">
                     {row.revenueLabel}
                   </td>
                 </tr>

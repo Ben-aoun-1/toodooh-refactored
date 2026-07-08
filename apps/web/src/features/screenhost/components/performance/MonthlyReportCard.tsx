@@ -1,9 +1,10 @@
-import { Download, Eye, FileText, Loader2 } from 'lucide-react';
+import { Calendar, Download, Eye, Loader2 } from 'lucide-react';
 
 import { formatIntFr } from '../../lib/performance-derive';
 import { firstOfFollowingMonth, monthLabelFr } from '../../lib/performance-period';
 
 import { PENDING_LABEL } from './Pending';
+import { Var } from './Var';
 
 interface MonthlyReportCardProps {
   /** The latest hub-pushed month for the venue, or null (EMPTY variant). */
@@ -17,7 +18,7 @@ interface MonthlyReportCardProps {
   downloading: boolean;
 }
 
-/** §3 — "Votre rendez-vous mensuel": the latest monthly report + its three tiles. */
+/** §3 — "Votre rendez-vous mensuel": the mockups' LIGHT lavender-gradient card + three tiles. */
 export function MonthlyReportCard({
   latestMonth,
   monthImpressions,
@@ -27,99 +28,108 @@ export function MonthlyReportCard({
   downloading,
 }: MonthlyReportCardProps) {
   const hasMonth = latestMonth !== null;
-  const stats: { label: string; value: string | null }[] = [
+  const stats: { label: string; value: string | null; suffix?: string }[] = [
     { label: 'Impressions générées', value: hasMonth ? formatIntFr(monthImpressions) : null },
     {
       label: 'Personnes atteintes',
       value: hasMonth ? formatIntFr(latestMonth.total_audience) : null,
+      suffix: 'pers.',
     },
     { label: 'Campagnes diffusées', value: hasMonth ? formatIntFr(campaignsCount) : null },
   ];
 
   return (
-    <section className="relative overflow-hidden rounded-2xl bg-brand-deep p-6 text-white sm:p-8">
+    <section className="relative isolate mb-12 mt-9 overflow-hidden rounded-[20px] border border-perf-line bg-[linear-gradient(155deg,#ECEDFD_0%,#FFFFFF_55%,#F5F6F8_100%)] p-[30px] px-[22px] pb-8 sm:p-10 sm:px-11 sm:pb-11">
       <div
-        className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-primary/20 blur-2xl"
+        className="pointer-events-none absolute -top-[100px] right-[-80px] z-0 h-[280px] w-[280px] rounded-full bg-[radial-gradient(circle_at_35%_35%,#9195F8,transparent_72%)] opacity-[0.16] blur-[42px]"
         aria-hidden
       />
-      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-brand-primary">
-        <FileText className="h-4 w-4" aria-hidden />
+      <div className="perf-mono relative z-10 inline-flex items-center gap-2 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-brand-accent">
+        <Calendar className="h-[13px] w-[13px]" aria-hidden />
         Rapports mensuels
       </div>
-      {/* text-white must be EXPLICIT — a global heading rule would otherwise repaint it dark. */}
-      <h2 className="mt-3 text-2xl font-semibold text-white sm:text-3xl">
-        Votre rendez-vous <em className="not-italic text-brand-primary">mensuel</em>
+      <h2 className="relative z-10 mt-4 text-[27px] font-bold tracking-[-0.015em] text-perf-ink">
+        Votre rendez-vous <em className="not-italic text-brand-accent">mensuel</em>
       </h2>
-      <p className="mt-2 max-w-2xl text-sm text-white/80">
+      <p className="relative z-10 mt-2.5 max-w-[520px] text-sm leading-[1.6] text-perf-grey">
         Chaque mois, votre rapport d'audience est généré automatiquement et vous êtes notifié.
         Consultez le dernier et retrouvez tout l'historique, à télécharger à tout moment.
       </p>
 
-      <div className="mt-6 rounded-2xl bg-white/10 p-4 sm:p-5">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-full bg-brand-primary px-2.5 py-0.5 text-xs font-bold text-brand-deep">
+      <div className="relative z-10 mt-7 rounded-2xl border border-perf-line bg-white/55 p-[22px] sm:p-[26px] sm:px-7">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="perf-mono inline-flex items-center rounded-full bg-brand-accent px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white">
             Nouveau
           </span>
-          <span className="text-xs text-white/70">
+          <span className="perf-mono text-[11px] text-perf-mist">
             Généré automatiquement le{' '}
-            <span className="font-semibold text-white">
-              {hasMonth ? firstOfFollowingMonth(latestMonth.month) : '—'}
-            </span>
+            {hasMonth ? <Var>{firstOfFollowingMonth(latestMonth.month)}</Var> : <Var>—</Var>}
           </span>
         </div>
 
-        <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="mb-[22px] mt-5 flex flex-col items-start gap-4 border-b border-perf-line pb-[22px] sm:flex-row sm:items-end sm:justify-between sm:gap-6">
           <div>
-            <div className="text-xs uppercase tracking-wider text-white/60">
+            <div className="perf-mono text-[10px] font-semibold uppercase tracking-[0.1em] text-perf-mist">
               Dernier rapport mensuel
             </div>
-            <div className="mt-1 text-xl font-semibold">
+            <div className="mt-2.5 text-[34px] font-bold tracking-[-0.02em] text-perf-ink">
               {hasMonth ? monthLabelFr(latestMonth.month) : '—'}
             </div>
-            <p className="mt-1 max-w-md text-sm text-white/75">
+            <p className="mt-2.5 max-w-[420px] text-[13px] leading-[1.6] text-perf-grey">
               Votre synthèse d'audience du mois : impressions générées, personnes touchées et profil
               de votre clientèle.
             </p>
           </div>
-          <div className="flex flex-shrink-0 flex-wrap gap-2">
+          <div className="flex w-full flex-shrink-0 items-center gap-2.5 sm:w-auto">
             <button
               type="button"
               onClick={onConsult}
               disabled={!hasMonth}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-white/40 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-full border border-perf-line bg-white px-[19px] py-[11px] text-[13.5px] font-semibold text-perf-ink transition-colors hover:border-perf-mist hover:bg-[#F6F8FA] disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none"
             >
-              <Eye className="h-4 w-4" aria-hidden />
+              <Eye className="h-[15px] w-[15px]" aria-hidden />
               Consulter
             </button>
             <button
               type="button"
               onClick={onDownload}
               disabled={!hasMonth || downloading}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-brand-primary px-4 py-2 text-sm font-semibold text-brand-deep transition-colors hover:bg-brand-primary/90 disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-full bg-brand-primary px-5 py-3 text-[13.5px] font-semibold text-[#0D2B1F] transition-colors hover:bg-[#65DCA0] disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none"
             >
               {downloading ? (
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                <Loader2 className="h-[15px] w-[15px] animate-spin" aria-hidden />
               ) : (
-                <Download className="h-4 w-4" aria-hidden />
+                <Download className="h-[15px] w-[15px]" aria-hidden />
               )}
               Télécharger
             </button>
           </div>
         </div>
 
-        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          {stats.map((stat) => (
-            <div key={stat.label} className="rounded-xl bg-white/10 p-3">
-              <div className="text-xs text-white/60">{stat.label}</div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 sm:gap-0">
+          {stats.map((stat, idx) => (
+            <div
+              key={stat.label}
+              className={`border-b border-perf-line pb-4 last:border-b-0 last:pb-0 sm:border-b-0 sm:px-[22px] sm:pb-0 ${
+                idx === 0 ? 'sm:pl-0' : ''
+              } ${idx < stats.length - 1 ? 'sm:border-r sm:border-r-perf-line' : ''}`}
+            >
+              <div className="perf-mono text-[9.5px] font-semibold uppercase tracking-[0.08em] text-perf-mist">
+                {stat.label}
+              </div>
               {stat.value !== null ? (
-                <div className="mt-1 text-2xl font-bold tabular-nums">
+                <div className="mt-2 text-[22px] font-bold tracking-[-0.01em] text-perf-ink">
                   {stat.value}
-                  {stat.label === 'Personnes atteintes' && (
-                    <span className="ml-1 text-sm font-medium text-white/60">pers.</span>
+                  {stat.suffix && (
+                    <span className="ml-1 text-[13px] font-medium text-perf-mist">
+                      {stat.suffix}
+                    </span>
                   )}
                 </div>
               ) : (
-                <div className="mt-1 text-sm font-medium italic text-white/50">{PENDING_LABEL}</div>
+                <div className="mt-2 text-[14.5px] font-semibold italic text-perf-mist">
+                  {PENDING_LABEL}
+                </div>
               )}
             </div>
           ))}

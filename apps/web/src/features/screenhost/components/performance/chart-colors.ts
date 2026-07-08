@@ -7,15 +7,15 @@ export const CHART_ACCENT = '#9195F8'; // = tailwind brand.accent (hero revenue)
 export const CHART_DEEP = '#204B43'; // = tailwind brand.deep (S03 impressions)
 export const CHART_GREEN = '#1D9E75'; // hero audience + heatmap ramp top (design-ruled)
 
-/** S02 — the 5-step intensity ramp #E4F5EC → #1D9E75 as static Tailwind classes. */
+/** S02 — the mockups' exact 5-step intensity ramp as static Tailwind classes. */
 export const HEATMAP_LEVEL_CLASSES = [
   'bg-[#E4F5EC]',
-  'bg-[#C2EBD7]',
-  'bg-[#8FD9B7]',
-  'bg-[#4FBE93]',
+  'bg-[#BFEBD5]',
+  'bg-[#88DAB2]',
+  'bg-[#4FC28D]',
   'bg-[#1D9E75]',
 ] as const;
 
-/** The striped "fermé" treatment of the mockups' closed-hour cells. */
+/** The mockups' exact striped ("hachuré") treatment of closed-hour cells. */
 export const HEATMAP_CLOSED_CLASS =
-  'bg-[repeating-linear-gradient(45deg,#F3F4F6_0px,#F3F4F6_4px,#E5E7EB_4px,#E5E7EB_8px)]';
+  'bg-[repeating-linear-gradient(-45deg,#F1F5F3,#F1F5F3_3px,#E4ECE7_3px,#E4ECE7_6px)]';

@@ -1,4 +1,4 @@
-import { Calendar, Loader2 } from 'lucide-react';
+import { Calendar, Loader2, TrendingUp } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
@@ -231,45 +231,46 @@ export default function OwnerPerformance() {
     profile.isError || monthlyStats.isError || impressions.isError || earnings.isError;
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="perf-page min-h-screen bg-perf-page">
       <div className="flex h-screen">
         <OwnerNavigation isDisabled={isDisabled} />
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <header className="border-b border-gray-100 bg-white">
-            <div className="w-full px-4 py-3 sm:px-6 lg:px-8">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <h1 className="text-xl font-semibold text-brand-deep">Mes performances</h1>
-                  <p className="hidden text-sm text-gray-500 sm:block">
-                    Analysez l'activité de votre établissement et développez vos revenus
-                  </p>
+          <div className="flex-1 overflow-y-auto">
+            <div className="mx-auto w-full max-w-[1180px] px-5 pb-16 pt-[26px] sm:px-10 sm:pb-24">
+              <header className="mb-7 flex flex-col justify-between gap-4 border-b border-perf-line py-[22px] sm:flex-row sm:items-center sm:gap-6">
+                <div className="flex items-center gap-3.5">
+                  <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[10px] bg-perf-lavender text-brand-accent">
+                    <TrendingUp className="h-[19px] w-[19px]" aria-hidden />
+                  </div>
+                  <div className="min-w-0">
+                    <h1 className="text-[19px] font-semibold tracking-[-0.015em] text-perf-ink">
+                      Mes performances
+                    </h1>
+                    <p className="mt-0.5 text-[13px] text-perf-grey">
+                      Analysez l'activité de votre établissement et développez vos revenus
+                    </p>
+                  </div>
                 </div>
-                <div className="flex flex-shrink-0 items-center gap-2">
+                <div className="flex flex-shrink-0 flex-wrap items-center gap-3">
                   <button
                     type="button"
                     onClick={() => navigate('/owner-calendar-devices')}
-                    aria-label="Piloter mon calendrier de diffusion"
-                    title="Piloter mon calendrier de diffusion"
-                    className="inline-flex flex-shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-2xl bg-brand-primary px-4 py-2.5 text-sm font-semibold text-brand-deep transition-colors hover:bg-brand-primary/90"
+                    className="inline-flex items-center gap-[9px] whitespace-nowrap rounded-full bg-brand-primary px-5 py-3 text-[13.5px] font-semibold text-[#0D2B1F] shadow-[0_1px_2px_rgba(13,43,31,0.06)] transition-colors hover:bg-[#65DCA0]"
                   >
-                    <Calendar className="h-4 w-4 flex-shrink-0" aria-hidden />
-                    <span className="hidden lg:inline">Piloter mon calendrier de diffusion</span>
+                    <Calendar className="h-[15px] w-[15px] flex-shrink-0" aria-hidden />
+                    <span>Piloter mon calendrier de diffusion</span>
                   </button>
                   <OwnerNotificationsBell userId={user?.id} />
                 </div>
-              </div>
-            </div>
-          </header>
+              </header>
 
-          <div className="flex-1 overflow-y-auto">
-            <div className="w-full space-y-6 px-4 py-6 sm:px-6 lg:px-8">
               {screenhosts.isLoading ? (
-                <div className="flex items-center justify-center gap-2 py-16 text-gray-400">
+                <div className="flex items-center justify-center gap-2 py-16 text-perf-mist">
                   <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
                   <span className="text-sm">Chargement…</span>
                 </div>
               ) : venues.length === 0 ? (
-                <div className="rounded-2xl border-2 border-dashed border-gray-200 px-6 py-16 text-center text-sm text-gray-500">
+                <div className="rounded-xl border border-dashed border-perf-line bg-white px-6 py-16 text-center text-sm text-perf-grey">
                   Aucun établissement associé à votre compte.
                 </div>
               ) : (
@@ -284,10 +285,10 @@ export default function OwnerPerformance() {
                             type="button"
                             onClick={() => setSelectedId(v.id)}
                             aria-pressed={active}
-                            className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary ${
+                            className={`rounded-full px-[17px] py-[9px] text-[13px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary ${
                               active
-                                ? 'bg-brand-deep text-white'
-                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                ? 'border border-brand-primary bg-brand-primary font-semibold text-[#0D2B1F]'
+                                : 'border border-perf-line bg-white font-medium text-perf-grey hover:border-perf-green hover:text-perf-ink'
                             }`}
                           >
                             {v.name}
@@ -298,7 +299,7 @@ export default function OwnerPerformance() {
                   )}
 
                   {anyError && (
-                    <p className="text-sm font-medium text-rose-500">
+                    <p className="mt-4 text-sm font-medium text-rose-500">
                       Impossible de charger les performances pour le moment.
                     </p>
                   )}
