@@ -60,6 +60,7 @@ import {
   isoDate,
   resolvePeriodRange,
 } from '../lib/performance-period';
+import { downloadPeriodReport } from '../lib/period-report';
 
 const log = logger.child({ module: 'OwnerPerformance' });
 
@@ -244,6 +245,20 @@ export default function OwnerPerformance() {
       setDownloading(false);
     }
   };
+  // R1 — the bottom CTA: the ON-DEMAND period report over the ACTIVE filter range (live server
+  // render; the monthly card/history buttons above keep their stored-artifact URLs).
+  const downloadPeriod = async () => {
+    if (!selectedId || downloading) return;
+    setDownloading(true);
+    try {
+      await downloadPeriodReport(selectedId, range);
+    } catch (err) {
+      log.error({ err }, 'period report download failed');
+      toast.error('Échec du téléchargement. Veuillez réessayer.');
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const anyError =
     profile.isError || monthlyStats.isError || impressions.isError || earnings.isError;
@@ -404,9 +419,9 @@ export default function OwnerPerformance() {
                   <SpsSection />
 
                   <DownloadCta
-                    latestMonth={latestMonth?.month ?? null}
+                    hasData={hostHasData || castHasData}
                     downloading={downloading}
-                    onDownload={() => latestMonth && void downloadMonth(latestMonth.month)}
+                    onDownload={() => void downloadPeriod()}
                   />
                 </>
               )}
