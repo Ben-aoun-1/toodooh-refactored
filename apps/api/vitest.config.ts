@@ -27,6 +27,9 @@ export default defineConfig({
       STORAGE_ENDPOINT: process.env['STORAGE_ENDPOINT'] ?? 'http://localhost:9000',
       STORAGE_ACCESS_KEY: process.env['STORAGE_ACCESS_KEY'] ?? 'minioadmin',
       STORAGE_SECRET_KEY: process.env['STORAGE_SECRET_KEY'] ?? 'minioadmin',
+      // R1 report renderer — pass through so the real-chromium smoke runs when the machine has
+      // one (unset → the guarded suite skips; CI stays chromium-free).
+      ...(process.env['CHROMIUM_PATH'] ? { CHROMIUM_PATH: process.env['CHROMIUM_PATH'] } : {}),
     },
   },
 });

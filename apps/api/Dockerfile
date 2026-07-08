@@ -16,6 +16,12 @@ RUN pnpm --filter @toodooh/api deploy --prod=false /out
 FROM node:20-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
+# Chromium for the report renderer (R1) — puppeteer-core drives the DISTRO chromium (no bundled
+# download; that is why -core). Font fallbacks stay MINIMAL (ttf-freefont Latin + noto emoji —
+# the full font-noto set alone costs hundreds of MB); Geist itself loads via the template's
+# Google-Fonts import when outbound network exists.
+RUN apk add --no-cache chromium nss freetype harfbuzz ca-certificates ttf-freefont font-noto-emoji
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 COPY --from=builder /out/node_modules ./node_modules
 COPY --from=builder /repo/apps/api/dist ./dist
 COPY --from=builder /repo/apps/api/package.json ./

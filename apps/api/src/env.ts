@@ -70,6 +70,11 @@ const EnvSchema = z.object({
   FACTURE_BANK_NAME: z.string().min(1).default('—'),
   FACTURE_BANK_RIB: z.string().min(1).default('—'),
   FACTURE_BANK_IBAN: z.string().min(1).default('—'),
+  // Chromium executable for the report renderer (R1). OPTIONAL for the same eager-parse reason as
+  // the WEDOOH_* block: unset, the renderer falls back to PUPPETEER_EXECUTABLE_PATH (the docker
+  // image sets it) then common system paths; when none resolves, report rendering fails with a
+  // clear error while every other route keeps serving.
+  CHROMIUM_PATH: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof EnvSchema> & {
