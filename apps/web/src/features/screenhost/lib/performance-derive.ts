@@ -1,3 +1,5 @@
+import { addDays, format, parseISO } from 'date-fns';
+
 import { type DateRange, inRange } from './performance-period';
 
 /**
@@ -43,6 +45,50 @@ export interface VenueRatios {
 
 /** ISO date of an earnings line's reconciliation timestamp (the fallback anchor). */
 const reconciledDate = (line: PerformanceEarningsLine): string => line.reconciled_at.slice(0, 10);
+
+/**
+ * HOST first-data flag (Mejri ruling): the venue's AUDIENCE pipeline has delivered something —
+ * any hub-pushed monthly-stats month OR any non-zero affluence cell. Once true, every HOST
+ * metric shows real values (0 rendered as 0) instead of "En attente du premier deal".
+ */
+export function hasHostData(months: unknown[], affluenceGrid: number[][]): boolean {
+  return months.length > 0 || affluenceGrid.some((row) => row.some((value) => value > 0));
+}
+
+/**
+ * CAST first-data flag (Mejri ruling): the venue's CAMPAIGN/REVENUE/PROOF pipeline has delivered
+ * something — any earnings line OR any impressions-daily day (the API omits zero days, so a day
+ * row IS data). Once true, every CAST metric shows real values, 0 on dates/periods without data.
+ * The two flags NEVER gate each other's sections.
+ */
+export function hasCastData(
+  lines: PerformanceEarningsLine[],
+  days: DailyImpressionsPoint[],
+): boolean {
+  return lines.length > 0 || days.length > 0;
+}
+
+/**
+ * S03 once hasCastData: every day of the (already clamped) period renders, 0 on days the API
+ * omitted. Inverted ranges produce []. ISO date arithmetic stays string-based on the day level.
+ */
+export function zeroFillDays(
+  days: DailyImpressionsPoint[],
+  range: DateRange,
+): DailyImpressionsPoint[] {
+  if (range.from > range.to) return [];
+  const byDate = new Map(days.map((d) => [d.date, d.impressions]));
+  const filled: DailyImpressionsPoint[] = [];
+  for (
+    let cursor = parseISO(range.from);
+    !Number.isNaN(cursor.getTime()) && format(cursor, 'yyyy-MM-dd') <= range.to;
+    cursor = addDays(cursor, 1)
+  ) {
+    const date = format(cursor, 'yyyy-MM-dd');
+    filled.push({ date, impressions: byDate.get(date) ?? 0 });
+  }
+  return filled;
+}
 
 /**
  * Daily open-hours span from the venue profile, `[opening, closing)`. Falls back to 14 (the
@@ -181,7 +227,7 @@ export function demographicBreakdown(ratios: VenueRatios, audience: number): Dem
 
 /**
  * S02 heatmap — 5-step intensity levels bucketed by QUANTILES over the visible (open-hour) cell
- * values. All-zero input → everything level 1 (the ramp floor).
+ * values. The ramp only applies to cells WITH data.
  */
 export function quantileThresholds(values: number[]): [number, number, number, number] {
   const positive = values.filter((v) => v > 0).sort((a, b) => a - b);
@@ -191,11 +237,16 @@ export function quantileThresholds(values: number[]): [number, number, number, n
   return [at(0.2), at(0.4), at(0.6), at(0.8)];
 }
 
+/**
+ * Level 0 = NO DATA → the hachure treatment, not the ramp floor (Mejri ruling #1). The affluence
+ * grid zero-fills, so a measured-true-zero cell is indistinguishable from an unmeasured one —
+ * accepted approximation: 0 reads as no-data.
+ */
 export function intensityLevel(
   value: number,
   thresholds: [number, number, number, number],
-): 1 | 2 | 3 | 4 | 5 {
-  if (value <= 0) return 1;
+): 0 | 1 | 2 | 3 | 4 | 5 {
+  if (value <= 0) return 0;
   if (value < thresholds[0]) return 1;
   if (value < thresholds[1]) return 2;
   if (value < thresholds[2]) return 3;

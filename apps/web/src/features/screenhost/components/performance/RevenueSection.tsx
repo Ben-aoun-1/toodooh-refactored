@@ -17,11 +17,13 @@ interface RevenueSectionProps {
   total: number;
   count: number;
   rows: RevenueRow[];
+  /** CAST first-data flag — until true, the 'À venir' variant; after, values with 0s. */
+  hasCastData: boolean;
 }
 
 /** S05 — "Vos revenus de la période": total + per-campaign detail, or the 'À venir' empty state. */
-export function RevenueSection({ total, count, rows }: RevenueSectionProps) {
-  const empty = count === 0;
+export function RevenueSection({ total, count, rows, hasCastData }: RevenueSectionProps) {
+  const empty = !hasCastData;
   return (
     <section className="mb-[76px]">
       <SectionHeading
@@ -93,6 +95,11 @@ export function RevenueSection({ total, count, rows }: RevenueSectionProps) {
               <span>Détail par campagne</span>
               <span>Votre revenu</span>
             </div>
+            {rows.length === 0 && (
+              <div className="px-1 py-[26px] text-center text-[13.5px] italic text-perf-mist">
+                Aucune campagne sur la période analysée.
+              </div>
+            )}
             <div>
               {rows.map((row) => (
                 <div

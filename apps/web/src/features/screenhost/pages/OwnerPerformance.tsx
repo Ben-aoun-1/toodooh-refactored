@@ -43,10 +43,13 @@ import {
   demographicBreakdown,
   formatTndCellFr,
   formatTndFr,
+  hasCastData,
+  hasHostData,
   impressionsOfMonth,
   lineInPeriod,
   linesEndingInMonth,
   openHoursPerDay,
+  zeroFillDays,
 } from '../lib/performance-derive';
 import {
   type PeriodKey,
@@ -110,6 +113,11 @@ export default function OwnerPerformance() {
   );
 
   const latestMonth = months[0] ?? null;
+
+  // ── HOST/CAST first-data flags (Mejri ruling) — they NEVER gate each other's sections ─────────
+  const affluenceGrid = useMemo(() => affluence.data?.grid ?? [], [affluence.data]);
+  const hostHasData = useMemo(() => hasHostData(months, affluenceGrid), [months, affluenceGrid]);
+  const castHasData = useMemo(() => hasCastData(venueLines, days), [venueLines, days]);
   const historyRows = useMemo(
     () =>
       months.slice(1).map((m) => ({
@@ -158,7 +166,17 @@ export default function OwnerPerformance() {
       ),
     [periodAudience, profile.data],
   );
-  const periodDays = useMemo(() => days.filter((d) => inRange(d.date, range)), [days, range]);
+  // S03 days: zero-filled over the period∩fetch-window once CAST data exists (0 = day without
+  // data); before the first CAST data the section shows its pending placeholder instead.
+  const periodDays = useMemo(() => {
+    const inWindow = days.filter((d) => inRange(d.date, range));
+    if (!castHasData) return inWindow;
+    const clamped = {
+      from: range.from > fetchWindow.from ? range.from : fetchWindow.from,
+      to: range.to < fetchWindow.to ? range.to : fetchWindow.to,
+    };
+    return zeroFillDays(inWindow, clamped);
+  }, [days, range, castHasData, fetchWindow]);
   const category = categoryLabel(
     profile.data?.business_sector ?? null,
     profile.data?.class ?? null,
@@ -310,6 +328,8 @@ export default function OwnerPerformance() {
                     campaignsCount={
                       latestMonth ? linesEndingInMonth(venueLines, latestMonth.month).length : 0
                     }
+                    hasHostData={hostHasData}
+                    hasCastData={castHasData}
                     onConsult={() => latestMonth && consultMonth(latestMonth.month)}
                     onDownload={() => latestMonth && void downloadMonth(latestMonth.month)}
                     downloading={downloading}
@@ -326,6 +346,8 @@ export default function OwnerPerformance() {
                     revenueSeries={revenueSeries}
                     audienceTotal={audienceTotal}
                     audienceSeries={audienceSeries}
+                    hasHostData={hostHasData}
+                    hasCastData={castHasData}
                   />
 
                   <PeriodFilters
@@ -343,25 +365,30 @@ export default function OwnerPerformance() {
                     range={range}
                     category={category}
                     campaignsCount={periodLines.length}
+                    hasCastData={castHasData}
                   />
 
-                  <AudienceKpisSection kpis={kpis} />
+                  <AudienceKpisSection kpis={kpis} hasHostData={hostHasData} />
 
                   <PeakHoursHeatmap
-                    grid={affluence.data?.grid ?? []}
-                    hasData={affluence.data?.has_data ?? false}
+                    grid={affluenceGrid}
                     openingHour={profile.data?.opening_hour ?? null}
                     closingHour={profile.data?.closing_hour ?? null}
                   />
 
-                  <ImpressionsChartSection days={periodDays} />
+                  <ImpressionsChartSection days={periodDays} hasCastData={castHasData} />
 
-                  <DemographicsSection breakdown={breakdown} category={category} />
+                  <DemographicsSection
+                    breakdown={breakdown}
+                    category={category}
+                    hasHostData={hostHasData}
+                  />
 
                   <RevenueSection
                     total={periodLines.reduce((sum, l) => sum + l.earnings_tnd, 0)}
                     count={periodLines.length}
                     rows={revenueRows}
+                    hasCastData={castHasData}
                   />
 
                   <CampaignsSection
@@ -369,6 +396,7 @@ export default function OwnerPerformance() {
                     cumulativeImpressions={cumulativeImpressions}
                     top3={top3}
                     rows={campaignRows}
+                    hasCastData={castHasData}
                   />
 
                   <OptimisationSection />

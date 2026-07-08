@@ -9,10 +9,18 @@ interface ReportIntroProps {
   /** 'business_sector · Class' — '—' when the venue has no sector. */
   category: string;
   campaignsCount: number;
+  /** CAST first-data flag — once true, "Campagnes incluses" shows the count, 0 included. */
+  hasCastData: boolean;
 }
 
 /** §7 — the intro strip: Commerce / Période analysée / Catégorie / Campagnes incluses. */
-export function ReportIntro({ venueName, range, category, campaignsCount }: ReportIntroProps) {
+export function ReportIntro({
+  venueName,
+  range,
+  category,
+  campaignsCount,
+  hasCastData,
+}: ReportIntroProps) {
   const cells: { label: string; value: React.ReactNode }[] = [
     { label: 'Commerce', value: <Var>{venueName}</Var> },
     {
@@ -26,7 +34,7 @@ export function ReportIntro({ venueName, range, category, campaignsCount }: Repo
     { label: 'Catégorie', value: <Var>{category}</Var> },
     {
       label: 'Campagnes incluses',
-      value: campaignsCount > 0 ? <Var>{String(campaignsCount)}</Var> : <Var>{PENDING_LABEL}</Var>,
+      value: hasCastData ? <Var>{String(campaignsCount)}</Var> : <Var>{PENDING_LABEL}</Var>,
     },
   ];
 

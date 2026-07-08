@@ -13,6 +13,10 @@ interface MonthlyReportCardProps {
   monthImpressions: number;
   /** Count of campaigns whose end falls in that month. */
   campaignsCount: number;
+  /** HOST first-data flag — gates the "Personnes atteintes" tile (Mejri ruling). */
+  hasHostData: boolean;
+  /** CAST first-data flag — gates the "Impressions générées" + "Campagnes diffusées" tiles. */
+  hasCastData: boolean;
   onConsult: () => void;
   onDownload: () => void;
   downloading: boolean;
@@ -23,19 +27,21 @@ export function MonthlyReportCard({
   latestMonth,
   monthImpressions,
   campaignsCount,
+  hasHostData,
+  hasCastData,
   onConsult,
   onDownload,
   downloading,
 }: MonthlyReportCardProps) {
   const hasMonth = latestMonth !== null;
   const stats: { label: string; value: string | null; suffix?: string }[] = [
-    { label: 'Impressions générées', value: hasMonth ? formatIntFr(monthImpressions) : null },
+    { label: 'Impressions générées', value: hasCastData ? formatIntFr(monthImpressions) : null },
     {
       label: 'Personnes atteintes',
-      value: hasMonth ? formatIntFr(latestMonth.total_audience) : null,
+      value: hasHostData ? formatIntFr(latestMonth?.total_audience ?? 0) : null,
       suffix: 'pers.',
     },
-    { label: 'Campagnes diffusées', value: hasMonth ? formatIntFr(campaignsCount) : null },
+    { label: 'Campagnes diffusées', value: hasCastData ? formatIntFr(campaignsCount) : null },
   ];
 
   return (

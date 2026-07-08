@@ -19,6 +19,8 @@ interface CampaignsSectionProps {
   cumulativeImpressions: number;
   top3: string[];
   rows: CampaignTableRow[];
+  /** CAST first-data flag — until true, the 'En attente' variants; after, values with 0s. */
+  hasCastData: boolean;
 }
 
 function KpiLabel({ children }: { children: React.ReactNode }) {
@@ -36,8 +38,9 @@ export function CampaignsSection({
   cumulativeImpressions,
   top3,
   rows,
+  hasCastData,
 }: CampaignsSectionProps) {
-  const empty = count === 0;
+  const empty = !hasCastData;
   return (
     <section className="mb-[76px]">
       <SectionHeading
@@ -114,6 +117,10 @@ export function CampaignsSection({
       {empty ? (
         <div className="mt-6 rounded-xl border border-perf-line bg-white px-5 py-[34px] text-center text-[13.5px] italic text-perf-mist">
           En attente du premier deal.
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="mt-6 rounded-xl border border-perf-line bg-white px-5 py-[34px] text-center text-[13.5px] italic text-perf-mist">
+          Aucune campagne sur la période analysée.
         </div>
       ) : (
         <div className="mt-6 overflow-x-auto">

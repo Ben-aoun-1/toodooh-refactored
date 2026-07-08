@@ -8,6 +8,8 @@ import {
   cumulativeSeries,
   dailyAudienceWithin,
   demographicBreakdown,
+  hasCastData,
+  hasHostData,
   impressionsOfMonth,
   impressionsWithin,
   intensityLevel,
@@ -15,6 +17,7 @@ import {
   linesEndingInMonth,
   openHoursPerDay,
   quantileThresholds,
+  zeroFillDays,
 } from './performance-derive';
 
 const line = (over: Partial<PerformanceEarningsLine> = {}): PerformanceEarningsLine => ({
@@ -184,19 +187,69 @@ describe('demographicBreakdown (S04 — four real bands only)', () => {
 });
 
 describe('heatmap quantile bucketing (S02)', () => {
-  it('buckets values into 5 levels over the positive values', () => {
+  it('buckets values into 5 levels over the positive values; 0 = NO DATA (level 0, hachure)', () => {
     const values = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
     const thresholds = quantileThresholds(values);
-    expect(intensityLevel(0, thresholds)).toBe(1);
+    expect(intensityLevel(0, thresholds)).toBe(0);
     expect(intensityLevel(10, thresholds)).toBe(1);
     expect(intensityLevel(35, thresholds)).toBe(2);
     expect(intensityLevel(55, thresholds)).toBe(3);
     expect(intensityLevel(75, thresholds)).toBe(4);
     expect(intensityLevel(100, thresholds)).toBe(5);
   });
-  it('all-zero grid → everything at the ramp floor', () => {
+  it('all-zero grid → every cell is no-data (hachure), never the ramp floor', () => {
     const thresholds = quantileThresholds([0, 0, 0]);
-    expect(intensityLevel(0, thresholds)).toBe(1);
+    expect(intensityLevel(0, thresholds)).toBe(0);
+  });
+  it('a positive cell with a degenerate distribution still ramps at the floor', () => {
+    const thresholds = quantileThresholds([0, 0, 0]);
+    expect(intensityLevel(5, thresholds)).toBe(1);
+  });
+});
+
+describe('HOST/CAST first-data flags (Mejri ruling)', () => {
+  const zeroGrid = Array.from({ length: 7 }, () => Array<number>(24).fill(0));
+
+  it('hasHostData: any monthly-stats month OR any non-zero affluence cell', () => {
+    expect(hasHostData([], zeroGrid)).toBe(false);
+    expect(hasHostData([], [])).toBe(false);
+    expect(hasHostData([{ month: '2026-06' }], zeroGrid)).toBe(true);
+    const grid = zeroGrid.map((row) => [...row]);
+    grid[3]![14] = 42;
+    expect(hasHostData([], grid)).toBe(true);
+  });
+
+  it('hasCastData: any earnings line OR any impressions-daily day', () => {
+    expect(hasCastData([], [])).toBe(false);
+    expect(hasCastData([line()], [])).toBe(true);
+    expect(hasCastData([], [{ date: '2026-06-01', impressions: 12 }])).toBe(true);
+  });
+});
+
+describe('zeroFillDays (S03 after the first CAST data)', () => {
+  it('fills every day of the range, keeping real values and zeroing the gaps', () => {
+    expect(
+      zeroFillDays(
+        [
+          { date: '2026-06-02', impressions: 20 },
+          { date: '2026-06-04', impressions: 40 },
+        ],
+        { from: '2026-06-01', to: '2026-06-04' },
+      ),
+    ).toEqual([
+      { date: '2026-06-01', impressions: 0 },
+      { date: '2026-06-02', impressions: 20 },
+      { date: '2026-06-03', impressions: 0 },
+      { date: '2026-06-04', impressions: 40 },
+    ]);
+  });
+  it('crosses month boundaries and returns [] on an inverted range', () => {
+    expect(zeroFillDays([], { from: '2026-06-29', to: '2026-07-01' }).map((d) => d.date)).toEqual([
+      '2026-06-29',
+      '2026-06-30',
+      '2026-07-01',
+    ]);
+    expect(zeroFillDays([], { from: '2026-07-02', to: '2026-07-01' })).toEqual([]);
   });
 });
 

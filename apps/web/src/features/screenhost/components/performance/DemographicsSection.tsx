@@ -53,18 +53,25 @@ function DemoRow({
 }
 
 interface DemographicsSectionProps {
-  /** null → the EMPTY variant (the venue's ratios have not been synced). */
+  /** null → the venue's ratios have not been synced (no counts computable). */
   breakdown: DemographicBreakdown | null;
   /** The §7 category string, quoted in the how-to-read note. */
   category: string;
+  /** HOST first-data flag — counts derive from the audience pipeline (Mejri ruling). */
+  hasHostData: boolean;
 }
 
 /**
  * S04 — "Profil typologique de votre clientèle". DEVIATION (ruled): only the four REAL age bands
- * are rendered — the mockup's 0–9 and 10–16 bands have no data source and are dropped.
+ * are rendered — the mockup's 0–9 and 10–16 bands have no data source and are dropped. Counts
+ * stay pending until hasHostData AND the ratios exist (both feed the computation).
  */
-export function DemographicsSection({ breakdown, category }: DemographicsSectionProps) {
-  const pending = breakdown === null;
+export function DemographicsSection({
+  breakdown,
+  category,
+  hasHostData,
+}: DemographicsSectionProps) {
+  const pending = !hasHostData || breakdown === null;
   const sexeMax = breakdown ? Math.max(breakdown.femmes, breakdown.hommes) : 0;
   const ageMax = breakdown ? Math.max(...breakdown.ages.map((b) => b.count)) : 0;
 

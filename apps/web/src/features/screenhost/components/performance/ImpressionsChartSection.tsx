@@ -16,12 +16,18 @@ import { ChartPlaceholder } from './Pending';
 import { SectionHeading } from './SectionHeading';
 
 interface ImpressionsChartSectionProps {
-  /** The period's delivered-impressions days (already filtered, ascending). */
+  /** The period's days — ZERO-FILLED by the page once hasCastData (0 on days without data). */
   days: DailyImpressionsPoint[];
+  /** CAST first-data flag — until true, the chart shows the pending placeholder. */
+  hasCastData: boolean;
 }
 
-/** S03 — "Évolution des impressions": the per-day delivered impressions of the period. */
-export function ImpressionsChartSection({ days }: ImpressionsChartSectionProps) {
+/**
+ * S03 — "Évolution des impressions": the per-day delivered impressions of the period. Once
+ * hasCastData the chart always draws (zero-filled days); the placeholder only remains for the
+ * pre-first-data state or a period entirely outside the 400-day fetch window.
+ */
+export function ImpressionsChartSection({ days, hasCastData }: ImpressionsChartSectionProps) {
   return (
     <section className="mb-[76px]">
       <SectionHeading
@@ -34,7 +40,7 @@ export function ImpressionsChartSection({ days }: ImpressionsChartSectionProps) 
           <div className="text-[17px] font-semibold text-perf-ink">Impressions par jour</div>
           <div className="perf-mono text-[11px] text-perf-mist">Sur la période sélectionnée</div>
         </div>
-        {days.length > 0 ? (
+        {hasCastData && days.length > 0 ? (
           <div className="aspect-[800/280] w-full rounded-xl border border-perf-line bg-white px-3 py-2.5">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={days} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>

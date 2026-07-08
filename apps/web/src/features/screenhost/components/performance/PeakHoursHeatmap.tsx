@@ -11,11 +11,9 @@ const HEATMAP_HOURS = Array.from({ length: 14 }, (_, i) => i + 8);
 
 const closedHour = (
   hour: number,
-  hasData: boolean,
   openingHour: number | null,
   closingHour: number | null,
 ): boolean => {
-  if (!hasData) return true;
   if (openingHour === null || closingHour === null) return false;
   return hour < openingHour || hour >= closingHour;
 };
@@ -23,33 +21,27 @@ const closedHour = (
 interface PeakHoursHeatmapProps {
   /** 7×24 typical-week grid (grid[0]=Monday), from the existing affluence read. */
   grid: number[][];
-  hasData: boolean;
   openingHour: number | null;
   closingHour: number | null;
 }
 
 /**
- * S02 — "Vos peak hours": weekday × hour heatmap. Intensity is quantile-bucketed over the visible
- * OPEN cells; hours outside [opening, closing) get the striped "fermé" treatment; no data at all →
- * everything striped (the EMPTY mockup).
+ * S02 — "Vos peak hours": weekday × hour heatmap. A cell is HACHURÉE when the hour is closed OR
+ * when it has no data (level 0 — the grid zero-fills, so 0 reads as no-data; accepted
+ * approximation per the Mejri ruling). The quantile ramp applies only to cells with data.
  */
-export function PeakHoursHeatmap({
-  grid,
-  hasData,
-  openingHour,
-  closingHour,
-}: PeakHoursHeatmapProps) {
+export function PeakHoursHeatmap({ grid, openingHour, closingHour }: PeakHoursHeatmapProps) {
   const thresholds = useMemo(() => {
     const visible: number[] = [];
     for (let day = 0; day < 7; day += 1) {
       for (const hour of HEATMAP_HOURS) {
-        if (!closedHour(hour, hasData, openingHour, closingHour)) {
+        if (!closedHour(hour, openingHour, closingHour)) {
           visible.push(grid[day]?.[hour] ?? 0);
         }
       }
     }
     return quantileThresholds(visible);
-  }, [grid, hasData, openingHour, closingHour]);
+  }, [grid, openingHour, closingHour]);
 
   return (
     <section className="mb-[76px]">
@@ -73,14 +65,15 @@ export function PeakHoursHeatmap({
                 {label}
               </div>
               {HEATMAP_HOURS.map((hour) => {
-                const closed = closedHour(hour, hasData, openingHour, closingHour);
+                const closed = closedHour(hour, openingHour, closingHour);
                 const value = grid[day]?.[hour] ?? 0;
                 const level = intensityLevel(value, thresholds);
+                const hachure = closed || level === 0;
                 return (
                   <div
                     key={`${label}-${hour}`}
                     title={closed ? 'Fermé' : `${label} ${hour}h — ${value}`}
-                    className={`h-[26px] rounded ${closed ? HEATMAP_CLOSED_CLASS : HEATMAP_LEVEL_CLASSES[level - 1]}`}
+                    className={`h-[26px] rounded ${hachure ? HEATMAP_CLOSED_CLASS : HEATMAP_LEVEL_CLASSES[level - 1]}`}
                   />
                 );
               })}

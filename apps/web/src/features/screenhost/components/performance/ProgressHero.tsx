@@ -71,6 +71,9 @@ interface ProgressHeroProps {
   revenueSeries: CumulativePoint[];
   audienceTotal: number;
   audienceSeries: CumulativePoint[];
+  /** HOST flag gates "Personnes touchées"; CAST gates "Revenu généré" (Mejri ruling). */
+  hasHostData: boolean;
+  hasCastData: boolean;
 }
 
 /** §5 — "Votre progression depuis le début": the two cumulative hero charts (unfiltered). */
@@ -79,6 +82,8 @@ export function ProgressHero({
   revenueSeries,
   audienceTotal,
   audienceSeries,
+  hasHostData,
+  hasCastData,
 }: ProgressHeroProps) {
   return (
     <section className="mb-10">
@@ -91,7 +96,7 @@ export function ProgressHero({
       <div className="mt-[22px] grid grid-cols-1 gap-[18px] lg:grid-cols-2">
         <HeroCard
           label="Revenu généré depuis le début"
-          value={revenueSeries.length > 0 ? formatTndFr(revenueTotal) : null}
+          value={hasCastData ? formatTndFr(revenueTotal) : null}
           suffix="TND"
           series={revenueSeries}
           color={CHART_ACCENT}
@@ -99,7 +104,7 @@ export function ProgressHero({
         />
         <HeroCard
           label="Personnes touchées depuis le début"
-          value={audienceSeries.length > 0 ? formatIntFr(audienceTotal) : null}
+          value={hasHostData ? formatIntFr(audienceTotal) : null}
           suffix="pers."
           series={audienceSeries}
           color={CHART_GREEN}

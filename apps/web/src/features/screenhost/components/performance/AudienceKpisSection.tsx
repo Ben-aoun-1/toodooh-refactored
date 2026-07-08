@@ -49,11 +49,12 @@ function KpiValue({
 
 interface AudienceKpisSectionProps {
   kpis: AudienceKpis;
+  /** HOST first-data flag — once true, KPIs show real values, 0 rendered as 0 (Mejri ruling). */
+  hasHostData: boolean;
 }
 
 /** S01 — "Votre audience en chiffres": the mockups' ruled KPI row (2px green top border). */
-export function AudienceKpisSection({ kpis }: AudienceKpisSectionProps) {
-  const hasData = kpis.peak !== null;
+export function AudienceKpisSection({ kpis, hasHostData }: AudienceKpisSectionProps) {
   return (
     <section className="mb-[76px]">
       <SectionHeading
@@ -65,7 +66,7 @@ export function AudienceKpisSection({ kpis }: AudienceKpisSectionProps) {
         <div className="border-b border-perf-line py-[22px] md:border-b-0 md:border-r md:border-r-perf-soft md:py-[26px] md:pr-6">
           <KpiLabel>Audience globale</KpiLabel>
           <div className="mt-4">
-            <KpiValue value={hasData ? kpis.global : null} />
+            <KpiValue value={hasHostData ? kpis.global : null} />
           </div>
           <p className="mt-2.5 text-[12.5px] leading-[1.45] text-perf-grey">
             Personnes mesurées dans votre lieu sur la période.
@@ -76,7 +77,7 @@ export function AudienceKpisSection({ kpis }: AudienceKpisSectionProps) {
           <div>
             <KpiLabel>Audience moyenne / heure</KpiLabel>
             <div className="mt-4">
-              <KpiValue value={kpis.perHour} suffix="pers/h" compact />
+              <KpiValue value={hasHostData ? (kpis.perHour ?? 0) : null} suffix="pers/h" compact />
             </div>
             <p className="mt-1 text-[12.5px] leading-[1.45] text-perf-grey">
               Densité moyenne d'audience pendant les heures d'ouverture.
@@ -85,7 +86,7 @@ export function AudienceKpisSection({ kpis }: AudienceKpisSectionProps) {
           <div>
             <KpiLabel>Audience moyenne / jour</KpiLabel>
             <div className="mt-4">
-              <KpiValue value={kpis.perDay} compact />
+              <KpiValue value={hasHostData ? (kpis.perDay ?? 0) : null} compact />
             </div>
             <p className="mt-1 text-[12.5px] leading-[1.45] text-perf-grey">
               Personnes par jour d'ouverture en moyenne.
@@ -96,7 +97,7 @@ export function AudienceKpisSection({ kpis }: AudienceKpisSectionProps) {
         <div className="py-[22px] md:py-[26px] md:pl-6">
           <KpiLabel>Pic d'audience</KpiLabel>
           <div className="mt-4">
-            <KpiValue value={kpis.peak?.value ?? null} />
+            <KpiValue value={hasHostData ? (kpis.peak?.value ?? 0) : null} />
           </div>
           <p className="mt-2.5 text-[12.5px] leading-[1.45] text-perf-grey">
             Maximum observé — <Var>{kpis.peak ? formatDateFr(kpis.peak.date) : 'JJ/MM/AAAA'}</Var>
