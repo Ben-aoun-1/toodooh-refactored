@@ -6,11 +6,12 @@ import { db, sql } from '../src/db/client.js';
 import {
   type NewUser,
   screenhostAffluence,
-  screenhostMonthlyStats,
+  screenhostMonthlyReports,
   screenhosts,
   users,
 } from '../src/db/schema.js';
 import { screenhostsRoutes } from '../src/routes/screenhosts.js';
+import { storage } from '../src/storage/s3-storage.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
 
@@ -166,7 +167,7 @@ describe('screenhost affluence read (owner-scoped, real Postgres)', () => {
   });
 });
 
-describe('screenhost monthly-report PDF download (owner-scoped, real Postgres)', () => {
+describe('screenhost monthly-report download (STORED artifact, owner-scoped, real Postgres)', () => {
   let app: ReturnType<typeof buildApp>;
 
   beforeEach(async () => {
@@ -179,48 +180,58 @@ describe('screenhost monthly-report PDF download (owner-scoped, real Postgres)',
     await app.close();
     vi.restoreAllMocks();
   });
-  const seedMonthlyStats = async (screenhostId: string, month: string): Promise<void> => {
-    await db.insert(screenhostMonthlyStats).values({
-      screenhostId,
-      month,
-      totalAudience: 5000,
-      daily: [
-        { date: `${month}-01`, audience: 200 },
-        { date: `${month}-02`, audience: 300 },
-      ],
-      peakDayOfWeek: 5,
-      peakHour: 18,
-    });
+  // R1: the route serves the STORED MinIO artifact — a screenhost_monthly_reports row plus the
+  // object behind its storage_key (storage.download is spied; MinIO itself is out of scope here).
+  const seedStoredReport = async (screenhostId: string, month: string): Promise<string> => {
+    const key = `reports/${screenhostId}/${month}.pdf`;
+    await db.insert(screenhostMonthlyReports).values({ screenhostId, month, storageKey: key });
+    return key;
   };
   const report = (id: string, month: string) =>
     app.inject({ method: 'GET', url: `/api/screenhosts/${id}/monthly-report?month=${month}` });
 
-  it('streams the branded PDF for the owner’s own screenhost + month', async () => {
+  it('streams the STORED artifact for the owner’s own screenhost + month', async () => {
     const me = await seedUser();
     const sh = await seedScreenhost(me);
-    await seedMonthlyStats(sh, '2026-05');
+    const key = await seedStoredReport(sh, '2026-05');
+    const download = vi
+      .spyOn(storage, 'download')
+      .mockResolvedValue({ body: Buffer.from('%PDF-stored'), contentType: 'application/pdf' });
     mockSession(me);
 
     const res = await report(sh, '2026-05');
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toContain('application/pdf');
-    expect(res.rawPayload.length).toBeGreaterThan(0);
     expect(res.rawPayload.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+    expect(download).toHaveBeenCalledWith({ key });
   });
 
-  it('404 for a month with no stored stats', async () => {
+  it('404 REPORT_NOT_GENERATED for a month with no stored artifact', async () => {
     const me = await seedUser();
     const sh = await seedScreenhost(me);
-    await seedMonthlyStats(sh, '2026-05');
+    await seedStoredReport(sh, '2026-05');
     mockSession(me);
-    expect((await report(sh, '2026-04')).statusCode).toBe(404); // no stats for April
+    const res = await report(sh, '2026-04'); // no April artifact
+    expect(res.statusCode).toBe(404);
+    expect(res.json<{ error: string }>().error).toBe('REPORT_NOT_GENERATED');
+  });
+
+  it('503 REPORT_STORAGE_UNAVAILABLE when the stored object cannot be fetched', async () => {
+    const me = await seedUser();
+    const sh = await seedScreenhost(me);
+    await seedStoredReport(sh, '2026-05');
+    vi.spyOn(storage, 'download').mockResolvedValue({ error: 'connection refused' });
+    mockSession(me);
+    const res = await report(sh, '2026-05');
+    expect(res.statusCode).toBe(503);
+    expect(res.json<{ error: string }>().error).toBe('REPORT_STORAGE_UNAVAILABLE');
   });
 
   it('404 for another owner’s screenhost (owner-scope)', async () => {
     const me = await seedUser();
     const other = await seedUser();
     const foreign = await seedScreenhost(other);
-    await seedMonthlyStats(foreign, '2026-05');
+    await seedStoredReport(foreign, '2026-05');
     mockSession(me);
     expect((await report(foreign, '2026-05')).statusCode).toBe(404);
   });

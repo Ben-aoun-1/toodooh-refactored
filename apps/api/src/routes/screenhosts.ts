@@ -13,15 +13,19 @@ import {
   type DispatchAcceptation,
   proofOfPlay,
   screenhostAffluence,
+  screenhostMonthlyReports,
   screenhostMonthlyStats,
   screenhosts,
   users,
 } from '../db/schema.js';
 import { buildEligibilityPatch } from '../lib/eligibility-patch.js';
-import { renderMonthlyReportPdf } from '../lib/report.js';
+import { assembleReportData } from '../lib/report/assemble.js';
+import { renderPdf } from '../lib/report/render.js';
+import { renderReportHtml } from '../lib/report/template.js';
 import { pushApprovedOwnerLocations } from '../lib/wedooh-sync.js';
 import { decryptWifiPassword, encryptWifiPassword } from '../lib/wifi-crypto.js';
 import { requireActiveAccount, requireAdmin, requireAuth } from '../middleware/require-auth.js';
+import { storage } from '../storage/s3-storage.js';
 
 // Owner- and admin-facing WiFi maintenance for screenhosts. A venue's WiFi can change after
 // signup (Kais 2026-06), so SSID + password are editable here by the owner (their own
@@ -575,11 +579,12 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
-  // GET /api/screenhosts/:id/monthly-report?month=YYYY-MM — owner-scoped branded PDF of the hub's
-  // ACTUAL monthly stats for that venue/month (renders on-the-fly, never stored — like the facture).
-  // Same owner-scoping as the affluence read: a foreign/missing id is a 404; a month with no stored
-  // stats is also a 404 (nothing to render yet). Auto-at-month-end notification is DEFERRED — the
-  // report is downloadable as soon as the hub's stats arrive.
+  // GET /api/screenhosts/:id/monthly-report?month=YYYY-MM — owner-scoped download of the STORED
+  // monthly report artifact (R1: the month-end job renders + stores one MinIO PDF per venue/month;
+  // this route no longer renders anything). Same owner-scoping as the affluence read (foreign/
+  // missing id → 404). A month whose artifact has not been generated yet → 404
+  // REPORT_NOT_GENERATED (a distinct code so the FE can keep its friendly notice). The body is
+  // served THROUGH the api (owner-auth) rather than presigned — reports stay on a private prefix.
   app.get('/api/screenhosts/:id/monthly-report', ownerGuard, async (request, reply) => {
     const parsedParams = idParamSchema.safeParse(request.params);
     if (!parsedParams.success) {
@@ -606,50 +611,122 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
     }
 
-    // Owner scoping in the WHERE (foreign id → 404); join the owner for the report's branded names.
+    // Owner scoping in the WHERE: a foreign screenhost id is indistinguishable from a missing one.
     const [owned] = await db
-      .select({
-        venueName: screenhosts.name,
-        contactName: users.contactName,
-        businessName: users.businessName,
-      })
+      .select({ id: screenhosts.id })
       .from(screenhosts)
-      .innerJoin(users, eq(screenhosts.ownerId, users.id))
       .where(and(eq(screenhosts.id, parsedParams.data.id), eq(screenhosts.ownerId, userId)))
       .limit(1);
     if (!owned) {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
     }
 
-    const [stats] = await db
-      .select()
-      .from(screenhostMonthlyStats)
+    const [report] = await db
+      .select({ storageKey: screenhostMonthlyReports.storageKey })
+      .from(screenhostMonthlyReports)
       .where(
         and(
-          eq(screenhostMonthlyStats.screenhostId, parsedParams.data.id),
-          eq(screenhostMonthlyStats.month, parsedQuery.data.month),
+          eq(screenhostMonthlyReports.screenhostId, owned.id),
+          eq(screenhostMonthlyReports.month, parsedQuery.data.month),
         ),
       )
       .limit(1);
-    if (!stats) {
-      return reply
-        .status(404)
-        .send({ error: 'NOT_FOUND', message: 'No stats for that month yet.' });
+    if (!report) {
+      return reply.status(404).send({
+        error: 'REPORT_NOT_GENERATED',
+        message: 'No stored report for that month yet.',
+      });
     }
 
-    const pdf = await renderMonthlyReportPdf({
-      ownerName: owned.businessName ?? owned.contactName,
-      venueName: owned.venueName,
-      month: stats.month,
-      totalAudience: stats.totalAudience,
-      daily: stats.daily,
-      peakDayOfWeek: stats.peakDayOfWeek,
-      peakHour: stats.peakHour,
-    });
+    const object = await storage.download({ key: report.storageKey });
+    if ('error' in object) {
+      return reply.status(503).send({
+        error: 'REPORT_STORAGE_UNAVAILABLE',
+        message: 'The stored report could not be fetched. Please retry.',
+      });
+    }
+    return reply
+      .status(200)
+      .header('content-type', object.contentType ?? 'application/pdf')
+      .header('content-disposition', `inline; filename="rapport-${parsedQuery.data.month}.pdf"`)
+      .send(object.body);
+  });
+
+  // GET /api/screenhosts/:id/report?from=YYYY-MM-DD&to=YYYY-MM-DD — owner-scoped ON-DEMAND period
+  // report (R1): assembles the SAME data the performances page reads over [from, to], renders the
+  // HTML template through chromium and streams the PDF. EPHEMERAL — never stored. Range bounded
+  // like impressions-daily (≤ 400 days). A chromium failure is an explicit 503 (the rest of the
+  // api keeps serving; the renderer relaunches on the next call).
+  app.get('/api/screenhosts/:id/report', ownerGuard, async (request, reply) => {
+    const parsedParams = idParamSchema.safeParse(request.params);
+    if (!parsedParams.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: [{ field: 'id', reason: 'must be a uuid' }],
+      });
+    }
+    const parsedQuery = z
+      .object({
+        from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      })
+      .safeParse(request.query);
+    if (!parsedQuery.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: parsedQuery.error.issues.map((i) => ({
+          field: i.path.join('.'),
+          reason: i.message,
+        })),
+      });
+    }
+    const { from, to } = parsedQuery.data;
+    const spanDays = (Date.parse(to) - Date.parse(from)) / 86_400_000;
+    if (!Number.isFinite(spanDays) || spanDays < 0 || spanDays > 400) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: [{ field: 'to', reason: 'from ≤ to and the range must not exceed 400 days' }],
+      });
+    }
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply
+        .status(401)
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+    }
+
+    // Owner scoping in the WHERE: a foreign screenhost id is indistinguishable from a missing one.
+    const [owned] = await db
+      .select({ id: screenhosts.id })
+      .from(screenhosts)
+      .where(and(eq(screenhosts.id, parsedParams.data.id), eq(screenhosts.ownerId, userId)))
+      .limit(1);
+    if (!owned) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
+    }
+
+    const data = await assembleReportData(owned.id, { from, to });
+    if (!data) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
+    }
+
+    let pdf: Buffer;
+    try {
+      pdf = await renderPdf(renderReportHtml(data));
+    } catch (err) {
+      request.log.error({ err }, 'period report render failed');
+      return reply.status(503).send({
+        error: 'REPORT_RENDER_FAILED',
+        message: 'Report rendering is temporarily unavailable. Please retry.',
+      });
+    }
     return reply
       .status(200)
       .header('content-type', 'application/pdf')
-      .header('content-disposition', `inline; filename="rapport-${stats.month}.pdf"`)
+      .header('content-disposition', `inline; filename="rapport-${from}_${to}.pdf"`)
       .send(pdf);
   });
 

@@ -1,21 +1,25 @@
 import { Download, Loader2 } from 'lucide-react';
 
 interface DownloadCtaProps {
-  /** null → no month exists yet: the button is disabled with a hint. */
-  latestMonth: string | null;
+  /** false until EITHER first-data flag flips — an all-empty period report has nothing to say. */
+  hasData: boolean;
   downloading: boolean;
   onDownload: () => void;
 }
 
-/** §16 — the bottom "Télécharger le rapport (PDF)" CTA + the mockups' powered-by block. */
-export function DownloadCta({ latestMonth, downloading, onDownload }: DownloadCtaProps) {
+/**
+ * §16 — the bottom "Télécharger le rapport (PDF)" CTA + the mockups' powered-by block. R1: the
+ * button now downloads the ON-DEMAND period report for the page's ACTIVE filter range (the
+ * monthly card / history buttons keep their stored-artifact URLs).
+ */
+export function DownloadCta({ hasData, downloading, onDownload }: DownloadCtaProps) {
   return (
     <div className="mt-3">
       <div className="mb-12 flex flex-col items-center gap-2">
         <button
           type="button"
           onClick={onDownload}
-          disabled={latestMonth === null || downloading}
+          disabled={!hasData || downloading}
           className="inline-flex items-center gap-3 rounded-full bg-perf-ink px-[34px] py-[17px] text-[15px] font-semibold text-white shadow-[0_6px_20px_rgba(16,37,26,0.16)] transition-colors hover:bg-perf-green disabled:cursor-not-allowed disabled:opacity-40"
         >
           {downloading ? (
@@ -25,10 +29,8 @@ export function DownloadCta({ latestMonth, downloading, onDownload }: DownloadCt
           )}
           Télécharger le rapport (PDF)
         </button>
-        {latestMonth === null && (
-          <p className="text-xs italic text-perf-mist">
-            Disponible dès votre premier rapport mensuel.
-          </p>
+        {!hasData && (
+          <p className="text-xs italic text-perf-mist">Disponible dès vos premières données.</p>
         )}
       </div>
       <div className="flex flex-col items-center gap-3 border-t border-perf-soft pt-7">

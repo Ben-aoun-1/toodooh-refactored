@@ -274,6 +274,13 @@
       "when": 1783432806718,
       "tag": "0038_screenhost_demographic_ratios",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1783523097703,
+      "tag": "0039_screenhost_monthly_reports",
+      "breakpoints": true
     }
   ]
 }
