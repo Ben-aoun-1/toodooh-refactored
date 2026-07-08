@@ -1,85 +1,106 @@
 import { type AudienceKpis, formatIntFr } from '../../lib/performance-derive';
 import { formatDateFr } from '../../lib/performance-period';
 
-import { PendingValue } from './Pending';
+import { PENDING_LABEL, PendingValue } from './Pending';
 import { SectionHeading } from './SectionHeading';
+import { Var } from './Var';
 
-interface AudienceKpisSectionProps {
-  kpis: AudienceKpis;
+function KpiLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="perf-mono flex items-center gap-2 text-[10px] uppercase tracking-[0.1em] text-perf-mist">
+      <span className="h-[5px] w-[5px] rounded-full bg-perf-mist opacity-70" aria-hidden />
+      {children}
+    </div>
+  );
 }
 
-function KpiValue({ value, suffix }: { value: number | null; suffix?: string }) {
+function KpiValue({
+  value,
+  suffix,
+  compact,
+}: {
+  value: number | null;
+  suffix?: string;
+  compact?: boolean;
+}) {
+  // The mockup's cascade renders the STACKED cells' pending state at 28px — reproduced as-is.
+  if (value === null && compact)
+    return (
+      <span className="text-[28px] font-semibold italic leading-tight text-perf-mist">
+        {PENDING_LABEL}
+      </span>
+    );
   if (value === null) return <PendingValue />;
   return (
-    <span className="text-2xl font-bold tabular-nums text-brand-deep">
+    <span
+      className={`font-semibold leading-none tracking-[-0.03em] text-perf-ink ${
+        compact ? 'text-[28px]' : 'text-[46px]'
+      }`}
+    >
       {formatIntFr(value)}
-      {suffix && <span className="ml-1 text-sm font-medium text-gray-400">{suffix}</span>}
+      {suffix && (
+        <span className="ml-1 text-[17px] font-medium tracking-normal text-perf-grey">
+          {suffix}
+        </span>
+      )}
     </span>
   );
 }
 
-/** S01 — "Votre audience en chiffres": global / per-hour / per-day / peak KPIs over the period. */
-export function AudienceKpisSection({ kpis }: AudienceKpisSectionProps) {
-  const hasData = kpis.peak !== null;
+interface AudienceKpisSectionProps {
+  kpis: AudienceKpis;
+  /** HOST first-data flag — once true, KPIs show real values, 0 rendered as 0 (Mejri ruling). */
+  hasHostData: boolean;
+}
+
+/** S01 — "Votre audience en chiffres": the mockups' ruled KPI row (2px green top border). */
+export function AudienceKpisSection({ kpis, hasHostData }: AudienceKpisSectionProps) {
   return (
-    <section className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
+    <section className="mb-[76px]">
       <SectionHeading
         num="Section 01"
         title="Votre audience en chiffres"
         lead="Indicateurs de densité d'audience mesurés dans votre lieu sur la période analysée, croisés avec vos heures d'ouverture."
       />
-      <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-4">
-          <div className="flex items-center gap-2 text-xs font-medium text-gray-500">
-            <span className="h-1.5 w-1.5 rounded-full bg-brand-primary" aria-hidden />
-            Audience globale
+      <div className="mt-8 grid grid-cols-1 border-t-2 border-t-perf-green md:grid-cols-3 md:border-b md:border-b-perf-line">
+        <div className="border-b border-perf-line py-[22px] md:border-b-0 md:border-r md:border-r-perf-soft md:py-[26px] md:pr-6">
+          <KpiLabel>Audience globale</KpiLabel>
+          <div className="mt-4">
+            <KpiValue value={hasHostData ? kpis.global : null} />
           </div>
-          <div className="mt-2">
-            <KpiValue value={hasData ? kpis.global : null} />
-          </div>
-          <p className="mt-2 text-xs text-gray-500">
+          <p className="mt-2.5 text-[12.5px] leading-[1.45] text-perf-grey">
             Personnes mesurées dans votre lieu sur la période.
           </p>
         </div>
 
-        <div className="space-y-4 rounded-xl border border-gray-100 bg-gray-50/60 p-4">
+        <div className="flex flex-col gap-[22px] border-b border-perf-line py-[22px] md:border-b-0 md:border-r md:border-r-perf-soft md:py-[26px] md:pl-6 md:pr-6">
           <div>
-            <div className="flex items-center gap-2 text-xs font-medium text-gray-500">
-              <span className="h-1.5 w-1.5 rounded-full bg-brand-primary" aria-hidden />
-              Audience moyenne / heure
+            <KpiLabel>Audience moyenne / heure</KpiLabel>
+            <div className="mt-4">
+              <KpiValue value={hasHostData ? (kpis.perHour ?? 0) : null} suffix="pers/h" compact />
             </div>
-            <div className="mt-2">
-              <KpiValue value={kpis.perHour} suffix="pers/h" />
-            </div>
-            <p className="mt-2 text-xs text-gray-500">
+            <p className="mt-1 text-[12.5px] leading-[1.45] text-perf-grey">
               Densité moyenne d'audience pendant les heures d'ouverture.
             </p>
           </div>
           <div>
-            <div className="flex items-center gap-2 text-xs font-medium text-gray-500">
-              <span className="h-1.5 w-1.5 rounded-full bg-brand-primary" aria-hidden />
-              Audience moyenne / jour
+            <KpiLabel>Audience moyenne / jour</KpiLabel>
+            <div className="mt-4">
+              <KpiValue value={hasHostData ? (kpis.perDay ?? 0) : null} compact />
             </div>
-            <div className="mt-2">
-              <KpiValue value={kpis.perDay} />
-            </div>
-            <p className="mt-2 text-xs text-gray-500">Personnes par jour d'ouverture en moyenne.</p>
+            <p className="mt-1 text-[12.5px] leading-[1.45] text-perf-grey">
+              Personnes par jour d'ouverture en moyenne.
+            </p>
           </div>
         </div>
 
-        <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-4">
-          <div className="flex items-center gap-2 text-xs font-medium text-gray-500">
-            <span className="h-1.5 w-1.5 rounded-full bg-brand-primary" aria-hidden />
-            Pic d'audience
+        <div className="py-[22px] md:py-[26px] md:pl-6">
+          <KpiLabel>Pic d'audience</KpiLabel>
+          <div className="mt-4">
+            <KpiValue value={hasHostData ? (kpis.peak?.value ?? 0) : null} />
           </div>
-          <div className="mt-2">
-            <KpiValue value={kpis.peak?.value ?? null} />
-          </div>
-          <p className="mt-2 text-xs text-gray-500">
-            Maximum observé —{' '}
-            <span className="font-medium text-gray-600">
-              {kpis.peak ? formatDateFr(kpis.peak.date) : 'JJ/MM/AAAA'}
-            </span>
+          <p className="mt-2.5 text-[12.5px] leading-[1.45] text-perf-grey">
+            Maximum observé — <Var>{kpis.peak ? formatDateFr(kpis.peak.date) : 'JJ/MM/AAAA'}</Var>
           </p>
         </div>
       </div>

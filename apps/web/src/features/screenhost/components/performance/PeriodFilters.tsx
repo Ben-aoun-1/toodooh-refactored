@@ -25,7 +25,7 @@ export function PeriodFilters({
   onApplyCustom,
 }: PeriodFiltersProps) {
   return (
-    <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+    <section className="mb-14">
       <div className="flex flex-wrap gap-2">
         {PERIOD_PILLS.map((pill) => {
           const isActive = pill.key === active;
@@ -35,12 +35,12 @@ export function PeriodFilters({
               type="button"
               onClick={() => onSelect(pill.key)}
               aria-pressed={isActive}
-              className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary ${
+              className={`rounded-full px-[17px] py-[9px] text-[13px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary ${
                 isActive
-                  ? 'bg-brand-deep text-white'
-                  : pill.key === 'custom'
-                    ? 'border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  ? 'border border-brand-primary bg-brand-primary font-semibold text-[#0D2B1F]'
+                  : `border bg-white font-medium text-perf-grey hover:border-perf-green hover:text-perf-ink ${
+                      pill.key === 'custom' ? 'border-dashed border-perf-line' : 'border-perf-line'
+                    }`
               }`}
             >
               {pill.label}
@@ -50,11 +50,11 @@ export function PeriodFilters({
       </div>
 
       {active === 'custom' && (
-        <div className="mt-4 grid grid-cols-1 items-end gap-3 sm:grid-cols-3">
-          <div>
+        <div className="mt-3.5 grid grid-cols-1 items-end gap-[18px] rounded-xl border border-perf-line bg-white p-[22px] px-6 sm:grid-cols-2 md:grid-cols-[1fr_1fr_auto]">
+          <div className="flex flex-col gap-[7px]">
             <label
               htmlFor="perf-date-start"
-              className="mb-1 block text-sm font-semibold text-gray-700"
+              className="text-[11.5px] font-semibold uppercase tracking-[0.04em] text-perf-grey"
             >
               Date de début
             </label>
@@ -63,13 +63,13 @@ export function PeriodFilters({
               type="date"
               value={customFrom}
               onChange={(e) => onCustomFromChange(e.target.value)}
-              className="h-11 w-full rounded-lg border border-gray-200 px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary"
+              className="w-full rounded-lg border border-perf-line bg-white px-3 py-2.5 text-[13.5px] text-perf-ink focus:border-perf-green focus:outline-none focus:ring-2 focus:ring-perf-green/10"
             />
           </div>
-          <div>
+          <div className="flex flex-col gap-[7px]">
             <label
               htmlFor="perf-date-end"
-              className="mb-1 block text-sm font-semibold text-gray-700"
+              className="text-[11.5px] font-semibold uppercase tracking-[0.04em] text-perf-grey"
             >
               Date de fin
             </label>
@@ -78,13 +78,13 @@ export function PeriodFilters({
               type="date"
               value={customTo}
               onChange={(e) => onCustomToChange(e.target.value)}
-              className="h-11 w-full rounded-lg border border-gray-200 px-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary"
+              className="w-full rounded-lg border border-perf-line bg-white px-3 py-2.5 text-[13.5px] text-perf-ink focus:border-perf-green focus:outline-none focus:ring-2 focus:ring-perf-green/10"
             />
           </div>
           <button
             type="button"
             onClick={onApplyCustom}
-            className="h-11 rounded-lg bg-brand-primary px-4 text-sm font-semibold text-brand-deep transition-colors hover:bg-brand-primary/90"
+            className="whitespace-nowrap rounded-lg bg-brand-primary px-5 py-[11px] text-[13.5px] font-semibold text-[#0D2B1F] transition-colors hover:bg-[#65DCA0]"
           >
             Actualiser la recherche
           </button>
