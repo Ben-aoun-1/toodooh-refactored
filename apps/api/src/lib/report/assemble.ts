@@ -1,0 +1,314 @@
+import { format } from 'date-fns';
+import { and, desc, eq, gte, lte, count as sqlCount, sql } from 'drizzle-orm';
+
+import { db } from '../../db/client.js';
+import {
+  businessSectors,
+  campaignReconciliation,
+  campaignScreenhostPayout,
+  campaigns,
+  proofOfPlay,
+  screenhostAffluence,
+  screenhostMonthlyStats,
+  screenhosts,
+} from '../../db/schema.js';
+
+import {
+  type AudienceKpis,
+  type DailyImpressionsPoint,
+  type DateRange,
+  type DemographicBreakdown,
+  type ReportEarningsLine,
+  type VenueRatios,
+  audienceKpis,
+  campaignStatut,
+  categoryLabel,
+  dailyAudienceWithin,
+  demographicBreakdown,
+  formatCompactPeriod,
+  formatDateFr,
+  formatIntFr,
+  formatTablePeriod,
+  formatTndCellFr,
+  formatTndFr,
+  hasCastData,
+  hasHostData,
+  intensityLevel,
+  lineInPeriod,
+  openHoursPerDay,
+  quantileThresholds,
+  zeroFillDays,
+} from './derive.js';
+
+// One data truth: this module runs the SAME queries the owner reads use (screenhosts.ts —
+// profile / monthly-stats / affluence / impressions-daily / earnings) and derives the template's
+// inputs with the api-side mirror of the web derivations. Owner-scoping is the CALLER's job
+// (the route resolves ownership; the month-end job iterates its own venue list).
+
+/** The mockups' visible hour columns — 8h through 21h (mirror of the page heatmap). */
+export const HEATMAP_HOURS = Array.from({ length: 14 }, (_, i) => i + 8);
+
+export interface ReportRevenueRow {
+  name: string;
+  period: string;
+  amountLabel: string;
+}
+
+export interface ReportCampaignRow {
+  name: string;
+  period: string;
+  typeLabel: string;
+  statut: 'Active' | 'Passée';
+  impressionsLabel: string;
+  revenueLabel: string;
+}
+
+export interface ReportData {
+  venueName: string;
+  category: string;
+  range: DateRange;
+  /** DD/MM/YYYY of the render day — the masthead's "Généré le". */
+  generatedLabel: string;
+  hostHasData: boolean;
+  castHasData: boolean;
+  kpis: AudienceKpis;
+  /** 7×14 levels for the 8h–21h grid; 0 = hachure (closed hour OR no data). */
+  heatLevels: number[][];
+  /** Zero-filled period days once castHasData; [] before the first CAST data. */
+  days: DailyImpressionsPoint[];
+  breakdown: DemographicBreakdown | null;
+  revenue: { totalLabel: string; count: number; rows: ReportRevenueRow[] };
+  campaignsBlock: {
+    count: number;
+    cumulativeImpressions: number;
+    top3: string[];
+    rows: ReportCampaignRow[];
+  };
+}
+
+const typeLabelFr = (raw: string): string =>
+  raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : '—';
+
+const numOrNull = (value: string | null): number | null => {
+  if (value === null) return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+};
+
+/** 7×14 hachure/ramp levels — quantiles over the OPEN visible cells, exactly like the page. */
+export function heatmapLevels(
+  grid: number[][],
+  openingHour: number | null,
+  closingHour: number | null,
+): number[][] {
+  const closed = (hour: number): boolean => {
+    if (openingHour === null || closingHour === null) return false;
+    return hour < openingHour || hour >= closingHour;
+  };
+  const visible: number[] = [];
+  for (let day = 0; day < 7; day += 1) {
+    for (const hour of HEATMAP_HOURS) {
+      if (!closed(hour)) visible.push(grid[day]?.[hour] ?? 0);
+    }
+  }
+  const thresholds = quantileThresholds(visible);
+  return Array.from({ length: 7 }, (_, day) =>
+    HEATMAP_HOURS.map((hour) =>
+      closed(hour) ? 0 : intensityLevel(grid[day]?.[hour] ?? 0, thresholds),
+    ),
+  );
+}
+
+/** All six ratio columns or null — a partial row never leaks (the C3 all-or-null contract). */
+function ratiosOrNull(venue: {
+  genderMalePct: string | null;
+  genderFemalePct: string | null;
+  age17To30Pct: string | null;
+  age31To45Pct: string | null;
+  age46To60Pct: string | null;
+  age60PlusPct: string | null;
+}): VenueRatios | null {
+  const male = numOrNull(venue.genderMalePct);
+  const female = numOrNull(venue.genderFemalePct);
+  const a17 = numOrNull(venue.age17To30Pct);
+  const a31 = numOrNull(venue.age31To45Pct);
+  const a46 = numOrNull(venue.age46To60Pct);
+  const a60 = numOrNull(venue.age60PlusPct);
+  if (
+    male === null ||
+    female === null ||
+    a17 === null ||
+    a31 === null ||
+    a46 === null ||
+    a60 === null
+  ) {
+    return null;
+  }
+  return {
+    gender_male_pct: male,
+    gender_female_pct: female,
+    age_17_30_pct: a17,
+    age_31_45_pct: a31,
+    age_46_60_pct: a46,
+    age_60_plus_pct: a60,
+  };
+}
+
+/**
+ * Assemble everything the template needs for one venue over one inclusive [from, to] range.
+ * Returns null when the venue does not exist. `todayIso` parameterizes the S06 statut + masthead
+ * (testability); defaults to the render day.
+ */
+export async function assembleReportData(
+  venueId: string,
+  range: DateRange,
+  todayIso: string = format(new Date(), 'yyyy-MM-dd'),
+): Promise<ReportData | null> {
+  // 1) profile (identity card + ratios) — mirror of GET /:id/profile.
+  const [venue] = await db
+    .select({
+      name: screenhosts.name,
+      sectorName: businessSectors.name,
+      class: screenhosts.class,
+      openingHour: screenhosts.openingHour,
+      closingHour: screenhosts.closingHour,
+      genderMalePct: screenhosts.genderMalePct,
+      genderFemalePct: screenhosts.genderFemalePct,
+      age17To30Pct: screenhosts.age17To30Pct,
+      age31To45Pct: screenhosts.age31To45Pct,
+      age46To60Pct: screenhosts.age46To60Pct,
+      age60PlusPct: screenhosts.age60PlusPct,
+    })
+    .from(screenhosts)
+    .leftJoin(businessSectors, eq(screenhosts.businessSectorId, businessSectors.id))
+    .where(eq(screenhosts.id, venueId))
+    .limit(1);
+  if (!venue) return null;
+
+  // 2) monthly stats (month desc) — mirror of GET /:id/monthly-stats.
+  const months = await db
+    .select({
+      month: screenhostMonthlyStats.month,
+      totalAudience: screenhostMonthlyStats.totalAudience,
+      daily: screenhostMonthlyStats.daily,
+    })
+    .from(screenhostMonthlyStats)
+    .where(eq(screenhostMonthlyStats.screenhostId, venueId))
+    .orderBy(desc(screenhostMonthlyStats.month));
+
+  // 3) affluence slots → zero-filled 7×24 grid — mirror of GET /:id/affluence.
+  const slots = await db
+    .select({
+      dayOfWeek: screenhostAffluence.dayOfWeek,
+      hour: screenhostAffluence.hour,
+      estimatedImpressions: screenhostAffluence.estimatedImpressions,
+    })
+    .from(screenhostAffluence)
+    .where(eq(screenhostAffluence.screenhostId, venueId));
+  const grid: number[][] = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
+  for (const slot of slots) {
+    const row = grid[slot.dayOfWeek - 1];
+    if (row && slot.hour >= 0 && slot.hour <= 23) row[slot.hour] = slot.estimatedImpressions;
+  }
+
+  // 4) delivered impressions per Tunis-local day in range — mirror of GET /:id/impressions-daily.
+  const tunisDay = sql<string>`to_char(${proofOfPlay.receivedAt} at time zone 'Africa/Tunis', 'YYYY-MM-DD')`;
+  const dayRows = await db
+    .select({ date: tunisDay, impressions: sqlCount() })
+    .from(proofOfPlay)
+    .where(
+      and(
+        eq(proofOfPlay.screenhostId, venueId),
+        eq(proofOfPlay.eventType, 'VIDEO_ENDED'),
+        gte(tunisDay, range.from),
+        lte(tunisDay, range.to),
+      ),
+    )
+    .groupBy(tunisDay)
+    .orderBy(tunisDay);
+  const rangeDays: DailyImpressionsPoint[] = dayRows.map((r) => ({
+    date: r.date,
+    impressions: r.impressions,
+  }));
+
+  // 5) earnings lines for THIS venue — mirror of GET /screenhosts/earnings, venue-scoped.
+  const lineRows = await db
+    .select({
+      campaignName: campaigns.name,
+      deliveredImp: campaignScreenhostPayout.deliveredImp,
+      earningsTnd: campaignScreenhostPayout.earningsTnd, // numeric → string
+      reconciledAt: campaignReconciliation.reconciledAt,
+      campaignStart: campaigns.startDate,
+      campaignEnd: campaigns.endDate,
+      campaignType: campaigns.campaignType,
+      campaignStatus: campaigns.status,
+    })
+    .from(campaignScreenhostPayout)
+    .innerJoin(campaigns, eq(campaigns.id, campaignScreenhostPayout.campaignId))
+    .innerJoin(
+      campaignReconciliation,
+      eq(campaignReconciliation.id, campaignScreenhostPayout.reconciliationId),
+    )
+    .where(eq(campaignScreenhostPayout.screenhostId, venueId))
+    .orderBy(desc(campaignReconciliation.reconciledAt));
+  const lines: ReportEarningsLine[] = lineRows.map((r) => ({
+    campaign_name: r.campaignName,
+    delivered_imp: r.deliveredImp,
+    earnings_tnd: Number(r.earningsTnd),
+    reconciled_at:
+      r.reconciledAt instanceof Date ? r.reconciledAt.toISOString() : String(r.reconciledAt),
+    campaign_start: r.campaignStart,
+    campaign_end: r.campaignEnd,
+    campaign_type: r.campaignType,
+    campaign_status: r.campaignStatus,
+  }));
+
+  // ── derivations (the page's semantics, api-side mirror) ─────────────────────────────────────
+  const hostFlag = hasHostData(months, grid);
+  const castFlag = hasCastData(lines, rangeDays);
+
+  const periodAudience = dailyAudienceWithin(months, range);
+  const kpis = audienceKpis(periodAudience, openHoursPerDay(venue.openingHour, venue.closingHour));
+
+  const ratios = ratiosOrNull(venue);
+  const periodLines = lines.filter((l) => lineInPeriod(l, range));
+  const top3 = [...periodLines]
+    .sort((a, b) => b.delivered_imp - a.delivered_imp)
+    .slice(0, 3)
+    .map((l) => l.campaign_name);
+
+  return {
+    venueName: venue.name,
+    category: categoryLabel(venue.sectorName, venue.class),
+    range,
+    generatedLabel: formatDateFr(todayIso),
+    hostHasData: hostFlag,
+    castHasData: castFlag,
+    kpis,
+    heatLevels: heatmapLevels(grid, venue.openingHour, venue.closingHour),
+    days: castFlag ? zeroFillDays(rangeDays, range) : [],
+    breakdown: ratios ? demographicBreakdown(ratios, kpis.global) : null,
+    revenue: {
+      totalLabel: formatTndFr(periodLines.reduce((s, l) => s + l.earnings_tnd, 0)),
+      count: periodLines.length,
+      rows: periodLines.map((l) => ({
+        name: l.campaign_name,
+        period: formatCompactPeriod(l.campaign_start, l.campaign_end),
+        amountLabel: `${formatTndFr(l.earnings_tnd)} TND`,
+      })),
+    },
+    campaignsBlock: {
+      count: periodLines.length,
+      cumulativeImpressions: periodLines.reduce((s, l) => s + l.delivered_imp, 0),
+      top3,
+      rows: periodLines.map((l) => ({
+        name: l.campaign_name,
+        period: formatTablePeriod(l.campaign_start, l.campaign_end),
+        typeLabel: typeLabelFr(l.campaign_type),
+        statut: campaignStatut(l, todayIso),
+        impressionsLabel: formatIntFr(l.delivered_imp),
+        revenueLabel: formatTndCellFr(l.earnings_tnd),
+      })),
+    },
+  };
+}
