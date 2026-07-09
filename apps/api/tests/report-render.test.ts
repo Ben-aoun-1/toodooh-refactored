@@ -2,9 +2,12 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 import { closeReportBrowser, renderPdf, resolveChromiumPath } from '../src/lib/report/render.js';
 
-// Real-chromium smoke — SKIPPED when the machine has no chromium (plain CI): the seam is
-// exercised locally (CHROMIUM_PATH) and in the docker image, where the executable is guaranteed.
-const chromium = resolveChromiumPath();
+// Real-chromium smoke — runs ONLY when CHROMIUM_PATH / PUPPETEER_EXECUTABLE_PATH is explicitly
+// set (local dev, docker image); plain CI skips. GH runners incidentally ship google-chrome, so
+// path-probing ran the smoke against whatever Chrome the runner image carries — and the
+// ubuntu-24.04 runner image 20260628.225.1 Chrome hangs at launch (WS endpoint never appears).
+const explicitPath = process.env['CHROMIUM_PATH'] ?? process.env['PUPPETEER_EXECUTABLE_PATH'];
+const chromium = explicitPath ? resolveChromiumPath() : null;
 
 describe.skipIf(chromium === null)('renderPdf (real chromium)', () => {
   afterAll(async () => {

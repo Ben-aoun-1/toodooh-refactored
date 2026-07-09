@@ -1,5 +1,10 @@
 import type { ReportData } from './assemble.js';
-import { type DailyImpressionsPoint, formatDateFr, formatIntFr } from './derive.js';
+import {
+  type DailyImpressionsPoint,
+  formatDateFr,
+  formatDecimalFr,
+  formatIntFr,
+} from './derive.js';
 
 // ONE self-contained HTML document for the R1 report — inline CSS derived from the perf page /
 // mockup styles (the design HTMLs' FINAL :root overrides), Geist via the SAME Google-Fonts import
@@ -42,14 +47,15 @@ const kpiLabel = (label: string): string =>
 
 const kpiValue = (
   value: number | null,
-  opts: { suffix?: string; compact?: boolean } = {},
+  opts: { suffix?: string; compact?: boolean; decimal?: boolean } = {},
 ): string => {
   if (value === null) {
     // The mockup cascade renders the STACKED cells' pending at 28px — reproduced like the page.
     return `<div class="kpi-pending${opts.compact ? ' kpi-pending--stack' : ''}">${PENDING}</div>`;
   }
   const suffix = opts.suffix ? `<span class="kpi-suffix">${opts.suffix}</span>` : '';
-  return `<div class="kpi-value${opts.compact ? ' kpi-value--stack' : ''}">${formatIntFr(value)}${suffix}</div>`;
+  const formatted = opts.decimal ? formatDecimalFr(value) : formatIntFr(value);
+  return `<div class="kpi-value${opts.compact ? ' kpi-value--stack' : ''}">${formatted}${suffix}</div>`;
 };
 
 /** Inline SVG area chart for S03 (the sim-chart idiom: plantation stroke, soft gradient). */
@@ -136,7 +142,7 @@ export function renderReportHtml(data: ReportData): string {
       <div class="kpi-cell kpi-cell--stack">
         <div>
           ${kpiLabel('Audience moyenne / heure')}
-          ${kpiValue(hostHasData ? (kpis.perHour ?? 0) : null, { suffix: 'pers/h', compact: true })}
+          ${kpiValue(hostHasData ? (kpis.perHour ?? 0) : null, { suffix: 'pers/h', compact: true, decimal: true })}
           <p class="kpi-detail">Densité moyenne d'audience pendant les heures d'ouverture.</p>
         </div>
         <div>

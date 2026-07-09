@@ -163,6 +163,16 @@ describe('renderReportHtml — FULL variants (both flags true)', () => {
     expect(html).not.toContain('JJ/MM/AAAA');
   });
 
+  it('renders a fractional moyenne/h with one comma decimal (Mejri prod-test #3)', () => {
+    const fractional = renderReportHtml(
+      baseData({
+        hostHasData: true,
+        kpis: { global: 4, perDay: 4, perHour: 0.3, peak: { value: 4, date: '2026-06-26' } },
+      }),
+    );
+    expect(fractional).toContain('0,3<span class="kpi-suffix">pers/h</span>');
+  });
+
   it('keeps the hachure ONLY for no-data cells (the closed Sunday)', () => {
     const hachureCells = html.match(/class="hm-cell cell-h"/g) ?? [];
     expect(hachureCells.length).toBe(14); // day 6 (Sunday) only in the fixture

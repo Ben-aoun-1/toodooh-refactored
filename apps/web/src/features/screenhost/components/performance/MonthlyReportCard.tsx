@@ -91,7 +91,7 @@ export function MonthlyReportCard({
               type="button"
               onClick={onConsult}
               disabled={!hasMonth}
-              className="inline-flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-full border border-perf-line bg-white px-[19px] py-[11px] text-[13.5px] font-semibold text-perf-ink transition-colors hover:border-perf-mist hover:bg-[#F6F8FA] disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none"
+              className="inline-flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-full border border-perf-line bg-white px-[19px] py-[11px] text-[13.5px] font-semibold text-perf-ink transition duration-150 hover:border-perf-mist hover:bg-[#F6F8FA] active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none"
             >
               <Eye className="h-[15px] w-[15px]" aria-hidden />
               Consulter
@@ -100,7 +100,7 @@ export function MonthlyReportCard({
               type="button"
               onClick={onDownload}
               disabled={!hasMonth || downloading}
-              className="inline-flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-full bg-brand-primary px-5 py-3 text-[13.5px] font-semibold text-[#0D2B1F] transition-colors hover:bg-[#65DCA0] disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none"
+              className="inline-flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-full bg-brand-primary px-5 py-3 text-[13.5px] font-semibold text-[#0D2B1F] transition duration-150 hover:-translate-y-px hover:bg-[#65DCA0] active:translate-y-0 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none"
             >
               {downloading ? (
                 <Loader2 className="h-[15px] w-[15px] animate-spin" aria-hidden />

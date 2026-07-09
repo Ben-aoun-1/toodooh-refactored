@@ -11,7 +11,7 @@ import {
 import { type DailyImpressionsPoint, formatIntFr } from '../../lib/performance-derive';
 import { formatDateFr } from '../../lib/performance-period';
 
-import { CHART_DEEP } from './chart-colors';
+import { AXIS_LINE, AXIS_TICK, CHART_DEEP } from './chart-colors';
 import { ChartPlaceholder } from './Pending';
 import { SectionHeading } from './SectionHeading';
 
@@ -43,7 +43,8 @@ export function ImpressionsChartSection({ days, hasCastData }: ImpressionsChartS
         {hasCastData && days.length > 0 ? (
           <div className="aspect-[800/280] w-full rounded-xl border border-perf-line bg-white px-3 py-2.5">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={days} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+              {/* right margin ≥ half the last date tick, so the end-of-axis label never clips */}
+              <AreaChart data={days} margin={{ top: 8, right: 18, bottom: 0, left: 0 }}>
                 <defs>
                   <linearGradient id="impressionsArea" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor={CHART_DEEP} stopOpacity={0.2} />
@@ -53,10 +54,20 @@ export function ImpressionsChartSection({ days, hasCastData }: ImpressionsChartS
                 <CartesianGrid strokeDasharray="3 3" stroke="#F0F1F4" />
                 <XAxis
                   dataKey="date"
-                  tick={{ fontSize: 10, fill: '#8A9E92' }}
+                  tick={AXIS_TICK}
+                  tickLine={false}
+                  axisLine={AXIS_LINE}
                   tickFormatter={(d) => formatDateFr(String(d)).slice(0, 5)}
+                  minTickGap={24}
                 />
-                <YAxis tick={{ fontSize: 10, fill: '#8A9E92' }} width={44} />
+                <YAxis
+                  tick={AXIS_TICK}
+                  tickLine={false}
+                  axisLine={AXIS_LINE}
+                  width={44}
+                  allowDecimals={false}
+                  tickFormatter={(v) => formatIntFr(Number(v))}
+                />
                 <Tooltip
                   formatter={(v) => [formatIntFr(Number(v)), 'Impressions servies']}
                   labelFormatter={(d) => formatDateFr(String(d))}

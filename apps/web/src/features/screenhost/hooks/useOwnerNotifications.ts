@@ -25,12 +25,17 @@ const toDate = (value?: string | null): Date => {
   return Number.isNaN(d.getTime()) ? new Date() : d;
 };
 
-// Where the bell's CTA navigates, by notification type. A pending-acceptance notification opens the
-// owner's accept/reject surface; everything else falls back to the owner campaigns page.
-const actionFor = (n: ApiNotification): { actionLabel: string; actionPath: string } =>
-  n.type === 'dispatch_pending_acceptance'
-    ? { actionLabel: 'Consulter', actionPath: '/owner-allocations' }
-    : { actionLabel: 'Consulter', actionPath: '/owner-campaigns' };
+// Where the bell's CTA navigates, by notification type (exported for the routing tests). A
+// pending-acceptance notification opens the owner's accept/reject surface; a monthly-report
+// notification opens "Mes performances" (Mejri prod-test #1 — never the campaigns route);
+// everything else falls back to the owner campaigns page.
+export const actionFor = (n: ApiNotification): { actionLabel: string; actionPath: string } => {
+  if (n.type === 'dispatch_pending_acceptance')
+    return { actionLabel: 'Consulter', actionPath: '/owner-allocations' };
+  if (n.type === 'monthly_report_ready')
+    return { actionLabel: 'Consulter', actionPath: '/owner-performance' };
+  return { actionLabel: 'Consulter', actionPath: '/owner-campaigns' };
+};
 
 const toFeed = (rows: ApiNotification[]): NotificationFeed<string> => ({
   items: rows.map((n) => ({
