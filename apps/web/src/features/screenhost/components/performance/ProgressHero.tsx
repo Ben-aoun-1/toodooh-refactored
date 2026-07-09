@@ -1,9 +1,9 @@
-import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
+import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 import { type CumulativePoint, formatIntFr, formatTndFr } from '../../lib/performance-derive';
 import { formatDateFr } from '../../lib/performance-period';
 
-import { CHART_ACCENT, CHART_GREEN } from './chart-colors';
+import { AXIS_LINE, AXIS_TICK, CHART_ACCENT, CHART_GREEN } from './chart-colors';
 import { ChartPlaceholder, PENDING_LABEL } from './Pending';
 
 interface HeroCardProps {
@@ -36,14 +36,31 @@ function HeroCard({ label, value, suffix, series, color, gradientId }: HeroCardP
         {series.length > 0 ? (
           <div className="aspect-[400/130] w-full rounded-xl border border-perf-line bg-white px-3 py-2.5">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={series} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
+              {/* right margin ≥ half the last date tick, so the end-of-axis label never clips */}
+              <AreaChart data={series} margin={{ top: 4, right: 18, bottom: 0, left: 0 }}>
                 <defs>
                   <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor={color} stopOpacity={0.2} />
                     <stop offset="100%" stopColor={color} stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <XAxis dataKey="date" hide />
+                <XAxis
+                  dataKey="date"
+                  tick={AXIS_TICK}
+                  tickLine={false}
+                  axisLine={AXIS_LINE}
+                  tickFormatter={(d) => formatDateFr(String(d)).slice(0, 5)}
+                  minTickGap={24}
+                />
+                <YAxis
+                  tick={AXIS_TICK}
+                  tickLine={false}
+                  axisLine={AXIS_LINE}
+                  width={44}
+                  tickCount={4}
+                  allowDecimals={false}
+                  tickFormatter={(v) => formatIntFr(Number(v))}
+                />
                 <Tooltip
                   formatter={(v) => [formatIntFr(Number(v)), label]}
                   labelFormatter={(d) => formatDateFr(String(d))}

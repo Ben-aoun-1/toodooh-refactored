@@ -7,6 +7,18 @@ export const CHART_ACCENT = '#9195F8'; // = tailwind brand.accent (hero revenue)
 export const CHART_DEEP = '#204B43'; // = tailwind brand.deep (S03 impressions)
 export const CHART_GREEN = '#1D9E75'; // hero audience + heatmap ramp top (design-ruled)
 
+/**
+ * Shared axis treatment for the page's curves (Mejri prod-test #2 — the mockups' charts carry no
+ * axes, so the ruling renders them in the mockup's own design language): Geist Mono ticks in
+ * perf-mist over perf-line hairlines, tick marks off.
+ */
+export const AXIS_TICK = {
+  fontSize: 10,
+  fill: '#8A9E92', // = tailwind perf.mist
+  fontFamily: "'Geist Mono', 'SF Mono', Monaco, monospace", // = .perf-mono
+} as const;
+export const AXIS_LINE = { stroke: '#E9EBEF' } as const; // = tailwind perf.line
+
 /** S02 — the mockups' exact 5-step intensity ramp as static Tailwind classes. */
 export const HEATMAP_LEVEL_CLASSES = [
   'bg-[#E4F5EC]',
