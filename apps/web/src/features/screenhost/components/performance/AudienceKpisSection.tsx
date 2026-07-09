@@ -1,4 +1,4 @@
-import { type AudienceKpis, formatIntFr } from '../../lib/performance-derive';
+import { type AudienceKpis, formatDecimalFr, formatIntFr } from '../../lib/performance-derive';
 import { formatDateFr } from '../../lib/performance-period';
 
 import { PENDING_LABEL, PendingValue } from './Pending';
@@ -18,10 +18,13 @@ function KpiValue({
   value,
   suffix,
   compact,
+  decimal,
 }: {
   value: number | null;
   suffix?: string;
   compact?: boolean;
+  /** Render with at most one comma decimal (moyenne/h — Mejri prod-test #3). */
+  decimal?: boolean;
 }) {
   // The mockup's cascade renders the STACKED cells' pending state at 28px — reproduced as-is.
   if (value === null && compact)
@@ -37,7 +40,7 @@ function KpiValue({
         compact ? 'text-[28px]' : 'text-[46px]'
       }`}
     >
-      {formatIntFr(value)}
+      {decimal ? formatDecimalFr(value) : formatIntFr(value)}
       {suffix && (
         <span className="ml-1 text-[17px] font-medium tracking-normal text-perf-grey">
           {suffix}
@@ -77,7 +80,12 @@ export function AudienceKpisSection({ kpis, hasHostData }: AudienceKpisSectionPr
           <div>
             <KpiLabel>Audience moyenne / heure</KpiLabel>
             <div className="mt-4">
-              <KpiValue value={hasHostData ? (kpis.perHour ?? 0) : null} suffix="pers/h" compact />
+              <KpiValue
+                value={hasHostData ? (kpis.perHour ?? 0) : null}
+                suffix="pers/h"
+                compact
+                decimal
+              />
             </div>
             <p className="mt-1 text-[12.5px] leading-[1.45] text-perf-grey">
               Densité moyenne d'audience pendant les heures d'ouverture.

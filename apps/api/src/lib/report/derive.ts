@@ -85,7 +85,8 @@ export function audienceKpis(points: DailyAudiencePoint[], hoursPerDay: number):
     if (peak === null || p.audience > peak.value) peak = { value: p.audience, date: p.date };
   }
   const perDay = Math.round(global / points.length);
-  const perHour = hoursPerDay > 0 ? Math.round(perDay / hoursPerDay) : null;
+  // One decimal (Mejri prod-test #3): 4 pers/day ÷ 14 h must read 0,3 — never a rounded 0.
+  const perHour = hoursPerDay > 0 ? Math.round((perDay / hoursPerDay) * 10) / 10 : null;
   return { global, perDay, perHour, peak };
 }
 
@@ -214,6 +215,16 @@ export function formatTndCellFr(value: number): string {
   const [intPart = '0', decPart = '00'] = fixed.split('.');
   const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, NNBSP);
   return `${value < 0 ? '-' : ''}${grouped},${decPart} TND`;
+}
+
+/** At most one comma decimal ('0,3'); whole numbers drop it ('4') — the moyenne/h display. */
+export function formatDecimalFr(value: number): string {
+  const rounded = Math.round(value * 10) / 10;
+  if (Number.isInteger(rounded)) return formatIntFr(rounded);
+  const sign = rounded < 0 ? '-' : '';
+  const abs = Math.abs(rounded);
+  const intPart = Math.floor(abs);
+  return `${sign}${formatIntFr(intPart)},${Math.round((abs - intPart) * 10)}`;
 }
 
 /** 'YYYY-MM-DD' → 'DD/MM/YYYY'; '—' on malformed input. */

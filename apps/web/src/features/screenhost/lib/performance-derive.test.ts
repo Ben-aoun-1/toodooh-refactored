@@ -8,6 +8,7 @@ import {
   cumulativeSeries,
   dailyAudienceWithin,
   demographicBreakdown,
+  formatDecimalFr,
   hasCastData,
   hasHostData,
   impressionsOfMonth,
@@ -61,8 +62,23 @@ describe('audienceKpis (S01)', () => {
     expect(kpis.peak).toEqual({ value: 900, date: '2026-06-02' });
   });
 
+  it('perHour keeps one decimal instead of rounding to a misleading 0 (Mejri prod-test #3)', () => {
+    const kpis = audienceKpis([{ date: '2026-06-26', audience: 4 }], 14);
+    expect(kpis.perDay).toBe(4);
+    expect(kpis.perHour).toBe(0.3); // 4 ÷ 14 = 0,2857… → one decimal, not 0
+  });
+
   it('empty input → the honest empty state', () => {
     expect(audienceKpis([], 14)).toEqual({ global: 0, perDay: null, perHour: null, peak: null });
+  });
+});
+
+describe('formatDecimalFr (the moyenne/h display)', () => {
+  it('renders at most one comma decimal; whole numbers drop it', () => {
+    expect(formatDecimalFr(0.3)).toBe('0,3');
+    expect(formatDecimalFr(0.2857)).toBe('0,3');
+    expect(formatDecimalFr(4)).toBe('4');
+    expect(formatDecimalFr(54.6)).toBe('54,6');
   });
 });
 

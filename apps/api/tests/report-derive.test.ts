@@ -9,6 +9,7 @@ import {
   demographicBreakdown,
   formatCompactPeriod,
   formatDateFr,
+  formatDecimalFr,
   formatIntFr,
   formatTablePeriod,
   formatTndCellFr,
@@ -61,6 +62,12 @@ describe('audienceKpis (web parity, S01)', () => {
     expect(kpis.perDay).toBe(700);
     expect(kpis.perHour).toBe(50);
     expect(kpis.peak).toEqual({ value: 900, date: '2026-06-02' });
+  });
+
+  it('perHour keeps one decimal instead of rounding to a misleading 0 (Mejri prod-test #3)', () => {
+    const kpis = audienceKpis([{ date: '2026-06-26', audience: 4 }], 14);
+    expect(kpis.perDay).toBe(4);
+    expect(kpis.perHour).toBe(0.3); // 4 ÷ 14 = 0,2857… → one decimal, not 0
   });
 
   it('empty input → the honest empty state', () => {
@@ -227,6 +234,12 @@ describe('fr-FR formats (deterministic, U+202F grouping — what the page render
     expect(formatIntFr(191400)).toBe('191\u202f400');
     expect(formatIntFr(764)).toBe('764');
     expect(formatIntFr(-12345)).toBe('-12\u202f345');
+  });
+  it('formatDecimalFr renders at most one comma decimal; whole numbers drop it (web parity)', () => {
+    expect(formatDecimalFr(0.3)).toBe('0,3');
+    expect(formatDecimalFr(0.2857)).toBe('0,3');
+    expect(formatDecimalFr(4)).toBe('4');
+    expect(formatDecimalFr(54.6)).toBe('54,6');
   });
   it('formatTndCellFr renders comma decimals + TND', () => {
     expect(formatTndCellFr(412)).toBe('412,00 TND');

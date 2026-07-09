@@ -121,7 +121,8 @@ export function audienceKpis(points: DailyAudiencePoint[], hoursPerDay: number):
     if (peak === null || p.audience > peak.value) peak = { value: p.audience, date: p.date };
   }
   const perDay = Math.round(global / points.length);
-  const perHour = hoursPerDay > 0 ? Math.round(perDay / hoursPerDay) : null;
+  // One decimal (Mejri prod-test #3): 4 pers/day ÷ 14 h must read 0,3 — never a rounded 0.
+  const perHour = hoursPerDay > 0 ? Math.round((perDay / hoursPerDay) * 10) / 10 : null;
   return { global, perDay, perHour, peak };
 }
 
@@ -257,6 +258,11 @@ export function intensityLevel(
 /** fr-FR integer formatting ('191 400'), the mockups' number style. */
 export function formatIntFr(value: number): string {
   return Math.round(value).toLocaleString('fr-FR');
+}
+
+/** fr-FR with at most one comma decimal ('0,3'); whole numbers drop it ('4') — the moyenne/h display. */
+export function formatDecimalFr(value: number): string {
+  return value.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 1 });
 }
 
 /** fr-FR money without decimals for hero/S05 totals ('1 640'); table cells add ',00 TND'. */
