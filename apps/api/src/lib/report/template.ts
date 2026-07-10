@@ -424,18 +424,19 @@ body{font-family:'Geist',-apple-system,system-ui,sans-serif;background:var(--pag
 .intro-cell:last-child{border-right:none;}
 .intro-label{font-size:7.5px;letter-spacing:0.08em;text-transform:uppercase;color:var(--mist);margin-bottom:5px;}
 .intro-value{font-size:11px;font-weight:600;letter-spacing:-0.012em;}
-/* sections */
-.section{margin-bottom:30px;}
+/* sections — print rhythm (R1.5): a slightly stronger number/title hierarchy than the screen
+   mirror and one consistent section gap, tuned for A4 reading distance */
+.section{margin-bottom:32px;}
 /* the whole heading block is atomic AND glued to its first content block — no orphaned
    eyebrows/titles at page bottoms */
 .s-head{break-inside:avoid;break-after:avoid;}
 .sub-title,.sub-lead{break-after:avoid;}
-.s-num{display:inline-flex;align-items:center;gap:6px;font-family:'Geist Mono',monospace;font-size:8px;letter-spacing:0.12em;text-transform:uppercase;color:var(--green);font-weight:600;margin-bottom:7px;}
-.s-dot{width:4px;height:4px;border-radius:50%;background:var(--green);}
-.s-title{font-size:18px;font-weight:600;line-height:1.15;letter-spacing:-0.015em;margin-bottom:6px;}
-.s-lead{font-size:10px;color:var(--grey);line-height:1.6;max-width:440px;margin-bottom:14px;}
-.sub-title{font-size:13px;font-weight:600;letter-spacing:-0.01em;margin-top:18px;}
-.sub-lead{font-size:9.5px;color:var(--grey);max-width:400px;margin:3px 0 12px;}
+.s-num{display:inline-flex;align-items:center;gap:6px;font-family:'Geist Mono',monospace;font-size:9px;letter-spacing:0.13em;text-transform:uppercase;color:var(--green);font-weight:600;margin-bottom:8px;}
+.s-dot{width:4.5px;height:4.5px;border-radius:50%;background:var(--green);}
+.s-title{font-size:20px;font-weight:600;line-height:1.15;letter-spacing:-0.018em;margin-bottom:7px;}
+.s-lead{font-size:10.5px;color:var(--grey);line-height:1.6;max-width:460px;margin-bottom:15px;}
+.sub-title{font-size:14px;font-weight:600;letter-spacing:-0.01em;margin-top:20px;}
+.sub-lead{font-size:10px;color:var(--grey);max-width:420px;margin:3px 0 12px;}
 /* KPI rows */
 .kpi-row{display:grid;grid-template-columns:repeat(3,1fr);border-top:2px solid var(--green);border-bottom:1px solid var(--line);break-inside:avoid;}
 .kpi-cell{padding:14px 14px 14px 0;border-right:1px solid var(--soft);}
@@ -449,13 +450,13 @@ body{font-family:'Geist',-apple-system,system-ui,sans-serif;background:var(--pag
 .kpi-suffix{font-size:11px;font-weight:500;color:var(--grey);margin-left:3px;letter-spacing:normal;}
 .kpi-pending{font-size:11px;font-weight:600;font-style:italic;color:var(--mist);margin-bottom:6px;}
 .kpi-pending--stack{font-size:19px;line-height:1.2;}
-.kpi-detail{font-size:8.5px;color:var(--grey);line-height:1.45;}
-/* heatmap */
-.hm-wrap{padding:14px;}
+.kpi-detail{font-size:9px;color:var(--grey);line-height:1.45;}
+/* heatmap — sized to the print column (1fr cells scale to width; taller cells for paper) */
+.hm-wrap{padding:16px;}
 .hm-grid{display:grid;grid-template-columns:34px repeat(14,1fr);gap:2.5px;}
-.hm-hour{font-family:'Geist Mono',monospace;font-size:7px;color:var(--mist);text-align:center;padding-bottom:4px;}
-.hm-day{font-family:'Geist Mono',monospace;font-size:7.5px;color:var(--grey);text-transform:uppercase;letter-spacing:0.05em;align-self:center;padding-right:4px;}
-.hm-cell{height:15px;border-radius:2.5px;}
+.hm-hour{font-family:'Geist Mono',monospace;font-size:7.5px;color:var(--mist);text-align:center;padding-bottom:4px;}
+.hm-day{font-family:'Geist Mono',monospace;font-size:8px;color:var(--grey);text-transform:uppercase;letter-spacing:0.05em;align-self:center;padding-right:4px;}
+.hm-cell{height:17px;border-radius:2.5px;}
 .cell-h{background:repeating-linear-gradient(-45deg,#F1F5F3,#F1F5F3 3px,#E4ECE7 3px,#E4ECE7 6px);}
 .hm-legend{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:7px;color:var(--grey);text-transform:uppercase;letter-spacing:0.04em;}
 .hm-scale{display:inline-flex;gap:2px;}
@@ -464,7 +465,7 @@ body{font-family:'Geist',-apple-system,system-ui,sans-serif;background:var(--pag
 .chart-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;}
 .chart-title{font-size:12px;font-weight:600;}
 .chart-sub{font-size:8px;color:var(--mist);}
-.chart-wrap{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:#fff;}
+.chart-wrap{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:#fff;}
 .s03-chart{width:100%;height:auto;display:block;}
 .chart-placeholder{background:#F6F8FA;border:1px dashed var(--soft);border-radius:8px;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--mist);font-style:italic;font-size:9.5px;padding:34px 14px;}
 .chart-legend{display:flex;align-items:center;gap:5px;margin-top:9px;font-size:7px;color:var(--grey);text-transform:uppercase;letter-spacing:0.04em;}
@@ -514,17 +515,17 @@ body{font-family:'Geist',-apple-system,system-ui,sans-serif;background:var(--pag
 .top3-rank{width:10px;font-size:11px;font-weight:600;color:var(--mist);flex-shrink:0;}
 .top3-rank--first{color:var(--green);}
 .top3-name{font-size:9.5px;}
-.hist-table{width:100%;border-collapse:collapse;font-size:9px;break-inside:avoid;}
-.hist-table th{text-align:left;font-size:7px;letter-spacing:0.08em;text-transform:uppercase;color:var(--mist);padding:0 8px 7px 0;border-bottom:2px solid var(--deep);font-weight:600;}
+.hist-table{width:100%;border-collapse:collapse;font-size:9.5px;break-inside:avoid;}
+.hist-table th{text-align:left;font-size:7.5px;letter-spacing:0.08em;text-transform:uppercase;color:var(--mist);padding:0 8px 8px 0;border-bottom:2px solid var(--deep);font-weight:600;}
 .hist-table th.th-right{text-align:right;padding-right:0;}
-.hist-table td{padding:8px 8px 8px 0;border-bottom:1px solid var(--soft);vertical-align:middle;}
+.hist-table td{padding:9px 8px 9px 0;border-bottom:1px solid var(--soft);vertical-align:middle;}
 .td-amount{text-align:right;color:var(--portage);font-weight:600;padding-right:0 !important;}
-.pill{display:inline-flex;align-items:center;gap:4px;font-size:8px;color:var(--grey);}
+.pill{display:inline-flex;align-items:center;gap:4px;font-size:8.5px;color:var(--grey);}
 .pill-dot{width:4px;height:4px;border-radius:50%;background:var(--mist);display:inline-block;}
 .pill--active{color:var(--green);}
 .pill--active .pill-dot{background:var(--green);}
 /* S07 pistes */
-.reco-card{background:var(--card);border:1px dashed var(--line);border-radius:8px;padding:13px 16px;margin-bottom:9px;break-inside:avoid;}
+.reco-card{background:var(--card);border:1px dashed var(--line);border-radius:8px;padding:14px 16px;margin-bottom:10px;break-inside:avoid;}
 .reco-num{display:inline-flex;align-items:center;gap:5px;font-size:7px;letter-spacing:0.1em;text-transform:uppercase;font-weight:600;margin-bottom:5px;}
 .reco-num--portage{color:var(--portage);}
 .reco-num--green{color:var(--green);}
