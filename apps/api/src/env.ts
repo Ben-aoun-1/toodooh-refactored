@@ -75,6 +75,10 @@ const EnvSchema = z.object({
   // image sets it) then common system paths; when none resolves, report rendering fails with a
   // clear error while every other route keeps serving.
   CHROMIUM_PATH: z.string().min(1).optional(),
+  // Claude API key for the report's AI recommendations (R2). OPTIONAL by design, mirroring the
+  // WEDOOH_* pattern: unset, the feature is OFF — every report keeps the generic pistes and boot
+  // logs ONE warning. The operator provisions the real key in /srv/toodooh/.env at switch-on.
+  ANTHROPIC_API_KEY: z.string().min(16).optional(),
 });
 
 export type Env = z.infer<typeof EnvSchema> & {
