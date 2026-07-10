@@ -5,6 +5,7 @@ import {
   formatDecimalFr,
   formatIntFr,
 } from './derive.js';
+import type { Piste } from './recommendations.js';
 
 // ONE self-contained HTML document for the R1 report — inline CSS derived from the perf page /
 // mockup styles (the design HTMLs' FINAL :root overrides), Geist via the SAME Google-Fonts import
@@ -123,7 +124,10 @@ const demoRow = (label: string, countLabel: string | null, barPct: number): stri
   </div>
   <div class="demo-bar"><div class="demo-fill" style="width:${Math.max(0, Math.min(100, barPct))}%"></div></div>`;
 
-export function renderReportHtml(data: ReportData): string {
+export function renderReportHtml(
+  data: ReportData,
+  opts: { aiPistes?: Piste[] | null } = {},
+): string {
   const { kpis, hostHasData, castHasData } = data;
 
   // ── intro strip (its four cells are ALSO echoed on the cover — one builder keeps them in
@@ -341,16 +345,30 @@ export function renderReportHtml(data: ReportData): string {
     ${historyBlock}
   </section>`;
 
-  // ── S07 (the page's three GENERIC pistes, copy verbatim) ────────────────────────────────────
+  // ── S07 — AI pistes when the generator produced them (R2), else the page's three GENERIC
+  //    pistes copy VERBATIM. Same cards, same color cadence; AI content is escaped like any
+  //    other external string. ──────────────────────────────────────────────────────────────────
+  const RECO_VARIANTS = ['portage', 'green', 'deep'] as const;
+  const aiPisteCards = (pistes: Piste[]): string =>
+    pistes
+      .map((piste, idx) => {
+        const variant = RECO_VARIANTS[idx] ?? 'green';
+        return `<div class="reco-card"><div class="reco-num mono reco-num--${variant}"><span class="reco-dot reco-dot--${variant}"></span>Piste 0${idx + 1}</div><h3 class="reco-title">${esc(piste.title)}</h3><p class="reco-body">${esc(piste.body)}</p></div>`;
+      })
+      .join('\n    ');
+  const pisteCards =
+    opts.aiPistes && opts.aiPistes.length === 3
+      ? aiPisteCards(opts.aiPistes)
+      : `<div class="reco-card"><div class="reco-num mono reco-num--portage"><span class="reco-dot reco-dot--portage"></span>Piste 01</div><h3 class="reco-title">Anticipez les temps forts</h3><p class="reco-body">Un grand match international est à l'affiche ce mois-ci (Coupe du Monde, CAN…) — profitez-en pour communiquer sa diffusion et inviter vos clients à venir le suivre dès maintenant sur vos réseaux.</p></div>
+    <div class="reco-card"><div class="reco-num mono reco-num--green"><span class="reco-dot reco-dot--green"></span>Piste 02</div><h3 class="reco-title">Repérez vos angles morts</h3><p class="reco-body">Vous avez 2 périodes creuses à valoriser autrement. Mardi matin et jeudi après-midi sont vos créneaux les plus faibles — essayez X et Y pour les redynamiser.</p></div>
+    <div class="reco-card"><div class="reco-num mono reco-num--deep"><span class="reco-dot reco-dot--deep"></span>Piste 03</div><h3 class="reco-title">Résumé du SPS et recommandations</h3><p class="reco-body reco-body--pending">En attente de votre score de priorité.</p></div>`;
   const s07 = `
   <section class="section">
     ${sectionHead('Section 07', "Vos pistes d'optimisation futures", "Quelques observations issues de l'activité de votre lieu sur la période, transformées en pistes concrètes pour développer vos revenus.")}
     <div class="note note--violet">
       <p><strong>Lecture personnalisée.</strong> Ces pistes s'appuient sur les données mesurées dans votre lieu — audience, profil typologique, performance des campagnes diffusées.</p>
     </div>
-    <div class="reco-card"><div class="reco-num mono reco-num--portage"><span class="reco-dot reco-dot--portage"></span>Piste 01</div><h3 class="reco-title">Anticipez les temps forts</h3><p class="reco-body">Un grand match international est à l'affiche ce mois-ci (Coupe du Monde, CAN…) — profitez-en pour communiquer sa diffusion et inviter vos clients à venir le suivre dès maintenant sur vos réseaux.</p></div>
-    <div class="reco-card"><div class="reco-num mono reco-num--green"><span class="reco-dot reco-dot--green"></span>Piste 02</div><h3 class="reco-title">Repérez vos angles morts</h3><p class="reco-body">Vous avez 2 périodes creuses à valoriser autrement. Mardi matin et jeudi après-midi sont vos créneaux les plus faibles — essayez X et Y pour les redynamiser.</p></div>
-    <div class="reco-card"><div class="reco-num mono reco-num--deep"><span class="reco-dot reco-dot--deep"></span>Piste 03</div><h3 class="reco-title">Résumé du SPS et recommandations</h3><p class="reco-body reco-body--pending">En attente de votre score de priorité.</p></div>
+    ${pisteCards}
   </section>`;
 
   // ── S08 (SPS — permanently the "À venir" variant, ruled) ────────────────────────────────────

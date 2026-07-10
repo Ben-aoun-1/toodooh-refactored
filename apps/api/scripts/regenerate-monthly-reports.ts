@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm';
 import { db, sql } from '../src/db/client.js';
 import { screenhostMonthlyReports, screenhosts } from '../src/db/schema.js';
 import { assembleReportData } from '../src/lib/report/assemble.js';
+import { pistesForReport } from '../src/lib/report/recommendations.js';
 import { renderPdf, resolveChromiumPath } from '../src/lib/report/render.js';
 import { renderReportHtml } from '../src/lib/report/template.js';
 import { storage } from '../src/storage/s3-storage.js';
@@ -88,7 +89,9 @@ export async function regenerateStoredReports(
     try {
       const data = await assembleReportData(row.screenhostId, monthBounds(row.month));
       if (!data) throw new Error('venue vanished mid-run');
-      const pdf = await renderPdf(renderReportHtml(data));
+      // R2 — same frozen seam as the month-end job (uncached; consistent with restyle-in-place).
+      const aiPistes = await pistesForReport(data).catch(() => null);
+      const pdf = await renderPdf(renderReportHtml(data, { aiPistes }));
 
       // SAME key on purpose — S3/MinIO PUT overwrites in place; nothing else moves.
       const uploaded = await storage.upload({

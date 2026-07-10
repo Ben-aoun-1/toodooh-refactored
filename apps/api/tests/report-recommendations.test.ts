@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { ReportData } from '../src/lib/report/assemble.js';
 import {
   type RecommendationInput,
+  buildRecommendationInput,
   generateRecommendations,
   generateRecommendationsCached,
   isRecommendationsEnabled,
+  pistesForReport,
+  pistesForReportCached,
   resetRecommendationsForTests,
 } from '../src/lib/report/recommendations.js';
 
@@ -228,5 +232,103 @@ describe('generateRecommendationsCached (on-demand path)', () => {
     expect(parseSpy).toHaveBeenCalledTimes(502);
     await generateRecommendationsCached('venue-500', range, input());
     expect(parseSpy).toHaveBeenCalledTimes(502);
+  });
+});
+
+// ── the report seam (Commit 2) ────────────────────────────────────────────────────────────────
+
+const reportData = (over: Partial<ReportData> = {}): ReportData => ({
+  venueName: 'Café Le Palmier',
+  category: 'Café · Salon de thé',
+  range: { from: '2026-06-01', to: '2026-06-30' },
+  generatedLabel: '10/07/2026',
+  hostHasData: true,
+  castHasData: true,
+  kpis: { global: 21400, perDay: 764, perHour: 76.4, peak: { value: 1180, date: '2026-06-14' } },
+  // one hot cell (Ven idx4, 18h → hourIdx 10 = level 5), one warm, one weak, rest closed
+  heatLevels: Array.from({ length: 7 }, (_, day) =>
+    Array.from({ length: 14 }, (_, h) => {
+      if (day === 4 && h === 10) return 5;
+      if (day === 5 && h === 9) return 3;
+      if (day === 1 && h === 1) return 1;
+      return 0;
+    }),
+  ),
+  days: [],
+  breakdown: {
+    femmes: 11128,
+    hommes: 10272,
+    ages: [
+      { key: 'age_17_30_pct', label: '17 – 30 ans', count: 7276 },
+      { key: 'age_31_45_pct', label: '31 – 45 ans', count: 6206 },
+      { key: 'age_46_60_pct', label: '46 – 60 ans', count: 3852 },
+      { key: 'age_60_plus_pct', label: '60 ans et plus', count: 2140 },
+    ],
+  },
+  revenue: { totalLabel: '1 065', count: 3, rows: [] },
+  campaignsBlock: { count: 3, cumulativeImpressions: 140300, top3: [], rows: [] },
+  ...over,
+});
+
+describe('buildRecommendationInput (ReportData → minimized payload)', () => {
+  it('maps the aggregates: identity, KPIs, top/bottom open slots, campaigns, demography', () => {
+    const built = buildRecommendationInput(reportData());
+    expect(built.commerce).toBe('Café Le Palmier');
+    expect(built.categorie).toBe('Café · Salon de thé');
+    expect(built.periode).toEqual({ du: '2026-06-01', au: '2026-06-30' });
+    expect(built.audience).toEqual({
+      globale: 21400,
+      moyenneParJour: 764,
+      moyenneParHeure: 76.4,
+      pic: { valeur: 1180, date: '2026-06-14' },
+    });
+    expect(built.creneaux.plusForts[0]).toBe('Ven 18h'); // the level-5 cell leads
+    expect(built.creneaux.plusFaibles[0]).toBe('Mar 9h'); // the level-1 cell trails
+    expect(built.campagnes).toEqual({ nombre: 3, revenuTotalTnd: '1 065' });
+    expect(built.demographie?.femmes).toBe(11128);
+    expect(built.demographie?.tranchesAge[0]).toEqual({ tranche: '17 – 30 ans', personnes: 7276 });
+  });
+
+  it('closed/hachured cells (level 0) are never créneaux', () => {
+    const built = buildRecommendationInput(reportData());
+    expect(built.creneaux.plusForts).toHaveLength(3);
+    expect(built.creneaux.plusFaibles).toHaveLength(3);
+    // only 3 open cells exist in the fixture → forts and faibles are the same 3 slots, reordered
+    expect(new Set([...built.creneaux.plusForts, ...built.creneaux.plusFaibles]).size).toBe(3);
+  });
+
+  it('a HOST-empty venue sends null audience; missing ratios send null demography', () => {
+    const built = buildRecommendationInput(
+      reportData({
+        hostHasData: false,
+        breakdown: null,
+        kpis: { global: 0, perDay: null, perHour: null, peak: null },
+      }),
+    );
+    expect(built.audience).toEqual({
+      globale: null,
+      moyenneParJour: null,
+      moyenneParHeure: null,
+      pic: null,
+    });
+    expect(built.demographie).toBeNull();
+  });
+});
+
+describe('pistesForReport / pistesForReportCached (the report seam)', () => {
+  it('a venue with NEITHER host nor cast data keeps the generic pistes without an API call', async () => {
+    const empty = reportData({ hostHasData: false, castHasData: false });
+    await expect(pistesForReport(empty)).resolves.toBeNull();
+    await expect(pistesForReportCached('venue-x', empty)).resolves.toBeNull();
+    expect(parseSpy).not.toHaveBeenCalled();
+  });
+
+  it('with data, the frozen path generates and the cached path caches per venue × period', async () => {
+    parseSpy.mockResolvedValue(okMessage);
+    await expect(pistesForReport(reportData())).resolves.toEqual(validPistes);
+    expect(parseSpy).toHaveBeenCalledTimes(1); // uncached — every call hits the API
+    await expect(pistesForReportCached('venue-1', reportData())).resolves.toEqual(validPistes);
+    await expect(pistesForReportCached('venue-1', reportData())).resolves.toEqual(validPistes);
+    expect(parseSpy).toHaveBeenCalledTimes(2); // one more for the first cached call only
   });
 });

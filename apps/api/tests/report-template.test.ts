@@ -229,6 +229,64 @@ describe('renderReportHtml — FULL variants (both flags true)', () => {
   });
 });
 
+describe('renderReportHtml — S07 AI pistes (R2)', () => {
+  const aiPistes = [
+    { title: 'Valorisez vos vendredis soirs', body: 'Le créneau Ven 18h est votre plus fort.' },
+    { title: 'Comblez le creux du mardi matin', body: 'Mar 9h est votre créneau le plus faible.' },
+    { title: 'Misez sur les 17 – 30 ans', body: 'Votre première tranche d’âge mesurée.' },
+  ];
+
+  it('renders the 3 AI pistes in the SAME card language; the generic copy disappears', () => {
+    const html = renderReportHtml(fullData(), { aiPistes });
+    expect(html).toContain('Valorisez vos vendredis soirs');
+    expect(html).toContain('Le créneau Ven 18h est votre plus fort.');
+    expect(html).toContain('Misez sur les 17 – 30 ans');
+    // same visual language: numbered cards with the color cadence
+    expect(html).toContain('reco-num--portage');
+    expect(html).toContain('reco-num--green');
+    expect(html).toContain('reco-num--deep');
+    expect(html).toContain('Piste 01');
+    expect(html).toContain('Piste 03');
+    // the S07 frame (head + note) stays; the generic pistes are replaced
+    expect(html).toContain("Vos pistes d'optimisation futures");
+    expect(html).toContain('Lecture personnalisée.');
+    expect(html).not.toContain('Anticipez les temps forts');
+    expect(html).not.toContain('Repérez vos angles morts');
+    expect(html).not.toContain('En attente de votre score de priorité.');
+  });
+
+  it('null or absent aiPistes keeps the generic pistes verbatim', () => {
+    for (const html of [
+      renderReportHtml(baseData()),
+      renderReportHtml(baseData(), { aiPistes: null }),
+    ]) {
+      expect(html).toContain('Anticipez les temps forts');
+      expect(html).toContain('Repérez vos angles morts');
+      expect(html).toContain('Résumé du SPS et recommandations');
+      expect(html).toContain('En attente de votre score de priorité.');
+    }
+  });
+
+  it('a malformed (non-3) pistes array falls back to the generic pistes', () => {
+    const html = renderReportHtml(baseData(), { aiPistes: aiPistes.slice(0, 2) });
+    expect(html).toContain('Anticipez les temps forts');
+    expect(html).not.toContain('Valorisez vos vendredis soirs');
+  });
+
+  it('escapes AI piste content (no raw HTML injection through the model)', () => {
+    const html = renderReportHtml(baseData(), {
+      aiPistes: [
+        { title: '<script>alert(1)</script>', body: '<img src=x>' },
+        aiPistes[1] ?? { title: 'x', body: 'y' },
+        aiPistes[2] ?? { title: 'x', body: 'y' },
+      ],
+    });
+    expect(html).not.toContain('<script>alert(1)</script>');
+    expect(html).not.toContain('<img src=x>');
+    expect(html).toContain('&lt;script&gt;');
+  });
+});
+
 describe('impressionsChartSvg', () => {
   it('draws a closed area + line over the day values', () => {
     const svg = impressionsChartSvg([

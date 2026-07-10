@@ -34,6 +34,14 @@ vi.mock('../src/lib/report/render.js', async (importOriginal) => {
   };
 });
 
+// R2 — regeneration rides the SAME frozen pistes seam as the month-end job (uncached). Default
+// null → generic pistes, like an unprovisioned box.
+const pistesSpy = vi.hoisted(() => vi.fn());
+vi.mock('../src/lib/report/recommendations.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/lib/report/recommendations.js')>();
+  return { ...actual, pistesForReport: pistesSpy };
+});
+
 const silentLog = {
   info: () => undefined,
   warn: () => undefined,
@@ -101,6 +109,8 @@ describe('regenerateStoredReports (real Postgres, mocked render/storage)', () =>
   beforeEach(async () => {
     await resetAuthTables();
     renderSpy.mockClear();
+    pistesSpy.mockReset();
+    pistesSpy.mockResolvedValue(null);
     vi.restoreAllMocks();
   });
 
@@ -135,6 +145,9 @@ describe('regenerateStoredReports (real Postgres, mocked render/storage)', () =>
     // Restyle ≠ news: the owner keeps exactly the ONE notification the sweep inserted.
     const notifs = await db.select().from(notifications).where(eq(notifications.userId, owner));
     expect(notifs).toHaveLength(1);
+
+    // R2 — the regeneration rode the frozen pistes seam once per row (sweep + regen = 2 calls).
+    expect(pistesSpy).toHaveBeenCalledTimes(2);
   });
 
   it('--dry-run lists targets without rendering, uploading or touching rows', async () => {

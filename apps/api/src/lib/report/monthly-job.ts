@@ -7,6 +7,7 @@ import { notifications, screenhostMonthlyReports, screenhosts } from '../../db/s
 import { storage } from '../../storage/s3-storage.js';
 
 import { assembleReportData } from './assemble.js';
+import { pistesForReport } from './recommendations.js';
 import { resolveChromiumPath, renderPdf } from './render.js';
 import { renderReportHtml } from './template.js';
 
@@ -121,7 +122,10 @@ export async function runMonthlyReportSweep(
 
       const data = await assembleReportData(venue.id, { from, to });
       if (!data) continue; // venue vanished mid-sweep
-      const pdf = await renderPdf(renderReportHtml(data));
+      // R2 — generated ONCE here and frozen into the stored PDF (no cache). A generator failure
+      // of ANY kind resolves to null → the generic pistes; it can never fail the report.
+      const aiPistes = await pistesForReport(data).catch(() => null);
+      const pdf = await renderPdf(renderReportHtml(data, { aiPistes }));
 
       const key = `reports/${venue.id}/${month}.pdf`;
       const uploaded = await storage.upload({ key, body: pdf, contentType: 'application/pdf' });

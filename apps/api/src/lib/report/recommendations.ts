@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { env } from '../../env.js';
 import { logger } from '../../logger.js';
 
+import type { ReportData } from './assemble.js';
 import type { DateRange } from './derive.js';
 
 const log = logger.child({ module: 'report-recommendations' });
@@ -154,6 +155,91 @@ export async function generateRecommendationsCached(
     cache.set(key, { pistes, expiresAt: Date.now() + CACHE_TTL_MS });
   }
   return pistes;
+}
+
+// ── report wiring (Commit 2) — the ONE seam the job, the on-demand endpoint and the
+// regeneration script call. Gate: a venue with neither HOST nor CAST data keeps the generic
+// pistes without an API call (all-null aggregates cannot ground anything).
+
+const DAY_LABELS_FR = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'] as const;
+const FIRST_HEATMAP_HOUR = 8; // the grid's 14 columns span 8h–21h (the page's visible hours)
+
+/** Top/bottom OPEN slots from the 7×14 ramp levels (0 = closed/no-data, never a créneau). */
+const heatmapSlots = (levels: number[][]): { plusForts: string[]; plusFaibles: string[] } => {
+  const open: { label: string; level: number }[] = [];
+  levels.forEach((row, day) => {
+    row.forEach((level, hourIdx) => {
+      if (level > 0) {
+        open.push({
+          label: `${DAY_LABELS_FR[day] ?? '—'} ${FIRST_HEATMAP_HOUR + hourIdx}h`,
+          level,
+        });
+      }
+    });
+  });
+  const byLevelDesc = [...open].sort((a, b) => b.level - a.level);
+  return {
+    plusForts: byLevelDesc.slice(0, 3).map((s) => s.label),
+    plusFaibles: byLevelDesc
+      .slice(-3)
+      .reverse()
+      .map((s) => s.label),
+  };
+};
+
+/** ReportData → the minimized wire payload. Pure; exported for the payload-pinning tests. */
+export function buildRecommendationInput(data: ReportData): RecommendationInput {
+  return {
+    commerce: data.venueName,
+    categorie: data.category,
+    periode: { du: data.range.from, au: data.range.to },
+    audience: data.hostHasData
+      ? {
+          globale: data.kpis.global,
+          moyenneParJour: data.kpis.perDay,
+          moyenneParHeure: data.kpis.perHour,
+          pic: data.kpis.peak ? { valeur: data.kpis.peak.value, date: data.kpis.peak.date } : null,
+        }
+      : { globale: null, moyenneParJour: null, moyenneParHeure: null, pic: null },
+    creneaux: heatmapSlots(data.heatLevels),
+    campagnes: {
+      nombre: data.castHasData ? data.campaignsBlock.count : 0,
+      revenuTotalTnd: data.castHasData ? data.revenue.totalLabel : '0',
+    },
+    demographie: data.breakdown
+      ? {
+          femmes: data.breakdown.femmes,
+          hommes: data.breakdown.hommes,
+          tranchesAge: data.breakdown.ages.map((band) => ({
+            tranche: band.label,
+            personnes: band.count,
+          })),
+        }
+      : null,
+  };
+}
+
+/** Frozen path (month-end job + regeneration script): one uncached generation per stored PDF. */
+export async function pistesForReport(data: ReportData): Promise<Piste[] | null> {
+  try {
+    if (!data.hostHasData && !data.castHasData) return null;
+    return await generateRecommendations(buildRecommendationInput(data));
+  } catch {
+    return null; // the module contract, restated at the seam: NEVER throw into a report path
+  }
+}
+
+/** On-demand path (GET /:id/report): cache-wrapped per venue × period. */
+export async function pistesForReportCached(
+  venueId: string,
+  data: ReportData,
+): Promise<Piste[] | null> {
+  try {
+    if (!data.hostHasData && !data.castHasData) return null;
+    return await generateRecommendationsCached(venueId, data.range, buildRecommendationInput(data));
+  } catch {
+    return null;
+  }
 }
 
 /** Test hook — drops the lazy client and the cache (mirrors closeReportBrowser). */
