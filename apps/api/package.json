@@ -13,6 +13,7 @@
     "test": "vitest run",
     "migrate": "tsx --env-file-if-exists=.env scripts/migrate.ts",
     "promote": "tsx --env-file-if-exists=.env scripts/promote-to-admin.ts",
+    "reports:regenerate": "tsx --env-file-if-exists=.env scripts/regenerate-monthly-reports.ts",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {

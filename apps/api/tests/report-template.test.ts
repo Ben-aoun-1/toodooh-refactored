@@ -116,8 +116,31 @@ describe('renderReportHtml — structure shared by both states', () => {
     expect(html).toContain('Score actuel');
     expect(html).toContain('À venir');
     expect(html).toContain('poids 25 %');
-    expect(html).toContain('Powered by');
+    expect(html).toContain('POWERED BY');
     expect(html).toContain('Généré le 08/07/2026');
+  });
+
+  it('opens on a cover page carrying the document identity (R1.5), no masthead left', () => {
+    expect(html).toContain('class="cover"');
+    expect(html).toContain('Rapport de performances');
+    expect(html).toContain('<h1 class="cover-venue">Café Le Palmier</h1>');
+    expect(html).toContain('<div class="cover-cat">Café · Salon de thé</div>');
+    expect(html).toContain('01/06/2026');
+    expect(html).toContain('30/06/2026');
+    expect(html).not.toContain('masthead');
+  });
+
+  it('embeds the running header/footer chrome for render.ts (venue · period, page X / Y)', () => {
+    expect(html).toContain('<template id="pdf-header">');
+    expect(html).toContain('<template id="pdf-footer">');
+    expect(html).toContain('Café Le Palmier · 01/06/2026 – 30/06/2026');
+    expect(html).toContain('<span class="pageNumber"></span>');
+    expect(html).toContain('<span class="totalPages"></span>');
+  });
+
+  it('echoes the intro strip facts on the cover (both carry the four cells)', () => {
+    const cells = html.match(/class="intro-cell"/g) ?? [];
+    expect(cells.length).toBe(8); // 4 on the cover + 4 in the intro strip
   });
 });
 

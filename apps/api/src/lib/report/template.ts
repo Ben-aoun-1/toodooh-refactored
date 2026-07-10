@@ -10,8 +10,14 @@ import {
 // mockup styles (the design HTMLs' FINAL :root overrides), Geist via the SAME Google-Fonts import
 // as the web app (system-font fallback offline). Scope = the page FROM THE FILTERS DOWN: intro
 // strip + S01→S08 with the page's FRENCH COPY VERBATIM, HOST/CAST empty variants identical to the
-// page (Mejri ruling), SPS "À venir", the three GENERIC pistes. A minimal masthead + powered-by
-// footer frame the PDF (additive — a PDF needs a title block; surfaced in the CF-9).
+// page (Mejri ruling), SPS "À venir", the three GENERIC pistes.
+//
+// R1.5 document chrome: a COVER PAGE (brand mark, document title, venue, category, period,
+// "Généré le") opens the document and a running header/footer prints on every page via the inert
+// <template id="pdf-header|pdf-footer"> tags at the end of <body> — render.ts extracts them and
+// switches Chromium's displayHeaderFooter on (call sites untouched). Chromium cannot suppress the
+// chrome on the first page, so the cover keeps generous whitespace at both edges. The header and
+// footer templates are sandboxed by Chromium: inline styles only, no page classes, no webfonts.
 
 const PENDING = 'En attente du premier deal';
 const CHART_PENDING = 'Évolution en attente du premier deal';
@@ -120,14 +126,39 @@ const demoRow = (label: string, countLabel: string | null, barPct: number): stri
 export function renderReportHtml(data: ReportData): string {
   const { kpis, hostHasData, castHasData } = data;
 
-  // ── intro strip ────────────────────────────────────────────────────────────────────────────
-  const intro = `
-  <div class="intro">
+  // ── intro strip (its four cells are ALSO echoed on the cover — one builder keeps them in
+  //    sync) ──────────────────────────────────────────────────────────────────────────────────
+  const introCells = `
     <div class="intro-cell"><div class="intro-label mono">Commerce</div><div class="intro-value"><span class="var">${esc(data.venueName)}</span></div></div>
     <div class="intro-cell"><div class="intro-label mono">Période analysée</div><div class="intro-value"><span class="var">${formatDateFr(data.range.from)}</span> – <span class="var">${formatDateFr(data.range.to)}</span></div></div>
     <div class="intro-cell"><div class="intro-label mono">Catégorie</div><div class="intro-value"><span class="var">${esc(data.category)}</span></div></div>
-    <div class="intro-cell"><div class="intro-label mono">Campagnes incluses</div><div class="intro-value"><span class="var">${castHasData ? String(data.campaignsBlock.count) : PENDING}</span></div></div>
+    <div class="intro-cell"><div class="intro-label mono">Campagnes incluses</div><div class="intro-value"><span class="var">${castHasData ? String(data.campaignsBlock.count) : PENDING}</span></div></div>`;
+  const intro = `
+  <div class="intro">${introCells}
   </div>`;
+
+  // ── cover page ───────────────────────────────────────────────────────────────────────────────
+  const cover = `
+  <section class="cover">
+    <div class="cover-brand">${brandMark('cover-mark')}<span class="cover-word">tood<b>oo</b>h</span></div>
+    <div class="cover-main">
+      <div class="cover-accent"><span class="acc-mint"></span><span class="acc-portage"></span></div>
+      <div class="cover-eyebrow mono">Rapport de performances</div>
+      <h1 class="cover-venue">${esc(data.venueName)}</h1>
+      <div class="cover-cat">${esc(data.category)}</div>
+      <div class="cover-period mono"><span class="var">${formatDateFr(data.range.from)}</span> – <span class="var">${formatDateFr(data.range.to)}</span></div>
+    </div>
+    <div class="cover-bottom">
+      <div class="cover-facts">${introCells}
+      </div>
+      <div class="cover-generated mono">Généré le ${data.generatedLabel}</div>
+    </div>
+  </section>`;
+
+  // ── running header + footer (Chromium-sandboxed: inline styles, no page classes/webfonts) ────
+  const pdfChrome = `
+  <template id="pdf-header"><div style="width:100%;font-family:'Geist Mono','Courier New',monospace;font-size:7px;color:#8A9E92;padding:0 12mm;text-align:right;">${esc(data.venueName)} · ${formatDateFr(data.range.from)} – ${formatDateFr(data.range.to)}</div></template>
+  <template id="pdf-footer"><div style="width:100%;font-size:7px;color:#8A9E92;padding:0 12mm;display:flex;justify-content:space-between;align-items:baseline;"><span style="display:inline-flex;align-items:baseline;gap:5px;"><span style="font-family:'Geist Mono','Courier New',monospace;font-size:6px;letter-spacing:0.14em;color:#8A9E92;">POWERED BY</span><span style="font-family:'Geist','Helvetica Neue',Arial,sans-serif;font-weight:600;font-size:8px;color:#10251A;">tood<span style="color:#1D9E75">oo</span>h</span></span><span style="font-family:'Geist Mono','Courier New',monospace;">page <span class="pageNumber"></span> / <span class="totalPages"></span></span></div></template>`;
 
   // ── S01 ────────────────────────────────────────────────────────────────────────────────────
   const s01 = `
@@ -367,33 +398,45 @@ body{font-family:'Geist',-apple-system,system-ui,sans-serif;background:var(--pag
 .var{font-family:'Geist Mono','SF Mono',Monaco,monospace;font-weight:500;color:var(--green);font-size:0.92em;white-space:nowrap;}
 .var-portage{font-weight:600;color:var(--portage);}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;break-inside:avoid;}
-/* masthead */
-.masthead{display:flex;justify-content:space-between;align-items:center;padding-bottom:12px;border-bottom:1px solid var(--line);margin-bottom:16px;}
-.mast-brand{display:flex;align-items:center;gap:8px;}
-.mast-mark{width:20px;height:16px;color:var(--mint);}
-.mast-word{font-size:16px;font-weight:600;letter-spacing:-0.01em;}
-.mast-word b{color:var(--green);font-weight:600;}
-.mast-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.12em;color:var(--grey);}
-.mast-meta{font-size:9px;color:var(--mist);}
+/* cover page — one full page (A4 content box at the chromed margins is ~260mm tall), then a
+   hard break into the page-mirror. White, mint/portage accents, generous edge whitespace so the
+   running chrome (which Chromium also prints on page 1) sits clear of the composition. */
+.cover{height:259mm;display:flex;flex-direction:column;break-after:page;background:var(--card);padding:0 2mm;}
+.cover-brand{display:flex;align-items:center;gap:10px;padding-top:2mm;}
+.cover-mark{width:30px;height:25px;color:var(--mint);}
+.cover-word{font-size:21px;font-weight:600;letter-spacing:-0.01em;}
+.cover-word b{color:var(--green);font-weight:600;}
+.cover-main{flex:1;display:flex;flex-direction:column;justify-content:center;}
+.cover-accent{display:flex;gap:4px;margin-bottom:20px;}
+.cover-accent span{height:4px;border-radius:2px;}
+.acc-mint{width:36px;background:var(--mint);}
+.acc-portage{width:12px;background:var(--portage);}
+.cover-eyebrow{font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:var(--green);font-weight:600;margin-bottom:16px;}
+.cover-venue{font-size:40px;font-weight:600;letter-spacing:-0.03em;line-height:1.05;margin-bottom:10px;}
+.cover-cat{font-size:13px;color:var(--grey);margin-bottom:24px;}
+.cover-period{font-size:10px;color:var(--grey);}
+.cover-facts{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:12px 0;margin-bottom:14px;}
+.cover-generated{font-size:9px;color:var(--mist);}
 /* intro strip */
-.intro{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:12px 0;margin-bottom:26px;}
+.intro{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:12px 0;margin-bottom:26px;break-inside:avoid;}
 .intro-cell{padding:0 12px;border-right:1px solid var(--soft);min-width:0;}
 .intro-cell:first-child{padding-left:0;}
 .intro-cell:last-child{border-right:none;}
 .intro-label{font-size:7.5px;letter-spacing:0.08em;text-transform:uppercase;color:var(--mist);margin-bottom:5px;}
 .intro-value{font-size:11px;font-weight:600;letter-spacing:-0.012em;}
-/* sections */
-.section{margin-bottom:30px;}
+/* sections — print rhythm (R1.5): a slightly stronger number/title hierarchy than the screen
+   mirror and one consistent section gap, tuned for A4 reading distance */
+.section{margin-bottom:32px;}
 /* the whole heading block is atomic AND glued to its first content block — no orphaned
    eyebrows/titles at page bottoms */
 .s-head{break-inside:avoid;break-after:avoid;}
 .sub-title,.sub-lead{break-after:avoid;}
-.s-num{display:inline-flex;align-items:center;gap:6px;font-family:'Geist Mono',monospace;font-size:8px;letter-spacing:0.12em;text-transform:uppercase;color:var(--green);font-weight:600;margin-bottom:7px;}
-.s-dot{width:4px;height:4px;border-radius:50%;background:var(--green);}
-.s-title{font-size:18px;font-weight:600;line-height:1.15;letter-spacing:-0.015em;margin-bottom:6px;}
-.s-lead{font-size:10px;color:var(--grey);line-height:1.6;max-width:440px;margin-bottom:14px;}
-.sub-title{font-size:13px;font-weight:600;letter-spacing:-0.01em;margin-top:18px;}
-.sub-lead{font-size:9.5px;color:var(--grey);max-width:400px;margin:3px 0 12px;}
+.s-num{display:inline-flex;align-items:center;gap:6px;font-family:'Geist Mono',monospace;font-size:9px;letter-spacing:0.13em;text-transform:uppercase;color:var(--green);font-weight:600;margin-bottom:8px;}
+.s-dot{width:4.5px;height:4.5px;border-radius:50%;background:var(--green);}
+.s-title{font-size:20px;font-weight:600;line-height:1.15;letter-spacing:-0.018em;margin-bottom:7px;}
+.s-lead{font-size:10.5px;color:var(--grey);line-height:1.6;max-width:460px;margin-bottom:15px;}
+.sub-title{font-size:14px;font-weight:600;letter-spacing:-0.01em;margin-top:20px;}
+.sub-lead{font-size:10px;color:var(--grey);max-width:420px;margin:3px 0 12px;}
 /* KPI rows */
 .kpi-row{display:grid;grid-template-columns:repeat(3,1fr);border-top:2px solid var(--green);border-bottom:1px solid var(--line);break-inside:avoid;}
 .kpi-cell{padding:14px 14px 14px 0;border-right:1px solid var(--soft);}
@@ -407,13 +450,13 @@ body{font-family:'Geist',-apple-system,system-ui,sans-serif;background:var(--pag
 .kpi-suffix{font-size:11px;font-weight:500;color:var(--grey);margin-left:3px;letter-spacing:normal;}
 .kpi-pending{font-size:11px;font-weight:600;font-style:italic;color:var(--mist);margin-bottom:6px;}
 .kpi-pending--stack{font-size:19px;line-height:1.2;}
-.kpi-detail{font-size:8.5px;color:var(--grey);line-height:1.45;}
-/* heatmap */
-.hm-wrap{padding:14px;}
+.kpi-detail{font-size:9px;color:var(--grey);line-height:1.45;}
+/* heatmap — sized to the print column (1fr cells scale to width; taller cells for paper) */
+.hm-wrap{padding:16px;}
 .hm-grid{display:grid;grid-template-columns:34px repeat(14,1fr);gap:2.5px;}
-.hm-hour{font-family:'Geist Mono',monospace;font-size:7px;color:var(--mist);text-align:center;padding-bottom:4px;}
-.hm-day{font-family:'Geist Mono',monospace;font-size:7.5px;color:var(--grey);text-transform:uppercase;letter-spacing:0.05em;align-self:center;padding-right:4px;}
-.hm-cell{height:15px;border-radius:2.5px;}
+.hm-hour{font-family:'Geist Mono',monospace;font-size:7.5px;color:var(--mist);text-align:center;padding-bottom:4px;}
+.hm-day{font-family:'Geist Mono',monospace;font-size:8px;color:var(--grey);text-transform:uppercase;letter-spacing:0.05em;align-self:center;padding-right:4px;}
+.hm-cell{height:17px;border-radius:2.5px;}
 .cell-h{background:repeating-linear-gradient(-45deg,#F1F5F3,#F1F5F3 3px,#E4ECE7 3px,#E4ECE7 6px);}
 .hm-legend{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:7px;color:var(--grey);text-transform:uppercase;letter-spacing:0.04em;}
 .hm-scale{display:inline-flex;gap:2px;}
@@ -422,7 +465,7 @@ body{font-family:'Geist',-apple-system,system-ui,sans-serif;background:var(--pag
 .chart-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;}
 .chart-title{font-size:12px;font-weight:600;}
 .chart-sub{font-size:8px;color:var(--mist);}
-.chart-wrap{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:#fff;}
+.chart-wrap{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:#fff;}
 .s03-chart{width:100%;height:auto;display:block;}
 .chart-placeholder{background:#F6F8FA;border:1px dashed var(--soft);border-radius:8px;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--mist);font-style:italic;font-size:9.5px;padding:34px 14px;}
 .chart-legend{display:flex;align-items:center;gap:5px;margin-top:9px;font-size:7px;color:var(--grey);text-transform:uppercase;letter-spacing:0.04em;}
@@ -433,7 +476,7 @@ body{font-family:'Geist',-apple-system,system-ui,sans-serif;background:var(--pag
 .note--violet{background:#E3EBE8;border-left-color:var(--deep);}
 .note p{font-size:9px;line-height:1.6;color:var(--grey);}
 .note strong{color:var(--ink);font-weight:600;}
-.callout--green{display:flex;gap:8px;background:#E8F6ED;border:1px solid var(--line);border-left:3px solid var(--green);border-radius:5px;padding:10px 13px;font-size:9.5px;color:var(--ink);line-height:1.6;}
+.callout--green{display:flex;gap:8px;background:#E8F6ED;border:1px solid var(--line);border-left:3px solid var(--green);border-radius:5px;padding:10px 13px;font-size:9.5px;color:var(--ink);line-height:1.6;break-inside:avoid;}
 /* S04 demo */
 .demo-grid{display:grid;grid-template-columns:1fr 1fr;gap:26px;break-inside:avoid;}
 .demo-h{font-size:7px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:var(--grey);margin-bottom:10px;padding-bottom:7px;border-bottom:1px solid var(--line);}
@@ -472,17 +515,17 @@ body{font-family:'Geist',-apple-system,system-ui,sans-serif;background:var(--pag
 .top3-rank{width:10px;font-size:11px;font-weight:600;color:var(--mist);flex-shrink:0;}
 .top3-rank--first{color:var(--green);}
 .top3-name{font-size:9.5px;}
-.hist-table{width:100%;border-collapse:collapse;font-size:9px;break-inside:avoid;}
-.hist-table th{text-align:left;font-size:7px;letter-spacing:0.08em;text-transform:uppercase;color:var(--mist);padding:0 8px 7px 0;border-bottom:2px solid var(--deep);font-weight:600;}
+.hist-table{width:100%;border-collapse:collapse;font-size:9.5px;break-inside:avoid;}
+.hist-table th{text-align:left;font-size:7.5px;letter-spacing:0.08em;text-transform:uppercase;color:var(--mist);padding:0 8px 8px 0;border-bottom:2px solid var(--deep);font-weight:600;}
 .hist-table th.th-right{text-align:right;padding-right:0;}
-.hist-table td{padding:8px 8px 8px 0;border-bottom:1px solid var(--soft);vertical-align:middle;}
+.hist-table td{padding:9px 8px 9px 0;border-bottom:1px solid var(--soft);vertical-align:middle;}
 .td-amount{text-align:right;color:var(--portage);font-weight:600;padding-right:0 !important;}
-.pill{display:inline-flex;align-items:center;gap:4px;font-size:8px;color:var(--grey);}
+.pill{display:inline-flex;align-items:center;gap:4px;font-size:8.5px;color:var(--grey);}
 .pill-dot{width:4px;height:4px;border-radius:50%;background:var(--mist);display:inline-block;}
 .pill--active{color:var(--green);}
 .pill--active .pill-dot{background:var(--green);}
 /* S07 pistes */
-.reco-card{background:var(--card);border:1px dashed var(--line);border-radius:8px;padding:13px 16px;margin-bottom:9px;break-inside:avoid;}
+.reco-card{background:var(--card);border:1px dashed var(--line);border-radius:8px;padding:14px 16px;margin-bottom:10px;break-inside:avoid;}
 .reco-num{display:inline-flex;align-items:center;gap:5px;font-size:7px;letter-spacing:0.1em;text-transform:uppercase;font-weight:600;margin-bottom:5px;}
 .reco-num--portage{color:var(--portage);}
 .reco-num--green{color:var(--green);}
@@ -510,21 +553,10 @@ body{font-family:'Geist',-apple-system,system-ui,sans-serif;background:var(--pag
 .sps-explainer{padding-top:13px;border-top:1px solid var(--line);margin-top:14px;}
 .sps-explainer p{font-size:8px;color:var(--mist);line-height:1.6;}
 .sps-explainer strong{color:var(--grey);font-weight:600;}
-/* footer */
-.powered{display:flex;flex-direction:column;align-items:center;gap:6px;padding-top:16px;border-top:1px solid var(--soft);margin-top:6px;}
-.powered-label{font-family:'Geist Mono',monospace;font-size:7px;letter-spacing:0.18em;text-transform:uppercase;color:var(--mist);}
-.powered-word{font-size:12px;font-weight:600;letter-spacing:-0.01em;}
-.powered-word b{color:var(--green);font-weight:600;}
 </style>
 </head>
 <body>
-  <div class="masthead">
-    <div class="mast-brand">${brandMark('mast-mark')}<span class="mast-word">tood<b>oo</b>h</span></div>
-    <div style="text-align:right">
-      <div class="mast-title">Rapport de performances</div>
-      <div class="mast-meta mono">Généré le ${data.generatedLabel}</div>
-    </div>
-  </div>
+  ${cover}
   ${intro}
   ${s01}
   ${s02}
@@ -534,10 +566,7 @@ body{font-family:'Geist',-apple-system,system-ui,sans-serif;background:var(--pag
   ${s06}
   ${s07}
   ${s08}
-  <div class="powered">
-    <div class="powered-label">Powered by</div>
-    <div class="powered-word">tood<b>oo</b>h</div>
-  </div>
+  ${pdfChrome}
 </body>
 </html>`;
 }
