@@ -22,6 +22,14 @@ vi.mock('../src/lib/report/render.js', async (importOriginal) => {
   return { ...actual, renderPdf: renderSpy };
 });
 
+// R2 — the endpoint must use the CACHE-WRAPPED pistes seam (per venue × period); mocked at the
+// module boundary so the suite needs no key/SDK. Default: null → generic pistes.
+const pistesCachedSpy = vi.hoisted(() => vi.fn());
+vi.mock('../src/lib/report/recommendations.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/lib/report/recommendations.js')>();
+  return { ...actual, pistesForReportCached: pistesCachedSpy };
+});
+
 type GetSessionResult = Awaited<ReturnType<typeof auth.api.getSession>>;
 
 const buildApp = () => Fastify({ logger: false });
@@ -72,6 +80,8 @@ describe('GET /api/screenhosts/:id/report (period report, real Postgres)', () =>
       void html;
       return Buffer.from('%PDF-period-fake');
     });
+    pistesCachedSpy.mockReset();
+    pistesCachedSpy.mockResolvedValue(null);
     app = buildApp();
     await app.register(screenhostsRoutes);
     await app.ready();
@@ -134,5 +144,39 @@ describe('GET /api/screenhosts/:id/report (period report, real Postgres)', () =>
     const res = await report(sh, 'from=2026-06-01&to=2026-06-30');
     expect(res.statusCode).toBe(503);
     expect(res.json<{ error: string }>().error).toBe('REPORT_RENDER_FAILED');
+  });
+
+  it('goes through the CACHE-WRAPPED pistes seam and renders the AI pistes it returns (R2)', async () => {
+    const me = await seedUser();
+    const sh = await seedScreenhost(me);
+    mockSession(me);
+    pistesCachedSpy.mockResolvedValue([
+      { title: 'Valorisez vos vendredis soirs', body: 'Piste IA un.' },
+      { title: 'Comblez le mardi matin', body: 'Piste IA deux.' },
+      { title: 'Misez sur les 17 – 30 ans', body: 'Piste IA trois.' },
+    ]);
+    const res = await report(sh, 'from=2026-06-01&to=2026-06-30');
+    expect(res.statusCode).toBe(200);
+    // the cached variant, keyed by THIS venue (the period rides in data.range)
+    expect(pistesCachedSpy).toHaveBeenCalledTimes(1);
+    expect(pistesCachedSpy.mock.calls[0]?.[0]).toBe(sh);
+    expect(pistesCachedSpy.mock.calls[0]?.[1]?.range).toEqual({
+      from: '2026-06-01',
+      to: '2026-06-30',
+    });
+    const html = renderSpy.mock.calls[0]?.[0] ?? '';
+    expect(html).toContain('Valorisez vos vendredis soirs');
+    expect(html).not.toContain('Anticipez les temps forts');
+  });
+
+  it('a pistes-seam failure never fails the render — 200 with the generic pistes (R2)', async () => {
+    const me = await seedUser();
+    const sh = await seedScreenhost(me);
+    mockSession(me);
+    pistesCachedSpy.mockRejectedValue(new Error('anthropic exploded'));
+    const res = await report(sh, 'from=2026-06-01&to=2026-06-30');
+    expect(res.statusCode).toBe(200);
+    const html = renderSpy.mock.calls[0]?.[0] ?? '';
+    expect(html).toContain('Anticipez les temps forts');
   });
 });

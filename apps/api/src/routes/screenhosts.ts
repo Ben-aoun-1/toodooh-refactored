@@ -20,6 +20,7 @@ import {
 } from '../db/schema.js';
 import { buildEligibilityPatch } from '../lib/eligibility-patch.js';
 import { assembleReportData } from '../lib/report/assemble.js';
+import { pistesForReportCached } from '../lib/report/recommendations.js';
 import { renderPdf } from '../lib/report/render.js';
 import { renderReportHtml } from '../lib/report/template.js';
 import { pushApprovedOwnerLocations } from '../lib/wedooh-sync.js';
@@ -713,9 +714,13 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
     }
 
+    // R2 — cache-wrapped AI pistes (per venue × period, 24h); null → the generic pistes. The
+    // generator can never fail the render (hard fallback contract + belt-and-braces catch).
+    const aiPistes = await pistesForReportCached(owned.id, data).catch(() => null);
+
     let pdf: Buffer;
     try {
-      pdf = await renderPdf(renderReportHtml(data));
+      pdf = await renderPdf(renderReportHtml(data, { aiPistes }));
     } catch (err) {
       request.log.error({ err }, 'period report render failed');
       return reply.status(503).send({

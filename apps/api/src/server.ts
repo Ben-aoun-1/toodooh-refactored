@@ -8,6 +8,7 @@ import { db, sql } from './db/client.js';
 import { env } from './env.js';
 import { buildErrorHandler, buildNotFoundHandler } from './error-handler.js';
 import { startMonthlyReportJob } from './lib/report/monthly-job.js';
+import { isRecommendationsEnabled } from './lib/report/recommendations.js';
 import { isSyncEnabled, sweepUnexported } from './lib/wedooh-sync.js';
 import { buildLoggerConfig } from './logger.js';
 import { healthRoute } from './routes/health.js';
@@ -89,6 +90,12 @@ const start = async (): Promise<void> => {
     // pattern, no cron dependency). Generates + stores the previous CLOSED month's PDF per venue
     // with data, once (UNIQUE lock), and notifies the owner. No chromium → warns and no-ops.
     startMonthlyReportJob(app.log);
+
+    // R2 — AI report recommendations: ONE boot warning when the key is unprovisioned (the
+    // wedooh-sync degradation pattern); every report gracefully keeps the generic pistes.
+    if (!isRecommendationsEnabled()) {
+      app.log.warn('AI report recommendations disabled (ANTHROPIC_API_KEY unset) — generic pistes');
+    }
   } catch (err) {
     app.log.error(err);
     process.exit(1);
