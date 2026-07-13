@@ -15,15 +15,21 @@ const log = logger.child({ module: 'report-recommendations' });
 // « Repérez vos angles morts » paragraph. HARD FALLBACK CONTRACT unchanged from R2: this module
 // NEVER throws into a report path — missing key, timeout, API error, refusal, schema-parse
 // failure or cap violation ALL resolve to null, and the template keeps the generic Piste 02 body.
+// R3.1: an over-cap first draft earns ONE compress-retry turn before falling back, and every
+// fallback path warns with a machine-greppable reason (refusal | parse_failure | over_cap).
 // Logging carries the error message ONLY: never the key, never the prompt or response bodies.
 
 const PisteBodySchema = z.object({
-  body: z.string(),
+  body: z.string().describe('Un paragraphe de 30 mots maximum'),
 });
 
-/** Post-parse cap (the schema pins shape; size is checked here): body ≤40 words. */
+// R3.1 — the model consistently overshoots a bare word budget (probe: haiku wrote 56–62 French
+// words against « 40 mots maximum », so EVERY response died on the cap and prod PDFs showed the
+// generic body). Ask LOW (30, in the prompt AND the schema description), ENFORCE at 40, and give
+// one compress-retry before falling back.
 const BODY_MAX_WORDS = 40;
-const withinCap = (body: string): boolean => body.trim().split(/\s+/).length <= BODY_MAX_WORDS;
+const wordCount = (body: string): number => body.trim().split(/\s+/).length;
+const withinCap = (body: string): boolean => wordCount(body) <= BODY_MAX_WORDS;
 
 /**
  * The ONLY data that crosses the wire (data minimization, pinned by test): aggregates the report
@@ -60,7 +66,7 @@ const SYSTEM_PROMPT = `Tu es le conseiller data d'un commerçant partenaire de T
 Règles strictes :
 - Chaque affirmation chiffrée doit provenir des données fournies. N'invente aucune donnée, aucun événement, aucune tendance extérieure.
 - Aucune promesse ni garantie de revenus : formule des pistes d'action, jamais des engagements de résultat.
-- UN SEUL paragraphe de 40 mots maximum, sans titre.
+- UN SEUL paragraphe de 30 mots maximum, sans titre.
 - Rédige en français, en vouvoiement (« vous », « votre lieu »), dans le ton de conseil concret du rapport.
 - Si une donnée est absente ou nulle, ne la mentionne pas.`;
 
@@ -79,33 +85,67 @@ const getClient = (): Anthropic | null => {
 /** Whether the feature is on — the boot warning seam (mirrors isSyncEnabled). */
 export const isRecommendationsEnabled = (): boolean => Boolean(env.ANTHROPIC_API_KEY);
 
+// The compress-retry follow-up (R3.1): ONE extra turn when the first body busts the cap.
+const COMPRESS_PROMPT = 'Réécris ce paragraphe en 30 mots maximum, sans rien ajouter.';
+
+type ParseOutcome = { kind: 'ok'; body: string } | { kind: 'refusal' } | { kind: 'parse_failure' };
+
+/** One messages.parse call → a classified outcome (the SAME options as R2/R3: 10s, 1 SDK retry). */
+async function parseBody(
+  anthropic: Anthropic,
+  messages: Anthropic.MessageParam[],
+): Promise<ParseOutcome> {
+  const message = await anthropic.messages.parse(
+    {
+      model: MODEL,
+      max_tokens: MAX_TOKENS,
+      system: SYSTEM_PROMPT,
+      messages,
+      output_config: { format: zodOutputFormat(PisteBodySchema) },
+    },
+    { timeout: REQUEST_TIMEOUT_MS, maxRetries: 1 },
+  );
+  // Refusal → fallback, never retried (the report must never surface a refusal).
+  if (message.stop_reason === 'refusal') return { kind: 'refusal' };
+  // parsed_output is null on parse failure; re-validate through the schema so a drifting SDK
+  // (or a partial parse) can never hand the template a malformed body.
+  const revalidated = PisteBodySchema.safeParse(message.parsed_output);
+  if (!revalidated.success) return { kind: 'parse_failure' };
+  return { kind: 'ok', body: revalidated.data.body };
+}
+
+// R3.1 observability — every fallback logs ONE warn with a machine-greppable reason. NEVER the
+// body text, NEVER the input payload (data minimization holds in the logs too).
+const FELL_BACK = 'AI recommendations fell back — reports keep the generic Piste 02 body';
+
 /**
  * Generate the Piste 02 body for one report, or null for "keep the generic body". Uncached — the
- * month-end job and the regeneration script freeze the result into the stored PDF.
+ * month-end job and the regeneration script freeze the result into the stored PDF. An over-cap
+ * first draft gets ONE compress-retry turn; anything else falls back immediately.
  */
 export async function generateRecommendations(input: RecommendationInput): Promise<string | null> {
   const anthropic = getClient();
   if (!anthropic) return null;
   try {
-    const message = await anthropic.messages.parse(
-      {
-        model: MODEL,
-        max_tokens: MAX_TOKENS,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: JSON.stringify(input) }],
-        output_config: { format: zodOutputFormat(PisteBodySchema) },
-      },
-      { timeout: REQUEST_TIMEOUT_MS, maxRetries: 1 },
-    );
-    // Refusal → silent fallback, no retry (the report must never surface a refusal).
-    if (message.stop_reason === 'refusal') return null;
-    // parsed_output is null on parse failure; re-validate through the schema so a drifting SDK
-    // (or a partial parse) can never hand the template a malformed body.
-    const revalidated = PisteBodySchema.safeParse(message.parsed_output);
-    if (!revalidated.success) return null;
-    const body = revalidated.data.body;
-    if (!withinCap(body)) return null;
-    return body;
+    const ask: Anthropic.MessageParam[] = [{ role: 'user', content: JSON.stringify(input) }];
+    const first = await parseBody(anthropic, ask);
+    if (first.kind !== 'ok') {
+      log.warn({ reason: first.kind }, FELL_BACK);
+      return null;
+    }
+    if (withinCap(first.body)) return first.body;
+    const second = await parseBody(anthropic, [
+      ...ask,
+      { role: 'assistant', content: first.body },
+      { role: 'user', content: COMPRESS_PROMPT },
+    ]);
+    if (second.kind !== 'ok') {
+      log.warn({ reason: second.kind }, FELL_BACK);
+      return null;
+    }
+    if (withinCap(second.body)) return second.body;
+    log.warn({ reason: 'over_cap', words: wordCount(second.body) }, FELL_BACK);
+    return null;
   } catch (err) {
     // Typed SDK errors first (status is the useful signal), then anything else — message ONLY.
     const reason =
@@ -173,9 +213,13 @@ const heatmapSlots = (levels: number[][]): { plusForts: string[]; plusFaibles: s
     });
   });
   const byLevelDesc = [...open].sort((a, b) => b.level - a.level);
+  // R3.1 — the two lists are DISJOINT: a slot never reads as both fort and faible (the old
+  // slice(-3) reused fort cells below 6 open slots and the model echoed the contradiction).
+  // Fewer/empty plusFaibles beats a contradiction when the grid is nearly empty.
   return {
     plusForts: byLevelDesc.slice(0, 3).map((s) => s.label),
     plusFaibles: byLevelDesc
+      .slice(3)
       .slice(-3)
       .reverse()
       .map((s) => s.label),
@@ -217,7 +261,10 @@ export function buildRecommendationInput(data: ReportData): RecommendationInput 
 /** Frozen path (month-end job + regeneration script): one uncached generation per stored PDF. */
 export async function pistesForReport(data: ReportData): Promise<string | null> {
   try {
-    if (!data.hostHasData && !data.castHasData) return null;
+    if (!data.hostHasData && !data.castHasData) {
+      log.debug('recommendations skipped — venue has neither HOST nor CAST data');
+      return null;
+    }
     return await generateRecommendations(buildRecommendationInput(data));
   } catch {
     return null; // the module contract, restated at the seam: NEVER throw into a report path
@@ -230,7 +277,10 @@ export async function pistesForReportCached(
   data: ReportData,
 ): Promise<string | null> {
   try {
-    if (!data.hostHasData && !data.castHasData) return null;
+    if (!data.hostHasData && !data.castHasData) {
+      log.debug('recommendations skipped — venue has neither HOST nor CAST data');
+      return null;
+    }
     return await generateRecommendationsCached(venueId, data.range, buildRecommendationInput(data));
   } catch {
     return null;

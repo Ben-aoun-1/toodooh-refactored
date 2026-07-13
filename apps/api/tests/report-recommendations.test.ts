@@ -36,6 +36,14 @@ vi.mock('@anthropic-ai/sdk', () => {
   return { default: FakeAnthropic };
 });
 
+// R3.1 — the module child logger is mocked so the observable-fallback contract is assertable:
+// every fallback warns ONCE with a machine-greppable reason, and NEVER logs bodies/payloads.
+const { warnSpy, debugSpy } = vi.hoisted(() => ({ warnSpy: vi.fn(), debugSpy: vi.fn() }));
+vi.mock('../src/logger.js', () => ({
+  buildLoggerConfig: () => false,
+  logger: { child: () => ({ warn: warnSpy, debug: debugSpy }) },
+}));
+
 // The key is toggled per test through the env seam (the module reads env.ANTHROPIC_API_KEY on
 // every getClient() call, so a Proxy keeps the no-key path deterministic).
 const envState = vi.hoisted(() => ({ key: undefined as string | undefined }));
@@ -82,8 +90,14 @@ beforeEach(() => {
   resetRecommendationsForTests();
   parseSpy.mockReset();
   ctorSpy.mockClear();
+  warnSpy.mockClear();
+  debugSpy.mockClear();
   envState.key = TEST_KEY;
 });
+
+/** An n-word French-ish body (deterministic) — for cap/retry fixtures. */
+const bodyOfWords = (n: number): string => Array.from({ length: n }, (_, i) => `mot${i}`).join(' ');
+const okWith = (body: string) => ({ stop_reason: 'end_turn', parsed_output: { body } });
 
 describe('generateRecommendations — happy path', () => {
   it('returns the schema-valid Piste 02 body', async () => {
@@ -98,10 +112,13 @@ describe('generateRecommendations — happy path', () => {
     expect(params.model).toBe('claude-haiku-4-5');
     expect(params.max_tokens).toBe(1024);
     expect(params.output_config?.format).toBeDefined();
-    // R3 task: the weak-slot analysis, ONE titleless paragraph — never the old 3-piste ask
+    // R3 task: the weak-slot analysis, ONE titleless paragraph — never the old 3-piste ask.
+    // R3.1: ask LOW (30 in the prompt AND the schema description); enforcement stays 40.
     expect(params.system).toContain('les créneaux faibles et les périodes creuses');
-    expect(params.system).toContain('UN SEUL paragraphe de 40 mots maximum, sans titre');
+    expect(params.system).toContain('UN SEUL paragraphe de 30 mots maximum, sans titre');
+    expect(params.system).not.toContain('40 mots');
     expect(params.system).not.toContain('exactement 3 pistes');
+    expect(JSON.stringify(params.output_config)).toContain('Un paragraphe de 30 mots maximum');
     expect(options).toEqual({ timeout: 10_000, maxRetries: 1 });
   });
 
@@ -126,18 +143,21 @@ describe('generateRecommendations — happy path', () => {
   });
 });
 
-describe('generateRecommendations — hard fallback matrix (every failure → null)', () => {
-  it('no key → null without constructing a client or calling the SDK', async () => {
+describe('generateRecommendations — hard fallback matrix (every failure → null, ONE warn)', () => {
+  it('no key → null without constructing a client, calling the SDK, or warning', async () => {
     envState.key = undefined;
     await expect(generateRecommendations(input())).resolves.toBeNull();
     expect(ctorSpy).not.toHaveBeenCalled();
     expect(parseSpy).not.toHaveBeenCalled();
+    expect(warnSpy).not.toHaveBeenCalled(); // unprovisioned is a config state, not a failure
     expect(isRecommendationsEnabled()).toBe(false);
   });
 
-  it('parse failure (parsed_output null) → null', async () => {
+  it("parse failure (parsed_output null) → null + warn {reason: 'parse_failure'}", async () => {
     parseSpy.mockResolvedValue({ stop_reason: 'end_turn', parsed_output: null });
     await expect(generateRecommendations(input())).resolves.toBeNull();
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0]?.[0]).toEqual({ reason: 'parse_failure' });
   });
 
   it('the retired R2 3-piste shape → null (contract pinned to ONE body, revalidated locally)', async () => {
@@ -146,15 +166,16 @@ describe('generateRecommendations — hard fallback matrix (every failure → nu
       parsed_output: { pistes: [{ title: 'Titre', body: 'Corps.' }] },
     });
     await expect(generateRecommendations(input())).resolves.toBeNull();
+    expect(warnSpy.mock.calls[0]?.[0]).toEqual({ reason: 'parse_failure' });
   });
 
-  it('over-cap body (41 words) → null', async () => {
-    const longBody = Array.from({ length: 41 }, (_, i) => `mot${i}`).join(' ');
-    parseSpy.mockResolvedValue({
-      stop_reason: 'end_turn',
-      parsed_output: { body: longBody },
-    });
+  it("both drafts over cap → null + ONE warn {reason: 'over_cap', words} (never the body)", async () => {
+    parseSpy.mockResolvedValue(okWith(bodyOfWords(41)));
     await expect(generateRecommendations(input())).resolves.toBeNull();
+    expect(parseSpy).toHaveBeenCalledTimes(2); // the compress-retry ran, then gave up
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0]?.[0]).toEqual({ reason: 'over_cap', words: 41 });
+    expect(JSON.stringify(warnSpy.mock.calls)).not.toContain('mot0'); // body never logged
   });
 
   it('a non-string body → null (shape revalidated locally)', async () => {
@@ -165,10 +186,12 @@ describe('generateRecommendations — hard fallback matrix (every failure → nu
     await expect(generateRecommendations(input())).resolves.toBeNull();
   });
 
-  it('refusal stop_reason → null, silently (no retry)', async () => {
+  it("refusal stop_reason → null + warn {reason: 'refusal'}, no retry", async () => {
     parseSpy.mockResolvedValue({ stop_reason: 'refusal', parsed_output: null });
     await expect(generateRecommendations(input())).resolves.toBeNull();
     expect(parseSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0]?.[0]).toEqual({ reason: 'refusal' });
   });
 
   it('typed API error → null; plain timeout error → null (never throws)', async () => {
@@ -183,6 +206,56 @@ describe('generateRecommendations — hard fallback matrix (every failure → nu
     await expect(generateRecommendations(input())).resolves.toBeNull();
     parseSpy.mockRejectedValueOnce(new Error('Request timed out.'));
     await expect(generateRecommendations(input())).resolves.toBeNull();
+  });
+});
+
+// ── R3.1 — the compress-retry: ONE follow-up turn when the first draft busts the 40-word cap ──
+describe('generateRecommendations — compress-retry', () => {
+  it('a within-cap first draft returns immediately — no retry turn', async () => {
+    parseSpy.mockResolvedValue(okWith(bodyOfWords(40))); // exactly at cap → accepted
+    await expect(generateRecommendations(input())).resolves.toBe(bodyOfWords(40));
+    expect(parseSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('over-cap first draft (probe-real 56 words) → ONE retry turn carrying the draft + the compress ask', async () => {
+    const overLong = bodyOfWords(56);
+    parseSpy.mockResolvedValueOnce(okWith(overLong));
+    parseSpy.mockResolvedValueOnce(okWith(validBody));
+    await expect(generateRecommendations(input())).resolves.toBe(validBody);
+    expect(parseSpy).toHaveBeenCalledTimes(2);
+    expect(warnSpy).not.toHaveBeenCalled(); // the retry SUCCEEDED — nothing fell back
+    // the retry transcript: original ask, the over-long draft as assistant, the compress ask
+    const retryMessages = parseSpy.mock.calls[1]?.[0]?.messages as {
+      role: string;
+      content: string;
+    }[];
+    expect(retryMessages).toHaveLength(3);
+    expect(retryMessages[0]).toEqual({ role: 'user', content: JSON.stringify(input()) });
+    expect(retryMessages[1]).toEqual({ role: 'assistant', content: overLong });
+    expect(retryMessages[2]).toEqual({
+      role: 'user',
+      content: 'Réécris ce paragraphe en 30 mots maximum, sans rien ajouter.',
+    });
+    // the retry call keeps the SAME options (10s timeout, 1 SDK retry) and structured output
+    expect(parseSpy.mock.calls[1]?.[1]).toEqual({ timeout: 10_000, maxRetries: 1 });
+    expect(parseSpy.mock.calls[1]?.[0]?.output_config?.format).toBeDefined();
+  });
+
+  it('a refusal on the retry turn → null + warn, and NO third call', async () => {
+    parseSpy.mockResolvedValueOnce(okWith(bodyOfWords(41)));
+    parseSpy.mockResolvedValueOnce({ stop_reason: 'refusal', parsed_output: null });
+    await expect(generateRecommendations(input())).resolves.toBeNull();
+    expect(parseSpy).toHaveBeenCalledTimes(2);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0]?.[0]).toEqual({ reason: 'refusal' });
+  });
+
+  it('an API error on the retry turn → null via the catch path (never throws)', async () => {
+    parseSpy.mockResolvedValueOnce(okWith(bodyOfWords(41)));
+    parseSpy.mockRejectedValueOnce(new Error('Request timed out.'));
+    await expect(generateRecommendations(input())).resolves.toBeNull();
+    expect(warnSpy).toHaveBeenCalledTimes(1); // the existing catch-path warn
   });
 });
 
@@ -280,7 +353,8 @@ describe('buildRecommendationInput (ReportData → minimized payload)', () => {
       pic: { valeur: 1180, date: '2026-06-14' },
     });
     expect(built.creneaux.plusForts[0]).toBe('Ven 18h'); // the level-5 cell leads
-    expect(built.creneaux.plusFaibles[0]).toBe('Mar 9h'); // the level-1 cell trails
+    // R3.1 — only 3 open cells: all are forts, and faibles stays EMPTY rather than echoing them
+    expect(built.creneaux.plusFaibles).toEqual([]);
     expect(built.campagnes).toEqual({ nombre: 3, revenuTotalTnd: '1 065' });
     expect(built.demographie?.femmes).toBe(11128);
     expect(built.demographie?.tranchesAge[0]).toEqual({ tranche: '17 – 30 ans', personnes: 7276 });
@@ -288,10 +362,76 @@ describe('buildRecommendationInput (ReportData → minimized payload)', () => {
 
   it('closed/hachured cells (level 0) are never créneaux', () => {
     const built = buildRecommendationInput(reportData());
+    // only 3 open cells exist in the fixture — all become forts; nothing hachured leaks in
     expect(built.creneaux.plusForts).toHaveLength(3);
-    expect(built.creneaux.plusFaibles).toHaveLength(3);
-    // only 3 open cells exist in the fixture → forts and faibles are the same 3 slots, reordered
-    expect(new Set([...built.creneaux.plusForts, ...built.creneaux.plusFaibles]).size).toBe(3);
+    expect(built.creneaux.plusFaibles).toHaveLength(0);
+  });
+
+  // ── R3.1 — forts/faibles are DISJOINT (the old slice(-3) echoed fort cells below 6 slots and
+  // the model repeated the contradiction). Fewer/empty faibles beats a contradiction. ───────────
+  describe('heatmap slot dedupe matrix', () => {
+    const gridWith = (cells: [number, number, number][]): number[][] => {
+      const grid = Array.from({ length: 7 }, () => Array.from({ length: 14 }, () => 0));
+      for (const [day, hourIdx, level] of cells) {
+        const row = grid[day];
+        if (row) row[hourIdx] = level;
+      }
+      return grid;
+    };
+    const creneauxOf = (cells: [number, number, number][]) =>
+      buildRecommendationInput(reportData({ heatLevels: gridWith(cells) })).creneaux;
+
+    it('0 open cells → both lists empty', () => {
+      expect(creneauxOf([])).toEqual({ plusForts: [], plusFaibles: [] });
+    });
+
+    it('2 open cells → both become forts, faibles empty (never echoed back)', () => {
+      const c = creneauxOf([
+        [4, 10, 5], // Ven 18h
+        [1, 1, 1], // Mar 9h
+      ]);
+      expect(c.plusForts).toEqual(['Ven 18h', 'Mar 9h']);
+      expect(c.plusFaibles).toEqual([]);
+    });
+
+    it('4 open cells → 3 forts + the single remaining faible (fewer beats contradiction)', () => {
+      const c = creneauxOf([
+        [4, 10, 5], // Ven 18h
+        [5, 9, 4], // Sam 17h
+        [0, 4, 3], // Lun 12h
+        [1, 1, 1], // Mar 9h
+      ]);
+      expect(c.plusForts).toEqual(['Ven 18h', 'Sam 17h', 'Lun 12h']);
+      expect(c.plusFaibles).toEqual(['Mar 9h']);
+    });
+
+    it('6 open cells → two full DISJOINT lists, faibles weakest-first', () => {
+      const c = creneauxOf([
+        [4, 10, 5], // Ven 18h
+        [5, 9, 5], // Sam 17h
+        [4, 11, 4], // Ven 19h
+        [2, 6, 3], // Mer 14h
+        [3, 7, 2], // Jeu 15h
+        [1, 1, 1], // Mar 9h
+      ]);
+      expect(c.plusForts).toEqual(['Ven 18h', 'Sam 17h', 'Ven 19h']);
+      expect(c.plusFaibles).toEqual(['Mar 9h', 'Jeu 15h', 'Mer 14h']);
+      expect(c.plusForts.filter((s) => c.plusFaibles.includes(s))).toEqual([]);
+    });
+
+    it('a full 28-cell grid → 3 forts, the 3 TRUE weakest as faibles, disjoint', () => {
+      // 2 full days open (Lun+Mar, 14 hours each): levels ramp so the extremes are unambiguous.
+      const cells: [number, number, number][] = [];
+      for (let h = 0; h < 14; h += 1) {
+        cells.push([0, h, h < 3 ? 5 : 3]); // Lun: three level-5 peaks, the rest level 3
+        cells.push([1, h, h < 3 ? 1 : 2]); // Mar: three level-1 troughs, the rest level 2
+      }
+      const c = creneauxOf(cells);
+      expect(c.plusForts).toEqual(['Lun 8h', 'Lun 9h', 'Lun 10h']);
+      // the three level-1 troughs, tied → stable-sort order reversed (deterministic)
+      expect(c.plusFaibles).toEqual(['Mar 10h', 'Mar 9h', 'Mar 8h']);
+      expect(c.plusForts.filter((s) => c.plusFaibles.includes(s))).toEqual([]);
+    });
   });
 
   it('a HOST-empty venue sends null audience; missing ratios send null demography', () => {
