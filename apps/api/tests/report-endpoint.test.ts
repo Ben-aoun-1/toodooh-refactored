@@ -22,8 +22,9 @@ vi.mock('../src/lib/report/render.js', async (importOriginal) => {
   return { ...actual, renderPdf: renderSpy };
 });
 
-// R2 — the endpoint must use the CACHE-WRAPPED pistes seam (per venue × period); mocked at the
-// module boundary so the suite needs no key/SDK. Default: null → generic pistes.
+// R3 — the endpoint must use the CACHE-WRAPPED pistes seam (per venue × period, now yielding the
+// single Piste 02 body); mocked at the module boundary so the suite needs no key/SDK. Default:
+// null → generic Piste 02 body.
 const pistesCachedSpy = vi.hoisted(() => vi.fn());
 vi.mock('../src/lib/report/recommendations.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../src/lib/report/recommendations.js')>();
@@ -146,15 +147,11 @@ describe('GET /api/screenhosts/:id/report (period report, real Postgres)', () =>
     expect(res.json<{ error: string }>().error).toBe('REPORT_RENDER_FAILED');
   });
 
-  it('goes through the CACHE-WRAPPED pistes seam and renders the AI pistes it returns (R2)', async () => {
+  it('goes through the CACHE-WRAPPED pistes seam and renders the AI Piste 02 body it returns (R3)', async () => {
     const me = await seedUser();
     const sh = await seedScreenhost(me);
     mockSession(me);
-    pistesCachedSpy.mockResolvedValue([
-      { title: 'Valorisez vos vendredis soirs', body: 'Piste IA un.' },
-      { title: 'Comblez le mardi matin', body: 'Piste IA deux.' },
-      { title: 'Misez sur les 17 – 30 ans', body: 'Piste IA trois.' },
-    ]);
+    pistesCachedSpy.mockResolvedValue('Corps IA du créneau faible.');
     const res = await report(sh, 'from=2026-06-01&to=2026-06-30');
     expect(res.statusCode).toBe(200);
     // the cached variant, keyed by THIS venue (the period rides in data.range)
@@ -165,11 +162,12 @@ describe('GET /api/screenhosts/:id/report (period report, real Postgres)', () =>
       to: '2026-06-30',
     });
     const html = renderSpy.mock.calls[0]?.[0] ?? '';
-    expect(html).toContain('Valorisez vos vendredis soirs');
-    expect(html).not.toContain('Anticipez les temps forts');
+    expect(html).toContain('Corps IA du créneau faible.');
+    expect(html).toContain('Repérez vos angles morts'); // the FIXED title stays either way
+    expect(html).not.toContain('Vous avez 2 périodes creuses'); // the generic body is displaced
   });
 
-  it('a pistes-seam failure never fails the render — 200 with the generic pistes (R2)', async () => {
+  it('a pistes-seam failure never fails the render — 200 with the generic Piste 02 body (R3)', async () => {
     const me = await seedUser();
     const sh = await seedScreenhost(me);
     mockSession(me);
@@ -177,6 +175,6 @@ describe('GET /api/screenhosts/:id/report (period report, real Postgres)', () =>
     const res = await report(sh, 'from=2026-06-01&to=2026-06-30');
     expect(res.statusCode).toBe(200);
     const html = renderSpy.mock.calls[0]?.[0] ?? '';
-    expect(html).toContain('Anticipez les temps forts');
+    expect(html).toContain('Vous avez 2 périodes creuses');
   });
 });

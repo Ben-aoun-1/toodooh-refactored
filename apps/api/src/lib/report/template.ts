@@ -5,7 +5,6 @@ import {
   formatDecimalFr,
   formatIntFr,
 } from './derive.js';
-import type { Piste } from './recommendations.js';
 
 // ONE self-contained HTML document for the report — R1.6: the DEDICATED DARK-THEME design,
 // reproduced from the operator-approved mockup (planner: Toodooh_Rapport_Performances.html) —
@@ -23,8 +22,11 @@ import type { Piste } from './recommendations.js';
 // - the mockup's `stat-num{` selector misses its leading dot (a mockup bug) — implemented as
 //   `.stat-num`; the unused --portage token is not carried forward (charter watch item).
 //
-// S07 keeps the R2 seam: opts.aiPistes (exactly 3) renders into the piste cards; anything else
-// keeps the generic pistes verbatim (Piste 03 = the SPS wait-state).
+// S07 — R3: a FIXED 3-theme structure (titles pinned; the mockup's card language unchanged).
+// Piste 01 is the mockup's static copy (goes data-driven when les événements ships), Piste 03 is
+// the static SPS wait-state, and ONLY the Piste 02 body is AI-authored: opts.aiPistes (a single
+// non-blank string — the historic name keeps the job/endpoint/script call sites untouched)
+// fills it; anything else keeps the generic angles-morts body verbatim.
 
 const PENDING = 'En attente du premier deal';
 const CHART_PENDING = 'Évolution en attente du premier deal';
@@ -41,6 +43,17 @@ export const REV_MAX_ROWS = 4;
 /** The EMPTY mockup's decorative S04 bar widths (sexe 50/50; the four ruled age bands). */
 const PLACEHOLDER_SEXE_PCT = [50, 50];
 const PLACEHOLDER_AGE_PCT = [32, 28, 14, 6];
+
+// R3 — the three FIXED S07 themes. Bodies 01/03 are static (01 = mockup copy VERBATIM until an
+// events source ships; 03 = the SPS wait-state); only the Piste 02 body is ever AI-authored.
+const PISTE_01_TITLE = 'Anticipez les temps forts';
+const PISTE_01_BODY =
+  "Un grand match international est à l'affiche ce mois-ci (Coupe du Monde, CAN…) - profitez-en pour communiquer sa diffusion et inviter vos clients à venir le suivre dès maintenant sur vos réseaux.";
+const PISTE_02_TITLE = 'Repérez vos angles morts';
+const PISTE_02_GENERIC_BODY =
+  'Vous avez 2 périodes creuses à valoriser autrement. Mardi matin et jeudi après-midi sont vos créneaux les plus faibles - essayez X et Y pour les redynamiser.';
+const PISTE_03_TITLE = 'Résumé du SPS et recommandations';
+const PISTE_03_WAIT_BODY = 'En attente de votre score de priorité.';
 
 const esc = (value: string): string =>
   value.replace(
@@ -112,7 +125,7 @@ const barRow = (name: string, valueHtml: string, pct: number): string => `
 
 export function renderReportHtml(
   data: ReportData,
-  opts: { aiPistes?: Piste[] | null } = {},
+  opts: { aiPistes?: string | null } = {},
 ): string {
   const { kpis, hostHasData, castHasData } = data;
   const period = `${formatDateFr(data.range.from)} – ${formatDateFr(data.range.to)}`;
@@ -372,35 +385,23 @@ export function renderReportHtml(
     </div>
   </div>`;
 
-  // ── S07 — the R2 pistes seam under the mockup's card language ────────────────────────────────
-  const aiPistes = opts.aiPistes && opts.aiPistes.length === 3 ? opts.aiPistes : null;
-  const pisteCards = aiPistes
-    ? aiPistes
-        .map(
-          (piste, idx) => `
+  // ── S07 — R3 FIXED 3-theme structure; only the Piste 02 body is AI-authored ──────────────────
+  const aiBody =
+    typeof opts.aiPistes === 'string' && opts.aiPistes.trim() !== '' ? opts.aiPistes : null;
+  const pisteCard = (num: string, title: string, bodyHtml: string): string => `
     <div class="piste">
-      <div class="piste-k"><span class="b"></span>Piste 0${idx + 1}</div>
-      <div class="piste-t">${esc(piste.title)}</div>
-      <div class="piste-body">${esc(piste.body)}</div>
-    </div>`,
-        )
-        .join('')
-    : `
-    <div class="piste">
-      <div class="piste-k"><span class="b"></span>Piste 01</div>
-      <div class="piste-t">Anticipez les temps forts</div>
-      <div class="piste-body">Un grand match international est à l'affiche ce mois-ci (Coupe du Monde, CAN…) - profitez-en pour communiquer sa diffusion et inviter vos clients à venir le suivre dès maintenant sur vos réseaux.</div>
-    </div>
-    <div class="piste">
-      <div class="piste-k"><span class="b"></span>Piste 02</div>
-      <div class="piste-t">Repérez vos angles morts</div>
-      <div class="piste-body">Vous avez 2 périodes creuses à valoriser autrement. Mardi matin et jeudi après-midi sont vos créneaux les plus faibles - essayez X et Y pour les redynamiser.</div>
-    </div>
-    <div class="piste">
-      <div class="piste-k"><span class="b"></span>Piste 03</div>
-      <div class="piste-t">Résumé du SPS et recommandations</div>
-      <div class="piste-body wait">En attente de votre score de priorité.</div>
+      <div class="piste-k"><span class="b"></span>Piste ${num}</div>
+      <div class="piste-t">${title}</div>
+      ${bodyHtml}
     </div>`;
+  const pisteCards =
+    pisteCard('01', PISTE_01_TITLE, `<div class="piste-body">${PISTE_01_BODY}</div>`) +
+    pisteCard(
+      '02',
+      PISTE_02_TITLE,
+      `<div class="piste-body">${aiBody ? esc(aiBody) : PISTE_02_GENERIC_BODY}</div>`,
+    ) +
+    pisteCard('03', PISTE_03_TITLE, `<div class="piste-body wait">${PISTE_03_WAIT_BODY}</div>`);
   const s07 = `
   <div class="section">
     ${secHead('Section 07', "Vos pistes d'optimisation futures", "Quelques observations issues de l'activité de votre lieu sur la période, transformées en pistes concrètes pour développer vos revenus.")}

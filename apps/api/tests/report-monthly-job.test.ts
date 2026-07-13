@@ -32,8 +32,9 @@ vi.mock('../src/lib/report/render.js', async (importOriginal) => {
   };
 });
 
-// R2 — the AI pistes seam, mocked at the module boundary (no key/SDK in this suite). Default:
-// null → the generic pistes, exactly like an unprovisioned box.
+// R3 — the AI pistes seam (now yielding the single Piste 02 body), mocked at the module boundary
+// (no key/SDK in this suite). Default: null → the generic Piste 02 body, exactly like an
+// unprovisioned box.
 const pistesSpy = vi.hoisted(() => vi.fn());
 vi.mock('../src/lib/report/recommendations.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../src/lib/report/recommendations.js')>();
@@ -170,29 +171,26 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
     ).toHaveLength(1);
   });
 
-  it('calls the AI pistes generator ONCE per generated report and freezes its output (R2)', async () => {
+  it('calls the AI pistes generator ONCE per generated report and freezes its output (R3)', async () => {
     const owner = await seedUser();
     await seedVenueWithData(owner, 'Café IA');
     vi.spyOn(storage, 'upload').mockImplementation(async (params) => ({ key: params.key }));
-    pistesSpy.mockResolvedValue([
-      { title: 'Valorisez vos vendredis soirs', body: 'Piste IA un.' },
-      { title: 'Comblez le mardi matin', body: 'Piste IA deux.' },
-      { title: 'Misez sur les 17 – 30 ans', body: 'Piste IA trois.' },
-    ]);
+    pistesSpy.mockResolvedValue('Corps IA du créneau faible.');
 
     const result = await runMonthlyReportSweep(silentLog, NOW);
     expect(result.generated).toBe(1);
     expect(pistesSpy).toHaveBeenCalledTimes(1); // once per report, at generation time
     const html = renderSpy.mock.calls[0]?.[0] ?? '';
-    expect(html).toContain('Valorisez vos vendredis soirs'); // frozen into the stored PDF
-    expect(html).not.toContain('Anticipez les temps forts');
+    expect(html).toContain('Corps IA du créneau faible.'); // frozen into the stored PDF
+    expect(html).toContain('Repérez vos angles morts'); // under the FIXED Piste 02 title
+    expect(html).not.toContain('Vous avez 2 périodes creuses'); // the generic body is displaced
 
     // idempotent second tick: no new report → no new generation either
     await runMonthlyReportSweep(silentLog, NOW);
     expect(pistesSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('a generator failure NEVER fails the report — it still stores, with the generic pistes (R2)', async () => {
+  it('a generator failure NEVER fails the report — it still stores, with the generic Piste 02 body (R3)', async () => {
     const owner = await seedUser();
     const venue = await seedVenueWithData(owner, 'Café Sans IA');
     vi.spyOn(storage, 'upload').mockImplementation(async (params) => ({ key: params.key }));
@@ -201,7 +199,7 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
     const result = await runMonthlyReportSweep(silentLog, NOW);
     expect(result).toEqual({ month: '2026-06', generated: 1, skipped: 0, failed: 0 });
     const html = renderSpy.mock.calls[0]?.[0] ?? '';
-    expect(html).toContain('Anticipez les temps forts'); // the generic pistes carried the report
+    expect(html).toContain('Vous avez 2 périodes creuses'); // the generic body carried the report
     expect(
       await db
         .select()
