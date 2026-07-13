@@ -98,6 +98,9 @@ beforeEach(() => {
 /** An n-word French-ish body (deterministic) — for cap/retry fixtures. */
 const bodyOfWords = (n: number): string => Array.from({ length: n }, (_, i) => `mot${i}`).join(' ');
 const okWith = (body: string) => ({ stop_reason: 'end_turn', parsed_output: { body } });
+// The exact acceptance boundary (R3.1 ruling): 40 words AND 210 chars — 39 two-char words
+// (+38 joiners = 116) + one 93-char word = 210.
+const capBoundaryBody = `${Array.from({ length: 39 }, () => 'ab').join(' ')} ${'x'.repeat(93)}`;
 
 describe('generateRecommendations — happy path', () => {
   it('returns the schema-valid Piste 02 body', async () => {
@@ -169,13 +172,26 @@ describe('generateRecommendations — hard fallback matrix (every failure → nu
     expect(warnSpy.mock.calls[0]?.[0]).toEqual({ reason: 'parse_failure' });
   });
 
-  it("both drafts over cap → null + ONE warn {reason: 'over_cap', words} (never the body)", async () => {
+  it("both drafts over cap → null + ONE warn {reason: 'over_cap', words, chars} (never the body)", async () => {
     parseSpy.mockResolvedValue(okWith(bodyOfWords(41)));
     await expect(generateRecommendations(input())).resolves.toBeNull();
     expect(parseSpy).toHaveBeenCalledTimes(2); // the compress-retry ran, then gave up
     expect(warnSpy).toHaveBeenCalledTimes(1);
-    expect(warnSpy.mock.calls[0]?.[0]).toEqual({ reason: 'over_cap', words: 41 });
+    // BOTH counts ride the warn so forensics can see which guard fired (ruling pin 1)
+    expect(warnSpy.mock.calls[0]?.[0]).toEqual({
+      reason: 'over_cap',
+      words: 41,
+      chars: bodyOfWords(41).trim().length,
+    });
     expect(JSON.stringify(warnSpy.mock.calls)).not.toContain('mot0'); // body never logged
+  });
+
+  it('the 210-char guard fires INDEPENDENTLY of the word cap (38 long words → over_cap)', async () => {
+    const wide = Array.from({ length: 38 }, () => 'abcdefg').join(' '); // 38 words, 303 chars
+    parseSpy.mockResolvedValue(okWith(wide));
+    await expect(generateRecommendations(input())).resolves.toBeNull();
+    expect(parseSpy).toHaveBeenCalledTimes(2); // retried, still too wide
+    expect(warnSpy.mock.calls[0]?.[0]).toEqual({ reason: 'over_cap', words: 38, chars: 303 });
   });
 
   it('a non-string body → null (shape revalidated locally)', async () => {
@@ -211,11 +227,21 @@ describe('generateRecommendations — hard fallback matrix (every failure → nu
 
 // ── R3.1 — the compress-retry: ONE follow-up turn when the first draft busts the 40-word cap ──
 describe('generateRecommendations — compress-retry', () => {
-  it('a within-cap first draft returns immediately — no retry turn', async () => {
-    parseSpy.mockResolvedValue(okWith(bodyOfWords(40))); // exactly at cap → accepted
-    await expect(generateRecommendations(input())).resolves.toBe(bodyOfWords(40));
-    expect(parseSpy).toHaveBeenCalledTimes(1);
+  it('a first draft AT the exact acceptance boundary (40 words, 210 chars) returns immediately', async () => {
+    expect(capBoundaryBody.trim().split(/\s+/)).toHaveLength(40);
+    expect(capBoundaryBody.trim().length).toBe(210);
+    parseSpy.mockResolvedValue(okWith(capBoundaryBody));
+    await expect(generateRecommendations(input())).resolves.toBe(capBoundaryBody);
+    expect(parseSpy).toHaveBeenCalledTimes(1); // no retry turn
     expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('40 words but 211 chars → retried (the char guard alone trips acceptance)', async () => {
+    const oneOver = `${capBoundaryBody}x`; // 40 words, 211 chars
+    parseSpy.mockResolvedValueOnce(okWith(oneOver));
+    parseSpy.mockResolvedValueOnce(okWith(validBody));
+    await expect(generateRecommendations(input())).resolves.toBe(validBody);
+    expect(parseSpy).toHaveBeenCalledTimes(2);
   });
 
   it('over-cap first draft (probe-real 56 words) → ONE retry turn carrying the draft + the compress ask', async () => {

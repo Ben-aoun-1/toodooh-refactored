@@ -25,11 +25,15 @@ const PisteBodySchema = z.object({
 
 // R3.1 — the model consistently overshoots a bare word budget (probe: haiku wrote 56–62 French
 // words against « 40 mots maximum », so EVERY response died on the cap and prod PDFs showed the
-// generic body). Ask LOW (30, in the prompt AND the schema description), ENFORCE at 40, and give
-// one compress-retry before falling back.
+// generic body). Ask LOW (30, in the prompt AND the schema description), ENFORCE at 40 words
+// AND 210 chars, and give one compress-retry before falling back. The char guard is the RULED
+// layout interlock: the S07 card fits 2 body lines (measured 2→3-line break between 225c and
+// 253c; a 3rd line overflows page 4 by 16px), and words don't control wrapping — chars do.
 const BODY_MAX_WORDS = 40;
+const BODY_MAX_CHARS = 210;
 const wordCount = (body: string): number => body.trim().split(/\s+/).length;
-const withinCap = (body: string): boolean => wordCount(body) <= BODY_MAX_WORDS;
+const withinCap = (body: string): boolean =>
+  wordCount(body) <= BODY_MAX_WORDS && body.trim().length <= BODY_MAX_CHARS;
 
 /**
  * The ONLY data that crosses the wire (data minimization, pinned by test): aggregates the report
@@ -144,7 +148,11 @@ export async function generateRecommendations(input: RecommendationInput): Promi
       return null;
     }
     if (withinCap(second.body)) return second.body;
-    log.warn({ reason: 'over_cap', words: wordCount(second.body) }, FELL_BACK);
+    // both counts ride the warn so forensics can see WHICH guard fired (words vs chars)
+    log.warn(
+      { reason: 'over_cap', words: wordCount(second.body), chars: second.body.trim().length },
+      FELL_BACK,
+    );
     return null;
   } catch (err) {
     // Typed SDK errors first (status is the useful signal), then anything else — message ONLY.

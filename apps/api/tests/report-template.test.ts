@@ -343,18 +343,20 @@ describe('renderReportHtml — S07 FIXED 3-theme structure (R3)', () => {
   it('an AI body fills Piste 02 and displaces ONLY the generic angles-morts body', () => {
     const html = renderReportHtml(fullData(), { aiPistes: aiBody });
     expect(html).toContain(aiBody);
-    expect(html).not.toContain('Vous avez 2 périodes creuses');
+    expect(html).not.toContain('Comparez vos créneaux les plus forts');
   });
 
-  it('null/absent/blank aiPistes keeps the generic Piste 02 body verbatim', () => {
+  it('null/absent/blank aiPistes keeps the generic Piste 02 body verbatim (R3.1 real copy, no placeholders)', () => {
     for (const html of [
       renderReportHtml(baseData()),
       renderReportHtml(baseData(), { aiPistes: null }),
       renderReportHtml(baseData(), { aiPistes: '   ' }),
     ]) {
       expect(html).toContain(
-        'Vous avez 2 périodes creuses à valoriser autrement. Mardi matin et jeudi après-midi sont vos créneaux les plus faibles - essayez X et Y pour les redynamiser.',
+        'Comparez vos créneaux les plus forts à vos périodes creuses - adaptez vos offres, votre programmation et votre communication aux heures calmes pour attirer davantage de visiteurs et développer vos revenus publicitaires.',
       );
+      expect(html).not.toContain('essayez X et Y'); // the mockup placeholder never renders again
+      expect(html).not.toContain('Vous avez 2 périodes creuses');
     }
   });
 

@@ -183,7 +183,7 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
     const html = renderSpy.mock.calls[0]?.[0] ?? '';
     expect(html).toContain('Corps IA du créneau faible.'); // frozen into the stored PDF
     expect(html).toContain('Repérez vos angles morts'); // under the FIXED Piste 02 title
-    expect(html).not.toContain('Vous avez 2 périodes creuses'); // the generic body is displaced
+    expect(html).not.toContain('Comparez vos créneaux les plus forts'); // the generic body is displaced
 
     // idempotent second tick: no new report → no new generation either
     await runMonthlyReportSweep(silentLog, NOW);
@@ -199,7 +199,7 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
     const result = await runMonthlyReportSweep(silentLog, NOW);
     expect(result).toEqual({ month: '2026-06', generated: 1, skipped: 0, failed: 0 });
     const html = renderSpy.mock.calls[0]?.[0] ?? '';
-    expect(html).toContain('Vous avez 2 périodes creuses'); // the generic body carried the report
+    expect(html).toContain('Comparez vos créneaux les plus forts'); // the generic body carried the report
     expect(
       await db
         .select()

@@ -53,8 +53,12 @@ const PISTE_01_TITLE = 'Anticipez les temps forts';
 const PISTE_01_BODY =
   "Un grand match international est à l'affiche ce mois-ci (Coupe du Monde, CAN…) - profitez-en pour communiquer sa diffusion et inviter vos clients à venir le suivre dès maintenant sur vos réseaux.";
 const PISTE_02_TITLE = 'Repérez vos angles morts';
+// R3.1 — REAL generic copy (the mockup's body carried literal « essayez X et Y » placeholders,
+// which reached prod PDFs whenever the AI fell back). Register of the mockup, no invented numbers.
+// RULED asymmetry: this static body is 216 chars — over the 210-char guard that VARIABLE AI
+// bodies must pass — and that is fine: it renders 2 lines / 0px overflow by direct measurement.
 const PISTE_02_GENERIC_BODY =
-  'Vous avez 2 périodes creuses à valoriser autrement. Mardi matin et jeudi après-midi sont vos créneaux les plus faibles - essayez X et Y pour les redynamiser.';
+  'Comparez vos créneaux les plus forts à vos périodes creuses - adaptez vos offres, votre programmation et votre communication aux heures calmes pour attirer davantage de visiteurs et développer vos revenus publicitaires.';
 const PISTE_03_TITLE = 'Résumé du SPS et recommandations';
 const PISTE_03_WAIT_BODY = 'En attente de votre score de priorité.';
 
