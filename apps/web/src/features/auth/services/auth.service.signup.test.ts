@@ -217,6 +217,64 @@ describe('authService.signUp → POST /signup (Phase-1f F2)', () => {
     expect(sent[1]).toEqual({ name: 'Kiosque Lac', screen_count: 1 });
   });
 
+  // ── H1 (Mejri item 5) — working hours: the single [open, close) window rides the payload
+  // when captured, and is OMITTED entirely on the « préciser plus tard » skip. ─────────────────
+  it('sends the individual_owner working-hours pair — a 0 opening hour is kept (H1)', async () => {
+    postForm.mockResolvedValue(ok);
+    await authService.signUp({
+      ...advertiser,
+      profile_type: 'individual_owner',
+      opening_hour: 0,
+      closing_hour: 22,
+    });
+    expect(ownerPayload()).toMatchObject({ opening_hour: 0, closing_hour: 22 });
+  });
+
+  it('omits the working-hours pair when unset — the skip path sends NOTHING (H1)', async () => {
+    postForm.mockResolvedValue(ok);
+    await authService.signUp({ ...advertiser, profile_type: 'individual_owner' });
+    expect(ownerPayload()).not.toHaveProperty('opening_hour');
+    expect(ownerPayload()).not.toHaveProperty('closing_hour');
+  });
+
+  it('carries fleet working hours PER establishment; a skipped entry omits them (H1)', async () => {
+    postForm.mockResolvedValue(ok);
+    await authService.signUp({
+      ...advertiser,
+      profile_type: 'fleet_owner',
+      fleet_establishments: [
+        {
+          name: 'Café Centre',
+          screen_count: 3,
+          room_count: 2,
+          street_address: '',
+          city: '',
+          zone: '',
+          governorate_id: '',
+          opening_hour: 6,
+          closing_hour: 23,
+        },
+        {
+          name: 'Kiosque Lac',
+          screen_count: 1,
+          room_count: 1,
+          street_address: '',
+          city: '',
+          zone: '',
+          governorate_id: '',
+        },
+      ],
+    });
+    const sent = ownerPayload().fleet_establishments as Array<Record<string, unknown>>;
+    expect(sent[0]).toEqual({
+      name: 'Café Centre',
+      screen_count: 3,
+      opening_hour: 6,
+      closing_hour: 23,
+    });
+    expect(sent[1]).toEqual({ name: 'Kiosque Lac', screen_count: 1 });
+  });
+
   it('throws a French message when the POST fails', async () => {
     post.mockRejectedValueOnce(new ApiError({ status: 0, code: 'NETWORK', message: '' }));
     await expect(authService.signUp(advertiser)).rejects.toThrow(/connexion/i);

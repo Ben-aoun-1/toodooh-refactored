@@ -103,6 +103,10 @@ export interface FleetEstablishmentInput {
   longitude?: number;
   wifi_ssid?: string;
   wifi_password?: string;
+  // H1 — horaires d'ouverture (fenêtre unique [ouverture, fermeture), heures entières 0–23).
+  // Optionnels ("préciser plus tard") — omis ensemble quand l'utilisateur passe.
+  opening_hour?: number;
+  closing_hour?: number;
 }
 
 export interface SignUpData {
@@ -139,6 +143,9 @@ export interface SignUpData {
   longitude?: number;
   wifi_ssid?: string;
   wifi_password?: string;
+  // H1 — horaires d'ouverture de l'établissement (individual_owner; fenêtre unique, heures 0–23).
+  opening_hour?: number;
+  closing_hour?: number;
   /** Localités créées après inscription (propriétaire de parc) */
   fleet_establishments?: FleetEstablishmentInput[];
 }
