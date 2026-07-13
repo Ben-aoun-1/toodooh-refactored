@@ -4,6 +4,7 @@ import {
   closeReportBrowser,
   documentPdfOptions,
   extractDocumentChrome,
+  REPORT_PDF_OPTIONS,
   renderPdf,
   resolveChromiumPath,
 } from '../src/lib/report/render.js';
@@ -68,6 +69,18 @@ describe('extractDocumentChrome (R1.5 embedded chrome)', () => {
     expect(
       extractDocumentChrome('<body><template id="pdf-footer"><div>x</div></template></body>'),
     ).toBeNull();
+  });
+});
+
+describe('REPORT_PDF_OPTIONS (R1.6 — fixed self-contained pages)', () => {
+  it('prints zero-margin CSS-sized A4 pages with backgrounds, WITHOUT Chromium header/footer', () => {
+    expect(REPORT_PDF_OPTIONS.preferCSSPageSize).toBe(true);
+    expect(REPORT_PDF_OPTIONS.printBackground).toBe(true);
+    expect(REPORT_PDF_OPTIONS.format).toBe('A4');
+    expect(REPORT_PDF_OPTIONS.margin).toEqual({ top: '0', bottom: '0', left: '0', right: '0' });
+    expect(REPORT_PDF_OPTIONS.displayHeaderFooter).toBeUndefined();
+    expect(REPORT_PDF_OPTIONS.headerTemplate).toBeUndefined();
+    expect(REPORT_PDF_OPTIONS.footerTemplate).toBeUndefined();
   });
 });
 

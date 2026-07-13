@@ -64,6 +64,18 @@ export function documentPdfOptions(chrome: DocumentChrome | null): PDFOptions {
   };
 }
 
+// R1.6 — the dark document lays out five FIXED 210×297mm pages and carries its running head /
+// footer IN-DOM (literal page numbers), so Chromium's displayHeaderFooter stays OFF and the
+// margins are zero: each .page self-contains its padding. preferCSSPageSize honors the
+// template's `@page{ size:A4; margin:0 }` (Chromium's own "A4" paper is 8.27×11.69in ≈ 296.9mm —
+// a hair SHORT of the 297mm pages, which would spill blank pages without it).
+export const REPORT_PDF_OPTIONS: PDFOptions = {
+  format: 'A4', // fallback for documents WITHOUT an @page rule (preferCSSPageSize wins otherwise)
+  preferCSSPageSize: true,
+  printBackground: true,
+  margin: { top: '0', bottom: '0', left: '0', right: '0' },
+};
+
 // Lazy singleton: the browser launches on the FIRST render (api boot cost stays zero) and is
 // reused across renders. A crash/disconnect clears the memo so the next render relaunches —
 // the classic poisoned-promise guard.
@@ -115,10 +127,8 @@ export async function renderPdf(html: string): Promise<Buffer> {
       // tsconfig has no DOM lib). A dead network resolves the promise with fallback fonts.
       await page.evaluate('document.fonts.ready.then(() => undefined)');
       const pdf = await page.pdf({
-        format: 'A4',
-        printBackground: true,
+        ...REPORT_PDF_OPTIONS,
         timeout: RENDER_TIMEOUT_MS,
-        ...documentPdfOptions(extractDocumentChrome(html)),
       });
       return Buffer.from(pdf);
     })();
