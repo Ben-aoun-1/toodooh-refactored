@@ -12,9 +12,10 @@ import {
   resetRecommendationsForTests,
 } from '../src/lib/report/recommendations.js';
 
-// R2 — the SDK is mocked at the module root (no key, no network in CI); the zod output-format
-// helper stays REAL. The contract under test is the HARD FALLBACK matrix: every failure mode
-// resolves to null, and only the minimized aggregate payload ever crosses the wire.
+// R3 — the SDK is mocked at the module root (no key, no network in CI); the zod output-format
+// helper stays REAL. The model authors ONLY the Piste 02 body (S07's titles are fixed in the
+// template); the contract under test is the HARD FALLBACK matrix: every failure mode resolves
+// to null, and only the minimized aggregate payload ever crosses the wire.
 const parseSpy = vi.hoisted(() => vi.fn());
 const ctorSpy = vi.hoisted(() => vi.fn());
 vi.mock('@anthropic-ai/sdk', () => {
@@ -73,12 +74,9 @@ const input = (): RecommendationInput => ({
   },
 });
 
-const validPistes = [
-  { title: 'Valorisez vos vendredis soirs', body: 'Le créneau Ven 18h est votre plus fort.' },
-  { title: 'Comblez le creux du mardi matin', body: 'Mar 9h est votre créneau le plus faible.' },
-  { title: 'Capitalisez sur les 17 – 30 ans', body: 'Votre première tranche d’âge mesurée.' },
-];
-const okMessage = { stop_reason: 'end_turn', parsed_output: { pistes: validPistes } };
+const validBody =
+  'Mar 9h et Jeu 15h sont vos créneaux les plus faibles - proposez une offre matinale et communiquez-la sur vos réseaux pour redynamiser ces périodes creuses.';
+const okMessage = { stop_reason: 'end_turn', parsed_output: { body: validBody } };
 
 beforeEach(() => {
   resetRecommendationsForTests();
@@ -88,9 +86,9 @@ beforeEach(() => {
 });
 
 describe('generateRecommendations — happy path', () => {
-  it('returns the 3 schema-valid pistes', async () => {
+  it('returns the schema-valid Piste 02 body', async () => {
     parseSpy.mockResolvedValue(okMessage);
-    await expect(generateRecommendations(input())).resolves.toEqual(validPistes);
+    await expect(generateRecommendations(input())).resolves.toBe(validBody);
   });
 
   it('pins the request shape: model, max_tokens, structured output, timeout/retries', async () => {
@@ -100,7 +98,10 @@ describe('generateRecommendations — happy path', () => {
     expect(params.model).toBe('claude-haiku-4-5');
     expect(params.max_tokens).toBe(1024);
     expect(params.output_config?.format).toBeDefined();
-    expect(params.system).toContain('exactement 3 pistes');
+    // R3 task: the weak-slot analysis, ONE titleless paragraph — never the old 3-piste ask
+    expect(params.system).toContain('les créneaux faibles et les périodes creuses');
+    expect(params.system).toContain('UN SEUL paragraphe de 40 mots maximum, sans titre');
+    expect(params.system).not.toContain('exactement 3 pistes');
     expect(options).toEqual({ timeout: 10_000, maxRetries: 1 });
   });
 
@@ -139,10 +140,10 @@ describe('generateRecommendations — hard fallback matrix (every failure → nu
     await expect(generateRecommendations(input())).resolves.toBeNull();
   });
 
-  it('a 2-piste response → null (shape revalidated locally)', async () => {
+  it('the retired R2 3-piste shape → null (contract pinned to ONE body, revalidated locally)', async () => {
     parseSpy.mockResolvedValue({
       stop_reason: 'end_turn',
-      parsed_output: { pistes: validPistes.slice(0, 2) },
+      parsed_output: { pistes: [{ title: 'Titre', body: 'Corps.' }] },
     });
     await expect(generateRecommendations(input())).resolves.toBeNull();
   });
@@ -151,17 +152,15 @@ describe('generateRecommendations — hard fallback matrix (every failure → nu
     const longBody = Array.from({ length: 41 }, (_, i) => `mot${i}`).join(' ');
     parseSpy.mockResolvedValue({
       stop_reason: 'end_turn',
-      parsed_output: { pistes: [validPistes[0], validPistes[1], { title: 'Ok', body: longBody }] },
+      parsed_output: { body: longBody },
     });
     await expect(generateRecommendations(input())).resolves.toBeNull();
   });
 
-  it('over-cap title (61 chars) → null', async () => {
+  it('a non-string body → null (shape revalidated locally)', async () => {
     parseSpy.mockResolvedValue({
       stop_reason: 'end_turn',
-      parsed_output: {
-        pistes: [{ title: 'x'.repeat(61), body: 'Court.' }, validPistes[1], validPistes[2]],
-      },
+      parsed_output: { body: 42 },
     });
     await expect(generateRecommendations(input())).resolves.toBeNull();
   });
@@ -194,8 +193,8 @@ describe('generateRecommendationsCached (on-demand path)', () => {
     parseSpy.mockResolvedValue(okMessage);
     const first = await generateRecommendationsCached('venue-1', range, input());
     const second = await generateRecommendationsCached('venue-1', range, input());
-    expect(first).toEqual(validPistes);
-    expect(second).toEqual(validPistes);
+    expect(first).toBe(validBody);
+    expect(second).toBe(validBody);
     expect(parseSpy).toHaveBeenCalledTimes(1);
   });
 
@@ -215,9 +214,7 @@ describe('generateRecommendationsCached (on-demand path)', () => {
     parseSpy.mockRejectedValueOnce(new Error('boom'));
     await expect(generateRecommendationsCached('venue-1', range, input())).resolves.toBeNull();
     parseSpy.mockResolvedValueOnce(okMessage);
-    await expect(generateRecommendationsCached('venue-1', range, input())).resolves.toEqual(
-      validPistes,
-    );
+    await expect(generateRecommendationsCached('venue-1', range, input())).resolves.toBe(validBody);
     expect(parseSpy).toHaveBeenCalledTimes(2);
   });
 
@@ -316,7 +313,7 @@ describe('buildRecommendationInput (ReportData → minimized payload)', () => {
 });
 
 describe('pistesForReport / pistesForReportCached (the report seam)', () => {
-  it('a venue with NEITHER host nor cast data keeps the generic pistes without an API call', async () => {
+  it('a venue with NEITHER host nor cast data keeps the generic body without an API call', async () => {
     const empty = reportData({ hostHasData: false, castHasData: false });
     await expect(pistesForReport(empty)).resolves.toBeNull();
     await expect(pistesForReportCached('venue-x', empty)).resolves.toBeNull();
@@ -325,10 +322,10 @@ describe('pistesForReport / pistesForReportCached (the report seam)', () => {
 
   it('with data, the frozen path generates and the cached path caches per venue × period', async () => {
     parseSpy.mockResolvedValue(okMessage);
-    await expect(pistesForReport(reportData())).resolves.toEqual(validPistes);
+    await expect(pistesForReport(reportData())).resolves.toBe(validBody);
     expect(parseSpy).toHaveBeenCalledTimes(1); // uncached — every call hits the API
-    await expect(pistesForReportCached('venue-1', reportData())).resolves.toEqual(validPistes);
-    await expect(pistesForReportCached('venue-1', reportData())).resolves.toEqual(validPistes);
+    await expect(pistesForReportCached('venue-1', reportData())).resolves.toBe(validBody);
+    await expect(pistesForReportCached('venue-1', reportData())).resolves.toBe(validBody);
     expect(parseSpy).toHaveBeenCalledTimes(2); // one more for the first cached call only
   });
 });

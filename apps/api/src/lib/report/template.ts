@@ -5,7 +5,6 @@ import {
   formatDecimalFr,
   formatIntFr,
 } from './derive.js';
-import type { Piste } from './recommendations.js';
 
 // ONE self-contained HTML document for the report — R1.6: the DEDICATED DARK-THEME design,
 // reproduced from the operator-approved mockup (planner: Toodooh_Rapport_Performances.html) —
@@ -21,10 +20,16 @@ import type { Piste } from './recommendations.js';
 // - the heatmap hachure covers BOTH closed hours AND no-data cells (existing semantics under the
 //   new look);
 // - the mockup's `stat-num{` selector misses its leading dot (a mockup bug) — implemented as
-//   `.stat-num`; the unused --portage token is not carried forward (charter watch item).
+//   `.stat-num`; the unused --portage token is not carried forward (charter watch item);
+// - R3 (Mejri item 4): the S03 curve gets LABELED AXES — DD/MM date ticks and impression-count
+//   gridlines — overriding the axis-less mockup; the frame renders (unlabeled) in the empty
+//   state too.
 //
-// S07 keeps the R2 seam: opts.aiPistes (exactly 3) renders into the piste cards; anything else
-// keeps the generic pistes verbatim (Piste 03 = the SPS wait-state).
+// S07 — R3: a FIXED 3-theme structure (titles pinned; the mockup's card language unchanged).
+// Piste 01 is the mockup's static copy (goes data-driven when les événements ships), Piste 03 is
+// the static SPS wait-state, and ONLY the Piste 02 body is AI-authored: opts.aiPistes (a single
+// non-blank string — the historic name keeps the job/endpoint/script call sites untouched)
+// fills it; anything else keeps the generic angles-morts body verbatim.
 
 const PENDING = 'En attente du premier deal';
 const CHART_PENDING = 'Évolution en attente du premier deal';
@@ -42,6 +47,17 @@ export const REV_MAX_ROWS = 4;
 const PLACEHOLDER_SEXE_PCT = [50, 50];
 const PLACEHOLDER_AGE_PCT = [32, 28, 14, 6];
 
+// R3 — the three FIXED S07 themes. Bodies 01/03 are static (01 = mockup copy VERBATIM until an
+// events source ships; 03 = the SPS wait-state); only the Piste 02 body is ever AI-authored.
+const PISTE_01_TITLE = 'Anticipez les temps forts';
+const PISTE_01_BODY =
+  "Un grand match international est à l'affiche ce mois-ci (Coupe du Monde, CAN…) - profitez-en pour communiquer sa diffusion et inviter vos clients à venir le suivre dès maintenant sur vos réseaux.";
+const PISTE_02_TITLE = 'Repérez vos angles morts';
+const PISTE_02_GENERIC_BODY =
+  'Vous avez 2 périodes creuses à valoriser autrement. Mardi matin et jeudi après-midi sont vos créneaux les plus faibles - essayez X et Y pour les redynamiser.';
+const PISTE_03_TITLE = 'Résumé du SPS et recommandations';
+const PISTE_03_WAIT_BODY = 'En attente de votre score de priorité.';
+
 const esc = (value: string): string =>
   value.replace(
     /[&<>"']/g,
@@ -58,29 +74,124 @@ const secHead = (num: string, title: string, lead: string): string => `
     <h2 class="sec-title">${title}</h2>
     <p class="sec-lead">${lead}</p>`;
 
-/** Inline SVG area chart for S03 — the existing geometry, restyled to the dark palette. */
+// ── S03 chart geometry (R3 — labeled axes, Mejri item 4; OVERRIDES the axis-less mockup) ───────
+// The svg stretches (preserveAspectRatio="none"), so TEXT never lives inside it: gridlines/tick
+// marks are svg (they stretch fine), labels are HTML positioned from the SAME x()/y() mapping —
+// alignment is by construction, and the type stays crisp at print size.
+const CHART_W = 800;
+const CHART_H = 260;
+const CHART_PAD_X = 10;
+const CHART_PAD_TOP = 12;
+const CHART_PAD_BOTTOM = 5;
+
+const chartX = (i: number, days: number): number =>
+  CHART_PAD_X + (i * (CHART_W - 2 * CHART_PAD_X)) / Math.max(1, days - 1);
+const chartY = (v: number, yMax: number): number =>
+  CHART_H - CHART_PAD_BOTTOM - (v / yMax) * (CHART_H - CHART_PAD_TOP - CHART_PAD_BOTTOM);
+
+/** Y scale 0/step/2·step/3·step — step is the first "nice" INTEGER (1|2|2.5|5|10 × 10^k) ≥ max/3. */
+const yAxisTicks = (max: number): number[] => {
+  const raw = Math.max(1, max) / 3;
+  const mag = 10 ** Math.floor(Math.log10(raw));
+  const step =
+    [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw && Number.isInteger(s)) ?? 10 * mag;
+  return [0, step, 2 * step, 3 * step];
+};
+
+/** Span-aware X ticks: every day when the span holds ≤7 points, else 6 evenly spread ends-included. */
+const X_TICK_TARGET = 6;
+const xTickIndexes = (days: number): number[] =>
+  days <= 7
+    ? Array.from({ length: days }, (_, i) => i)
+    : Array.from({ length: X_TICK_TARGET }, (_, k) =>
+        Math.round((k * (days - 1)) / (X_TICK_TARGET - 1)),
+      );
+
+/** DD/MM tick label (the axis is year-less like the S05 periods). */
+const ddmm = (iso: string): string => formatDateFr(iso).slice(0, 5);
+
+/**
+ * Inline SVG for S03 — the dark-palette area chart, now over its axis frame (gridlines at the
+ * Y ticks, a baseline, X tick marks). With NO days it renders the frame alone: the empty state
+ * carries the same axes, unlabeled.
+ */
 export function impressionsChartSvg(days: DailyImpressionsPoint[]): string {
-  const W = 800;
-  const H = 260;
-  const PAD = 10;
   const max = Math.max(1, ...days.map((d) => d.impressions));
-  const n = Math.max(1, days.length - 1);
-  const x = (i: number): number => PAD + (i * (W - 2 * PAD)) / n;
-  const y = (v: number): number => H - PAD - (v / max) * (H - 2 * PAD);
+  const ticks = yAxisTicks(max);
+  const yMax = ticks[3] ?? 1;
+  const grid = ticks
+    .map((v) => {
+      const gy = chartY(v, yMax).toFixed(1);
+      const stroke = v === 0 ? 'rgba(118,230,171,0.28)' : 'rgba(118,230,171,0.12)';
+      return `<line x1="${CHART_PAD_X}" y1="${gy}" x2="${CHART_W - CHART_PAD_X}" y2="${gy}" stroke="${stroke}" stroke-width="1"/>`;
+    })
+    .join('');
+  const baseY = chartY(0, yMax);
+  const tickXs =
+    days.length > 0
+      ? xTickIndexes(days.length).map((i) => chartX(i, days.length))
+      : Array.from({ length: X_TICK_TARGET }, (_, k) => chartX(k, X_TICK_TARGET));
+  const tickMarks = tickXs
+    .map(
+      (tx) =>
+        `<line x1="${tx.toFixed(1)}" y1="${baseY.toFixed(1)}" x2="${tx.toFixed(1)}" y2="${(baseY + 9).toFixed(1)}" stroke="rgba(118,230,171,0.28)" stroke-width="1"/>`,
+    )
+    .join('');
+  if (days.length === 0) {
+    return `<svg class="s03-axes" viewBox="0 0 ${CHART_W} ${CHART_H}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">${grid}${tickMarks}</svg>`;
+  }
   const pts = (days.length === 1 ? [days[0], days[0]] : days).map(
-    (d, i) => `${x(i).toFixed(1)},${y(d?.impressions ?? 0).toFixed(1)}`,
+    (d, i) =>
+      `${chartX(i, Math.max(2, days.length)).toFixed(1)},${chartY(d?.impressions ?? 0, yMax).toFixed(1)}`,
   );
-  const first = pts[0] ?? `${PAD},${H - PAD}`;
-  const last = pts[pts.length - 1] ?? `${W - PAD},${H - PAD}`;
+  const first = pts[0] ?? `${CHART_PAD_X},${baseY}`;
+  const last = pts[pts.length - 1] ?? `${CHART_W - CHART_PAD_X},${baseY}`;
   const lastX = last.split(',')[0];
   const firstX = first.split(',')[0];
-  return `<svg class="s03-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+  return `<svg class="s03-chart" viewBox="0 0 ${CHART_W} ${CHART_H}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
     <defs><linearGradient id="impGrad" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#76E6AB" stop-opacity="0.28"/><stop offset="100%" stop-color="#76E6AB" stop-opacity="0"/>
     </linearGradient></defs>
-    <path d="M${pts.join(' L')} L${lastX},${H - PAD} L${firstX},${H - PAD} Z" fill="url(#impGrad)"/>
+    ${grid}${tickMarks}
+    <path d="M${pts.join(' L')} L${lastX},${baseY.toFixed(1)} L${firstX},${baseY.toFixed(1)} Z" fill="url(#impGrad)"/>
     <path d="M${pts.join(' L')}" fill="none" stroke="#76E6AB" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
   </svg>`;
+}
+
+/**
+ * The full S03 chart figure: Y impression-count labels (left), the plot, DD/MM date labels
+ * (below) — all positioned from the svg's own mapping. The empty state keeps its caption and
+ * renders the axis frame UNLABELED (no scale to claim before the first deal).
+ */
+export function impressionsChartBlock(days: DailyImpressionsPoint[]): string {
+  const hasData = days.length > 0;
+  const max = Math.max(1, ...days.map((d) => d.impressions));
+  const ticks = yAxisTicks(max);
+  const yMax = ticks[3] ?? 1;
+  const yLabels = hasData
+    ? ticks
+        .map(
+          (v) =>
+            `<span style="top:${((chartY(v, yMax) / CHART_H) * 100).toFixed(2)}%">${formatIntFr(v)}</span>`,
+        )
+        .join('')
+    : '';
+  const xLabels = hasData
+    ? xTickIndexes(days.length)
+        .map(
+          (i) =>
+            `<span style="left:${((chartX(i, days.length) / CHART_W) * 100).toFixed(2)}%">${ddmm(days[i]?.date ?? '')}</span>`,
+        )
+        .join('')
+    : '';
+  const plot = hasData
+    ? impressionsChartSvg(days)
+    : `<div class="chart-empty">${impressionsChartSvg([])}<span>${CHART_PENDING}</span></div>`;
+  return `<div class="chartfig">
+        <div class="chart-ylab">${yLabels}</div>
+        <div class="chart-plot">${plot}</div>
+        <div class="chart-xlab">${xLabels}</div>
+      </div>`;
 }
 
 /** 7×14 heat cells — level 0 (closed hour OR no data) hachures; levels 1..5 map to h0..h4. */
@@ -112,7 +223,7 @@ const barRow = (name: string, valueHtml: string, pct: number): string => `
 
 export function renderReportHtml(
   data: ReportData,
-  opts: { aiPistes?: Piste[] | null } = {},
+  opts: { aiPistes?: string | null } = {},
 ): string {
   const { kpis, hostHasData, castHasData } = data;
   const period = `${formatDateFr(data.range.from)} – ${formatDateFr(data.range.to)}`;
@@ -197,10 +308,6 @@ export function renderReportHtml(
   </div>`;
 
   // ── S03 ──────────────────────────────────────────────────────────────────────────────────────
-  const s03Body =
-    castHasData && data.days.length > 0
-      ? impressionsChartSvg(data.days)
-      : `<div class="chart-empty"><span>${CHART_PENDING}</span></div>`;
   const s03 = `
   <div class="section" style="margin-top:0">
     ${secHead('Section 03', 'Évolution des impressions', "Volume d'impressions servies dans votre lieu, jour par jour, sur la période analysée.")}
@@ -209,7 +316,7 @@ export function renderReportHtml(
         <span class="t">Impressions par jour</span>
         <span class="s">Sur la période sélectionnée</span>
       </div>
-      ${s03Body}
+      ${impressionsChartBlock(castHasData ? data.days : [])}
       <div class="chart-foot"><span class="line"></span>Impressions servies</div>
     </div>
   </div>`;
@@ -372,35 +479,23 @@ export function renderReportHtml(
     </div>
   </div>`;
 
-  // ── S07 — the R2 pistes seam under the mockup's card language ────────────────────────────────
-  const aiPistes = opts.aiPistes && opts.aiPistes.length === 3 ? opts.aiPistes : null;
-  const pisteCards = aiPistes
-    ? aiPistes
-        .map(
-          (piste, idx) => `
+  // ── S07 — R3 FIXED 3-theme structure; only the Piste 02 body is AI-authored ──────────────────
+  const aiBody =
+    typeof opts.aiPistes === 'string' && opts.aiPistes.trim() !== '' ? opts.aiPistes : null;
+  const pisteCard = (num: string, title: string, bodyHtml: string): string => `
     <div class="piste">
-      <div class="piste-k"><span class="b"></span>Piste 0${idx + 1}</div>
-      <div class="piste-t">${esc(piste.title)}</div>
-      <div class="piste-body">${esc(piste.body)}</div>
-    </div>`,
-        )
-        .join('')
-    : `
-    <div class="piste">
-      <div class="piste-k"><span class="b"></span>Piste 01</div>
-      <div class="piste-t">Anticipez les temps forts</div>
-      <div class="piste-body">Un grand match international est à l'affiche ce mois-ci (Coupe du Monde, CAN…) - profitez-en pour communiquer sa diffusion et inviter vos clients à venir le suivre dès maintenant sur vos réseaux.</div>
-    </div>
-    <div class="piste">
-      <div class="piste-k"><span class="b"></span>Piste 02</div>
-      <div class="piste-t">Repérez vos angles morts</div>
-      <div class="piste-body">Vous avez 2 périodes creuses à valoriser autrement. Mardi matin et jeudi après-midi sont vos créneaux les plus faibles - essayez X et Y pour les redynamiser.</div>
-    </div>
-    <div class="piste">
-      <div class="piste-k"><span class="b"></span>Piste 03</div>
-      <div class="piste-t">Résumé du SPS et recommandations</div>
-      <div class="piste-body wait">En attente de votre score de priorité.</div>
+      <div class="piste-k"><span class="b"></span>Piste ${num}</div>
+      <div class="piste-t">${title}</div>
+      ${bodyHtml}
     </div>`;
+  const pisteCards =
+    pisteCard('01', PISTE_01_TITLE, `<div class="piste-body">${PISTE_01_BODY}</div>`) +
+    pisteCard(
+      '02',
+      PISTE_02_TITLE,
+      `<div class="piste-body">${aiBody ? esc(aiBody) : PISTE_02_GENERIC_BODY}</div>`,
+    ) +
+    pisteCard('03', PISTE_03_TITLE, `<div class="piste-body wait">${PISTE_03_WAIT_BODY}</div>`);
   const s07 = `
   <div class="section">
     ${secHead('Section 07', "Vos pistes d'optimisation futures", "Quelques observations issues de l'activité de votre lieu sur la période, transformées en pistes concrètes pour développer vos revenus.")}
@@ -635,18 +730,33 @@ body{
 .heat-legend .swatch{ width:14px; height:11px; border-radius:2px; }
 
 /* ============ CHART (Section 03) ============ */
+/* R3 — labeled axes (Mejri item 4, overrides the axis-less mockup). The former 62px chart
+   absorbs the 11px date row internally (50px plot + 11px labels) so page 3's slack holds. */
 .chartcard-head{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:10px; }
 .chartcard-head .t{ font-size:11pt; font-weight:600; color:var(--ink); }
 .chartcard-head .s{ font-family:var(--mono); font-size:7.5pt; letter-spacing:.08em; color:var(--faint); }
-.s03-chart{ width:100%; height:62px; display:block; border-radius:8px; }
+.chartfig{ display:grid; grid-template-columns:30px 1fr; grid-template-rows:50px 11px; column-gap:8px; }
+.chart-ylab{ grid-column:1; grid-row:1; position:relative; }
+.chart-ylab span{
+  position:absolute; right:0; transform:translateY(-50%);
+  font-family:var(--mono); font-size:6.5pt; letter-spacing:.04em; color:var(--faint);
+}
+.chart-plot{ grid-column:2; grid-row:1; }
+.chart-xlab{ grid-column:2; grid-row:2; position:relative; }
+.chart-xlab span{
+  position:absolute; top:3px; transform:translateX(-50%);
+  font-family:var(--mono); font-size:6.5pt; letter-spacing:.04em; color:var(--faint);
+}
+.s03-chart{ width:100%; height:50px; display:block; border-radius:8px; }
 .chart-empty{
-  height:74px; border-radius:8px;
+  position:relative; height:50px; border-radius:8px;
   background:
     repeating-linear-gradient(90deg, var(--line-soft) 0 1px, transparent 1px 60px),
     rgba(255,255,255,0.012);
   display:flex; align-items:center; justify-content:center;
 }
-.chart-empty span{ font-family:var(--serif); font-style:italic; font-size:10.5pt; color:var(--faint); }
+.s03-axes{ position:absolute; inset:0; width:100%; height:100%; }
+.chart-empty span{ position:relative; font-family:var(--serif); font-style:italic; font-size:10.5pt; color:var(--faint); }
 .chart-foot{
   margin-top:10px; display:flex; align-items:center; gap:8px;
   font-family:var(--mono); font-size:6.8pt; letter-spacing:.16em; text-transform:uppercase; color:var(--faint);

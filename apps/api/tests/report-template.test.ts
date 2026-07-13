@@ -10,7 +10,8 @@ import {
 
 // Snapshot-style contract tests for the R1.6 DARK document: five fixed pages reproducing the
 // operator-approved mockup — palette, structure and FRENCH COPY VERBATIM — with the HOST/CAST
-// empty variants and the R2 pistes seam unchanged underneath the new look.
+// empty variants underneath the new look, and S07 as the R3 FIXED 3-theme structure (only the
+// Piste 02 body is ever AI-authored).
 
 const baseData = (over: Partial<ReportData> = {}): ReportData => ({
   venueName: 'Café Le Palmier',
@@ -303,57 +304,72 @@ describe('renderReportHtml — FULL variants (both flags true)', () => {
   });
 });
 
-describe('renderReportHtml — S07 pistes seam (R2, unchanged under the new look)', () => {
-  const aiPistes = [
-    { title: 'Valorisez vos vendredis soirs', body: 'Le créneau Ven 18h est votre plus fort.' },
-    { title: 'Comblez le creux du mardi matin', body: 'Mar 9h est votre créneau le plus faible.' },
-    { title: 'Misez sur les 17 – 30 ans', body: 'Votre première tranche d’âge mesurée.' },
+describe('renderReportHtml — S07 FIXED 3-theme structure (R3)', () => {
+  const aiBody =
+    'Mar 9h et Jeu 15h sont vos créneaux les plus faibles - proposez une offre matinale pour redynamiser ces périodes creuses.';
+  const PISTE_01_BODY =
+    "Un grand match international est à l'affiche ce mois-ci (Coupe du Monde, CAN…) - profitez-en pour communiquer sa diffusion et inviter vos clients à venir le suivre dès maintenant sur vos réseaux.";
+  const SPS_WAIT = '<div class="piste-body wait">En attente de votre score de priorité.</div>';
+  const bothBranches = [
+    renderReportHtml(fullData(), { aiPistes: aiBody }),
+    renderReportHtml(baseData()),
   ];
 
-  it('renders the 3 AI pistes in the mockup card language; the generic copy disappears', () => {
-    const html = renderReportHtml(fullData(), { aiPistes });
-    expect(html).toContain('Valorisez vos vendredis soirs');
-    expect(html).toContain('Misez sur les 17 – 30 ans');
-    expect(count(html, /class="piste"/g)).toBe(3);
-    expect(count(html, /class="piste-k"/g)).toBe(3);
-    expect(html).toContain('Piste 01');
-    expect(html).toContain('Piste 03');
-    expect(html).toContain('Lecture personnalisée.');
-    expect(html).not.toContain('Anticipez les temps forts');
-    expect(html).not.toContain('En attente de votre score de priorité.');
-  });
-
-  it('null/absent/malformed aiPistes keeps the generic pistes verbatim (Piste 03 = SPS wait)', () => {
-    for (const html of [
-      renderReportHtml(baseData()),
-      renderReportHtml(baseData(), { aiPistes: null }),
-      renderReportHtml(baseData(), { aiPistes: aiPistes.slice(0, 2) }),
-    ]) {
+  it('pins the three FIXED titles + kickers in BOTH branches (AI and generic)', () => {
+    for (const html of bothBranches) {
+      expect(count(html, /class="piste"/g)).toBe(3);
+      expect(count(html, /class="piste-k"/g)).toBe(3);
+      for (const p of ['Piste 01', 'Piste 02', 'Piste 03']) expect(html).toContain(p);
       expect(html).toContain('Anticipez les temps forts');
       expect(html).toContain('Repérez vos angles morts');
       expect(html).toContain('Résumé du SPS et recommandations');
+      expect(html).toContain('Lecture personnalisée.');
+    }
+  });
+
+  it('Piste 01 carries the mockup copy VERBATIM in both branches (static until les événements ships)', () => {
+    for (const html of bothBranches) {
+      expect(html).toContain(`<div class="piste-body">${PISTE_01_BODY}</div>`);
+    }
+  });
+
+  it('Piste 03 is EXACTLY the SPS wait-state (italic styling) in both branches', () => {
+    for (const html of bothBranches) {
+      expect(count(html, /class="piste-body wait"/g)).toBe(1);
+      expect(html).toContain(SPS_WAIT);
+    }
+  });
+
+  it('an AI body fills Piste 02 and displaces ONLY the generic angles-morts body', () => {
+    const html = renderReportHtml(fullData(), { aiPistes: aiBody });
+    expect(html).toContain(aiBody);
+    expect(html).not.toContain('Vous avez 2 périodes creuses');
+  });
+
+  it('null/absent/blank aiPistes keeps the generic Piste 02 body verbatim', () => {
+    for (const html of [
+      renderReportHtml(baseData()),
+      renderReportHtml(baseData(), { aiPistes: null }),
+      renderReportHtml(baseData(), { aiPistes: '   ' }),
+    ]) {
       expect(html).toContain(
-        '<div class="piste-body wait">En attente de votre score de priorité.</div>',
+        'Vous avez 2 périodes creuses à valoriser autrement. Mardi matin et jeudi après-midi sont vos créneaux les plus faibles - essayez X et Y pour les redynamiser.',
       );
     }
   });
 
-  it('escapes AI piste content (no raw HTML injection through the model)', () => {
+  it('escapes the AI body (no raw HTML injection through the model)', () => {
     const html = renderReportHtml(baseData(), {
-      aiPistes: [
-        { title: '<script>alert(1)</script>', body: '<img src=x>' },
-        aiPistes[1] ?? { title: 'x', body: 'y' },
-        aiPistes[2] ?? { title: 'x', body: 'y' },
-      ],
+      aiPistes: '<img src=x> & <script>alert(1)</script>',
     });
-    expect(html).not.toContain('<script>alert(1)</script>');
     expect(html).not.toContain('<img src=x>');
+    expect(html).not.toContain('<script>alert(1)</script>');
     expect(html).toContain('&lt;script&gt;');
   });
 });
 
-describe('impressionsChartSvg (dark restyle)', () => {
-  it('draws a closed mint area + line over the day values', () => {
+describe('impressionsChartSvg (dark restyle + R3 axis frame)', () => {
+  it('draws a closed mint area + line over the day values, above 4 gridlines and tick marks', () => {
     const svg = impressionsChartSvg([
       { date: '2026-06-01', impressions: 100 },
       { date: '2026-06-02', impressions: 0 },
@@ -362,10 +378,68 @@ describe('impressionsChartSvg (dark restyle)', () => {
     expect(svg).toContain('<svg');
     expect(svg).toContain('impGrad');
     expect(svg).toContain('stroke="#76E6AB"');
+    expect(count(svg, /<line /g)).toBe(4 + 3); // 4 Y gridlines + one tick mark per day (≤7 days)
   });
 
   it('handles a single day without NaN coordinates', () => {
     const svg = impressionsChartSvg([{ date: '2026-06-01', impressions: 10 }]);
     expect(svg).not.toContain('NaN');
+  });
+
+  it('with NO days renders the bare axis frame (gridlines + ticks, no curve)', () => {
+    const svg = impressionsChartSvg([]);
+    expect(svg).toContain('class="s03-axes"');
+    expect(count(svg, /<line /g)).toBe(4 + 6); // 4 gridlines + 6 evenly spread tick marks
+    expect(svg).not.toContain('<path');
+    expect(svg).not.toContain('NaN');
+  });
+});
+
+describe('S03 labeled axes (R3 — Mejri item 4, OVERRIDES the axis-less mockup)', () => {
+  const slice = (html: string, from: string, to: string): string =>
+    html.slice(html.indexOf(from), html.indexOf(to, html.indexOf(from)));
+  const ylabOf = (html: string): string => slice(html, 'class="chart-ylab"', 'class="chart-plot"');
+  const xlabOf = (html: string): string => slice(html, 'class="chart-xlab"', 'chart-foot');
+
+  it('data state: 4 impression-count Y labels on a nice scale + one DD/MM tick per day (short span)', () => {
+    const html = renderReportHtml(fullData()); // fixture max 5 100 → nice top 6 000
+    const ylab = ylabOf(html);
+    expect(count(ylab, /<span /g)).toBe(4);
+    for (const v of ['>0<', '>2 000<', '>4 000<', '>6 000<']) {
+      expect(ylab).toContain(v);
+    }
+    const xlab = xlabOf(html);
+    for (const d of ['>01/06<', '>02/06<', '>03/06<']) expect(xlab).toContain(d);
+    expect(count(xlab, /<span /g)).toBe(3);
+  });
+
+  it('a month-long span keeps 5–7 span-aware ticks, ends included', () => {
+    const html = renderReportHtml(
+      fullData({
+        days: Array.from({ length: 30 }, (_, i) => ({
+          date: `2026-06-${String(i + 1).padStart(2, '0')}`,
+          impressions: 100 + i,
+        })),
+      }),
+    );
+    const xlab = xlabOf(html);
+    expect(count(xlab, /<span /g)).toBe(6);
+    expect(xlab).toContain('>01/06<');
+    expect(xlab).toContain('>30/06<');
+  });
+
+  it('empty state: the caption stays, the axis frame renders UNLABELED', () => {
+    const html = renderReportHtml(baseData());
+    expect(html).toContain('Évolution en attente du premier deal');
+    expect(html).toContain('class="s03-axes"'); // axes present in the empty state too
+    expect(count(ylabOf(html), /<span /g)).toBe(0); // no scale is claimed before the first deal
+    expect(count(xlabOf(html), /<span /g)).toBe(0);
+  });
+
+  it('a CAST-flagged period with zero days still gets the empty frame (no NaN, no curve)', () => {
+    const html = renderReportHtml(baseData({ castHasData: true }));
+    expect(html).toContain('class="s03-axes"');
+    expect(html).not.toContain('class="s03-chart"');
+    expect(html).not.toContain('NaN');
   });
 });

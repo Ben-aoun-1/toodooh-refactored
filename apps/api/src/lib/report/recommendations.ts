@@ -10,26 +10,20 @@ import type { DateRange } from './derive.js';
 
 const log = logger.child({ module: 'report-recommendations' });
 
-// R2 — Claude-powered pistes for the report's S07. HARD FALLBACK CONTRACT: this module NEVER
-// throws into a report path — missing key, timeout, API error, refusal, schema-parse failure or
-// cap violation ALL resolve to null, and the template keeps its generic pistes. Logging carries
-// the error message ONLY: never the key, never the prompt or response bodies.
+// R3 — Claude-powered body for the report's S07 Piste 02 ONLY. S07 is a FIXED 3-theme structure
+// (titles pinned in the template; Pistes 01/03 fully static) — the model authors nothing but the
+// « Repérez vos angles morts » paragraph. HARD FALLBACK CONTRACT unchanged from R2: this module
+// NEVER throws into a report path — missing key, timeout, API error, refusal, schema-parse
+// failure or cap violation ALL resolve to null, and the template keeps the generic Piste 02 body.
+// Logging carries the error message ONLY: never the key, never the prompt or response bodies.
 
-/** One S07 recommendation card, as the template renders it. */
-export interface Piste {
-  title: string;
-  body: string;
-}
-
-const PistesSchema = z.object({
-  pistes: z.array(z.object({ title: z.string(), body: z.string() })).length(3),
+const PisteBodySchema = z.object({
+  body: z.string(),
 });
 
-/** Post-parse caps (the schema pins shape; sizes are checked here): title ≤60 chars, body ≤40 words. */
-const TITLE_MAX_CHARS = 60;
+/** Post-parse cap (the schema pins shape; size is checked here): body ≤40 words. */
 const BODY_MAX_WORDS = 40;
-const withinCaps = (piste: Piste): boolean =>
-  piste.title.length <= TITLE_MAX_CHARS && piste.body.trim().split(/\s+/).length <= BODY_MAX_WORDS;
+const withinCap = (body: string): boolean => body.trim().split(/\s+/).length <= BODY_MAX_WORDS;
 
 /**
  * The ONLY data that crosses the wire (data minimization, pinned by test): aggregates the report
@@ -61,12 +55,12 @@ const REQUEST_TIMEOUT_MS = 10_000;
 
 const SYSTEM_PROMPT = `Tu es le conseiller data d'un commerçant partenaire de TOODOOH, un réseau d'affichage publicitaire DOOH en Tunisie : des écrans installés dans son lieu diffusent des campagnes d'annonceurs, et le commerçant touche un revenu sur les impressions servies.
 
-À partir des chiffres fournis en entrée — et UNIQUEMENT de ces chiffres — propose exactement 3 pistes concrètes pour développer l'audience de son lieu et ses revenus publicitaires.
+À partir des chiffres fournis en entrée — et UNIQUEMENT de ces chiffres — analyse les créneaux faibles et les périodes creuses du lieu, puis propose comment les redynamiser pour développer l'audience et les revenus publicitaires.
 
 Règles strictes :
 - Chaque affirmation chiffrée doit provenir des données fournies. N'invente aucune donnée, aucun événement, aucune tendance extérieure.
 - Aucune promesse ni garantie de revenus : formule des pistes d'action, jamais des engagements de résultat.
-- Exactement 3 pistes : un titre court (60 caractères maximum) et un corps de 40 mots maximum.
+- UN SEUL paragraphe de 40 mots maximum, sans titre.
 - Rédige en français, en vouvoiement (« vous », « votre lieu »), dans le ton de conseil concret du rapport.
 - Si une donnée est absente ou nulle, ne la mentionne pas.`;
 
@@ -86,10 +80,10 @@ const getClient = (): Anthropic | null => {
 export const isRecommendationsEnabled = (): boolean => Boolean(env.ANTHROPIC_API_KEY);
 
 /**
- * Generate the 3 pistes for one report, or null for "keep the generic pistes". Uncached — the
+ * Generate the Piste 02 body for one report, or null for "keep the generic body". Uncached — the
  * month-end job and the regeneration script freeze the result into the stored PDF.
  */
-export async function generateRecommendations(input: RecommendationInput): Promise<Piste[] | null> {
+export async function generateRecommendations(input: RecommendationInput): Promise<string | null> {
   const anthropic = getClient();
   if (!anthropic) return null;
   try {
@@ -99,19 +93,19 @@ export async function generateRecommendations(input: RecommendationInput): Promi
         max_tokens: MAX_TOKENS,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: JSON.stringify(input) }],
-        output_config: { format: zodOutputFormat(PistesSchema) },
+        output_config: { format: zodOutputFormat(PisteBodySchema) },
       },
       { timeout: REQUEST_TIMEOUT_MS, maxRetries: 1 },
     );
     // Refusal → silent fallback, no retry (the report must never surface a refusal).
     if (message.stop_reason === 'refusal') return null;
     // parsed_output is null on parse failure; re-validate through the schema so a drifting SDK
-    // (or a partial parse) can never hand the template a malformed pistes block.
-    const revalidated = PistesSchema.safeParse(message.parsed_output);
+    // (or a partial parse) can never hand the template a malformed body.
+    const revalidated = PisteBodySchema.safeParse(message.parsed_output);
     if (!revalidated.success) return null;
-    const pistes = revalidated.data.pistes;
-    if (!pistes.every(withinCaps)) return null;
-    return pistes;
+    const body = revalidated.data.body;
+    if (!withinCap(body)) return null;
+    return body;
   } catch (err) {
     // Typed SDK errors first (status is the useful signal), then anything else — message ONLY.
     const reason =
@@ -120,7 +114,7 @@ export async function generateRecommendations(input: RecommendationInput): Promi
         : err instanceof Error
           ? err.message
           : String(err);
-    log.warn({ reason }, 'AI recommendations failed — reports keep the generic pistes');
+    log.warn({ reason }, 'AI recommendations failed — reports keep the generic Piste 02 body');
     return null;
   }
 }
@@ -131,7 +125,7 @@ export async function generateRecommendations(input: RecommendationInput): Promi
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const CACHE_MAX_ENTRIES = 500;
 interface CacheEntry {
-  pistes: Piste[];
+  body: string;
   expiresAt: number;
 }
 const cache = new Map<string, CacheEntry>();
@@ -140,26 +134,27 @@ export async function generateRecommendationsCached(
   venueId: string,
   range: DateRange,
   input: RecommendationInput,
-): Promise<Piste[] | null> {
+): Promise<string | null> {
   const key = `${venueId}|${range.from}|${range.to}`;
   const hit = cache.get(key);
-  if (hit && hit.expiresAt > Date.now()) return hit.pistes;
+  if (hit && hit.expiresAt > Date.now()) return hit.body;
   if (hit) cache.delete(key);
 
-  const pistes = await generateRecommendations(input);
-  if (pistes) {
+  const body = await generateRecommendations(input);
+  if (body) {
     if (cache.size >= CACHE_MAX_ENTRIES) {
       const oldest = cache.keys().next().value;
       if (oldest !== undefined) cache.delete(oldest);
     }
-    cache.set(key, { pistes, expiresAt: Date.now() + CACHE_TTL_MS });
+    cache.set(key, { body, expiresAt: Date.now() + CACHE_TTL_MS });
   }
-  return pistes;
+  return body;
 }
 
-// ── report wiring (Commit 2) — the ONE seam the job, the on-demand endpoint and the
-// regeneration script call. Gate: a venue with neither HOST nor CAST data keeps the generic
-// pistes without an API call (all-null aggregates cannot ground anything).
+// ── report wiring — the ONE seam the job, the on-demand endpoint and the regeneration script
+// call. The pistesFor* names predate R3 (they now yield the single Piste 02 body) and are kept
+// so those call sites stay untouched. Gate: a venue with neither HOST nor CAST data keeps the
+// generic body without an API call (all-null aggregates cannot ground anything).
 
 const DAY_LABELS_FR = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'] as const;
 const FIRST_HEATMAP_HOUR = 8; // the grid's 14 columns span 8h–21h (the page's visible hours)
@@ -220,7 +215,7 @@ export function buildRecommendationInput(data: ReportData): RecommendationInput 
 }
 
 /** Frozen path (month-end job + regeneration script): one uncached generation per stored PDF. */
-export async function pistesForReport(data: ReportData): Promise<Piste[] | null> {
+export async function pistesForReport(data: ReportData): Promise<string | null> {
   try {
     if (!data.hostHasData && !data.castHasData) return null;
     return await generateRecommendations(buildRecommendationInput(data));
@@ -233,7 +228,7 @@ export async function pistesForReport(data: ReportData): Promise<Piste[] | null>
 export async function pistesForReportCached(
   venueId: string,
   data: ReportData,
-): Promise<Piste[] | null> {
+): Promise<string | null> {
   try {
     if (!data.hostHasData && !data.castHasData) return null;
     return await generateRecommendationsCached(venueId, data.range, buildRecommendationInput(data));
