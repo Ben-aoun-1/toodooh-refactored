@@ -77,6 +77,9 @@ export const authService = {
       ...(n(e.longitude) !== undefined ? { longitude: n(e.longitude) } : {}),
       ...(t(e.wifi_ssid) ? { wifi_ssid: t(e.wifi_ssid) } : {}),
       ...(t(e.wifi_password) ? { wifi_password: t(e.wifi_password) } : {}),
+      // H1 — per-establishment working hours (single window, ints 0–23; n() keeps a valid 0).
+      ...(n(e.opening_hour) !== undefined ? { opening_hour: n(e.opening_hour) } : {}),
+      ...(n(e.closing_hour) !== undefined ? { closing_hour: n(e.closing_hour) } : {}),
     }));
     const payload = {
       email: data.email,
@@ -101,6 +104,9 @@ export const authService = {
       ...(n(data.longitude) !== undefined ? { longitude: n(data.longitude) } : {}),
       ...(t(data.wifi_ssid) ? { wifi_ssid: t(data.wifi_ssid) } : {}),
       ...(t(data.wifi_password) ? { wifi_password: t(data.wifi_password) } : {}),
+      // H1 — the individual_owner's working-hours window (skip = both absent → NULL columns).
+      ...(n(data.opening_hour) !== undefined ? { opening_hour: n(data.opening_hour) } : {}),
+      ...(n(data.closing_hour) !== undefined ? { closing_hour: n(data.closing_hour) } : {}),
       ...(fleetEstablishments?.length ? { fleet_establishments: fleetEstablishments } : {}),
     };
     // R7/N4 — owners now SEND their document volets (reversing F5 for owners): multipart with a

@@ -222,6 +222,100 @@ describe('POST /api/signup — screenhost location persistence (P3)', () => {
     expect(all).toHaveLength(0);
   });
 
+  // ── H1 (Mejri item 5) — working hours at signup: single daily window [open, close), stored in
+  // the SAME opening_hour/closing_hour columns the admin eligibility PATCH writes. ──────────────
+  it('individual_owner with working hours → opening/closing hours persisted (H1)', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      ...signupMultipart({
+        ...ownerBase,
+        profile_type: 'individual_owner',
+        opening_hour: 8,
+        closing_hour: 22,
+      }),
+    });
+    expect(res.statusCode).toBe(201);
+    const ownerId = await userIdByEmail(ownerBase.email);
+    const rows = await db.select().from(screenhosts).where(eq(screenhosts.ownerId, ownerId));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.openingHour).toBe(8);
+    expect(rows[0]?.closingHour).toBe(22);
+  });
+
+  it('individual_owner WITHOUT hours → both columns NULL (14h-fallback semantics preserved) (H1)', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      ...signupMultipart({ ...ownerBase, profile_type: 'individual_owner' }),
+    });
+    expect(res.statusCode).toBe(201);
+    const ownerId = await userIdByEmail(ownerBase.email);
+    const rows = await db.select().from(screenhosts).where(eq(screenhosts.ownerId, ownerId));
+    expect(rows[0]?.openingHour).toBeNull();
+    expect(rows[0]?.closingHour).toBeNull();
+  });
+
+  it('rejects an unordered, out-of-range or one-sided hours pair — 400, no user, no row (H1)', async () => {
+    const badPayloads = [
+      { opening_hour: 22, closing_hour: 8 }, // unordered (open < close required)
+      { opening_hour: 9, closing_hour: 9 }, // zero-width window
+      { opening_hour: 8, closing_hour: 24 }, // out of the 0–23 range
+      { opening_hour: 8 }, // one-sided pair
+    ];
+    for (const hours of badPayloads) {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/signup',
+        ...signupMultipart({ ...ownerBase, profile_type: 'individual_owner', ...hours }),
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json<{ error: string }>().error).toBe('INVALID_INPUT');
+    }
+    expect(await db.select().from(screenhosts)).toHaveLength(0);
+    expect(await userIdByEmail(ownerBase.email)).toBe('');
+  });
+
+  it('fleet_owner → hours are PER establishment; an entry without them stays NULL (H1)', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      ...signupMultipart({
+        ...ownerBase,
+        profile_type: 'fleet_owner',
+        fleet_establishments: [
+          { name: 'Café du Lac', opening_hour: 6, closing_hour: 23 },
+          { name: 'Resto Centre' },
+        ],
+      }),
+    });
+    expect(res.statusCode).toBe(201);
+    const ownerId = await userIdByEmail(ownerBase.email);
+    const rows = await db.select().from(screenhosts).where(eq(screenhosts.ownerId, ownerId));
+    expect(rows).toHaveLength(2);
+    const cafe = rows.find((r) => r.name === 'Café du Lac');
+    expect(cafe?.openingHour).toBe(6);
+    expect(cafe?.closingHour).toBe(23);
+    const resto = rows.find((r) => r.name === 'Resto Centre');
+    expect(resto?.openingHour).toBeNull();
+    expect(resto?.closingHour).toBeNull();
+  });
+
+  it('rejects an invalid pair inside fleet_establishments — 400, nothing persisted (H1)', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      ...signupMultipart({
+        ...ownerBase,
+        profile_type: 'fleet_owner',
+        fleet_establishments: [{ name: 'Café du Lac', opening_hour: 23, closing_hour: 6 }],
+      }),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ error: string }>().error).toBe('INVALID_INPUT');
+    expect(await db.select().from(screenhosts)).toHaveLength(0);
+  });
+
   it('duplicate-email signup (synthetic-id) → persists NO additional screenhost', async () => {
     // First: a real individual_owner signup → one screenhost.
     await app.inject({

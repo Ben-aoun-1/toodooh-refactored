@@ -21,6 +21,13 @@ import {
   AGENCY_BUSINESS_SECTOR_NAME,
   sectorsForAdvertiserAgencySignup,
 } from '@/features/advertiser/constants/advertiserBusinessSectors';
+import {
+  DEFAULT_CLOSING_HOUR,
+  DEFAULT_OPENING_HOUR,
+  HOUR_OPTIONS,
+  hoursPayload,
+  isValidHoursWindow,
+} from '@/features/auth/lib/working-hours';
 import { authService } from '@/features/auth/services/auth.service';
 import type {
   BusinessSector,
@@ -203,6 +210,15 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
   const [ownerLongitude, setOwnerLongitude] = useState('');
   const [ownerWifiSsid, setOwnerWifiSsid] = useState('');
   const [ownerWifiPassword, setOwnerWifiPassword] = useState('');
+  // H1 (Mejri item 5) — horaires d'ouverture: ONE hour-granular window [ouverture, fermeture),
+  // prefilled 08:00–22:00. « Préciser plus tard » sends nothing (NULL columns server-side: 14h
+  // report fallback + dispatch-ineligible until set). Individual = one pair; fleet = per draft.
+  const [ownerOpeningHour, setOwnerOpeningHour] = useState(DEFAULT_OPENING_HOUR);
+  const [ownerClosingHour, setOwnerClosingHour] = useState(DEFAULT_CLOSING_HOUR);
+  const [ownerHoursLater, setOwnerHoursLater] = useState(false);
+  const [fleetDraftOpeningHour, setFleetDraftOpeningHour] = useState(DEFAULT_OPENING_HOUR);
+  const [fleetDraftClosingHour, setFleetDraftClosingHour] = useState(DEFAULT_CLOSING_HOUR);
+  const [fleetDraftHoursLater, setFleetDraftHoursLater] = useState(false);
   const [companyLogo, setCompanyLogo] = useState<File | null>(null);
   const [companyLogoPreview, setCompanyLogoPreview] = useState<string | null>(null);
   const [lastName, setLastName] = useState('');
@@ -452,7 +468,9 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             !taxNumberError &&
             formData.business_sector_id &&
             etablissementScreens &&
-            etablissementRooms.trim(),
+            etablissementRooms.trim() &&
+            // H1 — the hour selects only misvalidate on fermeture ≤ ouverture; skip bypasses.
+            (ownerHoursLater || isValidHoursWindow(ownerOpeningHour, ownerClosingHour)),
           );
         }
         return Boolean(
@@ -558,7 +576,9 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
       fleetDraftStreet.trim() &&
       fleetDraftCity &&
       fleetDraftZone.trim() &&
-      fleetDraftGovernorate,
+      fleetDraftGovernorate &&
+      // H1 — per-establishment hours: valid window unless « préciser plus tard » is checked.
+      (fleetDraftHoursLater || isValidHoursWindow(fleetDraftOpeningHour, fleetDraftClosingHour)),
     );
   };
 
@@ -601,6 +621,8 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
       longitude: parseCoord(fleetDraftLongitude),
       wifi_ssid: fleetDraftWifiSsid.trim() || undefined,
       wifi_password: fleetDraftWifiPassword.trim() || undefined,
+      // H1 — the establishment's working hours; skipped = omitted (NULL columns server-side).
+      ...hoursPayload(fleetDraftHoursLater, fleetDraftOpeningHour, fleetDraftClosingHour),
     };
     setFleetEstablishments((prev) => [...prev, row]);
     setFleetDraftName('');
@@ -614,6 +636,9 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
     setFleetDraftLongitude('');
     setFleetDraftWifiSsid('');
     setFleetDraftWifiPassword('');
+    setFleetDraftOpeningHour(DEFAULT_OPENING_HOUR);
+    setFleetDraftClosingHour(DEFAULT_CLOSING_HOUR);
+    setFleetDraftHoursLater(false);
     toast.success('Établissement ajouté au réseau');
   };
 
@@ -681,6 +706,10 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
           selectedProfileType === 'individual_owner'
             ? ownerWifiPassword.trim() || undefined
             : undefined,
+        // H1 — the individual_owner's working-hours window; skipped or non-owner = omitted.
+        ...(selectedProfileType === 'individual_owner'
+          ? hoursPayload(ownerHoursLater, ownerOpeningHour, ownerClosingHour)
+          : {}),
         fleet_establishments:
           selectedProfileType === 'fleet_owner' && fleetEstablishments.length > 0
             ? fleetEstablishments.map(({ id: _id, ...rest }) => rest)
@@ -1192,6 +1221,15 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
               />
             </div>
           </div>
+          {renderWorkingHoursFields({
+            idPrefix: 'owner',
+            opening: ownerOpeningHour,
+            setOpening: setOwnerOpeningHour,
+            closing: ownerClosingHour,
+            setClosing: setOwnerClosingHour,
+            later: ownerHoursLater,
+            setLater: setOwnerHoursLater,
+          })}
         </>
       ) : (
         <>
@@ -1748,6 +1786,15 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             ))}
           </select>
         </div>
+        {renderWorkingHoursFields({
+          idPrefix: 'fleet-draft',
+          opening: fleetDraftOpeningHour,
+          setOpening: setFleetDraftOpeningHour,
+          closing: fleetDraftClosingHour,
+          setClosing: setFleetDraftClosingHour,
+          later: fleetDraftHoursLater,
+          setLater: setFleetDraftHoursLater,
+        })}
         {renderLocationWifiFields({
           idPrefix: 'fleet-draft',
           lat: fleetDraftLatitude,
@@ -1866,6 +1913,86 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
           </span>
         </label>
       </div>
+    </div>
+  );
+
+  /* ═══════ Horaires d'ouverture (H1, Mejri item 5) — shared by the individual-owner
+     Établissement step and each fleet-establishment draft. ONE hour-granular window
+     [ouverture, fermeture) matching the platform's single-window store; « préciser plus tard »
+     skips (NULL columns server-side — hours stay settable by an admin later). ═══════ */
+  const renderWorkingHoursFields = (opts: {
+    idPrefix: string;
+    opening: number;
+    setOpening: (v: number) => void;
+    closing: number;
+    setClosing: (v: number) => void;
+    later: boolean;
+    setLater: (v: boolean) => void;
+  }) => (
+    <div className="rounded-2xl border border-gray-200 bg-gray-50 p-5 space-y-4">
+      <div>
+        <p className="text-sm font-semibold text-gray-900">Horaires d&apos;ouverture</p>
+        <p className="text-xs text-gray-500 mt-1">
+          Les horaires de votre établissement, appliqués à toute la semaine. Ils servent au calcul
+          de vos performances et à la diffusion des campagnes.
+        </p>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div>
+          <label className={labelClass} htmlFor={`${opts.idPrefix}-opening-hour`}>
+            Heure d&apos;ouverture
+          </label>
+          <select
+            value={opts.opening}
+            onChange={(e) => opts.setOpening(parseInt(e.target.value, 10))}
+            className={inputClass}
+            disabled={opts.later}
+            id={`${opts.idPrefix}-opening-hour`}
+          >
+            {HOUR_OPTIONS.map((o) => (
+              <option key={`${opts.idPrefix}-o-${o.value}`} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className={labelClass} htmlFor={`${opts.idPrefix}-closing-hour`}>
+            Heure de fermeture
+          </label>
+          <select
+            value={opts.closing}
+            onChange={(e) => opts.setClosing(parseInt(e.target.value, 10))}
+            className={inputClass}
+            disabled={opts.later}
+            id={`${opts.idPrefix}-closing-hour`}
+          >
+            {HOUR_OPTIONS.map((o) => (
+              <option key={`${opts.idPrefix}-c-${o.value}`} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      {!opts.later && !isValidHoursWindow(opts.opening, opts.closing) && (
+        <p className="text-xs text-red-600">
+          L&apos;heure d&apos;ouverture doit précéder l&apos;heure de fermeture.
+        </p>
+      )}
+      <label
+        className="flex items-center cursor-pointer gap-2"
+        htmlFor={`${opts.idPrefix}-hours-later`}
+      >
+        <input
+          type="checkbox"
+          checked={opts.later}
+          onChange={(e) => opts.setLater(e.target.checked)}
+          className="w-4 h-4 rounded border-gray-300 text-brand-primary focus:ring-brand-primary/30"
+          id={`${opts.idPrefix}-hours-later`}
+        />
+        <span className="text-sm text-gray-700">Préciser plus tard</span>
+      </label>
     </div>
   );
 
