@@ -34,53 +34,83 @@ import { validateTaxNumber } from '../validation/tax-number.js';
 // location/WiFi fields are optional ("add later"); name is the only requirement.
 // room_count is accepted on the wire (the FE still sends it) but stripped here —
 // screenhosts has no room_count column, so it is never persisted.
-const fleetEstablishmentSchema = z.object({
-  name: z.string().min(1).max(200),
-  screen_count: z.number().int().min(0).optional(),
-  address: z.string().min(1).optional(),
-  city: z.string().min(1).optional(),
-  zone: z.string().optional(),
-  governorate_id: z.uuid().optional(),
-  postal_code: z
-    .string()
-    .regex(/^\d{4}$/, 'Postal code must be 4 digits')
-    .optional(),
-  latitude: z.number().min(-90).max(90).optional(),
-  longitude: z.number().min(-180).max(180).optional(),
-  wifi_ssid: z.string().min(1).optional(),
-  wifi_password: z.string().min(1).optional(),
-});
 
-const signupBodySchema = z.object({
-  email: z.email('A valid email is required'),
-  password: z.string().min(10, 'Password must be at least 10 characters'),
-  contact_name: z.string().min(1).max(100),
-  business_name: z.string().min(1).max(200),
-  contact_phone: z.string().refine(validatePhone, 'Phone must be E.164 (e.g. +21612345678)'),
-  terms_accepted: z.literal(true, { error: 'Terms must be accepted' }),
-  tax_number: z.string().refine(validateTaxNumber, 'Invalid tax number format').optional(),
-  profile_type: z.enum(PROFILE_TYPES).optional(),
-  business_type: z.string().min(1).optional(),
-  business_sector_id: z.uuid().optional(),
-  street_address: z.string().min(1).optional(),
-  city: z.string().min(1).optional(),
-  postal_code: z
-    .string()
-    .regex(/^\d{4}$/, 'Postal code must be 4 digits')
-    .optional(),
-  governorate_id: z.uuid().optional(),
-  fonction: z.string().optional(),
-  zone: z.string().optional(),
-  agent_toodooh: z.string().optional(),
-  // Screenhost signup location/WiFi capture (P3). individual_owner = ONE location
-  // built from these top-level fields; fleet_owner = one per fleet_establishments
-  // row. Coordinates and WiFi are optional ("add later") and never block signup.
-  latitude: z.number().min(-90).max(90).optional(),
-  longitude: z.number().min(-180).max(180).optional(),
-  wifi_ssid: z.string().min(1).optional(),
-  wifi_password: z.string().min(1).optional(),
-  fleet_establishments: z.array(fleetEstablishmentSchema).optional(),
-});
+// H1 (Mejri item 5) — working hours at signup: the venue's single daily window [open, close),
+// ints 0–23, landing in the SAME screenhosts.opening_hour/closing_hour columns the admin
+// eligibility PATCH and the C3 ingest write. The pair is all-or-nothing and must satisfy
+// open < close (the dispatch/report reading semantics); skipping leaves both NULL (14h report
+// fallback, full hachure, dispatch-ineligible until set). Per-day + overnight stay deferred.
+const hourField = z.number().int().min(0).max(23);
+interface HoursPair {
+  opening_hour?: number;
+  closing_hour?: number;
+}
+const hoursArePaired = (b: HoursPair): boolean =>
+  (b.opening_hour === undefined) === (b.closing_hour === undefined);
+const hoursAreOrdered = (b: HoursPair): boolean =>
+  b.opening_hour === undefined || b.closing_hour === undefined || b.opening_hour < b.closing_hour;
+const PAIR_MESSAGE = 'opening_hour and closing_hour must be provided together';
+const ORDER_MESSAGE = 'opening_hour must be strictly before closing_hour';
+
+const fleetEstablishmentSchema = z
+  .object({
+    name: z.string().min(1).max(200),
+    screen_count: z.number().int().min(0).optional(),
+    address: z.string().min(1).optional(),
+    city: z.string().min(1).optional(),
+    zone: z.string().optional(),
+    governorate_id: z.uuid().optional(),
+    postal_code: z
+      .string()
+      .regex(/^\d{4}$/, 'Postal code must be 4 digits')
+      .optional(),
+    latitude: z.number().min(-90).max(90).optional(),
+    longitude: z.number().min(-180).max(180).optional(),
+    wifi_ssid: z.string().min(1).optional(),
+    wifi_password: z.string().min(1).optional(),
+    opening_hour: hourField.optional(),
+    closing_hour: hourField.optional(),
+  })
+  .refine(hoursArePaired, { message: PAIR_MESSAGE, path: ['closing_hour'] })
+  .refine(hoursAreOrdered, { message: ORDER_MESSAGE, path: ['closing_hour'] });
+
+const signupBodySchema = z
+  .object({
+    email: z.email('A valid email is required'),
+    password: z.string().min(10, 'Password must be at least 10 characters'),
+    contact_name: z.string().min(1).max(100),
+    business_name: z.string().min(1).max(200),
+    contact_phone: z.string().refine(validatePhone, 'Phone must be E.164 (e.g. +21612345678)'),
+    terms_accepted: z.literal(true, { error: 'Terms must be accepted' }),
+    tax_number: z.string().refine(validateTaxNumber, 'Invalid tax number format').optional(),
+    profile_type: z.enum(PROFILE_TYPES).optional(),
+    business_type: z.string().min(1).optional(),
+    business_sector_id: z.uuid().optional(),
+    street_address: z.string().min(1).optional(),
+    city: z.string().min(1).optional(),
+    postal_code: z
+      .string()
+      .regex(/^\d{4}$/, 'Postal code must be 4 digits')
+      .optional(),
+    governorate_id: z.uuid().optional(),
+    fonction: z.string().optional(),
+    zone: z.string().optional(),
+    agent_toodooh: z.string().optional(),
+    // Screenhost signup location/WiFi capture (P3). individual_owner = ONE location
+    // built from these top-level fields; fleet_owner = one per fleet_establishments
+    // row. Coordinates and WiFi are optional ("add later") and never block signup.
+    latitude: z.number().min(-90).max(90).optional(),
+    longitude: z.number().min(-180).max(180).optional(),
+    wifi_ssid: z.string().min(1).optional(),
+    wifi_password: z.string().min(1).optional(),
+    // H1 — the individual_owner's working-hours window (fleet owners carry a pair per
+    // fleet_establishments entry instead). Advertisers/agencies never persist these.
+    opening_hour: hourField.optional(),
+    closing_hour: hourField.optional(),
+    fleet_establishments: z.array(fleetEstablishmentSchema).optional(),
+  })
+  .refine(hoursArePaired, { message: PAIR_MESSAGE, path: ['closing_hour'] })
+  .refine(hoursAreOrdered, { message: ORDER_MESSAGE, path: ['closing_hour'] });
 
 // Q4 — better-auth's signup is sequential, not atomic (createUser → linkAccount
 // → verification are separate calls; no injectable tx). If linkAccount throws
@@ -262,6 +292,8 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
       longitude,
       wifi_ssid,
       wifi_password,
+      opening_hour,
+      closing_hour,
       fleet_establishments,
     } = parsed.data;
     // terms_accepted is enforced `true` by the schema (z.literal); the acceptance time is
@@ -371,6 +403,8 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
             longitude: longitude !== undefined ? longitude.toString() : null,
             wifiSsid: wifi_ssid ?? null,
             wifiPasswordEncrypted: wifi_password ? encryptWifiPassword(wifi_password) : null,
+            openingHour: opening_hour ?? null,
+            closingHour: closing_hour ?? null,
             businessSectorId: business_sector_id ?? null,
             ownerId: persisted.id,
           });
@@ -392,6 +426,8 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
               wifiPasswordEncrypted: establishment.wifi_password
                 ? encryptWifiPassword(establishment.wifi_password)
                 : null,
+              openingHour: establishment.opening_hour ?? null,
+              closingHour: establishment.closing_hour ?? null,
               businessSectorId: business_sector_id ?? null,
               ownerId: persisted.id,
             })),
