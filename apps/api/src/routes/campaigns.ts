@@ -45,7 +45,9 @@ const updateSchema = createSchema
   .refine((b) => Object.keys(b).length > 0, { message: 'At least one field is required' });
 type UpdateInput = z.infer<typeof updateSchema>;
 
-// Advertiser-facing projection — the validated_* approval-audit columns are intentionally omitted.
+// Advertiser-facing projection — the validated_* approval-audit columns are intentionally
+// omitted. reject_reason/rejected_at ARE exposed (CF-Q1): the admin stores a mandatory reason on
+// reject, and the advertiser must be able to learn why their campaign was refused.
 const campaignSelection = {
   id: campaigns.id,
   name: campaigns.name,
@@ -56,6 +58,8 @@ const campaignSelection = {
   description: campaigns.description,
   requestedBudget: campaigns.requestedBudget,
   submittedAt: campaigns.submittedAt,
+  rejectedAt: campaigns.rejectedAt,
+  rejectReason: campaigns.rejectReason,
   createdAt: campaigns.createdAt,
   updatedAt: campaigns.updatedAt,
 };
@@ -71,6 +75,8 @@ type CampaignRow = Pick<
   | 'description'
   | 'requestedBudget'
   | 'submittedAt'
+  | 'rejectedAt'
+  | 'rejectReason'
   | 'createdAt'
   | 'updatedAt'
 >;
@@ -93,6 +99,8 @@ const campaignView = (
   requested_budget: number | null;
   content_validation_status: string | null;
   submitted_at: Date | null;
+  rejected_at: Date | null;
+  reject_reason: string | null;
   created_at: Date;
   updated_at: Date;
 } => ({
@@ -106,6 +114,8 @@ const campaignView = (
   requested_budget: row.requestedBudget === null ? null : Number(row.requestedBudget),
   content_validation_status: contentValidationStatus,
   submitted_at: row.submittedAt,
+  rejected_at: row.rejectedAt,
+  reject_reason: row.rejectReason,
   created_at: row.createdAt,
   updated_at: row.updatedAt,
 });
