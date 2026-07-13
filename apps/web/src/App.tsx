@@ -23,7 +23,6 @@ const MyInvoices = lazy(() => import('@/features/wallet/pages/MyInvoices'));
 const AdvertiserPerformancePlaceholder = lazy(
   () => import('@/features/performances/pages/AdvertiserPerformancePlaceholder'),
 );
-const CartPage = lazy(() => import('@/features/campaigns/pages/CartPage'));
 const OwnerDashboard = lazy(() => import('@/features/screenhost/pages/OwnerDashboard'));
 const Login = lazy(() => import('@/features/auth/pages/Login'));
 const SignUp = lazy(() => import('@/features/auth/pages/SignUp'));
@@ -409,17 +408,6 @@ export default function App() {
                 </AdvertiserRoute>
               }
             />
-            <Route
-              path="/my-cart"
-              element={
-                <AdvertiserRoute>
-                  <AdvertiserLayout>
-                    <CartPage />
-                  </AdvertiserLayout>
-                </AdvertiserRoute>
-              }
-            />
-
             {/* Routes protégées - Dashboard Propriétaire */}
             <Route
               path="/owner-dashboard"

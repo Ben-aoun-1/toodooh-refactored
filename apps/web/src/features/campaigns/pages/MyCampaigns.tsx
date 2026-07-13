@@ -24,6 +24,10 @@ import { useAuthStore } from '@/features/auth/stores/auth.store';
 import CampaignDrawer from '@/features/campaigns/components/CampaignDrawer';
 import { useDeleteCampaign } from '@/features/campaigns/hooks/useCampaignApi';
 import { useMyCampaigns } from '@/features/campaigns/hooks/useMyCampaigns';
+import {
+  canDeleteDraftCampaign,
+  rejectReasonToShow,
+} from '@/features/campaigns/lib/campaign-actions';
 import { logger } from '@/lib/logger';
 
 const log = logger.child({ module: 'MyCampaigns' });
@@ -173,8 +177,6 @@ export default function MyCampaigns() {
     navigate('/new-campaign', { state: { editMode: true, campaign } });
   };
 
-  const canDeleteDraftCampaign = (status: string) => status === 'draft';
-
   // TODO(phase-1): typed source [supabase] — see #15
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleDeleteDraftCampaign = async (campaign: any) => {
@@ -195,11 +197,6 @@ export default function MyCampaigns() {
     } catch (_e) {
       toast.error('Erreur lors de la suppression du brouillon');
     }
-  };
-
-  // Vérifier si une campagne peut être modifiée
-  const canEditCampaign = (status: string) => {
-    return status !== 'active';
   };
 
   // Compteurs par statut pour le bloc 7 widgets (Tout, Active, A venir, Brouillons, En attente, Non validé, Passées)
@@ -639,6 +636,11 @@ export default function MyCampaigns() {
                       : '—'}
                   </span>
                 </div>
+                {rejectReasonToShow(campaign.status, campaign.reject_reason) && (
+                  <p className="mb-2 rounded-lg border border-red-100 bg-red-50 px-2.5 py-1.5 text-xs text-red-700">
+                    <span className="font-semibold">Motif du refus :</span> {campaign.reject_reason}
+                  </p>
+                )}
                 <div className="flex flex-wrap gap-1.5 mb-3">
                   {campaign.event_id && (
                     <span className="inline-flex px-2 py-0.5 rounded bg-purple-100 text-purple-700 text-xs font-medium">
@@ -688,47 +690,35 @@ export default function MyCampaigns() {
                   >
                     Consulter
                   </button>
-                  {canDeleteDraftCampaign(campaign.status) ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => handleEditCampaign(campaign)}
-                        className="flex-1 py-2 rounded-lg text-sm font-medium inline-flex items-center justify-center gap-1.5 transition-colors bg-[#e3f7ec] text-[#66bc74] hover:bg-[#cceee0]"
-                      >
-                        <RotateCcw className="h-4 w-4" /> Reprendre
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteDraftCampaign(campaign)}
-                        className="flex-1 py-2 rounded-lg text-sm font-medium inline-flex items-center justify-center gap-1.5 transition-colors bg-red-50 text-red-700 hover:bg-red-100"
-                      >
-                        <Trash2 className="h-4 w-4" /> Supprimer
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        canEditCampaign(campaign.status) ? handleEditCampaign(campaign) : undefined
-                      }
-                      disabled={!canEditCampaign(campaign.status)}
-                      className={`flex-1 py-2 rounded-lg text-sm font-medium inline-flex items-center justify-center gap-1.5 transition-colors ${
-                        canEditCampaign(campaign.status)
-                          ? 'bg-[#e3f7ec] text-[#66bc74] hover:bg-[#cceee0]'
-                          : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      }`}
-                    >
-                      {isActive ? (
-                        <>
-                          <Rocket className="h-4 w-4" /> Booster
-                        </>
-                      ) : (
-                        <>
+                  {
+                    canDeleteDraftCampaign(campaign.status) ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleEditCampaign(campaign)}
+                          className="flex-1 py-2 rounded-lg text-sm font-medium inline-flex items-center justify-center gap-1.5 transition-colors bg-[#e3f7ec] text-[#66bc74] hover:bg-[#cceee0]"
+                        >
                           <RotateCcw className="h-4 w-4" /> Reprendre
-                        </>
-                      )}
-                    </button>
-                  )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteDraftCampaign(campaign)}
+                          className="flex-1 py-2 rounded-lg text-sm font-medium inline-flex items-center justify-center gap-1.5 transition-colors bg-red-50 text-red-700 hover:bg-red-100"
+                        >
+                          <Trash2 className="h-4 w-4" /> Supprimer
+                        </button>
+                      </>
+                    ) : isActive ? (
+                      // Booster stays a parked product decision — visible but disabled on active.
+                      <button
+                        type="button"
+                        disabled
+                        className="flex-1 py-2 rounded-lg text-sm font-medium inline-flex items-center justify-center gap-1.5 bg-gray-100 text-gray-400 cursor-not-allowed"
+                      >
+                        <Rocket className="h-4 w-4" /> Booster
+                      </button>
+                    ) : null /* CF-Q1: pending/rejected/completed are Consulter-only — the API is draft-only (409) */
+                  }
                 </div>
               </div>
             );
@@ -887,6 +877,12 @@ export default function MyCampaigns() {
                               {statusConf.label}
                             </span>
                           </div>
+                          {rejectReasonToShow(campaign.status, campaign.reject_reason) && (
+                            <p className="mt-1 text-xs text-red-700">
+                              <span className="font-semibold">Motif du refus :</span>{' '}
+                              {campaign.reject_reason}
+                            </p>
+                          )}
                         </td>
                         <td className="px-5 py-3.5 text-sm text-gray-900">{startStr}</td>
                         <td className="px-5 py-3.5 text-sm text-gray-900">{endStr}</td>
@@ -941,19 +937,15 @@ export default function MyCampaigns() {
                                   >
                                     Consulter la campagne
                                   </button>
-                                  {!canDeleteDraftCampaign(campaign.status) && (
+                                  {/* CF-Q1: Reprendre only on drafts (the API is draft-only, 409
+                                      otherwise); active keeps its parked, disabled Booster. */}
+                                  {campaign.status === 'active' && (
                                     <button
                                       type="button"
-                                      onClick={() => {
-                                        setOpenActionRowId(null);
-                                        if (canEditCampaign(campaign.status)) {
-                                          handleEditCampaign(campaign);
-                                        }
-                                      }}
-                                      disabled={!canEditCampaign(campaign.status)}
-                                      className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-50 ${canEditCampaign(campaign.status) ? 'text-gray-700' : 'text-gray-400 cursor-not-allowed'}`}
+                                      disabled
+                                      className="w-full px-3 py-2 text-left text-sm text-gray-400 cursor-not-allowed"
                                     >
-                                      {campaign.status === 'active' ? 'Booster' : 'Reprendre'}
+                                      Booster
                                     </button>
                                   )}
                                   {canDeleteDraftCampaign(campaign.status) && (
@@ -1117,51 +1109,44 @@ export default function MyCampaigns() {
                   >
                     Fermer
                   </button>
-                  {canDeleteDraftCampaign(selectedCampaign.status) ? (
-                    <>
+                  {
+                    canDeleteDraftCampaign(selectedCampaign.status) ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const c = selectedCampaign;
+                            closeDetailsDrawer();
+                            setTimeout(() => handleEditCampaign(c), 320);
+                          }}
+                          className="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-[10px] border border-[#1FC16B] text-sm font-medium text-[#1FC16B] bg-[#E3F7EC] hover:opacity-90 transition-opacity"
+                          style={{ boxShadow: '0px 1px 2px rgba(10, 13, 20, 0.0313726)' }}
+                        >
+                          <RotateCcw className="h-5 w-5" />
+                          Reprendre le brouillon
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteDraftCampaign(selectedCampaign)}
+                          className="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-[10px] border border-red-200 text-sm font-medium text-red-700 bg-red-50 hover:bg-red-100 transition-colors"
+                          style={{ boxShadow: '0px 1px 2px rgba(10, 13, 20, 0.0313726)' }}
+                        >
+                          <Trash2 className="h-5 w-5" />
+                          Supprimer le brouillon
+                        </button>
+                      </>
+                    ) : selectedCampaign.status === 'active' ? (
                       <button
                         type="button"
-                        onClick={() => {
-                          const c = selectedCampaign;
-                          closeDetailsDrawer();
-                          setTimeout(() => handleEditCampaign(c), 320);
-                        }}
-                        className="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-[10px] border border-[#1FC16B] text-sm font-medium text-[#1FC16B] bg-[#E3F7EC] hover:opacity-90 transition-opacity"
+                        disabled
+                        className="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-[10px] border text-sm font-medium bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
                         style={{ boxShadow: '0px 1px 2px rgba(10, 13, 20, 0.0313726)' }}
                       >
-                        <RotateCcw className="h-5 w-5" />
-                        Reprendre le brouillon
+                        <Rocket className="h-5 w-5" />
+                        Booster
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteDraftCampaign(selectedCampaign)}
-                        className="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-[10px] border border-red-200 text-sm font-medium text-red-700 bg-red-50 hover:bg-red-100 transition-colors"
-                        style={{ boxShadow: '0px 1px 2px rgba(10, 13, 20, 0.0313726)' }}
-                      >
-                        <Trash2 className="h-5 w-5" />
-                        Supprimer le brouillon
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const c = selectedCampaign;
-                        closeDetailsDrawer();
-                        setTimeout(() => handleEditCampaign(c), 320);
-                      }}
-                      disabled={!canEditCampaign(selectedCampaign.status)}
-                      className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-[10px] border text-sm font-medium transition-opacity ${
-                        canEditCampaign(selectedCampaign.status)
-                          ? 'bg-[#E3F7EC] border-[#1FC16B] text-[#1FC16B] hover:opacity-90'
-                          : 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed'
-                      }`}
-                      style={{ boxShadow: '0px 1px 2px rgba(10, 13, 20, 0.0313726)' }}
-                    >
-                      <Rocket className="h-5 w-5" />
-                      Booster
-                    </button>
-                  )}
+                    ) : null /* CF-Q1: pending/rejected/completed are Consulter-only in the drawer too */
+                  }
                 </div>
               }
             />

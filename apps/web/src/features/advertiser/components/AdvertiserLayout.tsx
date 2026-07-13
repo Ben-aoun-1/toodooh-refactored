@@ -22,8 +22,6 @@ import supportIconActive from '@/assets/supports.png';
 import ContentErrorBoundary from '@/components/ContentErrorBoundary';
 import { ModalProvider, useModal } from '@/contexts/ModalContext';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
-import CartSidebar from '@/features/campaigns/components/CartSidebar';
-import { useCartStore } from '@/features/campaigns/stores/cart.store';
 
 import PageHeader from './PageHeader';
 import SidebarNavItem from './SidebarNavItem';
@@ -53,12 +51,10 @@ function AdvertiserLayoutChrome({ children, userName }: AdvertiserLayoutProps) {
   const needsApproval = useAuthStore((s) => s.needsApproval);
   const validationStatus = useAuthStore((s) => s.validationStatus);
   const contactName = useAuthStore((s) => s.contactName);
-  const cartCount = useCartStore((s) => s.items.length);
   const { openLogout, openSupport, openAppointment, isSupportOpen } = useModal();
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
-  const [cartOpen, setCartOpen] = useState(false);
 
   const isDisabled = needsApproval && validationStatus === 'pending';
   const fallbackName = user?.email?.split('@')[0] || 'Utilisateur';
@@ -242,8 +238,6 @@ function AdvertiserLayoutChrome({ children, userName }: AdvertiserLayoutProps) {
         <PageHeader
           onMobileMenuClick={() => setIsMenuOpen(!isMenuOpen)}
           onContactClick={openAppointment}
-          onCartToggle={() => setCartOpen((v) => !v)}
-          cartCount={cartCount}
           userId={user?.id}
           userName={displayName}
         />
@@ -251,8 +245,6 @@ function AdvertiserLayoutChrome({ children, userName }: AdvertiserLayoutProps) {
           <ContentErrorBoundary>{children}</ContentErrorBoundary>
         </main>
       </div>
-
-      <CartSidebar open={cartOpen} />
     </div>
   );
 }

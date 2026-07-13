@@ -6,6 +6,11 @@ import { useAuthStore } from '@/features/auth/stores/auth.store';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
 import OwnerNotificationsBell from '@/features/screenhost/components/OwnerNotificationsBell';
 import { useScreenhostAllocations } from '@/features/screenhost/hooks/useScreenhostAllocations';
+import {
+  REJECT_ALLOCATION_CONFIRM,
+  decisionNeedsConfirm,
+  revenueLabel,
+} from '@/features/screenhost/services/screenhost-allocations.service';
 
 /**
  * Owner accept/reject surface — the de-Supabased replacement for the legacy per-campaign
@@ -30,6 +35,9 @@ export default function OwnerAllocations() {
   const [pendingId, setPendingId] = useState<string | null>(null);
 
   const decide = async (id: string, kind: 'accept' | 'reject') => {
+    // CF-Q1 — refusal is consequential and irreversible: confirm first, matching the app's
+    // window.confirm idiom (MyCampaigns draft deletion). Accept stays one-click.
+    if (decisionNeedsConfirm(kind) && !window.confirm(REJECT_ALLOCATION_CONFIRM)) return;
     setPendingId(id);
     try {
       if (kind === 'accept') {
@@ -96,6 +104,11 @@ export default function OwnerAllocations() {
                             <MonitorPlay className="h-4 w-4" />
                           </div>
                           <div className="min-w-0">
+                            {/* CF-Q1 (spec 2.2 « en tête le montant qui me revient ») — the owner's
+                                money leads the card; the API always returns revenu_previsionnel. */}
+                            <p className="text-sm font-semibold text-[#2A7A47]">
+                              Revenu estimé sur la période : {revenueLabel(a.revenu_previsionnel)}
+                            </p>
                             <p className="text-base font-medium text-[#171717] truncate">
                               {a.campaign_name}
                             </p>

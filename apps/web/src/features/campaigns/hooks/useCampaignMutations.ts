@@ -64,7 +64,7 @@ interface LinkCampaignToEventInput {
  * A draft / status-patch does not create an owner approval entry (those are
  * written server-side by `injectCampaignPublicationSchedule` on activation),
  * so no `screenhost` key is invalidated here — that reach belongs to
- * `useConfirmCartLaunch`.
+ * the launch-confirm flow (removed with the dead cart shell, CF-Q1).
  */
 export function useCampaignMutations() {
   const queryClient = useQueryClient();

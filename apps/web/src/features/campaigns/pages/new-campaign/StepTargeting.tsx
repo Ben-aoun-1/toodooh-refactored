@@ -1,6 +1,11 @@
 import { ArrowRight, Target } from 'lucide-react';
+import { useRef } from 'react';
+import { toast } from 'react-hot-toast';
 
-import { CampaignTargetingPanel } from '@/features/campaigns/targeting/components/CampaignTargetingPanel';
+import {
+  CampaignTargetingPanel,
+  type CampaignTargetingPanelHandle,
+} from '@/features/campaigns/targeting/components/CampaignTargetingPanel';
 
 interface StepTargetingProps {
   /** The create-early draft id. The panel persists lines (replace-set PUT) against it. */
@@ -12,9 +17,21 @@ interface StepTargetingProps {
 /**
  * Targeting step of the de-Supabase wizard. Mounts CampaignTargetingPanel on the create-early draft
  * id (category × class lines, persisted independently by the panel). Targeting is optional — the
- * wizard footer always allows advancing (the panel surfaces its own save state).
+ * wizard footer always allows advancing, but Suivant FLUSHES dirty edits first (CF-Q1: they used
+ * to be silently lost) and a save failure blocks the advance.
  */
 export default function StepTargeting({ draftCampaignId, onNext, onBack }: StepTargetingProps) {
+  const panelRef = useRef<CampaignTargetingPanelHandle>(null);
+
+  const handleNext = async () => {
+    const flushed = (await panelRef.current?.flush()) ?? true;
+    if (!flushed) {
+      toast.error("Échec de l'enregistrement du ciblage");
+      return;
+    }
+    await onNext();
+  };
+
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
@@ -32,7 +49,7 @@ export default function StepTargeting({ draftCampaignId, onNext, onBack }: StepT
           </div>
         </div>
         <div className="p-6">
-          <CampaignTargetingPanel campaignId={draftCampaignId} />
+          <CampaignTargetingPanel ref={panelRef} campaignId={draftCampaignId} />
         </div>
       </div>
 
@@ -47,7 +64,7 @@ export default function StepTargeting({ draftCampaignId, onNext, onBack }: StepT
         </button>
         <button
           type="button"
-          onClick={() => void onNext()}
+          onClick={() => void handleNext()}
           className="px-6 py-3 rounded-xl font-semibold transition-all flex items-center space-x-2 shadow-lg bg-gradient-to-r from-brand-primary to-brand-deep text-white hover:from-brand-primary/90 hover:to-brand-deep"
         >
           <span>Suivant</span>

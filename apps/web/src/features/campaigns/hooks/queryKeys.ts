@@ -6,7 +6,7 @@
  * feature-wide invalidation prefix (React Query matches query keys by prefix).
  *
  * Created by Commit 7a — the first campaigns React Query consumer
- * (`NewCampaign` + `CartPage` creation flow). `list` and `detail` are
+ * (the `NewCampaign` creation flow). `list` and `detail` are
  * declared here even though no query reads them yet: Commit 7a's
  * campaign-write mutations invalidate `campaignsKeys.list(userId)`
  * forward-compatibly so that Commit 7b (`MyCampaigns` / `CampaignDetails`)

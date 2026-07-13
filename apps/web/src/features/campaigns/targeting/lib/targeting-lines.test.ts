@@ -11,6 +11,7 @@ import {
   lineLabel,
   lineSignature,
   toWire,
+  needsTargetingFlush,
 } from './targeting-lines';
 
 const cat = (categoryId: string | null, cls: TargetingLine['class']): TargetingLine => ({
@@ -129,5 +130,16 @@ describe('toWire / fromWire — round-trips the API shape', () => {
   it('round-trips', () => {
     const lines = [cat('r', 'premium'), cat(null, 'moyen'), cat('g', null), allNetworkLine()];
     expect(fromWire(toWire(lines))).toEqual(lines);
+  });
+});
+
+describe('needsTargetingFlush (CF-Q1 — Suivant persists dirty edits first)', () => {
+  it('flushes only with a persistable draft AND dirty edits', () => {
+    expect(needsTargetingFlush('draft-1', true)).toBe(true);
+  });
+  it('skips when clean, when there is no draft id, or both', () => {
+    expect(needsTargetingFlush('draft-1', false)).toBe(false);
+    expect(needsTargetingFlush(null, true)).toBe(false);
+    expect(needsTargetingFlush(null, false)).toBe(false);
   });
 });

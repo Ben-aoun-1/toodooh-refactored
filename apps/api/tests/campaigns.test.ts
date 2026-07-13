@@ -432,6 +432,41 @@ describe('campaigns draft lifecycle (advertiser, real Postgres)', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  // ── CF-Q1 — reject_reason exposure: the admin stores a mandatory reason on reject; the
+  // advertiser projection must surface it (and rejected_at) so the owner learns WHY. ────────────
+  it('a rejected campaign carries reject_reason + rejected_at in GET /:id AND the list', async () => {
+    const me = await seedUser();
+    const id = await seedCampaign(me, { name: 'Refusée', status: 'rejected' });
+    const rejectedAt = new Date('2026-07-01T10:00:00Z');
+    await db
+      .update(campaigns)
+      .set({ rejectedAt, rejectReason: 'Visuel non conforme à la charte.' })
+      .where(eq(campaigns.id, id));
+    mockSession(me);
+
+    const one = await app.inject({ method: 'GET', url: `/api/campaigns/${id}` });
+    expect(one.statusCode).toBe(200);
+    const row = one.json() as { reject_reason: string | null; rejected_at: string | null };
+    expect(row.reject_reason).toBe('Visuel non conforme à la charte.');
+    expect(row.rejected_at).toBe(rejectedAt.toISOString());
+
+    const list = await app.inject({ method: 'GET', url: '/api/campaigns/mine' });
+    const mine = (list.json() as { id: string; reject_reason: string | null }[]).find(
+      (r) => r.id === id,
+    );
+    expect(mine?.reject_reason).toBe('Visuel non conforme à la charte.');
+  });
+
+  it('a non-rejected campaign carries NULL reject_reason/rejected_at', async () => {
+    const me = await seedUser();
+    const id = await seedCampaign(me, { name: 'Brouillon sain' });
+    mockSession(me);
+    const res = await app.inject({ method: 'GET', url: `/api/campaigns/${id}` });
+    const row = res.json() as { reject_reason: string | null; rejected_at: string | null };
+    expect(row.reject_reason).toBeNull();
+    expect(row.rejected_at).toBeNull();
+  });
+
   // ── PATCH /api/campaigns/:id ─────────────────────────────────────────────────
   it('edits a draft the caller owns (200)', async () => {
     const me = await seedUser();

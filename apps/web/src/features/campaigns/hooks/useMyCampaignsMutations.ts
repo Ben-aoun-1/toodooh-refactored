@@ -32,7 +32,7 @@ const isMissingValidationNotesColumn = (error: { code?: string; message?: string
  *
  * `activateDraftCampaign` is one unit-of-work mutationFn (balance check →
  * video-validation read → status write with `validation_notes`-missing-column
- * fallback → publication-schedule injection) — the `useConfirmCartLaunch`
+ * fallback → publication-schedule injection) — the launch-confirm
  * precedent. The former hand-patched optimistic `setCampaigns` writes are
  * dropped: both mutations invalidate-and-refetch (the locked default).
  *

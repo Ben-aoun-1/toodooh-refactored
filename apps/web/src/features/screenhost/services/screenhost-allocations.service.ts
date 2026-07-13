@@ -25,6 +25,17 @@ export interface PendingAllocation {
   created_at: string;
 }
 
+// ── CF-Q1 — pinned card/decision helpers (the page has no render-test harness) ─────────────────
+/** The owner's money leads each allocation card (spec 2.2 « en tête le montant qui me revient »). */
+export const revenueLabel = (tnd: number): string => `${tnd.toLocaleString('fr-FR')} TND`;
+
+/** Reject is consequential and irreversible — it alone needs confirmation. */
+export const decisionNeedsConfirm = (kind: 'accept' | 'reject'): boolean => kind === 'reject';
+
+// RULED copy (CF-9 amendment): no reattribution claim — the SPS cascade does not exist yet, a
+// refused share simply stays off-air. Upgrade truthfully when the refusal cascade ships.
+export const REJECT_ALLOCATION_CONFIRM = 'Refuser cette campagne ? Cette action est définitive.';
+
 export interface AllocationDecision {
   id: string;
   statut_acceptation: 'EN_ATTENTE' | 'ACCEPTE' | 'REFUSE';
