@@ -26,44 +26,6 @@ export function resolveChromiumPath(): string | null {
 /** Hard ceiling for one render — content settle + PDF emit together. */
 export const RENDER_TIMEOUT_MS = 30_000;
 
-// R1.5 document chrome: the template embeds its per-document running header/footer as inert
-// <template> tags INSIDE the HTML (renderPdf(html) call sites — endpoints + month-end job — stay
-// untouched). Chromium draws these in the page margins, so a chromed document reserves wider
-// top/bottom bands than a frameless one.
-export interface DocumentChrome {
-  headerTemplate: string;
-  footerTemplate: string;
-}
-
-const chromeTemplate = (html: string, id: string): string | null => {
-  const match = html.match(new RegExp(`<template id="${id}">([\\s\\S]*?)</template>`));
-  return match?.[1] ?? null;
-};
-
-/** Pull the optional embedded header/footer chrome; both tags or nothing (never half-chromed). */
-export function extractDocumentChrome(html: string): DocumentChrome | null {
-  const headerTemplate = chromeTemplate(html, 'pdf-header');
-  const footerTemplate = chromeTemplate(html, 'pdf-footer');
-  if (headerTemplate === null || footerTemplate === null) return null;
-  return { headerTemplate, footerTemplate };
-}
-
-/** R1's frameless margins — plain HTML (no embedded chrome) renders exactly as before. */
-const PLAIN_MARGIN = { top: '14mm', bottom: '14mm', left: '12mm', right: '12mm' };
-/** Chromed margins — room for the running header/footer without colliding with content. */
-const CHROME_MARGIN = { top: '20mm', bottom: '17mm', left: '12mm', right: '12mm' };
-
-/** The pdf() option fragment a document's chrome selects (pure — unit-tested without chromium). */
-export function documentPdfOptions(chrome: DocumentChrome | null): PDFOptions {
-  if (chrome === null) return { margin: PLAIN_MARGIN };
-  return {
-    margin: CHROME_MARGIN,
-    displayHeaderFooter: true,
-    headerTemplate: chrome.headerTemplate,
-    footerTemplate: chrome.footerTemplate,
-  };
-}
-
 // R1.6 — the dark document lays out five FIXED 210×297mm pages and carries its running head /
 // footer IN-DOM (literal page numbers), so Chromium's displayHeaderFooter stays OFF and the
 // margins are zero: each .page self-contains its padding. preferCSSPageSize honors the
