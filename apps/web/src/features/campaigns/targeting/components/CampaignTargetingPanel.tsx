@@ -1,10 +1,10 @@
 import { AlertCircle, Check, Loader2 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 
 import { useOwnerBusinessSectors } from '@/features/auth/hooks/useOwnerBusinessSectors';
 
 import { useCampaignTargeting } from '../hooks/useCampaignTargeting';
-import { fromWire, toWire } from '../lib/targeting-lines';
+import { fromWire, needsTargetingFlush, toWire } from '../lib/targeting-lines';
 
 import { type BuilderLine, TargetingBuilder, newBuilderLine } from './TargetingBuilder';
 
@@ -13,10 +13,19 @@ interface CampaignTargetingPanelProps {
   campaignId: string | null;
 }
 
+/** CF-Q1 — the step's Suivant flushes dirty edits through this handle before advancing. */
+export interface CampaignTargetingPanelHandle {
+  /** Persist dirty edits (replace-set). Resolves true when clean/saved, false on save failure. */
+  flush: () => Promise<boolean>;
+}
+
 // Composes the targeting builder with the API: loads the persisted lines + the owner categories,
 // holds the working set locally, and saves the full set (replace-set) with graceful loading / saving
 // / error states. Drop-in for the campaign wizard's targeting step once it carries a new-API draft id.
-export function CampaignTargetingPanel({ campaignId }: CampaignTargetingPanelProps) {
+export const CampaignTargetingPanel = forwardRef<
+  CampaignTargetingPanelHandle,
+  CampaignTargetingPanelProps
+>(function CampaignTargetingPanel({ campaignId }, ref) {
   const sectors = useOwnerBusinessSectors();
   const targeting = useCampaignTargeting(campaignId);
 
@@ -47,6 +56,21 @@ export function CampaignTargetingPanel({ campaignId }: CampaignTargetingPanelPro
     if (!campaignId) return;
     await targeting.save(toWire(lines)).catch(() => undefined);
   };
+
+  // CF-Q1 — silent-loss gap: edits lived only in `lines` until the panel's own save button.
+  // Suivant now flushes through this handle: clean or no-draft → advance freely; dirty → the
+  // SAME replace-set save, and a failure blocks the advance (saveError renders below).
+  useImperativeHandle(ref, () => ({
+    flush: async () => {
+      if (!needsTargetingFlush(campaignId, dirty)) return true;
+      try {
+        await targeting.save(toWire(lines));
+        return true;
+      } catch {
+        return false;
+      }
+    },
+  }));
 
   if (sectors.isLoading || targeting.isLoading) {
     return (
@@ -98,4 +122,4 @@ export function CampaignTargetingPanel({ campaignId }: CampaignTargetingPanelPro
       </div>
     </div>
   );
-}
+});

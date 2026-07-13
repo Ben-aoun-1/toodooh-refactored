@@ -104,3 +104,7 @@ export const toWire = (lines: readonly TargetingLine[]): TargetingLineWire[] =>
 
 export const fromWire = (rows: readonly TargetingLineWire[]): TargetingLine[] =>
   rows.map((row) => ({ categoryId: row.category_id, class: row.class }));
+
+/** CF-Q1 — Suivant flushes only when a persistable draft exists AND the working set is dirty. */
+export const needsTargetingFlush = (campaignId: string | null, dirty: boolean): boolean =>
+  Boolean(campaignId) && dirty;

@@ -2,6 +2,7 @@ import { Crosshair, Monitor, X } from 'lucide-react';
 import { type ReactNode } from 'react';
 
 import Drawer from '@/components/Drawer';
+import { rejectReasonToShow } from '@/features/campaigns/lib/campaign-actions';
 
 /**
  * Structural shape of the campaign a drawer renders. Loose by design: the
@@ -18,6 +19,8 @@ export interface CampaignDrawerCampaign {
   category?: string;
   selected_zones?: string[];
   validated_impressions?: number;
+  /** CF-Q1 — the admin's mandatory rejection reason (advertiser, « Non validé » campaigns). */
+  reject_reason?: string | null;
   // owner-only
   ownerLocationsCount?: number;
 }
@@ -136,6 +139,14 @@ export default function CampaignDrawer({
       {/* Body */}
       {isAdvertiser ? (
         <div className="flex-1 overflow-y-auto flex flex-col p-5 gap-4">
+          {/* CF-Q1 — a Non validé campaign leads with WHY (the admin reject stores the reason). */}
+          {rejectReasonToShow(campaign.status, campaign.reject_reason) && (
+            <Section label="Motif du refus">
+              <p className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-700">
+                {campaign.reject_reason}
+              </p>
+            </Section>
+          )}
           <Section label="Type de la campagne">
             <div className="flex gap-2">
               <div

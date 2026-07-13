@@ -24,6 +24,8 @@ export interface MyCampaignRow {
   budget: number;
   content_validation_status: string | null;
   submitted_at: string | null;
+  /** CF-Q1 — « Motif du refus » shown on Non validé campaigns (null otherwise). */
+  reject_reason: string | null;
   created_at: string;
   // Retained-but-empty on the new engine (Supabase-only concepts the new list drops).
   client: string;
@@ -50,6 +52,7 @@ function toRow(c: CampaignView): MyCampaignRow {
     budget: c.requested_budget ?? 0,
     content_validation_status: c.content_validation_status,
     submitted_at: c.submitted_at,
+    reject_reason: c.reject_reason,
     created_at: c.created_at,
     client: '',
     category: null,

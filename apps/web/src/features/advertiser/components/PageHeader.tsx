@@ -1,4 +1,4 @@
-import { ChevronRight, LayoutGrid, PanelLeft, ShoppingBag, Users } from 'lucide-react';
+import { ChevronRight, LayoutGrid, PanelLeft, Users } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 
 import headerAgendaIcon from '@/assets/header/agenda.png';
@@ -11,8 +11,6 @@ import AdvertiserNotificationsBell from './AdvertiserNotificationsBell';
 interface PageHeaderProps {
   onMobileMenuClick: () => void;
   onContactClick: () => void;
-  onCartToggle: () => void;
-  cartCount: number;
   userId?: string;
   userName?: string;
 }
@@ -23,8 +21,6 @@ const EMPHASIZED_PATHS = ['/my-campaigns', '/evenements'];
 export default function PageHeader({
   onMobileMenuClick,
   onContactClick,
-  onCartToggle,
-  cartCount,
   userId,
   userName,
 }: PageHeaderProps) {
@@ -161,19 +157,6 @@ export default function PageHeader({
             <span className="hidden md:inline">Prendre rendez-vous</span>
           </button>
           <AdvertiserNotificationsBell userId={userId} emphasized={emphasized} />
-          <button
-            type="button"
-            onClick={onCartToggle}
-            className={`flex items-center gap-1.5 px-2.5 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap ${
-              emphasized
-                ? 'bg-white border border-gray-200 hover:bg-gray-50 text-gray-700'
-                : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-            }`}
-          >
-            <ShoppingBag className="h-5 w-5 flex-shrink-0" />
-            <span className="hidden md:inline">Mon panier</span>
-            <span className="text-red-500 font-semibold">{cartCount}</span>
-          </button>
         </div>
       </div>
     </header>

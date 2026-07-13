@@ -15,8 +15,8 @@ import { campaignsKeys } from './queryKeys';
  * `features/campaigns/services/`, so per D6 the hook + key land in the
  * campaigns feature even though both consumers are screenhost pages — the key
  * is `campaignsKeys.ownerApprovals(ownerId)`. This keeps it inside the
- * `campaignsKeys.all` prefix that 7a's `useConfirmCartLaunch` already
- * invalidates (no 7a amendment, no `screenhostKeys` alias).
+ * `campaignsKeys.all` prefix that 7a's campaign-write mutations already
+ * invalidate (no 7a amendment, no `screenhostKeys` alias).
  */
 export function useOwnerCampaignApprovals(ownerId: string | undefined): {
   campaigns: PendingCampaign[];
