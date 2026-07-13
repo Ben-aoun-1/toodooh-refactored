@@ -164,7 +164,7 @@ describe('GET /api/screenhosts/:id/report (period report, real Postgres)', () =>
     const html = renderSpy.mock.calls[0]?.[0] ?? '';
     expect(html).toContain('Corps IA du créneau faible.');
     expect(html).toContain('Repérez vos angles morts'); // the FIXED title stays either way
-    expect(html).not.toContain('Vous avez 2 périodes creuses'); // the generic body is displaced
+    expect(html).not.toContain('Comparez vos créneaux les plus forts'); // the generic body is displaced
   });
 
   it('a pistes-seam failure never fails the render — 200 with the generic Piste 02 body (R3)', async () => {
@@ -175,6 +175,6 @@ describe('GET /api/screenhosts/:id/report (period report, real Postgres)', () =>
     const res = await report(sh, 'from=2026-06-01&to=2026-06-30');
     expect(res.statusCode).toBe(200);
     const html = renderSpy.mock.calls[0]?.[0] ?? '';
-    expect(html).toContain('Vous avez 2 périodes creuses');
+    expect(html).toContain('Comparez vos créneaux les plus forts');
   });
 });
