@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ReportData } from '../src/lib/report/assemble.js';
-import { impressionsChartSvg, renderReportHtml } from '../src/lib/report/template.js';
+import {
+  HIST_MAX_ROWS,
+  REV_MAX_ROWS,
+  impressionsChartSvg,
+  renderReportHtml,
+} from '../src/lib/report/template.js';
 
-// Snapshot-style contract tests: the template must carry the page's sections and FRENCH COPY
-// VERBATIM, with the HOST/CAST empty variants gated exactly like the page (Mejri ruling).
+// Snapshot-style contract tests for the R1.6 DARK document: five fixed pages reproducing the
+// operator-approved mockup — palette, structure and FRENCH COPY VERBATIM — with the HOST/CAST
+// empty variants and the R2 pistes seam unchanged underneath the new look.
 
 const baseData = (over: Partial<ReportData> = {}): ReportData => ({
   venueName: 'Café Le Palmier',
@@ -22,7 +28,16 @@ const baseData = (over: Partial<ReportData> = {}): ReportData => ({
   ...over,
 });
 
-const fullData = (): ReportData =>
+const campaignRow = (i: number) => ({
+  name: `Campagne ${String(i + 1).padStart(2, '0')} · Marque`,
+  period: '05/06 – 18/06/2026',
+  typeLabel: i % 3 === 0 ? 'Événementielle' : 'Standard',
+  statut: (i % 2 === 0 ? 'Active' : 'Passée') as 'Active' | 'Passée',
+  impressionsLabel: `${38 - i} 400`,
+  revenueLabel: `${412 - 20 * i},00 TND`,
+});
+
+const fullData = (over: Partial<ReportData> = {}): ReportData =>
   baseData({
     hostHasData: true,
     castHasData: true,
@@ -46,7 +61,7 @@ const fullData = (): ReportData =>
       ],
     },
     revenue: {
-      totalLabel: '1 065',
+      totalLabel: '1 065',
       count: 3,
       rows: [
         { name: 'Ooredoo · Forfait Data', period: '05/06 – 18/06', amountLabel: '412 TND' },
@@ -57,42 +72,83 @@ const fullData = (): ReportData =>
       count: 3,
       cumulativeImpressions: 140300,
       top3: ['Ooredoo · Forfait Data', 'Délice Danone', 'Attijari Bank · Rentrée'],
-      rows: [
-        {
-          name: 'Ooredoo · Forfait Data',
-          period: '05/06 – 18/06/2026',
-          typeLabel: 'Standard',
-          statut: 'Passée',
-          impressionsLabel: '58 400',
-          revenueLabel: '412,00 TND',
-        },
-        {
-          name: 'Attijari Bank · Rentrée',
-          period: '20/06 – 03/07/2026',
-          typeLabel: 'Événementielle',
-          statut: 'Active',
-          impressionsLabel: '39 800',
-          revenueLabel: '295,00 TND',
-        },
-      ],
+      rows: [campaignRow(0), campaignRow(1), campaignRow(2)],
     },
+    ...over,
   });
+
+const count = (html: string, needle: string | RegExp): number =>
+  (html.match(needle instanceof RegExp ? needle : new RegExp(needle, 'g')) ?? []).length;
+
+describe('renderReportHtml — the five-page dark document frame', () => {
+  const html = renderReportHtml(baseData());
+
+  it('lays out exactly 5 fixed pages, the first being the cover', () => {
+    expect(count(html, /class="page( cover)?"/g)).toBe(5);
+    expect(count(html, /class="page cover"/g)).toBe(1);
+  });
+
+  it('runs the runhead (venue · period) on pages 2–5 ONLY — never on the cover', () => {
+    expect(count(html, /class="runhead"/g)).toBe(4);
+    const cover = html.slice(
+      html.indexOf('class="page cover"'),
+      html.indexOf('<div class="page">'),
+    );
+    expect(cover).not.toContain('runhead');
+    expect(html).toContain('Café Le Palmier · 01/06/2026 – 30/06/2026');
+  });
+
+  it('server-renders LITERAL page numbers 1–5 in the in-DOM footers (no Chromium chrome)', () => {
+    for (let p = 1; p <= 5; p += 1) {
+      expect(count(html, new RegExp(`page ${p} / 5`, 'g'))).toBe(1);
+    }
+    expect(html).not.toContain('<template id="pdf-header">');
+    expect(html).not.toContain('<template id="pdf-footer">');
+    expect(html).not.toContain('pageNumber');
+  });
+
+  it('every footer carries the Powered by wordmark with the app SVG mark (never a raster)', () => {
+    expect(count(html, /class="footer"/g)).toBe(5);
+    expect(count(html, /Powered by/g)).toBe(5);
+    expect(count(html, /class="footer__mark"/g)).toBe(5);
+    expect(html).not.toContain('data:image');
+  });
+
+  it('carries the dark palette and the mockup fonts; drops the unused --portage token', () => {
+    expect(html).toContain('--paper:      #0D2B1F');
+    expect(html).toContain('--mint:       #76E6AB');
+    expect(html).toContain('family=Fraunces');
+    expect(html).toContain('@page{ size:A4; margin:0; }');
+    expect(html).not.toContain('--portage');
+  });
+});
+
+describe('renderReportHtml — cover page', () => {
+  const html = renderReportHtml(baseData());
+
+  it('kicker, Fraunces hero venue, catégorie · classe sub-row, period, Généré le', () => {
+    expect(html).toContain('Rapport de performances');
+    expect(html).toContain('<div class="cover__title"><b>Café Le Palmier</b></div>');
+    expect(html).toContain('<span class="cat">Café</span>');
+    expect(html).toContain('<span class="cat">Salon de thé</span>');
+    expect(html).toContain('<span class="cover__period">01/06/2026 – 30/06/2026</span>');
+    expect(html).toContain('Généré le 08/07/2026');
+  });
+
+  it('echoes the 4-cell metastrip on the cover AND page 2 (labels appear twice)', () => {
+    for (const label of ['Commerce', 'Période analysée', 'Catégorie', 'Campagnes incluses']) {
+      expect(count(html, new RegExp(`<div class="lbl">${label}</div>`, 'g'))).toBe(2);
+    }
+    expect(count(html, /class="metastrip"/g)).toBe(2);
+  });
+});
 
 describe('renderReportHtml — structure shared by both states', () => {
   const html = renderReportHtml(baseData());
 
   it('carries all eight numbered sections + their titles (copy verbatim)', () => {
-    for (const s of [
-      'Section 01',
-      'Section 02',
-      'Section 03',
-      'Section 04',
-      'Section 05',
-      'Section 06',
-      'Section 07',
-      'Section 08',
-    ]) {
-      expect(html).toContain(s);
+    for (let s = 1; s <= 8; s += 1) {
+      expect(html).toContain(`Section 0${s}`);
     }
     expect(html).toContain('Votre audience en chiffres');
     expect(html).toContain('Vos peak hours');
@@ -104,43 +160,23 @@ describe('renderReportHtml — structure shared by both states', () => {
     expect(html).toContain('Votre score de priorité');
   });
 
-  it('carries the intro strip, the generic pistes verbatim, the SPS À venir variant, powered-by', () => {
-    expect(html).toContain('Commerce');
-    expect(html).toContain('Période analysée');
-    expect(html).toContain('Catégorie');
-    expect(html).toContain('Campagnes incluses');
-    expect(html).toContain('Anticipez les temps forts');
-    expect(html).toContain('Repérez vos angles morts');
-    expect(html).toContain('Résumé du SPS et recommandations');
-    expect(html).toContain('En attente de votre score de priorité.');
+  it('renders the full S08 SPS layout — ring, the 4 weighted criteria verbatim, rank card, all À venir', () => {
+    expect(html).toContain('class="score-ring"');
     expect(html).toContain('Score actuel');
-    expect(html).toContain('À venir');
-    expect(html).toContain('poids 25 %');
-    expect(html).toContain('POWERED BY');
-    expect(html).toContain('Généré le 08/07/2026');
-  });
-
-  it('opens on a cover page carrying the document identity (R1.5), no masthead left', () => {
-    expect(html).toContain('class="cover"');
-    expect(html).toContain('Rapport de performances');
-    expect(html).toContain('<h1 class="cover-venue">Café Le Palmier</h1>');
-    expect(html).toContain('<div class="cover-cat">Café · Salon de thé</div>');
-    expect(html).toContain('01/06/2026');
-    expect(html).toContain('30/06/2026');
-    expect(html).not.toContain('masthead');
-  });
-
-  it('embeds the running header/footer chrome for render.ts (venue · period, page X / Y)', () => {
-    expect(html).toContain('<template id="pdf-header">');
-    expect(html).toContain('<template id="pdf-footer">');
-    expect(html).toContain('Café Le Palmier · 01/06/2026 – 30/06/2026');
-    expect(html).toContain('<span class="pageNumber"></span>');
-    expect(html).toContain('<span class="totalPages"></span>');
-  });
-
-  it('echoes the intro strip facts on the cover (both carry the four cells)', () => {
-    const cells = html.match(/class="intro-cell"/g) ?? [];
-    expect(cells.length).toBe(8); // 4 on the cover + 4 in the intro strip
+    expect(html).toContain('Classement');
+    const criteria: [string, string][] = [
+      ['Acceptation des campagnes', 'poids 25 %'],
+      ['Respect des événements acceptés', 'poids 30 %'],
+      ['Activité de votre écran', 'poids 20 %'],
+      ['Taux de remplissage', 'poids 10 %'],
+    ];
+    for (const [name, weight] of criteria) {
+      expect(html).toContain(`<span class="crit-name">${name}</span>`);
+      expect(html).toContain(`<span class="crit-weight">${weight}</span>`);
+    }
+    // ring + 4 criteria + rank card — the SPS engine does not exist; no number is ever invented
+    expect(count(html, /À venir/g)).toBeGreaterThanOrEqual(6);
+    expect(html).toContain('Comment lire votre score.');
   });
 });
 
@@ -163,17 +199,16 @@ describe('renderReportHtml — EMPTY variants (both flags false)', () => {
     expect(noSector).toContain('Catégorie de lieu');
   });
 
-  it('the heatmap is fully hachured (every cell level 0)', () => {
-    const hachureCells = html.match(/class="hm-cell cell-h"/g) ?? [];
-    expect(hachureCells.length).toBe(7 * 14);
+  it('hachures the WHOLE grid — closed hours and no-data cells share the treatment', () => {
+    expect(count(html, /class="heat-cell hclosed"/g)).toBe(7 * 14);
   });
 });
 
 describe('renderReportHtml — FULL variants (both flags true)', () => {
   const html = renderReportHtml(fullData());
 
-  it('renders real values, campaign rows, statut pills and the S03 svg', () => {
-    expect(html).toContain('21 400');
+  it('renders the statrow numbers, campaign rows, statut pills and the S03 svg', () => {
+    expect(html).toContain('21 400'); // formatIntFr groups with NNBSP
     expect(html).toContain('1 180');
     expect(html).toContain('14/06/2026');
     expect(html).toContain('Ooredoo · Forfait Data');
@@ -186,19 +221,21 @@ describe('renderReportHtml — FULL variants (both flags true)', () => {
     expect(html).not.toContain('JJ/MM/AAAA');
   });
 
-  it('renders a fractional moyenne/h with one comma decimal (Mejri prod-test #3)', () => {
+  it('renders a fractional moyenne/h with one comma decimal + the unit span', () => {
     const fractional = renderReportHtml(
       baseData({
         hostHasData: true,
         kpis: { global: 4, perDay: 4, perHour: 0.3, peak: { value: 4, date: '2026-06-26' } },
       }),
     );
-    expect(fractional).toContain('0,3<span class="kpi-suffix">pers/h</span>');
+    expect(fractional).toContain('0,3 <span class="unit">pers/h</span>');
   });
 
-  it('keeps the hachure ONLY for no-data cells (the closed Sunday)', () => {
-    const hachureCells = html.match(/class="hm-cell cell-h"/g) ?? [];
-    expect(hachureCells.length).toBe(14); // day 6 (Sunday) only in the fixture
+  it('maps ramp levels to h0..h4 and keeps the hachure ONLY for no-data cells (closed Sunday)', () => {
+    expect(count(html, /class="heat-cell hclosed"/g)).toBe(14); // day 7 (DIM) only in the fixture
+    for (const cls of ['h0', 'h1', 'h2', 'h3', 'h4']) {
+      expect(html).toContain(`class="heat-cell ${cls}"`);
+    }
   });
 
   it('a CAST-flagged period with zero rows shows the ratified empty copy', () => {
@@ -209,6 +246,43 @@ describe('renderReportHtml — FULL variants (both flags true)', () => {
       }),
     );
     expect(zeroRows).toContain('Aucune campagne sur la période analysée.');
+  });
+
+  it(`caps the history table at ${HIST_MAX_ROWS} rows + a "+ N autres campagnes" summary (NO JS scaling)`, () => {
+    const ten = renderReportHtml(
+      fullData({
+        campaignsBlock: {
+          count: 10,
+          cumulativeImpressions: 140300,
+          top3: ['A', 'B', 'C'],
+          rows: Array.from({ length: 10 }, (_, i) => campaignRow(i)),
+        },
+      }),
+    );
+    expect(count(ten, /<tr><td class="td-name">/g)).toBe(HIST_MAX_ROWS);
+    expect(ten).toContain('+ 2 autres campagnes');
+    expect(ten).not.toContain('transform:scale');
+    const three = renderReportHtml(fullData());
+    expect(count(three, /<tr><td class="td-name">/g)).toBe(3);
+    expect(three).not.toContain('autres campagnes');
+  });
+
+  it(`caps the S05 detail list at ${REV_MAX_ROWS} rows with the same summary discipline`, () => {
+    const ten = renderReportHtml(
+      fullData({
+        revenue: {
+          totalLabel: '2 130',
+          count: 10,
+          rows: Array.from({ length: 10 }, (_, i) => ({
+            name: `Campagne ${i + 1}`,
+            period: '05/06 – 18/06',
+            amountLabel: `${400 - i} TND`,
+          })),
+        },
+      }),
+    );
+    expect(count(ten, /class="rev-row"/g)).toBe(REV_MAX_ROWS);
+    expect(ten).toContain('+ 6 autres campagnes');
   });
 
   it('escapes venue + campaign names (no raw HTML injection)', () => {
@@ -229,48 +303,39 @@ describe('renderReportHtml — FULL variants (both flags true)', () => {
   });
 });
 
-describe('renderReportHtml — S07 AI pistes (R2)', () => {
+describe('renderReportHtml — S07 pistes seam (R2, unchanged under the new look)', () => {
   const aiPistes = [
     { title: 'Valorisez vos vendredis soirs', body: 'Le créneau Ven 18h est votre plus fort.' },
     { title: 'Comblez le creux du mardi matin', body: 'Mar 9h est votre créneau le plus faible.' },
     { title: 'Misez sur les 17 – 30 ans', body: 'Votre première tranche d’âge mesurée.' },
   ];
 
-  it('renders the 3 AI pistes in the SAME card language; the generic copy disappears', () => {
+  it('renders the 3 AI pistes in the mockup card language; the generic copy disappears', () => {
     const html = renderReportHtml(fullData(), { aiPistes });
     expect(html).toContain('Valorisez vos vendredis soirs');
-    expect(html).toContain('Le créneau Ven 18h est votre plus fort.');
     expect(html).toContain('Misez sur les 17 – 30 ans');
-    // same visual language: numbered cards with the color cadence
-    expect(html).toContain('reco-num--portage');
-    expect(html).toContain('reco-num--green');
-    expect(html).toContain('reco-num--deep');
+    expect(count(html, /class="piste"/g)).toBe(3);
+    expect(count(html, /class="piste-k"/g)).toBe(3);
     expect(html).toContain('Piste 01');
     expect(html).toContain('Piste 03');
-    // the S07 frame (head + note) stays; the generic pistes are replaced
-    expect(html).toContain("Vos pistes d'optimisation futures");
     expect(html).toContain('Lecture personnalisée.');
     expect(html).not.toContain('Anticipez les temps forts');
-    expect(html).not.toContain('Repérez vos angles morts');
     expect(html).not.toContain('En attente de votre score de priorité.');
   });
 
-  it('null or absent aiPistes keeps the generic pistes verbatim', () => {
+  it('null/absent/malformed aiPistes keeps the generic pistes verbatim (Piste 03 = SPS wait)', () => {
     for (const html of [
       renderReportHtml(baseData()),
       renderReportHtml(baseData(), { aiPistes: null }),
+      renderReportHtml(baseData(), { aiPistes: aiPistes.slice(0, 2) }),
     ]) {
       expect(html).toContain('Anticipez les temps forts');
       expect(html).toContain('Repérez vos angles morts');
       expect(html).toContain('Résumé du SPS et recommandations');
-      expect(html).toContain('En attente de votre score de priorité.');
+      expect(html).toContain(
+        '<div class="piste-body wait">En attente de votre score de priorité.</div>',
+      );
     }
-  });
-
-  it('a malformed (non-3) pistes array falls back to the generic pistes', () => {
-    const html = renderReportHtml(baseData(), { aiPistes: aiPistes.slice(0, 2) });
-    expect(html).toContain('Anticipez les temps forts');
-    expect(html).not.toContain('Valorisez vos vendredis soirs');
   });
 
   it('escapes AI piste content (no raw HTML injection through the model)', () => {
@@ -287,8 +352,8 @@ describe('renderReportHtml — S07 AI pistes (R2)', () => {
   });
 });
 
-describe('impressionsChartSvg', () => {
-  it('draws a closed area + line over the day values', () => {
+describe('impressionsChartSvg (dark restyle)', () => {
+  it('draws a closed mint area + line over the day values', () => {
     const svg = impressionsChartSvg([
       { date: '2026-06-01', impressions: 100 },
       { date: '2026-06-02', impressions: 0 },
@@ -296,7 +361,7 @@ describe('impressionsChartSvg', () => {
     ]);
     expect(svg).toContain('<svg');
     expect(svg).toContain('impGrad');
-    expect(svg).toContain('stroke="#204B43"');
+    expect(svg).toContain('stroke="#76E6AB"');
   });
 
   it('handles a single day without NaN coordinates', () => {
