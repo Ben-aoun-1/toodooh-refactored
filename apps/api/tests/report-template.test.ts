@@ -368,8 +368,8 @@ describe('renderReportHtml — S07 FIXED 3-theme structure (R3)', () => {
   });
 });
 
-describe('impressionsChartSvg (dark restyle)', () => {
-  it('draws a closed mint area + line over the day values', () => {
+describe('impressionsChartSvg (dark restyle + R3 axis frame)', () => {
+  it('draws a closed mint area + line over the day values, above 4 gridlines and tick marks', () => {
     const svg = impressionsChartSvg([
       { date: '2026-06-01', impressions: 100 },
       { date: '2026-06-02', impressions: 0 },
@@ -378,10 +378,68 @@ describe('impressionsChartSvg (dark restyle)', () => {
     expect(svg).toContain('<svg');
     expect(svg).toContain('impGrad');
     expect(svg).toContain('stroke="#76E6AB"');
+    expect(count(svg, /<line /g)).toBe(4 + 3); // 4 Y gridlines + one tick mark per day (≤7 days)
   });
 
   it('handles a single day without NaN coordinates', () => {
     const svg = impressionsChartSvg([{ date: '2026-06-01', impressions: 10 }]);
     expect(svg).not.toContain('NaN');
+  });
+
+  it('with NO days renders the bare axis frame (gridlines + ticks, no curve)', () => {
+    const svg = impressionsChartSvg([]);
+    expect(svg).toContain('class="s03-axes"');
+    expect(count(svg, /<line /g)).toBe(4 + 6); // 4 gridlines + 6 evenly spread tick marks
+    expect(svg).not.toContain('<path');
+    expect(svg).not.toContain('NaN');
+  });
+});
+
+describe('S03 labeled axes (R3 — Mejri item 4, OVERRIDES the axis-less mockup)', () => {
+  const slice = (html: string, from: string, to: string): string =>
+    html.slice(html.indexOf(from), html.indexOf(to, html.indexOf(from)));
+  const ylabOf = (html: string): string => slice(html, 'class="chart-ylab"', 'class="chart-plot"');
+  const xlabOf = (html: string): string => slice(html, 'class="chart-xlab"', 'chart-foot');
+
+  it('data state: 4 impression-count Y labels on a nice scale + one DD/MM tick per day (short span)', () => {
+    const html = renderReportHtml(fullData()); // fixture max 5 100 → nice top 6 000
+    const ylab = ylabOf(html);
+    expect(count(ylab, /<span /g)).toBe(4);
+    for (const v of ['>0<', '>2 000<', '>4 000<', '>6 000<']) {
+      expect(ylab).toContain(v);
+    }
+    const xlab = xlabOf(html);
+    for (const d of ['>01/06<', '>02/06<', '>03/06<']) expect(xlab).toContain(d);
+    expect(count(xlab, /<span /g)).toBe(3);
+  });
+
+  it('a month-long span keeps 5–7 span-aware ticks, ends included', () => {
+    const html = renderReportHtml(
+      fullData({
+        days: Array.from({ length: 30 }, (_, i) => ({
+          date: `2026-06-${String(i + 1).padStart(2, '0')}`,
+          impressions: 100 + i,
+        })),
+      }),
+    );
+    const xlab = xlabOf(html);
+    expect(count(xlab, /<span /g)).toBe(6);
+    expect(xlab).toContain('>01/06<');
+    expect(xlab).toContain('>30/06<');
+  });
+
+  it('empty state: the caption stays, the axis frame renders UNLABELED', () => {
+    const html = renderReportHtml(baseData());
+    expect(html).toContain('Évolution en attente du premier deal');
+    expect(html).toContain('class="s03-axes"'); // axes present in the empty state too
+    expect(count(ylabOf(html), /<span /g)).toBe(0); // no scale is claimed before the first deal
+    expect(count(xlabOf(html), /<span /g)).toBe(0);
+  });
+
+  it('a CAST-flagged period with zero days still gets the empty frame (no NaN, no curve)', () => {
+    const html = renderReportHtml(baseData({ castHasData: true }));
+    expect(html).toContain('class="s03-axes"');
+    expect(html).not.toContain('class="s03-chart"');
+    expect(html).not.toContain('NaN');
   });
 });
