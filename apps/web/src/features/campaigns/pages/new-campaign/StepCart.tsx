@@ -15,17 +15,19 @@ import {
   CART_BUDGET_MIN_TND,
   CART_BUDGET_STEP_TND,
 } from '@/features/campaigns/hooks/new-campaign/cart-budget';
-import { useCampaignCoverage } from '@/features/campaigns/hooks/useCampaignCoverage';
 import { useCreativePreviewUrl, useMyCreatives } from '@/features/campaigns/hooks/useCreativeApi';
 import { usePricingConfig } from '@/features/campaigns/hooks/usePricingConfig';
 import { formatUiDate, inclusiveDayCount } from '@/features/campaigns/lib/campaign-summary';
 import { estimateImpressions } from '@/features/campaigns/lib/impressions';
 import { toChipLabel } from '@/features/campaigns/lib/targeting-chip-label';
+import { zonesRecapLabel } from '@/features/campaigns/lib/zones-selection';
 import { useCampaignTargeting } from '@/features/campaigns/targeting/hooks/useCampaignTargeting';
 
 import CreativePreviewTile from './CreativePreviewTile';
 
 interface StepCartProps {
+  /** CF-Z1 — the selected zone NAMES for the couverture recap ([] = « Tout le réseau »). */
+  zoneNames: string[];
   requestedBudget: number | null;
   setRequestedBudget: (value: number | null) => void;
   campaignName: string;
@@ -57,6 +59,7 @@ const int = new Intl.NumberFormat('fr-TN', { maximumFractionDigits: 0 });
  * Réseau-only). The estimate + bounds are interim — L-price replaces the numbers, not this layout.
  */
 export default function StepCart({
+  zoneNames,
   requestedBudget,
   setRequestedBudget,
   campaignName,
@@ -72,7 +75,6 @@ export default function StepCart({
   saving,
 }: StepCartProps) {
   const targeting = useCampaignTargeting(draftCampaignId);
-  const coverage = useCampaignCoverage(draftCampaignId);
   const pricing = usePricingConfig();
   const { data: creatives = [] } = useMyCreatives(userId);
   const previewUrl = useCreativePreviewUrl(creativeId);
@@ -171,11 +173,10 @@ export default function StepCart({
 
             <div>
               <p className="mb-2 text-sm font-medium text-gray-500">Couverture</p>
+              {/* CF-Z1 — the selected zones (or « Tout le réseau » when none). */}
               <p className="text-sm text-gray-900">
-                <span className="text-gray-500">Écrans correspondants : </span>
-                <span className="font-medium">
-                  {coverage.isLoading ? '…' : coverage.screenhosts.length}
-                </span>
+                <span className="text-gray-500">Zones : </span>
+                <span className="font-medium">{zonesRecapLabel(zoneNames)}</span>
               </p>
             </div>
 

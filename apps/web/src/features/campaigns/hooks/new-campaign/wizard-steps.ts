@@ -23,10 +23,10 @@ export function validateTargeting(_state: WizardState): boolean {
 }
 
 /**
- * Couverture is a read-only coverage-map PREVIEW (the screenhosts matching the targeting). It gates
- * nothing — like Targeting, navigation past it is always allowed.
+ * CF-Z1 — Zones géographiques (the former coverage-map slot). Optional like Targeting: no zone
+ * selected = whole network on the zone criterion (VF US-2.1); navigation is always allowed.
  */
-export function validateCoverage(_state: WizardState): boolean {
+export function validateZones(_state: WizardState): boolean {
   return true;
 }
 
@@ -45,7 +45,7 @@ const STEP_TEMPLATE: ReadonlyArray<Omit<StepDescriptor, 'validate'>> = [
   { index: 1, id: 'basics', label: 'Nom et type' },
   { index: 2, id: 'targeting', label: 'Catégories' },
   { index: 3, id: 'dates', label: 'Période' },
-  { index: 4, id: 'coverage', label: 'Couverture' },
+  { index: 4, id: 'zones', label: 'Zones géographiques' },
   { index: 5, id: 'creative', label: 'Création' },
   { index: 6, id: 'cart', label: 'Validation' },
 ];
@@ -55,7 +55,7 @@ export function getStepList(): StepDescriptor[] {
     basics: validateBasics,
     targeting: validateTargeting,
     dates: validateDates,
-    coverage: validateCoverage,
+    zones: validateZones,
     creative: validateCreative,
     cart: validateCart,
   };

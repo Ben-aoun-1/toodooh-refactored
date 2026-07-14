@@ -34,15 +34,17 @@ import {
   useUpdateCampaign,
 } from '@/features/campaigns/hooks/useCampaignApi';
 import { usePricingConfig } from '@/features/campaigns/hooks/usePricingConfig';
+import { useZones } from '@/features/campaigns/hooks/useZones';
 import { quitDeletesDraft, shouldArmExitGuard } from '@/features/campaigns/lib/exit-intercept';
 import { setNavigationGuard } from '@/features/campaigns/lib/navigation-guard';
 import { parseCampaignUiDate, toLocalDateOnlyString } from '@/features/campaigns/lib/wizard-dates';
+import { defaultZoneSelection } from '@/features/campaigns/lib/zones-selection';
 import StepBasics from '@/features/campaigns/pages/new-campaign/StepBasics';
 import StepCart from '@/features/campaigns/pages/new-campaign/StepCart';
-import StepCoverage from '@/features/campaigns/pages/new-campaign/StepCoverage';
 import StepCreative from '@/features/campaigns/pages/new-campaign/StepCreative';
 import StepDates from '@/features/campaigns/pages/new-campaign/StepDates';
 import StepTargeting from '@/features/campaigns/pages/new-campaign/StepTargeting';
+import StepZones from '@/features/campaigns/pages/new-campaign/StepZones';
 import { useWizardResumeStore } from '@/features/campaigns/stores/wizard-resume.store';
 import { getErrorMessage } from '@/lib/errors';
 import { logger } from '@/lib/logger';
@@ -63,6 +65,7 @@ interface EditNavRecord {
   endDate?: string | Date | null;
   creative_id?: string | null;
   requested_budget?: number | null;
+  zones?: { zone_id: string; name: string }[];
 }
 
 /**
@@ -121,6 +124,56 @@ export default function NewCampaign() {
     [firstAvailableStartDate],
   );
 
+  // CF-Z1 — the predefined zones + the fresh-wizard default (Grand Tunis — V1's only zone).
+  const zonesQuery = useZones();
+  const zonesTouchedRef = useRef(false);
+  useEffect(() => {
+    if (!zonesQuery.data) return;
+    const next = defaultZoneSelection(
+      zonesQuery.data.map((z) => z.id),
+      { isEdit: editMode, touched: zonesTouchedRef.current, current: state.zoneIds },
+    );
+    if (JSON.stringify(next) !== JSON.stringify(state.zoneIds)) {
+      setState((prev) => ({ ...prev, zoneIds: next }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- default applies once, on zones load
+  }, [zonesQuery.data]);
+
+  const setZoneIds = useCallback(
+    (next: string[]) => {
+      zonesTouchedRef.current = true;
+      setState((prev) => ({ ...prev, zoneIds: next }));
+    },
+    [setState],
+  );
+
+  // Advancing from the Zones step persists a dirty selection first (replace-set PATCH — same
+  // block-on-failure semantics as the targeting flush). Save/submit also carry zone_ids.
+  const persistedZonesRef = useRef<string | null>(null);
+  const [savingZones, setSavingZones] = useState(false);
+  const handleZonesNext = useCallback(async () => {
+    if (state.draftCampaignId) {
+      const wire = JSON.stringify([...state.zoneIds].sort());
+      if (persistedZonesRef.current !== wire) {
+        setSavingZones(true);
+        try {
+          await updateCampaign.mutateAsync({
+            id: state.draftCampaignId,
+            input: { zone_ids: state.zoneIds },
+          });
+          persistedZonesRef.current = wire;
+        } catch (error) {
+          toast.error("Échec de l'enregistrement des zones");
+          log.error({ err: error }, 'zones replace-set failed');
+          return;
+        } finally {
+          setSavingZones(false);
+        }
+      }
+    }
+    await wiz.nextStep();
+  }, [state.draftCampaignId, state.zoneIds, updateCampaign, wiz]);
+
   // CF-Q2 — persist the shown step per draft id on every step change (covers save/exit too:
   // the step the user leaves from was already recorded on arrival). Cleared on submit/delete.
   const setResumeStep = useWizardResumeStore((s) => s.setStep);
@@ -133,7 +186,14 @@ export default function NewCampaign() {
   // "Saved" tracking: a RESUMED draft starts saved; a fresh wizard is saved only after an
   // explicit Enregistrer. Dirty = the editable state moved since the last save/load snapshot.
   const editableSnapshot = (s: WizardState): string =>
-    JSON.stringify([s.campaignName, s.startDate, s.endDate, s.creativeId, s.requestedBudget]);
+    JSON.stringify([
+      s.campaignName,
+      s.startDate,
+      s.endDate,
+      s.creativeId,
+      s.requestedBudget,
+      s.zoneIds, // CF-Z1 — zone edits count as dirty (exit intercept arms)
+    ]);
   const [explicitlySaved, setExplicitlySaved] = useState<boolean>(editMode);
   const savedSnapRef = useRef<string>(editableSnapshot(initialStateRef.current as WizardState));
   const dirtySinceSave = editableSnapshot(state) !== savedSnapRef.current;
@@ -399,13 +459,13 @@ export default function NewCampaign() {
         />
       );
     }
-    if (stepId === 'coverage') {
+    if (stepId === 'zones') {
       return (
-        <StepCoverage
-          draftCampaignId={state.draftCampaignId || null}
-          onNext={() => {
-            void wiz.nextStep();
-          }}
+        <StepZones
+          zoneIds={state.zoneIds}
+          setZoneIds={setZoneIds}
+          saving={savingZones}
+          onNext={handleZonesNext}
           onBack={() => wiz.prevStep()}
         />
       );
@@ -430,6 +490,9 @@ export default function NewCampaign() {
         <StepCart
           requestedBudget={state.requestedBudget}
           setRequestedBudget={setRequestedBudget}
+          zoneNames={(zonesQuery.data ?? [])
+            .filter((z) => state.zoneIds.includes(z.id))
+            .map((z) => z.name)}
           campaignName={state.campaignName}
           startDate={state.startDate}
           endDate={state.endDate}

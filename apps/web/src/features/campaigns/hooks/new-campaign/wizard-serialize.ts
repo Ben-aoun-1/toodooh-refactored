@@ -101,6 +101,8 @@ function draftPatch(state: WizardState): UpdateCampaignInput {
     start_date: state.startDate,
     end_date: state.endDate,
     requested_budget: state.requestedBudget,
+    // CF-Z1 — replace-set: [] legitimately clears (whole network on the zone criterion).
+    zone_ids: state.zoneIds,
   };
 }
 

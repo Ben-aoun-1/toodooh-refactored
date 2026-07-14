@@ -26,6 +26,8 @@ export interface MyCampaignRow {
   submitted_at: string | null;
   /** CF-Q1 — « Motif du refus » shown on Non validé campaigns (null otherwise). */
   reject_reason: string | null;
+  /** CF-Z1 — the campaign's zones; ride the edit-mode record so Reprendre rehydrates them. */
+  zones: { zone_id: string; name: string }[];
   created_at: string;
   // Retained-but-empty on the new engine (Supabase-only concepts the new list drops).
   client: string;
@@ -53,6 +55,7 @@ function toRow(c: CampaignView): MyCampaignRow {
     content_validation_status: c.content_validation_status,
     submitted_at: c.submitted_at,
     reject_reason: c.reject_reason,
+    zones: c.zones ?? [],
     created_at: c.created_at,
     client: '',
     category: null,
