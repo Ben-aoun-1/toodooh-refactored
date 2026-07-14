@@ -71,3 +71,16 @@ export const computeRi = (
   const raw = allocation / denom;
   return Math.floor(Math.min(r, Math.max(rMinEfficace, raw)));
 };
+
+/**
+ * CF-Z1 (VF US-2.1) — the zone eligibility clause: a campaign WITH zones requires the venue's
+ * zone to be among them; a campaign with NO zones passes everyone (whole network on this
+ * criterion). A venue with no zone (NULL — pre-backfill or cleared) fails a zoned campaign.
+ */
+export function screenhostMatchesZones(
+  venueZoneId: string | null,
+  campaignZoneIds: readonly string[],
+): boolean {
+  if (campaignZoneIds.length === 0) return true;
+  return venueZoneId !== null && campaignZoneIds.includes(venueZoneId);
+}

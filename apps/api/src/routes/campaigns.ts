@@ -7,8 +7,10 @@ import {
   businessSectors,
   campaignReconciliation,
   campaignTargeting,
+  campaignZones,
   campaigns,
   creatives,
+  zones,
 } from '../db/schema.js';
 import {
   type StartDateViolation,
@@ -35,6 +37,57 @@ const startDateRejection = (violation: StartDateViolation) => ({
   first_available_start_date: premiereDateDisponible(),
 });
 
+// CF-Z1 — zone_ids must all reference ACTIVE zones; anything else is a 400 INVALID_ZONE.
+async function invalidZoneIds(zoneIds: readonly string[]): Promise<string[]> {
+  if (zoneIds.length === 0) return [];
+  const active = await db
+    .select({ id: zones.id })
+    .from(zones)
+    .where(and(inArray(zones.id, [...zoneIds]), eq(zones.active, true)));
+  const known = new Set(active.map((z) => z.id));
+  return zoneIds.filter((id) => !known.has(id));
+}
+
+const invalidZoneRejection = (unknown: readonly string[]) => ({
+  error: 'INVALID_ZONE',
+  message: 'One or more zone_ids do not reference an active zone.',
+  unknown_zone_ids: [...unknown],
+});
+
+/** Replace-set the campaign's zones (mirrors the targeting PUT semantics). */
+async function replaceCampaignZones(campaignId: string, zoneIds: readonly string[]): Promise<void> {
+  await db.delete(campaignZones).where(eq(campaignZones.campaignId, campaignId));
+  if (zoneIds.length > 0) {
+    await db
+      .insert(campaignZones)
+      .values([...new Set(zoneIds)].map((zoneId) => ({ campaignId, zoneId })));
+  }
+}
+
+/** Batched zones-per-campaign fetch for the advertiser projections (mirrors targeting, no N+1). */
+async function zonesByCampaign(
+  ids: readonly string[],
+): Promise<Map<string, { zone_id: string; name: string }[]>> {
+  const map = new Map<string, { zone_id: string; name: string }[]>();
+  if (ids.length === 0) return map;
+  const rows = await db
+    .select({
+      campaignId: campaignZones.campaignId,
+      zone_id: campaignZones.zoneId,
+      name: zones.name,
+    })
+    .from(campaignZones)
+    .innerJoin(zones, eq(campaignZones.zoneId, zones.id))
+    .where(inArray(campaignZones.campaignId, [...ids]))
+    .orderBy(asc(zones.name));
+  for (const row of rows) {
+    const list = map.get(row.campaignId) ?? [];
+    list.push({ zone_id: row.zone_id, name: row.name });
+    map.set(row.campaignId, list);
+  }
+  return map;
+}
+
 const idParamSchema = z.object({ id: z.uuid() });
 
 // Wire shape is snake_case (apps/web-facing). start/end are ISO calendar dates (YYYY-MM-DD),
@@ -49,6 +102,9 @@ const createSchema = z.object({
   // Interim manual cart: an INDICATIVE budget (TND), not the engine inputs. The admin derives
   // i_cible/cpm/s/t at activation. Nullable; the cart PATCHes it before submit.
   requested_budget: z.number().positive().max(100_000_000).nullable().optional(),
+  // CF-Z1 — the campaign's targeted zones (replace-set, validated against ACTIVE zones). Absent =
+  // untouched; [] = clear (whole network on the zone criterion, VF US-2.1).
+  zone_ids: z.array(z.uuid()).max(50).optional(),
 });
 
 // Edit accepts any subset of the create fields plus creative_id (link/unlink the campaign's creative
@@ -182,6 +238,10 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
       const violation = startDateViolation(parsed.data.start_date);
       if (violation) return reply.status(400).send(startDateRejection(violation));
     }
+    if (parsed.data.zone_ids?.length) {
+      const unknown = await invalidZoneIds(parsed.data.zone_ids);
+      if (unknown.length > 0) return reply.status(400).send(invalidZoneRejection(unknown));
+    }
     const [created] = await db
       .insert(campaigns)
       .values({
@@ -198,6 +258,9 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
             : String(parsed.data.requested_budget),
       })
       .returning(campaignSelection);
+    if (parsed.data.zone_ids?.length && created) {
+      await replaceCampaignZones((created as CampaignRow).id, parsed.data.zone_ids);
+    }
     return reply.status(201).send(campaignView(created as CampaignRow));
   });
 
@@ -259,9 +322,12 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
       }
     }
 
+    const zoneMap = await zonesByCampaign(ids);
+
     return reply.status(200).send(
       rows.map((r) => ({
         ...campaignView(r, r.contentValidationStatus),
+        zones: zoneMap.get(r.id) ?? [],
         // delivered impressions + net spend come from the 1:1 reconciliation row — null until reconciled.
         delivered_impressions: r.deliveredImp ?? null,
         spend_tnd: r.spendTnd == null ? null : Number(r.spendTnd),
@@ -290,7 +356,11 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     if (!row) {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such campaign.' });
     }
-    return reply.status(200).send(campaignView(row, row.contentValidationStatus));
+    const zoneMap = await zonesByCampaign([row.id]);
+    return reply.status(200).send({
+      ...campaignView(row, row.contentValidationStatus),
+      zones: zoneMap.get(row.id) ?? [],
+    });
   });
 
   // PATCH /api/campaigns/:id — owner-scoped edit, draft-only (409 once submitted).
@@ -315,6 +385,11 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     if (parsed.data.start_date) {
       const violation = startDateViolation(parsed.data.start_date);
       if (violation) return reply.status(400).send(startDateRejection(violation));
+    }
+    // CF-Z1 — zone_ids: absent = untouched; [] = clear; ids must reference active zones.
+    if (parsed.data.zone_ids !== undefined && parsed.data.zone_ids.length > 0) {
+      const unknown = await invalidZoneIds(parsed.data.zone_ids);
+      if (unknown.length > 0) return reply.status(400).send(invalidZoneRejection(unknown));
     }
     // Owner-scope in the WHERE: a foreign id is indistinguishable from a missing one.
     const [existing] = await db
@@ -344,11 +419,28 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such creative.' });
       }
     }
-    const [updated] = await db
-      .update(campaigns)
-      .set(buildUpdatePatch(parsed.data))
-      .where(and(eq(campaigns.id, existing.id), eq(campaigns.advertiserId, userId)))
-      .returning(campaignSelection);
+    // CF-Z1 — a zone-only PATCH has an empty columns patch: skip the UPDATE (drizzle rejects an
+    // empty set()) and re-read the row; otherwise update as before. Zones replace-set after.
+    const columnsPatch = buildUpdatePatch(parsed.data);
+    let updated: CampaignRow | undefined;
+    if (Object.keys(columnsPatch).length > 0) {
+      const [row] = await db
+        .update(campaigns)
+        .set(columnsPatch)
+        .where(and(eq(campaigns.id, existing.id), eq(campaigns.advertiserId, userId)))
+        .returning(campaignSelection);
+      updated = row as CampaignRow;
+    } else {
+      const [row] = await db
+        .select(campaignSelection)
+        .from(campaigns)
+        .where(and(eq(campaigns.id, existing.id), eq(campaigns.advertiserId, userId)))
+        .limit(1);
+      updated = row as CampaignRow;
+    }
+    if (parsed.data.zone_ids !== undefined) {
+      await replaceCampaignZones(existing.id, parsed.data.zone_ids);
+    }
     return reply.status(200).send(campaignView(updated as CampaignRow));
   });
 

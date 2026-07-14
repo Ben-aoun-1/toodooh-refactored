@@ -9,9 +9,11 @@ import {
   businessSectors,
   campaignReconciliation,
   campaignTargeting,
+  campaignZones,
   campaigns,
   creatives,
   users,
+  zones,
 } from '../src/db/schema.js';
 import { isJourOuvre, premiereDateDisponible } from '../src/lib/campaign-dates.js';
 import { campaignsRoutes } from '../src/routes/campaigns.js';
@@ -272,6 +274,97 @@ describe('campaigns draft lifecycle (advertiser, real Postgres)', () => {
       payload: { name: 'NoBudget', campaign_type: 'standard' },
     });
     expect((res.json() as Record<string, unknown>)['requested_budget']).toBeNull();
+  });
+
+  // ── CF-Z1 — zone_ids: replace-set junction, active-zone validation, projection ──────────────
+  const GRAND_TUNIS_ID = '2c8e5a1e-4b7d-4f3a-9c6e-1a2b3c4d5e6f';
+
+  it('create persists zone_ids into campaign_zones; /mine + GET /:id expose the names', async () => {
+    const me = await seedUser();
+    mockSession(me);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/campaigns',
+      payload: { name: 'Zonée', campaign_type: 'standard', zone_ids: [GRAND_TUNIS_ID] },
+    });
+    expect(res.statusCode).toBe(201);
+    const id = (res.json() as { id: string }).id;
+    const junction = await db.select().from(campaignZones).where(eq(campaignZones.campaignId, id));
+    expect(junction).toHaveLength(1);
+    expect(junction[0]?.zoneId).toBe(GRAND_TUNIS_ID);
+
+    const one = await app.inject({ method: 'GET', url: `/api/campaigns/${id}` });
+    expect((one.json() as { zones: { zone_id: string; name: string }[] }).zones).toEqual([
+      { zone_id: GRAND_TUNIS_ID, name: 'Grand Tunis' },
+    ]);
+    const mine = await app.inject({ method: 'GET', url: '/api/campaigns/mine' });
+    const row = (mine.json() as { id: string; zones: { name: string }[] }[]).find(
+      (r) => r.id === id,
+    );
+    expect(row?.zones.map((z) => z.name)).toEqual(['Grand Tunis']);
+  });
+
+  it('rejects an unknown or inactive zone id (400 INVALID_ZONE), nothing persisted', async () => {
+    const me = await seedUser();
+    mockSession(me);
+    const ghost = '99999999-9999-4999-8999-999999999999';
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/campaigns',
+      payload: { name: 'Zone fantôme', campaign_type: 'standard', zone_ids: [ghost] },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: 'INVALID_ZONE', unknown_zone_ids: [ghost] });
+    expect(await db.select().from(campaigns)).toHaveLength(0);
+
+    const inactiveName = `Zone inactive ${Date.now()}`;
+    const [inactive] = await db
+      .insert(zones)
+      .values({ name: inactiveName, active: false })
+      .returning();
+    const res2 = await app.inject({
+      method: 'POST',
+      url: '/api/campaigns',
+      payload: { name: 'Zone éteinte', campaign_type: 'standard', zone_ids: [inactive?.id ?? ''] },
+    });
+    expect(res2.statusCode).toBe(400);
+    expect((res2.json() as { error: string }).error).toBe('INVALID_ZONE');
+  });
+
+  it('PATCH replace-sets zones; an explicit [] clears (whole network); zone-only PATCH works', async () => {
+    const me = await seedUser();
+    const id = await seedCampaign(me);
+    mockSession(me);
+    // zone-only PATCH (no column change) — sets [Grand Tunis]
+    const set = await app.inject({
+      method: 'PATCH',
+      url: `/api/campaigns/${id}`,
+      payload: { zone_ids: [GRAND_TUNIS_ID] },
+    });
+    expect(set.statusCode).toBe(200);
+    expect(
+      await db.select().from(campaignZones).where(eq(campaignZones.campaignId, id)),
+    ).toHaveLength(1);
+    // duplicate ids in the payload collapse (UNIQUE pair; Set dedup)
+    const dup = await app.inject({
+      method: 'PATCH',
+      url: `/api/campaigns/${id}`,
+      payload: { zone_ids: [GRAND_TUNIS_ID, GRAND_TUNIS_ID] },
+    });
+    expect(dup.statusCode).toBe(200);
+    expect(
+      await db.select().from(campaignZones).where(eq(campaignZones.campaignId, id)),
+    ).toHaveLength(1);
+    // [] clears — whole network on the zone criterion
+    const clear = await app.inject({
+      method: 'PATCH',
+      url: `/api/campaigns/${id}`,
+      payload: { zone_ids: [] },
+    });
+    expect(clear.statusCode).toBe(200);
+    expect(
+      await db.select().from(campaignZones).where(eq(campaignZones.campaignId, id)),
+    ).toHaveLength(0);
   });
 
   // ── CF-Q2 (spec §1.4) — the J+2-working-days start floor, enforced at every write ───────────

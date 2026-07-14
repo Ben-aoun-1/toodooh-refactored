@@ -281,6 +281,13 @@
       "when": 1783523097703,
       "tag": "0039_screenhost_monthly_reports",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1784052473062,
+      "tag": "0040_zones_v1",
+      "breakpoints": true
     }
   ]
 }
