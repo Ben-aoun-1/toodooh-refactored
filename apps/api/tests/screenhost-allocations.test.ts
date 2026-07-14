@@ -8,11 +8,13 @@ import {
   campaignDispatchAllocation,
   campaignDispatchPlan,
   campaigns,
+  creatives,
   type DispatchCreneau,
   type NewUser,
   screenhosts,
   users,
 } from '../src/db/schema.js';
+import { activeAllocationsForScreenhost } from '../src/lib/playout/active-allocations.js';
 import { screenhostsRoutes } from '../src/routes/screenhosts.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
@@ -64,7 +66,12 @@ const CRENEAUX: DispatchCreneau[] = [{ date: '2024-01-01', hour: 12, reps: 100, 
 // unless `statut` is passed.
 const seedAllocation = async (
   ownerId: string,
-  opts: { statut?: 'EN_ATTENTE' | 'ACCEPTE' | 'REFUSE'; campaignName?: string } = {},
+  opts: {
+    statut?: 'EN_ATTENTE' | 'ACCEPTE' | 'REFUSE';
+    campaignName?: string;
+    campaignStatus?: 'upcoming' | 'active';
+    window?: { start: string; end: string };
+  } = {},
 ): Promise<{ allocationId: string; screenhostId: string; campaignId: string }> => {
   const advertiser = await seedUser({ role: 'advertiser' });
   const [sh] = await db.insert(screenhosts).values({ name: 'Café Alloc', ownerId }).returning();
@@ -74,9 +81,9 @@ const seedAllocation = async (
       advertiserId: advertiser,
       name: opts.campaignName ?? 'Campagne Alloc',
       campaignType: 'standard',
-      status: 'active',
-      startDate: '2024-01-01',
-      endDate: '2024-01-31',
+      status: opts.campaignStatus ?? 'active',
+      startDate: opts.window?.start ?? '2024-01-01',
+      endDate: opts.window?.end ?? '2024-01-31',
     })
     .returning();
   const [plan] = await db
@@ -202,6 +209,56 @@ describe('screenhost dispatch allocation accept/reject (owner-scoped, real Postg
     expect(res.statusCode).toBe(200);
     expect((res.json() as { statut_acceptation: string }).statut_acceptation).toBe('REFUSE');
     expect((await readAlloc(allocationId))?.statutAcceptation).toBe('REFUSE');
+  });
+
+  it("CF-S1: an UPCOMING campaign's allocation is DECIDABLE but NOT airable until active", async () => {
+    const owner = await seedUser({ role: 'individual_owner' });
+    // A live window (today inside it) so ONLY the status gate decides airability.
+    const today = new Date();
+    const iso = (d: Date): string => d.toISOString().slice(0, 10);
+    const start = iso(new Date(today.getTime() - 24 * 3600 * 1000));
+    const end = iso(new Date(today.getTime() + 10 * 24 * 3600 * 1000));
+    const { allocationId, screenhostId, campaignId } = await seedAllocation(owner, {
+      campaignStatus: 'upcoming',
+      window: { start, end },
+    });
+    // The airability gate also requires an APPROVED linked creative — give the campaign one so
+    // the STATUS is the only variable under test.
+    const [adv] = await db
+      .select({ advertiserId: campaigns.advertiserId })
+      .from(campaigns)
+      .where(eq(campaigns.id, campaignId));
+    const [creative] = await db
+      .insert(creatives)
+      .values({
+        advertiserId: adv?.advertiserId ?? '',
+        creativeType: 'video',
+        storageKey: `creatives/gate/${campaignId}`,
+        durationSeconds: 20,
+        validationStatus: 'approved',
+      })
+      .returning();
+    await db
+      .update(campaigns)
+      .set({ creativeId: creative?.id ?? null })
+      .where(eq(campaigns.id, campaignId));
+    mockSession(owner);
+
+    // Decidable: the owner accepts while the campaign is still upcoming.
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/screenhosts/allocations/${allocationId}/accept`,
+    });
+    expect(res.statusCode).toBe(200);
+
+    // NOT airable: the playout gate requires status='active' — upcoming is excluded…
+    expect(await activeAllocationsForScreenhost(screenhostId, new Date())).toHaveLength(0);
+
+    // …and appears the moment the lifecycle flips it to active.
+    await db.update(campaigns).set({ status: 'active' }).where(eq(campaigns.id, campaignId));
+    expect((await activeAllocationsForScreenhost(screenhostId, new Date())).length).toBeGreaterThan(
+      0,
+    );
   });
 
   it('cannot accept ANOTHER owner’s allocation (404, no cross-owner write)', async () => {

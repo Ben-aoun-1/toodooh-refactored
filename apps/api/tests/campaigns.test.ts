@@ -61,8 +61,9 @@ const seedCampaign = async (
   opts: {
     name?: string;
     type?: string;
-    status?: 'draft' | 'pending' | 'active' | 'rejected';
+    status?: 'draft' | 'pending' | 'upcoming' | 'active' | 'rejected' | 'completed';
     startDate?: string | null;
+    endDate?: string | null;
   } = {},
 ): Promise<string> => {
   const [c] = await db
@@ -73,6 +74,7 @@ const seedCampaign = async (
       campaignType: opts.type ?? 'standard',
       status: opts.status ?? 'draft',
       startDate: opts.startDate ?? null,
+      endDate: opts.endDate ?? null,
     })
     .returning();
   return c?.id ?? '';
@@ -397,7 +399,12 @@ describe('campaigns draft lifecycle (advertiser, real Postgres)', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/campaigns',
-      payload: { name: 'Départ samedi', campaign_type: 'standard', start_date: saturday },
+      payload: {
+        name: 'Départ samedi',
+        campaign_type: 'standard',
+        start_date: saturday,
+        end_date: plusDays(saturday, 30),
+      },
     });
     expect(res.statusCode).toBe(201);
     const id = (res.json() as { id: string }).id;
@@ -437,7 +444,10 @@ describe('campaigns draft lifecycle (advertiser, real Postgres)', () => {
   it('re-checks the floor at SUBMIT: a stale draft (start now too soon) is refused, stays draft', async () => {
     const me = await seedUser();
     // Seeded straight into the DB with yesterday-ish ouvré start — as a draft saved days ago.
-    const id = await seedCampaign(me, { startDate: prevWorkingDay(floorDate()) });
+    const id = await seedCampaign(me, {
+      startDate: prevWorkingDay(floorDate()),
+      endDate: plusDays(floorDate(), 30),
+    });
     mockSession(me);
     const res = await app.inject({ method: 'POST', url: `/api/campaigns/${id}/submit` });
     expect(res.statusCode).toBe(400);
@@ -446,13 +456,14 @@ describe('campaigns draft lifecycle (advertiser, real Postgres)', () => {
     expect((await readCampaign(id))?.submittedAt).toBeNull();
   });
 
-  it('a date-less draft still submits (dates stay an activation-time requirement)', async () => {
+  it('CF-S1 HARDENING: a date-less draft no longer submits (400 MISSING_DATES, stays draft)', async () => {
     const me = await seedUser();
     const id = await seedCampaign(me);
     mockSession(me);
     const res = await app.inject({ method: 'POST', url: `/api/campaigns/${id}/submit` });
-    expect(res.statusCode).toBe(200);
-    expect((res.json() as { status: string }).status).toBe('pending');
+    expect(res.statusCode).toBe(400);
+    expect((res.json() as { error: string }).error).toBe('MISSING_DATES');
+    expect((await readCampaign(id))?.status).toBe('draft');
   });
 
   it('an existing draft with a PAST start stays fully READABLE (no retroactive breakage)', async () => {
@@ -672,6 +683,74 @@ describe('campaigns draft lifecycle (advertiser, real Postgres)', () => {
     expect(mine?.reject_reason).toBe('Visuel non conforme à la charte.');
   });
 
+  // ── CF-S1 — Non validé is RECOVERABLE + the projection carries creative_id ──────────────────
+  it('recovery round-trip: rejected → PATCH → resubmit → pending with the rejection audit CLEARED', async () => {
+    const me = await seedUser();
+    const id = await seedCampaign(me, {
+      status: 'rejected',
+      startDate: floorDate(),
+      endDate: plusDays(floorDate(), 20),
+    });
+    await db
+      .update(campaigns)
+      .set({ rejectedAt: new Date(), rejectReason: 'Visuel non conforme.' })
+      .where(eq(campaigns.id, id));
+    mockSession(me);
+
+    // A rejected campaign is editable again…
+    const patched = await app.inject({
+      method: 'PATCH',
+      url: `/api/campaigns/${id}`,
+      payload: { name: 'Corrigée' },
+    });
+    expect(patched.statusCode).toBe(200);
+
+    // …and resubmits to pending, shedding reject_reason + rejected_at.
+    const res = await app.inject({ method: 'POST', url: `/api/campaigns/${id}/submit` });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      status: string;
+      reject_reason: string | null;
+      rejected_at: string | null;
+    };
+    expect(body.status).toBe('pending');
+    expect(body.reject_reason).toBeNull();
+    expect(body.rejected_at).toBeNull();
+
+    // Pending is NOT editable/submittable (recovery is for rejected only).
+    const again = await app.inject({ method: 'POST', url: `/api/campaigns/${id}/submit` });
+    expect(again.statusCode).toBe(409);
+  });
+
+  it('a rejected resubmit still re-checks the date floor (stale start → 400 TOO_SOON)', async () => {
+    const me = await seedUser();
+    const id = await seedCampaign(me, {
+      status: 'rejected',
+      startDate: prevWorkingDay(floorDate()),
+      endDate: plusDays(floorDate(), 20),
+    });
+    mockSession(me);
+    const res = await app.inject({ method: 'POST', url: `/api/campaigns/${id}/submit` });
+    expect(res.statusCode).toBe(400);
+    expect((res.json() as { reason: string }).reason).toBe('TOO_SOON');
+    expect((await readCampaign(id))?.status).toBe('rejected'); // unchanged
+  });
+
+  it('the projection exposes creative_id on GET /:id and /mine (Reprendre rehydration)', async () => {
+    const me = await seedUser();
+    const creativeId = await seedCreative(me, 'approved');
+    const id = await seedCampaign(me);
+    await db.update(campaigns).set({ creativeId }).where(eq(campaigns.id, id));
+    mockSession(me);
+    const one = await app.inject({ method: 'GET', url: `/api/campaigns/${id}` });
+    expect((one.json() as { creative_id: string | null }).creative_id).toBe(creativeId);
+    const mine = await app.inject({ method: 'GET', url: '/api/campaigns/mine' });
+    const row = (mine.json() as { id: string; creative_id: string | null }[]).find(
+      (r) => r.id === id,
+    );
+    expect(row?.creative_id).toBe(creativeId);
+  });
+
   it('a non-rejected campaign carries NULL reject_reason/rejected_at', async () => {
     const me = await seedUser();
     const id = await seedCampaign(me, { name: 'Brouillon sain' });
@@ -736,7 +815,12 @@ describe('campaigns draft lifecycle (advertiser, real Postgres)', () => {
   // ── POST /api/campaigns/:id/submit ───────────────────────────────────────────
   it('submits a draft → pending and stamps submitted_at (200)', async () => {
     const me = await seedUser();
-    const id = await seedCampaign(me, { status: 'draft' });
+    // CF-S1 — submit now requires BOTH dates (the wizard always sends them).
+    const id = await seedCampaign(me, {
+      status: 'draft',
+      startDate: floorDate(),
+      endDate: plusDays(floorDate(), 20),
+    });
     mockSession(me);
     const res = await app.inject({ method: 'POST', url: `/api/campaigns/${id}/submit` });
     expect(res.statusCode).toBe(200);

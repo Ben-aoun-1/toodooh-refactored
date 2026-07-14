@@ -699,7 +699,16 @@ export type NewUserDocument = typeof userDocuments.$inferInsert;
 // VIDEO (validation fields on the later videos table) and screenhost owners approve placements via
 // campaign_owner_approvals — so a campaign's activation is DERIVED, not a single campaign-level
 // admin validation. Hence there are NO validated_by/at/notes columns on campaigns.
-export const campaignStatus = pgEnum('campaign_status', ['draft', 'pending', 'active', 'rejected']);
+// CF-S1 — upcoming/completed become STORED statuses (spec §3.1/3.2): admin approval routes by
+// start date (future → upcoming), the lifecycle job flips upcoming→active→completed daily.
+export const campaignStatus = pgEnum('campaign_status', [
+  'draft',
+  'pending',
+  'upcoming',
+  'active',
+  'rejected',
+  'completed',
+]);
 
 export const campaigns = pgTable(
   'campaigns',
@@ -726,6 +735,8 @@ export const campaigns = pgTable(
     // endpoint is unchanged). Nullable; L-price replaces the manual cart with the real cursor.
     requestedBudget: numeric('requested_budget', { precision: 12, scale: 2 }),
     submittedAt: timestamp('submitted_at', { withTimezone: true }),
+    // CF-S1 — the J-3 draft reminder stamp (one reminder per draft; NEVER an auto-delete).
+    draftReminderSentAt: timestamp('draft_reminder_sent_at', { withTimezone: true }),
     // Admin moderation audit (activation wiring). activated_at/by stamp the admin approval that flips
     // pending → active (and triggers dispatch); rejected_at/reject_reason stamp a pending → rejected.
     // All nullable — only one branch is ever taken, and a draft/pending campaign has neither set.

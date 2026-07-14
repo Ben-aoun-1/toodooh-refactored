@@ -87,6 +87,8 @@ const seedCampaign = async (
     // = no budget (the no_budget gate).
     requestedBudgetTnd?: number | null;
     campaignType?: string;
+    startDate?: string;
+    endDate?: string;
   } = {},
 ): Promise<string> => {
   const requestedBudget =
@@ -102,8 +104,8 @@ const seedCampaign = async (
       name: 'Activate Test',
       campaignType: opts.campaignType ?? 'standard',
       status: opts.status ?? 'pending',
-      startDate: '2024-01-01', // Mon
-      endDate: '2024-01-02', // Tue
+      startDate: opts.startDate ?? '2024-01-01', // Mon
+      endDate: opts.endDate ?? '2024-01-02', // Tue
       creativeId: opts.creativeId ?? null,
       requestedBudget,
     })
@@ -424,6 +426,28 @@ describe('admin campaign moderation — activation keystone (real Postgres)', ()
     const res = await app.inject({ method: 'GET', url: '/api/admin/campaigns?status=pending' });
     const rows = res.json() as { id: string; derived_i_cible: number | null }[];
     expect(rows.find((r) => r.id === campaignId)?.derived_i_cible).toBeNull();
+  });
+
+  it("CF-S1: a FUTURE-dated approval routes to 'upcoming' (dispatch still runs at approval)", async () => {
+    const { admin, campaignId } = await seedActivatable({ fundTnd: 500 });
+    mockSession(admin);
+    // Re-window the pending campaign into the future (Mon/Tue 2027 — same weekdays as the
+    // affluence fixture, so dispatch still covers).
+    await db
+      .update(campaigns)
+      .set({ startDate: '2027-01-04', endDate: '2027-01-05' })
+      .where(eq(campaigns.id, campaignId));
+    const res = await activate(campaignId);
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { campaign: { status: string }; plan: unknown };
+    expect(body.campaign.status).toBe('upcoming');
+    expect(body.plan).toBeDefined(); // the plan froze at approval regardless of the routing
+    const [row] = await db
+      .select({ status: campaigns.status, activatedAt: campaigns.activatedAt })
+      .from(campaigns)
+      .where(eq(campaigns.id, campaignId));
+    expect(row?.status).toBe('upcoming');
+    expect(row?.activatedAt).not.toBeNull(); // the approval stamp is set either way
   });
 
   it('404 for a nonexistent campaign; 403 for a non-admin', async () => {
