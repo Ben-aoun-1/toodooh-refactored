@@ -1,8 +1,10 @@
 // CF-Q2 (spec §1.4) — the campaign start-date rule, centralized so jours fériés can land HERE
 // later without touching any caller (the spec's clarify box on holidays is still open). RULED:
 // the spec's EXAMPLE is authoritative over its prose — the floor is TWO WORKING DAYS (Mon–Fri)
-// of lead (ven→mar, jeu→lun, sam/dim→mar, lun→mer), and week-end start dates are blocked
-// outright (floor AND selection).
+// of lead (ven→mar, jeu→lun, sam/dim→mar, lun→mer).
+// CF-W1 ruling #10 (2026-07-14): campaigns may START on ANY day, week-ends included — the
+// working-day lead is the ONLY constraint. isJourOuvre + JOURS_FERIES stay: they drive the LEAD
+// COUNTING (and the admin-holiday seam), no longer start-day eligibility.
 //
 // Timezone: the rule counts from the CALENDAR DATE in Africa/Tunis (UTC+1, no DST since 2008) —
 // a campaign day is a Tunisian day regardless of the server's TZ. Intl extracts the Tunis date;
@@ -46,14 +48,16 @@ export function premiereDateDisponible(today: Date = new Date()): string {
   return d;
 }
 
-export type StartDateViolation = 'NON_WORKING_DAY' | 'TOO_SOON';
+export type StartDateViolation = 'TOO_SOON';
 
-/** Why `startIso` is not an acceptable campaign start today — or null when it is. */
+/**
+ * Why `startIso` is not an acceptable campaign start today — or null when it is. Ruling #10:
+ * the working-day LEAD is the only constraint; a week-end start past the floor is legal.
+ */
 export function startDateViolation(
   startIso: string,
   today: Date = new Date(),
 ): StartDateViolation | null {
-  if (!isJourOuvre(startIso)) return 'NON_WORKING_DAY';
   if (startIso < premiereDateDisponible(today)) return 'TOO_SOON';
   return null;
 }

@@ -56,23 +56,37 @@ describe('isJourOuvre', () => {
   });
 });
 
-describe('startDateViolation', () => {
+describe('startDateViolation — ruling #10: the working-day LEAD is the only constraint', () => {
   const today = at('2026-07-13'); // lundi → floor 2026-07-15 (mercredi)
 
-  it('null for the floor itself and anything later that is ouvré', () => {
+  it('null for the floor itself and anything later — WEEK-ENDS INCLUDED', () => {
     expect(startDateViolation('2026-07-15', today)).toBeNull();
     expect(startDateViolation('2026-07-16', today)).toBeNull();
-    expect(startDateViolation('2026-07-24', today)).toBeNull(); // a later vendredi
+    expect(startDateViolation('2026-07-18', today)).toBeNull(); // samedi past the floor: LEGAL
+    expect(startDateViolation('2026-07-19', today)).toBeNull(); // dimanche past the floor: LEGAL
+    expect(startDateViolation('2026-08-15', today)).toBeNull(); // a far samedi: LEGAL
   });
 
-  it('TOO_SOON for an ouvré date before the floor (today and J+1 included)', () => {
+  it('from mercredi: floor vendredi — the following samedi/dimanche are selectable', () => {
+    const wednesday = at('2026-07-15');
+    expect(premiereDateDisponible(wednesday)).toBe('2026-07-17'); // vendredi
+    expect(startDateViolation('2026-07-17', wednesday)).toBeNull();
+    expect(startDateViolation('2026-07-18', wednesday)).toBeNull(); // samedi
+    expect(startDateViolation('2026-07-19', wednesday)).toBeNull(); // dimanche
+  });
+
+  it('from vendredi: floor mardi (the unchanged example) — the intervening week-end is TOO_SOON, never NON_WORKING_DAY', () => {
+    const friday = at('2026-07-17');
+    expect(premiereDateDisponible(friday)).toBe('2026-07-21'); // mardi
+    expect(startDateViolation('2026-07-18', friday)).toBe('TOO_SOON'); // samedi BEFORE the floor
+    expect(startDateViolation('2026-07-19', friday)).toBe('TOO_SOON'); // dimanche BEFORE the floor
+    expect(startDateViolation('2026-07-20', friday)).toBe('TOO_SOON'); // lundi BEFORE the floor
+    expect(startDateViolation('2026-07-21', friday)).toBeNull();
+  });
+
+  it('TOO_SOON for any date before the floor (today, J+1, the past)', () => {
     expect(startDateViolation('2026-07-13', today)).toBe('TOO_SOON');
     expect(startDateViolation('2026-07-14', today)).toBe('TOO_SOON');
-    expect(startDateViolation('2026-07-10', today)).toBe('TOO_SOON'); // the past
-  });
-
-  it('NON_WORKING_DAY for any week-end date, even far in the future (blocked outright)', () => {
-    expect(startDateViolation('2026-07-18', today)).toBe('NON_WORKING_DAY');
-    expect(startDateViolation('2026-08-15', today)).toBe('NON_WORKING_DAY'); // a far samedi
+    expect(startDateViolation('2026-07-10', today)).toBe('TOO_SOON');
   });
 });
