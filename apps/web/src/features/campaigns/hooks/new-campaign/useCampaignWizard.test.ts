@@ -15,7 +15,7 @@ import {
   validateBasics,
   validateDates,
   validateCart,
-  validateCoverage,
+  validateZones,
   validateCreative,
   validateTargeting,
 } from './wizard-steps';
@@ -28,6 +28,7 @@ function blankState(overrides: Partial<WizardState> = {}): WizardState {
     endDate: null,
     creativeId: null,
     requestedBudget: null,
+    zoneIds: [],
     draftCampaignId: '',
     ...overrides,
   };
@@ -69,7 +70,7 @@ describe('getStepList', () => {
       'basics',
       'targeting',
       'dates',
-      'coverage',
+      'zones',
       'creative',
       'cart',
     ]);
@@ -78,7 +79,7 @@ describe('getStepList', () => {
       'Nom et type',
       'Catégories',
       'Période',
-      'Couverture',
+      'Zones géographiques',
       'Création',
       'Validation',
     ]);
@@ -104,8 +105,8 @@ describe('validators', () => {
     expect(validateTargeting(blankState())).toBe(true);
   });
 
-  it('validateCoverage is always satisfiable (read-only map preview, no gate)', () => {
-    expect(validateCoverage(blankState())).toBe(true);
+  it('validateZones is always satisfiable (optional — no zones = whole network)', () => {
+    expect(validateZones(blankState())).toBe(true);
   });
 
   it('validateCreative requires a linked creative id', () => {
@@ -229,6 +230,7 @@ describe('performSubmit', () => {
       start_date: state.startDate,
       end_date: state.endDate,
       requested_budget: 750,
+      zone_ids: state.zoneIds,
     });
     expect(deps.submit).toHaveBeenCalledWith('cmp-9');
   });
@@ -280,6 +282,7 @@ describe('performSaveDraft (Enregistrer — save without submit)', () => {
       start_date: state.startDate,
       end_date: state.endDate,
       requested_budget: 750,
+      zone_ids: state.zoneIds,
     });
     expect(update).toHaveBeenCalledTimes(1);
   });
@@ -296,6 +299,7 @@ describe('performSaveDraft (Enregistrer — save without submit)', () => {
       start_date: state.startDate,
       end_date: state.endDate,
       requested_budget: 500,
+      zone_ids: state.zoneIds,
     });
   });
 

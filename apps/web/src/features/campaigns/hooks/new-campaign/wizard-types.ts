@@ -44,6 +44,8 @@ export interface WizardState {
   creativeId: string | null;
   /** Interim manual cart: advertiser-facing INDICATIVE budget (TND). PATCHed onto requested_budget. */
   requestedBudget: number | null;
+  /** CF-Z1 — the selected zone ids (replace-set persisted as zone_ids; [] = whole network). */
+  zoneIds: string[];
   /** The created-early draft's campaigns-table id (`''` until POST /api/campaigns returns). */
   draftCampaignId: string;
 }

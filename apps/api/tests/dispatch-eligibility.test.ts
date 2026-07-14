@@ -6,6 +6,7 @@ import {
   computeR,
   computeRi,
   screenhostMatchesTargeting,
+  screenhostMatchesZones,
 } from '../src/lib/dispatch/eligibility.js';
 
 describe('screenhostMatchesTargeting — category × class with NULL = "toutes"', () => {
@@ -111,5 +112,29 @@ describe('capaciteUtile + computeRi (A.5)', () => {
   });
   it('yields R when R_min_efficace > R (venue cannot reach the efficient floor)', () => {
     expect(computeRi(18000, 100, 12, 40, 30)).toBe(30);
+  });
+});
+
+// ── CF-Z1 (VF US-2.1) — the zone eligibility clause ───────────────────────────────────────────
+describe('screenhostMatchesZones', () => {
+  const GT = '2c8e5a1e-4b7d-4f3a-9c6e-1a2b3c4d5e6f';
+  const SFAX = '99999999-9999-4999-8999-999999999999';
+
+  it('match: the venue zone is among the campaign zones', () => {
+    expect(screenhostMatchesZones(GT, [GT])).toBe(true);
+    expect(screenhostMatchesZones(GT, [SFAX, GT])).toBe(true);
+  });
+
+  it('no-match: a zoned campaign excludes venues in other zones', () => {
+    expect(screenhostMatchesZones(GT, [SFAX])).toBe(false);
+  });
+
+  it('no-zones-pass: a campaign without zones passes every venue (whole network)', () => {
+    expect(screenhostMatchesZones(GT, [])).toBe(true);
+    expect(screenhostMatchesZones(null, [])).toBe(true);
+  });
+
+  it('a NULL venue zone fails any ZONED campaign', () => {
+    expect(screenhostMatchesZones(null, [GT])).toBe(false);
   });
 });

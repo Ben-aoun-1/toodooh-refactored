@@ -16,6 +16,7 @@ const state = (over: Partial<WizardState> = {}): WizardState => ({
   endDate: '2026-08-21',
   creativeId: null,
   requestedBudget: 900,
+  zoneIds: [],
   draftCampaignId: 'draft-1',
   ...over,
 });

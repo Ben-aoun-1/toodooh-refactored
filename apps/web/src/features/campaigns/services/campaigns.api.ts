@@ -24,6 +24,8 @@ export interface CampaignView {
   // no required field). delivered_impressions/spend_tnd/reconciled_at are null until reconciliation;
   // targeting is the campaign's category × class lines (NULL on either axis = "toutes").
   targeting?: { category_id: string | null; category_name: string | null; class: string | null }[];
+  /** CF-Z1 — the campaign's zones (GET /mine + GET /:id; absent on create/PATCH responses). */
+  zones?: { zone_id: string; name: string }[];
   delivered_impressions?: number | null;
   spend_tnd?: number | null;
   reconciled_at?: string | null;
@@ -45,6 +47,8 @@ export interface UpdateCampaignInput {
   end_date?: string | null;
   description?: string | null;
   requested_budget?: number | null;
+  /** CF-Z1 — replace-set of targeted zones; [] clears (whole network). */
+  zone_ids?: string[];
   creative_id?: string | null;
 }
 

@@ -7,6 +7,7 @@ import {
   campaignDispatchAllocation,
   campaignDispatchPlan,
   campaignTargeting,
+  campaignZones,
   notifications,
   screenhostAffluence,
   screenhosts,
@@ -18,6 +19,7 @@ import {
   capaciteUtile,
   computeR,
   screenhostMatchesTargeting,
+  screenhostMatchesZones,
 } from './eligibility.js';
 import { type PoolEntry, buildPlan } from './plan.js';
 import { buildWindowDays } from './window.js';
@@ -61,7 +63,15 @@ export const runDispatch = async (
   const config = await getDispatchConfig();
   const windowDays = buildWindowDays(campaign.startDate, campaign.endDate);
 
-  // Hard filters: active + horaires set + capacity present + matches targeting (category × class).
+  // CF-Z1 — the campaign's targeted zones (VF US-2.1): none = whole network on that criterion.
+  const zoneRows = await db
+    .select({ zoneId: campaignZones.zoneId })
+    .from(campaignZones)
+    .where(eq(campaignZones.campaignId, campaign.id));
+  const campaignZoneIds = zoneRows.map((z) => z.zoneId);
+
+  // Hard filters: active + horaires set + capacity present + matches targeting (category × class)
+  // + in a targeted zone (CF-Z1 — with prod entirely Grand Tunis this changes nothing today).
   const candidates = (
     await db
       .select({
@@ -69,6 +79,7 @@ export const runDispatch = async (
         sps: screenhosts.sps,
         businessSectorId: screenhosts.businessSectorId,
         class: screenhosts.class,
+        zoneId: screenhosts.zoneId,
         openingHour: screenhosts.openingHour,
         closingHour: screenhosts.closingHour,
         broadcastCapacity: screenhosts.broadcastCapacity,
@@ -79,7 +90,11 @@ export const runDispatch = async (
     (sh) =>
       sh.broadcastCapacity !== null &&
       broadcastableHours(sh.openingHour, sh.closingHour).length > 0 &&
-      screenhostMatchesTargeting({ businessSectorId: sh.businessSectorId, class: sh.class }, lines),
+      screenhostMatchesTargeting(
+        { businessSectorId: sh.businessSectorId, class: sh.class },
+        lines,
+      ) &&
+      screenhostMatchesZones(sh.zoneId, campaignZoneIds),
   );
 
   const candidateIds = candidates.map((c) => c.id);

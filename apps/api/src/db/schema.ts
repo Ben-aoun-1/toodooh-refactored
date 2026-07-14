@@ -349,6 +349,12 @@ export const screenhosts = pgTable(
     }),
     // Venue tier — reuses targeting_class so a targeting line's class matches the venue's class.
     class: targetingClass('class'),
+    // CF-Z1 — the venue's predefined zone (FK → zones). Backfilled AND defaulted to Grand Tunis
+    // by mig 0040 (signup untouched — the column default carries new venues). Distinct from the
+    // legacy free-text `zone` address field above.
+    zoneId: uuid('zone_id')
+      .references(() => zones.id)
+      .default(sql`'2c8e5a1e-4b7d-4f3a-9c6e-1a2b3c4d5e6f'::uuid`),
     // Broadcast operating hours — V1 = one daily window [opening_hour, closing_hour); nullable until
     // set. Per-weekday hours + overnight (closing ≤ opening) semantics are deferred to L-disp.
     openingHour: integer('opening_hour'),
@@ -810,6 +816,33 @@ export type NewCreative = typeof creatives.$inferInsert;
 // = "tout le réseau" (target everything). The UNIQUE index uses NULLS NOT DISTINCT (PG15+) so NULL
 // counts as a value — a line can appear at most once (dedup). Deleting a campaign cascades its lines.
 // (the targeting_class enum is declared above screenhosts — it is shared by the venue's class column.)
+
+// ── CF-Z1 — Zones V1 (Grand Tunis) ──────────────────────────────────────────────────────────────
+// Predefined geographic zones (VF US-2.1). V1 seeds ONE row ('Grand Tunis', mig 0040) and both
+// backfills and DEFAULTS screenhosts.zone_id to it, so today's eligibility behavior is unchanged.
+// Future zones arrive as rows (predefined list or map picking — operator decision pending).
+// NOTE: screenhosts.zone (free text, signup address sub-form) is UNRELATED legacy — never an FK.
+export const zones = pgTable('zones', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull().unique(),
+  active: boolean('active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// A campaign's targeted zones (replace-set like campaign_targeting). NO rows = whole network on
+// the zone criterion (VF US-2.1).
+export const campaignZones = pgTable(
+  'campaign_zones',
+  {
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    zoneId: uuid('zone_id')
+      .notNull()
+      .references(() => zones.id),
+  },
+  (table) => [unique('campaign_zones_pair_unique').on(table.campaignId, table.zoneId)],
+);
 
 export const campaignTargeting = pgTable(
   'campaign_targeting',

@@ -10,11 +10,13 @@ import {
   campaignDispatchAllocation,
   campaignDispatchPlan,
   campaignTargeting,
+  campaignZones,
   campaigns,
   notifications,
   screenhostAffluence,
   screenhosts,
   users,
+  zones,
 } from '../src/db/schema.js';
 import { campaignDispatchRoutes } from '../src/routes/campaign-dispatch.js';
 
@@ -165,6 +167,52 @@ describe('campaign dispatch entrypoint (L-disp, real Postgres)', () => {
     expect(
       (await dispatch(campaignId, { i_cible: 20000, cpm: 10, s: 10, t: 0.8 })).statusCode,
     ).toBe(409);
+  });
+
+  // ── CF-Z1 — the zone clause: [Grand Tunis] ≡ no zones today (prod is entirely Grand Tunis);
+  // a foreign zone empties the pool. ─────────────────────────────────────────────────────────────
+  const GRAND_TUNIS_ID = '2c8e5a1e-4b7d-4f3a-9c6e-1a2b3c4d5e6f';
+
+  it('NO-BEHAVIOR-CHANGE: a campaign zoned [Grand Tunis] dispatches EXACTLY like a no-zones one', async () => {
+    const admin = await seedUser({ role: 'admin' });
+    const advertiser = await seedUser({ role: 'advertiser' });
+    const owner = await seedUser({ role: 'individual_owner' });
+    const cat = await ownerSectorId();
+    const campaignId = await seedCampaign(advertiser);
+    await seedTargeting(campaignId, cat, 'premium');
+    await db.insert(campaignZones).values({ campaignId, zoneId: GRAND_TUNIS_ID });
+    await seedEligibleScreenhost(owner, cat, 'premium', 100); // zone_id: the GT column DEFAULT
+    mockSession(admin);
+
+    // The SAME fixture + assertions as the no-zones happy path above — the clause changes nothing.
+    const res = await dispatch(campaignId, { i_cible: 20000, cpm: 10, s: 10, t: 0.8 });
+    expect(res.statusCode).toBe(201);
+    const body = res.json() as PlanResponse;
+    expect(body.plan.couvert).toBe(20000);
+    expect(body.plan.n_retenus).toBe(1);
+    expect(body.plan.is_partial).toBe(false);
+    expect(body.allocations).toHaveLength(1);
+    expect(body.allocations[0]?.ii_potentiel).toBe(20000);
+    expect(body.allocations[0]?.r_i).toBe(10);
+  });
+
+  it('a campaign zoned to a DIFFERENT zone excludes Grand-Tunis venues (422 empty pool)', async () => {
+    const admin = await seedUser({ role: 'admin' });
+    const advertiser = await seedUser({ role: 'advertiser' });
+    const owner = await seedUser({ role: 'individual_owner' });
+    const cat = await ownerSectorId();
+    const [sfax] = await db
+      .insert(zones)
+      .values({ name: `Grand Sfax ${Date.now()}-${(seq += 1)}`, active: true })
+      .returning();
+    const campaignId = await seedCampaign(advertiser);
+    await seedTargeting(campaignId, cat, 'premium');
+    await db.insert(campaignZones).values({ campaignId, zoneId: sfax?.id ?? '' });
+    await seedEligibleScreenhost(owner, cat, 'premium', 100); // Grand Tunis by default
+    mockSession(admin);
+
+    const res = await dispatch(campaignId, { i_cible: 20000, cpm: 10, s: 10, t: 0.8 });
+    expect(res.statusCode).toBe(422); // NOT_DELIVERABLE — the zone clause emptied the pool
   });
 
   it('flags PARTIAL when the pool cannot cover I_cible', async () => {

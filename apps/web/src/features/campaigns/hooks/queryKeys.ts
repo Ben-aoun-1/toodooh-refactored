@@ -77,4 +77,7 @@ export const campaignsKeys = {
 
   /** The advertiser-readable CPM pricing config — the Validation-step impressions estimate. */
   pricingConfig: () => [...campaignsKeys.all, 'pricingConfig'] as const,
+
+  /** CF-Z1 — the predefined zones the wizard offers (GET /api/zones). */
+  zones: () => [...campaignsKeys.all, 'zones'] as const,
 };

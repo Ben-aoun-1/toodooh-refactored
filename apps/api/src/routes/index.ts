@@ -30,6 +30,7 @@ import { screensRoutes } from './screens.js';
 import { signinRoutes } from './signin.js';
 import { signupRoute } from './signup.js';
 import { taxAvailabilityRoute } from './tax-availability.js';
+import { zonesRoutes } from './zones.js';
 
 // Aggregates all application-shaped /api/* routes. Future routes
 // (/api/admin/users) register here.
@@ -106,6 +107,8 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   await app.register(agentRoutes);
   // Zones cutover (Z1): public GET catalog + admin-guarded scalar writes.
   await app.register(predefinedZonesRoutes);
+  // CF-Z1 — the NEW zones read (wizard); distinct from the legacy predefined_zones CRUD above.
+  await app.register(zonesRoutes);
   // Public reference-data reads (no auth) — register last; they add no preHandler.
   await app.register(referenceRoutes);
 };
