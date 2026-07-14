@@ -297,23 +297,31 @@ describe('campaigns draft lifecycle (advertiser, real Postgres)', () => {
     expect(await db.select().from(campaigns)).toHaveLength(0); // nothing persisted
   });
 
-  it('rejects a WEEK-END start outright, even far beyond the floor (400 NON_WORKING_DAY)', async () => {
+  it('ACCEPTS a week-end start past the floor on create, PATCH and submit (ruling #10)', async () => {
     const me = await seedUser();
     mockSession(me);
+    const saturday = nextSaturday(plusDays(floorDate(), 7));
     const res = await app.inject({
       method: 'POST',
       url: '/api/campaigns',
-      payload: {
-        name: 'Samedi lointain',
-        campaign_type: 'standard',
-        start_date: nextSaturday(plusDays(floorDate(), 30)),
-      },
+      payload: { name: 'Départ samedi', campaign_type: 'standard', start_date: saturday },
     });
-    expect(res.statusCode).toBe(400);
-    expect((res.json() as { reason: string }).reason).toBe('NON_WORKING_DAY');
+    expect(res.statusCode).toBe(201);
+    const id = (res.json() as { id: string }).id;
+
+    const patched = await app.inject({
+      method: 'PATCH',
+      url: `/api/campaigns/${id}`,
+      payload: { start_date: nextSaturday(plusDays(saturday, 1)) },
+    });
+    expect(patched.statusCode).toBe(200);
+
+    const submitted = await app.inject({ method: 'POST', url: `/api/campaigns/${id}/submit` });
+    expect(submitted.statusCode).toBe(200);
+    expect((submitted.json() as { status: string }).status).toBe('pending');
   });
 
-  it('rejects the same floor violations on PATCH; an explicit null still clears the date', async () => {
+  it('rejects a too-soon start on PATCH; an explicit null still clears the date', async () => {
     const me = await seedUser();
     const id = await seedCampaign(me);
     mockSession(me);
@@ -324,12 +332,6 @@ describe('campaigns draft lifecycle (advertiser, real Postgres)', () => {
     });
     expect(tooSoon.statusCode).toBe(400);
     expect((tooSoon.json() as { reason: string }).reason).toBe('TOO_SOON');
-    const weekend = await app.inject({
-      method: 'PATCH',
-      url: `/api/campaigns/${id}`,
-      payload: { start_date: nextSaturday(floorDate()) },
-    });
-    expect((weekend.json() as { reason: string }).reason).toBe('NON_WORKING_DAY');
     const cleared = await app.inject({
       method: 'PATCH',
       url: `/api/campaigns/${id}`,

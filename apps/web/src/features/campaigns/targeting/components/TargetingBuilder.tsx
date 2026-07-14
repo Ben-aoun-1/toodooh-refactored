@@ -5,7 +5,9 @@ import { useState } from 'react';
 import {
   type TargetingLine,
   allNetworkLine,
+  categoryLineLabel,
   duplicateIndexOf,
+  firstAvailableCategoryLine,
   firstAvailableLine,
   isAllNetwork,
   lineLabel,
@@ -31,6 +33,9 @@ interface TargetingBuilderProps {
   onChange: (next: BuilderLine[]) => void;
   categories: CategoryOption[];
   disabled?: boolean;
+  /** CF-W1 — the wizard targets CATEGORIES only: the class control is HIDDEN (not removed —
+   * classes return later), every line carries the all-value class (null), dedup is by category. */
+  categoryOnly?: boolean;
 }
 
 const FLASH_MS = 1800;
@@ -40,6 +45,7 @@ export function TargetingBuilder({
   onChange,
   categories,
   disabled = false,
+  categoryOnly = false,
 }: TargetingBuilderProps) {
   // Key of the existing line to flash amber when a duplicate is attempted (transient UI only).
   const [flashKey, setFlashKey] = useState<string | null>(null);
@@ -74,8 +80,13 @@ export function TargetingBuilder({
 
   const removeLine = (index: number) => onChange(value.filter((_, i) => i !== index));
 
+  const nextSeed = () =>
+    categoryOnly
+      ? firstAvailableCategoryLine(value, categoryIds)
+      : firstAvailableLine(value, categoryIds);
+
   const addLine = () => {
-    const seed = firstAvailableLine(value, categoryIds);
+    const seed = nextSeed();
     if (!seed) return; // every combination already targeted
     onChange([...value, newBuilderLine(seed)]);
   };
@@ -83,7 +94,7 @@ export function TargetingBuilder({
   const enableAllNetwork = () => onChange([newBuilderLine(allNetworkLine())]);
   const disableAllNetwork = () => onChange([]);
 
-  const addExhausted = firstAvailableLine(value, categoryIds) === null;
+  const addExhausted = nextSeed() === null;
 
   return (
     <section className="space-y-5">
@@ -92,7 +103,9 @@ export function TargetingBuilder({
           Quelles audiences voulez-vous toucher&nbsp;?
         </h2>
         <p className="text-sm text-gray-500">
-          Ciblez par type de lieu et par standing, ou diffusez sur l’ensemble du réseau.
+          {categoryOnly
+            ? 'Ciblez par type de lieu, ou diffusez sur l’ensemble du réseau.'
+            : 'Ciblez par type de lieu et par standing, ou diffusez sur l’ensemble du réseau.'}
         </p>
       </header>
 
@@ -184,14 +197,16 @@ export function TargetingBuilder({
                           onChange={(categoryId) => editLine(index, { categoryId })}
                         />
                       </div>
-                      <div className="flex-1">
-                        <ClassSegmentedControl
-                          value={line.class}
-                          groupId={line.key}
-                          disabled={disabled}
-                          onChange={(cls) => editLine(index, { class: cls })}
-                        />
-                      </div>
+                      {!categoryOnly && (
+                        <div className="flex-1">
+                          <ClassSegmentedControl
+                            value={line.class}
+                            groupId={line.key}
+                            disabled={disabled}
+                            onChange={(cls) => editLine(index, { class: cls })}
+                          />
+                        </div>
+                      )}
                       <button
                         type="button"
                         aria-label="Retirer cette audience"
@@ -253,7 +268,9 @@ export function TargetingBuilder({
                         exit={{ opacity: 0, scale: 0.85 }}
                         className="inline-flex items-center gap-1.5 rounded-full bg-brand-primary/15 py-1 pl-3 pr-1.5 text-sm font-medium text-brand-deep"
                       >
-                        {lineLabel(line, categoryName)}
+                        {categoryOnly
+                          ? categoryLineLabel(line, categoryName)
+                          : lineLabel(line, categoryName)}
                         <button
                           type="button"
                           aria-label={`Retirer ${lineLabel(line, categoryName)}`}

@@ -24,16 +24,14 @@ import { requireAuth } from '../middleware/require-auth.js';
 // leak). Edits and deletes are draft-only (409 once submitted); submit is the single draft→pending
 // transition. Targeting/video/map/owner-approval/pricing land in later lanes.
 
-// CF-Q2 (spec §1.4) — the start-date floor lives in ONE place (lib/campaign-dates: J+2 working
-// days, week-ends blocked; jours fériés land there later). Enforced on create, PATCH and submit
-// (a stale draft must not slip through at submit time). Admin activation is untouched (parked).
+// CF-Q2 (spec §1.4) — the start-date floor lives in ONE place (lib/campaign-dates: a J+2
+// WORKING-DAY LEAD; per ruling #10 any start day is legal, week-ends included). Enforced on
+// create, PATCH and submit (a stale draft must not slip through at submit time). Admin
+// activation is untouched (parked).
 const startDateRejection = (violation: StartDateViolation) => ({
   error: 'INVALID_START_DATE',
   reason: violation,
-  message:
-    violation === 'NON_WORKING_DAY'
-      ? 'Campaigns start on working days (Mon-Fri).'
-      : 'The start date must be at least two working days ahead.',
+  message: 'The start date must be at least two working days ahead.',
   first_available_start_date: premiereDateDisponible(),
 });
 

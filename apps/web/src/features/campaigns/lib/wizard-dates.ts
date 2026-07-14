@@ -27,13 +27,9 @@ export function parseCampaignUiDate(value: Date | string | null | undefined): Da
   return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), 0, 0, 0, 0);
 }
 
-// ── CF-Q2 (spec §1.4) — the server start floor, consumed (never recomputed) by StepBasics ──────
-
-/** Week-end dates are unselectable in the START picker (react-datepicker filterDate). */
-export function isSelectableStartDate(date: Date): boolean {
-  const day = date.getDay();
-  return day !== 0 && day !== 6;
-}
+// ── CF-Q2 (spec §1.4) — the server start floor, consumed (never recomputed) by the Période
+// step. CF-W1 ruling #10: any start day is legal (week-ends included) — the weekend filter is
+// REPEALED; the floor (working-day lead) is the only constraint.
 
 /** French helper line under the start field — from the server's first_available_start_date. */
 export function startFloorHelperText(firstAvailableIso: string | undefined): string | null {
@@ -44,5 +40,5 @@ export function startFloorHelperText(firstAvailableIso: string | undefined): str
     month: '2-digit',
     year: 'numeric',
   });
-  return `Premier départ possible : ${label} — les campagnes démarrent en jours ouvrés.`;
+  return `Lancement possible à partir du ${label}.`;
 }

@@ -4,13 +4,16 @@ import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState }
 import { useOwnerBusinessSectors } from '@/features/auth/hooks/useOwnerBusinessSectors';
 
 import { useCampaignTargeting } from '../hooks/useCampaignTargeting';
-import { fromWire, needsTargetingFlush, toWire } from '../lib/targeting-lines';
+import { fromWire, needsTargetingFlush, toCategoryOnly, toWire } from '../lib/targeting-lines';
 
 import { type BuilderLine, TargetingBuilder, newBuilderLine } from './TargetingBuilder';
 
 interface CampaignTargetingPanelProps {
   /** The NEW campaigns-table draft id. When null the builder runs local-only (not yet persistable). */
   campaignId: string | null;
+  /** CF-W1 — category-only wizard mode: hydrated lines normalize (class→all-value, dedup by
+   * category) and the builder hides the class control. */
+  categoryOnly?: boolean;
 }
 
 /** CF-Q1 — the step's Suivant flushes dirty edits through this handle before advancing. */
@@ -25,7 +28,7 @@ export interface CampaignTargetingPanelHandle {
 export const CampaignTargetingPanel = forwardRef<
   CampaignTargetingPanelHandle,
   CampaignTargetingPanelProps
->(function CampaignTargetingPanel({ campaignId }, ref) {
+>(function CampaignTargetingPanel({ campaignId, categoryOnly = false }, ref) {
   const sectors = useOwnerBusinessSectors();
   const targeting = useCampaignTargeting(campaignId);
 
@@ -33,12 +36,15 @@ export const CampaignTargetingPanel = forwardRef<
   const hydrated = useRef(false);
 
   // Seed the working set from the persisted lines once they arrive (don't clobber later edits).
+  // CF-W1 category-only: legacy classed lines normalize on hydrate (class→null, dedup by
+  // category) — the next save persists the normalized set.
   useEffect(() => {
     if (!hydrated.current && !targeting.isLoading) {
-      setLines(fromWire(targeting.rows).map(newBuilderLine));
+      const wire = fromWire(targeting.rows);
+      setLines((categoryOnly ? toCategoryOnly(wire) : wire).map(newBuilderLine));
       hydrated.current = true;
     }
-  }, [targeting.isLoading, targeting.rows]);
+  }, [targeting.isLoading, targeting.rows, categoryOnly]);
 
   const categories = useMemo(
     () => (sectors.data ?? []).map((s) => ({ id: s.id, name: s.name })),
@@ -83,7 +89,12 @@ export const CampaignTargetingPanel = forwardRef<
 
   return (
     <div className="space-y-6">
-      <TargetingBuilder value={lines} onChange={setLines} categories={categories} />
+      <TargetingBuilder
+        value={lines}
+        onChange={setLines}
+        categories={categories}
+        categoryOnly={categoryOnly}
+      />
 
       {targeting.isError && (
         <p className="flex items-center gap-2 text-sm text-red-500">
