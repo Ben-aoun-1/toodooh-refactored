@@ -68,10 +68,9 @@ export async function performCreateDraft(args: {
   if (!state.campaignName.trim()) {
     return { kind: 'error', error: new Error('Le nom de la campagne est obligatoire') };
   }
-  if (!state.startDate || !state.endDate) {
-    return { kind: 'error', error: new Error('Les dates de début et fin sont obligatoires') };
-  }
-  if (state.startDate >= state.endDate) {
+  // CF-W1 — dates moved to the Période step (3): the create-early draft is legitimately
+  // date-less (the API accepts nullable dates; they PATCH later via saveDraft/submit).
+  if (state.startDate && state.endDate && state.startDate >= state.endDate) {
     return {
       kind: 'error',
       error: new Error('La date de début doit être antérieure à la date de fin'),
@@ -92,7 +91,21 @@ export async function performCreateDraft(args: {
 }
 
 /**
- * Interim cart submit: PATCH the indicative requested_budget onto the draft, then POST /:id/submit
+ * The full draft PATCH body (CF-W1): dates now arrive at the Période step (after create-early),
+ * so save/submit persist the WHOLE editable state, not just the budget. An emptied name is
+ * omitted (the API's name is min-1; the draft keeps its stored name).
+ */
+function draftPatch(state: WizardState): UpdateCampaignInput {
+  return {
+    ...(state.campaignName.trim() ? { name: state.campaignName.trim() } : {}),
+    start_date: state.startDate,
+    end_date: state.endDate,
+    requested_budget: state.requestedBudget,
+  };
+}
+
+/**
+ * Interim cart submit: PATCH the draft state (name/dates/indicative budget), then POST /:id/submit
  * (draft → pending). Requires the create-early draft and a positive budget — both gated by the step
  * validators, re-checked here so the function is safe to call directly.
  */
@@ -108,7 +121,7 @@ export async function performSubmit(args: {
     return { kind: 'error', error: new Error('Le budget doit être supérieur à 0 dinar') };
   }
   try {
-    await deps.update(state.draftCampaignId, { requested_budget: state.requestedBudget });
+    await deps.update(state.draftCampaignId, draftPatch(state));
     const campaign = await deps.submit(state.draftCampaignId);
     return { kind: 'success', campaign };
   } catch (e) {
@@ -135,9 +148,7 @@ export async function performSaveDraft(args: {
     return { kind: 'error', error: new Error('Le budget doit être supérieur à 0 dinar') };
   }
   try {
-    const campaign = await deps.update(state.draftCampaignId, {
-      requested_budget: state.requestedBudget,
-    });
+    const campaign = await deps.update(state.draftCampaignId, draftPatch(state));
     return { kind: 'success', campaign };
   } catch (e) {
     return { kind: 'error', error: e instanceof Error ? e : new Error(String(e)) };

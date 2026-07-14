@@ -14,6 +14,8 @@ import ariane4 from '@/assets/ariane/4.png';
 import ariane4s from '@/assets/ariane/4s.png';
 import ariane5 from '@/assets/ariane/5.png';
 import ariane5s from '@/assets/ariane/5s.png';
+import ariane6 from '@/assets/ariane/6.png';
+import ariane6s from '@/assets/ariane/6s.png';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { useCampaignWizard } from '@/features/campaigns/hooks/new-campaign/useCampaignWizard';
 import { buildInitialWizardState } from '@/features/campaigns/hooks/new-campaign/wizard-init';
@@ -34,6 +36,7 @@ import StepBasics from '@/features/campaigns/pages/new-campaign/StepBasics';
 import StepCart from '@/features/campaigns/pages/new-campaign/StepCart';
 import StepCoverage from '@/features/campaigns/pages/new-campaign/StepCoverage';
 import StepCreative from '@/features/campaigns/pages/new-campaign/StepCreative';
+import StepDates from '@/features/campaigns/pages/new-campaign/StepDates';
 import StepTargeting from '@/features/campaigns/pages/new-campaign/StepTargeting';
 import { useWizardResumeStore } from '@/features/campaigns/stores/wizard-resume.store';
 import { getErrorMessage } from '@/lib/errors';
@@ -41,8 +44,8 @@ import { logger } from '@/lib/logger';
 
 const log = logger.child({ module: 'NewCampaign' });
 
-const ARIANE_ICONS = [ariane1, ariane2, ariane3, ariane4, ariane5] as const;
-const ARIANE_ICONS_DONE = [ariane1s, ariane2s, ariane3s, ariane4s, ariane5s] as const;
+const ARIANE_ICONS = [ariane1, ariane2, ariane3, ariane4, ariane5, ariane6] as const;
+const ARIANE_ICONS_DONE = [ariane1s, ariane2s, ariane3s, ariane4s, ariane5s, ariane6s] as const;
 
 // Loose edit-mode record carried in router state (MyCampaigns navigation). The wizard prefills name +
 // dates from it; the full edit round-trip on the new engine lands with the MyCampaigns repoint (C6).
@@ -58,10 +61,11 @@ interface EditNavRecord {
 }
 
 /**
- * The de-Supabase campaign wizard — a 5-step orchestrator on the campaigns REST engine:
- *   Basics → Targeting → Couverture → Creative → Cart (interim indicative budget) + Submit.
+ * The de-Supabase campaign wizard — a 6-step orchestrator on the campaigns REST engine (CF-W1):
+ *   Nom et type → Catégories → Période → Couverture → Création → Validation (+ Submit).
  *
- * Leaving Basics creates the draft (POST /api/campaigns) and threads the id into the later panels.
+ * Leaving step 1 creates the draft (POST /api/campaigns, date-less — dates arrive at Période)
+ * and threads the id into the later panels.
  * Couverture is a read-only coverage-map preview of the screenhosts matching the targeting; it gates
  * nothing. There is no render harness — the logic core (validators / create-early / submit) is
  * unit-tested in useCampaignWizard.test.ts.
@@ -212,15 +216,25 @@ export default function NewCampaign() {
       return (
         <StepBasics
           campaignName={state.campaignName}
+          setCampaignName={setCampaignName}
+          onNext={handleBasicsNext}
+          creating={wiz.creatingDraft}
+        />
+      );
+    }
+    if (stepId === 'dates') {
+      return (
+        <StepDates
           startDate={startDate}
           endDate={endDate}
           minStartDate={minStartDate}
           firstAvailableStartDate={firstAvailableStartDate}
-          setCampaignName={setCampaignName}
           setStartDate={setStartDate}
           setEndDate={setEndDate}
-          onNext={handleBasicsNext}
-          creating={wiz.creatingDraft}
+          onNext={() => {
+            void wiz.nextStep();
+          }}
+          onBack={() => wiz.prevStep()}
         />
       );
     }

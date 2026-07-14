@@ -108,3 +108,46 @@ export const fromWire = (rows: readonly TargetingLineWire[]): TargetingLine[] =>
 /** CF-Q1 — Suivant flushes only when a persistable draft exists AND the working set is dirty. */
 export const needsTargetingFlush = (campaignId: string | null, dirty: boolean): boolean =>
   Boolean(campaignId) && dirty;
+
+// ── CF-W1 — CATEGORY-ONLY wizard mode (classes hidden, not removed; they return later) ─────────
+
+/** Label for category-only mode: the category name alone (no « · Toutes classes » noise). */
+export const categoryLineLabel = (
+  line: TargetingLine,
+  categoryName: (id: string) => string | undefined,
+): string => {
+  if (isAllNetwork(line)) return 'Tout le réseau';
+  return line.categoryId ? (categoryName(line.categoryId) ?? 'Catégorie') : 'Toutes catégories';
+};
+
+/**
+ * First category not already taken (class pinned to the all-value `null`). Specific categories
+ * only — the null/null whole-network line stays the toggle's job. Null when all are taken.
+ */
+export const firstAvailableCategoryLine = (
+  lines: readonly TargetingLine[],
+  categoryIds: readonly string[],
+): TargetingLine | null => {
+  for (const categoryId of categoryIds) {
+    const candidate: TargetingLine = { categoryId, class: null };
+    if (duplicateIndexOf(lines, candidate) === -1) return candidate;
+  }
+  return null;
+};
+
+/**
+ * Normalize a persisted set into category-only form: every class coerced to the all-value
+ * (`null`), then deduped BY CATEGORY (order preserved). An all-network line stays itself.
+ */
+export const toCategoryOnly = (lines: readonly TargetingLine[]): TargetingLine[] => {
+  const seen = new Set<string>();
+  const out: TargetingLine[] = [];
+  for (const line of lines) {
+    const normalized: TargetingLine = { categoryId: line.categoryId, class: null };
+    const sig = lineSignature(normalized);
+    if (seen.has(sig)) continue;
+    seen.add(sig);
+    out.push(normalized);
+  }
+  return out;
+};

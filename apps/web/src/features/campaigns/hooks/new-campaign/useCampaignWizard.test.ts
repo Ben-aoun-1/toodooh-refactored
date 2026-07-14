@@ -13,6 +13,7 @@ import {
   canStepBeReached,
   getStepList,
   validateBasics,
+  validateDates,
   validateCart,
   validateCoverage,
   validateCreative,
@@ -62,21 +63,41 @@ function fakeCampaign(overrides: Partial<CampaignView> = {}): CampaignView {
 }
 
 describe('getStepList', () => {
-  it('returns the 5 REST-engine steps in order', () => {
+  it('returns the 6 CF-W1 steps in order (name+type, categories, dates, coverage, creative, cart)', () => {
     const steps = getStepList();
-    expect(steps.map((s) => s.id)).toEqual(['basics', 'targeting', 'coverage', 'creative', 'cart']);
-    expect(steps.map((s) => s.index)).toEqual([1, 2, 3, 4, 5]);
+    expect(steps.map((s) => s.id)).toEqual([
+      'basics',
+      'targeting',
+      'dates',
+      'coverage',
+      'creative',
+      'cart',
+    ]);
+    expect(steps.map((s) => s.index)).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(steps.map((s) => s.label)).toEqual([
+      'Nom et type',
+      'Catégories',
+      'Période',
+      'Couverture',
+      'Création',
+      'Validation',
+    ]);
   });
 });
 
 describe('validators', () => {
-  it('validateBasics requires a name and a start < end range', () => {
+  it('validateBasics requires a NAME only (dates moved to the Période step; type chips are UI-only)', () => {
     expect(validateBasics(blankState({ campaignName: '   ' }))).toBe(false);
-    expect(validateBasics(validBasics({ endDate: null }))).toBe(false);
-    expect(validateBasics(validBasics({ startDate: '2026-07-15', endDate: '2026-07-01' }))).toBe(
+    expect(validateBasics(blankState({ campaignName: 'Demo' }))).toBe(true);
+    expect(validateBasics(validBasics({ startDate: null, endDate: null }))).toBe(true);
+  });
+
+  it('validateDates requires a start < end range', () => {
+    expect(validateDates(validBasics({ endDate: null }))).toBe(false);
+    expect(validateDates(validBasics({ startDate: '2026-07-15', endDate: '2026-07-01' }))).toBe(
       false,
     );
-    expect(validateBasics(validBasics())).toBe(true);
+    expect(validateDates(validBasics())).toBe(true);
   });
 
   it('validateTargeting is always satisfiable (optional, panel-persisted)', () => {
@@ -102,25 +123,33 @@ describe('validators', () => {
 describe('canStepBeReached', () => {
   it('blocks a step when a prior gate fails', () => {
     const stepList = getStepList();
-    // Basics valid → targeting + coverage (always-true) reachable; cart blocked (no creative).
+    // Name + dates valid → up to creative (5) reachable; cart (6) blocked (no creative).
     const state = validBasics();
     expect(canStepBeReached(state, 1, stepList)).toBe(true);
     expect(canStepBeReached(state, 2, stepList)).toBe(true);
-    expect(canStepBeReached(state, 3, stepList)).toBe(true); // targeting gate is always true → coverage
-    expect(canStepBeReached(state, 4, stepList)).toBe(true); // coverage gate is always true → creative
-    expect(canStepBeReached(state, 5, stepList)).toBe(false); // creative gate fails → cart blocked
+    expect(canStepBeReached(state, 3, stepList)).toBe(true);
+    expect(canStepBeReached(state, 4, stepList)).toBe(true);
+    expect(canStepBeReached(state, 5, stepList)).toBe(true);
+    expect(canStepBeReached(state, 6, stepList)).toBe(false); // creative gate fails → cart blocked
+  });
+
+  it('a date-less draft stops at the Période gate (coverage/4 unreachable)', () => {
+    const stepList = getStepList();
+    const state = blankState({ campaignName: 'Demo' });
+    expect(canStepBeReached(state, 3, stepList)).toBe(true); // dates step itself opens
+    expect(canStepBeReached(state, 4, stepList)).toBe(false); // its gate fails past it
   });
 
   it('reaches the last step when every prior gate passes', () => {
     const stepList = getStepList();
     const state = validBasics({ creativeId: 'crv-1' });
-    expect(canStepBeReached(state, 5, stepList)).toBe(true);
+    expect(canStepBeReached(state, 6, stepList)).toBe(true);
   });
 
   it('returns false for out-of-range indices', () => {
     const stepList = getStepList();
     expect(canStepBeReached(validBasics(), 0, stepList)).toBe(false);
-    expect(canStepBeReached(validBasics(), 6, stepList)).toBe(false);
+    expect(canStepBeReached(validBasics(), 7, stepList)).toBe(false);
   });
 });
 
@@ -154,6 +183,21 @@ describe('performCreateDraft', () => {
     expect(create).not.toHaveBeenCalled();
   });
 
+  it('CF-W1: creates a DATE-LESS draft (dates arrive at the Période step)', async () => {
+    const create = vi.fn().mockResolvedValue(fakeCampaign({ id: 'cmp-43' }));
+    const result = await performCreateDraft({
+      state: blankState({ campaignName: 'Demo' }),
+      deps: { create },
+    });
+    expect(result).toEqual({ kind: 'success', id: 'cmp-43' });
+    expect(create).toHaveBeenCalledWith({
+      name: 'Demo',
+      campaign_type: 'standard',
+      start_date: null,
+      end_date: null,
+    });
+  });
+
   it('surfaces an API error', async () => {
     const create = vi.fn().mockRejectedValue(new Error('boom'));
     const result = await performCreateDraft({ state: validBasics(), deps: { create } });
@@ -170,7 +214,7 @@ describe('performSubmit', () => {
     };
   }
 
-  it('PATCHes the budget then submits on the happy path', async () => {
+  it('PATCHes the FULL draft (name/dates/budget — CF-W1) then submits on the happy path', async () => {
     const deps = makeDeps();
     const state = validBasics({
       draftCampaignId: 'cmp-9',
@@ -180,7 +224,12 @@ describe('performSubmit', () => {
     const result = await performSubmit({ state, deps });
     expect(result.kind).toBe('success');
     if (result.kind === 'success') expect(result.campaign.status).toBe('pending');
-    expect(deps.update).toHaveBeenCalledWith('cmp-9', { requested_budget: 750 });
+    expect(deps.update).toHaveBeenCalledWith('cmp-9', {
+      name: state.campaignName.trim(),
+      start_date: state.startDate,
+      end_date: state.endDate,
+      requested_budget: 750,
+    });
     expect(deps.submit).toHaveBeenCalledWith('cmp-9');
   });
 
@@ -216,7 +265,7 @@ describe('performSubmit', () => {
 });
 
 describe('performSaveDraft (Enregistrer — save without submit)', () => {
-  it('PATCHes the indicative budget and does NOT submit', async () => {
+  it('PATCHes the FULL draft (name/dates/budget — CF-W1) and does NOT submit', async () => {
     const update = vi.fn().mockResolvedValue(fakeCampaign({ requested_budget: 750 }));
     const state = validBasics({
       draftCampaignId: 'cmp-9',
@@ -226,8 +275,28 @@ describe('performSaveDraft (Enregistrer — save without submit)', () => {
     const result = await performSaveDraft({ state, deps: { update } });
     expect(result.kind).toBe('success');
     if (result.kind === 'success') expect(result.campaign.status).toBe('draft');
-    expect(update).toHaveBeenCalledWith('cmp-9', { requested_budget: 750 });
+    expect(update).toHaveBeenCalledWith('cmp-9', {
+      name: state.campaignName.trim(),
+      start_date: state.startDate,
+      end_date: state.endDate,
+      requested_budget: 750,
+    });
     expect(update).toHaveBeenCalledTimes(1);
+  });
+
+  it('omits an EMPTIED name from the PATCH (the draft keeps its stored name)', async () => {
+    const update = vi.fn().mockResolvedValue(fakeCampaign());
+    const state = validBasics({
+      draftCampaignId: 'cmp-9',
+      campaignName: '   ',
+      requestedBudget: 500,
+    });
+    await performSaveDraft({ state, deps: { update } });
+    expect(update).toHaveBeenCalledWith('cmp-9', {
+      start_date: state.startDate,
+      end_date: state.endDate,
+      requested_budget: 500,
+    });
   });
 
   it('errors without calling the API when there is no draft id', async () => {

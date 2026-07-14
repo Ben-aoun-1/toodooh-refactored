@@ -12,6 +12,9 @@ import {
   lineSignature,
   toWire,
   needsTargetingFlush,
+  categoryLineLabel,
+  firstAvailableCategoryLine,
+  toCategoryOnly,
 } from './targeting-lines';
 
 const cat = (categoryId: string | null, cls: TargetingLine['class']): TargetingLine => ({
@@ -141,5 +144,62 @@ describe('needsTargetingFlush (CF-Q1 — Suivant persists dirty edits first)', (
     expect(needsTargetingFlush('draft-1', false)).toBe(false);
     expect(needsTargetingFlush(null, true)).toBe(false);
     expect(needsTargetingFlush(null, false)).toBe(false);
+  });
+});
+
+// ── CF-W1 — category-only wizard mode (classes hidden, not removed) ────────────────────────────
+describe('firstAvailableCategoryLine', () => {
+  it('seeds the first untaken category with the all-value class, never null/null', () => {
+    expect(firstAvailableCategoryLine([], ['r', 'g'])).toEqual({ categoryId: 'r', class: null });
+    expect(firstAvailableCategoryLine([{ categoryId: 'r', class: null }], ['r', 'g'])).toEqual({
+      categoryId: 'g',
+      class: null,
+    });
+  });
+
+  it('returns null when every category is taken (no auto-seed of « tout le réseau »)', () => {
+    expect(
+      firstAvailableCategoryLine(
+        [
+          { categoryId: 'r', class: null },
+          { categoryId: 'g', class: null },
+        ],
+        ['r', 'g'],
+      ),
+    ).toBeNull();
+  });
+});
+
+describe('toCategoryOnly (hydrate normalization)', () => {
+  it('coerces every class to the all-value and dedups BY CATEGORY, order preserved', () => {
+    expect(
+      toCategoryOnly([
+        { categoryId: 'r', class: 'premium' },
+        { categoryId: 'g', class: 'moyen' },
+        { categoryId: 'r', class: 'populaire' }, // same category, other class → deduped
+      ]),
+    ).toEqual([
+      { categoryId: 'r', class: null },
+      { categoryId: 'g', class: null },
+    ]);
+  });
+
+  it('keeps an all-network line as itself', () => {
+    expect(toCategoryOnly([{ categoryId: null, class: null }])).toEqual([
+      { categoryId: null, class: null },
+    ]);
+  });
+
+  it('the wire shape out of a category-only set carries class = null on every line', () => {
+    const wire = toWire(toCategoryOnly([{ categoryId: 'r', class: 'premium' }]));
+    expect(wire).toEqual([{ category_id: 'r', class: null }]);
+  });
+});
+
+describe('categoryLineLabel', () => {
+  it('labels by category alone (no « · Toutes classes » noise)', () => {
+    const name = (id: string) => (id === 'r' ? 'Restaurant' : undefined);
+    expect(categoryLineLabel({ categoryId: 'r', class: null }, name)).toBe('Restaurant');
+    expect(categoryLineLabel({ categoryId: null, class: null }, name)).toBe('Tout le réseau');
   });
 });
