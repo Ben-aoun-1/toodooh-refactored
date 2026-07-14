@@ -26,3 +26,23 @@ export function parseCampaignUiDate(value: Date | string | null | undefined): Da
   if (Number.isNaN(parsed.getTime())) return null;
   return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), 0, 0, 0, 0);
 }
+
+// ── CF-Q2 (spec §1.4) — the server start floor, consumed (never recomputed) by StepBasics ──────
+
+/** Week-end dates are unselectable in the START picker (react-datepicker filterDate). */
+export function isSelectableStartDate(date: Date): boolean {
+  const day = date.getDay();
+  return day !== 0 && day !== 6;
+}
+
+/** French helper line under the start field — from the server's first_available_start_date. */
+export function startFloorHelperText(firstAvailableIso: string | undefined): string | null {
+  const parsed = parseCampaignUiDate(firstAvailableIso ?? null);
+  if (!parsed) return null;
+  const label = parsed.toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+  return `Premier départ possible : ${label} — les campagnes démarrent en jours ouvrés.`;
+}

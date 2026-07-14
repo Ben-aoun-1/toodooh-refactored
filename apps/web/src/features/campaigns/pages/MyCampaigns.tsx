@@ -28,6 +28,7 @@ import {
   canDeleteDraftCampaign,
   rejectReasonToShow,
 } from '@/features/campaigns/lib/campaign-actions';
+import { useWizardResumeStore } from '@/features/campaigns/stores/wizard-resume.store';
 import { logger } from '@/lib/logger';
 
 const log = logger.child({ module: 'MyCampaigns' });
@@ -189,6 +190,7 @@ export default function MyCampaigns() {
 
     try {
       await deleteCampaign.mutateAsync(campaign.id);
+      useWizardResumeStore.getState().clear(campaign.id); // CF-Q2 resume-key hygiene
       setOpenActionRowId((prev) => (prev === campaign.id ? null : prev));
       if (selectedCampaign?.id === campaign.id) {
         closeDetailsDrawer();

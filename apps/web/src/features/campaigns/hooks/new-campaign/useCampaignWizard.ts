@@ -52,7 +52,7 @@ export function useCampaignWizard(opts: UseCampaignWizardOptions): UseCampaignWi
 
   // useWizard drives only the index; we re-validate ourselves and advance via its raw setter so the
   // async draft-create can complete before the move (avoiding a stale-closure predicate race).
-  const wiz = useWizard({ totalSteps });
+  const wiz = useWizard({ totalSteps, initialStep: opts.initialStep ?? 1 });
 
   const { createDraft, updateCampaign, submitCampaign } = opts;
 

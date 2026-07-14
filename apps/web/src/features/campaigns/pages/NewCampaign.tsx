@@ -1,6 +1,6 @@
 import 'react-datepicker/dist/react-datepicker.css';
 import { ChevronRight, X } from 'lucide-react';
-import React, { useCallback, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -17,6 +17,8 @@ import ariane5s from '@/assets/ariane/5s.png';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { useCampaignWizard } from '@/features/campaigns/hooks/new-campaign/useCampaignWizard';
 import { buildInitialWizardState } from '@/features/campaigns/hooks/new-campaign/wizard-init';
+import { resolveResumeStep } from '@/features/campaigns/hooks/new-campaign/wizard-resume';
+import { getStepList } from '@/features/campaigns/hooks/new-campaign/wizard-steps';
 import type {
   UseCampaignWizardOptions,
   WizardState,
@@ -26,12 +28,14 @@ import {
   useSubmitCampaign,
   useUpdateCampaign,
 } from '@/features/campaigns/hooks/useCampaignApi';
+import { usePricingConfig } from '@/features/campaigns/hooks/usePricingConfig';
 import { parseCampaignUiDate, toLocalDateOnlyString } from '@/features/campaigns/lib/wizard-dates';
 import StepBasics from '@/features/campaigns/pages/new-campaign/StepBasics';
 import StepCart from '@/features/campaigns/pages/new-campaign/StepCart';
 import StepCoverage from '@/features/campaigns/pages/new-campaign/StepCoverage';
 import StepCreative from '@/features/campaigns/pages/new-campaign/StepCreative';
 import StepTargeting from '@/features/campaigns/pages/new-campaign/StepTargeting';
+import { useWizardResumeStore } from '@/features/campaigns/stores/wizard-resume.store';
 import { getErrorMessage } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 
@@ -71,8 +75,14 @@ export default function NewCampaign() {
   const campaignToEdit = (location.state?.campaign as EditNavRecord | undefined) ?? null;
 
   const initialStateRef = useRef<WizardState | null>(null);
+  const initialStepRef = useRef<number>(1);
   if (initialStateRef.current === null) {
     initialStateRef.current = buildInitialWizardState({ campaignToEdit });
+    // CF-Q2 (spec §3.3) — Reprendre resumes at the stored step (same device, exact) or derives
+    // the first incomplete step from the loaded draft. Read once at mount (getState — no sub).
+    const draftId = initialStateRef.current.draftCampaignId;
+    const stored = draftId ? useWizardResumeStore.getState().steps[draftId] : undefined;
+    initialStepRef.current = resolveResumeStep(stored, initialStateRef.current, getStepList());
   }
 
   const createCampaign = useCreateCampaign(user?.id);
@@ -82,6 +92,7 @@ export default function NewCampaign() {
   const wizOpts = useMemo<UseCampaignWizardOptions>(
     () => ({
       initialState: initialStateRef.current as WizardState,
+      initialStep: initialStepRef.current,
       createDraft: (input) => createCampaign.mutateAsync(input),
       updateCampaign: (id, input) => updateCampaign.mutateAsync({ id, input }),
       submitCampaign: (id) => submitCampaign.mutateAsync(id),
@@ -91,6 +102,22 @@ export default function NewCampaign() {
 
   const wiz = useCampaignWizard(wizOpts);
   const { state, setState, currentStep, stepList } = wiz;
+
+  // CF-Q2 — the server start floor (J+2 jours ouvrés), fetched once per mount via React Query.
+  const pricingConfig = usePricingConfig();
+  const firstAvailableStartDate = pricingConfig.data?.first_available_start_date;
+  const minStartDate = useMemo(
+    () => parseCampaignUiDate(firstAvailableStartDate ?? null),
+    [firstAvailableStartDate],
+  );
+
+  // CF-Q2 — persist the shown step per draft id on every step change (covers save/exit too:
+  // the step the user leaves from was already recorded on arrival). Cleared on submit/delete.
+  const setResumeStep = useWizardResumeStore((s) => s.setStep);
+  const clearResumeStep = useWizardResumeStore((s) => s.clear);
+  useEffect(() => {
+    if (state.draftCampaignId) setResumeStep(state.draftCampaignId, currentStep);
+  }, [state.draftCampaignId, currentStep, setResumeStep]);
 
   const setCampaignName = useCallback(
     (value: string) => setState((prev) => ({ ...prev, campaignName: value })),
@@ -129,13 +156,14 @@ export default function NewCampaign() {
   const handleSubmit = useCallback(async () => {
     const result = await wiz.submit();
     if (result.kind === 'success') {
+      if (state.draftCampaignId) clearResumeStep(state.draftCampaignId); // CF-Q2 key hygiene
       toast.success('Campagne soumise pour validation.');
       navigate('/my-campaigns?status=pending');
     } else {
       toast.error(getErrorMessage(result.error) || 'Erreur lors de la soumission de la campagne');
       log.error({ err: result.error }, 'campaign submit failed');
     }
-  }, [wiz, navigate]);
+  }, [wiz, navigate, state.draftCampaignId, clearResumeStep]);
 
   const handleSaveDraft = useCallback(async () => {
     const result = await wiz.saveDraft();
@@ -186,6 +214,8 @@ export default function NewCampaign() {
           campaignName={state.campaignName}
           startDate={startDate}
           endDate={endDate}
+          minStartDate={minStartDate}
+          firstAvailableStartDate={firstAvailableStartDate}
           setCampaignName={setCampaignName}
           setStartDate={setStartDate}
           setEndDate={setEndDate}

@@ -3,10 +3,16 @@ import { useMemo, useState } from 'react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 
+import { isSelectableStartDate, startFloorHelperText } from '@/features/campaigns/lib/wizard-dates';
+
 interface StepBasicsProps {
   campaignName: string;
   startDate: Date | null;
   endDate: Date | null;
+  /** CF-Q2 — the SERVER's J+2-working-days floor (parsed); null while the config loads. */
+  minStartDate: Date | null;
+  /** The floor as the wire ISO date — feeds the French helper line. */
+  firstAvailableStartDate?: string;
   setCampaignName: (value: string) => void;
   setStartDate: (next: Date | null) => void;
   setEndDate: (next: Date | null) => void;
@@ -42,6 +48,8 @@ export default function StepBasics({
   campaignName,
   startDate,
   endDate,
+  minStartDate,
+  firstAvailableStartDate,
   setCampaignName,
   setStartDate,
   setEndDate,
@@ -148,7 +156,8 @@ export default function StepBasics({
                 selectsStart
                 startDate={startDate}
                 endDate={endDate}
-                minDate={today}
+                minDate={minStartDate ?? today}
+                filterDate={isSelectableStartDate}
                 className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-transparent transition-all ${
                   dateTouched.start && dateErrors.start
                     ? 'border-red-300 bg-red-50'
@@ -157,6 +166,12 @@ export default function StepBasics({
                 placeholderText="Sélectionnez une date"
                 dateFormat="dd/MM/yyyy"
               />
+              {/* CF-Q2 — the floor comes from the SERVER (pricing-config), never recomputed here */}
+              {startFloorHelperText(firstAvailableStartDate) && (
+                <p className="mt-1 text-xs text-gray-500">
+                  {startFloorHelperText(firstAvailableStartDate)}
+                </p>
+              )}
               {dateTouched.start && dateErrors.start && (
                 <p className="mt-1 text-sm text-red-600 flex items-center">
                   <AlertCircle className="h-4 w-4 mr-1" />
@@ -179,7 +194,7 @@ export default function StepBasics({
                 selectsEnd
                 startDate={startDate}
                 endDate={endDate}
-                minDate={startDate || today}
+                minDate={startDate || minStartDate || today}
                 className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-transparent transition-all ${
                   dateTouched.end && dateErrors.end ? 'border-red-300 bg-red-50' : 'border-gray-300'
                 }`}
