@@ -1,10 +1,10 @@
-import { and, eq, isNotNull, lt, lte } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, lt, lte } from 'drizzle-orm';
 import type { FastifyBaseLogger } from 'fastify';
 
 import { db } from '../db/client.js';
-import { campaigns } from '../db/schema.js';
+import { campaigns, notifications } from '../db/schema.js';
 
-import { tunisDateOf } from './campaign-dates.js';
+import { plusCalendarDays, tunisDateOf } from './campaign-dates.js';
 
 // CF-S1 (spec §3.1/3.2) — the stored-status lifecycle: admin approval routes a future-dated
 // campaign to 'upcoming'; this job flips upcoming→active when the window opens and
@@ -20,9 +20,18 @@ export function onCampaignCompleted(campaignId: string): void {
   void campaignId; // intentionally unused — see the seam note above
 }
 
+// CF-S1 Commit 2 — the J-3 draft reminder (spec §3.2), folded into this tick (one clock, one
+// job). Spec copy with the cart CTA ADAPTED to the current flow (« soumettez-la » — the cart
+// does not exist yet; the cart lane restores « ajoutez-la au panier »). NO deletion path of any
+// kind — drafts are reminded, never auto-deleted.
+export const DRAFT_REMINDER_TITLE = 'Votre campagne démarre bientôt';
+export const draftReminderBody = (name: string): string =>
+  `Votre campagne ${name} doit commencer dans 3 jours. Pour ne pas la perdre, terminez le processus et soumettez-la pour la lancer.`;
+
 export interface LifecycleTickResult {
   activated: number;
   completed: number;
+  reminded: number;
 }
 
 /** One transition pass. Order matters: an over-slept 'upcoming' whose whole window already
@@ -55,13 +64,40 @@ export async function runCampaignLifecycleTick(
 
   for (const c of completed) onCompleted(c.id);
 
-  if (activated.length > 0 || completed.length > 0) {
+  // J-3 reminder: drafts starting in exactly 3 Tunis calendar days, not yet reminded. The stamp
+  // makes the pass idempotent; date-less drafts never match (a NULL start never equals a date).
+  const reminderTarget = plusCalendarDays(today, 3);
+  const due = await db
+    .select({ id: campaigns.id, name: campaigns.name, advertiserId: campaigns.advertiserId })
+    .from(campaigns)
+    .where(
+      and(
+        eq(campaigns.status, 'draft'),
+        eq(campaigns.startDate, reminderTarget),
+        isNull(campaigns.draftReminderSentAt),
+      ),
+    );
+  for (const draft of due) {
+    await db.insert(notifications).values({
+      userId: draft.advertiserId,
+      type: 'campaign_draft_reminder',
+      title: DRAFT_REMINDER_TITLE,
+      body: draftReminderBody(draft.name),
+      campaignId: draft.id,
+    });
+    await db
+      .update(campaigns)
+      .set({ draftReminderSentAt: new Date() })
+      .where(eq(campaigns.id, draft.id));
+  }
+
+  if (activated.length > 0 || completed.length > 0 || due.length > 0) {
     log.info(
-      { activated: activated.length, completed: completed.length, today },
+      { activated: activated.length, completed: completed.length, reminded: due.length, today },
       'campaign lifecycle tick applied transitions',
     );
   }
-  return { activated: activated.length, completed: completed.length };
+  return { activated: activated.length, completed: completed.length, reminded: due.length };
 }
 
 /** Boot + hourly unref'd interval (the sweepUnexported pattern) — never holds the process open. */

@@ -28,7 +28,7 @@ export function isJourOuvre(isoDate: string): boolean {
 }
 
 /** isoDate + n calendar days (UTC-noon anchored). */
-const plusDays = (isoDate: string, n: number): string => {
+export const plusCalendarDays = (isoDate: string, n: number): string => {
   const d = new Date(`${isoDate}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
@@ -42,7 +42,7 @@ export function premiereDateDisponible(today: Date = new Date()): string {
   let d = tunisDateOf(today);
   let ouvres = 0;
   while (ouvres < 2) {
-    d = plusDays(d, 1);
+    d = plusCalendarDays(d, 1);
     if (isJourOuvre(d)) ouvres += 1;
   }
   return d;
