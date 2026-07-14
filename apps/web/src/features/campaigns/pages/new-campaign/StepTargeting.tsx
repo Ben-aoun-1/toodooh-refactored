@@ -1,5 +1,5 @@
 import { ArrowRight, Target } from 'lucide-react';
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 
 import {
@@ -12,6 +12,9 @@ interface StepTargetingProps {
   draftCampaignId: string | null;
   onNext: () => void | Promise<void>;
   onBack: () => void;
+  /** CF-W1 §1.8 — hands the panel's flush() to the orchestrator while this step is mounted, so
+   * the header Enregistrer persists dirty targeting too. Called with null on unmount. */
+  registerFlush?: (flush: (() => Promise<boolean>) | null) => void;
 }
 
 /**
@@ -20,8 +23,18 @@ interface StepTargetingProps {
  * wizard footer always allows advancing, but Suivant FLUSHES dirty edits first (CF-Q1: they used
  * to be silently lost) and a save failure blocks the advance.
  */
-export default function StepTargeting({ draftCampaignId, onNext, onBack }: StepTargetingProps) {
+export default function StepTargeting({
+  draftCampaignId,
+  onNext,
+  onBack,
+  registerFlush,
+}: StepTargetingProps) {
   const panelRef = useRef<CampaignTargetingPanelHandle>(null);
+
+  useEffect(() => {
+    registerFlush?.(() => panelRef.current?.flush() ?? Promise.resolve(true));
+    return () => registerFlush?.(null);
+  }, [registerFlush]);
 
   const handleNext = async () => {
     const flushed = (await panelRef.current?.flush()) ?? true;

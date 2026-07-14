@@ -1,6 +1,8 @@
 import { toast } from 'react-hot-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
 
+import { consultNavigationGuard } from '@/features/campaigns/lib/navigation-guard';
+
 interface SidebarNavItemProps {
   path: string;
   label: string;
@@ -38,15 +40,16 @@ export default function SidebarNavItem({
           toast.error(disabledMessage);
           return;
         }
+        // CF-W1 (§1.9) — the campaign wizard may hold unsaved work: its guard takes over the
+        // exit (confirm popup) and navigates itself; everywhere else this is a pass-through.
+        if (!consultNavigationGuard(path)) return;
         navigate(path);
         onNavigate?.();
       }}
       disabled={disabled}
       title={!expanded ? label : undefined}
       className={`h-9 flex items-center rounded-lg text-sm font-medium transition-colors tracking-[-0.006em] ${
-        expanded
-          ? 'w-full max-w-[232px] px-3 py-2 gap-3'
-          : 'w-10 justify-center px-0 mx-auto'
+        expanded ? 'w-full max-w-[232px] px-3 py-2 gap-3' : 'w-10 justify-center px-0 mx-auto'
       } ${
         disabled
           ? 'text-[#5C5C5C] opacity-50 cursor-not-allowed'
