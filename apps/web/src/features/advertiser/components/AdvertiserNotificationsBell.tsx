@@ -1,4 +1,4 @@
-import { Bell, CheckCircle2, Settings, Video, X } from 'lucide-react';
+import { Bell, CalendarDays, Settings, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -105,14 +105,16 @@ export default function AdvertiserNotificationsBell({ userId, emphasized = false
             ) : (
               visibleItems.map((item) => {
                 const isRead = readIdSet.has(item.id);
+                // Captured so the narrowing survives into the onClick closure (TS strict).
+                const action = item.action;
                 return (
                   <div key={item.id} className="px-5 py-4 border-b border-gray-100">
                     <div className="flex items-start gap-3">
                       <div className="relative mt-0.5 h-10 w-10 rounded-full border border-brand-primary text-[#2A7A47] flex items-center justify-center">
-                        {item.kind === 'account_approved' ? (
-                          <CheckCircle2 className="h-4 w-4" />
+                        {item.kind === 'campaign_draft_reminder' ? (
+                          <CalendarDays className="h-4 w-4" />
                         ) : (
-                          <Video className="h-4 w-4" />
+                          <Bell className="h-4 w-4" />
                         )}
                         {!isRead ? (
                           <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-red-500" />
@@ -135,17 +137,20 @@ export default function AdvertiserNotificationsBell({ userId, emphasized = false
                               Marquer comme lu
                             </button>
                           ) : null}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              markRead(item.id);
-                              setOpen(false);
-                              navigate(item.actionPath);
-                            }}
-                            className="h-10 px-4 rounded-xl bg-brand-primary text-sm leading-none text-[#101010] font-semibold hover:bg-brand-primary/90"
-                          >
-                            {item.actionLabel}
-                          </button>
+                          {/* CF-S1b — nullable CTA: an unknown type renders plainly, no button. */}
+                          {action ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                markRead(item.id);
+                                setOpen(false);
+                                navigate(action.path);
+                              }}
+                              className="h-10 px-4 rounded-xl bg-brand-primary text-sm leading-none text-[#101010] font-semibold hover:bg-brand-primary/90"
+                            >
+                              {action.label}
+                            </button>
+                          ) : null}
                         </div>
                       </div>
                     </div>

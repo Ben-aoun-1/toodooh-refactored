@@ -33,11 +33,12 @@ export interface NotificationFeed<K extends string = string> {
  * Returns a new feed with `ids` added to `readIds` (deduplicated). Pure — the
  * optimistic `onMutate` applies it, `onError` restores the pre-mutation
  * snapshot, so a failed mark-read never leaves the bell falsely cleared.
+ *
+ * The constraint is any `readIds`-bearing feed (CF-S1b): the advertiser feed's
+ * items carry a nullable CTA so they are not `NotificationFeedItem`s, but the
+ * mark-read transform only ever touches `readIds`.
  */
-export function markFeedRead<K extends string>(
-  feed: NotificationFeed<K>,
-  ids: readonly string[],
-): NotificationFeed<K> {
+export function markFeedRead<F extends { readIds: string[] }>(feed: F, ids: readonly string[]): F {
   const merged = new Set(feed.readIds);
   for (const id of ids) merged.add(id);
   return { ...feed, readIds: [...merged] };
