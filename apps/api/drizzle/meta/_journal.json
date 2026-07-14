@@ -288,6 +288,13 @@
       "when": 1784052473062,
       "tag": "0040_zones_v1",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1784059671405,
+      "tag": "0041_campaign_lifecycle",
+      "breakpoints": true
     }
   ]
 }

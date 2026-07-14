@@ -18,6 +18,8 @@ export interface CampaignView {
   // CF-Q1 — the admin's mandatory rejection audit, surfaced to the advertiser (« Motif du refus »).
   rejected_at: string | null;
   reject_reason: string | null;
+  /** CF-S1 — the linked creative (Reprendre rehydrates past Création with it). */
+  creative_id: string | null;
   created_at: string;
   updated_at: string;
   // Reconciled performance + targeting (GET /mine only; optional so other CampaignView readers gain

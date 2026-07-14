@@ -28,6 +28,8 @@ export interface MyCampaignRow {
   reject_reason: string | null;
   /** CF-Z1 — the campaign's zones; ride the edit-mode record so Reprendre rehydrates them. */
   zones: { zone_id: string; name: string }[];
+  /** CF-S1 — rides the edit-mode record so a resumed draft derives past Création. */
+  creative_id: string | null;
   created_at: string;
   // Retained-but-empty on the new engine (Supabase-only concepts the new list drops).
   client: string;
@@ -56,6 +58,7 @@ function toRow(c: CampaignView): MyCampaignRow {
     submitted_at: c.submitted_at,
     reject_reason: c.reject_reason,
     zones: c.zones ?? [],
+    creative_id: c.creative_id,
     created_at: c.created_at,
     client: '',
     category: null,

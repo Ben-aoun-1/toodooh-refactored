@@ -53,6 +53,7 @@ function fakeCampaign(overrides: Partial<CampaignView> = {}): CampaignView {
     end_date: '2026-07-15',
     rejected_at: null,
     reject_reason: null,
+    creative_id: null,
     description: null,
     requested_budget: null,
     content_validation_status: null,

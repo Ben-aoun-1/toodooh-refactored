@@ -183,8 +183,15 @@ describe('db schema', () => {
     expect(screenhosts.sps).toBeDefined(); // neutral default 50; computation deferred
   });
 
-  it('campaign_status enum mirrors the status convention (draft → pending → active → rejected)', () => {
-    expect(campaignStatus.enumValues).toEqual(['draft', 'pending', 'active', 'rejected']);
+  it('campaign_status enum mirrors the CF-S1 lifecycle (draft → pending → upcoming → active → rejected/completed)', () => {
+    expect(campaignStatus.enumValues).toEqual([
+      'draft',
+      'pending',
+      'upcoming',
+      'active',
+      'rejected',
+      'completed',
+    ]);
   });
 
   it('campaigns exposes the draft-lifecycle + approval-audit columns (C1)', () => {

@@ -10,6 +10,7 @@ import {
   campaigns,
   creatives,
 } from '../db/schema.js';
+import { tunisDateOf } from '../lib/campaign-dates.js';
 import { getDispatchConfig } from '../lib/dispatch/config.js';
 import { runDispatch } from '../lib/dispatch/dispatch-service.js';
 import { DEFAULT_TIER_COEF } from '../lib/dispatch/thresholds.js';
@@ -281,9 +282,14 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
     if (!loaded) {
       return reply.status(500).send({ error: 'INTERNAL_ERROR', message: 'Dispatch plan missing.' });
     }
+    // CF-S1 — approval routes by date (Tunis calendar): a future start is 'upcoming' (the
+    // lifecycle job flips it to 'active' on day one); today-or-past goes straight to 'active'.
+    // Dispatch already ran above either way (the plan freezes at approval, unchanged).
+    const approvedStatus =
+      campaign.startDate && campaign.startDate > tunisDateOf(new Date()) ? 'upcoming' : 'active';
     const [activated] = await db
       .update(campaigns)
-      .set({ status: 'active', activatedAt: new Date(), activatedBy: adminId })
+      .set({ status: approvedStatus, activatedAt: new Date(), activatedBy: adminId })
       // Atomic transition: a concurrent activate can't double-flip (lost race → 0 rows → 409).
       .where(and(eq(campaigns.id, id), eq(campaigns.status, 'pending')))
       .returning();

@@ -5,15 +5,18 @@ import { canDeleteDraftCampaign, canResumeCampaign, rejectReasonToShow } from '.
 // CF-Q1 — Reprendre/Supprimer are draft-only (the API PATCH/submit 409 anything else), and the
 // « Motif du refus » renders only on rejected campaigns that actually carry a stored reason.
 
-describe('canResumeCampaign / canDeleteDraftCampaign (draft-only, mirroring the API 409 gate)', () => {
-  it('allows drafts only', () => {
+describe('canResumeCampaign / canDeleteDraftCampaign (mirroring the API gates)', () => {
+  it('Reprendre works on drafts AND — CF-S1 — rejected campaigns (recovery end-to-end)', () => {
     expect(canResumeCampaign('draft')).toBe(true);
+    expect(canResumeCampaign('rejected')).toBe(true);
     expect(canDeleteDraftCampaign('draft')).toBe(true);
   });
 
-  it('refuses every non-draft status — pending/rejected/completed dead-end server-side', () => {
-    for (const status of ['pending', 'rejected', 'completed', 'active', 'paused']) {
+  it('every other status stays non-resumable; deletion stays draft-only', () => {
+    for (const status of ['pending', 'upcoming', 'completed', 'active', 'paused']) {
       expect(canResumeCampaign(status)).toBe(false);
+    }
+    for (const status of ['pending', 'upcoming', 'rejected', 'completed', 'active']) {
       expect(canDeleteDraftCampaign(status)).toBe(false);
     }
   });

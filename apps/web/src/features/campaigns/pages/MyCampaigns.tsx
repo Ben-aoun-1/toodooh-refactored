@@ -26,8 +26,10 @@ import { useDeleteCampaign } from '@/features/campaigns/hooks/useCampaignApi';
 import { useMyCampaigns } from '@/features/campaigns/hooks/useMyCampaigns';
 import {
   canDeleteDraftCampaign,
+  canResumeCampaign,
   rejectReasonToShow,
 } from '@/features/campaigns/lib/campaign-actions';
+import { campaignStatusUi } from '@/features/campaigns/lib/campaign-status';
 import { useWizardResumeStore } from '@/features/campaigns/stores/wizard-resume.store';
 import { logger } from '@/lib/logger';
 
@@ -89,14 +91,10 @@ export default function MyCampaigns() {
   const itemsPerPage = 6;
 
   // Filter campaigns (status '' = all, 'upcoming' = startDate > now)
-  const nowForFilter = new Date();
   const filteredCampaigns = campaigns.filter((campaign) => {
     try {
-      const statusMatch = !filters.status
-        ? true
-        : filters.status === 'upcoming'
-          ? campaign.startDate != null && campaign.startDate > nowForFilter
-          : campaign.status === filters.status;
+      // CF-S1 — 'upcoming' is a STORED status now: plain equality, no date derivation.
+      const statusMatch = !filters.status ? true : campaign.status === filters.status;
       const typeMatch = !filters.campaignType
         ? true
         : filters.campaignType === 'event'
@@ -201,11 +199,11 @@ export default function MyCampaigns() {
     }
   };
 
-  // Compteurs par statut pour le bloc 7 widgets (Tout, Active, A venir, Brouillons, En attente, Non validé, Passées)
-  const now = new Date();
+  // Compteurs par statut pour le bloc 7 widgets (Tout, Active, À venir, Brouillons, En attente, Non validé, Passées)
   const countTout = campaigns.length;
   const countActive = campaigns.filter((c) => c.status === 'active').length;
-  const countAVenir = campaigns.filter((c) => c.startDate != null && c.startDate > now).length;
+  // CF-S1 — counted from the STORED status, like every other widget.
+  const countAVenir = campaigns.filter((c) => c.status === 'upcoming').length;
   const countBrouillons = campaigns.filter((c) => c.status === 'draft').length;
   const countEnAttente = campaigns.filter((c) => c.status === 'pending').length;
   const countNonValide = campaigns.filter((c) => c.status === 'rejected').length;
@@ -231,7 +229,7 @@ export default function MyCampaigns() {
       rounded: 'rounded-md',
     },
     {
-      label: 'A venir',
+      label: 'À venir',
       value: 'upcoming' as const,
       count: countAVenir,
       bg: 'bg-[#EBF1FF]',
@@ -561,48 +559,9 @@ export default function MyCampaigns() {
       ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {paginatedCampaigns.map((campaign) => {
-            const statusMap: Record<
-              string,
-              { label: string; bg: string; text: string; dot: string }
-            > = {
-              draft: {
-                label: 'Non validé',
-                bg: 'bg-red-50',
-                text: 'text-red-700',
-                dot: 'bg-red-500',
-              },
-              rejected: {
-                label: 'Non validé',
-                bg: 'bg-red-50',
-                text: 'text-red-700',
-                dot: 'bg-red-500',
-              },
-              pending: {
-                label: 'En attente',
-                bg: 'bg-amber-50',
-                text: 'text-amber-700',
-                dot: 'bg-amber-500',
-              },
-              active: {
-                label: 'Active',
-                bg: 'bg-green-50',
-                text: 'text-green-700',
-                dot: 'bg-green-500',
-              },
-              completed: {
-                label: 'Terminée',
-                bg: 'bg-gray-100',
-                text: 'text-gray-700',
-                dot: 'bg-gray-500',
-              },
-              paused: {
-                label: 'En pause',
-                bg: 'bg-gray-100',
-                text: 'text-gray-700',
-                dot: 'bg-gray-500',
-              },
-            };
-            const statusConf = statusMap[campaign.status] || statusMap.draft;
+            // CF-S1 — ONE status map for every surface (kills the grid's draft=« Non validé »
+            // mislabel and the « Terminée »/« Passée » split).
+            const statusConf = campaignStatusUi(campaign.status);
             const start = campaign.startDate;
             const end = campaign.endDate;
             const dateStr =
@@ -692,35 +651,36 @@ export default function MyCampaigns() {
                   >
                     Consulter
                   </button>
-                  {
-                    canDeleteDraftCampaign(campaign.status) ? (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => handleEditCampaign(campaign)}
-                          className="flex-1 py-2 rounded-lg text-sm font-medium inline-flex items-center justify-center gap-1.5 transition-colors bg-[#e3f7ec] text-[#66bc74] hover:bg-[#cceee0]"
-                        >
-                          <RotateCcw className="h-4 w-4" /> Reprendre
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteDraftCampaign(campaign)}
-                          className="flex-1 py-2 rounded-lg text-sm font-medium inline-flex items-center justify-center gap-1.5 transition-colors bg-red-50 text-red-700 hover:bg-red-100"
-                        >
-                          <Trash2 className="h-4 w-4" /> Supprimer
-                        </button>
-                      </>
-                    ) : isActive ? (
-                      // Booster stays a parked product decision — visible but disabled on active.
-                      <button
-                        type="button"
-                        disabled
-                        className="flex-1 py-2 rounded-lg text-sm font-medium inline-flex items-center justify-center gap-1.5 bg-gray-100 text-gray-400 cursor-not-allowed"
-                      >
-                        <Rocket className="h-4 w-4" /> Booster
-                      </button>
-                    ) : null /* CF-Q1: pending/rejected/completed are Consulter-only — the API is draft-only (409) */
-                  }
+                  {/* CF-S1 — Reprendre on draft AND rejected (recovery works end-to-end now);
+                      Supprimer stays draft-only; active keeps the parked disabled Booster;
+                      pending/upcoming/completed are Consulter-only. */}
+                  {canResumeCampaign(campaign.status) && (
+                    <button
+                      type="button"
+                      onClick={() => handleEditCampaign(campaign)}
+                      className="flex-1 py-2 rounded-lg text-sm font-medium inline-flex items-center justify-center gap-1.5 transition-colors bg-[#e3f7ec] text-[#66bc74] hover:bg-[#cceee0]"
+                    >
+                      <RotateCcw className="h-4 w-4" /> Reprendre
+                    </button>
+                  )}
+                  {canDeleteDraftCampaign(campaign.status) && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteDraftCampaign(campaign)}
+                      className="flex-1 py-2 rounded-lg text-sm font-medium inline-flex items-center justify-center gap-1.5 transition-colors bg-red-50 text-red-700 hover:bg-red-100"
+                    >
+                      <Trash2 className="h-4 w-4" /> Supprimer
+                    </button>
+                  )}
+                  {isActive && (
+                    <button
+                      type="button"
+                      disabled
+                      className="flex-1 py-2 rounded-lg text-sm font-medium inline-flex items-center justify-center gap-1.5 bg-gray-100 text-gray-400 cursor-not-allowed"
+                    >
+                      <Rocket className="h-4 w-4" /> Booster
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -783,60 +743,8 @@ export default function MyCampaigns() {
                   </tr>
                 ) : (
                   paginatedCampaigns.map((campaign) => {
-                    const statusMap: Record<
-                      string,
-                      { label: string; bg: string; text: string; dot: string }
-                    > = {
-                      draft: {
-                        label: 'Brouillon',
-                        bg: 'bg-amber-50',
-                        text: 'text-amber-700',
-                        dot: 'bg-amber-500',
-                      },
-                      rejected: {
-                        label: 'Non validé',
-                        bg: 'bg-red-50',
-                        text: 'text-red-700',
-                        dot: 'bg-red-500',
-                      },
-                      pending: {
-                        label: 'En attente',
-                        bg: 'bg-orange-50',
-                        text: 'text-orange-700',
-                        dot: 'bg-orange-500',
-                      },
-                      active: {
-                        label: 'Active',
-                        bg: 'bg-green-50',
-                        text: 'text-green-700',
-                        dot: 'bg-green-500',
-                      },
-                      completed: {
-                        label: 'Passée',
-                        bg: 'bg-gray-100',
-                        text: 'text-gray-700',
-                        dot: 'bg-gray-500',
-                      },
-                      paused: {
-                        label: 'Passée',
-                        bg: 'bg-gray-100',
-                        text: 'text-gray-700',
-                        dot: 'bg-gray-500',
-                      },
-                    };
-                    const isUpcoming =
-                      campaign.startDate && new Date(campaign.startDate) > new Date();
-                    const statusConf =
-                      campaign.status === 'active'
-                        ? statusMap.active
-                        : isUpcoming
-                          ? {
-                              label: 'A venir',
-                              bg: 'bg-blue-50',
-                              text: 'text-blue-700',
-                              dot: 'bg-blue-500',
-                            }
-                          : statusMap[campaign.status] || statusMap.draft;
+                    // CF-S1 — the stored status IS the truth: no date-derived « A venir ».
+                    const statusConf = campaignStatusUi(campaign.status);
                     const startStr = campaign.startDate
                       ? new Date(campaign.startDate).toLocaleDateString('fr-FR', {
                           day: '2-digit',
@@ -939,8 +847,20 @@ export default function MyCampaigns() {
                                   >
                                     Consulter la campagne
                                   </button>
-                                  {/* CF-Q1: Reprendre only on drafts (the API is draft-only, 409
-                                      otherwise); active keeps its parked, disabled Booster. */}
+                                  {/* CF-S1: Reprendre on draft AND rejected (recovery works
+                                      end-to-end); active keeps its parked, disabled Booster. */}
+                                  {campaign.status === 'rejected' && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setOpenActionRowId(null);
+                                        handleEditCampaign(campaign);
+                                      }}
+                                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                                    >
+                                      Reprendre
+                                    </button>
+                                  )}
                                   {campaign.status === 'active' && (
                                     <button
                                       type="button"
@@ -1029,54 +949,9 @@ export default function MyCampaigns() {
           mounted through the <Drawer> exit animation; `open` drives the slide. */}
       {selectedCampaign &&
         (() => {
-          const drawerStatusStyle: Record<
-            string,
-            { label: string; bg: string; border: string; dot: string; text: string }
-          > = {
-            draft: {
-              label: 'Brouillon',
-              bg: '#FFFAEB',
-              border: '#FFECC0',
-              dot: '#F6B51E',
-              text: '#F6B51E',
-            },
-            rejected: {
-              label: 'Non validé',
-              bg: '#FFEBEC',
-              border: '#FFC5C7',
-              dot: '#FB3748',
-              text: '#FB3748',
-            },
-            pending: {
-              label: 'En attente',
-              bg: '#FFF3EB',
-              border: '#FFD4BC',
-              dot: '#FA7319',
-              text: '#FA7319',
-            },
-            active: {
-              label: 'Active',
-              bg: '#E3F7EC',
-              border: '#76E6AB',
-              dot: '#1FC16B',
-              text: '#1FC16B',
-            },
-            completed: {
-              label: 'Passée',
-              bg: '#F5F5F5',
-              border: '#EBEBEB',
-              dot: '#5C5C5C',
-              text: '#5C5C5C',
-            },
-            paused: {
-              label: 'Passée',
-              bg: '#F5F5F5',
-              border: '#EBEBEB',
-              dot: '#5C5C5C',
-              text: '#5C5C5C',
-            },
-          };
-          const st = drawerStatusStyle[selectedCampaign.status] || drawerStatusStyle.draft;
+          // CF-S1 — the drawer badge reads the SAME map as the cards/rows.
+          const statusUi = campaignStatusUi(selectedCampaign.status);
+          const st = { label: statusUi.label, ...statusUi.drawer };
           return (
             <CampaignDrawer
               open={showDetailsModal}
@@ -1137,6 +1012,20 @@ export default function MyCampaigns() {
                           Supprimer le brouillon
                         </button>
                       </>
+                    ) : selectedCampaign.status === 'rejected' ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const c = selectedCampaign;
+                          closeDetailsDrawer();
+                          setTimeout(() => handleEditCampaign(c), 320);
+                        }}
+                        className="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-[10px] border border-[#1FC16B] text-sm font-medium text-[#1FC16B] bg-[#E3F7EC] hover:opacity-90 transition-opacity"
+                        style={{ boxShadow: '0px 1px 2px rgba(10, 13, 20, 0.0313726)' }}
+                      >
+                        <RotateCcw className="h-5 w-5" />
+                        Reprendre
+                      </button>
                     ) : selectedCampaign.status === 'active' ? (
                       <button
                         type="button"
@@ -1147,7 +1036,7 @@ export default function MyCampaigns() {
                         <Rocket className="h-5 w-5" />
                         Booster
                       </button>
-                    ) : null /* CF-Q1: pending/rejected/completed are Consulter-only in the drawer too */
+                    ) : null /* CF-S1: pending/upcoming/completed are Consulter-only in the drawer */
                   }
                 </div>
               }

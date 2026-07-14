@@ -132,6 +132,8 @@ const campaignSelection = {
   submittedAt: campaigns.submittedAt,
   rejectedAt: campaigns.rejectedAt,
   rejectReason: campaigns.rejectReason,
+  // CF-S1 — the linked creative rides the projection so Reprendre can rehydrate past Création.
+  creativeId: campaigns.creativeId,
   createdAt: campaigns.createdAt,
   updatedAt: campaigns.updatedAt,
 };
@@ -149,6 +151,7 @@ type CampaignRow = Pick<
   | 'submittedAt'
   | 'rejectedAt'
   | 'rejectReason'
+  | 'creativeId'
   | 'createdAt'
   | 'updatedAt'
 >;
@@ -173,6 +176,7 @@ const campaignView = (
   submitted_at: Date | null;
   rejected_at: Date | null;
   reject_reason: string | null;
+  creative_id: string | null;
   created_at: Date;
   updated_at: Date;
 } => ({
@@ -188,6 +192,7 @@ const campaignView = (
   submitted_at: row.submittedAt,
   rejected_at: row.rejectedAt,
   reject_reason: row.rejectReason,
+  creative_id: row.creativeId,
   created_at: row.createdAt,
   updated_at: row.updatedAt,
 });
@@ -400,10 +405,12 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     if (!existing) {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such campaign.' });
     }
-    if (existing.status !== 'draft') {
+    // CF-S1 — a Non validé campaign is RECOVERABLE: editable like a draft (resubmit clears the
+    // rejection audit below in /submit).
+    if (existing.status !== 'draft' && existing.status !== 'rejected') {
       return reply.status(409).send({
         error: 'CONFLICT',
-        message: 'Only a draft campaign can be edited.',
+        message: 'Only a draft or rejected campaign can be edited.',
         statusCode: 409,
       });
     }
@@ -455,31 +462,55 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
     }
     const [existing] = await db
-      .select({ id: campaigns.id, status: campaigns.status, startDate: campaigns.startDate })
+      .select({
+        id: campaigns.id,
+        status: campaigns.status,
+        startDate: campaigns.startDate,
+        endDate: campaigns.endDate,
+      })
       .from(campaigns)
       .where(and(eq(campaigns.id, parsedParams.data.id), eq(campaigns.advertiserId, userId)))
       .limit(1);
     if (!existing) {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such campaign.' });
     }
-    if (existing.status !== 'draft') {
+    if (existing.status !== 'draft' && existing.status !== 'rejected') {
       return reply.status(409).send({
         error: 'CONFLICT',
-        message: 'Only a draft campaign can be submitted.',
+        message: 'Only a draft or rejected campaign can be submitted.',
         statusCode: 409,
       });
     }
-    // CF-Q2 — re-check the floor at submit time: a draft saved days ago may now be too soon.
-    // A date-less draft submits as before (dates stay an activation-time requirement).
-    if (existing.startDate) {
-      const violation = startDateViolation(existing.startDate);
-      if (violation) return reply.status(400).send(startDateRejection(violation));
+    // CF-S1 hardening — a submit now requires BOTH dates (the wizard always sends them; a
+    // date-less pending row would dead-end at activation).
+    if (!existing.startDate || !existing.endDate) {
+      return reply.status(400).send({
+        error: 'MISSING_DATES',
+        message: 'A campaign needs a start and end date before submission.',
+      });
     }
+    // CF-Q2 — re-check the floor at submit time: a draft saved days ago may now be too soon.
+    const violation = startDateViolation(existing.startDate);
+    if (violation) return reply.status(400).send(startDateRejection(violation));
+    // CF-S1 — a resubmitted Non validé sheds its rejection audit with the status.
     const [updated] = await db
       .update(campaigns)
-      .set({ status: 'pending', submittedAt: new Date() })
-      .where(and(eq(campaigns.id, existing.id), eq(campaigns.advertiserId, userId)))
+      .set({ status: 'pending', submittedAt: new Date(), rejectedAt: null, rejectReason: null })
+      .where(
+        and(
+          eq(campaigns.id, existing.id),
+          eq(campaigns.advertiserId, userId),
+          inArray(campaigns.status, ['draft', 'rejected']),
+        ),
+      )
       .returning(campaignSelection);
+    if (!updated) {
+      return reply.status(409).send({
+        error: 'CONFLICT',
+        message: 'Only a draft or rejected campaign can be submitted.',
+        statusCode: 409,
+      });
+    }
     return reply.status(200).send(campaignView(updated as CampaignRow));
   });
 
