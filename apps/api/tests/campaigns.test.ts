@@ -13,6 +13,7 @@ import {
   creatives,
   users,
 } from '../src/db/schema.js';
+import { isJourOuvre, premiereDateDisponible } from '../src/lib/campaign-dates.js';
 import { campaignsRoutes } from '../src/routes/campaigns.js';
 import { apiRoutes } from '../src/routes/index.js';
 
@@ -59,6 +60,7 @@ const seedCampaign = async (
     name?: string;
     type?: string;
     status?: 'draft' | 'pending' | 'active' | 'rejected';
+    startDate?: string | null;
   } = {},
 ): Promise<string> => {
   const [c] = await db
@@ -68,9 +70,29 @@ const seedCampaign = async (
       name: opts.name ?? 'Campaign Test',
       campaignType: opts.type ?? 'standard',
       status: opts.status ?? 'draft',
+      startDate: opts.startDate ?? null,
     })
     .returning();
   return c?.id ?? '';
+};
+
+// CF-Q2 — route fixtures compute VALID dates through the same lib the route enforces (the floor
+// moves with real time; no clock mocking). prevWorkingDay/nextSaturday build the invalid cases.
+const plusDays = (iso: string, n: number): string => {
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+const floorDate = (): string => premiereDateDisponible();
+const prevWorkingDay = (iso: string): string => {
+  let d = plusDays(iso, -1);
+  while (!isJourOuvre(d)) d = plusDays(d, -1);
+  return d;
+};
+const nextSaturday = (iso: string): string => {
+  let d = plusDays(iso, 1);
+  while (new Date(`${d}T12:00:00Z`).getUTCDay() !== 6) d = plusDays(d, 1);
+  return d;
 };
 
 const readCampaign = async (id: string): Promise<typeof campaigns.$inferSelect | undefined> => {
@@ -178,8 +200,8 @@ describe('campaigns draft lifecycle (advertiser, real Postgres)', () => {
       payload: {
         name: 'Ramadan Promo',
         campaign_type: 'standard',
-        start_date: '2026-07-01',
-        end_date: '2026-07-31',
+        start_date: floorDate(),
+        end_date: plusDays(floorDate(), 30),
         description: 'A test campaign',
       },
     });
@@ -189,8 +211,8 @@ describe('campaigns draft lifecycle (advertiser, real Postgres)', () => {
       name: 'Ramadan Promo',
       campaign_type: 'standard',
       status: 'draft',
-      start_date: '2026-07-01',
-      end_date: '2026-07-31',
+      start_date: floorDate(),
+      end_date: plusDays(floorDate(), 30),
       description: 'A test campaign',
     });
     expect(body['id']).toBeDefined();
@@ -250,6 +272,104 @@ describe('campaigns draft lifecycle (advertiser, real Postgres)', () => {
       payload: { name: 'NoBudget', campaign_type: 'standard' },
     });
     expect((res.json() as Record<string, unknown>)['requested_budget']).toBeNull();
+  });
+
+  // ── CF-Q2 (spec §1.4) — the J+2-working-days start floor, enforced at every write ───────────
+  it('rejects a create whose start is an ouvré day BEFORE the floor (400 TOO_SOON + the floor)', async () => {
+    const me = await seedUser();
+    mockSession(me);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/campaigns',
+      payload: {
+        name: 'Trop tôt',
+        campaign_type: 'standard',
+        start_date: prevWorkingDay(floorDate()),
+      },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({
+      error: 'INVALID_START_DATE',
+      reason: 'TOO_SOON',
+      message: 'The start date must be at least two working days ahead.',
+      first_available_start_date: floorDate(),
+    });
+    expect(await db.select().from(campaigns)).toHaveLength(0); // nothing persisted
+  });
+
+  it('rejects a WEEK-END start outright, even far beyond the floor (400 NON_WORKING_DAY)', async () => {
+    const me = await seedUser();
+    mockSession(me);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/campaigns',
+      payload: {
+        name: 'Samedi lointain',
+        campaign_type: 'standard',
+        start_date: nextSaturday(plusDays(floorDate(), 30)),
+      },
+    });
+    expect(res.statusCode).toBe(400);
+    expect((res.json() as { reason: string }).reason).toBe('NON_WORKING_DAY');
+  });
+
+  it('rejects the same floor violations on PATCH; an explicit null still clears the date', async () => {
+    const me = await seedUser();
+    const id = await seedCampaign(me);
+    mockSession(me);
+    const tooSoon = await app.inject({
+      method: 'PATCH',
+      url: `/api/campaigns/${id}`,
+      payload: { start_date: prevWorkingDay(floorDate()) },
+    });
+    expect(tooSoon.statusCode).toBe(400);
+    expect((tooSoon.json() as { reason: string }).reason).toBe('TOO_SOON');
+    const weekend = await app.inject({
+      method: 'PATCH',
+      url: `/api/campaigns/${id}`,
+      payload: { start_date: nextSaturday(floorDate()) },
+    });
+    expect((weekend.json() as { reason: string }).reason).toBe('NON_WORKING_DAY');
+    const cleared = await app.inject({
+      method: 'PATCH',
+      url: `/api/campaigns/${id}`,
+      payload: { start_date: null },
+    });
+    expect(cleared.statusCode).toBe(200);
+    expect((cleared.json() as { start_date: string | null }).start_date).toBeNull();
+  });
+
+  it('re-checks the floor at SUBMIT: a stale draft (start now too soon) is refused, stays draft', async () => {
+    const me = await seedUser();
+    // Seeded straight into the DB with yesterday-ish ouvré start — as a draft saved days ago.
+    const id = await seedCampaign(me, { startDate: prevWorkingDay(floorDate()) });
+    mockSession(me);
+    const res = await app.inject({ method: 'POST', url: `/api/campaigns/${id}/submit` });
+    expect(res.statusCode).toBe(400);
+    expect((res.json() as { reason: string }).reason).toBe('TOO_SOON');
+    expect((await readCampaign(id))?.status).toBe('draft'); // unchanged
+    expect((await readCampaign(id))?.submittedAt).toBeNull();
+  });
+
+  it('a date-less draft still submits (dates stay an activation-time requirement)', async () => {
+    const me = await seedUser();
+    const id = await seedCampaign(me);
+    mockSession(me);
+    const res = await app.inject({ method: 'POST', url: `/api/campaigns/${id}/submit` });
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as { status: string }).status).toBe('pending');
+  });
+
+  it('an existing draft with a PAST start stays fully READABLE (no retroactive breakage)', async () => {
+    const me = await seedUser();
+    const id = await seedCampaign(me, { startDate: '2025-01-06' }); // a long-gone lundi
+    mockSession(me);
+    const one = await app.inject({ method: 'GET', url: `/api/campaigns/${id}` });
+    expect(one.statusCode).toBe(200);
+    expect((one.json() as { start_date: string }).start_date).toBe('2025-01-06');
+    const list = await app.inject({ method: 'GET', url: '/api/campaigns/mine' });
+    expect(list.statusCode).toBe(200);
+    expect((list.json() as { id: string }[]).some((r) => r.id === id)).toBe(true);
   });
 
   it('rejects a create missing a required field (400)', async () => {

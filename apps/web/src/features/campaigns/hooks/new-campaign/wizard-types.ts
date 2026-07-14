@@ -69,6 +69,8 @@ export type SaveDraftResult =
 
 export interface UseCampaignWizardOptions {
   initialState: WizardState;
+  /** CF-Q2 — the step to open at (« Reprendre » resume); defaults to 1. */
+  initialStep?: number;
   /** Create-early DI: POST /api/campaigns on leaving Basics → the draft id. */
   createDraft: (input: CreateCampaignInput) => Promise<CampaignView>;
   /** PATCH /api/campaigns/:id — used to write requested_budget (and to link the creative). */

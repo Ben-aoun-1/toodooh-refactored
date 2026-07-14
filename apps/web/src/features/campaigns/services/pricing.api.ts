@@ -8,6 +8,8 @@ import { apiClient } from '@/lib/api-client';
 export interface PricingConfig {
   standard_cpm_tnd: number;
   event_cpm_tnd: number;
+  /** CF-Q2 — the J+2-working-days start floor (ISO date), computed server-side in ONE place. */
+  first_available_start_date: string;
 }
 
 export const pricingApi = {

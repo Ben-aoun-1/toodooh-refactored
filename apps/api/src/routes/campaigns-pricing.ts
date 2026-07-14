@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 
+import { premiereDateDisponible } from '../lib/campaign-dates.js';
 import { getDispatchConfig } from '../lib/dispatch/config.js';
 import { requireAuth } from '../middleware/require-auth.js';
 
@@ -19,6 +20,9 @@ export const campaignsPricingRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(200).send({
         standard_cpm_tnd: cfg.standardCpmTnd,
         event_cpm_tnd: cfg.eventCpmTnd,
+        // CF-Q2 (spec §1.4) — the J+2-working-days start floor, computed server-side in ONE
+        // place (lib/campaign-dates) so the wizard consumes it instead of hardcoding the rule.
+        first_available_start_date: premiereDateDisponible(),
       });
     },
   );

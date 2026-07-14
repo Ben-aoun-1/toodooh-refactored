@@ -10,6 +10,11 @@ import {
   campaigns,
   creatives,
 } from '../db/schema.js';
+import {
+  type StartDateViolation,
+  premiereDateDisponible,
+  startDateViolation,
+} from '../lib/campaign-dates.js';
 import { requireAdvertiser } from '../middleware/require-advertiser.js';
 import { requireAuth } from '../middleware/require-auth.js';
 
@@ -18,6 +23,19 @@ import { requireAuth } from '../middleware/require-auth.js';
 // advertiser via advertiser_id: a foreign id is indistinguishable from a missing one (404, never a
 // leak). Edits and deletes are draft-only (409 once submitted); submit is the single draft→pending
 // transition. Targeting/video/map/owner-approval/pricing land in later lanes.
+
+// CF-Q2 (spec §1.4) — the start-date floor lives in ONE place (lib/campaign-dates: J+2 working
+// days, week-ends blocked; jours fériés land there later). Enforced on create, PATCH and submit
+// (a stale draft must not slip through at submit time). Admin activation is untouched (parked).
+const startDateRejection = (violation: StartDateViolation) => ({
+  error: 'INVALID_START_DATE',
+  reason: violation,
+  message:
+    violation === 'NON_WORKING_DAY'
+      ? 'Campaigns start on working days (Mon-Fri).'
+      : 'The start date must be at least two working days ahead.',
+  first_available_start_date: premiereDateDisponible(),
+});
 
 const idParamSchema = z.object({ id: z.uuid() });
 
@@ -162,6 +180,10 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         .status(401)
         .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
     }
+    if (parsed.data.start_date) {
+      const violation = startDateViolation(parsed.data.start_date);
+      if (violation) return reply.status(400).send(startDateRejection(violation));
+    }
     const [created] = await db
       .insert(campaigns)
       .values({
@@ -291,6 +313,11 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         .status(401)
         .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
     }
+    // CF-Q2 — an explicit null still clears the date; only a SET start date meets the floor.
+    if (parsed.data.start_date) {
+      const violation = startDateViolation(parsed.data.start_date);
+      if (violation) return reply.status(400).send(startDateRejection(violation));
+    }
     // Owner-scope in the WHERE: a foreign id is indistinguishable from a missing one.
     const [existing] = await db
       .select({ id: campaigns.id, status: campaigns.status })
@@ -338,7 +365,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
     }
     const [existing] = await db
-      .select({ id: campaigns.id, status: campaigns.status })
+      .select({ id: campaigns.id, status: campaigns.status, startDate: campaigns.startDate })
       .from(campaigns)
       .where(and(eq(campaigns.id, parsedParams.data.id), eq(campaigns.advertiserId, userId)))
       .limit(1);
@@ -351,6 +378,12 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         message: 'Only a draft campaign can be submitted.',
         statusCode: 409,
       });
+    }
+    // CF-Q2 — re-check the floor at submit time: a draft saved days ago may now be too soon.
+    // A date-less draft submits as before (dates stay an activation-time requirement).
+    if (existing.startDate) {
+      const violation = startDateViolation(existing.startDate);
+      if (violation) return reply.status(400).send(startDateRejection(violation));
     }
     const [updated] = await db
       .update(campaigns)

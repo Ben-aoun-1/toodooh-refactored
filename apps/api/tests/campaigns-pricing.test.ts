@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { auth } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
 import { type NewUser, dispatchConfig, users } from '../src/db/schema.js';
+import { isJourOuvre, premiereDateDisponible } from '../src/lib/campaign-dates.js';
 import { adminDispatchConfigRoutes } from '../src/routes/admin-dispatch-config.js';
 import { campaignsPricingRoutes } from '../src/routes/campaigns-pricing.js';
 
@@ -80,7 +81,19 @@ describe('advertiser pricing-config — GET /api/campaigns/pricing-config (real 
     const res = await getPricing();
     expect(res.statusCode).toBe(200);
     const body = res.json() as { standard_cpm_tnd: number; event_cpm_tnd: number };
-    expect(body).toEqual({ standard_cpm_tnd: 15, event_cpm_tnd: 30 });
+    expect(body).toEqual({
+      standard_cpm_tnd: 15,
+      event_cpm_tnd: 30,
+      first_available_start_date: premiereDateDisponible(),
+    });
+  });
+
+  it('carries the CF-Q2 start floor: an ISO working day ≥2 calendar days out', async () => {
+    mockSession(await seedUser({ role: 'advertiser' }), 'advertiser');
+    const body = (await getPricing()).json() as { first_available_start_date: string };
+    expect(body.first_available_start_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(isJourOuvre(body.first_available_start_date)).toBe(true);
+    expect(body.first_available_start_date > new Date().toISOString().slice(0, 10)).toBe(true);
   });
 
   it('reflects an admin CPM edit — admin PATCH then advertiser GET sees the new value', async () => {
