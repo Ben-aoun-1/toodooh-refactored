@@ -10,6 +10,9 @@ import {
   campaignReconciliation,
   campaignScreenhostPayout,
   campaigns,
+  campaignTargeting,
+  campaignZones,
+  creatives,
   type DispatchAcceptation,
   proofOfPlay,
   screenhostAffluence,
@@ -17,6 +20,7 @@ import {
   screenhostMonthlyStats,
   screenhosts,
   users,
+  zones,
 } from '../db/schema.js';
 import { buildEligibilityPatch } from '../lib/eligibility-patch.js';
 import { assembleReportData } from '../lib/report/assemble.js';
@@ -891,6 +895,12 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
 
   // GET /api/screenhosts/allocations — the owner's EN_ATTENTE allocations awaiting their decision,
   // joined to campaign (name/window) + screenhost (name) for the accept/reject surface. Newest first.
+  // CF-O1 (spec §2.2) — the owner decides on the FULL proposal, so each row also carries
+  // campaign_type, the targeting category NAMES (classes are engine-internal, never owner-facing),
+  // the zone NAMES ([] = whole network on that criterion, CF-Z1), and the linked creative's
+  // {kind, duration_seconds} meta (null when the campaign has no creative). The media itself is
+  // presigned on demand via GET /allocations/:id/creative-url, never embedded here (short-TTL urls
+  // would go stale sitting in an open list).
   app.get('/api/screenhosts/allocations', ownerGuard, async (request, reply) => {
     const userId = request.user?.id;
     if (!userId) {
@@ -903,6 +913,7 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         id: campaignDispatchAllocation.id,
         campaignId: campaigns.id,
         campaignName: campaigns.name,
+        campaignType: campaigns.campaignType,
         startDate: campaigns.startDate,
         endDate: campaigns.endDate,
         screenhostId: screenhosts.id,
@@ -911,6 +922,8 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         rI: campaignDispatchAllocation.rI,
         revenuPrevisionnel: campaignDispatchAllocation.revenuPrevisionnel,
         createdAt: campaignDispatchAllocation.createdAt,
+        creativeKind: creatives.creativeType,
+        creativeDuration: creatives.durationSeconds,
       })
       .from(campaignDispatchAllocation)
       .innerJoin(screenhosts, eq(campaignDispatchAllocation.screenhostId, screenhosts.id))
@@ -919,6 +932,7 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         eq(campaignDispatchAllocation.planId, campaignDispatchPlan.id),
       )
       .innerJoin(campaigns, eq(campaignDispatchPlan.campaignId, campaigns.id))
+      .leftJoin(creatives, eq(campaigns.creativeId, creatives.id))
       .where(
         and(
           eq(screenhosts.ownerId, userId),
@@ -927,11 +941,52 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       )
       .orderBy(desc(campaignDispatchAllocation.createdAt));
 
+    // Category/zone names are 1:many — ONE batched query each over the already-owner-scoped
+    // campaign ids, grouped in JS (the campaigns.ts no-N+1 idiom). Categories collapse to NAMES:
+    // a NULL category_id line means « toutes les catégories », so any such line (or no targeting
+    // at all) yields [] — same "empty = whole network" convention the zones already use.
+    const campaignIds = [...new Set(rows.map((r) => r.campaignId))];
+    const categoriesByCampaign = new Map<string, string[]>();
+    const allCategoriesCampaigns = new Set<string>();
+    const zonesByCampaign = new Map<string, string[]>();
+    if (campaignIds.length > 0) {
+      const targetingLines = await db
+        .select({
+          campaignId: campaignTargeting.campaignId,
+          categoryName: businessSectors.name,
+        })
+        .from(campaignTargeting)
+        .leftJoin(businessSectors, eq(campaignTargeting.categoryId, businessSectors.id))
+        .where(inArray(campaignTargeting.campaignId, campaignIds))
+        .orderBy(asc(businessSectors.name));
+      for (const line of targetingLines) {
+        if (line.categoryName === null) {
+          allCategoriesCampaigns.add(line.campaignId);
+          continue;
+        }
+        const list = categoriesByCampaign.get(line.campaignId) ?? [];
+        if (!list.includes(line.categoryName)) list.push(line.categoryName);
+        categoriesByCampaign.set(line.campaignId, list);
+      }
+      const zoneRows = await db
+        .select({ campaignId: campaignZones.campaignId, name: zones.name })
+        .from(campaignZones)
+        .innerJoin(zones, eq(campaignZones.zoneId, zones.id))
+        .where(inArray(campaignZones.campaignId, campaignIds))
+        .orderBy(asc(zones.name));
+      for (const row of zoneRows) {
+        const list = zonesByCampaign.get(row.campaignId) ?? [];
+        list.push(row.name);
+        zonesByCampaign.set(row.campaignId, list);
+      }
+    }
+
     return reply.status(200).send(
       rows.map((r) => ({
         id: r.id,
         campaign_id: r.campaignId,
         campaign_name: r.campaignName,
+        campaign_type: r.campaignType,
         start_date: r.startDate,
         end_date: r.endDate,
         screenhost_id: r.screenhostId,
@@ -940,6 +995,14 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         r_i: r.rI,
         revenu_previsionnel: Number(r.revenuPrevisionnel),
         created_at: r.createdAt.toISOString(),
+        categories: allCategoriesCampaigns.has(r.campaignId)
+          ? []
+          : (categoriesByCampaign.get(r.campaignId) ?? []),
+        zones: zonesByCampaign.get(r.campaignId) ?? [],
+        creative:
+          r.creativeKind === null
+            ? null
+            : { kind: r.creativeKind, duration_seconds: r.creativeDuration },
       })),
     );
   });
@@ -1002,6 +1065,53 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
   app.post('/api/screenhosts/allocations/:id/reject', ownerGuard, (request, reply) =>
     decideAllocation(request, reply, 'REFUSE'),
   );
+
+  // GET /api/screenhosts/allocations/:id/creative-url — presign the proposed campaign's creative so
+  // the OWNER can view the actual spot before deciding (CF-O1, spec §2.2). Mirrors the admin/
+  // advertiser presign mechanics (admin-creatives.ts /:id/url) with the allocation-list's owner
+  // scoping IN the WHERE: the caller must own the allocation's screenhost, so a foreign or missing
+  // allocation — or one whose campaign has no linked creative (inner join) — is an
+  // indistinguishable 404. Short TTL: the url is fetched on expand and consumed immediately; 5
+  // minutes outlives any plausible view without leaving long-lived media links around.
+  app.get('/api/screenhosts/allocations/:id/creative-url', ownerGuard, async (request, reply) => {
+    const parsed = idParamSchema.safeParse(request.params);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: [{ field: 'id', reason: 'must be a uuid' }],
+      });
+    }
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply
+        .status(401)
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+    }
+    const [row] = await db
+      .select({ storageKey: creatives.storageKey })
+      .from(campaignDispatchAllocation)
+      .innerJoin(screenhosts, eq(campaignDispatchAllocation.screenhostId, screenhosts.id))
+      .innerJoin(
+        campaignDispatchPlan,
+        eq(campaignDispatchAllocation.planId, campaignDispatchPlan.id),
+      )
+      .innerJoin(campaigns, eq(campaignDispatchPlan.campaignId, campaigns.id))
+      .innerJoin(creatives, eq(campaigns.creativeId, creatives.id))
+      .where(
+        and(eq(campaignDispatchAllocation.id, parsed.data.id), eq(screenhosts.ownerId, userId)),
+      )
+      .limit(1);
+    if (!row) return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such creative.' });
+    const result = await storage.getPresignedUrl({ key: row.storageKey, expiresInSeconds: 300 });
+    if ('error' in result) {
+      return reply.status(502).send({
+        error: 'STORAGE_ERROR',
+        message: 'Could not generate a creative URL. Please retry.',
+      });
+    }
+    return reply.status(200).send({ url: result.url });
+  });
 
   // ── dispatch calendar (owner-scoped, ACCEPTE only) ─────────────────────────────────────────────
   // GET /api/screenhosts/calendar — the owner's ACCEPTE allocations (the ones that actually air),

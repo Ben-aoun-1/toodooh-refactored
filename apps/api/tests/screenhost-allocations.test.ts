@@ -1,21 +1,28 @@
-import { eq } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
+
+import { eq, inArray } from 'drizzle-orm';
 import Fastify from 'fastify';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { auth } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
 import {
+  businessSectors,
   campaignDispatchAllocation,
   campaignDispatchPlan,
   campaigns,
+  campaignTargeting,
+  campaignZones,
   creatives,
   type DispatchCreneau,
   type NewUser,
   screenhosts,
   users,
+  zones,
 } from '../src/db/schema.js';
 import { activeAllocationsForScreenhost } from '../src/lib/playout/active-allocations.js';
 import { screenhostsRoutes } from '../src/routes/screenhosts.js';
+import { storage } from '../src/storage/s3-storage.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
 
@@ -64,6 +71,13 @@ const CRENEAUX: DispatchCreneau[] = [{ date: '2024-01-01', hour: 12, reps: 100, 
 // Seed the full chain advertiser→campaign→plan→(screenhost owned by `ownerId`)→allocation and return
 // the allocation id. statutAcceptation is left UNSET so the column default (EN_ATTENTE) applies,
 // unless `statut` is passed.
+// CF-O1 proposal fixtures: `creative` links an approved creative (optionally uploading real bytes to
+// the test MinIO), `categoryNames`/`zoneNames` create targeting/zone rows. business_sectors and
+// zones survive resetAuthTables (no users FK), and db.test/reference.test pin EXACT seed counts —
+// so seeded rows are tracked and deleted in afterEach (links first, FK order), and names carry a
+// per-run random tag so a crashed run can never collide with the canonical seeds.
+const seededSectorIds: string[] = [];
+const seededZoneIds: string[] = [];
 const seedAllocation = async (
   ownerId: string,
   opts: {
@@ -71,8 +85,17 @@ const seedAllocation = async (
     campaignName?: string;
     campaignStatus?: 'upcoming' | 'active';
     window?: { start: string; end: string };
+    creative?: { kind: 'video' | 'photo'; duration: number | null; bytes?: Buffer };
+    categoryNames?: string[];
+    allCategoriesLine?: boolean;
+    zoneNames?: string[];
   } = {},
-): Promise<{ allocationId: string; screenhostId: string; campaignId: string }> => {
+): Promise<{
+  allocationId: string;
+  screenhostId: string;
+  campaignId: string;
+  storageKey: string | null;
+}> => {
   const advertiser = await seedUser({ role: 'advertiser' });
   const [sh] = await db.insert(screenhosts).values({ name: 'Café Alloc', ownerId }).returning();
   const [campaign] = await db
@@ -117,10 +140,60 @@ const seedAllocation = async (
       ...(opts.statut ? { statutAcceptation: opts.statut } : {}),
     })
     .returning();
+
+  let storageKey: string | null = null;
+  if (opts.creative) {
+    storageKey = `creatives/test-alloc/${campaign?.id ?? randomUUID()}`;
+    const [creative] = await db
+      .insert(creatives)
+      .values({
+        advertiserId: advertiser,
+        creativeType: opts.creative.kind,
+        storageKey,
+        durationSeconds: opts.creative.duration,
+        validationStatus: 'approved',
+      })
+      .returning();
+    await db
+      .update(campaigns)
+      .set({ creativeId: creative?.id ?? null })
+      .where(eq(campaigns.id, campaign?.id ?? ''));
+    if (opts.creative.bytes) {
+      await storage.upload({
+        key: storageKey,
+        body: opts.creative.bytes,
+        contentType: opts.creative.kind === 'video' ? 'video/mp4' : 'image/jpeg',
+      });
+    }
+  }
+  for (const name of opts.categoryNames ?? []) {
+    const [sector] = await db
+      .insert(businessSectors)
+      .values({ name, audience: 'owner' })
+      .returning();
+    if (sector) seededSectorIds.push(sector.id);
+    await db
+      .insert(campaignTargeting)
+      .values({ campaignId: campaign?.id ?? '', categoryId: sector?.id ?? null, class: null });
+  }
+  if (opts.allCategoriesLine) {
+    await db
+      .insert(campaignTargeting)
+      .values({ campaignId: campaign?.id ?? '', categoryId: null, class: null });
+  }
+  for (const name of opts.zoneNames ?? []) {
+    const [zone] = await db.insert(zones).values({ name }).returning();
+    if (zone) seededZoneIds.push(zone.id);
+    await db
+      .insert(campaignZones)
+      .values({ campaignId: campaign?.id ?? '', zoneId: zone?.id ?? '' });
+  }
+
   return {
     allocationId: alloc?.id ?? '',
     screenhostId: sh?.id ?? '',
     campaignId: campaign?.id ?? '',
+    storageKey,
   };
 };
 
@@ -144,6 +217,20 @@ describe('screenhost dispatch allocation accept/reject (owner-scoped, real Postg
   });
 
   afterEach(async () => {
+    // Sweep this test's reference-table rows (links first — targeting/zone FKs are NO ACTION):
+    // business_sectors/zones survive the users-cascade truncate, and other suites pin exact seeds.
+    if (seededSectorIds.length > 0) {
+      await db
+        .delete(campaignTargeting)
+        .where(inArray(campaignTargeting.categoryId, seededSectorIds));
+      await db.delete(businessSectors).where(inArray(businessSectors.id, seededSectorIds));
+      seededSectorIds.length = 0;
+    }
+    if (seededZoneIds.length > 0) {
+      await db.delete(campaignZones).where(inArray(campaignZones.zoneId, seededZoneIds));
+      await db.delete(zones).where(inArray(zones.id, seededZoneIds));
+      seededZoneIds.length = 0;
+    }
     await app.close();
     vi.restoreAllMocks();
   });
@@ -180,6 +267,130 @@ describe('screenhost dispatch allocation accept/reject (owner-scoped, real Postg
     mockNoSession();
     const res = await app.inject({ method: 'GET', url: '/api/screenhosts/allocations' });
     expect(res.statusCode).toBe(401);
+  });
+
+  // ── CF-O1: the full proposal payload ────────────────────────────────────────
+  it('payload carries the full proposal: type, category NAMES, zone NAMES, creative meta', async () => {
+    const owner = await seedUser();
+    const tag = randomUUID().slice(0, 8);
+    // Insert order is deliberately non-alphabetical — the payload sorts names ascending.
+    await seedAllocation(owner, {
+      creative: { kind: 'video', duration: 20 },
+      categoryNames: [`Resto ${tag}`, `Café ${tag}`],
+      zoneNames: [`Zone B ${tag}`, `Zone A ${tag}`],
+    });
+    mockSession(owner);
+
+    const res = await app.inject({ method: 'GET', url: '/api/screenhosts/allocations' });
+    expect(res.statusCode).toBe(200);
+    const [row] = res.json() as Array<Record<string, unknown>>;
+    expect(row).toMatchObject({
+      campaign_type: 'standard',
+      categories: [`Café ${tag}`, `Resto ${tag}`],
+      zones: [`Zone A ${tag}`, `Zone B ${tag}`],
+      creative: { kind: 'video', duration_seconds: 20 },
+    });
+    // Classes are engine-internal — never owner-facing on this surface.
+    expect(JSON.stringify(row)).not.toContain('"class"');
+  });
+
+  it('empty proposal criteria: no zones → [], no targeting → [], no creative → null', async () => {
+    const owner = await seedUser();
+    await seedAllocation(owner);
+    mockSession(owner);
+
+    const res = await app.inject({ method: 'GET', url: '/api/screenhosts/allocations' });
+    const [row] = res.json() as Array<Record<string, unknown>>;
+    expect(row).toMatchObject({ categories: [], zones: [], creative: null });
+  });
+
+  it('an ALL-categories targeting line (NULL category) collapses categories to []', async () => {
+    const owner = await seedUser();
+    const tag = randomUUID().slice(0, 8);
+    await seedAllocation(owner, {
+      categoryNames: [`Café ${tag}`],
+      allCategoriesLine: true,
+    });
+    mockSession(owner);
+
+    const res = await app.inject({ method: 'GET', url: '/api/screenhosts/allocations' });
+    const [row] = res.json() as Array<Record<string, unknown>>;
+    expect(row).toMatchObject({ categories: [] });
+  });
+
+  // ── CF-O1: GET /allocations/:id/creative-url (owner-scoped presign) ─────────
+  it('presigns the spot for the allocation owner — url present AND fetchable from MinIO', async () => {
+    const owner = await seedUser();
+    const bytes = Buffer.from(`spot-bytes-${randomUUID()}`);
+    const { allocationId, storageKey } = await seedAllocation(owner, {
+      creative: { kind: 'photo', duration: 10, bytes },
+    });
+    mockSession(owner);
+
+    try {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/screenhosts/allocations/${allocationId}/creative-url`,
+      });
+      expect(res.statusCode).toBe(200);
+      const { url } = res.json() as { url: string };
+      expect(url).toContain(storageKey ?? '');
+      const fetched = await fetch(url);
+      expect(fetched.status).toBe(200);
+      expect(await fetched.text()).toBe(bytes.toString());
+    } finally {
+      if (storageKey) await storage.delete({ key: storageKey }).catch(() => undefined);
+    }
+  });
+
+  it('a FOREIGN owner gets a 404 indistinguishable from a missing allocation', async () => {
+    const me = await seedUser();
+    const other = await seedUser();
+    const { allocationId } = await seedAllocation(other, {
+      creative: { kind: 'video', duration: 15 },
+    });
+    mockSession(me);
+
+    const foreign = await app.inject({
+      method: 'GET',
+      url: `/api/screenhosts/allocations/${allocationId}/creative-url`,
+    });
+    const missing = await app.inject({
+      method: 'GET',
+      url: `/api/screenhosts/allocations/${randomUUID()}/creative-url`,
+    });
+    expect(foreign.statusCode).toBe(404);
+    expect(missing.statusCode).toBe(404);
+    expect(foreign.json()).toEqual(missing.json());
+  });
+
+  it('an allocation whose campaign has NO creative → 404 (no presign path)', async () => {
+    const owner = await seedUser();
+    const { allocationId } = await seedAllocation(owner);
+    mockSession(owner);
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/screenhosts/allocations/${allocationId}/creative-url`,
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('creative-url rejects a non-uuid id (400) and requires authentication (401)', async () => {
+    const owner = await seedUser();
+    mockSession(owner);
+    const bad = await app.inject({
+      method: 'GET',
+      url: '/api/screenhosts/allocations/not-a-uuid/creative-url',
+    });
+    expect(bad.statusCode).toBe(400);
+
+    mockNoSession();
+    const anon = await app.inject({
+      method: 'GET',
+      url: `/api/screenhosts/allocations/${randomUUID()}/creative-url`,
+    });
+    expect(anon.statusCode).toBe(401);
   });
 
   // ── accept / reject ─────────────────────────────────────────────────────────

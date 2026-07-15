@@ -31,20 +31,24 @@ export function useScreenhostAllocations(userId: string | undefined): {
     enabled: Boolean(userId),
   });
 
-  const invalidate = () => {
-    // The list (this decision removes the allocation from EN_ATTENTE) + the bell (the pending-
-    // acceptance notification is now actioned).
-    queryClient.invalidateQueries({ queryKey: listKey });
+  const invalidateBell = () => {
+    // The producer's "pending acceptance" notification is moot once the owner decides.
     queryClient.invalidateQueries({ queryKey: screenhostKeys.notifications(userId ?? '') });
   };
 
   const acceptMutation = useMutation({
     mutationFn: (id: string) => screenhostAllocationsService.accept(id),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      // Accept removes the allocation from EN_ATTENTE — refetch so the card leaves the queue.
+      queryClient.invalidateQueries({ queryKey: listKey });
+      invalidateBell();
+    },
   });
   const rejectMutation = useMutation({
     mutationFn: (id: string) => screenhostAllocationsService.reject(id),
-    onSuccess: invalidate,
+    // CF-O1 — deliberately NO list invalidation: the refused card must stay visible in its
+    // « Refus enregistré » state (page-held copy) instead of vanishing on refetch.
+    onSuccess: invalidateBell,
   });
 
   return {
@@ -62,4 +66,22 @@ export function useScreenhostAllocations(userId: string | undefined): {
     },
     deciding: acceptMutation.isPending || rejectMutation.isPending,
   };
+}
+
+/**
+ * CF-O1 — the allocation's short-TTL presigned spot url, fetched lazily: `enabled` only once the
+ * owner expands « Voir le spot » (a list of always-presigned urls would go stale, the TTL is 5min).
+ * staleTime under the TTL so an expand → collapse → expand within the window reuses the same url.
+ */
+export function useAllocationCreativeUrl(
+  allocationId: string,
+  enabled: boolean,
+): { url: string | undefined; isLoading: boolean; isError: boolean } {
+  const query = useQuery({
+    queryKey: screenhostKeys.allocationCreativeUrl(allocationId),
+    queryFn: () => screenhostAllocationsService.creativeUrl(allocationId),
+    enabled,
+    staleTime: 4 * 60 * 1000,
+  });
+  return { url: query.data?.url, isLoading: query.isLoading, isError: query.isError };
 }
