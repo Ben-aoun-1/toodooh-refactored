@@ -514,6 +514,108 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     return reply.status(200).send(campaignView(updated as CampaignRow));
   });
 
+  // POST /api/campaigns/:id/replay — « Rejouer » (spec §3.3): clone a COMPLETED campaign into an
+  // identical NEW draft so the advertiser only has to pick a new période. Copied: name,
+  // campaign_type, creative_id, requested_budget, description, and the targeting/zone rows
+  // (DUPLICATED, never shared — the clone owns fresh rows). NEVER copied: dates (NULL — the whole
+  // point is a new period, and the old ones are in the past anyway), status (draft), submitted_at,
+  // the rejection/activation audit, draft_reminder_sent_at. The clone + its line copies commit in
+  // ONE transaction (no half-cloned draft on a mid-flight failure). Returns the full advertiser
+  // projection (campaignView + zones + targeting, content gate derived) — the wizard rehydrates
+  // from it directly.
+  app.post('/api/campaigns/:id/replay', advertiserGuard, async (request, reply) => {
+    const parsedParams = idParamSchema.safeParse(request.params);
+    if (!parsedParams.success) return reply.status(400).send(invalidId);
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply
+        .status(401)
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+    }
+    // Owner-scope in the WHERE: a foreign id is indistinguishable from a missing one.
+    const [source] = await db
+      .select()
+      .from(campaigns)
+      .where(and(eq(campaigns.id, parsedParams.data.id), eq(campaigns.advertiserId, userId)))
+      .limit(1);
+    if (!source) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such campaign.' });
+    }
+    // Rejouer is a Passée-only affordance (spec §3.3) — a draft is resumable, a rejected one is
+    // recoverable, a live one is running; none of them is REPLAYABLE.
+    if (source.status !== 'completed') {
+      return reply.status(409).send({
+        error: 'REPLAY_SOURCE_NOT_COMPLETED',
+        message: 'Only a completed campaign can be replayed.',
+        statusCode: 409,
+      });
+    }
+
+    const clone = await db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(campaigns)
+        .values({
+          advertiserId: userId,
+          name: source.name,
+          campaignType: source.campaignType,
+          status: 'draft',
+          description: source.description,
+          creativeId: source.creativeId,
+          requestedBudget: source.requestedBudget,
+        })
+        .returning(campaignSelection);
+      if (!created) throw new Error('replay clone insert returned no row');
+      const cloneId = (created as CampaignRow).id;
+      const lines = await tx
+        .select({ categoryId: campaignTargeting.categoryId, class: campaignTargeting.class })
+        .from(campaignTargeting)
+        .where(eq(campaignTargeting.campaignId, source.id));
+      if (lines.length > 0) {
+        await tx
+          .insert(campaignTargeting)
+          .values(lines.map((l) => ({ campaignId: cloneId, ...l })));
+      }
+      const zoneRows = await tx
+        .select({ zoneId: campaignZones.zoneId })
+        .from(campaignZones)
+        .where(eq(campaignZones.campaignId, source.id));
+      if (zoneRows.length > 0) {
+        await tx
+          .insert(campaignZones)
+          .values(zoneRows.map((z) => ({ campaignId: cloneId, zoneId: z.zoneId })));
+      }
+      return created as CampaignRow;
+    });
+
+    // The content gate is DERIVED from the (shared) linked creative — same rule as every read.
+    let contentValidationStatus: string | null = null;
+    if (clone.creativeId) {
+      const [creative] = await db
+        .select({ validationStatus: creatives.validationStatus })
+        .from(creatives)
+        .where(eq(creatives.id, clone.creativeId))
+        .limit(1);
+      contentValidationStatus = creative?.validationStatus ?? null;
+    }
+    const zoneMap = await zonesByCampaign([clone.id]);
+    const targetingLines = await db
+      .select({
+        category_id: campaignTargeting.categoryId,
+        category_name: businessSectors.name,
+        class: campaignTargeting.class,
+      })
+      .from(campaignTargeting)
+      .leftJoin(businessSectors, eq(campaignTargeting.categoryId, businessSectors.id))
+      .where(eq(campaignTargeting.campaignId, clone.id))
+      .orderBy(asc(campaignTargeting.createdAt), asc(campaignTargeting.id));
+
+    return reply.status(201).send({
+      ...campaignView(clone, contentValidationStatus),
+      zones: zoneMap.get(clone.id) ?? [],
+      targeting: targetingLines,
+    });
+  });
+
   // DELETE /api/campaigns/:id — owner-scoped, draft-only (409 once submitted). 204 on success.
   app.delete('/api/campaigns/:id', advertiserGuard, async (request, reply) => {
     const parsedParams = idParamSchema.safeParse(request.params);

@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import Fastify from 'fastify';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -992,6 +992,188 @@ describe('campaigns draft lifecycle (advertiser, real Postgres)', () => {
     expect(
       (get.json() as { content_validation_status: string | null }).content_validation_status,
     ).toBeNull();
+  });
+
+  // ── POST /api/campaigns/:id/replay (CF-RJ1 — « Rejouer », spec §3.3) ─────────
+  // Fixture note: sectors are READ from the pre-seeded reference data and the zone is the seeded
+  // Grand Tunis — nothing is inserted into business_sectors/zones (the exact-seed-count footgun).
+  const grandTunisId = async (): Promise<string> => {
+    const [z] = await db.select({ id: zones.id }).from(zones).where(eq(zones.name, 'Grand Tunis'));
+    return z?.id ?? '';
+  };
+  const twoOwnerSectors = async (): Promise<{ id: string; name: string }[]> =>
+    db
+      .select({ id: businessSectors.id, name: businessSectors.name })
+      .from(businessSectors)
+      .where(eq(businessSectors.audience, 'owner'))
+      .orderBy(asc(businessSectors.displayOrder))
+      .limit(2);
+
+  // A full-bodied COMPLETED campaign: every copyable field set, every never-copied field set too
+  // (dates/submitted_at/draft_reminder_sent_at) so the matrix can pin both directions.
+  const seedCompletedSource = async (
+    me: string,
+  ): Promise<{ id: string; creativeId: string; sectors: { id: string; name: string }[] }> => {
+    const creativeId = await seedCreative(me, 'approved');
+    const sectors = await twoOwnerSectors();
+    const gt = await grandTunisId();
+    const [source] = await db
+      .insert(campaigns)
+      .values({
+        advertiserId: me,
+        name: 'Été 2025',
+        campaignType: 'standard',
+        status: 'completed',
+        startDate: '2025-07-01',
+        endDate: '2025-07-15',
+        description: 'Campagne estivale originale',
+        creativeId,
+        requestedBudget: '1500',
+        submittedAt: new Date('2025-06-20T10:00:00Z'),
+        draftReminderSentAt: new Date('2025-06-18T08:00:00Z'),
+      })
+      .returning();
+    await seedTargeting(source?.id ?? '', [
+      { categoryId: sectors[0]?.id },
+      { categoryId: sectors[1]?.id, class: 'premium' },
+    ]);
+    await db.insert(campaignZones).values({ campaignId: source?.id ?? '', zoneId: gt });
+    return { id: source?.id ?? '', creativeId, sectors };
+  };
+
+  it('replay clones a completed campaign — the full copy/no-copy matrix (201)', async () => {
+    const me = await seedUser();
+    const { id: sourceId, creativeId, sectors } = await seedCompletedSource(me);
+    mockSession(me);
+
+    const res = await app.inject({ method: 'POST', url: `/api/campaigns/${sourceId}/replay` });
+    expect(res.statusCode).toBe(201);
+    const body = res.json() as Record<string, unknown> & { id: string };
+
+    // COPIED — the identical-new-campaign half of the matrix.
+    expect(body).toMatchObject({
+      name: 'Été 2025',
+      campaign_type: 'standard',
+      description: 'Campagne estivale originale',
+      requested_budget: 1500,
+      creative_id: creativeId,
+      content_validation_status: 'approved', // derived from the SHARED linked creative
+    });
+    // NOT copied — a fresh draft pointed at a new période.
+    expect(body).toMatchObject({
+      status: 'draft',
+      start_date: null,
+      end_date: null,
+      submitted_at: null,
+      rejected_at: null,
+      reject_reason: null,
+    });
+    expect(body.id).not.toBe(sourceId);
+
+    // Projection carries the cloned lines: zones + targeting with resolved names, class preserved.
+    // (Batch-inserted lines share one created_at, so the projection order is not guaranteed —
+    // compare order-insensitively.)
+    expect(body['zones']).toEqual([{ zone_id: await grandTunisId(), name: 'Grand Tunis' }]);
+    const targeting = (
+      body['targeting'] as { category_id: string | null; category_name: string | null }[]
+    )
+      .slice()
+      .sort((a, b) => (a.category_name ?? '').localeCompare(b.category_name ?? ''));
+    expect(targeting).toEqual(
+      [
+        { category_id: sectors[0]?.id, category_name: sectors[0]?.name, class: null },
+        { category_id: sectors[1]?.id, category_name: sectors[1]?.name, class: 'premium' },
+      ].sort((a, b) => (a.category_name ?? '').localeCompare(b.category_name ?? '')),
+    );
+
+    // DB half of the no-copy matrix: reminder stamp and activation audit stay at their defaults.
+    const [cloneRow] = await db.select().from(campaigns).where(eq(campaigns.id, body.id));
+    expect(cloneRow?.draftReminderSentAt).toBeNull();
+    expect(cloneRow?.activatedAt).toBeNull();
+    expect(cloneRow?.activatedBy).toBeNull();
+    expect(cloneRow?.advertiserId).toBe(me);
+  });
+
+  it('replayed targeting/zone rows are DUPLICATED, not shared — source edits never leak', async () => {
+    const me = await seedUser();
+    const { id: sourceId } = await seedCompletedSource(me);
+    mockSession(me);
+
+    const res = await app.inject({ method: 'POST', url: `/api/campaigns/${sourceId}/replay` });
+    const cloneId = (res.json() as { id: string }).id;
+
+    // Distinct rows: the clone's targeting line ids share nothing with the source's.
+    const sourceLines = await db
+      .select({ id: campaignTargeting.id })
+      .from(campaignTargeting)
+      .where(eq(campaignTargeting.campaignId, sourceId));
+    const cloneLines = await db
+      .select({ id: campaignTargeting.id })
+      .from(campaignTargeting)
+      .where(eq(campaignTargeting.campaignId, cloneId));
+    expect(sourceLines).toHaveLength(2);
+    expect(cloneLines).toHaveLength(2);
+    const sourceIds = new Set(sourceLines.map((l) => l.id));
+    expect(cloneLines.some((l) => sourceIds.has(l.id))).toBe(false);
+
+    // Wipe the SOURCE's lines and zones — the clone keeps its own copies.
+    await db.delete(campaignTargeting).where(eq(campaignTargeting.campaignId, sourceId));
+    await db.delete(campaignZones).where(eq(campaignZones.campaignId, sourceId));
+    expect(
+      await db.select().from(campaignTargeting).where(eq(campaignTargeting.campaignId, cloneId)),
+    ).toHaveLength(2);
+    expect(
+      await db.select().from(campaignZones).where(eq(campaignZones.campaignId, cloneId)),
+    ).toHaveLength(1);
+  });
+
+  it.each(['draft', 'pending', 'upcoming', 'active', 'rejected'] as const)(
+    'replay of a %s campaign → 409 REPLAY_SOURCE_NOT_COMPLETED',
+    async (status) => {
+      const me = await seedUser();
+      const campaignId = await seedCampaign(me, { status });
+      mockSession(me);
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/campaigns/${campaignId}/replay`,
+      });
+      expect(res.statusCode).toBe(409);
+      expect((res.json() as { error: string }).error).toBe('REPLAY_SOURCE_NOT_COMPLETED');
+      // No clone materialized.
+      expect(await db.select().from(campaigns)).toHaveLength(1);
+    },
+  );
+
+  it('replay owner scoping: a FOREIGN completed campaign is indistinguishable from a missing one (404)', async () => {
+    const me = await seedUser();
+    const other = await seedUser();
+    const { id: foreignId } = await seedCompletedSource(other);
+    mockSession(me);
+
+    const foreign = await app.inject({ method: 'POST', url: `/api/campaigns/${foreignId}/replay` });
+    const missing = await app.inject({
+      method: 'POST',
+      url: '/api/campaigns/99999999-9999-4999-8999-999999999999/replay',
+    });
+    expect(foreign.statusCode).toBe(404);
+    expect(missing.statusCode).toBe(404);
+    expect(foreign.json()).toEqual(missing.json());
+    // The foreign source spawned nothing for the caller.
+    expect(await db.select().from(campaigns).where(eq(campaigns.advertiserId, me))).toHaveLength(0);
+  });
+
+  it('replay rejects a non-uuid id (400) and requires authentication (401)', async () => {
+    const me = await seedUser();
+    mockSession(me);
+    const bad = await app.inject({ method: 'POST', url: '/api/campaigns/not-a-uuid/replay' });
+    expect(bad.statusCode).toBe(400);
+
+    mockNoSession();
+    const anon = await app.inject({
+      method: 'POST',
+      url: '/api/campaigns/99999999-9999-4999-8999-999999999999/replay',
+    });
+    expect(anon.statusCode).toBe(401);
   });
 
   // ── apiRoutes wiring ─────────────────────────────────────────────────────────
