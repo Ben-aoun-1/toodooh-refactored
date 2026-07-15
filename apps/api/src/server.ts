@@ -8,6 +8,7 @@ import { db, sql } from './db/client.js';
 import { env } from './env.js';
 import { buildErrorHandler, buildNotFoundHandler } from './error-handler.js';
 import { startCampaignLifecycleJob } from './lib/campaign-lifecycle.js';
+import { isMediaProbeEnabled } from './lib/media-probe.js';
 import { startMonthlyReportJob } from './lib/report/monthly-job.js';
 import { isRecommendationsEnabled } from './lib/report/recommendations.js';
 import { isSyncEnabled, sweepUnexported } from './lib/wedooh-sync.js';
@@ -98,6 +99,15 @@ const start = async (): Promise<void> => {
     // wedooh-sync degradation pattern); every report gracefully keeps the generic pistes.
     if (!isRecommendationsEnabled()) {
       app.log.warn('AI report recommendations disabled (ANTHROPIC_API_KEY unset) — generic pistes');
+    }
+
+    // CF-SH1 — ONE boot warning when ffprobe is unprovisioned (dev without ffmpeg): byte-sniffing
+    // still applies, but the measured codec/ratio/duration checks skip. The docker image always
+    // sets FFPROBE_PATH — degradation is a dev-only posture, never a silent prod skip.
+    if (!isMediaProbeEnabled()) {
+      app.log.warn(
+        'media probe disabled (FFPROBE_PATH unset) — upload codec/ratio/duration checks skip; byte-sniffing still applies',
+      );
     }
   } catch (err) {
     app.log.error(err);

@@ -22,6 +22,10 @@ ENV NODE_ENV=production
 # Google-Fonts import when outbound network exists.
 RUN apk add --no-cache chromium nss freetype harfbuzz ca-certificates ttf-freefont font-noto-emoji
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+# ffmpeg (ffprobe included) for authoritative creative validation (CF-SH1) — same env-gated layer
+# style as chromium above: the binary path rides an ENV the code checks, dev without it degrades.
+RUN apk add --no-cache ffmpeg
+ENV FFPROBE_PATH=/usr/bin/ffprobe
 COPY --from=builder /out/node_modules ./node_modules
 COPY --from=builder /repo/apps/api/dist ./dist
 COPY --from=builder /repo/apps/api/package.json ./
