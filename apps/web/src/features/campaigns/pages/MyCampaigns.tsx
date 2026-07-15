@@ -9,6 +9,7 @@ import {
   MoreVertical,
   Plus,
   MapPin,
+  Repeat,
   Rocket,
   RotateCcw,
   Trash2,
@@ -22,13 +23,19 @@ import 'react-datepicker/dist/react-datepicker.css';
 import campagneIcon from '@/assets/sidebar/campagnes.png';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import CampaignDrawer from '@/features/campaigns/components/CampaignDrawer';
-import { useDeleteCampaign } from '@/features/campaigns/hooks/useCampaignApi';
+import { useDeleteCampaign, useReplayCampaign } from '@/features/campaigns/hooks/useCampaignApi';
 import { useMyCampaigns } from '@/features/campaigns/hooks/useMyCampaigns';
 import {
   canDeleteDraftCampaign,
   canResumeCampaign,
   rejectReasonToShow,
 } from '@/features/campaigns/lib/campaign-actions';
+import {
+  REPLAY_ERROR_TOAST,
+  REPLAY_SUCCESS_TOAST,
+  canReplayCampaign,
+  performReplay,
+} from '@/features/campaigns/lib/campaign-replay';
 import { campaignStatusUi } from '@/features/campaigns/lib/campaign-status';
 import { useWizardResumeStore } from '@/features/campaigns/stores/wizard-resume.store';
 import { logger } from '@/lib/logger';
@@ -81,6 +88,7 @@ export default function MyCampaigns() {
   // invalidate-and-refetch), no local mirror is needed.
   const { campaigns, loading, isError } = useMyCampaigns(user?.id);
   const deleteCampaign = useDeleteCampaign(user?.id);
+  const replayCampaign = useReplayCampaign(user?.id);
 
   useEffect(() => {
     if (isError) {
@@ -174,6 +182,26 @@ export default function MyCampaigns() {
 
     // Rediriger vers la page de nouvelle campagne avec les données de la campagne
     navigate('/new-campaign', { state: { editMode: true, campaign } });
+  };
+
+  // CF-RJ1 (spec §3.3) — « Rejouer » a Passée campaign: clone server-side, land the wizard on
+  // Période (resume-store key on the NEW draft id), everything else prefilled from the clone.
+  const handleReplayCampaign = async (campaign: { id: string; status: string }) => {
+    if (!canReplayCampaign(campaign.status)) return;
+    const result = await performReplay({
+      sourceId: campaign.id,
+      deps: {
+        replay: (id) => replayCampaign.mutateAsync(id),
+        setResumeStep: (draftId, step) => useWizardResumeStore.getState().setStep(draftId, step),
+        navigate,
+      },
+    });
+    if (result.kind === 'success') {
+      toast.success(REPLAY_SUCCESS_TOAST);
+    } else {
+      log.error({ err: result.error }, 'campaign replay failed');
+      toast.error(REPLAY_ERROR_TOAST);
+    }
   };
 
   // TODO(phase-1): typed source [supabase] — see #15
@@ -653,7 +681,7 @@ export default function MyCampaigns() {
                   </button>
                   {/* CF-S1 — Reprendre on draft AND rejected (recovery works end-to-end now);
                       Supprimer stays draft-only; active keeps the parked disabled Booster;
-                      pending/upcoming/completed are Consulter-only. */}
+                      pending/upcoming are Consulter-only. CF-RJ1 — completed gains Rejouer. */}
                   {canResumeCampaign(campaign.status) && (
                     <button
                       type="button"
@@ -661,6 +689,15 @@ export default function MyCampaigns() {
                       className="flex-1 py-2 rounded-lg text-sm font-medium inline-flex items-center justify-center gap-1.5 transition-colors bg-[#e3f7ec] text-[#66bc74] hover:bg-[#cceee0]"
                     >
                       <RotateCcw className="h-4 w-4" /> Reprendre
+                    </button>
+                  )}
+                  {canReplayCampaign(campaign.status) && (
+                    <button
+                      type="button"
+                      onClick={() => void handleReplayCampaign(campaign)}
+                      className="flex-1 py-2 rounded-lg text-sm font-medium inline-flex items-center justify-center gap-1.5 transition-colors bg-[#e3f7ec] text-[#66bc74] hover:bg-[#cceee0]"
+                    >
+                      <Repeat className="h-4 w-4" /> Rejouer
                     </button>
                   )}
                   {canDeleteDraftCampaign(campaign.status) && (
@@ -861,6 +898,19 @@ export default function MyCampaigns() {
                                       Reprendre
                                     </button>
                                   )}
+                                  {/* CF-RJ1 — Rejouer on a Passée campaign (clone → Période). */}
+                                  {canReplayCampaign(campaign.status) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setOpenActionRowId(null);
+                                        void handleReplayCampaign(campaign);
+                                      }}
+                                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                                    >
+                                      Rejouer
+                                    </button>
+                                  )}
                                   {campaign.status === 'active' && (
                                     <button
                                       type="button"
@@ -1036,7 +1086,22 @@ export default function MyCampaigns() {
                         <Rocket className="h-5 w-5" />
                         Booster
                       </button>
-                    ) : null /* CF-S1: pending/upcoming/completed are Consulter-only in the drawer */
+                    ) : canReplayCampaign(selectedCampaign.status) ? (
+                      /* CF-RJ1 — a Passée campaign is replayable from the drawer too. */
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const c = selectedCampaign;
+                          closeDetailsDrawer();
+                          setTimeout(() => void handleReplayCampaign(c), 320);
+                        }}
+                        className="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-[10px] border border-[#1FC16B] text-sm font-medium text-[#1FC16B] bg-[#E3F7EC] hover:opacity-90 transition-opacity"
+                        style={{ boxShadow: '0px 1px 2px rgba(10, 13, 20, 0.0313726)' }}
+                      >
+                        <Repeat className="h-5 w-5" />
+                        Rejouer
+                      </button>
+                    ) : null /* CF-S1: pending/upcoming are Consulter-only in the drawer */
                   }
                 </div>
               }
