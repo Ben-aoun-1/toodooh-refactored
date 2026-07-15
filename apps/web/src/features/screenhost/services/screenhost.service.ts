@@ -14,6 +14,28 @@ export interface ScreenhostWifi {
   wifi_password_set: boolean;
 }
 
+/**
+ * H2 — the `/mine` list row: the WiFi view PLUS the venue's single-window hours
+ * ([open, close), ints 0–23; both null = none set). The WiFi PATCH response stays hour-less.
+ */
+export interface OwnerScreenhost extends ScreenhostWifi {
+  opening_hour: number | null;
+  closing_hour: number | null;
+}
+
+/** H2 — the owner hours PATCH body: BOTH ints 0–23 with open < close, or BOTH null (clears). */
+export interface HoursPatch {
+  opening_hour: number | null;
+  closing_hour: number | null;
+}
+
+export interface ScreenhostHours {
+  id: string;
+  name: string;
+  opening_hour: number | null;
+  closing_hour: number | null;
+}
+
 /** Reveal response — the decrypted current password, or `null` when none is set. */
 export interface ScreenhostWifiReveal {
   wifi_password: string | null;
@@ -41,13 +63,18 @@ export interface WifiPatch {
 
 export const screenhostService = {
   /** GET /api/screenhosts/mine — returns the array directly (no envelope). */
-  getMine(): Promise<ScreenhostWifi[]> {
-    return apiClient.get<ScreenhostWifi[]>('/screenhosts/mine');
+  getMine(): Promise<OwnerScreenhost[]> {
+    return apiClient.get<OwnerScreenhost[]>('/screenhosts/mine');
   },
 
   /** PATCH /api/screenhosts/:id/wifi — owner-scoped; returns the redacted view. */
   updateWifi(id: string, patch: WifiPatch): Promise<ScreenhostWifi> {
     return apiClient.patch<ScreenhostWifi>(`/screenhosts/${id}/wifi`, patch);
+  },
+
+  /** H2 — PATCH /api/screenhosts/:id/hours — owner-scoped single-window hours (or both-null clear). */
+  updateHours(id: string, patch: HoursPatch): Promise<ScreenhostHours> {
+    return apiClient.patch<ScreenhostHours>(`/screenhosts/${id}/hours`, patch);
   },
 
   /**

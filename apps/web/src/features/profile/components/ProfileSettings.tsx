@@ -9,6 +9,7 @@ import {
   Lock,
   Trash2,
   Check,
+  Clock,
   Info,
   Wifi,
 } from 'lucide-react';
@@ -25,7 +26,8 @@ type EntrepriseSubId =
   | 'adresse'
   | 'documents'
   | 'coordonnees-bancaires'
-  | 'wifi-lieu';
+  | 'wifi-lieu'
+  | 'horaires-lieu';
 type ConfidentialiteSubId = 'password' | 'delete';
 
 /**
@@ -126,6 +128,9 @@ interface ProfileSettingsProps {
   /** Owner-only "WiFi du lieu" sub-tab content (per-screenhost WiFi editor). */
   wifiSlot?: ReactNode;
   wifiSubLabel?: string;
+  /** H2 — owner-only « Horaires d'ouverture » sub-tab content (per-screenhost hours editor). */
+  hoursSlot?: ReactNode;
+  hoursSubLabel?: string;
 }
 
 const TABS: { id: TabId; label: string }[] = [
@@ -204,6 +209,8 @@ export default function ProfileSettings({
   bankSubLabel,
   wifiSlot,
   wifiSubLabel,
+  hoursSlot,
+  hoursSubLabel,
 }: ProfileSettingsProps) {
   const location = useLocation();
   const [activeTab, setActiveTab] = useState<TabId>('responsable');
@@ -269,6 +276,15 @@ export default function ProfileSettings({
           },
         ]
       : []),
+    ...(hoursSlot
+      ? [
+          {
+            id: 'horaires-lieu' as const,
+            label: hoursSubLabel ?? "Horaires d'ouverture",
+            icon: <Clock className="h-5 w-5" />,
+          },
+        ]
+      : []),
   ];
 
   useEffect(() => {
@@ -291,10 +307,11 @@ export default function ProfileSettings({
         subParam === 'adresse' ||
         subParam === 'documents' ||
         subParam === 'coordonnees-bancaires' ||
-        subParam === 'wifi-lieu')
+        subParam === 'wifi-lieu' ||
+        subParam === 'horaires-lieu')
     ) {
-      // Owner-only sub-tabs (bank, wifi) render only when their slot is supplied; the render
-      // guards on the slot, so deep-linking to one without the slot is a harmless no-render.
+      // Owner-only sub-tabs (bank, wifi, hours) render only when their slot is supplied; the
+      // render guards on the slot, so deep-linking to one without the slot is a harmless no-render.
       setEntrepriseSub(subParam);
     }
   }, [location.search]);
@@ -958,6 +975,8 @@ export default function ProfileSettings({
             {entrepriseSub === 'coordonnees-bancaires' && bankSlot}
 
             {entrepriseSub === 'wifi-lieu' && wifiSlot}
+
+            {entrepriseSub === 'horaires-lieu' && hoursSlot}
           </div>
         </div>
       )}
