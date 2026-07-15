@@ -31,6 +31,10 @@ export const screenhostKeys = {
   pendingAllocations: (userId: string) =>
     [...screenhostKeys.all, 'pendingAllocations', userId] as const,
 
+  /** CF-O1 — an allocation's short-TTL presigned spot url (GET /allocations/:id/creative-url). */
+  allocationCreativeUrl: (allocationId: string) =>
+    [...screenhostKeys.all, 'allocationCreativeUrl', allocationId] as const,
+
   /** The owner's ACCEPTE allocations + créneaux for the diffusion calendar (GET /calendar). */
   calendar: (userId: string) => [...screenhostKeys.all, 'calendar', userId] as const,
 
