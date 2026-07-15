@@ -176,6 +176,8 @@ const ownerGuard = { preHandler: [requireAuth, requireActiveAccount] };
 
 export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/screenhosts/mine — the caller's screenhosts, password-redacted.
+  // H2 — the venue's opening hours ride along so the owner settings' « Horaires d'ouverture »
+  // editor reads its current state from the same list the WiFi editor already uses.
   app.get('/api/screenhosts/mine', ownerGuard, async (request, reply) => {
     const userId = request.user?.id;
     if (!userId) {
@@ -184,11 +186,21 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
     }
     const rows = await db
-      .select(wifiSelection)
+      .select({
+        ...wifiSelection,
+        openingHour: screenhosts.openingHour,
+        closingHour: screenhosts.closingHour,
+      })
       .from(screenhosts)
       .where(eq(screenhosts.ownerId, userId))
       .orderBy(asc(screenhosts.name));
-    return reply.status(200).send(rows.map(wifiView));
+    return reply.status(200).send(
+      rows.map((row) => ({
+        ...wifiView(row),
+        opening_hour: row.openingHour,
+        closing_hour: row.closingHour,
+      })),
+    );
   });
 
   // GET /api/screenhosts/earnings — the caller's per-(campaign × screenhost) payouts + grand total.
@@ -299,6 +311,79 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       });
     }
     return reply.status(200).send(wifiView(result.row));
+  });
+
+  // ── H2 — owner opening-hours editor ────────────────────────────────────────────────────────────
+  // PATCH /api/screenhosts/:id/hours — the OWNER edits their venue's single-window hours
+  // post-signup. Same columns as every other writer (signup, admin eligibility PATCH, C3 ingest —
+  // all untouched); STRICTER pair semantics than the admin's partial patch: BOTH ints 0–23 with
+  // open < close, or BOTH null (clears — the venue returns to the no-hours state: 14h report
+  // fallback, full heatmap hachure, dispatch-ineligible). Owner-scoping in the UPDATE's WHERE —
+  // a foreign or missing id is an indistinguishable 404.
+  // TIMING SEMANTICS: an hours change affects FUTURE dispatch eligibility, heatmap hachure and
+  // report divisors immediately — but NEVER rewrites already-frozen plans/créneaux (dispatch froze
+  // them at approval; pinned by test).
+  const hoursPatchSchema = z
+    .object({
+      opening_hour: z.number().int().min(0).max(23).nullable(),
+      closing_hour: z.number().int().min(0).max(23).nullable(),
+    })
+    .refine((b) => (b.opening_hour === null) === (b.closing_hour === null), {
+      message: 'opening_hour and closing_hour must be set together or both null',
+    })
+    .refine(
+      (b) => b.opening_hour === null || b.closing_hour === null || b.opening_hour < b.closing_hour,
+      { message: 'opening_hour must be strictly before closing_hour' },
+    );
+
+  app.patch('/api/screenhosts/:id/hours', ownerGuard, async (request, reply) => {
+    const parsedParams = idParamSchema.safeParse(request.params);
+    if (!parsedParams.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: [{ field: 'id', reason: 'must be a uuid' }],
+      });
+    }
+    const parsed = hoursPatchSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: parsed.error.issues.map((i) => ({
+          field: i.path.join('.') || 'hours',
+          reason: i.message,
+        })),
+      });
+    }
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply
+        .status(401)
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+    }
+    const [updated] = await db
+      .update(screenhosts)
+      .set({
+        openingHour: parsed.data.opening_hour,
+        closingHour: parsed.data.closing_hour,
+      })
+      .where(and(eq(screenhosts.id, parsedParams.data.id), eq(screenhosts.ownerId, userId)))
+      .returning({
+        id: screenhosts.id,
+        name: screenhosts.name,
+        openingHour: screenhosts.openingHour,
+        closingHour: screenhosts.closingHour,
+      });
+    if (!updated) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
+    }
+    return reply.status(200).send({
+      id: updated.id,
+      name: updated.name,
+      opening_hour: updated.openingHour,
+      closing_hour: updated.closingHour,
+    });
   });
 
   // GET /api/screenhosts/:id/wifi/reveal — owner-scoped, explicit on-demand reveal of the CURRENT
