@@ -22,16 +22,18 @@ export function onCampaignCompleted(campaignId: string): void {
 
 // CF-S1 Commit 2 — the J-3 draft reminder (spec §3.2), folded into this tick (one clock, one
 // job). Spec copy with the cart CTA ADAPTED to the current flow (« soumettez-la » — the cart
-// does not exist yet; the cart lane restores « ajoutez-la au panier »). NO deletion path of any
-// kind — drafts are reminded, never auto-deleted.
+// does not exist yet; the cart lane restores « ajoutez-la au panier »).
+// CF-S2 — the copy now WARNS about the auto-deletion (spec §1.14, reinstated by operator-accepted
+// veto): a draft that sails past its start date is deleted by this same tick.
 export const DRAFT_REMINDER_TITLE = 'Votre campagne démarre bientôt';
 export const draftReminderBody = (name: string): string =>
-  `Votre campagne ${name} doit commencer dans 3 jours. Pour ne pas la perdre, terminez le processus et soumettez-la pour la lancer.`;
+  `Votre campagne ${name} doit commencer dans 3 jours. Terminez le processus et soumettez-la pour la lancer — sans quoi elle sera supprimée automatiquement à sa date de début.`;
 
 export interface LifecycleTickResult {
   activated: number;
   completed: number;
   reminded: number;
+  deleted: number;
 }
 
 /** One transition pass. Order matters: an over-slept 'upcoming' whose whole window already
@@ -91,13 +93,43 @@ export async function runCampaignLifecycleTick(
       .where(eq(campaigns.id, draft.id));
   }
 
-  if (activated.length > 0 || completed.length > 0 || due.length > 0) {
+  // CF-S2 (spec §1.14) — « si la date de début est dépassée et que la campagne est toujours en
+  // statut Brouillon […] elle est supprimée automatiquement. » Deliberately AFTER the reminder
+  // pass: a draft at J-3 gets its warning in the same tick that deletes another draft past its
+  // start. STRICTLY past (« dépassée ») — a draft starting today survives its whole start day.
+  // Set-based + idempotent (a re-run matches nothing); date-less drafts NEVER match (NULL never
+  // compares); ONLY status='draft' — pending/rejected/anything-submitted is never touched.
+  // targeting + zone rows go via their FK cascades; a reminder notification survives with its
+  // campaign_id nulled (FK set-null) so the warning trail outlives the draft.
+  const deleted = await db
+    .delete(campaigns)
+    .where(
+      and(
+        eq(campaigns.status, 'draft'),
+        isNotNull(campaigns.startDate),
+        lt(campaigns.startDate, today),
+      ),
+    )
+    .returning({ id: campaigns.id });
+
+  if (activated.length > 0 || completed.length > 0 || due.length > 0 || deleted.length > 0) {
     log.info(
-      { activated: activated.length, completed: completed.length, reminded: due.length, today },
+      {
+        activated: activated.length,
+        completed: completed.length,
+        reminded: due.length,
+        deleted: deleted.length,
+        today,
+      },
       'campaign lifecycle tick applied transitions',
     );
   }
-  return { activated: activated.length, completed: completed.length, reminded: due.length };
+  return {
+    activated: activated.length,
+    completed: completed.length,
+    reminded: due.length,
+    deleted: deleted.length,
+  };
 }
 
 /** Boot + hourly unref'd interval (the sweepUnexported pattern) — never holds the process open. */
