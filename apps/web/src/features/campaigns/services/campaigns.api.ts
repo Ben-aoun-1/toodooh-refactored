@@ -70,6 +70,10 @@ export const campaignsApi = {
   submit(id: string): Promise<CampaignView> {
     return apiClient.post<CampaignView>(`/campaigns/${id}/submit`);
   },
+  /** CF-RJ1 « Rejouer » — clone a COMPLETED campaign into a fresh, date-less draft (201). */
+  replay(id: string): Promise<CampaignView> {
+    return apiClient.post<CampaignView>(`/campaigns/${id}/replay`);
+  },
   remove(id: string): Promise<void> {
     return apiClient.del<void>(`/campaigns/${id}`);
   },

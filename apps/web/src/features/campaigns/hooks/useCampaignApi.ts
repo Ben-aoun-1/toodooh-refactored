@@ -65,6 +65,18 @@ export function useSubmitCampaign(userId: string | undefined) {
   });
 }
 
+/** CF-RJ1 « Rejouer » — clone a completed campaign into a fresh draft (POST /:id/replay). */
+export function useReplayCampaign(userId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => campaignsApi.replay(id),
+    onSuccess: (campaign: CampaignView) => {
+      queryClient.setQueryData(campaignsKeys.detail(campaign.id), campaign);
+      void queryClient.invalidateQueries({ queryKey: campaignsKeys.list(userId ?? '') });
+    },
+  });
+}
+
 export function useDeleteCampaign(userId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
