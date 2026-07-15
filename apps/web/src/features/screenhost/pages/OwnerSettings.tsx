@@ -14,6 +14,7 @@ import ProfileDocumentsManager, {
 import ProfileSettings, {
   type ProfileFormInitialValues,
 } from '@/features/profile/components/ProfileSettings';
+import OwnerHoursSlot from '@/features/screenhost/components/OwnerHoursSlot';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
 import OwnerWifiSlot from '@/features/screenhost/components/OwnerWifiSlot';
 
@@ -165,6 +166,8 @@ export default function OwnerSettings() {
               bankSubLabel="Mes coordonnées bancaires"
               wifiSlot={<OwnerWifiSlot userId={user?.id ?? ''} />}
               wifiSubLabel="WiFi du lieu"
+              hoursSlot={<OwnerHoursSlot userId={user?.id ?? ''} />}
+              hoursSubLabel="Horaires d'ouverture"
             />
           </div>
         </div>
