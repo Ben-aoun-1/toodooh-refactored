@@ -11,7 +11,12 @@ import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 
 import { useCreativeUpload, useMyCreatives } from '@/features/campaigns/hooks/useCreativeApi';
-import { readVideoDurationSeconds } from '@/features/campaigns/services/creative-media';
+import {
+  PHOTO_ACCEPT,
+  VIDEO_ACCEPT,
+  creativeUploadErrorMessage,
+  readVideoDurationSeconds,
+} from '@/features/campaigns/services/creative-media';
 import type { CreativeType, CreativeView } from '@/features/campaigns/services/creatives.api';
 import { getErrorMessage } from '@/lib/errors';
 import { logger } from '@/lib/logger';
@@ -20,8 +25,6 @@ const log = logger.child({ module: 'StepCreative' });
 
 const MAX_VIDEO_DURATION_SECONDS = 30;
 const PHOTO_DURATIONS = [10, 20, 30] as const;
-const VIDEO_ACCEPT = 'video/mp4,video/webm,video/quicktime';
-const PHOTO_ACCEPT = 'image/jpeg,image/png,image/webp';
 
 const STATUS_LABEL: Record<string, string> = {
   pending: 'En attente de validation',
@@ -100,7 +103,12 @@ export default function StepCreative({
       await onSelectCreative(created.id);
     } catch (error) {
       log.error({ err: error }, 'creative upload failed');
-      toast.error(getErrorMessage(error) || 'Erreur lors du téléversement de la création.');
+      // CF-SH1 — the server's hardening rejections get their French copy; anything else keeps
+      // the generic fallback.
+      toast.error(
+        creativeUploadErrorMessage(error) ??
+          (getErrorMessage(error) || 'Erreur lors du téléversement de la création.'),
+      );
     }
   };
 
@@ -195,8 +203,8 @@ export default function StepCreative({
                 <p className="font-bold text-gray-900">Téléverser une nouvelle création</p>
                 <p className="text-sm text-gray-500">
                   {uploadType === 'video'
-                    ? 'MP4, WebM ou MOV · 30 secondes maximum'
-                    : 'JPEG, PNG ou WebP'}
+                    ? 'MP4 ou MOV (H.264, 16:9) · 30 secondes maximum'
+                    : 'JPEG ou PNG'}
                 </p>
                 <span className="inline-flex items-center px-4 py-2.5 mt-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50">
                   Parcourir les fichiers
@@ -271,8 +279,8 @@ export default function StepCreative({
             <div>
               <p className="text-sm font-bold text-gray-900 mb-2">Spécifications</p>
               <ul className="text-sm text-gray-600 space-y-1">
-                <li>Vidéo : 30 secondes maximum (MP4 / WebM / MOV)</li>
-                <li>Photo : durée de diffusion 10, 20 ou 30 secondes (JPEG / PNG / WebP)</li>
+                <li>Vidéo : 30 secondes maximum (MP4 / MOV, H.264, 16:9)</li>
+                <li>Photo : durée de diffusion 10, 20 ou 30 secondes (JPEG / PNG)</li>
                 <li>Votre création sera validée par notre équipe avant diffusion</li>
               </ul>
             </div>

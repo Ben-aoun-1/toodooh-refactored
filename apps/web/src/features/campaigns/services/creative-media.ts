@@ -1,9 +1,36 @@
 /**
- * Client-side media probing for the creative upload step (L-spot). The upload route requires an
+ * Client-side media helpers for the creative upload step (L-spot). The upload route requires an
  * integer `duration_seconds`; for a video we read it from an offscreen <video> element's metadata
- * (authoritative ffprobe is a server-side follow-up), for a photo the advertiser picks a diffusion
- * slot. Self-contained so the new REST creative path does not depend on the legacy video service.
+ * — a UX PRE-CHECK only since CF-SH1: the server measures the real duration via ffprobe and its
+ * value wins. For a photo the advertiser picks a diffusion slot. Self-contained so the new REST
+ * creative path does not depend on the legacy video service.
+ *
+ * CF-SH1 (spec §1.6) — the accept lists are SPEC-STRICT (MP4/MOV video, JPEG/PNG image; webm/webp
+ * out) and the server's hardening error codes map to French toasts here, pinned by unit test.
  */
+
+/** File-input accept lists — aligned with the server's spec-strict allowlists (CF-SH1). */
+export const VIDEO_ACCEPT = 'video/mp4,video/quicktime';
+export const PHOTO_ACCEPT = 'image/jpeg,image/png';
+
+// The server's CF-SH1 hardening codes → the app's French toast copy. Anything unmapped falls back
+// to the caller's generic error handling.
+const UPLOAD_ERROR_MESSAGES: Record<string, string> = {
+  MEDIA_TYPE_MISMATCH:
+    'Le fichier ne correspond pas au format annoncé — vérifiez le type du fichier.',
+  MEDIA_FORMAT_UNSUPPORTED: 'Format non conforme : vidéo MP4/MOV en 16:9, H.264, 30 s max.',
+  MEDIA_RATIO_INVALID: 'Format non conforme : la vidéo doit être au ratio 16:9 (±2%).',
+  MEDIA_DURATION_INVALID: 'Format non conforme : la vidéo ne doit pas dépasser 30 secondes.',
+  MEDIA_UNREADABLE: 'Fichier illisible — réessayez avec une vidéo MP4 (H.264).',
+};
+
+/** French toast for a CF-SH1 upload rejection, or null when the error carries no mapped code. */
+export function creativeUploadErrorMessage(error: unknown): string | null {
+  if (typeof error !== 'object' || error === null) return null;
+  const code = (error as { code?: unknown }).code;
+  if (typeof code !== 'string') return null;
+  return UPLOAD_ERROR_MESSAGES[code] ?? null;
+}
 
 function tryReadDuration(video: HTMLVideoElement): number | null {
   const d = video.duration;

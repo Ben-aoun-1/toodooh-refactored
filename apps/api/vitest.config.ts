@@ -30,6 +30,9 @@ export default defineConfig({
       // R1 report renderer — pass through so the real-chromium smoke runs when the machine has
       // one (unset → the guarded suite skips; CI stays chromium-free).
       ...(process.env['CHROMIUM_PATH'] ? { CHROMIUM_PATH: process.env['CHROMIUM_PATH'] } : {}),
+      // CF-SH1 media probe — same posture: the ffprobe-dependent upload tests run only where an
+      // explicit FFPROBE_PATH exists (the docker image); dev/CI without ffmpeg skips them.
+      ...(process.env['FFPROBE_PATH'] ? { FFPROBE_PATH: process.env['FFPROBE_PATH'] } : {}),
     },
   },
 });

@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { eq } from 'drizzle-orm';
 import Fastify from 'fastify';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -44,17 +47,20 @@ const multipartBody = (file: { filename: string; contentType: string; content: B
   };
 };
 
+// CF-SH1 — uploads are byte-sniffed now, so the fixtures are REAL media (ffmpeg-generated,
+// tests/fixtures): a 2s H.264 16:9 mp4 and a real JPEG. Fake byte strings would 400.
+const fixture = (name: string): Buffer => readFileSync(join(import.meta.dirname, 'fixtures', name));
 const videoFile = () =>
   multipartBody({
     filename: 'clip.mp4',
     contentType: 'video/mp4',
-    content: Buffer.from('fake-mp4-bytes'),
+    content: fixture('h264-169.mp4'),
   });
 const photoFile = () =>
   multipartBody({
     filename: 'shot.jpg',
     contentType: 'image/jpeg',
-    content: Buffer.from('fake-jpeg-bytes'),
+    content: fixture('photo.jpg'),
   });
 
 let seq = 0;
@@ -108,7 +114,9 @@ describe('creatives upload + library (advertiser, real Postgres + MinIO)', () =>
     const body = res.json() as Record<string, unknown>;
     expect(body).toMatchObject({
       creative_type: 'video',
-      duration_seconds: 25,
+      // CF-SH1 — with ffprobe (docker) the SERVER-measured duration wins (the fixture is 2s);
+      // without it (dev/CI) the client param remains the stored value, as before.
+      duration_seconds: process.env['FFPROBE_PATH'] ? 2 : 25,
       validation_status: 'pending',
       title: 'Promo',
     });
@@ -238,14 +246,12 @@ describe('creatives upload + library (advertiser, real Postgres + MinIO)', () =>
       url: '/api/creatives?type=photo&duration_seconds=20',
       ...photoFile(),
     });
-    await db
-      .insert(creatives)
-      .values({
-        advertiserId: other,
-        creativeType: 'video',
-        storageKey: `creatives/${other}/x`,
-        durationSeconds: 10,
-      });
+    await db.insert(creatives).values({
+      advertiserId: other,
+      creativeType: 'video',
+      storageKey: `creatives/${other}/x`,
+      durationSeconds: 10,
+    });
 
     const res = await app.inject({ method: 'GET', url: '/api/creatives/mine' });
     expect(res.statusCode).toBe(200);

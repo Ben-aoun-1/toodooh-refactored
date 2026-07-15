@@ -9,10 +9,20 @@ import { db } from '../db/client.js';
 import { creatives } from '../db/schema.js';
 import {
   MAX_CREATIVE_BYTES,
+  MAX_VIDEO_DURATION_SECONDS,
   creativeView,
   isValidDuration,
   mimeAllowedForKind,
 } from '../lib/creatives.js';
+import {
+  MediaProbeError,
+  REQUIRED_VIDEO_CODEC,
+  declaredMatchesSniffed,
+  isMediaProbeEnabled,
+  isRatioConforming,
+  probeMedia,
+  sniffContainer,
+} from '../lib/media-probe.js';
 import { requireAdvertiser } from '../middleware/require-advertiser.js';
 import { requireAuth } from '../middleware/require-auth.js';
 import { storage } from '../storage/s3-storage.js';
@@ -89,20 +99,16 @@ export const creativesRoutes: FastifyPluginAsync = async (app) => {
     try {
       body = await data.toBuffer();
     } catch {
-      return reply
-        .status(413)
-        .send({
-          error: 'PAYLOAD_TOO_LARGE',
-          message: `File exceeds the ${MAX_CREATIVE_BYTES}-byte limit.`,
-        });
+      return reply.status(413).send({
+        error: 'PAYLOAD_TOO_LARGE',
+        message: `File exceeds the ${MAX_CREATIVE_BYTES}-byte limit.`,
+      });
     }
     if (data.file.truncated) {
-      return reply
-        .status(413)
-        .send({
-          error: 'PAYLOAD_TOO_LARGE',
-          message: `File exceeds the ${MAX_CREATIVE_BYTES}-byte limit.`,
-        });
+      return reply.status(413).send({
+        error: 'PAYLOAD_TOO_LARGE',
+        message: `File exceeds the ${MAX_CREATIVE_BYTES}-byte limit.`,
+      });
     }
     if (!mimeAllowedForKind(type, data.mimetype)) {
       return invalidField(
@@ -110,6 +116,75 @@ export const creativesRoutes: FastifyPluginAsync = async (app) => {
         'file',
         `unsupported content type for a ${type} creative: ${data.mimetype}`,
       );
+    }
+
+    // ── CF-SH1 (spec §1.6) — authoritative validation for NEW uploads only ──────────────────────
+    // Existing rows are GRANDFATHERED: none of this runs anywhere but here.
+    // Layer 1 (always on): the declared mimetype must match what the bytes actually are.
+    const sniffed = sniffContainer(body);
+    if (!declaredMatchesSniffed(data.mimetype, sniffed)) {
+      return reply.status(400).send({
+        error: 'MEDIA_TYPE_MISMATCH',
+        message: `The file's bytes do not match the declared content type (declared ${data.mimetype}, detected ${sniffed ?? 'unrecognized'}).`,
+        declared: data.mimetype,
+        detected: sniffed,
+      });
+    }
+    // Layer 2 (FFPROBE_PATH-gated, the chromium-smoke posture): measured codec/ratio/duration.
+    // The SERVER-measured duration becomes the stored value; the client param is advisory.
+    let storedDurationSeconds = durationSeconds;
+    if (type === 'video' && isMediaProbeEnabled()) {
+      let probed;
+      try {
+        probed = await probeMedia(body);
+      } catch (err) {
+        if (err instanceof MediaProbeError) {
+          return reply.status(400).send({
+            error: 'MEDIA_UNREADABLE',
+            message: 'The video stream could not be read. Upload a valid MP4/MOV (H.264).',
+          });
+        }
+        throw err;
+      }
+      if (probed.codec !== REQUIRED_VIDEO_CODEC) {
+        return reply.status(400).send({
+          error: 'MEDIA_FORMAT_UNSUPPORTED',
+          message: `A video creative must be H.264 (measured codec: ${probed.codec ?? 'none'}).`,
+          measured_codec: probed.codec,
+        });
+      }
+      if (
+        probed.width === null ||
+        probed.height === null ||
+        !isRatioConforming(probed.width, probed.height)
+      ) {
+        const measured =
+          probed.width !== null && probed.height !== null && probed.height > 0
+            ? Number((probed.width / probed.height).toFixed(3))
+            : null;
+        return reply.status(400).send({
+          error: 'MEDIA_RATIO_INVALID',
+          message: `A video creative must be 16:9 within ±2% (measured: ${measured ?? 'unknown'}${probed.width !== null && probed.height !== null ? ` — ${probed.width}×${probed.height}` : ''}).`,
+          measured_ratio: measured,
+          width: probed.width,
+          height: probed.height,
+        });
+      }
+      if (probed.durationSeconds === null) {
+        return reply.status(400).send({
+          error: 'MEDIA_UNREADABLE',
+          message: 'The video duration could not be measured. Upload a valid MP4/MOV (H.264).',
+        });
+      }
+      const measuredDuration = Math.max(1, Math.ceil(probed.durationSeconds));
+      if (measuredDuration > MAX_VIDEO_DURATION_SECONDS) {
+        return reply.status(400).send({
+          error: 'MEDIA_DURATION_INVALID',
+          message: `A video creative must be at most ${MAX_VIDEO_DURATION_SECONDS} seconds (measured: ${measuredDuration}s).`,
+          measured_duration_seconds: measuredDuration,
+        });
+      }
+      storedDurationSeconds = measuredDuration;
     }
 
     const creativeId = randomUUID();
@@ -131,7 +206,7 @@ export const creativesRoutes: FastifyPluginAsync = async (app) => {
         creativeType: type,
         title: title ?? null,
         storageKey: key,
-        durationSeconds,
+        durationSeconds: storedDurationSeconds,
         mimeType: data.mimetype,
         originalFilename: data.filename,
         sizeBytes: body.length,
@@ -186,12 +261,10 @@ export const creativesRoutes: FastifyPluginAsync = async (app) => {
     if (!row) return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such creative.' });
     const result = await storage.getPresignedUrl({ key: row.storageKey });
     if ('error' in result) {
-      return reply
-        .status(502)
-        .send({
-          error: 'STORAGE_ERROR',
-          message: 'Could not generate a creative URL. Please retry.',
-        });
+      return reply.status(502).send({
+        error: 'STORAGE_ERROR',
+        message: 'Could not generate a creative URL. Please retry.',
+      });
     }
     return reply.status(200).send({ url: result.url });
   });
