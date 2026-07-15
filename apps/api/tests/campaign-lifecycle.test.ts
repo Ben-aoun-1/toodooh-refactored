@@ -1,8 +1,17 @@
-import { eq } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { db, sql } from '../src/db/client.js';
-import { type NewUser, campaigns, notifications, users } from '../src/db/schema.js';
+import {
+  type NewUser,
+  businessSectors,
+  campaignTargeting,
+  campaignZones,
+  campaigns,
+  notifications,
+  users,
+  zones,
+} from '../src/db/schema.js';
 import {
   DRAFT_REMINDER_TITLE,
   draftReminderBody,
@@ -114,7 +123,7 @@ describe('campaign lifecycle tick (real Postgres)', () => {
     const adv = await seedUser();
     const slept = await seedCampaign(adv, 'upcoming', { start: '2026-07-01', end: '2026-07-10' });
     const result = await runCampaignLifecycleTick(silentLog, NOW);
-    expect(result).toEqual({ activated: 1, completed: 1, reminded: 0 });
+    expect(result).toEqual({ activated: 1, completed: 1, reminded: 0, deleted: 0 });
     expect(await statusOf(slept)).toBe('completed');
   });
 
@@ -124,13 +133,15 @@ describe('campaign lifecycle tick (real Postgres)', () => {
     await seedCampaign(adv, 'active', { start: '2026-07-01', end: '2026-07-10' });
     await runCampaignLifecycleTick(silentLog, NOW);
     const second = await runCampaignLifecycleTick(silentLog, NOW);
-    expect(second).toEqual({ activated: 0, completed: 0, reminded: 0 });
+    expect(second).toEqual({ activated: 0, completed: 0, reminded: 0, deleted: 0 });
   });
 
-  it('never touches draft/pending/rejected/completed rows', async () => {
+  it('transitions never touch draft/pending/rejected/completed rows', async () => {
     const adv = await seedUser();
     const rows = await Promise.all([
-      seedCampaign(adv, 'draft', { start: '2026-07-01', end: '2026-07-10' }),
+      // CF-S2 — a FUTURE-dated draft (a past-start draft is now deleted by design; that path
+      // has its own matrix below).
+      seedCampaign(adv, 'draft', { start: '2026-08-01', end: '2026-08-10' }),
       seedCampaign(adv, 'pending', { start: '2026-07-01', end: '2026-07-10' }),
       seedCampaign(adv, 'rejected', { start: '2026-07-01', end: '2026-07-10' }),
       seedCampaign(adv, 'completed', { start: '2026-07-01', end: '2026-07-10' }),
@@ -179,9 +190,10 @@ describe('J-3 draft reminder (real Postgres)', () => {
     expect(rows[0]?.type).toBe('campaign_draft_reminder');
     expect(rows[0]?.campaignId).toBe(j3);
     expect(rows[0]?.title).toBe(DRAFT_REMINDER_TITLE);
-    // The spec copy, cart CTA adapted (« soumettez-la ») until the cart lane lands.
+    // CF-S2 — the copy now WARNS about the auto-deletion at start date (spec §1.14 reinstated);
+    // cart CTA still adapted (« soumettez-la ») until the cart lane lands.
     expect(rows[0]?.body).toBe(
-      'Votre campagne LC draft doit commencer dans 3 jours. Pour ne pas la perdre, terminez le processus et soumettez-la pour la lancer.',
+      'Votre campagne LC draft doit commencer dans 3 jours. Terminez le processus et soumettez-la pour la lancer — sans quoi elle sera supprimée automatiquement à sa date de début.',
     );
     expect(rows[0]?.body).toBe(draftReminderBody('LC draft'));
 
@@ -201,12 +213,131 @@ describe('J-3 draft reminder (real Postgres)', () => {
     expect(await notificationsFor(adv)).toHaveLength(1);
   });
 
-  it('NEVER targets date-less drafts, and NEVER deletes anything', async () => {
+  it('NEVER targets date-less drafts — not reminded, not deleted', async () => {
     const adv = await seedUser();
     const dateless = await seedCampaign(adv, 'draft', {});
     const result = await runCampaignLifecycleTick(silentLog, NOW);
     expect(result.reminded).toBe(0);
+    expect(result.deleted).toBe(0);
     expect(await notificationsFor(adv)).toHaveLength(0);
     expect(await statusOf(dateless)).toBe('draft'); // still there, untouched
+  });
+});
+
+// ── CF-S2 — past-start draft auto-deletion (spec §1.14, operator-accepted veto) ─────────────────
+describe('draft auto-deletion at start date (real Postgres)', () => {
+  beforeEach(async () => {
+    await resetAuthTables();
+  });
+
+  const exists = async (id: string): Promise<boolean> =>
+    (await db.select({ id: campaigns.id }).from(campaigns).where(eq(campaigns.id, id))).length > 0;
+
+  it('deletion matrix: strictly-past draft deleted; today-start / date-less / non-draft never', async () => {
+    const adv = await seedUser();
+    const pastDraft = await seedCampaign(adv, 'draft', { start: '2026-07-14', end: '2026-08-01' });
+    const longPastDraft = await seedCampaign(adv, 'draft', { start: '2026-01-05', end: null });
+    // « dépassée » is STRICTLY past — a draft starting today keeps its whole start day.
+    const todayDraft = await seedCampaign(adv, 'draft', { start: '2026-07-15', end: '2026-08-01' });
+    const futureDraft = await seedCampaign(adv, 'draft', {
+      start: '2026-07-20',
+      end: '2026-08-01',
+    });
+    const dateless = await seedCampaign(adv, 'draft', {});
+    // Every other status with a past start is NEVER deletion-eligible. ('upcoming' transitions
+    // to active in the same tick — a status change, never a deletion.)
+    const pending = await seedCampaign(adv, 'pending', { start: '2026-07-01', end: '2026-08-01' });
+    const upcoming = await seedCampaign(adv, 'upcoming', {
+      start: '2026-07-01',
+      end: '2026-08-01',
+    });
+    const active = await seedCampaign(adv, 'active', { start: '2026-07-01', end: '2026-08-01' });
+    const rejected = await seedCampaign(adv, 'rejected', {
+      start: '2026-07-01',
+      end: '2026-08-01',
+    });
+    const completedRow = await seedCampaign(adv, 'completed', {
+      start: '2026-06-01',
+      end: '2026-06-20',
+    });
+
+    const result = await runCampaignLifecycleTick(silentLog, NOW);
+    expect(result.deleted).toBe(2);
+
+    expect(await exists(pastDraft)).toBe(false);
+    expect(await exists(longPastDraft)).toBe(false);
+    expect(await exists(todayDraft)).toBe(true);
+    expect(await exists(futureDraft)).toBe(true);
+    expect(await exists(dateless)).toBe(true);
+    expect(await statusOf(pending)).toBe('pending');
+    expect(await statusOf(upcoming)).toBe('active'); // transitioned, NOT deleted
+    expect(await statusOf(active)).toBe('active');
+    expect(await statusOf(rejected)).toBe('rejected');
+    expect(await statusOf(completedRow)).toBe('completed');
+  });
+
+  it('cascade integrity: targeting + zone rows go with the draft; the reminder notification survives with campaign_id nulled', async () => {
+    const adv = await seedUser();
+    const id = await seedCampaign(adv, 'draft', { start: '2026-07-10', end: '2026-08-01' });
+    // Reference rows are READ from the pre-seeded data — nothing inserted into
+    // business_sectors/zones (the exact-seed-count footgun).
+    const [sector] = await db
+      .select({ id: businessSectors.id })
+      .from(businessSectors)
+      .where(eq(businessSectors.audience, 'owner'))
+      .orderBy(asc(businessSectors.displayOrder))
+      .limit(1);
+    const [gt] = await db.select({ id: zones.id }).from(zones).where(eq(zones.name, 'Grand Tunis'));
+    await db
+      .insert(campaignTargeting)
+      .values({ campaignId: id, categoryId: sector?.id ?? null, class: null });
+    await db.insert(campaignZones).values({ campaignId: id, zoneId: gt?.id ?? '' });
+    // The draft HAD been warned: a J-3 notification row referencing it.
+    await db.insert(notifications).values({
+      userId: adv,
+      type: 'campaign_draft_reminder',
+      title: DRAFT_REMINDER_TITLE,
+      body: draftReminderBody('LC draft'),
+      campaignId: id,
+    });
+
+    const result = await runCampaignLifecycleTick(silentLog, NOW);
+    expect(result.deleted).toBe(1);
+
+    expect(await exists(id)).toBe(false);
+    expect(
+      await db.select().from(campaignTargeting).where(eq(campaignTargeting.campaignId, id)),
+    ).toHaveLength(0);
+    expect(
+      await db.select().from(campaignZones).where(eq(campaignZones.campaignId, id)),
+    ).toHaveLength(0);
+    // The warning trail outlives the draft — the notification stays, its reference nulled.
+    const [notif] = await db.select().from(notifications).where(eq(notifications.userId, adv));
+    expect(notif?.type).toBe('campaign_draft_reminder');
+    expect(notif?.campaignId).toBeNull();
+  });
+
+  it('is IDEMPOTENT — a second tick deletes nothing', async () => {
+    const adv = await seedUser();
+    await seedCampaign(adv, 'draft', { start: '2026-07-14', end: '2026-08-01' });
+    const first = await runCampaignLifecycleTick(silentLog, NOW);
+    expect(first.deleted).toBe(1);
+    const second = await runCampaignLifecycleTick(silentLog, NOW);
+    expect(second.deleted).toBe(0);
+  });
+
+  it('reminders run BEFORE deletions: one tick warns the J-3 draft AND deletes the past one', async () => {
+    const adv = await seedUser();
+    const j3 = await seedCampaign(adv, 'draft', { start: '2026-07-18', end: '2026-08-01' });
+    const past = await seedCampaign(adv, 'draft', { start: '2026-07-14', end: '2026-08-01' });
+
+    const result = await runCampaignLifecycleTick(silentLog, NOW);
+    expect(result).toEqual({ activated: 0, completed: 0, reminded: 1, deleted: 1 });
+
+    expect(await exists(j3)).toBe(true); // warned, kept
+    expect(await exists(past)).toBe(false); // deleted regardless of any reminder state
+    const rows = await db.select().from(notifications).where(eq(notifications.userId, adv));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.campaignId).toBe(j3);
   });
 });
