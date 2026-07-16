@@ -16,14 +16,33 @@ export interface DispatchConfigView {
   f_max_seconds: number;
   standard_cpm_tnd: number;
   event_cpm_tnd: number;
+  /** E1 — the attention index T by spot-duration bucket ((0,1], t_10s ≤ t_20s ≤ t_30s). */
+  t_10s: number;
+  t_20s: number;
+  t_30s: number;
 }
 
-// A partial CPM edit — either or both. The server refines that at least one is present and that each
-// is finite + strictly positive (a non-positive CPM blows up I_cible = ⌊budget·1000/cpm⌋).
+// A partial edit — any subset of the editable knobs. The server refines that at least one is
+// present, that each CPM is finite + strictly positive (a non-positive CPM blows up
+// I_cible = ⌊budget·1000/cpm⌋), that each T is in (0, 1], and that the MERGED t ordering holds.
 export interface CpmPatch {
   standard_cpm_tnd?: number;
   event_cpm_tnd?: number;
+  t_10s?: number;
+  t_20s?: number;
+  t_30s?: number;
 }
+
+// ── E1 — the attention-T client checks, mirrors of the server rules (pinned by unit test) ───────
+/** A T value in (0, 1] — an attention index is a discount, never a boost. */
+export function parseAttention(raw: string): number | null {
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 && n <= 1 ? n : null;
+}
+
+/** The VF ordering: a longer spot holds attention better — t_10s ≤ t_20s ≤ t_30s. */
+export const attentionOrderingValid = (t10: number, t20: number, t30: number): boolean =>
+  t10 <= t20 && t20 <= t30;
 
 export const adminDispatchConfigService = {
   async get(): Promise<DispatchConfigView> {

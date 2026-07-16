@@ -43,12 +43,13 @@ const poolEntry = (
   hours: o.hi ?? 24,
   capaciteUtile: o.cap ?? o.residual,
   residualCapacity: o.residual,
-  // Default = the unconstrained F-based R for s=10,t=0.8 (computeR(10,0.8,300)=30) — first-campaign
+  // Default = the unconstrained F-based PHYSICAL R for s=10 (computeR(10,300)=30) — first-campaign
   // behavior, so these pre-F-cap-fix tests keep their semantics. A constrained screen overrides it.
   repsCap: o.repsCap ?? 30,
   slots: o.slots ?? [],
 });
 
+// t = the E1 attention index (buildPlan is pure — the DB layer derives it via tForDuration).
 const base = { iCible: 20000, cpm: 10, s: 10, t: 0.8, ...CFG, windowDays: WINDOW };
 
 describe('computeBounds (A.4)', () => {
@@ -87,13 +88,15 @@ describe('buildPlan — happy path (covers I_cible, A.5/A.6 honoured)', () => {
     expect(plan.gJour).toBeCloseTo(100 / 30, 5);
     expect(plan.nMin).toBe(1);
     expect(plan.nMax).toBe(20);
-    expect(plan.r).toBe(30); // MIN[(3600/10)·0.8, 300/10] = min(288,30)
+    expect(plan.r).toBe(30); // PHYSICAL MIN[3600/10, 300/10] = min(360,30) — E1: T is not in R
   });
 
   it('keeps R_i in [R_min_efficace, R] and never oversells the F second-cap', () => {
     const a = plan.allocations[0];
     expect(a).toBeDefined();
-    expect(a!.rI).toBe(8); // clamp(20000/(100·24)=8.33, 2, 30) → floor 8
+    // E1 back-conversion: the 20000 FACTURABLE allocation needs 20000/0.8 = 25000 physical
+    // impressions → clamp(25000/(100·24)=10.42, 2, 30) → floor 10.
+    expect(a!.rI).toBe(10);
     expect(a!.rI).toBeGreaterThanOrEqual(CFG.rMinEfficace);
     expect(a!.rI).toBeLessThanOrEqual(plan.r);
     expect(a!.rI * base.s).toBeLessThanOrEqual(CFG.fMaxSeconds); // Σ campaign-seconds/h ≤ F

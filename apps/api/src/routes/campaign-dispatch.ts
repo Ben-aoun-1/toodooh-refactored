@@ -19,11 +19,12 @@ import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
 // on-activation trigger must gate on approved-creative + confirmed-payment + draft→active first.
 
 const idParamSchema = z.object({ id: z.uuid() });
+// E1 (VF) — `t` is no longer an input: the attention index derives from S inside runDispatch
+// (tForDuration against the config buckets) and lands on the plan snapshot.
 const bodySchema = z.object({
   i_cible: z.number().int().positive(),
   cpm: z.number().positive(),
   s: z.number().int().positive(),
-  t: z.number().positive(),
 });
 
 export const planView = (
@@ -96,7 +97,6 @@ export const campaignDispatchRoutes: FastifyPluginAsync = async (app) => {
       iCible: parsed.data.i_cible,
       cpm: parsed.data.cpm,
       s: parsed.data.s,
-      t: parsed.data.t,
     });
 
     if (result.status === 'NO_WINDOW') {

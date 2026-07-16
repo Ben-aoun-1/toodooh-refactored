@@ -905,6 +905,13 @@ export const dispatchConfig = pgTable(
       .notNull()
       .default('15.000'),
     eventCpmTnd: numeric('event_cpm_tnd', { precision: 10, scale: 3 }).notNull().default('30.000'),
+    // E1 (VF) — the attention index T by spot duration bucket (≤10s / ≤20s / ≤30s). Facturable
+    // capacity = Ai × Hi × R × T from E1 on; the planning back-conversion divides by the SAME T.
+    // Admin-editable within (0, 1] and t_10s ≤ t_20s ≤ t_30s (a longer spot holds attention
+    // better, VF legend). Defaults are the VF canonical 0,60/0,70/0,80.
+    t10s: numeric('t_10s', { precision: 4, scale: 2 }).notNull().default('0.60'),
+    t20s: numeric('t_20s', { precision: 4, scale: 2 }).notNull().default('0.70'),
+    t30s: numeric('t_30s', { precision: 4, scale: 2 }).notNull().default('0.80'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()

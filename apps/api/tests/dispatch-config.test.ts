@@ -19,9 +19,14 @@ describe('getDispatchConfig (seeded singleton, real Postgres)', () => {
       fMaxSeconds: 300,
       standardCpmTnd: 15,
       eventCpmTnd: 30,
+      // E1 (migration 0042) — the attention T buckets at their VF canonical defaults.
+      t10s: 0.6,
+      t20s: 0.7,
+      t30s: 0.8,
     });
     // numeric(10,3) columns come back as strings from pg → must be coerced.
     expect(typeof cfg.standardCpmTnd).toBe('number');
     expect(typeof cfg.eventCpmTnd).toBe('number');
+    expect(typeof cfg.t10s).toBe('number');
   });
 });

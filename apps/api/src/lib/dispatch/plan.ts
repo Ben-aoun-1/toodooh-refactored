@@ -1,6 +1,6 @@
 import { type DispatchCreneau } from '../../db/schema.js';
 
-import { computeR, computeRi } from './eligibility.js';
+import { computeR, computeRi, physicalFromFacturable } from './eligibility.js';
 import { type EligibleScreenhost, selection } from './selection.js';
 import { computeGJour, computeSMin } from './thresholds.js';
 
@@ -112,7 +112,7 @@ export const buildPlan = (input: BuildPlanInput): BuiltPlan => {
     input;
   const gJour = computeGJour(gMois, joursActifs);
   const sMin = computeSMin(seuilDiffusable, cpm);
-  const r = computeR(s, t, fMaxSeconds);
+  const r = computeR(s, fMaxSeconds); // PHYSICAL ceiling — E1: T lives in the capacity, not in R
 
   const maxCap = input.pool.reduce((m, p) => Math.max(m, p.capaciteUtile), 0);
   const { nMin, nMax } = computeBounds(iCible, maxCap, seuilDiffusable);
@@ -132,9 +132,17 @@ export const buildPlan = (input: BuildPlanInput): BuiltPlan => {
   for (const ret of retenus) {
     const p = byId.get(ret.id);
     if (!p) continue;
+    // E1 (VF, US-2.9) — the allocation a_i is FACTURABLE impressions; the physical slots that must
+    // air are a_i ÷ T (the same T that discounted the capacity — one source, both directions).
     // Clamp to THIS screen's residual-aware cap (repsCap), not the global F-based r — so r_i never
     // pushes this screen's total campaign-seconds/hour over F when other campaigns already air there.
-    const rI = computeRi(ret.ai, p.avgAffluence, p.hours, rMinEfficace, p.repsCap);
+    const rI = computeRi(
+      physicalFromFacturable(ret.ai, t),
+      p.avgAffluence,
+      p.hours,
+      rMinEfficace,
+      p.repsCap,
+    );
     allocations.push({
       screenhostId: ret.id,
       iiPotentiel: ret.ai,

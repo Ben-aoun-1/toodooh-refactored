@@ -248,11 +248,11 @@ describe('admin campaign moderation — activation keystone (real Postgres)', ()
       .limit(1);
     expect(plan).toBeDefined();
     // The plan snapshots the DERIVED inputs (not an admin body): i_cible from budget@CPM, cpm=15,
-    // s=creative duration 20, t=1.0.
+    // s=creative duration 20 → E1: t = t_20s = 0.7 (the attention index, duration-derived).
     expect(plan?.iCible).toBe(20000);
     expect(Number(plan?.cpm)).toBe(15);
     expect(plan?.sSpotSeconds).toBe(20);
-    expect(Number(plan?.tTierCoef)).toBe(1);
+    expect(Number(plan?.tTierCoef)).toBe(0.7);
     const allocs = await db
       .select()
       .from(campaignDispatchAllocation)

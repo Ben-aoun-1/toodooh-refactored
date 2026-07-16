@@ -88,6 +88,22 @@ describe('advertiser pricing-config — GET /api/campaigns/pricing-config (real 
     });
   });
 
+  it('E1 — the advertiser estimate is INDEPENDENT of the attention index T', async () => {
+    // The demand-side target I_cible = ⌊budget × 1000 / CPM⌋ does not change with T — only the
+    // SUPPLY-side facturable capacity does. The pricing-config response carries NO t field (the
+    // exact-shape toEqual above already pins it; this makes the E1 invariant explicit) and the
+    // estimate math is a pure function of budget and CPM.
+    mockSession(await seedUser({ role: 'advertiser' }), 'advertiser');
+    const body = (await getPricing()).json() as Record<string, unknown>;
+    expect(Object.keys(body).sort()).toEqual([
+      'event_cpm_tnd',
+      'first_available_start_date',
+      'standard_cpm_tnd',
+    ]);
+    expect(JSON.stringify(body)).not.toMatch(/t_10s|t_20s|t_30s|attention/);
+    expect(Math.floor((300 * 1000) / (body['standard_cpm_tnd'] as number))).toBe(20000);
+  });
+
   it('carries the CF-Q2 start floor: an ISO working day ≥2 calendar days out', async () => {
     mockSession(await seedUser({ role: 'advertiser' }), 'advertiser');
     const body = (await getPricing()).json() as { first_available_start_date: string };
