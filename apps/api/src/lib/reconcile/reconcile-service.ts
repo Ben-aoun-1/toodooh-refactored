@@ -11,6 +11,7 @@ import {
   campaignScreenhostPayout,
   proofOfPlay,
 } from '../../db/schema.js';
+import { S_MIN_TND } from '../vf-constants.js';
 
 import {
   type AllocationInput,
@@ -61,7 +62,11 @@ export const reconcileCampaignById = async (
     .limit(1);
   if (!plan) return { status: 'NO_PLAN' };
   const cpm = Number(plan.cpm);
-  const sMin = Number(plan.sMin);
+  // E1 (VF) — the refund gate reads the FIXED VF materiality floor (S_min = 20 TND), no longer the
+  // plan's derived snapshot (seuil × CPM/1000 ≈ 15 TND at POC values). The snapshot column stays
+  // stored for audit; only the GATE moved. BEHAVIOR CHANGE: gaps valued in [old_s_min, 20) TND now
+  // settle RÉUSSIE (no refund) instead of PARTIAL.
+  const sMin = S_MIN_TND;
 
   const allocations = await db
     .select()

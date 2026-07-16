@@ -82,11 +82,9 @@ const hoursOf = async (id: string) => {
   return row;
 };
 
-const patchHours = (
-  app: ReturnType<typeof buildApp>,
-  id: string,
-  payload: unknown,
-): ReturnType<ReturnType<typeof buildApp>['inject']> =>
+// (E1 housekeeping) — inferred return type: fastify's `inject` is overloaded and an explicit
+// ReturnType<> annotation resolves to the callback overload's Chain, not the promise.
+const patchHours = (app: ReturnType<typeof buildApp>, id: string, payload: unknown) =>
   app.inject({ method: 'PATCH', url: `/api/screenhosts/${id}/hours`, payload: payload as never });
 
 describe('owner opening-hours PATCH (H2, real Postgres)', () => {
@@ -129,7 +127,7 @@ describe('owner opening-hours PATCH (H2, real Postgres)', () => {
     expect(await hoursOf(id)).toEqual({ open: null, close: null });
   });
 
-  it.each([
+  const invalidHourPayloads: [Record<string, number | null>, string][] = [
     [{ opening_hour: 8 }, 'one-sided (missing closing)'],
     [{ closing_hour: 22 }, 'one-sided (missing opening)'],
     [{ opening_hour: 8, closing_hour: null }, 'int + null'],
@@ -139,7 +137,8 @@ describe('owner opening-hours PATCH (H2, real Postgres)', () => {
     [{ opening_hour: -1, closing_hour: 22 }, 'below range'],
     [{ opening_hour: 8, closing_hour: 24 }, 'above range'],
     [{ opening_hour: 8.5, closing_hour: 22 }, 'non-integer'],
-  ] as const)('rejects %j — %s (400, row untouched)', async (payload) => {
+  ];
+  it.each(invalidHourPayloads)('rejects %j — %s (400, row untouched)', async (payload) => {
     const owner = await seedUser();
     const id = await seedVenue(owner, { open: 9, close: 18 });
     mockSession(owner);

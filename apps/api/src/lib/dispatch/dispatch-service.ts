@@ -18,17 +18,20 @@ import {
   broadcastableHours,
   capaciteUtile,
   computeR,
+  facturableFromPhysical,
   screenhostMatchesTargeting,
   screenhostMatchesZones,
 } from './eligibility.js';
 import { type PoolEntry, buildPlan } from './plan.js';
+import { tForDuration } from './thresholds.js';
 import { buildWindowDays } from './window.js';
 
+// E1 (VF) — T is no longer an input: the attention index derives from the spot duration S and the
+// config's t_10s/t_20s/t_30s buckets inside runDispatch (and is snapshotted onto the plan).
 export interface DispatchInputs {
   iCible: number;
   cpm: number;
   s: number;
-  t: number;
 }
 
 export type DispatchResult =
@@ -61,6 +64,8 @@ export const runDispatch = async (
   if (lines.length === 0) return { status: 'NO_TARGETING' };
 
   const config = await getDispatchConfig();
+  // E1 (VF) — the attention index for THIS campaign's spot duration; snapshotted onto the plan.
+  const t = tForDuration(inputs.s, config);
   const windowDays = buildWindowDays(campaign.startDate, campaign.endDate);
 
   // CF-Z1 — the campaign's targeted zones (VF US-2.1): none = whole network on that criterion.
@@ -167,8 +172,12 @@ export const runDispatch = async (
     // different spot durations never exceed 300s/hour. (First campaign on a screen: engaged 0 →
     // residual F → R_eff = the unconstrained MIN[(3600/S)·T, F/S] — unchanged behavior.)
     const residualSeconds = Math.max(0, config.fMaxSeconds - (engagedSecondsById.get(sh.id) ?? 0));
-    const rEff = computeR(inputs.s, inputs.t, residualSeconds); // MIN[(3600/S)·T, ⌊residual/S⌋]
-    const capacite = Math.floor(capaciteUtile(avgAffluence, hours, rEff));
+    const rEff = computeR(inputs.s, residualSeconds); // PHYSICAL MIN[3600/S, ⌊residual/S⌋]
+    // E1 (VF) — Ii = Ii_brut × T: the pool carries FACTURABLE capacity (what the screen is worth
+    // to the campaign), floored to whole impressions; the physical rep ceiling stays in repsCap.
+    const capacite = Math.floor(
+      facturableFromPhysical(capaciteUtile(avgAffluence, hours, rEff), t),
+    );
     const residualCapacity = capacite; // the F-cap is baked into R_eff — no impression subtraction
     if (residualCapacity <= 0) continue; // no residual broadcast budget (or zero affluence) → skip
     pool.push({
@@ -193,7 +202,7 @@ export const runDispatch = async (
     iCible: inputs.iCible,
     cpm: inputs.cpm,
     s: inputs.s,
-    t: inputs.t,
+    t,
     seuilDiffusable: config.seuilDiffusable,
     gMois: config.gMois,
     joursActifs: config.joursActifs,
@@ -220,7 +229,9 @@ export const runDispatch = async (
           iCible: inputs.iCible,
           cpm: String(inputs.cpm),
           sSpotSeconds: inputs.s,
-          tTierCoef: String(inputs.t),
+          // E1 — the column keeps its historical name; since E1 it snapshots the ATTENTION index
+          // T (duration-derived), no longer a tier coefficient.
+          tTierCoef: String(t),
           seuilDiffusable: config.seuilDiffusable,
           sMin: String(built.sMin),
           gJour: String(built.gJour),

@@ -75,22 +75,22 @@ describe('broadcastableHours — intra-day horaires window [opening, closing)', 
   });
 });
 
-describe('computeR — R = MIN[(3600/S)·T, F/S] (floored)', () => {
-  it('is capped by F/S when the tier term is larger', () => {
-    expect(computeR(10, 0.8, 300)).toBe(30); // min(288, 30)
-    expect(computeR(10, 0.5, 300)).toBe(30); // min(180, 30)
+describe('computeR — R = MIN[3600/S, F/S], the PHYSICAL ceiling (E1: T moved out of R)', () => {
+  it('is capped by F/S when the hour term is larger', () => {
+    expect(computeR(10, 300)).toBe(30); // min(360, 30)
+    expect(computeR(20, 300)).toBe(15); // min(180, 15)
   });
-  it('is capped by the tier term when F/S is larger', () => {
-    expect(computeR(60, 0.5, 300)).toBe(5); // min(30, 5)
-    expect(computeR(120, 0.8, 300)).toBe(2); // min(24, 2.5) → floor 2
+  it('is capped by the 3600/S hour term when the seconds budget exceeds an hour', () => {
+    expect(computeR(60, 7200)).toBe(60); // min(60, 120) — the physical hour bound
+    expect(computeR(120, 300)).toBe(2); // min(30, 2.5) → floor 2
   });
 
   it('caps at residual_seconds/S when passed a per-screen residual budget (F-cap fix)', () => {
-    // The third arg is a generic seconds budget: with other campaigns engaged the caller passes the
-    // residual (F − engaged) instead of F → R_eff = MIN[(3600/S)·T, ⌊residual/S⌋].
-    expect(computeR(10, 0.8, 120)).toBe(12); // min(288, 12) — residual 120s, 10s spot
-    expect(computeR(10, 0.8, 95)).toBe(9); // min(288, ⌊9.5⌋) → 9
-    expect(computeR(10, 0.8, 0)).toBe(0); // a full screen (residual 0) → no reps
+    // The second arg is a generic seconds budget: with other campaigns engaged the caller passes the
+    // residual (F − engaged) instead of F → R_eff = MIN[3600/S, ⌊residual/S⌋].
+    expect(computeR(10, 120)).toBe(12); // min(360, 12) — residual 120s, 10s spot
+    expect(computeR(10, 95)).toBe(9); // min(360, ⌊9.5⌋) → 9
+    expect(computeR(10, 0)).toBe(0); // a full screen (residual 0) → no reps
   });
 });
 

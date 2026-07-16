@@ -45,15 +45,32 @@ export const broadcastableHours = (
   return hours;
 };
 
-/** R = MIN[(3600/S)·T, F/S] — max reps/hour (floored to whole spots). */
-export const computeR = (s: number, t: number, f: number): number => {
+/**
+ * R = MIN[3600/S, F/S] — the PHYSICAL max reps/hour (floored to whole spots). E1 (VF): the
+ * attention index T no longer scales R — physically, the same number of spots fits in an hour
+ * regardless of attention; T discounts the FACTURABLE capacity below instead.
+ */
+export const computeR = (s: number, f: number): number => {
   if (s <= 0) return 0;
-  return Math.floor(Math.min((3600 / s) * t, f / s));
+  return Math.floor(Math.min(3600 / s, f / s));
 };
 
-/** capacité_utile = Ai·Hi·R — the SH's potential impression capacity. */
+/** capacité brute = Ai·Hi·R — the SH's PHYSICAL potential impression capacity. */
 export const capaciteUtile = (avgAffluence: number, hours: number, r: number): number =>
   avgAffluence * hours * r;
+
+// ── E1 (VF) — the facturable ↔ physical conversion, ONE source for BOTH directions ──────────────
+// Facturable capacity Ii = Ii_brut × T (the attention index discounts what a screen's physical
+// capacity is WORTH to an advertiser); the planning back-conversion (US-2.9) divides the allocated
+// FACTURABLE impressions by the SAME T to size the physical slots that must actually air. Keeping
+// the two as adjacent inverses makes drift between the directions structurally impossible.
+
+/** Ii = Ii_brut × T — physical capacity → facturable capacity. */
+export const facturableFromPhysical = (physical: number, t: number): number => physical * t;
+
+/** The inverse — allocated facturable impressions → the physical impressions to air. */
+export const physicalFromFacturable = (facturable: number, t: number): number =>
+  t > 0 ? facturable / t : 0;
 
 /**
  * R_i = clamp(a_i / (Ai·Hi), R_min_efficace, R) — reps/hour planned at a screenhost (floored).

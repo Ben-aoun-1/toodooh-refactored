@@ -12,6 +12,10 @@ export interface ResolvedDispatchConfig {
   // Admin-editable CPM (TND/1000) — the activation derivation picks one by campaign type.
   standardCpmTnd: number;
   eventCpmTnd: number;
+  // E1 (VF) — the attention index T by spot-duration bucket (tForDuration reads these).
+  t10s: number;
+  t20s: number;
+  t30s: number;
 }
 
 // Read the singleton dispatch config (numeric columns come back as strings → coerce to numbers).
@@ -27,6 +31,9 @@ export const getDispatchConfig = async (): Promise<ResolvedDispatchConfig> => {
         fMaxSeconds: row.fMaxSeconds,
         standardCpmTnd: Number(row.standardCpmTnd),
         eventCpmTnd: Number(row.eventCpmTnd),
+        t10s: Number(row.t10s),
+        t20s: Number(row.t20s),
+        t30s: Number(row.t30s),
       }
     : { ...DISPATCH_CONFIG_DEFAULTS };
   // seuil_diffusable is the materiality divisor (N_max = ⌊I_cible/seuil⌋) and the no-crumb floor;

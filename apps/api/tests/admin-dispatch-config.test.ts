@@ -38,7 +38,14 @@ const seedUser = async (values: Partial<NewUser> = {}): Promise<string> => {
 };
 
 const restoreCpmDefaults = async (): Promise<void> => {
-  await db.update(dispatchConfig).set({ standardCpmTnd: '15.000', eventCpmTnd: '30.000' });
+  // E1 — the T buckets join the per-test restore (their tests edit the same singleton).
+  await db.update(dispatchConfig).set({
+    standardCpmTnd: '15.000',
+    eventCpmTnd: '30.000',
+    t10s: '0.60',
+    t20s: '0.70',
+    t30s: '0.80',
+  });
 };
 
 describe('admin dispatch-config — CPM read/edit (real Postgres)', () => {
@@ -113,5 +120,48 @@ describe('admin dispatch-config — CPM read/edit (real Postgres)', () => {
     mockSession(await seedUser({ role: 'advertiser' }), 'advertiser');
     expect((await get()).statusCode).toBe(403);
     expect((await patch({ standard_cpm_tnd: 99 })).statusCode).toBe(403);
+  });
+
+  // ── E1 — the attention T knobs (t_10s/t_20s/t_30s) ─────────────────────────────
+  it('GET exposes the T buckets at their VF defaults; PATCH edits them (persisted)', async () => {
+    mockSession(await seedUser({ role: 'admin' }));
+    const before = (await get()).json() as { t_10s: number; t_20s: number; t_30s: number };
+    expect(before).toMatchObject({ t_10s: 0.6, t_20s: 0.7, t_30s: 0.8 });
+
+    const res = await patch({ t_10s: 0.5, t_20s: 0.65, t_30s: 0.9 });
+    expect(res.statusCode).toBe(200);
+    const after = (await get()).json() as { t_10s: number; t_20s: number; t_30s: number };
+    expect(after).toMatchObject({ t_10s: 0.5, t_20s: 0.65, t_30s: 0.9 });
+  });
+
+  it('rejects T out of (0, 1] — zero, negative, above one (400)', async () => {
+    mockSession(await seedUser({ role: 'admin' }));
+    expect((await patch({ t_10s: 0 })).statusCode).toBe(400);
+    expect((await patch({ t_20s: -0.5 })).statusCode).toBe(400);
+    expect((await patch({ t_30s: 1.01 })).statusCode).toBe(400);
+    expect((await patch({ t_30s: 1 })).statusCode).toBe(200); // 1 is the inclusive ceiling
+  });
+
+  it('rejects nonsense ORDERINGS — including a partial patch judged on the MERGED config', async () => {
+    mockSession(await seedUser({ role: 'admin' }));
+    // Full-body nonsense: t_10s > t_20s.
+    expect((await patch({ t_10s: 0.9, t_20s: 0.7, t_30s: 0.8 })).statusCode).toBe(400);
+    // Partial nonsense: t_10s alone above the CURRENT t_20s (0.7) — merged validation catches it.
+    expect((await patch({ t_10s: 0.75 })).statusCode).toBe(400);
+    // Partial sense: t_10s alone below the current t_20s passes.
+    expect((await patch({ t_10s: 0.55 })).statusCode).toBe(200);
+    // Nothing written on a rejected ordering: the failed 0.75 never landed.
+    const cfg = (await get()).json() as { t_10s: number };
+    expect(cfg.t_10s).toBe(0.55);
+  });
+
+  it('CPM regression — CPM edits are unchanged and never touch the T buckets', async () => {
+    mockSession(await seedUser({ role: 'admin' }));
+    const res = await patch({ standard_cpm_tnd: 17 });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { standard_cpm_tnd: number; t_10s: number; t_30s: number };
+    expect(body.standard_cpm_tnd).toBe(17);
+    expect(body.t_10s).toBe(0.6);
+    expect(body.t_30s).toBe(0.8);
   });
 });

@@ -149,8 +149,9 @@ describe('campaign dispatch entrypoint (L-disp, real Postgres)', () => {
     await seedEligibleScreenhost(owner, cat, 'premium', 100);
     mockSession(admin);
 
-    // Ai=100, Hi=2×10=20, R=min((3600/10)·0.8, 300/10)=30 → capacité=60000. i_cible 20000 < 60000.
-    const res = await dispatch(campaignId, { i_cible: 20000, cpm: 10, s: 10, t: 0.8 });
+    // E1: s=10 → T=0.6. Ai=100, Hi=2×10=20, R=min(3600/10, 300/10)=30 → brut 60000 →
+    // FACTURABLE = 36000. i_cible 20000 < 36000.
+    const res = await dispatch(campaignId, { i_cible: 20000, cpm: 10, s: 10 });
     expect(res.statusCode).toBe(201);
     const body = res.json() as PlanResponse;
     expect(body.plan.couvert).toBe(20000);
@@ -161,12 +162,11 @@ describe('campaign dispatch entrypoint (L-disp, real Postgres)', () => {
     expect(body.plan.g_jour).toBeCloseTo(100 / 30, 4);
     expect(body.allocations).toHaveLength(1);
     expect(body.allocations[0]?.ii_potentiel).toBe(20000);
-    expect(body.allocations[0]?.r_i).toBe(10); // clamp(20000/(100·20)=10, 2, 30)
+    // E1 back-conversion: 20000 fact / 0.6 = 33333 physical → clamp(33333/(100·20)=16.7, 2, 30) → 16.
+    expect(body.allocations[0]?.r_i).toBe(16);
     expect(body.allocations[0]?.creneaux.length).toBe(20); // 2 days × 10 broadcast hours
 
-    expect(
-      (await dispatch(campaignId, { i_cible: 20000, cpm: 10, s: 10, t: 0.8 })).statusCode,
-    ).toBe(409);
+    expect((await dispatch(campaignId, { i_cible: 20000, cpm: 10, s: 10 })).statusCode).toBe(409);
   });
 
   // ── CF-Z1 — the zone clause: [Grand Tunis] ≡ no zones today (prod is entirely Grand Tunis);
@@ -185,7 +185,7 @@ describe('campaign dispatch entrypoint (L-disp, real Postgres)', () => {
     mockSession(admin);
 
     // The SAME fixture + assertions as the no-zones happy path above — the clause changes nothing.
-    const res = await dispatch(campaignId, { i_cible: 20000, cpm: 10, s: 10, t: 0.8 });
+    const res = await dispatch(campaignId, { i_cible: 20000, cpm: 10, s: 10 });
     expect(res.statusCode).toBe(201);
     const body = res.json() as PlanResponse;
     expect(body.plan.couvert).toBe(20000);
@@ -193,7 +193,7 @@ describe('campaign dispatch entrypoint (L-disp, real Postgres)', () => {
     expect(body.plan.is_partial).toBe(false);
     expect(body.allocations).toHaveLength(1);
     expect(body.allocations[0]?.ii_potentiel).toBe(20000);
-    expect(body.allocations[0]?.r_i).toBe(10);
+    expect(body.allocations[0]?.r_i).toBe(16);
   });
 
   it('a campaign zoned to a DIFFERENT zone excludes Grand-Tunis venues (422 empty pool)', async () => {
@@ -211,7 +211,7 @@ describe('campaign dispatch entrypoint (L-disp, real Postgres)', () => {
     await seedEligibleScreenhost(owner, cat, 'premium', 100); // Grand Tunis by default
     mockSession(admin);
 
-    const res = await dispatch(campaignId, { i_cible: 20000, cpm: 10, s: 10, t: 0.8 });
+    const res = await dispatch(campaignId, { i_cible: 20000, cpm: 10, s: 10 });
     expect(res.statusCode).toBe(422); // NOT_DELIVERABLE — the zone clause emptied the pool
   });
 
@@ -225,7 +225,7 @@ describe('campaign dispatch entrypoint (L-disp, real Postgres)', () => {
     await seedEligibleScreenhost(owner, cat, 'premium', 100); // capacité 60000
     mockSession(admin);
 
-    const res = await dispatch(campaignId, { i_cible: 200000, cpm: 10, s: 10, t: 0.8 });
+    const res = await dispatch(campaignId, { i_cible: 200000, cpm: 10, s: 10 });
     expect(res.statusCode).toBe(201);
     const body = res.json() as PlanResponse;
     expect(body.plan.is_partial).toBe(true);
@@ -239,11 +239,11 @@ describe('campaign dispatch entrypoint (L-disp, real Postgres)', () => {
     const cat = await ownerSectorId();
     const campaignId = await seedCampaign(advertiser);
     await seedTargeting(campaignId, cat, 'premium');
-    await seedEligibleScreenhost(owner, cat, 'premium', 1); // capacité = ⌊1·20·30⌋ = 600 < seuil 1000
+    await seedEligibleScreenhost(owner, cat, 'premium', 1); // fact = ⌊1·20·30 × 0.6⌋ = 360 < seuil 1000
     mockSession(admin);
 
-    // N_min ⌈1500/600⌉=3 > N_max ⌊1500/1000⌋=1 → too thin → clôture alert, NOT frozen.
-    const res = await dispatch(campaignId, { i_cible: 1500, cpm: 10, s: 10, t: 0.8 });
+    // N_min ⌈1500/360⌉=5 > N_max ⌊1500/1000⌋=1 → too thin → clôture alert, NOT frozen.
+    const res = await dispatch(campaignId, { i_cible: 1500, cpm: 10, s: 10 });
     expect(res.statusCode).toBe(422);
     expect((res.json() as { reason: string }).reason).toBe('too_thin');
 
@@ -255,9 +255,7 @@ describe('campaign dispatch entrypoint (L-disp, real Postgres)', () => {
     expect(plans).toHaveLength(0);
 
     // ...so a re-dispatch is the SAME 422 (renvoi curseur), never a 409 irrevocable lock.
-    expect((await dispatch(campaignId, { i_cible: 1500, cpm: 10, s: 10, t: 0.8 })).statusCode).toBe(
-      422,
-    );
+    expect((await dispatch(campaignId, { i_cible: 1500, cpm: 10, s: 10 })).statusCode).toBe(422);
   });
 
   it('non-uniform affluence does not crash persistence (integer couvert/ii_potentiel)', async () => {
@@ -267,8 +265,8 @@ describe('campaign dispatch entrypoint (L-disp, real Postgres)', () => {
     const cat = await ownerSectorId();
     const campaignId = await seedCampaign(advertiser);
     await seedTargeting(campaignId, cat, 'premium');
-    // 20 broadcast slots; total 2001 → avg 100.05 → capacité = ⌊100.05·20·30⌋ = 60030. The raw FP
-    // product is 60030.0000…7, which would crash an `integer` column if persisted unrounded.
+    // 20 broadcast slots; total 2001 → avg 100.05 → fact = ⌊100.05·20·30 × 0.6⌋ = 36018. The raw
+    // FP product carries …000000004 noise, which would crash an `integer` column unfloored.
     const [sh] = await db
       .insert(screenhosts)
       .values({
@@ -301,12 +299,12 @@ describe('campaign dispatch entrypoint (L-disp, real Postgres)', () => {
     await db.insert(screenhostAffluence).values(rows);
     mockSession(admin);
 
-    // i_cible 100000 > capacité 60030 → the SH's full residual is allocated (the fractional path).
-    const res = await dispatch(campaignId, { i_cible: 100000, cpm: 10, s: 10, t: 0.8 });
+    // i_cible 100000 > fact 36018 → the SH's full residual is allocated (the fractional path).
+    const res = await dispatch(campaignId, { i_cible: 100000, cpm: 10, s: 10 });
     expect(res.statusCode).toBe(201);
     const body = res.json() as PlanResponse;
     expect(Number.isInteger(body.plan.couvert)).toBe(true);
-    expect(body.plan.couvert).toBe(60030);
+    expect(body.plan.couvert).toBe(36018);
     expect(body.plan.is_partial).toBe(true);
     expect(Number.isInteger(body.allocations[0]?.ii_potentiel ?? -1)).toBe(true);
   });
@@ -316,9 +314,7 @@ describe('campaign dispatch entrypoint (L-disp, real Postgres)', () => {
     const advertiser = await seedUser({ role: 'advertiser' });
     const campaignId = await seedCampaign(advertiser);
     mockSession(admin);
-    expect((await dispatch(campaignId, { i_cible: 1000, cpm: 10, s: 10, t: 0.8 })).statusCode).toBe(
-      400,
-    );
+    expect((await dispatch(campaignId, { i_cible: 1000, cpm: 10, s: 10 })).statusCode).toBe(400);
   });
 
   it('400 when the campaign has no window (start/end date)', async () => {
@@ -328,9 +324,7 @@ describe('campaign dispatch entrypoint (L-disp, real Postgres)', () => {
     const campaignId = await seedCampaign(advertiser, { start: null, end: null });
     await seedTargeting(campaignId, cat, 'premium');
     mockSession(admin);
-    expect((await dispatch(campaignId, { i_cible: 1000, cpm: 10, s: 10, t: 0.8 })).statusCode).toBe(
-      400,
-    );
+    expect((await dispatch(campaignId, { i_cible: 1000, cpm: 10, s: 10 })).statusCode).toBe(400);
   });
 
   it('404 for a nonexistent campaign', async () => {
@@ -342,7 +336,6 @@ describe('campaign dispatch entrypoint (L-disp, real Postgres)', () => {
           i_cible: 1000,
           cpm: 10,
           s: 10,
-          t: 0.8,
         })
       ).statusCode,
     ).toBe(404);
@@ -352,9 +345,7 @@ describe('campaign dispatch entrypoint (L-disp, real Postgres)', () => {
     const advertiser = await seedUser({ role: 'advertiser' });
     const campaignId = await seedCampaign(advertiser);
     mockSession(advertiser, 'advertiser');
-    expect((await dispatch(campaignId, { i_cible: 1000, cpm: 10, s: 10, t: 0.8 })).statusCode).toBe(
-      403,
-    );
+    expect((await dispatch(campaignId, { i_cible: 1000, cpm: 10, s: 10 })).statusCode).toBe(403);
   });
 
   // ── cross-campaign F-second cap (mixed spot durations) ───────────────────────
@@ -383,15 +374,16 @@ describe('campaign dispatch entrypoint (L-disp, real Postgres)', () => {
     await seedTargeting(b, cat, 'premium');
     mockSession(admin);
 
-    // A: S=30 → R_eff = MIN[(3600/30)·0.8=96, 300/30=10] = 10 → r_i 10 → 10×30 = 300s (full hour).
-    expect((await dispatch(a, { i_cible: 20000, cpm: 10, s: 30, t: 0.8 })).statusCode).toBe(201);
+    // A: S=30 → T=0.8, R_eff = MIN[3600/30=120, 300/30=10] = 10; fact capacity 16000 < i_cible
+    // 20000 → the full screen is allocated: physical 16000/0.8 = 20000 → r_i 10 → 300s (full hour).
+    expect((await dispatch(a, { i_cible: 20000, cpm: 10, s: 30 })).statusCode).toBe(201);
     const [aAlloc] = await allocsFor(a);
     expect(aAlloc?.rI).toBe(10);
     expect((aAlloc?.rI ?? 0) * 30).toBe(300);
 
     // B: S=10 → the screen's residual budget is 0 → no eligible screenhost → 422 (NOT double-booked
     // onto the full hour, which the old impression-based residual would have allowed).
-    expect((await dispatch(b, { i_cible: 20000, cpm: 10, s: 10, t: 0.8 })).statusCode).toBe(422);
+    expect((await dispatch(b, { i_cible: 20000, cpm: 10, s: 10 })).statusCode).toBe(422);
   });
 
   it('mixed durations on a shared screen honour the invariant Σ(r_i × S) ≤ 300', async () => {
@@ -407,18 +399,17 @@ describe('campaign dispatch entrypoint (L-disp, real Postgres)', () => {
     await seedTargeting(b, cat, 'premium');
     mockSession(admin);
 
-    // A: S=30, T=0.05 → R_eff = MIN[(3600/30)·0.05=6, 10] = 6; a huge I_cible fills the SH → r_i 6.
-    expect((await dispatch(a, { i_cible: 10_000_000, cpm: 10, s: 30, t: 0.05 })).statusCode).toBe(
-      201,
-    );
+    // A: S=30 → T=0.8 (E1: derived), R_eff = MIN[120, 300/30=10] = 10. A MODEST i_cible sizes
+    // r_i to 6: fact capacity = ⌊100·20·10 × 0.8⌋ = 16000 ≥ 10000 → allocation 10000 fact →
+    // physical 10000/0.8 = 12500 → clamp(12500/(100·20)=6.25, 2, 10) → floor 6.
+    expect((await dispatch(a, { i_cible: 10_000, cpm: 10, s: 30 })).statusCode).toBe(201);
     const [aAlloc] = await allocsFor(a);
     expect(aAlloc?.rI).toBe(6); // 6×30 = 180s
 
-    // B: S=10, T=0.8. Engaged 180s → residual 120s → R_eff = MIN[288, ⌊120/10⌋=12] = 12 → r_i 12
+    // B: S=10 → T=0.6. Engaged 180s → residual 120s → R_eff = MIN[360, ⌊120/10⌋=12] = 12; a huge
+    // I_cible fills the screen: fact = ⌊100·20·12 × 0.6⌋ = 14400 → physical 24000 → r_i 12
     // (the old impression-residual would have given 24 → 240s → 420s/hr total — the bug).
-    expect((await dispatch(b, { i_cible: 10_000_000, cpm: 10, s: 10, t: 0.8 })).statusCode).toBe(
-      201,
-    );
+    expect((await dispatch(b, { i_cible: 10_000_000, cpm: 10, s: 10 })).statusCode).toBe(201);
     const [bAlloc] = await allocsFor(b);
     expect(bAlloc?.rI).toBe(12); // 12×10 = 120s
 
@@ -440,12 +431,12 @@ describe('campaign dispatch entrypoint (L-disp, real Postgres)', () => {
     const cat = await ownerSectorId();
     const campaignId = await seedCampaign(advertiser); // name 'Dispatch Test'
     await seedTargeting(campaignId, cat, 'premium');
-    const sh1 = await seedEligibleScreenhost(owner1, cat, 'premium', 100); // capacité 60000
-    const sh2 = await seedEligibleScreenhost(owner2, cat, 'premium', 100); // capacité 60000
+    const sh1 = await seedEligibleScreenhost(owner1, cat, 'premium', 100); // fact 36000
+    const sh2 = await seedEligibleScreenhost(owner2, cat, 'premium', 100); // fact 36000
     mockSession(admin);
 
-    // i_cible 100000 > a single SH's 60000 → N_min=2 → both SHs allocated → both owners notified.
-    const res = await dispatch(campaignId, { i_cible: 100000, cpm: 10, s: 10, t: 0.8 });
+    // i_cible 100000 > a single SH's 36000 → both SHs allocated → both owners notified.
+    const res = await dispatch(campaignId, { i_cible: 100000, cpm: 10, s: 10 });
     expect(res.statusCode).toBe(201);
 
     const allocs = await allocsFor(campaignId);
@@ -476,7 +467,7 @@ describe('campaign dispatch entrypoint (L-disp, real Postgres)', () => {
     await seedEligibleScreenhost(owner, cat, 'premium', 100);
     mockSession(admin);
 
-    const res = await dispatch(campaignId, { i_cible: 100000, cpm: 10, s: 10, t: 0.8 });
+    const res = await dispatch(campaignId, { i_cible: 100000, cpm: 10, s: 10 });
     expect(res.statusCode).toBe(201);
 
     // Two allocations (both venues), one owner → exactly one notification.

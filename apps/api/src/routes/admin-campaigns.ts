@@ -13,7 +13,6 @@ import {
 import { tunisDateOf } from '../lib/campaign-dates.js';
 import { getDispatchConfig } from '../lib/dispatch/config.js';
 import { runDispatch } from '../lib/dispatch/dispatch-service.js';
-import { DEFAULT_TIER_COEF } from '../lib/dispatch/thresholds.js';
 import { walletBalance } from '../lib/recharges.js';
 import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
 
@@ -35,7 +34,7 @@ import { planView } from './campaign-dispatch.js';
 //   cpm     = config CPM by type (event_cpm_tnd for an 'event' campaign, else standard_cpm_tnd)
 //   i_cible = ⌊requested_budget·1000 / cpm⌋        (the advertiser's indicative ask → target impressions)
 //   s       = the linked creative's duration_seconds (the spot length actually airing)
-//   t       = DEFAULT_TIER_COEF                     (neutral; per-tier pricing is a later lane)
+//   t       = derived INSIDE runDispatch (E1: tForDuration(s, config) — the VF attention index)
 // budget (the funding gate) = requested_budget, the advertiser's stated ask.
 
 const idParamSchema = z.object({ id: z.uuid() });
@@ -226,7 +225,7 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
       });
     }
     const s = creativeDurationSeconds;
-    const t = DEFAULT_TIER_COEF;
+    // E1 (VF) — T is duration-derived inside runDispatch (tForDuration), no longer passed here.
 
     // Funded gate: balance >= the advertiser's indicative budget (the ask). NO debit (L-redisp bills
     // actual aired impressions at reconciliation).
@@ -243,7 +242,7 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
     }
 
     // Dispatch (reuse the engine). Every DispatchResult case is handled.
-    const result = await runDispatch(campaign, { iCible, cpm, s, t });
+    const result = await runDispatch(campaign, { iCible, cpm, s });
     if (result.status === 'NO_WINDOW') {
       return reply.status(400).send({
         error: 'INVALID_INPUT',
