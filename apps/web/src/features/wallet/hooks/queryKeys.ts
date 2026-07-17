@@ -8,11 +8,11 @@
 export const walletKeys = {
   all: ['wallet'] as const,
 
-  /** The user's wallet ledger — balance + completed recharges + campaign expenses. */
-  transactions: (userId: string) => [...walletKeys.all, 'transactions', userId] as const,
+  /** The derived wallet balance (GET /api/wallet/balance) — CF-M1, the live money source. */
+  balance: (userId: string) => [...walletKeys.all, 'balance', userId] as const,
 
-  /** The user's invoice list. */
-  invoices: (userId: string) => [...walletKeys.all, 'invoices', userId] as const,
+  /** The user's recharges (GET /api/recharges/mine) — the ledger's credits AND the factures. */
+  recharges: (userId: string) => [...walletKeys.all, 'recharges', userId] as const,
 
   /** Owner revenue summary (`revenueService.getRevenueStats`). */
   revenueStats: (userId: string) => [...walletKeys.all, 'revenueStats', userId] as const,

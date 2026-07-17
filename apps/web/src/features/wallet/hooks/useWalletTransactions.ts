@@ -1,23 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
 
-import { supabase } from '@/lib/supabase';
-import { balanceService } from '@/services/balance.service';
+import { useMyCampaignsList } from '@/features/campaigns/hooks/useCampaignApi';
+import { type LedgerTransaction, composeLedger } from '@/features/wallet/lib/wallet-ledger';
+import { walletService } from '@/features/wallet/services/wallet.service';
 
 import { walletKeys } from './queryKeys';
 
-export interface Transaction {
-  id: string;
-  type: 'recharge' | 'expense';
-  designation: string;
-  amount: number;
-  date: Date;
-  paymentMethod?: string;
-}
-
-interface WalletTransactionsData {
-  balance: number;
-  transactions: Transaction[];
-}
+export type Transaction = LedgerTransaction;
 
 interface UseWalletTransactionsResult {
   balance: number;
@@ -27,78 +17,39 @@ interface UseWalletTransactionsResult {
 }
 
 /**
- * Composite read for MyRecharges: the available balance plus a merged,
- * date-sorted ledger of completed recharges and campaign expenses. Verbatim
- * port of the former `[user]` effect.
+ * CF-M1 — the MyRecharges composite, now fed by the LIVE api: the derived balance
+ * (GET /api/wallet/balance) plus a ledger COMPOSED client-side from GET /api/recharges/mine
+ * (confirmed credits) and GET /api/campaigns/mine (reconciled spend debits — the campaigns query
+ * is the SAME cache entry MyCampaigns uses). Replaces the disabled Supabase merge.
+ *
+ * The money queries refetch on window focus ('always', overriding the app-wide false): an admin
+ * confirms transfers from another session, so returning to this tab must show the credited
+ * balance without a manual refresh.
  */
-async function fetchWalletTransactions(userId: string): Promise<WalletTransactionsData> {
-  const balanceInfo = await balanceService.getBalanceInfo(userId);
-  const balance = balanceInfo
-    ? balanceInfo.available_balance
-    : await balanceService.getUserBalance(userId);
-
-  const merged: Transaction[] = [];
-
-  const { data: rechargesData } = await supabase
-    .from('recharges')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('status', 'completed')
-    .order('created_at', { ascending: false });
-
-  if (rechargesData) {
-    rechargesData.forEach((r) => {
-      merged.push({
-        id: `r-${r.id}`,
-        type: 'recharge',
-        designation: 'Rechargement wallet',
-        amount: parseFloat(r.amount) || 0,
-        date: new Date(r.created_at),
-        paymentMethod:
-          r.payment_method === 'card'
-            ? 'Carte Bancaire'
-            : r.payment_method === 'bank'
-              ? 'Virement'
-              : 'Espèces',
-      });
-    });
-  }
-
-  const { data: campaignsData } = await supabase
-    .from('campaigns')
-    .select('id, name, budget, created_at')
-    .eq('user_id', userId)
-    .in('status', ['active', 'completed'])
-    .order('created_at', { ascending: false });
-
-  if (campaignsData) {
-    campaignsData.forEach((c) => {
-      const budgetTTC = (parseFloat(c.budget) || 0) * 1.19;
-      merged.push({
-        id: `c-${c.id}`,
-        type: 'expense',
-        designation: c.name || 'Campagne',
-        amount: budgetTTC,
-        date: new Date(c.created_at),
-      });
-    });
-  }
-
-  merged.sort((a, b) => b.date.getTime() - a.date.getTime());
-  return { balance, transactions: merged };
-}
-
 export function useWalletTransactions(userId: string | undefined): UseWalletTransactionsResult {
-  const query = useQuery({
-    queryKey: walletKeys.transactions(userId ?? ''),
-    queryFn: () => fetchWalletTransactions(userId as string),
+  const balanceQuery = useQuery({
+    queryKey: walletKeys.balance(userId ?? ''),
+    queryFn: () => walletService.getBalance(),
     enabled: !!userId,
+    refetchOnWindowFocus: 'always',
   });
+  const rechargesQuery = useQuery({
+    queryKey: walletKeys.recharges(userId ?? ''),
+    queryFn: () => walletService.listMyRecharges(),
+    enabled: !!userId,
+    refetchOnWindowFocus: 'always',
+  });
+  const campaignsQuery = useMyCampaignsList(userId);
+
+  const transactions = useMemo(
+    () => composeLedger(rechargesQuery.data ?? [], campaignsQuery.data ?? []),
+    [rechargesQuery.data, campaignsQuery.data],
+  );
 
   return {
-    balance: query.data?.balance ?? 0,
-    transactions: query.data?.transactions ?? [],
-    loading: query.isLoading,
-    isError: query.isError,
+    balance: balanceQuery.data?.balance_tnd ?? 0,
+    transactions,
+    loading: balanceQuery.isLoading || rechargesQuery.isLoading || campaignsQuery.isLoading,
+    isError: balanceQuery.isError || rechargesQuery.isError || campaignsQuery.isError,
   };
 }

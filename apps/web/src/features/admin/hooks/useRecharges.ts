@@ -56,36 +56,53 @@ export function useAdvertiserIdentities(): Map<string, AdvertiserIdentity> {
 }
 
 /**
+ * CF-M1 — the advertiser-side keys a confirm/reject must reach, pinned as a pure list (tested):
+ * the LIVE wallet keys (balance + recharges — the ledger and factures derive from these) and the
+ * dashboard stats (its balance leg is the same live read). These replaced the dead
+ * walletKeys.transactions Supabase key at the money-flow repoint.
+ */
+export const rechargeDecisionInvalidationKeys = (advertiserId: string) => [
+  walletKeys.balance(advertiserId),
+  walletKeys.recharges(advertiserId),
+  advertiserKeys.dashboardStats(advertiserId),
+];
+
+/**
  * Confirm / reject mutations.
  *
  * CF-14 invalidation graph — a confirm reaching `confirmed` credits the
  * advertiser's derived balance, so it reaches two other features: the admin
- * recharge list (intra) AND the advertiser's wallet ledger +
- * dashboard balance (cross-feature, keyed by the recharge's advertiser_id).
- * A reject changes nothing the advertiser's balance/ledger shows (those count
- * only confirmed rows) — recharge list only.
+ * recharge list (intra) AND the advertiser's LIVE wallet keys + dashboard
+ * balance (cross-feature, keyed by the recharge's advertiser_id). A reject
+ * flips the row's status (visible in the advertiser's recharges/factures
+ * list), so it reaches the same advertiser keys — balance included is
+ * harmless (a reject never credits).
  */
 export function useRechargeMutations() {
   const queryClient = useQueryClient();
   const invalidateRechargeList = () =>
     queryClient.invalidateQueries({ queryKey: adminKeys.rechargesAll() });
-  const invalidateAdvertiserBalance = (advertiserId: string) => {
-    queryClient.invalidateQueries({ queryKey: walletKeys.transactions(advertiserId) });
-    queryClient.invalidateQueries({ queryKey: advertiserKeys.dashboardStats(advertiserId) });
+  const invalidateAdvertiserMoney = (advertiserId: string) => {
+    for (const key of rechargeDecisionInvalidationKeys(advertiserId)) {
+      void queryClient.invalidateQueries({ queryKey: key });
+    }
   };
 
   const confirmRecharge = useMutation({
     mutationFn: (id: string) => adminRechargesService.confirm(id),
     onSuccess: (updated: AdminRecharge) => {
       invalidateRechargeList();
-      invalidateAdvertiserBalance(updated.advertiser_id);
+      invalidateAdvertiserMoney(updated.advertiser_id);
     },
   });
 
   const rejectRecharge = useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) =>
       adminRechargesService.reject(id, reason),
-    onSuccess: invalidateRechargeList,
+    onSuccess: (updated: AdminRecharge) => {
+      invalidateRechargeList();
+      invalidateAdvertiserMoney(updated.advertiser_id);
+    },
   });
 
   return { confirmRecharge, rejectRecharge };
