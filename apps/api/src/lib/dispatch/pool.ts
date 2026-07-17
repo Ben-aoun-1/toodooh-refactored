@@ -1,4 +1,4 @@
-import { and, eq, inArray, ne } from 'drizzle-orm';
+import { and, eq, inArray, ne, sql } from 'drizzle-orm';
 
 import { type DrizzleDb } from '../../db/client.js';
 import {
@@ -38,7 +38,18 @@ export type DbExecutor = DrizzleDb | Parameters<Parameters<DrizzleDb['transactio
 export interface AssemblePoolOpts {
   excludeScreenhostIds?: string[];
   excludeAllocationId?: string;
+  // US-4.4 — take a pg_advisory_xact_lock per candidate screenhost (SORTED ids — deadlock-free)
+  // BEFORE reading engagement, so two allocating transactions over a shared screen serialize and
+  // the second sees the first's committed engagement. Only meaningful when `executor` is an open
+  // transaction (xact locks release at commit/rollback); the allocating callers (dispatch freeze,
+  // refusal cascade) pass true, read-only assembly does not.
+  lockOccupancy?: boolean;
 }
+
+// US-4.4 — keyspace 1 of pg_advisory_xact_lock(int4, int4) for per-screenhost occupancy; key 2 is
+// hashtext(screenhost uuid). A hash collision over-locks (serializes two unrelated screens) which
+// is safe; it can never under-lock.
+export const OCCUPANCY_LOCK_NAMESPACE = 44_004;
 
 export interface AssemblePoolInputs {
   s: number; // spot duration (seconds)
@@ -102,6 +113,20 @@ export const assemblePool = async (
   );
 
   const candidateIds = candidates.map((c) => c.id);
+
+  // US-4.4 — pessimistic occupancy locking: serialize on every candidate BEFORE the engagement
+  // read below, in SORTED order so two overlapping pools can never deadlock (both acquire in the
+  // same global order). Sequential on purpose: ordered acquisition is the deadlock-freedom
+  // argument, and the candidates set is Grand-Tunis-sized.
+  if (opts.lockOccupancy === true && candidateIds.length > 0) {
+    const sortedIds = [...candidateIds].sort();
+    for (const id of sortedIds) {
+      await executor.execute(
+        sql`select pg_advisory_xact_lock(${OCCUPANCY_LOCK_NAMESPACE}, hashtext(${id}))`,
+      );
+    }
+  }
+
   // Affluence (Ai) for the candidates; engaged broadcast SECONDS (other plans' allocations) cap the
   // per-screen F-budget below.
   const affluenceRows = candidateIds.length

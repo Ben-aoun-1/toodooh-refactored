@@ -41,6 +41,9 @@ export const runDispatch = async (
   inputs: DispatchInputs,
 ): Promise<DispatchResult> => {
   if (!campaign.startDate || !campaign.endDate) return { status: 'NO_WINDOW' };
+  // Captured as non-null consts: the guard's narrowing does not flow into the tx closure below.
+  const startDate = campaign.startDate;
+  const endDate = campaign.endDate;
 
   const [existing] = await db
     .select({ id: campaignDispatchPlan.id })
@@ -57,48 +60,55 @@ export const runDispatch = async (
   // longer feeds this path (superseded; the column stays for the admin surface).
   const seuil = seuilImpressions(inputs.cpm);
 
-  // E3 — the pool assembly + occupancy netting live in assemblePool (shared with the refusal
-  // cascade and later redispatch); dispatch runs it with no exclusions.
-  const assembled = await assemblePool(
-    db,
-    { id: campaign.id, startDate: campaign.startDate, endDate: campaign.endDate },
-    { s: inputs.s, t, fMaxSeconds: config.fMaxSeconds },
-  );
-  if (assembled.status === 'NO_TARGETING') return { status: 'NO_TARGETING' };
-  const { windowDays, pool } = assembled;
+  // US-4.4 — ONE transaction from pool assembly to freeze: assemblePool takes per-screenhost
+  // advisory locks (sorted) BEFORE reading engagement, so two dispatches racing over shared
+  // screens serialize and the loser reads the winner's committed engagement — the 300s/hour
+  // budget can no longer be jointly oversold. Clôture paths return early (the empty transaction
+  // commits, the locks release); the 23505 unique-index catch below stays as the belt for the
+  // check-then-insert race on the SAME campaign.
+  const outcome = await db
+    .transaction(async (tx): Promise<DispatchResult> => {
+      // E3 — the pool assembly + occupancy netting live in assemblePool (shared with the refusal
+      // cascade and later redispatch); dispatch runs it with no exclusions.
+      const assembled = await assemblePool(
+        tx,
+        { id: campaign.id, startDate, endDate },
+        { s: inputs.s, t, fMaxSeconds: config.fMaxSeconds },
+        { lockOccupancy: true },
+      );
+      if (assembled.status === 'NO_TARGETING') return { status: 'NO_TARGETING' };
+      const { windowDays, pool } = assembled;
 
-  const built = buildPlan({
-    iCible: inputs.iCible,
-    cpm: inputs.cpm,
-    s: inputs.s,
-    t,
-    seuilDiffusable: seuil,
-    gMois: config.gMois,
-    joursActifs: config.joursActifs,
-    rMinEfficace: config.rMinEfficace,
-    fMaxSeconds: config.fMaxSeconds,
-    windowDays,
-    pool,
-  });
+      const built = buildPlan({
+        iCible: inputs.iCible,
+        cpm: inputs.cpm,
+        s: inputs.s,
+        t,
+        seuilDiffusable: seuil,
+        gMois: config.gMois,
+        joursActifs: config.joursActifs,
+        rMinEfficace: config.rMinEfficace,
+        fMaxSeconds: config.fMaxSeconds,
+        windowDays,
+        pool,
+      });
 
-  // Clôture: a too-thin (N_min>N_max / empty pool) or no-allocation result is NOT a deliverable
-  // plan — do NOT freeze it. Freezing an empty plan + the unique index would lock the campaign
-  // forever; instead return the clôture alert so the advertiser can adjust the cursor / targeting
-  // and re-dispatch (renvoi curseur). A genuine PARTIAL (nRetenus>0, not too-thin) IS delivered → frozen.
-  if (built.isTooThin) return { status: 'TOO_THIN', nMin: built.nMin, nMax: built.nMax };
-  if (built.nRetenus === 0) return { status: 'NO_ELIGIBLE' };
+      // Clôture: a too-thin (N_min>N_max / empty pool) or no-allocation result is NOT a deliverable
+      // plan — do NOT freeze it. Freezing an empty plan + the unique index would lock the campaign
+      // forever; instead return the clôture alert so the advertiser can adjust the cursor / targeting
+      // and re-dispatch (renvoi curseur). A genuine PARTIAL (nRetenus>0, not too-thin) IS delivered → frozen.
+      if (built.isTooThin) return { status: 'TOO_THIN', nMin: built.nMin, nMax: built.nMax };
+      if (built.nRetenus === 0) return { status: 'NO_ELIGIBLE' };
 
-  // E3 amendment — a sub-seuil uncovered remainder is stored on the plan for E6, not dropped.
-  if (built.reliquatStocke > 0) {
-    log.info(
-      { campaignId: campaign.id, reliquat: built.reliquatStocke, seuil },
-      'dispatch: reliquat sous le seuil — stocké pour le redispatch (E6)',
-    );
-  }
+      // E3 amendment — a sub-seuil uncovered remainder is stored on the plan for E6, not dropped.
+      if (built.reliquatStocke > 0) {
+        log.info(
+          { campaignId: campaign.id, reliquat: built.reliquatStocke, seuil },
+          'dispatch: reliquat sous le seuil — stocké pour le redispatch (E6)',
+        );
+      }
 
-  // Persist the frozen plan + allocations atomically.
-  const inserted = await db
-    .transaction(async (tx) => {
+      // Persist the frozen plan + allocations atomically (same tx as the locked engagement read).
       const [planRow] = await tx
         .insert(campaignDispatchPlan)
         .values({
@@ -162,15 +172,14 @@ export const runDispatch = async (
           );
         }
       }
-      return planRow;
+      return { status: 'OK', plan: planRow, allocationCount: built.allocations.length };
     })
-    .catch((err: unknown) => {
+    .catch((err: unknown): DispatchResult => {
       // Lost the check-then-insert race against the unique index (campaign_dispatch_plan_campaign_uq):
       // a concurrent dispatch already froze the plan. Surface the irrevocable conflict, not a 500.
-      if ((err as { code?: string }).code === '23505') return null;
+      if ((err as { code?: string }).code === '23505') return { status: 'ALREADY_DISPATCHED' };
       throw err;
     });
-  if (inserted === null) return { status: 'ALREADY_DISPATCHED' };
 
-  return { status: 'OK', plan: inserted, allocationCount: built.allocations.length };
+  return outcome;
 };
