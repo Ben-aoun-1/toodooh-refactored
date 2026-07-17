@@ -62,6 +62,11 @@ export interface BuiltPlan {
   nRetenus: number;
   isPartial: boolean;
   isTooThin: boolean;
+  // E3 (Mariem 2026-07-15 amendment) — a sub-seuil uncovered remainder (0 < V − couvert < seuil)
+  // is a crumb, NOT a clôture-1: it is STORED (« stocké ») for the redispatch (E6) to fold into
+  // its own remaining loss (E6's materiality validation runs on the TOTAL). 0 when covered or
+  // when the remainder is ≥ the seuil (that stays the partial path, unchanged).
+  reliquatStocke: number;
   allocations: PlanAllocation[];
 }
 
@@ -152,18 +157,25 @@ export const buildPlan = (input: BuildPlanInput): BuiltPlan => {
     });
   }
 
+  // E3 amendment — after selection returns, a sub-seuil remainder is stored, not flagged partial.
+  const reliquat = iCible - couvert;
+  const reliquatStocke = reliquat > 0 && reliquat < seuilDiffusable ? reliquat : 0;
+
   return {
     sMin,
     gJour,
     r,
     couvert,
-    // Clôture 1 (partial): pool couldn't cover I_cible. Clôture 2 (too thin): covering I_cible would
-    // force more screenhosts than materiality allows (N_min > N_max), or the pool is empty.
+    // Clôture 1 (partial): pool couldn't cover I_cible by a MATERIAL margin (≥ seuil). Clôture 2
+    // (too thin): covering I_cible would force more screenhosts than materiality allows
+    // (N_min > N_max), or the pool is empty. A sub-seuil shortfall is neither — it lands in
+    // reliquatStocke for E6.
     nMin: Number.isFinite(nMin) ? nMin : 0,
     nMax,
     nRetenus: retenus.length,
-    isPartial: couvert < iCible,
+    isPartial: couvert < iCible && reliquatStocke === 0,
     isTooThin: input.pool.length === 0 || nMin > nMax,
+    reliquatStocke,
     allocations,
   };
 };

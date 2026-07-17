@@ -133,6 +133,53 @@ describe('buildPlan — clôture 1 (PARTIAL: pool cannot cover I_cible)', () => 
   });
 });
 
+// E3 (Mariem 2026-07-15 amendment) — the post-selection storage matrix: a sub-seuil uncovered
+// remainder is a crumb → STORED for E6 (not a clôture-1); a remainder ≥ seuil stays the existing
+// partial path (nothing stored); full coverage stores nothing.
+describe('buildPlan — reliquat stocké (E3 amendment storage matrix)', () => {
+  it('CRUMB: 0 < V − couvert < seuil → stored, NOT partial', () => {
+    // A covers 19 500 of 20 000 → reliquat 500 < seuil 1000, no headroom anywhere to absorb.
+    const plan = buildPlan({
+      ...base,
+      pool: [poolEntry('A', 9, { residual: 19500, ai: 100, hi: 24, slots: monSlots(100) })],
+    });
+    expect(plan.couvert).toBe(19500);
+    expect(plan.reliquatStocke).toBe(500);
+    expect(plan.isPartial).toBe(false); // immaterial (< S_min) — E6 revalidates on the TOTAL
+  });
+
+  it('NON-CRUMB: V − couvert ≥ seuil → the existing partial path, reliquat NOT stored', () => {
+    const plan = buildPlan({
+      ...base,
+      pool: [poolEntry('A', 9, { residual: 5000, cap: 5000, ai: 100, hi: 5 })],
+    });
+    expect(plan.couvert).toBe(5000); // reliquat 15 000 ≥ seuil 1000
+    expect(plan.reliquatStocke).toBe(0);
+    expect(plan.isPartial).toBe(true);
+  });
+
+  it('EXACT-SEUIL remainder is NOT a crumb (boundary: reliquat === seuil → partial path)', () => {
+    // A covers 19 000 of 20 000 → reliquat exactly 1000 = seuil → material → partial, not stored.
+    const plan = buildPlan({
+      ...base,
+      pool: [poolEntry('A', 9, { residual: 19000, ai: 100, hi: 24, slots: monSlots(100) })],
+    });
+    expect(plan.couvert).toBe(19000);
+    expect(plan.reliquatStocke).toBe(0);
+    expect(plan.isPartial).toBe(true);
+  });
+
+  it('ZERO remainder: covered plans store nothing and stay non-partial', () => {
+    const plan = buildPlan({
+      ...base,
+      pool: [poolEntry('A', 9, { residual: 72000, ai: 100, hi: 24, slots: monSlots(100) })],
+    });
+    expect(plan.couvert).toBe(20000);
+    expect(plan.reliquatStocke).toBe(0);
+    expect(plan.isPartial).toBe(false);
+  });
+});
+
 describe('buildPlan — clôture 2 (TOO THIN: N_min > N_max → renvoi curseur)', () => {
   it('flags is_too_thin when covering I_cible would force more SH than materiality allows', () => {
     const plan = buildPlan({

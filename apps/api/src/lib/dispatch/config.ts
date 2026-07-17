@@ -36,8 +36,9 @@ export const getDispatchConfig = async (): Promise<ResolvedDispatchConfig> => {
         t30s: Number(row.t30s),
       }
     : { ...DISPATCH_CONFIG_DEFAULTS };
-  // seuil_diffusable is the materiality divisor (N_max = ⌊I_cible/seuil⌋) and the no-crumb floor;
-  // a non-positive value would silently disable both. Fail loud on misconfiguration.
+  // SUPERSEDED on the dispatch path (E3, Mariem 2026-07-15): the materiality divisor and no-crumb
+  // floor are now the VALUE-based seuilImpressions(cpm). This value no longer feeds dispatch — it
+  // stays validated for the admin config surface (removal banked).
   if (resolved.seuilDiffusable <= 0) {
     throw new Error('dispatch_config.seuil_diffusable must be > 0');
   }

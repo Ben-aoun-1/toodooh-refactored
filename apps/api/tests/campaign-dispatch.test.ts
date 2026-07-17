@@ -31,6 +31,7 @@ type PlanResponse = {
     n_retenus: number;
     s_min: number;
     g_jour: number;
+    seuil_diffusable: number;
     is_partial: boolean;
     is_too_thin: boolean;
   };
@@ -158,7 +159,10 @@ describe('campaign dispatch entrypoint (L-disp, real Postgres)', () => {
     expect(body.plan.n_retenus).toBe(1);
     expect(body.plan.is_partial).toBe(false);
     expect(body.plan.is_too_thin).toBe(false);
-    expect(body.plan.s_min).toBe(10); // 1000 × 10 / 1000
+    // E3 amendment — the seuil is VALUE-based: seuilImpressions(10) = 2000 → S_min = 20 TND
+    // (was 10 when config seuil_diffusable=1000 fed dispatch).
+    expect(body.plan.s_min).toBe(20);
+    expect(body.plan.seuil_diffusable).toBe(2000); // the plan snapshots the DERIVED threshold
     expect(body.plan.g_jour).toBeCloseTo(100 / 30, 4);
     expect(body.allocations).toHaveLength(1);
     expect(body.allocations[0]?.ii_potentiel).toBe(20000);
@@ -230,6 +234,38 @@ describe('campaign dispatch entrypoint (L-disp, real Postgres)', () => {
     const body = res.json() as PlanResponse;
     expect(body.plan.is_partial).toBe(true);
     expect(body.plan.couvert).toBeLessThan(200000);
+    // E3 amendment — a MATERIAL (≥ seuil) shortfall is the partial path: nothing is stored.
+    const [plan] = await db
+      .select({ reliquatStocke: campaignDispatchPlan.reliquatStocke })
+      .from(campaignDispatchPlan)
+      .where(eq(campaignDispatchPlan.campaignId, campaignId));
+    expect(plan?.reliquatStocke).toBe(0);
+  });
+
+  // E3 (Mariem 2026-07-15 amendment) — a sub-seuil uncovered remainder is « stocké », not dropped
+  // and not a clôture-1: E6 (redispatch) folds it into its own loss total.
+  it('stores a sub-seuil reliquat on the plan (crumb → reliquat_stocke, NOT partial)', async () => {
+    const admin = await seedUser({ role: 'admin' });
+    const advertiser = await seedUser({ role: 'advertiser' });
+    const owner = await seedUser({ role: 'individual_owner' });
+    const cat = await ownerSectorId();
+    const campaignId = await seedCampaign(advertiser);
+    await seedTargeting(campaignId, cat, 'premium');
+    await seedEligibleScreenhost(owner, cat, 'premium', 100); // facturable capacity 36000
+    mockSession(admin);
+
+    // i_cible 37000 → the SH's full 36000 is allocated; the 1000 remainder is < seuil (2000 at
+    // CPM 10, worth 10 TND < S_min 20) → stored for E6, and the plan is NOT flagged partial.
+    const res = await dispatch(campaignId, { i_cible: 37000, cpm: 10, s: 10 });
+    expect(res.statusCode).toBe(201);
+    const body = res.json() as PlanResponse;
+    expect(body.plan.couvert).toBe(36000);
+    expect(body.plan.is_partial).toBe(false);
+    const [plan] = await db
+      .select({ reliquatStocke: campaignDispatchPlan.reliquatStocke })
+      .from(campaignDispatchPlan)
+      .where(eq(campaignDispatchPlan.campaignId, campaignId));
+    expect(plan?.reliquatStocke).toBe(1000);
   });
 
   it('too-thin → 422 NOT_DELIVERABLE, not frozen, re-dispatchable (never 409-locks)', async () => {

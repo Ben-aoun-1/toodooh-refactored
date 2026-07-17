@@ -302,6 +302,13 @@
       "when": 1784124653408,
       "tag": "0042_vf_attention_index",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1784284250636,
+      "tag": "0043_plan_reliquat_stocke",
+      "breakpoints": true
     }
   ]
 }

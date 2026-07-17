@@ -1,0 +1,1 @@
+ALTER TABLE "campaign_dispatch_plan" ADD COLUMN "reliquat_stocke" integer DEFAULT 0 NOT NULL;
