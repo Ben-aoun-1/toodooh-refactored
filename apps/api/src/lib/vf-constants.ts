@@ -8,7 +8,10 @@
 //                                        as RÉUSSIE (no refund). Consumed by reconcile (E1).
 //   « seuil diffusable = 5 000 imp. »  → SEUIL_DIFFUSABLE — the anti-miette (no-crumbs) floor: no
 //                                        screenhost allocation below this many impressions.
-//                                        Consumed by a later lane (config reconciliation).
+//                                        SUPERSEDED on the dispatch path (E3, Mariem 2026-07-15):
+//                                        the seuil is now VALUE-based — seuilImpressions(cpm) =
+//                                        S_MIN_TND × 1000 ÷ CPM (lib/dispatch/thresholds.ts), the
+//                                        same rule as redispatch. Constant kept; removal banked.
 //   « G_mois = 100 TND »               → G_MOIS_TND — the monthly screenhost dignity target.
 //                                        Consumed by a later lane (E4 dignity).
 //   « valeur min SH = 20 TND »         → VALEUR_MIN_SH_TND — the minimum TND value an allocation

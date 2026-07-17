@@ -47,9 +47,12 @@ export const revenueLabel = (tnd: number): string => `${tnd.toLocaleString('fr-F
 /** Reject is consequential and irreversible — it alone needs confirmation. */
 export const decisionNeedsConfirm = (kind: 'accept' | 'reject'): boolean => kind === 'reject';
 
-// RULED copy (CF-9 amendment): no reattribution claim — the SPS cascade does not exist yet, a
-// refused share simply stays off-air. Upgrade truthfully when the refusal cascade ships.
-export const REJECT_ALLOCATION_CONFIRM = 'Refuser cette campagne ? Cette action est définitive.';
+// E3 (US-2.8) — the refusal cascade ships: a pre-diffusion refusal re-places the share on the
+// other eligible screens, so the reattribution claim is NOW true (the earlier ruled copy withheld
+// it while no cascade existed). « Cette action est définitive. » stays as the second line — the
+// API makes REFUSE terminal.
+export const REJECT_ALLOCATION_CONFIRM =
+  'Refuser cette campagne ? Votre part sera réattribuée aux autres écrans.\nCette action est définitive.';
 
 // ── CF-O1 — pinned proposal labels + decision states (same no-render-harness idiom) ────────────
 // Accept success replaces the bare toast with the spec's keep-screens-active reminder.

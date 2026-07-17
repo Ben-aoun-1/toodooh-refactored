@@ -22,6 +22,7 @@ import {
   users,
   zones,
 } from '../db/schema.js';
+import { runRefusalCascade } from '../lib/dispatch/cascade.js';
 import { buildEligibilityPatch } from '../lib/eligibility-patch.js';
 import { assembleReportData } from '../lib/report/assemble.js';
 import { pistesForReportCached } from '../lib/report/recommendations.js';
@@ -1094,6 +1095,13 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
 
   // Shared accept/reject body: owner-scoped status write. The WHERE subselect (the caller's own
   // screenhosts) makes a foreign allocation id indistinguishable from a missing one (404).
+  // E3 (US-2.8) — a REFUSE on a PRE-DIFFUSION campaign (pending/upcoming) re-places the refused
+  // share via the cascade, IN THE SAME TRANSACTION as the status write: if the cascade fails, the
+  // refusal rolls back too (all-or-nothing — the owner retries, the share is never silently
+  // stranded half-placed). The row is locked FOR UPDATE so two concurrent decisions on the same
+  // allocation serialize (no double cascade). Refusal is DEFINITIVE (« cette action est
+  // définitive ») — once REFUSE, re-refusing is an idempotent 200, any other flip is a 409: the
+  // cascade may already have re-placed the share, so un-refusing would double-book it.
   const decideAllocation = async (
     request: FastifyRequest,
     reply: FastifyReply,
@@ -1114,31 +1122,87 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
     }
 
-    const [updated] = await db
-      .update(campaignDispatchAllocation)
-      .set({ statutAcceptation: statut })
-      .where(
-        and(
-          eq(campaignDispatchAllocation.id, parsedParams.data.id),
-          inArray(
-            campaignDispatchAllocation.screenhostId,
-            db
-              .select({ id: screenhosts.id })
-              .from(screenhosts)
-              .where(eq(screenhosts.ownerId, userId)),
+    const outcome = await db.transaction(async (tx) => {
+      const [row] = await tx
+        .select({
+          allocation: campaignDispatchAllocation,
+          plan: campaignDispatchPlan,
+          campaignId: campaigns.id,
+          campaignName: campaigns.name,
+          campaignStatus: campaigns.status,
+          campaignStart: campaigns.startDate,
+          campaignEnd: campaigns.endDate,
+        })
+        .from(campaignDispatchAllocation)
+        .innerJoin(
+          campaignDispatchPlan,
+          eq(campaignDispatchAllocation.planId, campaignDispatchPlan.id),
+        )
+        .innerJoin(campaigns, eq(campaignDispatchPlan.campaignId, campaigns.id))
+        .where(
+          and(
+            eq(campaignDispatchAllocation.id, parsedParams.data.id),
+            inArray(
+              campaignDispatchAllocation.screenhostId,
+              tx
+                .select({ id: screenhosts.id })
+                .from(screenhosts)
+                .where(eq(screenhosts.ownerId, userId)),
+            ),
           ),
-        ),
-      )
-      .returning({
-        id: campaignDispatchAllocation.id,
-        statutAcceptation: campaignDispatchAllocation.statutAcceptation,
-      });
-    if (!updated) {
+        )
+        .limit(1)
+        .for('update', { of: campaignDispatchAllocation });
+      if (!row) return { kind: 'not_found' as const };
+
+      const current = row.allocation.statutAcceptation;
+      // Idempotent re-decide (incl. re-REFUSE: no second cascade).
+      if (current === statut) return { kind: 'ok' as const, id: row.allocation.id, statut };
+      // Refusal is final — the cascade may already have re-placed this share.
+      if (current === 'REFUSE') return { kind: 'refused_final' as const };
+
+      await tx
+        .update(campaignDispatchAllocation)
+        .set({ statutAcceptation: statut })
+        .where(eq(campaignDispatchAllocation.id, row.allocation.id));
+
+      // Cascade only PRE-DIFFUSION (pending/upcoming). A refusal while the campaign is ACTIVE
+      // stays non-cascading — mid-flight re-placement is E6's (redispatch) job.
+      if (
+        statut === 'REFUSE' &&
+        (row.campaignStatus === 'pending' || row.campaignStatus === 'upcoming') &&
+        row.campaignStart !== null &&
+        row.campaignEnd !== null
+      ) {
+        await runRefusalCascade(tx, {
+          plan: row.plan,
+          campaign: {
+            id: row.campaignId,
+            name: row.campaignName,
+            startDate: row.campaignStart,
+            endDate: row.campaignEnd,
+          },
+          refused: {
+            id: row.allocation.id,
+            screenhostId: row.allocation.screenhostId,
+            iiPotentiel: row.allocation.iiPotentiel,
+          },
+        });
+      }
+      return { kind: 'ok' as const, id: row.allocation.id, statut };
+    });
+
+    if (outcome.kind === 'not_found') {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such allocation.' });
     }
-    return reply
-      .status(200)
-      .send({ id: updated.id, statut_acceptation: updated.statutAcceptation });
+    if (outcome.kind === 'refused_final') {
+      return reply.status(409).send({
+        error: 'CONFLICT',
+        message: 'Allocation déjà refusée — le refus est définitif.',
+        statusCode: 409,
+      });
+    }
+    return reply.status(200).send({ id: outcome.id, statut_acceptation: outcome.statut });
   };
 
   // POST /api/screenhosts/allocations/:id/accept — owner accepts (→ ACCEPTE); the campaign may air.

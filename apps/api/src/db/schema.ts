@@ -892,6 +892,9 @@ export const dispatchConfig = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     // Singleton guard — a unique constant column ⇒ at most one config row.
     singleton: boolean('singleton').notNull().default(true),
+    // SUPERSEDED on the dispatch path (E3, Mariem 2026-07-15): the anti-miette seuil is now
+    // VALUE-based — seuilImpressions(cpm) = S_MIN_TND × 1000 ÷ CPM. This column no longer feeds
+    // dispatch; it stays for the admin config surface (removal banked).
     seuilDiffusable: integer('seuil_diffusable').notNull(), // min impressions worth airing
     gMois: numeric('g_mois', { precision: 12, scale: 2 }).notNull(), // monthly SH dignity target (TND)
     joursActifs: integer('jours_actifs').notNull(), // divisor for G_jour = g_mois / jours_actifs
@@ -954,7 +957,9 @@ export const campaignDispatchPlan = pgTable(
     cpm: numeric('cpm', { precision: 10, scale: 3 }).notNull(),
     sSpotSeconds: integer('s_spot_seconds').notNull(),
     tTierCoef: numeric('t_tier_coef', { precision: 4, scale: 3 }).notNull(),
-    // Wired-seuils snapshot (A.7) — what this plan was built against.
+    // Wired-seuils snapshot (A.7) — what this plan was built against. E3 (amendment): since E3
+    // seuil_diffusable snapshots the DERIVED value-based threshold seuilImpressions(cpm) — still
+    // exactly "the min impressions worth airing for THIS plan" — no longer the config value.
     seuilDiffusable: integer('seuil_diffusable').notNull(),
     sMin: numeric('s_min', { precision: 14, scale: 4 }).notNull(),
     gJour: numeric('g_jour', { precision: 14, scale: 4 }).notNull(),
@@ -967,6 +972,10 @@ export const campaignDispatchPlan = pgTable(
     nRetenus: integer('n_retenus').notNull(),
     isPartial: boolean('is_partial').notNull().default(false), // clôture 1 (advertiser alert)
     isTooThin: boolean('is_too_thin').notNull().default(false), // clôture 2 (renvoi curseur)
+    // E3 (amendment) — the sub-seuil uncovered remainder, STORED (« stocké ») in facturable
+    // impressions for the redispatch (E6) to add to its own remaining loss. Fed at freeze time
+    // (buildPlan.reliquatStocke) and grown by the refusal cascade's sub-seuil shortfalls.
+    reliquatStocke: integer('reliquat_stocke').notNull().default(0),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [uniqueIndex('campaign_dispatch_plan_campaign_uq').on(table.campaignId)],

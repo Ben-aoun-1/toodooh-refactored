@@ -6,25 +6,17 @@ import {
   type CampaignDispatchPlan,
   campaignDispatchAllocation,
   campaignDispatchPlan,
-  campaignTargeting,
-  campaignZones,
   notifications,
-  screenhostAffluence,
   screenhosts,
 } from '../../db/schema.js';
+import { logger } from '../../logger.js';
 
 import { getDispatchConfig } from './config.js';
-import {
-  broadcastableHours,
-  capaciteUtile,
-  computeR,
-  facturableFromPhysical,
-  screenhostMatchesTargeting,
-  screenhostMatchesZones,
-} from './eligibility.js';
-import { type PoolEntry, buildPlan } from './plan.js';
-import { tForDuration } from './thresholds.js';
-import { buildWindowDays } from './window.js';
+import { buildPlan } from './plan.js';
+import { assemblePool } from './pool.js';
+import { seuilImpressions, tForDuration } from './thresholds.js';
+
+const log = logger.child({ module: 'dispatch' });
 
 // E1 (VF) — T is no longer an input: the attention index derives from the spot duration S and the
 // config's t_10s/t_20s/t_30s buckets inside runDispatch (and is snapshotted onto the plan).
@@ -49,6 +41,9 @@ export const runDispatch = async (
   inputs: DispatchInputs,
 ): Promise<DispatchResult> => {
   if (!campaign.startDate || !campaign.endDate) return { status: 'NO_WINDOW' };
+  // Captured as non-null consts: the guard's narrowing does not flow into the tx closure below.
+  const startDate = campaign.startDate;
+  const endDate = campaign.endDate;
 
   const [existing] = await db
     .select({ id: campaignDispatchPlan.id })
@@ -57,171 +52,63 @@ export const runDispatch = async (
     .limit(1);
   if (existing) return { status: 'ALREADY_DISPATCHED' }; // frozen + irrevocable
 
-  const lines = await db
-    .select({ categoryId: campaignTargeting.categoryId, class: campaignTargeting.class })
-    .from(campaignTargeting)
-    .where(eq(campaignTargeting.campaignId, campaign.id));
-  if (lines.length === 0) return { status: 'NO_TARGETING' };
-
   const config = await getDispatchConfig();
   // E1 (VF) — the attention index for THIS campaign's spot duration; snapshotted onto the plan.
   const t = tForDuration(inputs.s, config);
-  const windowDays = buildWindowDays(campaign.startDate, campaign.endDate);
+  // E3 (Mariem 2026-07-15 amendment) — the anti-miette seuil is VALUE-based, derived HERE from the
+  // campaign's CPM (the same S_min=20 TND rule as redispatch). dispatch_config.seuil_diffusable no
+  // longer feeds this path (superseded; the column stays for the admin surface).
+  const seuil = seuilImpressions(inputs.cpm);
 
-  // CF-Z1 — the campaign's targeted zones (VF US-2.1): none = whole network on that criterion.
-  const zoneRows = await db
-    .select({ zoneId: campaignZones.zoneId })
-    .from(campaignZones)
-    .where(eq(campaignZones.campaignId, campaign.id));
-  const campaignZoneIds = zoneRows.map((z) => z.zoneId);
+  // US-4.4 — ONE transaction from pool assembly to freeze: assemblePool takes per-screenhost
+  // advisory locks (sorted) BEFORE reading engagement, so two dispatches racing over shared
+  // screens serialize and the loser reads the winner's committed engagement — the 300s/hour
+  // budget can no longer be jointly oversold. Clôture paths return early (the empty transaction
+  // commits, the locks release); the 23505 unique-index catch below stays as the belt for the
+  // check-then-insert race on the SAME campaign.
+  const outcome = await db
+    .transaction(async (tx): Promise<DispatchResult> => {
+      // E3 — the pool assembly + occupancy netting live in assemblePool (shared with the refusal
+      // cascade and later redispatch); dispatch runs it with no exclusions.
+      const assembled = await assemblePool(
+        tx,
+        { id: campaign.id, startDate, endDate },
+        { s: inputs.s, t, fMaxSeconds: config.fMaxSeconds },
+        { lockOccupancy: true },
+      );
+      if (assembled.status === 'NO_TARGETING') return { status: 'NO_TARGETING' };
+      const { windowDays, pool } = assembled;
 
-  // Hard filters: active + horaires set + capacity present + matches targeting (category × class)
-  // + in a targeted zone (CF-Z1 — with prod entirely Grand Tunis this changes nothing today).
-  const candidates = (
-    await db
-      .select({
-        id: screenhosts.id,
-        sps: screenhosts.sps,
-        businessSectorId: screenhosts.businessSectorId,
-        class: screenhosts.class,
-        zoneId: screenhosts.zoneId,
-        openingHour: screenhosts.openingHour,
-        closingHour: screenhosts.closingHour,
-        broadcastCapacity: screenhosts.broadcastCapacity,
-      })
-      .from(screenhosts)
-      .where(eq(screenhosts.isActive, true))
-  ).filter(
-    (sh) =>
-      sh.broadcastCapacity !== null &&
-      broadcastableHours(sh.openingHour, sh.closingHour).length > 0 &&
-      screenhostMatchesTargeting(
-        { businessSectorId: sh.businessSectorId, class: sh.class },
-        lines,
-      ) &&
-      screenhostMatchesZones(sh.zoneId, campaignZoneIds),
-  );
+      const built = buildPlan({
+        iCible: inputs.iCible,
+        cpm: inputs.cpm,
+        s: inputs.s,
+        t,
+        seuilDiffusable: seuil,
+        gMois: config.gMois,
+        joursActifs: config.joursActifs,
+        rMinEfficace: config.rMinEfficace,
+        fMaxSeconds: config.fMaxSeconds,
+        windowDays,
+        pool,
+      });
 
-  const candidateIds = candidates.map((c) => c.id);
-  // Affluence (Ai) for the candidates; engaged broadcast SECONDS (other plans' allocations) cap the
-  // per-screen F-budget below.
-  const affluenceRows = candidateIds.length
-    ? await db
-        .select({
-          screenhostId: screenhostAffluence.screenhostId,
-          dayOfWeek: screenhostAffluence.dayOfWeek,
-          hour: screenhostAffluence.hour,
-          estimatedImpressions: screenhostAffluence.estimatedImpressions,
-        })
-        .from(screenhostAffluence)
-        .where(inArray(screenhostAffluence.screenhostId, candidateIds))
-    : [];
-  const engagementRows = candidateIds.length
-    ? await db
-        .select({
-          screenhostId: campaignDispatchAllocation.screenhostId,
-          rI: campaignDispatchAllocation.rI,
-          spotSeconds: campaignDispatchPlan.sSpotSeconds,
-        })
-        .from(campaignDispatchAllocation)
-        .innerJoin(
-          campaignDispatchPlan,
-          eq(campaignDispatchAllocation.planId, campaignDispatchPlan.id),
-        )
-        .where(inArray(campaignDispatchAllocation.screenhostId, candidateIds))
-    : [];
+      // Clôture: a too-thin (N_min>N_max / empty pool) or no-allocation result is NOT a deliverable
+      // plan — do NOT freeze it. Freezing an empty plan + the unique index would lock the campaign
+      // forever; instead return the clôture alert so the advertiser can adjust the cursor / targeting
+      // and re-dispatch (renvoi curseur). A genuine PARTIAL (nRetenus>0, not too-thin) IS delivered → frozen.
+      if (built.isTooThin) return { status: 'TOO_THIN', nMin: built.nMin, nMax: built.nMax };
+      if (built.nRetenus === 0) return { status: 'NO_ELIGIBLE' };
 
-  const affByKey = new Map<string, number>();
-  for (const a of affluenceRows)
-    affByKey.set(`${a.screenhostId}:${a.dayOfWeek}:${a.hour}`, a.estimatedImpressions);
-  // Engaged broadcast SECONDS/hour per screen = Σ other campaigns' (r_i × their spot duration S).
-  // (This campaign has no allocations yet — ALREADY_DISPATCHED is rejected upstream.) Seconds, not
-  // impressions: the cross-campaign cap is the 300s/hour broadcast budget, and a 30s spot and a 10s
-  // spot cost it differently — impression accounting can't see that.
-  const engagedSecondsById = new Map<string, number>();
-  for (const e of engagementRows)
-    engagedSecondsById.set(
-      e.screenhostId,
-      (engagedSecondsById.get(e.screenhostId) ?? 0) + e.rI * e.spotSeconds,
-    );
+      // E3 amendment — a sub-seuil uncovered remainder is stored on the plan for E6, not dropped.
+      if (built.reliquatStocke > 0) {
+        log.info(
+          { campaignId: campaign.id, reliquat: built.reliquatStocke, seuil },
+          'dispatch: reliquat sous le seuil — stocké pour le redispatch (E6)',
+        );
+      }
 
-  const windowWeekdays = [...new Set(windowDays.map((d) => d.dayOfWeek))];
-
-  const pool: PoolEntry[] = [];
-  for (const sh of candidates) {
-    const bHours = broadcastableHours(sh.openingHour, sh.closingHour);
-    const slots = windowWeekdays.flatMap((dow) =>
-      bHours.map((hour) => ({
-        dayOfWeek: dow,
-        hour,
-        affluence: affByKey.get(`${sh.id}:${dow}:${hour}`) ?? 0,
-      })),
-    );
-    const hours = windowDays.length * bHours.length; // Hi — broadcastable slots over the window
-    let totalAffluence = 0;
-    for (const day of windowDays) {
-      for (const hour of bHours)
-        totalAffluence += affByKey.get(`${sh.id}:${day.dayOfWeek}:${hour}`) ?? 0;
-    }
-    const avgAffluence = hours > 0 ? totalAffluence / hours : 0;
-    // Floor to whole impressions: capaciteUtile round-trips through FP (avgAffluence = total/hours
-    // → ×hours), so non-uniform affluence yields e.g. 60030.0000000007. Flooring at the source keeps
-    // residual/ai/couvert/ii_potentiel integers (the persisted columns are `integer`).
-    // Per-screen F-second cap: the residual broadcast budget after OTHER campaigns → R_eff. The
-    // cross-campaign cap is SECONDS-based (residual ÷ S), so screens shared by campaigns with
-    // different spot durations never exceed 300s/hour. (First campaign on a screen: engaged 0 →
-    // residual F → R_eff = the unconstrained MIN[(3600/S)·T, F/S] — unchanged behavior.)
-    const residualSeconds = Math.max(0, config.fMaxSeconds - (engagedSecondsById.get(sh.id) ?? 0));
-    const rEff = computeR(inputs.s, residualSeconds); // PHYSICAL MIN[3600/S, ⌊residual/S⌋]
-    // E1 (VF) — Ii = Ii_brut × T: the pool carries FACTURABLE capacity (what the screen is worth
-    // to the campaign), floored to whole impressions; the physical rep ceiling stays in repsCap.
-    const capacite = Math.floor(
-      facturableFromPhysical(capaciteUtile(avgAffluence, hours, rEff), t),
-    );
-    const residualCapacity = capacite; // the F-cap is baked into R_eff — no impression subtraction
-    if (residualCapacity <= 0) continue; // no residual broadcast budget (or zero affluence) → skip
-    pool.push({
-      id: sh.id,
-      sps: Number(sh.sps),
-      // V1 STUB (hardcoded — NOT registre-derived): no last-service / per-day-revenue registre
-      // exists yet, so the dignity rule + ancienneté tiebreak are INERT until one does. Only
-      // `engagements` (above) is genuinely derived from stored plans. TODO: wire a registre.
-      anciennete: 0,
-      revenuJour: 0,
-      activeToday: false,
-      avgAffluence,
-      hours,
-      capaciteUtile: capacite,
-      residualCapacity,
-      repsCap: rEff,
-      slots,
-    });
-  }
-
-  const built = buildPlan({
-    iCible: inputs.iCible,
-    cpm: inputs.cpm,
-    s: inputs.s,
-    t,
-    seuilDiffusable: config.seuilDiffusable,
-    gMois: config.gMois,
-    joursActifs: config.joursActifs,
-    rMinEfficace: config.rMinEfficace,
-    fMaxSeconds: config.fMaxSeconds,
-    windowDays,
-    pool,
-  });
-
-  // Clôture: a too-thin (N_min>N_max / empty pool) or no-allocation result is NOT a deliverable
-  // plan — do NOT freeze it. Freezing an empty plan + the unique index would lock the campaign
-  // forever; instead return the clôture alert so the advertiser can adjust the cursor / targeting
-  // and re-dispatch (renvoi curseur). A genuine PARTIAL (nRetenus>0, not too-thin) IS delivered → frozen.
-  if (built.isTooThin) return { status: 'TOO_THIN', nMin: built.nMin, nMax: built.nMax };
-  if (built.nRetenus === 0) return { status: 'NO_ELIGIBLE' };
-
-  // Persist the frozen plan + allocations atomically.
-  const inserted = await db
-    .transaction(async (tx) => {
+      // Persist the frozen plan + allocations atomically (same tx as the locked engagement read).
       const [planRow] = await tx
         .insert(campaignDispatchPlan)
         .values({
@@ -232,7 +119,9 @@ export const runDispatch = async (
           // E1 — the column keeps its historical name; since E1 it snapshots the ATTENTION index
           // T (duration-derived), no longer a tier coefficient.
           tTierCoef: String(t),
-          seuilDiffusable: config.seuilDiffusable,
+          // E3 — snapshots the DERIVED value-based seuil (seuilImpressions(cpm)), the threshold
+          // this plan was actually built against.
+          seuilDiffusable: seuil,
           sMin: String(built.sMin),
           gJour: String(built.gJour),
           fMaxSeconds: config.fMaxSeconds,
@@ -243,6 +132,7 @@ export const runDispatch = async (
           nRetenus: built.nRetenus,
           isPartial: built.isPartial,
           isTooThin: built.isTooThin,
+          reliquatStocke: built.reliquatStocke,
         })
         .returning();
       if (!planRow) throw new Error('dispatch plan insert failed');
@@ -282,15 +172,14 @@ export const runDispatch = async (
           );
         }
       }
-      return planRow;
+      return { status: 'OK', plan: planRow, allocationCount: built.allocations.length };
     })
-    .catch((err: unknown) => {
+    .catch((err: unknown): DispatchResult => {
       // Lost the check-then-insert race against the unique index (campaign_dispatch_plan_campaign_uq):
       // a concurrent dispatch already froze the plan. Surface the irrevocable conflict, not a 500.
-      if ((err as { code?: string }).code === '23505') return null;
+      if ((err as { code?: string }).code === '23505') return { status: 'ALREADY_DISPATCHED' };
       throw err;
     });
-  if (inserted === null) return { status: 'ALREADY_DISPATCHED' };
 
-  return { status: 'OK', plan: inserted, allocationCount: built.allocations.length };
+  return outcome;
 };
