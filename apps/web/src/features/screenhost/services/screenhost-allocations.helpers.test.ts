@@ -34,8 +34,10 @@ describe('decisionNeedsConfirm (reject is consequential; accept stays one-click)
     expect(decisionNeedsConfirm('accept')).toBe(false);
   });
 
-  it('the confirmation copy is the ruled French message (no reattribution claim — no cascade yet)', () => {
-    expect(REJECT_ALLOCATION_CONFIRM).toBe('Refuser cette campagne ? Cette action est définitive.');
+  it('the confirmation copy claims reattribution (E3 cascade) and stays definitive (second line)', () => {
+    expect(REJECT_ALLOCATION_CONFIRM).toBe(
+      'Refuser cette campagne ? Votre part sera réattribuée aux autres écrans.\nCette action est définitive.',
+    );
   });
 });
 
