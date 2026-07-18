@@ -8,6 +8,7 @@ import { db, sql } from './db/client.js';
 import { env } from './env.js';
 import { buildErrorHandler, buildNotFoundHandler } from './error-handler.js';
 import { startCampaignLifecycleJob } from './lib/campaign-lifecycle.js';
+import { startCampaignRedispatchJob } from './lib/campaign-redispatch.js';
 import { isMediaProbeEnabled } from './lib/media-probe.js';
 import { startMonthlyReportJob } from './lib/report/monthly-job.js';
 import { isRecommendationsEnabled } from './lib/report/recommendations.js';
@@ -94,6 +95,10 @@ const start = async (): Promise<void> => {
     startMonthlyReportJob(app.log);
     // CF-S1 — upcoming→active→completed transitions (+ the J-3 draft reminder rides this tick).
     startCampaignLifecycleJob(app.log);
+    // E6 — the rattrapage tick (detect manquements on ACTIVE campaigns → re-place forward while
+    // the total ≥ S_min). AFTER the lifecycle job: a campaign flipped active this hour gets its
+    // first redispatch look in the same boot sequence.
+    startCampaignRedispatchJob(app.log);
 
     // R2 — AI report recommendations: ONE boot warning when the key is unprovisioned (the
     // wedooh-sync degradation pattern); every report gracefully keeps the generic pistes.

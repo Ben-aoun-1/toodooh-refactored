@@ -1,4 +1,4 @@
-import { and, eq, inArray, ne, sql } from 'drizzle-orm';
+import { and, eq, inArray, notInArray, sql } from 'drizzle-orm';
 
 import { type DrizzleDb } from '../../db/client.js';
 import {
@@ -28,8 +28,10 @@ import { buildWindowDays } from './window.js';
 // F-budget → R_eff → facturable capacity. The exclusions are the only additions:
 //   • excludeScreenhostIds — screenhosts removed from the candidates (the cascade excludes the
 //     refuser(s); E6 will exclude dead screens). Empty/absent = the original behavior.
-//   • excludeAllocationId — one allocation removed from the ENGAGEMENT netting (a refused/dead
-//     allocation will not air, so its seconds must not count). Absent = the original behavior.
+//   • excludeAllocationId / excludeAllocationIds — allocations removed from the ENGAGEMENT
+//     netting (a refused/dead allocation will not air, so its seconds must not count). Absent =
+//     the original behavior. (E6 passes the plural form for dead-screen allocations; belt-only
+//     when their screenhosts are candidate-excluded anyway, since netting is per-candidate.)
 
 // db or an open transaction — commit 2 (US-4.4) runs the assembly INSIDE the freeze tx under
 // per-screenhost advisory locks, so the executor is caller-supplied.
@@ -38,6 +40,7 @@ export type DbExecutor = DrizzleDb | Parameters<Parameters<DrizzleDb['transactio
 export interface AssemblePoolOpts {
   excludeScreenhostIds?: string[];
   excludeAllocationId?: string;
+  excludeAllocationIds?: string[];
   // US-4.4 — take a pg_advisory_xact_lock per candidate screenhost (SORTED ids — deadlock-free)
   // BEFORE reading engagement, so two allocating transactions over a shared screen serialize and
   // the second sees the first's committed engagement. Only meaningful when `executor` is an open
@@ -140,6 +143,10 @@ export const assemblePool = async (
         .from(screenhostAffluence)
         .where(inArray(screenhostAffluence.screenhostId, candidateIds))
     : [];
+  const excludedAllocationIds = [
+    ...(opts.excludeAllocationId === undefined ? [] : [opts.excludeAllocationId]),
+    ...(opts.excludeAllocationIds ?? []),
+  ];
   const engagementRows = candidateIds.length
     ? await executor
         .select({
@@ -153,11 +160,11 @@ export const assemblePool = async (
           eq(campaignDispatchAllocation.planId, campaignDispatchPlan.id),
         )
         .where(
-          opts.excludeAllocationId === undefined
+          excludedAllocationIds.length === 0
             ? inArray(campaignDispatchAllocation.screenhostId, candidateIds)
             : and(
                 inArray(campaignDispatchAllocation.screenhostId, candidateIds),
-                ne(campaignDispatchAllocation.id, opts.excludeAllocationId),
+                notInArray(campaignDispatchAllocation.id, excludedAllocationIds),
               ),
         )
     : [];
