@@ -19,10 +19,12 @@ import {
   screenhostMonthlyReports,
   screenhostMonthlyStats,
   screenhosts,
+  screens,
   users,
   zones,
 } from '../db/schema.js';
 import { runRefusalCascade } from '../lib/dispatch/cascade.js';
+import { REDISPATCH_HEARTBEAT_TOLERANCE_MS } from '../lib/dispatch/redispatch.js';
 import { buildEligibilityPatch } from '../lib/eligibility-patch.js';
 import { assembleReportData } from '../lib/report/assemble.js';
 import { pistesForReportCached } from '../lib/report/recommendations.js';
@@ -200,6 +202,50 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         ...wifiView(row),
         opening_hour: row.openingHour,
         closing_hour: row.closingHour,
+      })),
+    );
+  });
+
+  // CF-D1 — GET /api/screenhosts/screens: the caller's DEVICES across all their venues, with REAL
+  // liveness. `connected` uses THE ONE liveness truth (E6's REDISPATCH_HEARTBEAT_TOLERANCE_MS —
+  // last_seen_at refreshes on pairing, every HEARTBEAT and every proof): within the tolerance →
+  // connected; older or never-seen → not. Owner-scoped via the JOIN's WHERE (the WiFi-routes
+  // idiom); static route, so it cannot collide with the deeper /:id/* param routes. NO secrets in
+  // the payload — pairing codes/tokens never leave the device flow.
+  app.get('/api/screenhosts/screens', ownerGuard, async (request, reply) => {
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply
+        .status(401)
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+    }
+    const rows = await db
+      .select({
+        id: screens.id,
+        name: screens.name,
+        venueId: screenhosts.id,
+        venueName: screenhosts.name,
+        lastSeenAt: screens.lastSeenAt,
+        pairedAt: screens.pairedAt,
+        createdAt: screens.createdAt,
+      })
+      .from(screens)
+      .innerJoin(screenhosts, eq(screens.screenhostId, screenhosts.id))
+      .where(eq(screenhosts.ownerId, userId))
+      .orderBy(asc(screenhosts.name), asc(screens.name));
+    const now = Date.now();
+    return reply.status(200).send(
+      rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        venue_id: row.venueId,
+        venue_name: row.venueName,
+        last_seen_at: row.lastSeenAt,
+        connected:
+          row.lastSeenAt !== null &&
+          now - row.lastSeenAt.getTime() <= REDISPATCH_HEARTBEAT_TOLERANCE_MS,
+        paired_at: row.pairedAt,
+        created_at: row.createdAt,
       })),
     );
   });
