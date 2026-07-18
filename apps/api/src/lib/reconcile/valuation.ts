@@ -32,15 +32,19 @@ export interface AllocationInput {
 
 export interface AllocationValuation {
   screenhostId: string;
-  expectedImp: number; // Σ créneau.impressions
-  deliveredImp: number; // Σ impressions of DELIVERED créneaux
+  expectedImp: number; // Σ créneau.impressions (PHYSICAL — the créneaux unit)
+  deliveredImp: number; // Σ impressions of DELIVERED créneaux (PHYSICAL)
   manquementImp: number; // expected − delivered
-  earningsTnd: number; // round4(delivered_imp × cpm/1000) — the SH payable, the SOURCE OF TRUTH (FIX B)
+  earningsTnd: number; // round4(delivered_imp × T × cpm/1000) — the SH payable, SOURCE OF TRUTH (FIX B)
 }
 
-// Per-(campaign, screenhost): binary per créneau, valued on the potential. Earnings are the rounded
-// per-SH figure — NOTHING on the undiffused part.
-export const valueAllocation = (a: AllocationInput, cpm: number): AllocationValuation => {
+// Per-(campaign, screenhost): binary per créneau, valued on the potential. Earnings keep their
+// BASIS (each SH is paid only its DELIVERED créneaux — nothing on the undiffused part; a
+// defaulter's undelivered share stays unpaid, US-3.7's payment half). E6: the VALUE unit is
+// FACTURABLE (physical × the plan's frozen T) — the unit the advertiser is billed in, so the
+// campaign-level conservation identity holds in one currency. Pre-E1 plans carry T = 1.0 and are
+// numerically unchanged.
+export const valueAllocation = (a: AllocationInput, cpm: number, t = 1): AllocationValuation => {
   let expectedImp = 0;
   let deliveredImp = 0;
   for (const c of a.creneaux) {
@@ -52,14 +56,28 @@ export const valueAllocation = (a: AllocationInput, cpm: number): AllocationValu
     expectedImp,
     deliveredImp,
     manquementImp: expectedImp - deliveredImp,
-    earningsTnd: round4((deliveredImp * cpm) / 1000),
+    earningsTnd: round4((deliveredImp * t * cpm) / 1000),
   };
 };
+
+// E6 — the redispatch context the NET settlement needs. Defaults reproduce the pre-E6 math
+// exactly (t 1, no reliquat, nothing replaced), so pre-E6 callers/fixtures are untouched.
+export interface ReconcileNetOpts {
+  /** The plan's frozen attention index (t_tier_coef) — physical → facturable. */
+  t?: number;
+  /** The plan's CURRENT reliquat_stocke: promised volume never allocated NOR replaced. */
+  reliquatStockeFact?: number;
+  /** Σ over redispatch rounds of (placed_fact − reliquat_consumed_fact): the missed-sourced
+   * placements whose ORIGINAL créneaux still sit in the plan — the double-count the NET math
+   * removes so a replaced-and-delivered slot can never also be refunded. */
+  replacedMissedFact?: number;
+}
 
 export interface CampaignValuation {
   expectedImp: number;
   deliveredImp: number;
   manquementImp: number;
+  /** E6 — the NET loss value (gross missed facturable − replaced + stored reliquat), the refund gate. */
   pPerteTnd: number;
   refundTnd: number;
   spendTnd: number;
@@ -67,25 +85,42 @@ export interface CampaignValuation {
   perScreenhost: AllocationValuation[];
 }
 
-// Aggregate + apply B.4 with MONEY CONSERVATION (FIX B — per-SH rounded earnings are the single source
-// of truth, so the screencaster debit equals Σ screenhost earnings to the cent):
-//   budget  = expected_imp × cpm/1000
-//   P_perte = manquement_imp × cpm/1000                 (the gap value — drives the s_min threshold)
-//   refund  = P_perte ≥ s_min ? (budget − Σ earnings) : 0
-//   spend   = budget − refund
-// ⇒ PARTIAL (P_perte ≥ s_min): spend = Σ earnings EXACTLY (conserves). RÉUSSIE (sub-s_min gap): refund
-//   0, spend = budget — the platform keeps the recorded micro-gap. Snapshot cpm + s_min never recomputed.
+// Aggregate + apply B.4, NET (E6) and money-conserving (FIX B):
+//   gross_gap_fact = manquement_imp × T
+//   net_gap_fact   = max(0, gross_gap_fact − replaced_missed) + reliquat_stocke
+//   P_perte(NET)   = net_gap_fact × cpm/1000              — drives the S_min refund gate
+//   budget         = (expected_imp × T − replaced_missed + reliquat_stocke) × cpm/1000
+//                    (the ORIGINAL promise: redispatch additions live in expected, so the
+//                     replaced volume is deducted once; the stored crumb the advertiser bought is
+//                     added — never delivered, never replaced, it is in the gap BY CONSTRUCTION)
+//   refund         = P_perte ≥ s_min ? max(0, budget − Σ earnings) : 0
+//   spend          = budget − refund
+// CONSERVATION IDENTITY: spend = Σ payouts + (refund > 0 ? 0 : unrefunded net gap) — a refunding
+// settlement debits EXACTLY what the screenhosts earned; a RÉUSSIE keeps the sub-S_min net gap
+// with the platform. budget − Σ earnings ≡ the net gap value by algebra (expected − delivered =
+// manquement), so no slot is ever refunded twice: a replaced-and-delivered slot raises delivered
+// AND is deducted from the promise once.
 export const reconcileCampaign = (
   allocations: readonly AllocationInput[],
   cpm: number,
   sMin: number,
+  opts: ReconcileNetOpts = {},
 ): CampaignValuation => {
-  const perScreenhost = allocations.map((a) => valueAllocation(a, cpm));
+  const t = opts.t ?? 1;
+  const reliquatStockeFact = opts.reliquatStockeFact ?? 0;
+  const replacedMissedFact = opts.replacedMissedFact ?? 0;
+
+  const perScreenhost = allocations.map((a) => valueAllocation(a, cpm, t));
   const expectedImp = perScreenhost.reduce((sum, p) => sum + p.expectedImp, 0);
   const deliveredImp = perScreenhost.reduce((sum, p) => sum + p.deliveredImp, 0);
   const manquementImp = expectedImp - deliveredImp;
-  const pPerteTnd = round4((manquementImp * cpm) / 1000);
-  const budgetTnd = round4((expectedImp * cpm) / 1000);
+
+  const grossGapFact = manquementImp * t;
+  const netGapFact = Math.max(0, grossGapFact - replacedMissedFact) + reliquatStockeFact;
+  const pPerteTnd = round4((netGapFact * cpm) / 1000);
+  const budgetTnd = round4(
+    ((expectedImp * t - replacedMissedFact + reliquatStockeFact) * cpm) / 1000,
+  );
   const sumEarningsTnd = round4(perScreenhost.reduce((sum, p) => sum + p.earningsTnd, 0));
   // refund = budget − Σ earnings (NOT P_perte): makes spend == Σ earnings exactly for a PARTIAL.
   const refundTnd = pPerteTnd >= sMin ? Math.max(0, round4(budgetTnd - sumEarningsTnd)) : 0;

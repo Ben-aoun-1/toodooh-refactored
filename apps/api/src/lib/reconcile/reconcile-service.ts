@@ -6,6 +6,7 @@ import {
   type CampaignScreenhostPayout,
   campaignDispatchAllocation,
   campaignDispatchPlan,
+  campaignRedispatchRounds,
   campaignReconciliation,
   campaignScreenhostPayout,
 } from '../../db/schema.js';
@@ -63,12 +64,32 @@ export const reconcileCampaignById = async (
   // Delivered SLOTS per screenhost — the shared FIX A bucketing (binary per Tunis (date,hour)).
   const deliveredBySh = await loadDeliveredSlots(campaignId);
 
+  // E6 — the NET context: the plan's frozen T (physical → facturable), the CURRENT stored
+  // reliquat (never delivered, never replaced → part of the net gap by construction), and the
+  // rounds ledger's missed-sourced placements (the double-count the NET math removes — a
+  // replaced-and-delivered slot can never also be refunded).
+  const rounds = await db
+    .select({
+      placedFact: campaignRedispatchRounds.placedFact,
+      reliquatConsumedFact: campaignRedispatchRounds.reliquatConsumedFact,
+    })
+    .from(campaignRedispatchRounds)
+    .where(eq(campaignRedispatchRounds.campaignId, campaignId));
+  const replacedMissedFact = rounds.reduce(
+    (sum, r) => sum + Math.max(0, r.placedFact - r.reliquatConsumedFact),
+    0,
+  );
+
   const inputs: AllocationInput[] = allocations.map((a) => ({
     screenhostId: a.screenhostId,
     creneaux: a.creneaux.map((c) => ({ date: c.date, hour: c.hour, impressions: c.impressions })),
     deliveredSlots: deliveredBySh.get(a.screenhostId) ?? new Set<string>(),
   }));
-  const valuation = reconcileCampaign(inputs, cpm, sMin);
+  const valuation = reconcileCampaign(inputs, cpm, sMin, {
+    t: Number(plan.tTierCoef),
+    reliquatStockeFact: plan.reliquatStocke,
+    replacedMissedFact,
+  });
 
   const persisted = await db
     .transaction(async (tx) => {

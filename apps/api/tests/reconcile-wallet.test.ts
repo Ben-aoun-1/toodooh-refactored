@@ -99,7 +99,9 @@ const seed = async (): Promise<S> => {
       iCible: 20000,
       cpm: '10',
       sSpotSeconds: 10,
-      tTierCoef: '0.8',
+      // E6 — the valuation is now FACTURABLE (× the plan's T); this suite pins the wallet/route
+      // mechanics, so T is 1.0 here (numbers unchanged); the T-conversion is pinned in e6 suites.
+      tTierCoef: '1.0',
       seuilDiffusable: 1000,
       sMin: '10',
       gJour: '3.33',
