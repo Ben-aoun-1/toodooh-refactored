@@ -13,7 +13,8 @@ import { useEffect, useState, useMemo } from 'react';
 
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { useInvoices } from '@/features/wallet/hooks/useInvoices';
-import { generateInvoicePDF } from '@/features/wallet/services/invoice-pdf.service';
+import { type InvoiceRow, invoiceDesignation } from '@/features/wallet/lib/wallet-ledger';
+import { factureFilename, walletService } from '@/features/wallet/services/wallet.service';
 import { logger } from '@/lib/logger';
 
 const log = logger.child({ module: 'MyInvoices' });
@@ -30,9 +31,8 @@ export default function MyInvoices() {
     const q = search.toLowerCase();
     return invoices.filter(
       (f) =>
-        f.numero?.toLowerCase().includes(q) ||
-        f.description?.toLowerCase().includes(q) ||
-        f.campaign_name?.toLowerCase().includes(q),
+        f.numero.toLowerCase().includes(q) ||
+        invoiceDesignation(f.date_emission).toLowerCase().includes(q),
     );
   }, [invoices, search]);
 
@@ -46,28 +46,22 @@ export default function MyInvoices() {
     setCurrentPage(1);
   }, [search]);
 
-  // TODO(phase-1): typed source [supabase] — see #15
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleDownloadPDF = async (facture: any) => {
-    if (!user) return;
+  // CF-M1 — the facture is the SERVER's pdfkit render (bank-details block included), streamed
+  // owner-scoped from GET /api/recharges/:id/facture; the client-side jsPDF generator is deleted.
+  const handleDownloadPDF = async (facture: InvoiceRow) => {
     try {
-      await generateInvoicePDF(
-        {
-          id: facture.id,
-          numero: facture.numero,
-          montant: Number(facture.montant || 0),
-          date_emission: facture.date_emission || new Date(),
-          date_echeance: facture.date_echeance || null,
-          description: facture.description,
-          campaign_name: facture.campaign_name,
-          client_name: facture.client_name,
-          statut: facture.statut || 'payee',
-        },
-        user.id,
-      );
+      const blob = await walletService.downloadFacture(facture.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = factureFilename(facture.numero);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
     } catch (error) {
-      log.error({ error }, 'Erreur lors de la génération du PDF');
-      alert('Erreur lors de la génération du PDF. Veuillez réessayer.');
+      log.error({ error }, 'Erreur lors du téléchargement de la facture');
+      alert('Erreur lors du téléchargement de la facture. Veuillez réessayer.');
     }
   };
 
@@ -84,20 +78,6 @@ export default function MyInvoices() {
     new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
       amount,
     ) + ' TND';
-
-  // TODO(phase-1): typed source [supabase] — see #15
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const getDesignation = (f: any) => {
-    if (f.description) return f.description;
-    if (f.campaign_name) return f.campaign_name;
-    const d = f.date_emission ? new Date(f.date_emission) : null;
-    if (d) {
-      const month = d.toLocaleDateString('fr-FR', { month: 'long' });
-      const year = d.getFullYear();
-      return `Facture ${month.charAt(0).toUpperCase() + month.slice(1)} ${year}`;
-    }
-    return 'Facture';
-  };
 
   return (
     <div className="space-y-6">
@@ -160,12 +140,12 @@ export default function MyInvoices() {
                   >
                     <td className="px-5 py-4">
                       <p className="text-sm font-semibold text-gray-900">
-                        {getDesignation(facture)}
+                        {invoiceDesignation(facture.date_emission)}
                       </p>
                       <p className="text-xs text-gray-400 mt-0.5">{facture.numero}</p>
                     </td>
                     <td className="px-5 py-4 text-sm font-semibold text-gray-900">
-                      {formatCurrency(Number(facture.montant || 0))}
+                      {formatCurrency(facture.montant)}
                     </td>
                     <td className="px-5 py-4 text-sm text-gray-500">
                       {formatDate(facture.date_emission)}

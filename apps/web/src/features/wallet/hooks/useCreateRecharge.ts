@@ -1,49 +1,29 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { supabase } from '@/lib/supabase';
+import { type RechargeRow, walletService } from '@/features/wallet/services/wallet.service';
 
 import { walletKeys } from './queryKeys';
 
 export interface CreateRechargeInput {
   amount: number;
-  payment_method: string;
-  description: string;
 }
 
 /**
- * Creates a wallet recharge in `status: 'pending'` (awaiting admin
- * validation). A pending recharge is not yet reflected in the balance or
- * the completed-transactions ledger, so this is effectively a fire-and-
- * forget submission — the original handler ran no post-insert refetch.
- *
- * onSuccess still invalidates `walletKeys.transactions` so the ledger is
- * the correct invalidation target the day a recharge transitions to
- * `completed` (admin approval — Commit 7). It is a near-no-op today
- * (pending rows are filtered out of the ledger) and is the right
- * invalidation graph regardless. The balance-changing event is the
- * admin-side approval, not this creation — that cross-feature
- * (advertiserKeys.dashboardStats) invalidation belongs to Commit 7.
+ * CF-M1 — POST /api/recharges: creates a PENDING recharge (awaiting admin confirmation of the
+ * bank transfer) and resolves the created row, whose FCT- `reference` the page surfaces — that
+ * reference is the facture the advertiser wires against. Success invalidates the live wallet
+ * keys: the recharges list gains the pending row immediately; the balance is untouched until the
+ * admin confirms (kept in the graph so a stale read never survives the round-trip).
  */
 export function useCreateRecharge(userId: string | undefined) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: CreateRechargeInput) => {
-      const { error } = await supabase
-        .from('recharges')
-        .insert({
-          user_id: userId,
-          amount: input.amount,
-          payment_method: input.payment_method,
-          status: 'pending',
-          description: input.description,
-        })
-        .select()
-        .single();
-      if (error) throw error;
-    },
+    mutationFn: (input: CreateRechargeInput): Promise<RechargeRow> =>
+      walletService.createRecharge(input.amount),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: walletKeys.transactions(userId ?? '') });
+      void queryClient.invalidateQueries({ queryKey: walletKeys.recharges(userId ?? '') });
+      void queryClient.invalidateQueries({ queryKey: walletKeys.balance(userId ?? '') });
     },
   });
 }

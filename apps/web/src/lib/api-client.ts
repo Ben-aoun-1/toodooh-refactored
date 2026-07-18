@@ -113,6 +113,32 @@ async function request<T>(
   throw err;
 }
 
+/**
+ * GET a binary resource (CF-M1: the server-rendered facture PDF). Same base/credentials/error
+ * mapping as `request`, but resolves the raw Blob instead of parsing JSON.
+ */
+async function requestBlob(path: string, opts: RequestOptions = {}): Promise<Blob> {
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}${path}`, { method: 'GET', credentials: 'include' });
+  } catch {
+    throw new ApiError({ status: 0, code: 'NETWORK', message: '' });
+  }
+  if (res.ok) return res.blob();
+  let raw: unknown;
+  const text = await res.text().catch(() => '');
+  if (text) {
+    try {
+      raw = JSON.parse(text);
+    } catch {
+      raw = undefined;
+    }
+  }
+  const err = toApiError(res.status, raw, res.headers.get('x-request-id'));
+  if (res.status === 401 && !opts.skipAuthRedirect) unauthorizedHandler?.();
+  throw err;
+}
+
 export const apiClient = {
   /** Register the mid-session-401 handler (the store clears identity). Called once at store init. */
   onUnauthorized(fn: () => void): void {
@@ -120,6 +146,9 @@ export const apiClient = {
   },
   get<T>(path: string, opts?: RequestOptions): Promise<T> {
     return request<T>('GET', path, opts);
+  },
+  getBlob(path: string, opts?: RequestOptions): Promise<Blob> {
+    return requestBlob(path, opts);
   },
   post<T>(path: string, body?: unknown, opts?: RequestOptions): Promise<T> {
     return request<T>('POST', path, { ...opts, body });

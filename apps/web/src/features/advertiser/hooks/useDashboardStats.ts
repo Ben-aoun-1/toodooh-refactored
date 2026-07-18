@@ -1,13 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 
+import { walletService } from '@/features/wallet/services/wallet.service';
 import { logger } from '@/lib/logger';
-import { supabase } from '@/lib/supabase';
-import { balanceService } from '@/services/balance.service';
 
 import {
   computeDashboardStats,
   INITIAL_STATS,
   type DashboardStats,
+  type DashboardStatsCampaignRow,
   type DashboardStatsResult,
 } from './dashboard-stats.transform';
 import { advertiserKeys } from './queryKeys';
@@ -25,41 +25,38 @@ interface UseDashboardStatsResult {
 }
 
 /**
- * Fetches the campaign rows + wallet balance and runs the pure
- * `computeDashboardStats` transform. A campaign-fetch error is logged and
- * treated as an empty list; a balance-fetch error is logged and treated as
- * 0 — both mirror the pre-React-Query behavior. Only a genuinely unexpected
- * throw propagates to `query.error`.
+ * CF-M1 — the BALANCE leg is live: GET /api/wallet/balance (the derived confirmed balance) feeds
+ * `stats.balance` / `availableBalanceTnd`; a balance-fetch error is logged and treated as 0, as
+ * before. Focus-refetch 'always' (per-query override, D-Q escape hatch): an admin confirms
+ * recharges from another session, and the balance card must show the credit without a manual
+ * refresh.
+ *
+ * The CAMPAIGN stats legs (views/budget/year buckets) were Supabase reads — disabled in prod (the
+ * lazy client throws, so this whole query errored and every stat rendered 0). They now compute
+ * over an EMPTY list: identical rendered output, no dead client. De-Supabase backlog: a live
+ * source for views/budget aggregates (GET /api/campaigns/mine has requested_budget/status but no
+ * views) — see #15.
  */
-async function fetchDashboardStats(userId: string): Promise<DashboardStatsResult> {
-  const { data: campaigns, error: campaignsError } = await supabase
-    .from('campaigns')
-    .select('status, views, budget, created_at')
-    .eq('user_id', userId);
-
-  if (campaignsError) {
-    log.error({ campaignsError }, 'Error fetching campaigns');
-  }
+async function fetchDashboardStats(): Promise<DashboardStatsResult> {
+  const campaigns: DashboardStatsCampaignRow[] = [];
 
   let balance = 0;
   try {
-    const balanceInfo = await balanceService.getBalanceInfo(userId);
-    balance = balanceInfo
-      ? balanceInfo.available_balance
-      : await balanceService.getUserBalance(userId);
+    balance = (await walletService.getBalance()).balance_tnd;
   } catch (e) {
     log.error({ error: e }, 'Erreur récupération solde');
     balance = 0;
   }
 
-  return computeDashboardStats(campaigns || [], balance);
+  return computeDashboardStats(campaigns, balance);
 }
 
 export function useDashboardStats(userId: string | undefined): UseDashboardStatsResult {
   const query = useQuery({
     queryKey: advertiserKeys.dashboardStats(userId ?? ''),
-    queryFn: () => fetchDashboardStats(userId as string),
+    queryFn: () => fetchDashboardStats(),
     enabled: !!userId,
+    refetchOnWindowFocus: 'always',
   });
 
   return {

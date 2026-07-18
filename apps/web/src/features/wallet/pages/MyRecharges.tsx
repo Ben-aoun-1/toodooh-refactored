@@ -72,19 +72,6 @@ export default function MyRecharges() {
     setCurrentPage(1);
   }, [activeTab, searchQuery]);
 
-  const getMethodLabel = (method: string) => {
-    switch (method) {
-      case 'card':
-        return 'Carte bancaire';
-      case 'bank':
-        return 'Virement bancaire';
-      case 'cash':
-        return 'Espèces';
-      default:
-        return 'Autre';
-    }
-  };
-
   const handleQuickRecharge = (amount: number) => {
     setNewRecharge({ amount: amount.toString(), payment_method: 'card', description: '' });
     setShowNewRechargeModal(true);
@@ -103,13 +90,14 @@ export default function MyRecharges() {
 
     try {
       setSubmitting(true);
-      await createRecharge.mutateAsync({
+      // CF-M1 — the live API takes the amount only (bank-transfer flow; the facture carries the
+      // payment coordinates). The 201 row's FCT- reference is the advertiser's wire reference.
+      const created = await createRecharge.mutateAsync({
         amount: parseFloat(newRecharge.amount),
-        payment_method: newRecharge.payment_method,
-        description:
-          newRecharge.description || `Recharge ${getMethodLabel(newRecharge.payment_method)}`,
       });
-      toast.success('Recharge créée avec succès ! En attente de validation.');
+      toast.success(`Recharge créée — référence ${created.reference}. En attente de validation.`, {
+        duration: 6000,
+      });
       setNewRecharge({ amount: '', payment_method: 'card', description: '' });
       setShowNewRechargeModal(false);
     } catch (_error) {
