@@ -1,358 +1,86 @@
-import {
-  Monitor,
-  MapPin,
-  X,
-  Calendar,
-  AlertTriangle,
-  CheckCircle,
-  XCircle,
-  Eye,
-  Wrench,
-  Power,
-  Plus,
-  Search,
-  MoreVertical,
-  Info,
-  Bell,
-} from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { Calendar, MapPin, Monitor, Search, Wifi, WifiOff } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 import { useAuthStore } from '@/features/auth/stores/auth.store';
-import AddScreen from '@/features/screenhost/components/AddScreen';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
-import ScreenCalendar from '@/features/screenhost/components/ScreenCalendar';
-import { useOwnerScreensData } from '@/features/screens/hooks/useOwnerScreensData';
-import { useOwnerScreensMutations } from '@/features/screens/hooks/useOwnerScreensMutations';
-import type {
-  Screen,
-  ScreenStatus,
-  UnavailabilityPeriod,
-} from '@/features/screens/services/screens.service';
-import { logger } from '@/lib/logger';
+import { useOwnerDevices } from '@/features/screenhost/hooks/useOwnerDevices';
+import {
+  DEVICE_STATUS_LABELS,
+  type DeviceStatus,
+  deviceCounts,
+  deviceStatusOf,
+  groupByVenue,
+  lastSeenLabel,
+} from '@/features/screenhost/lib/device-liveness';
 
-const log = logger.child({ module: 'OwnerScreens' });
+/**
+ * CF-D1 — « Mes Écrans » on the LIVE api (GET /api/screenhosts/screens): the owner's devices per
+ * venue with REAL connectivity (server-computed against the E6 heartbeat tolerance — one liveness
+ * truth), replacing the dead Supabase screens surface. The old status enum
+ * (active/inactive/maintenance/unavailable), the unavailability modal, the auto-accept toggle and
+ * « Ajouter un écran » had no live backing: screens are GENERATED at owner approval and pair from
+ * the TV app; the indisponibilités calendar lives on its own page (E2's /owner-calendar-devices).
+ */
+const STATUS_BADGE: Record<DeviceStatus, string> = {
+  connected: 'bg-green-50 text-green-700 border border-green-200',
+  offline: 'bg-red-50 text-red-700 border border-red-200',
+  never: 'bg-gray-100 text-gray-600 border border-gray-200',
+};
 
-interface _RevenueStats {
-  totalRevenue: number;
-  monthlyRevenue: number;
-  activeScreens: number;
-  totalScreens: number;
-  loyaltyPoints: number;
-}
+const STATUS_DOT: Record<DeviceStatus, string> = {
+  connected: 'bg-green-500',
+  offline: 'bg-red-500',
+  never: 'bg-gray-400',
+};
+
+type StatusFilter = 'all' | DeviceStatus;
 
 export default function OwnerScreens() {
   const navigate = useNavigate();
   const { user, needsApproval, validationStatus } = useAuthStore();
   const isDisabled = needsApproval && validationStatus === 'pending';
-  const ownerScreensQuery = useOwnerScreensData();
-  const { toggleAutoAccept, removeUnavailabilityPeriod: removePeriodMutation } =
-    useOwnerScreensMutations();
-  const loading = ownerScreensQuery.loading;
-  const [screens, setScreens] = useState<Screen[]>([]);
-  const [selectedScreen, setSelectedScreen] = useState<Screen | null>(null);
-  const [showAddScreenModal, setShowAddScreenModal] = useState(false);
-  const [showStatusModal, setShowStatusModal] = useState(false);
-  const [showCalendar, setShowCalendar] = useState(false);
+  const { devices, loading, isError } = useOwnerDevices(user?.id);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<string>('name');
-  const [unavailabilityPeriods, setUnavailabilityPeriods] = useState<UnavailabilityPeriod[]>([]);
-  const [screenAutoAccept, setScreenAutoAccept] = useState<Map<string, boolean>>(new Map());
-  const [updatingScreen, setUpdatingScreen] = useState<string | null>(null);
-
-  // Local state mirrors seeded from the useOwnerScreensData React Query
-  // composite. INTENTIONAL Step-10 per-page exception to the invalidate-only
-  // policy: handleStatusChange / handleUnavailabilityAdded /
-  // updateScreenStatusInDatabase / the checkExpiredUnavailability interval are
-  // local-only (unpersisted) edits left untouched per Step 10 scope, so they
-  // need mutable local state. Persistent mutations invalidate screensKeys →
-  // the query refetches → this effect re-seeds the mirrors.
-  useEffect(() => {
-    if (ownerScreensQuery.data) {
-      setScreens(ownerScreensQuery.data.screens);
-      setUnavailabilityPeriods(ownerScreensQuery.data.unavailabilityPeriods);
-      setScreenAutoAccept(ownerScreensQuery.data.autoAccept);
-    }
-  }, [ownerScreensQuery.data]);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const now = new Date();
 
   useEffect(() => {
-    if (ownerScreensQuery.isError) toast.error('Erreur lors du chargement des écrans');
-  }, [ownerScreensQuery.isError]);
-
-  // useEffect séparé pour l'authentification
-  useEffect(() => {
-    if (!user) {
-      navigate('/login');
-    }
+    if (!user) navigate('/login');
   }, [user, navigate]);
 
-  // ✅ OPTIMISATION : useEffect pour le popup calendrier (inchangé)
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const openCalendar = urlParams.get('openCalendar');
+    if (isError) toast.error('Erreur lors du chargement des écrans');
+  }, [isError]);
 
-    if (openCalendar === 'true') {
-      setTimeout(() => {
-        setShowCalendar(true);
-        const newUrl = window.location.pathname;
-        window.history.replaceState({}, '', newUrl);
-      }, 500);
-    }
-  }, []);
+  const counts = useMemo(() => deviceCounts(devices), [devices]);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active':
-        return 'text-green-400 bg-green-500/20 border border-green-500/30';
-      case 'inactive':
-        return 'text-red-400 bg-red-500/20 border border-red-500/30';
-      case 'maintenance':
-        return 'text-yellow-400 bg-yellow-500/20 border border-yellow-500/30';
-      case 'unavailable':
-        return 'text-gray-400 bg-gray-500/20 border border-gray-500/30';
-      default:
-        return 'text-gray-400 bg-gray-500/20 border border-gray-500/30';
-    }
-  };
+  const filtered = useMemo(() => {
+    const term = searchTerm.toLowerCase();
+    return devices.filter((d) => {
+      const matchesTerm =
+        !term || d.name.toLowerCase().includes(term) || d.venue_name.toLowerCase().includes(term);
+      const matchesStatus = statusFilter === 'all' || deviceStatusOf(d) === statusFilter;
+      return matchesTerm && matchesStatus;
+    });
+  }, [devices, searchTerm, statusFilter]);
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'active':
-        return 'Actif';
-      case 'inactive':
-        return 'Inactif';
-      case 'maintenance':
-        return 'Maintenance';
-      case 'unavailable':
-        return 'Indisponible';
-      default:
-        return 'Inconnu';
-    }
-  };
+  const venues = useMemo(() => groupByVenue(filtered), [filtered]);
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'active':
-        return <CheckCircle className="h-4 w-4" />;
-      case 'maintenance':
-        return <Wrench className="h-4 w-4" />;
-      case 'inactive':
-        return <XCircle className="h-4 w-4" />;
-      case 'unavailable':
-        return <AlertTriangle className="h-4 w-4" />;
-      default:
-        return <Info className="h-4 w-4" />;
-    }
-  };
-
-  const handleToggleAutoAccept = async (screenId: string, currentValue: boolean) => {
-    try {
-      setUpdatingScreen(screenId);
-      const newValue = !currentValue;
-      // La mutation upsert screen_configurations puis invalide screensKeys
-      // → la query refetch → l'effet de synchronisation re-seede screenAutoAccept.
-      await toggleAutoAccept.mutateAsync({ screenId, newValue });
-      toast.success(
-        newValue ? 'Acceptation automatique activée' : 'Acceptation automatique désactivée',
-      );
-    } catch (_error) {
-      toast.error('Erreur lors de la mise à jour de la configuration');
-    } finally {
-      setUpdatingScreen(null);
-    }
-  };
-
-  const handleStatusChange = async (
-    screenId: string,
-    newStatus: ScreenStatus,
-    _reason?: string,
-  ) => {
-    try {
-      // Appeler le service pour mettre à jour en base de données
-
-      // Mettre à jour l'état local
-      setScreens((prev) =>
-        prev.map((screen) => {
-          if (screen.id === screenId) {
-            return {
-              ...screen,
-              status: newStatus,
-            };
-          }
-          return screen;
-        }),
-      );
-
-      toast.success(`Statut de l'écran mis à jour`);
-      setShowStatusModal(false);
-    } catch (_error) {
-      toast.error('Erreur lors de la mise à jour du statut');
-    }
-  };
-
-  const handleUnavailabilityAdded = async (period: UnavailabilityPeriod) => {
-    try {
-      setUnavailabilityPeriods((prev) => [...prev, period]);
-
-      // Mettre à jour le statut de l'écran si la période est en cours
-      const now = new Date();
-      const periodStart = new Date(`${period.start_date}T${period.start_time}`);
-      const periodEnd = new Date(`${period.end_date}T${period.end_time}`);
-
-      if (now >= periodStart && now <= periodEnd) {
-        // Mettre à jour en base de données
-
-        // Mettre à jour l'état local
-        setScreens((prev) =>
-          prev.map((screen) => {
-            if (screen.id === period.screen_id) {
-              return {
-                ...screen,
-                status: 'unavailable',
-              };
-            }
-            return screen;
-          }),
-        );
-      }
-    } catch (_error) {
-      toast.error('Erreur lors de la mise à jour du statut');
-    }
-  };
-
-  const removeUnavailabilityPeriod = async (periodId: string) => {
-    try {
-      // La mutation supprime puis invalide screensKeys → refetch → re-seed.
-      await removePeriodMutation.mutateAsync(periodId);
-      toast.success("Période d'indisponibilité supprimée");
-    } catch (_error) {
-      toast.error('Erreur lors de la suppression de la période');
-    }
-  };
-
-  // Fonction pour mettre à jour le statut d'un écran en base de données
-  const updateScreenStatusInDatabase = async (_screenId: string, _newStatus: ScreenStatus) => {
-    try {
-      return true;
-    } catch (error) {
-      log.error({ error }, '❌ Erreur lors de la mise à jour du statut');
-      return false;
-    }
-  };
-
-  // Vérifier automatiquement les périodes d'indisponibilité expirées
-  useEffect(() => {
-    const checkExpiredUnavailability = () => {
-      const now = new Date();
-
-      setUnavailabilityPeriods((prev) =>
-        prev.map((period) => {
-          const periodStart = new Date(`${period.start_date}T${period.start_time}`);
-          const periodEnd = new Date(`${period.end_date}T${period.end_time}`);
-
-          // Si la période est expirée, la marquer comme terminée
-          if (now > periodEnd && period.status !== 'completed') {
-            // Remettre l'écran en statut actif si il était indisponible
-            setScreens((prevScreens) =>
-              prevScreens.map((screen) => {
-                if (screen.id === period.screen_id && screen.status === 'unavailable') {
-                  // Mettre à jour en base de données de manière asynchrone
-                  updateScreenStatusInDatabase(screen.id, 'active').then((success) => {
-                    if (success) {
-                      toast.success(
-                        `L'écran "${screen.name}" est maintenant disponible pour diffuser des annonces`,
-                      );
-                    }
-                  });
-
-                  return {
-                    ...screen,
-                    status: 'active',
-                  };
-                }
-                return screen;
-              }),
-            );
-
-            return { ...period, status: 'completed' as const };
-          }
-
-          // Si la période est en cours, la marquer comme active
-          if (now >= periodStart && now <= periodEnd && period.status === 'pending') {
-            // Marquer l'écran comme indisponible
-            setScreens((prevScreens) =>
-              prevScreens.map((screen) => {
-                if (screen.id === period.screen_id) {
-                  // Mettre à jour en base de données de manière asynchrone
-                  updateScreenStatusInDatabase(screen.id, 'unavailable').then((success) => {
-                    if (success) {
-                      toast.success(
-                        `L'écran "${screen.name}" est maintenant indisponible (${period.reason})`,
-                      );
-                    }
-                  });
-
-                  return {
-                    ...screen,
-                    status: 'unavailable',
-                  };
-                }
-                return screen;
-              }),
-            );
-
-            return { ...period, status: 'active' as const };
-          }
-
-          return period;
-        }),
-      );
-    };
-
-    // Vérifier immédiatement
-    checkExpiredUnavailability();
-
-    // Vérifier toutes les minutes
-    const interval = setInterval(checkExpiredUnavailability, 60000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  const filteredScreens = screens.filter((screen) => {
-    const matchesSearch =
-      screen.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      screen.location.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || screen.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
-
-  const sortedScreens = [...filteredScreens].sort((a, b) => {
-    switch (sortBy) {
-      case 'name':
-        return a.name.localeCompare(b.name);
-      case 'status':
-        return a.status.localeCompare(b.status);
-      case 'revenue':
-        return b.monthly_revenue - a.monthly_revenue;
-      case 'lastActivity':
-        return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
-      default:
-        return 0;
-    }
-  });
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-brand-primary mx-auto mb-4"></div>
-          <p className="text-gray-600">Chargement...</p>
-        </div>
-      </div>
-    );
-  }
+  const filterChip = (key: StatusFilter, label: string, count: number) => (
+    <button
+      key={key}
+      onClick={() => setStatusFilter(key)}
+      className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+        statusFilter === key
+          ? 'bg-gray-900 text-white'
+          : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+      }`}
+    >
+      {label} ({count})
+    </button>
+  );
 
   return (
     <div className="min-h-screen bg-white">
@@ -367,48 +95,28 @@ export default function OwnerScreens() {
                 <div className="flex items-center space-x-4">
                   <div>
                     <h1 className="text-2xl font-bold text-gray-900">Mes Écrans</h1>
-                    <p className="text-sm text-gray-600 mt-1">Gérez et suivez vos écrans</p>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Suivez la connexion de vos écrans en temps réel
+                    </p>
                   </div>
                   <span className="px-3 py-1 text-sm font-medium bg-brand-primary/10 text-brand-primary border border-brand-primary/20 rounded-full">
-                    {screens.length} écran{screens.length > 1 ? 's' : ''}
+                    {devices.length} écran{devices.length > 1 ? 's' : ''}
                   </span>
                 </div>
-
-                {/* Notifications */}
-                <div className="flex items-center space-x-4">
-                  <button className="p-2 rounded-lg hover:bg-gray-100 transition-colors relative text-gray-600">
-                    <Bell className="h-6 w-6" />
-                    <span className="absolute -top-1 -right-1 h-5 w-5 bg-red-500 text-gray-900 text-xs rounded-full flex items-center justify-center">
-                      2
-                    </span>
-                  </button>
-                </div>
+                <button
+                  onClick={() => navigate('/owner-calendar-devices')}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2 text-sm font-medium"
+                >
+                  <Calendar className="h-4 w-4" />
+                  <span>Calendrier des indisponibilités</span>
+                </button>
               </div>
             </div>
           </header>
 
           <div className="flex-1 overflow-y-auto">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-              {/* Boutons d'action */}
-              <div className="flex justify-between items-center mb-6">
-                <button
-                  onClick={() => setShowCalendar(true)}
-                  className="px-4 py-2 bg-[#E94E77] text-gray-900 rounded-lg hover:bg-[#E94E77]/90 transition-colors flex items-center space-x-2"
-                >
-                  <Calendar className="h-4 w-4" />
-                  <span>Calendrier des Indisponibilités</span>
-                </button>
-
-                <button
-                  onClick={() => setShowAddScreenModal(true)}
-                  className="px-4 py-2 bg-brand-primary text-gray-900 rounded-lg hover:bg-brand-primary/80 transition-colors flex items-center space-x-2"
-                >
-                  <Plus className="h-4 w-4" />
-                  <span>Ajouter un écran</span>
-                </button>
-              </div>
-
-              {/* Filtres et recherche */}
+              {/* Recherche + filtres de connexion */}
               <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200 mb-8">
                 <div className="flex flex-col md:flex-row gap-4">
                   <div className="flex-1">
@@ -416,559 +124,114 @@ export default function OwnerScreens() {
                       <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                       <input
                         type="text"
-                        placeholder="Rechercher un écran..."
+                        placeholder="Rechercher un écran ou un établissement..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="w-full pl-10 pr-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
                       />
                     </div>
                   </div>
-
-                  <div className="flex gap-2">
-                    {/* Boutons de filtres pour les statuts */}
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => setStatusFilter('all')}
-                        className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                          statusFilter === 'all'
-                            ? 'bg-brand-primary text-gray-900'
-                            : 'bg-white/10 text-gray-700 hover:bg-gray-100'
-                        }`}
-                      >
-                        Tous
-                      </button>
-                      <button
-                        onClick={() => setStatusFilter('active')}
-                        className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-1 ${
-                          statusFilter === 'active'
-                            ? 'bg-green-500/30 text-green-400 border border-green-500/50'
-                            : 'bg-white/10 text-gray-700 hover:bg-gray-100'
-                        }`}
-                      >
-                        <CheckCircle className="h-4 w-4" />
-                        <span>Actif</span>
-                      </button>
-                      <button
-                        onClick={() => setStatusFilter('maintenance')}
-                        className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-1 ${
-                          statusFilter === 'maintenance'
-                            ? 'bg-yellow-500/30 text-yellow-400 border border-yellow-500/50'
-                            : 'bg-white/10 text-gray-700 hover:bg-gray-100'
-                        }`}
-                      >
-                        <Wrench className="h-4 w-4" />
-                        <span>Maintenance</span>
-                      </button>
-                      <button
-                        onClick={() => setStatusFilter('inactive')}
-                        className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-1 ${
-                          statusFilter === 'inactive'
-                            ? 'bg-red-500/30 text-red-400 border border-red-500/50'
-                            : 'bg-white/10 text-gray-700 hover:bg-gray-100'
-                        }`}
-                      >
-                        <XCircle className="h-4 w-4" />
-                        <span>Inactif</span>
-                      </button>
-                      <button
-                        onClick={() => setStatusFilter('unavailable')}
-                        className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-1 ${
-                          statusFilter === 'unavailable'
-                            ? 'bg-gray-500/30 text-gray-400 border border-gray-500/50'
-                            : 'bg-white/10 text-gray-700 hover:bg-gray-100'
-                        }`}
-                      >
-                        <AlertTriangle className="h-4 w-4" />
-                        <span>Indisponible</span>
-                      </button>
-                    </div>
-
-                    <select
-                      value={sortBy}
-                      onChange={(e) => setSortBy(e.target.value)}
-                      className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
-                    >
-                      <option value="name" className="bg-white text-gray-900">
-                        Trier par nom
-                      </option>
-                      <option value="status" className="bg-white text-gray-900">
-                        Trier par statut
-                      </option>
-                      <option value="revenue" className="bg-white text-gray-900">
-                        Trier par revenus
-                      </option>
-                      <option value="lastActivity" className="bg-white text-gray-900">
-                        Trier par activité
-                      </option>
-                    </select>
+                  <div className="flex gap-2 flex-wrap">
+                    {filterChip('all', 'Tous', devices.length)}
+                    {filterChip('connected', DEVICE_STATUS_LABELS.connected, counts.connected)}
+                    {filterChip('offline', DEVICE_STATUS_LABELS.offline, counts.offline)}
+                    {filterChip('never', DEVICE_STATUS_LABELS.never, counts.never)}
                   </div>
                 </div>
               </div>
 
-              {/* Périodes d'indisponibilité actives et programmées */}
-              {statusFilter === 'unavailable' &&
-                unavailabilityPeriods.filter((p) => p.status !== 'completed').length > 0 && (
-                  <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200 mb-8">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                      <AlertTriangle className="h-5 w-5 mr-2 text-yellow-400" />
-                      Périodes d'Indisponibilité
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {unavailabilityPeriods
-                        .filter((period) => period.status !== 'completed')
-                        .map((period) => {
-                          const now = new Date();
-                          const periodStart = new Date(`${period.start_date}T${period.start_time}`);
-                          const periodEnd = new Date(`${period.end_date}T${period.end_time}`);
-                          const isActive = now >= periodStart && now <= periodEnd;
-                          const isPending = now < periodStart;
-                          const screen = screens.find((s) => s.id === period.screen_id);
-
+              {/* Écrans par établissement */}
+              {loading ? (
+                <div className="p-16 flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-primary"></div>
+                </div>
+              ) : venues.length === 0 ? (
+                <div className="p-16 text-center">
+                  <Monitor className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+                  <p className="text-sm text-gray-500">
+                    {devices.length === 0
+                      ? 'Aucun écran pour le moment — vos écrans apparaissent ici dès la validation de votre compte.'
+                      : 'Aucun écran ne correspond à votre recherche.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-8">
+                  {venues.map((venue) => (
+                    <section key={venue.venueId}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <MapPin className="h-4 w-4 text-gray-400" />
+                        <h2 className="text-base font-bold text-gray-900">{venue.venueName}</h2>
+                        <span className="text-xs text-gray-400">
+                          {venue.devices.length} écran{venue.devices.length > 1 ? 's' : ''}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {venue.devices.map((device) => {
+                          const status = deviceStatusOf(device);
                           return (
                             <div
-                              key={period.id}
-                              className={`p-4 rounded-lg border ${
-                                isActive
-                                  ? 'bg-red-500/10 border-red-500/30'
-                                  : 'bg-yellow-500/10 border-yellow-500/30'
-                              }`}
+                              key={device.id}
+                              className="bg-white rounded-xl border border-gray-200 shadow-sm p-5"
                             >
-                              <div className="flex items-start justify-between mb-2">
-                                <h4 className="font-medium text-gray-900">
-                                  {screen?.name || 'Écran'}
-                                </h4>
-                                <div className="flex items-center space-x-2">
-                                  <span
-                                    className={`text-xs px-2 py-1 rounded-full ${
-                                      isActive
-                                        ? 'bg-red-500/30 text-red-200'
-                                        : 'bg-yellow-500/30 text-yellow-200'
+                              <div className="flex items-start justify-between gap-3 mb-3">
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <div
+                                    className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                                      status === 'connected' ? 'bg-green-50' : 'bg-gray-100'
                                     }`}
                                   >
-                                    {isActive ? 'En cours' : 'Programmé'}
-                                  </span>
-                                  {isPending && (
-                                    <button
-                                      onClick={() => removeUnavailabilityPeriod(period.id)}
-                                      className="text-red-400 hover:text-red-300 transition-colors"
-                                      title="Supprimer cette période"
-                                    >
-                                      <X className="h-3 w-3" />
-                                    </button>
-                                  )}
+                                    {status === 'connected' ? (
+                                      <Wifi className="h-5 w-5 text-green-600" />
+                                    ) : (
+                                      <WifiOff className="h-5 w-5 text-gray-400" />
+                                    )}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <h3 className="text-sm font-bold text-gray-900 truncate">
+                                      {device.name}
+                                    </h3>
+                                    <p className="text-xs text-gray-500 truncate">
+                                      {device.venue_name}
+                                    </p>
+                                  </div>
                                 </div>
+                                <span
+                                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium flex-shrink-0 ${STATUS_BADGE[status]}`}
+                                >
+                                  <span
+                                    className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[status]}`}
+                                  />
+                                  {DEVICE_STATUS_LABELS[status]}
+                                </span>
                               </div>
-                              <p className="text-sm text-gray-600 mb-2">{period.reason}</p>
                               <div className="text-xs text-gray-500 space-y-1">
-                                <div>
-                                  Du: {new Date(period.start_date).toLocaleDateString('fr-FR')} à{' '}
-                                  {period.start_time}
-                                </div>
-                                <div>
-                                  Au: {new Date(period.end_date).toLocaleDateString('fr-FR')} à{' '}
-                                  {period.end_time}
-                                </div>
+                                {status === 'offline' && device.last_seen_at && (
+                                  <p className="text-red-600 font-medium">
+                                    {lastSeenLabel(device.last_seen_at, now)}
+                                  </p>
+                                )}
+                                {status === 'never' && (
+                                  <p>En attente du premier appairage de l’écran.</p>
+                                )}
+                                {device.paired_at && (
+                                  <p>
+                                    Appairé le{' '}
+                                    {new Date(device.paired_at).toLocaleDateString('fr-FR')}
+                                  </p>
+                                )}
                               </div>
                             </div>
                           );
                         })}
-                    </div>
-                  </div>
-                )}
-
-              {/* Liste des écrans */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                {sortedScreens.map((screen) => (
-                  <div
-                    key={screen.id}
-                    className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1"
-                  >
-                    {/* En-tête de l'écran */}
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex-1">
-                        <h3 className="text-lg font-bold text-gray-900 mb-1">{screen.name}</h3>
-                        <div className="flex items-center text-gray-600 text-sm mb-2">
-                          <MapPin className="h-4 w-4 mr-1" />
-                          {screen.location}
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <span
-                            className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(screen.status)}`}
-                          >
-                            {getStatusIcon(screen.status)}
-                            <span className="ml-1">{getStatusText(screen.status)}</span>
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            Dernière sync: {new Date(screen.updated_at).toLocaleString('fr-FR')}
-                          </span>
-                        </div>
                       </div>
-
-                      <div className="relative">
-                        <button className="p-2 rounded-lg hover:bg-white/10 transition-colors text-gray-900">
-                          <MoreVertical className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Statistiques */}
-                    <div className="grid grid-cols-2 gap-4 mb-4">
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-gray-900">
-                          {screen.monthly_revenue.toLocaleString('fr-TN', {
-                            style: 'currency',
-                            currency: 'TND',
-                          })}
-                        </p>
-                        <p className="text-xs text-gray-500">Revenus</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-2xl font-bold text-gray-900">
-                          {unavailabilityPeriods.filter((p) => p.screen_id === screen.id).length}
-                        </p>
-                        <p className="text-xs text-gray-500">Périodes d'indisponibilité</p>
-                      </div>
-                    </div>
-
-                    {/* Configuration acceptation automatique */}
-                    <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-gray-900">
-                            Acceptation des campagnes
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {screenAutoAccept.get(screen.id) ? 'Automatique' : 'Manuelle'}
-                          </p>
-                        </div>
-                        <button
-                          onClick={() =>
-                            handleToggleAutoAccept(
-                              screen.id,
-                              screenAutoAccept.get(screen.id) || false,
-                            )
-                          }
-                          disabled={updatingScreen === screen.id}
-                          className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-brand-primary focus:ring-offset-2 ${
-                            screenAutoAccept.get(screen.id) ? 'bg-brand-primary' : 'bg-gray-200'
-                          } ${updatingScreen === screen.id ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        >
-                          <span
-                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                              screenAutoAccept.get(screen.id) ? 'translate-x-5' : 'translate-x-0'
-                            }`}
-                          />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => setSelectedScreen(screen)}
-                        className="flex-1 px-3 py-2 bg-brand-primary/20 text-brand-primary rounded-lg hover:bg-brand-primary/30 transition-colors text-sm font-medium flex items-center justify-center"
-                      >
-                        <Eye className="h-4 w-4 mr-1" />
-                        Détails
-                      </button>
-
-                      {screen.status === 'active' && (
-                        <button
-                          onClick={() => {
-                            setSelectedScreen(screen);
-                            setShowStatusModal(true);
-                          }}
-                          className="px-3 py-2 bg-yellow-500/20 text-yellow-400 rounded-lg hover:bg-yellow-500/30 transition-colors text-sm font-medium"
-                        >
-                          <Wrench className="h-4 w-4" />
-                        </button>
-                      )}
-
-                      {screen.status === 'maintenance' && (
-                        <button
-                          onClick={() => handleStatusChange(screen.id, 'active')}
-                          className="px-3 py-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30 transition-colors text-sm font-medium"
-                        >
-                          <Power className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {sortedScreens.length === 0 && (
-                <div className="text-center py-12">
-                  <Monitor className="h-12 w-12 text-gray-900/40 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-500 mb-2">Aucun écran trouvé</h3>
-                  <p className="text-gray-900/40">
-                    Aucun écran ne correspond à vos critères de recherche.
-                  </p>
+                    </section>
+                  ))}
                 </div>
               )}
             </div>
           </div>
         </div>
       </div>
-
-      {/* Modal de détails d'écran */}
-      {selectedScreen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b">
-              <div className="flex items-center space-x-3">
-                <Monitor className="h-6 w-6 text-brand-primary" />
-                <h2 className="text-xl font-bold text-gray-900">{selectedScreen.name}</h2>
-              </div>
-              <button
-                onClick={() => setSelectedScreen(null)}
-                className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-              >
-                <XCircle className="h-5 w-5 text-gray-600" />
-              </button>
-            </div>
-
-            {/* Content */}
-            <div className="p-6">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Informations générales */}
-                <div className="space-y-4">
-                  <div className="bg-gray-50 rounded-xl p-4">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                      Informations générales
-                    </h3>
-                    <div className="space-y-2">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Localisation:</span>
-                        <span className="text-gray-900">{selectedScreen.location}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Statut:</span>
-                        <span
-                          className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(selectedScreen.status)}`}
-                        >
-                          {getStatusIcon(selectedScreen.status)}
-                          <span className="ml-1">{getStatusText(selectedScreen.status)}</span>
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Dernière sync:</span>
-                        <span className="text-gray-900">
-                          {new Date(selectedScreen.updated_at).toLocaleString('fr-FR')}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-600">Revenus totaux:</span>
-                        <span className="text-gray-900 font-semibold">
-                          {selectedScreen.total_revenue.toLocaleString('fr-TN', {
-                            style: 'currency',
-                            currency: 'TND',
-                          })}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Périodes d'indisponibilité */}
-                  <div className="bg-gray-50 rounded-xl p-4">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                      Périodes d'indisponibilité
-                    </h3>
-                    {unavailabilityPeriods.filter((p) => p.screen_id === selectedScreen.id).length >
-                    0 ? (
-                      <div className="space-y-2">
-                        {unavailabilityPeriods
-                          .filter((p) => p.screen_id === selectedScreen.id)
-                          .slice(0, 5)
-                          .map((period) => (
-                            <div
-                              key={period.id}
-                              className="bg-white rounded-lg p-3 border border-gray-200"
-                            >
-                              <div className="flex justify-between items-start mb-1">
-                                <span className="text-sm font-medium text-gray-900">
-                                  {period.reason}
-                                </span>
-                                <span
-                                  className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded-full ${
-                                    period.status === 'active'
-                                      ? 'text-green-400 bg-green-500/20 border border-green-500/30'
-                                      : period.status === 'pending'
-                                        ? 'text-yellow-400 bg-yellow-500/20 border border-yellow-500/30'
-                                        : 'text-gray-400 bg-gray-500/20 border border-gray-500/30'
-                                  }`}
-                                >
-                                  {period.status === 'active'
-                                    ? 'Actif'
-                                    : period.status === 'pending'
-                                      ? 'En attente'
-                                      : 'Terminé'}
-                                </span>
-                              </div>
-                              <div className="text-xs text-gray-600">
-                                {new Date(period.start_date).toLocaleDateString('fr-FR')} -{' '}
-                                {new Date(period.end_date).toLocaleDateString('fr-FR')}
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                {period.start_time} - {period.end_time}
-                              </div>
-                            </div>
-                          ))}
-                      </div>
-                    ) : (
-                      <p className="text-gray-500 text-center py-4">
-                        Aucune période d'indisponibilité
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Actions rapides */}
-                <div className="space-y-4">
-                  <div className="bg-gray-50 rounded-xl p-4">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Actions rapides</h3>
-                    <div className="space-y-3">
-                      <button
-                        onClick={() => {
-                          setSelectedScreen(null);
-                          setShowCalendar(true);
-                        }}
-                        className="w-full p-3 bg-[#E94E77]/10 text-[#E94E77] rounded-lg hover:bg-[#E94E77]/20 transition-colors text-left flex items-center"
-                      >
-                        <Calendar className="h-5 w-5 mr-3" />
-                        <div>
-                          <div className="font-medium">Déclarer indisponibilité</div>
-                          <div className="text-sm text-[#E94E77]/80">
-                            Planifier une période d'indisponibilité
-                          </div>
-                        </div>
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          setSelectedScreen(null);
-                          setShowStatusModal(true);
-                        }}
-                        className="w-full p-3 bg-yellow-500/20 text-yellow-400 rounded-lg hover:bg-yellow-500/30 transition-colors text-left flex items-center"
-                      >
-                        <Wrench className="h-5 w-5 mr-3" />
-                        <div>
-                          <div className="font-medium">Changer le statut</div>
-                          <div className="text-sm text-yellow-400/80">
-                            Modifier le statut de l'écran
-                          </div>
-                        </div>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="flex justify-end space-x-3 mt-6 pt-6 border-t border-white/20">
-                <button
-                  onClick={() => setSelectedScreen(null)}
-                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-                >
-                  Fermer
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal de changement de statut */}
-      {showStatusModal && selectedScreen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
-            {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b">
-              <div className="flex items-center space-x-3">
-                <Wrench className="h-6 w-6 text-brand-primary" />
-                <h2 className="text-xl font-bold text-gray-900">Changer le statut de l'écran</h2>
-              </div>
-              <button
-                onClick={() => setShowStatusModal(false)}
-                className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-              >
-                <XCircle className="h-5 w-5 text-gray-600" />
-              </button>
-            </div>
-
-            {/* Content */}
-            <div className="p-6">
-              <p className="text-gray-600 mb-6">Écran: {selectedScreen.name}</p>
-
-              <div className="space-y-3 mb-6">
-                <button
-                  onClick={() => handleStatusChange(selectedScreen.id, 'active')}
-                  className="w-full p-3 bg-white border-2 border-green-500 text-green-700 rounded-lg hover:bg-green-50 transition-colors text-left flex items-center"
-                >
-                  <CheckCircle className="h-5 w-5 mr-3" />
-                  <div>
-                    <div className="font-medium">Actif</div>
-                    <div className="text-sm text-green-600">Écran opérationnel</div>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() =>
-                    handleStatusChange(selectedScreen.id, 'maintenance', 'Maintenance préventive')
-                  }
-                  className="w-full p-3 bg-white border-2 border-orange-500 text-orange-700 rounded-lg hover:bg-orange-50 transition-colors text-left flex items-center"
-                >
-                  <Wrench className="h-5 w-5 mr-3" />
-                  <div>
-                    <div className="font-medium">Maintenance</div>
-                    <div className="text-sm text-orange-600">Écran en maintenance</div>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => handleStatusChange(selectedScreen.id, 'inactive', 'Hors service')}
-                  className="w-full p-3 bg-white border-2 border-red-500 text-red-700 rounded-lg hover:bg-red-50 transition-colors text-left flex items-center"
-                >
-                  <XCircle className="h-5 w-5 mr-3" />
-                  <div>
-                    <div className="font-medium">Inactif</div>
-                    <div className="text-sm text-red-600">Écran hors service</div>
-                  </div>
-                </button>
-              </div>
-
-              <div className="flex justify-end space-x-3">
-                <button
-                  onClick={() => setShowStatusModal(false)}
-                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-                >
-                  Annuler
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal du calendrier */}
-      {showCalendar && (
-        <ScreenCalendar
-          screens={screens}
-          onUnavailabilityAdded={handleUnavailabilityAdded}
-          onClose={() => setShowCalendar(false)}
-        />
-      )}
-
-      {/* Modal d'ajout d'écran */}
-      <AddScreen
-        isOpen={showAddScreenModal}
-        onClose={() => setShowAddScreenModal(false)}
-        onScreenAdded={() => {
-          // useCreateScreen invalide screensKeys → la query refetch toute seule.
-          setShowAddScreenModal(false);
-        }}
-      />
     </div>
   );
 }

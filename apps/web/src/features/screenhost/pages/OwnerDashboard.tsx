@@ -1,6 +1,4 @@
-import { useQueryClient } from '@tanstack/react-query';
 import {
-  Plus,
   AlertTriangle,
   CheckCircle,
   Banknote,
@@ -23,18 +21,22 @@ import { useOwnerBusinessSectors } from '@/features/auth/hooks/useOwnerBusinessS
 import { useSectors } from '@/features/auth/hooks/useSectors';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { useOwnerCampaignApprovals } from '@/features/campaigns/hooks/useOwnerCampaignApprovals';
-import AddScreen from '@/features/screenhost/components/AddScreen';
 import { OwnerAffluenceSection } from '@/features/screenhost/components/OwnerAffluenceSection';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
 import OwnerNotificationsBell from '@/features/screenhost/components/OwnerNotificationsBell';
+import { useOwnerDevices } from '@/features/screenhost/hooks/useOwnerDevices';
+import {
+  DEVICE_STATUS_LABELS,
+  type DeviceStatus,
+  deviceCounts,
+  deviceStatusOf,
+} from '@/features/screenhost/lib/device-liveness';
+import type { OwnerDeviceRow } from '@/features/screenhost/services/owner-devices.service';
 import {
   hasOwnerBankDetails,
   hasOwnerLegalDocument,
   hideOwnerGettingStarted,
 } from '@/features/screenhost/utils/ownerGettingStarted';
-import { useScreens } from '@/features/screens/hooks/useScreens';
-import type { Screen } from '@/features/screens/services/screens.service';
-import { walletKeys } from '@/features/wallet/hooks/queryKeys';
 import { useRevenueStats } from '@/features/wallet/hooks/useRevenue';
 import type { RevenueStats } from '@/features/wallet/services/revenue.service';
 
@@ -74,7 +76,6 @@ const EMPTY_REVENUE_STATS: RevenueStats = {
 export default function OwnerDashboard() {
   const navigate = useNavigate();
   const { user, needsApproval, validationStatus } = useAuthStore();
-  const queryClient = useQueryClient();
 
   // Fonction pour déterminer si les fonctionnalités sont désactivées
   const isDisabled = needsApproval && validationStatus === 'pending';
@@ -83,7 +84,6 @@ export default function OwnerDashboard() {
   const [_accountStatus, _setAccountStatus] = useState<'active' | 'pending' | 'suspended'>(
     'active',
   );
-  const [showAddScreen, setShowAddScreen] = useState(false);
   const [selectedEstablishment, setSelectedEstablishment] = useState<string | null>(null);
 
   const { profile, loading: profileLoading, error: profileError } = useBusinessProfile(user?.id);
@@ -92,7 +92,9 @@ export default function OwnerDashboard() {
   // it must be resolved against owner sectors first (advertiser `sectors` is only a fallback) —
   // mirrors the OwnerSettings precedent. Resolving against advertiser sectors alone left it blank.
   const { data: ownerSectors } = useOwnerBusinessSectors();
-  const { screens, loading: screensLoading, isError: screensError } = useScreens();
+  // CF-D1 — the screens leg reads the LIVE devices api (the same hook OwnerScreens uses:
+  // one source, real liveness).
+  const { devices, loading: screensLoading, isError: screensError } = useOwnerDevices(user?.id);
   const { stats: revenueStats, isError: revenueError } = useRevenueStats(user?.id);
   // Pending-approval notifications — Commit 7b adopts the campaigns-owned
   // `useOwnerCampaignApprovals` hook (the former inline `getPendingCampaigns`
@@ -133,10 +135,6 @@ export default function OwnerDashboard() {
     return sectors?.find((s) => s.id === id)?.name?.trim() || '';
   }, [profile, sectors, ownerSectors]);
 
-  const handleScreenAdded = () => {
-    queryClient.invalidateQueries({ queryKey: walletKeys.revenueStats(user?.id ?? '') });
-  };
-
   // Redirige vers la connexion si la session est absente.
   useEffect(() => {
     if (!user) {
@@ -160,35 +158,25 @@ export default function OwnerDashboard() {
     if (screensLoading) return;
     const generatedAlerts: Alert[] = [];
 
-    const maintenanceScreens = screens.filter((screen) => screen.status === 'maintenance');
-    if (maintenanceScreens.length > 0) {
+    // CF-D1 — the old maintenance/inactive/unavailable enum alerts had no live backing; the
+    // live model derives from REAL connectivity (the E6 tolerance, server-computed).
+    const counts = deviceCounts(devices);
+    if (counts.offline > 0) {
       generatedAlerts.push({
-        id: 'maintenance',
+        id: 'offline',
         type: 'warning',
-        title: 'Écrans en maintenance',
-        message: `${maintenanceScreens.length} écran(s) sont actuellement en maintenance.`,
+        title: 'Écrans hors ligne',
+        message: `${counts.offline} écran(s) sont hors ligne — vérifiez leur connexion.`,
         timestamp: new Date().toISOString(),
       });
     }
 
-    const inactiveScreens = screens.filter((screen) => screen.status === 'inactive');
-    if (inactiveScreens.length > 0) {
+    if (counts.never > 0) {
       generatedAlerts.push({
-        id: 'inactive',
+        id: 'never-connected',
         type: 'info',
-        title: 'Écrans inactifs',
-        message: `${inactiveScreens.length} écran(s) sont inactifs et ne génèrent pas de revenus.`,
-        timestamp: new Date().toISOString(),
-      });
-    }
-
-    const unavailableScreens = screens.filter((screen) => screen.status === 'unavailable');
-    if (unavailableScreens.length > 0) {
-      generatedAlerts.push({
-        id: 'unavailable',
-        type: 'warning',
-        title: 'Écrans indisponibles',
-        message: `${unavailableScreens.length} écran(s) sont temporairement indisponibles.`,
+        title: 'Écrans jamais connectés',
+        message: `${counts.never} écran(s) n’ont jamais été appairés.`,
         timestamp: new Date().toISOString(),
       });
     }
@@ -204,7 +192,7 @@ export default function OwnerDashboard() {
     }
 
     setAlerts(generatedAlerts.slice(0, 5));
-  }, [screensLoading, screens, revenueStats]);
+  }, [screensLoading, devices, revenueStats]);
 
   // Fonctions de redirection pour les widgets
   const handleNavigateToScreens = () => {
@@ -254,46 +242,27 @@ export default function OwnerDashboard() {
     [],
   );
 
+  // CF-D1 — venues grouped from the LIVE devices wire (real venue names, not location strings);
+  // a venue is « connecté » when ANY of its screens is, « hors ligne » when at least one has been
+  // seen before, « jamais connecté » otherwise.
   const establishmentsWithStatus = useMemo(() => {
-    const list = Array.isArray(screens) ? screens : [];
-    const byLocation = new Map<
+    const byVenue = new Map<
       string,
-      {
-        name: string;
-        screens: Screen[];
-        status: 'active' | 'inactive' | 'maintenance' | 'unavailable';
-      }
+      { name: string; devices: OwnerDeviceRow[]; status: DeviceStatus }
     >();
-    list.forEach((s) => {
-      const loc = s.location || s.name || 'Établissement';
-      if (!byLocation.has(loc)) {
-        const status: 'active' | 'inactive' | 'maintenance' | 'unavailable' =
-          s.status === 'active'
-            ? 'active'
-            : s.status === 'maintenance'
-              ? 'maintenance'
-              : s.status === 'unavailable'
-                ? 'unavailable'
-                : 'inactive';
-        byLocation.set(loc, { name: loc, screens: [s], status });
+    for (const device of devices) {
+      const status = deviceStatusOf(device);
+      const entry = byVenue.get(device.venue_id);
+      if (!entry) {
+        byVenue.set(device.venue_id, { name: device.venue_name, devices: [device], status });
       } else {
-        const entry = byLocation.get(loc)!;
-        entry.screens.push(s);
-        if (s.status === 'active') entry.status = 'active';
-        else if (s.status === 'maintenance' && entry.status !== 'active')
-          entry.status = 'maintenance';
-        else if (
-          s.status === 'unavailable' &&
-          entry.status !== 'active' &&
-          entry.status !== 'maintenance'
-        )
-          entry.status = 'unavailable';
-        else if (entry.status !== 'active' && entry.status !== 'maintenance')
-          entry.status = 'inactive';
+        entry.devices.push(device);
+        if (status === 'connected') entry.status = 'connected';
+        else if (status === 'offline' && entry.status !== 'connected') entry.status = 'offline';
       }
-    });
-    return Array.from(byLocation.values());
-  }, [screens]);
+    }
+    return Array.from(byVenue.values());
+  }, [devices]);
 
   useEffect(() => {
     if (!selectedEstablishment) return;
@@ -307,11 +276,11 @@ export default function OwnerDashboard() {
       : establishmentsWithStatus;
 
     return source.flatMap((est) =>
-      est.screens.map((screen) => ({
-        id: screen.id,
+      est.devices.map((device) => ({
+        id: device.id,
         establishmentName: est.name,
-        screenName: screen.name || 'Écran',
-        status: screen.status,
+        screenName: device.name || 'Écran',
+        status: deviceStatusOf(device),
       })),
     );
   }, [establishmentsWithStatus, selectedEstablishment]);
@@ -496,30 +465,28 @@ export default function OwnerDashboard() {
                     </div>
                   ) : (
                     establishmentsWithStatus.map((est, idx) => {
-                      const statusConfig = {
-                        active: {
-                          label: 'Actif',
+                      // CF-D1 — real connectivity pills (the enum statuses had no live backing).
+                      const statusConfig: Record<
+                        DeviceStatus,
+                        { label: string; bg: string; text: string; dot: string }
+                      > = {
+                        connected: {
+                          label: DEVICE_STATUS_LABELS.connected,
                           bg: 'bg-[#e8f6ed]',
                           text: 'text-[#16a34a]',
                           dot: 'bg-[#16a34a]',
                         },
-                        inactive: {
-                          label: 'Inactif',
+                        offline: {
+                          label: DEVICE_STATUS_LABELS.offline,
                           bg: 'bg-red-50',
                           text: 'text-red-600',
                           dot: 'bg-red-500',
                         },
-                        maintenance: {
-                          label: 'En panne',
-                          bg: 'bg-amber-50',
-                          text: 'text-amber-600',
-                          dot: 'bg-amber-500',
-                        },
-                        unavailable: {
-                          label: 'En panne',
-                          bg: 'bg-amber-50',
-                          text: 'text-amber-600',
-                          dot: 'bg-amber-500',
+                        never: {
+                          label: DEVICE_STATUS_LABELS.never,
+                          bg: 'bg-gray-100',
+                          text: 'text-gray-600',
+                          dot: 'bg-gray-400',
                         },
                       };
                       const sc = statusConfig[est.status];
@@ -557,33 +524,30 @@ export default function OwnerDashboard() {
                   <div className="px-4 pb-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                       {establishmentScreenRows.map((row) => {
-                        const statusConfig = {
-                          active: {
-                            label: 'Active',
+                        const statusConfig: Record<
+                          DeviceStatus,
+                          { label: string; bg: string; text: string; dot: string }
+                        > = {
+                          connected: {
+                            label: DEVICE_STATUS_LABELS.connected,
                             bg: 'bg-[#e8f6ed]',
                             text: 'text-[#16a34a]',
                             dot: 'bg-[#16a34a]',
                           },
-                          inactive: {
-                            label: 'Inactif',
+                          offline: {
+                            label: DEVICE_STATUS_LABELS.offline,
                             bg: 'bg-red-50',
                             text: 'text-red-600',
                             dot: 'bg-red-500',
                           },
-                          maintenance: {
-                            label: 'En panne',
-                            bg: 'bg-amber-50',
-                            text: 'text-amber-600',
-                            dot: 'bg-amber-500',
+                          never: {
+                            label: DEVICE_STATUS_LABELS.never,
+                            bg: 'bg-gray-100',
+                            text: 'text-gray-600',
+                            dot: 'bg-gray-400',
                           },
-                          unavailable: {
-                            label: 'En panne',
-                            bg: 'bg-amber-50',
-                            text: 'text-amber-600',
-                            dot: 'bg-amber-500',
-                          },
-                        } as const;
-                        const sc = statusConfig[row.status] || statusConfig.inactive;
+                        };
+                        const sc = statusConfig[row.status];
                         return (
                           <div
                             key={row.id}
@@ -807,25 +771,8 @@ export default function OwnerDashboard() {
                       Mes Écrans
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-                      {/* Ajouter un Écran */}
-                      <button
-                        onClick={() => setShowAddScreen(true)}
-                        disabled={isDisabled}
-                        className={`bg-white rounded-xl p-6 shadow-lg transition-all duration-300 border border-gray-200 text-left ${
-                          isDisabled
-                            ? 'opacity-50 cursor-not-allowed'
-                            : 'hover:shadow-xl transform hover:-translate-y-1 cursor-pointer group'
-                        }`}
-                      >
-                        <div className="flex items-center justify-center mb-4">
-                          <div className="p-4 rounded-xl bg-gradient-to-br from-brand-primary to-brand-primary/80 shadow-lg group-hover:scale-110 transition-transform">
-                            <Plus className="h-8 w-8 text-white" />
-                          </div>
-                        </div>
-                        <p className="text-sm font-medium text-gray-600 text-center">
-                          Enregistrer un nouvel écran
-                        </p>
-                      </button>
+                      {/* CF-D1 — « Enregistrer un nouvel écran » removed: screens are GENERATED
+                          server-side at owner approval and pair from the TV app. */}
 
                       {/* Déclarer Indisponibilité */}
                       <button
@@ -1021,13 +968,6 @@ export default function OwnerDashboard() {
           </div>
         </div>
       </div>
-
-      {/* Add Screen Modal */}
-      <AddScreen
-        isOpen={showAddScreen}
-        onClose={() => setShowAddScreen(false)}
-        onScreenAdded={handleScreenAdded}
-      />
     </div>
   );
 }
