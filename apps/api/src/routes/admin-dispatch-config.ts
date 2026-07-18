@@ -27,6 +27,7 @@ const configView = (cfg: ResolvedDispatchConfig) => ({
   t_10s: cfg.t10s,
   t_20s: cfg.t20s,
   t_30s: cfg.t30s,
+  campaign_lead_working_days: cfg.campaignLeadWorkingDays,
 });
 
 // At least one knob must be supplied. CPMs: finite, strictly-positive TND/1000 rates (a
@@ -43,6 +44,9 @@ const patchBodySchema = z
     t_10s: tField,
     t_20s: tField,
     t_30s: tField,
+    // CF-D1 — the campaign start-date lead (working days). 0 is legal (floor = today, field-test
+    // calibration only); 30 caps runaway values. Integer: the lead counts whole jours ouvrés.
+    campaign_lead_working_days: z.number().int().min(0).max(30).optional(),
   })
   .refine((b) => Object.values(b).some((v) => v !== undefined), {
     message: 'at least one editable field is required',
@@ -95,6 +99,7 @@ export const adminDispatchConfigRoutes: FastifyPluginAsync = async (app) => {
       t10s?: string;
       t20s?: string;
       t30s?: string;
+      campaignLeadWorkingDays?: number;
     } = {};
     if (parsed.data.standard_cpm_tnd !== undefined)
       patch.standardCpmTnd = String(parsed.data.standard_cpm_tnd);
@@ -103,6 +108,8 @@ export const adminDispatchConfigRoutes: FastifyPluginAsync = async (app) => {
     if (parsed.data.t_10s !== undefined) patch.t10s = String(parsed.data.t_10s);
     if (parsed.data.t_20s !== undefined) patch.t20s = String(parsed.data.t_20s);
     if (parsed.data.t_30s !== undefined) patch.t30s = String(parsed.data.t_30s);
+    if (parsed.data.campaign_lead_working_days !== undefined)
+      patch.campaignLeadWorkingDays = parsed.data.campaign_lead_working_days;
 
     const [existing] = await db.select({ id: dispatchConfig.id }).from(dispatchConfig).limit(1);
     if (existing) {
@@ -120,6 +127,8 @@ export const adminDispatchConfigRoutes: FastifyPluginAsync = async (app) => {
         t10s: patch.t10s ?? String(DISPATCH_CONFIG_DEFAULTS.t10s),
         t20s: patch.t20s ?? String(DISPATCH_CONFIG_DEFAULTS.t20s),
         t30s: patch.t30s ?? String(DISPATCH_CONFIG_DEFAULTS.t30s),
+        campaignLeadWorkingDays:
+          patch.campaignLeadWorkingDays ?? DISPATCH_CONFIG_DEFAULTS.campaignLeadWorkingDays,
       });
     }
     return reply.status(200).send(configView(await getDispatchConfig()));

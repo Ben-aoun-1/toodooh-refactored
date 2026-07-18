@@ -23,6 +23,8 @@ describe('getDispatchConfig (seeded singleton, real Postgres)', () => {
       t10s: 0.6,
       t20s: 0.7,
       t30s: 0.8,
+      // CF-D1 (migration 0045) — the campaign lead at its spec default (J+2 jours ouvrés).
+      campaignLeadWorkingDays: 2,
     });
     // numeric(10,3) columns come back as strings from pg → must be coerced.
     expect(typeof cfg.standardCpmTnd).toBe('number');

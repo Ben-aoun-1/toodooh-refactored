@@ -39,12 +39,14 @@ const seedUser = async (values: Partial<NewUser> = {}): Promise<string> => {
 
 const restoreCpmDefaults = async (): Promise<void> => {
   // E1 — the T buckets join the per-test restore (their tests edit the same singleton).
+  // CF-D1 — so does the campaign lead.
   await db.update(dispatchConfig).set({
     standardCpmTnd: '15.000',
     eventCpmTnd: '30.000',
     t10s: '0.60',
     t20s: '0.70',
     t30s: '0.80',
+    campaignLeadWorkingDays: 2,
   });
 };
 
@@ -153,6 +155,28 @@ describe('admin dispatch-config — CPM read/edit (real Postgres)', () => {
     // Nothing written on a rejected ordering: the failed 0.75 never landed.
     const cfg = (await get()).json() as { t_10s: number };
     expect(cfg.t_10s).toBe(0.55);
+  });
+
+  // ── CF-D1 — the campaign start-date lead (campaign_lead_working_days) ───────────
+  it('GET exposes the lead at its migration default (2); PATCH edits it — 0 included', async () => {
+    mockSession(await seedUser({ role: 'admin' }));
+    const before = (await get()).json() as { campaign_lead_working_days: number };
+    expect(before.campaign_lead_working_days).toBe(2);
+
+    expect((await patch({ campaign_lead_working_days: 5 })).statusCode).toBe(200);
+    expect((await get()).json()).toMatchObject({ campaign_lead_working_days: 5 });
+
+    // 0 is a LEGAL value (floor = today, field tests) — the min bound is inclusive.
+    expect((await patch({ campaign_lead_working_days: 0 })).statusCode).toBe(200);
+    expect((await get()).json()).toMatchObject({ campaign_lead_working_days: 0 });
+  });
+
+  it('rejects a lead out of [0, 30] or non-integer (400); 30 is the inclusive ceiling', async () => {
+    mockSession(await seedUser({ role: 'admin' }));
+    expect((await patch({ campaign_lead_working_days: -1 })).statusCode).toBe(400);
+    expect((await patch({ campaign_lead_working_days: 31 })).statusCode).toBe(400);
+    expect((await patch({ campaign_lead_working_days: 2.5 })).statusCode).toBe(400);
+    expect((await patch({ campaign_lead_working_days: 30 })).statusCode).toBe(200);
   });
 
   it('CPM regression — CPM edits are unchanged and never touch the T buckets', async () => {

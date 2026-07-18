@@ -17,6 +17,7 @@ import {
   premiereDateDisponible,
   startDateViolation,
 } from '../lib/campaign-dates.js';
+import { getDispatchConfig } from '../lib/dispatch/config.js';
 import { requireAdvertiser } from '../middleware/require-advertiser.js';
 import { requireAuth } from '../middleware/require-auth.js';
 
@@ -30,12 +31,18 @@ import { requireAuth } from '../middleware/require-auth.js';
 // WORKING-DAY LEAD; per ruling #10 any start day is legal, week-ends included). Enforced on
 // create, PATCH and submit (a stale draft must not slip through at submit time). Admin
 // activation is untouched (parked).
-const startDateRejection = (violation: StartDateViolation) => ({
+// CF-D1 — the lead is calibratable (dispatch_config.campaign_lead_working_days, default 2); the
+// rejection payload reflects the lead that actually gated the request.
+const startDateRejection = (violation: StartDateViolation, leadWorkingDays: number) => ({
   error: 'INVALID_START_DATE',
   reason: violation,
-  message: 'The start date must be at least two working days ahead.',
-  first_available_start_date: premiereDateDisponible(),
+  message: `The start date must be at least ${leadWorkingDays} working day(s) ahead.`,
+  first_available_start_date: premiereDateDisponible(new Date(), leadWorkingDays),
 });
+
+/** The configured campaign start-date lead (working days). */
+const campaignLead = async (): Promise<number> =>
+  (await getDispatchConfig()).campaignLeadWorkingDays;
 
 // CF-Z1 — zone_ids must all reference ACTIVE zones; anything else is a 400 INVALID_ZONE.
 async function invalidZoneIds(zoneIds: readonly string[]): Promise<string[]> {
@@ -240,8 +247,9 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
     }
     if (parsed.data.start_date) {
-      const violation = startDateViolation(parsed.data.start_date);
-      if (violation) return reply.status(400).send(startDateRejection(violation));
+      const lead = await campaignLead();
+      const violation = startDateViolation(parsed.data.start_date, new Date(), lead);
+      if (violation) return reply.status(400).send(startDateRejection(violation, lead));
     }
     if (parsed.data.zone_ids?.length) {
       const unknown = await invalidZoneIds(parsed.data.zone_ids);
@@ -388,8 +396,9 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     }
     // CF-Q2 — an explicit null still clears the date; only a SET start date meets the floor.
     if (parsed.data.start_date) {
-      const violation = startDateViolation(parsed.data.start_date);
-      if (violation) return reply.status(400).send(startDateRejection(violation));
+      const lead = await campaignLead();
+      const violation = startDateViolation(parsed.data.start_date, new Date(), lead);
+      if (violation) return reply.status(400).send(startDateRejection(violation, lead));
     }
     // CF-Z1 — zone_ids: absent = untouched; [] = clear; ids must reference active zones.
     if (parsed.data.zone_ids !== undefined && parsed.data.zone_ids.length > 0) {
@@ -491,8 +500,9 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
       });
     }
     // CF-Q2 — re-check the floor at submit time: a draft saved days ago may now be too soon.
-    const violation = startDateViolation(existing.startDate);
-    if (violation) return reply.status(400).send(startDateRejection(violation));
+    const lead = await campaignLead();
+    const violation = startDateViolation(existing.startDate, new Date(), lead);
+    if (violation) return reply.status(400).send(startDateRejection(violation, lead));
     // CF-U1 — the budget-null contract: requested_budget stays NULL until the advertiser sets it
     // at Validation, so the positive-budget requirement the wizard gated CLIENT-side now holds
     // server-side too (activation derives i_cible from the budget — a budget-less pending row

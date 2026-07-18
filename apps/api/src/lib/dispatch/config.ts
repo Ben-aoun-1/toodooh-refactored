@@ -16,6 +16,8 @@ export interface ResolvedDispatchConfig {
   t10s: number;
   t20s: number;
   t30s: number;
+  // CF-D1 — the campaign start-date lead in working days (the calibratable J+2 floor).
+  campaignLeadWorkingDays: number;
 }
 
 // Read the singleton dispatch config (numeric columns come back as strings → coerce to numbers).
@@ -34,6 +36,7 @@ export const getDispatchConfig = async (): Promise<ResolvedDispatchConfig> => {
         t10s: Number(row.t10s),
         t20s: Number(row.t20s),
         t30s: Number(row.t30s),
+        campaignLeadWorkingDays: row.campaignLeadWorkingDays,
       }
     : { ...DISPATCH_CONFIG_DEFAULTS };
   // SUPERSEDED on the dispatch path (E3, Mariem 2026-07-15): the materiality divisor and no-crumb

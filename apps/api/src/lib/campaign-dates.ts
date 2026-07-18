@@ -34,14 +34,23 @@ export const plusCalendarDays = (isoDate: string, n: number): string => {
   return d.toISOString().slice(0, 10);
 };
 
+/** CF-D1 — the spec's default lead; dispatch_config.campaign_lead_working_days overrides it. */
+export const DEFAULT_CAMPAIGN_LEAD_WORKING_DAYS = 2;
+
 /**
- * The first selectable campaign start: `today` advanced by TWO working days. Lands on a working
- * day by construction (the last day counted is itself ouvré).
+ * The first selectable campaign start: `today` advanced by `leadWorkingDays` working days
+ * (default 2 — the spec's floor). CF-D1: the lead is calibratable (dispatch_config feeds it at
+ * the routes); 0 → the floor is TODAY. A positive lead lands on a working day by construction
+ * (the last day counted is itself ouvré); lead 0 returns today whatever the weekday — weekend
+ * START legality is ruling #10's and unchanged.
  */
-export function premiereDateDisponible(today: Date = new Date()): string {
+export function premiereDateDisponible(
+  today: Date = new Date(),
+  leadWorkingDays: number = DEFAULT_CAMPAIGN_LEAD_WORKING_DAYS,
+): string {
   let d = tunisDateOf(today);
   let ouvres = 0;
-  while (ouvres < 2) {
+  while (ouvres < leadWorkingDays) {
     d = plusCalendarDays(d, 1);
     if (isJourOuvre(d)) ouvres += 1;
   }
@@ -57,7 +66,8 @@ export type StartDateViolation = 'TOO_SOON';
 export function startDateViolation(
   startIso: string,
   today: Date = new Date(),
+  leadWorkingDays: number = DEFAULT_CAMPAIGN_LEAD_WORKING_DAYS,
 ): StartDateViolation | null {
-  if (startIso < premiereDateDisponible(today)) return 'TOO_SOON';
+  if (startIso < premiereDateDisponible(today, leadWorkingDays)) return 'TOO_SOON';
   return null;
 }

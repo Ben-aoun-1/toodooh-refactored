@@ -12,10 +12,11 @@ import {
   campaignZones,
   campaigns,
   creatives,
+  dispatchConfig,
   users,
   zones,
 } from '../src/db/schema.js';
-import { isJourOuvre, premiereDateDisponible } from '../src/lib/campaign-dates.js';
+import { isJourOuvre, premiereDateDisponible, tunisDateOf } from '../src/lib/campaign-dates.js';
 import { campaignsRoutes } from '../src/routes/campaigns.js';
 import { apiRoutes } from '../src/routes/index.js';
 
@@ -389,7 +390,7 @@ describe('campaigns draft lifecycle (advertiser, real Postgres)', () => {
     expect(res.json()).toEqual({
       error: 'INVALID_START_DATE',
       reason: 'TOO_SOON',
-      message: 'The start date must be at least two working days ahead.',
+      message: 'The start date must be at least 2 working day(s) ahead.',
       first_available_start_date: floorDate(),
     });
     expect(await db.select().from(campaigns)).toHaveLength(0); // nothing persisted
@@ -458,6 +459,48 @@ describe('campaigns draft lifecycle (advertiser, real Postgres)', () => {
     expect((res.json() as { reason: string }).reason).toBe('TOO_SOON');
     expect((await readCampaign(id))?.status).toBe('draft'); // unchanged
     expect((await readCampaign(id))?.submittedAt).toBeNull();
+  });
+
+  it('CF-D1 — at lead 0 TODAY is selectable and submits; yesterday stays TOO_SOON', async () => {
+    // The lead is the calibratable dispatch_config value; 0 collapses the floor to TODAY (tests
+    // only). The singleton is seeded (migration 0026) — flip it, exercise, restore.
+    await db.update(dispatchConfig).set({ campaignLeadWorkingDays: 0 });
+    try {
+      const me = await seedUser();
+      mockSession(me);
+      const today = tunisDateOf(new Date());
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/campaigns',
+        payload: {
+          name: 'Test terrain',
+          campaign_type: 'standard',
+          start_date: today,
+          end_date: plusDays(today, 30),
+          requested_budget: 500,
+        },
+      });
+      expect(res.statusCode).toBe(201);
+      const id = (res.json() as { id: string }).id;
+      const submitted = await app.inject({ method: 'POST', url: `/api/campaigns/${id}/submit` });
+      expect(submitted.statusCode).toBe(200);
+      expect((submitted.json() as { status: string }).status).toBe('pending');
+
+      // The floor is TODAY, not gone: the past is still refused, and the payload says lead 0.
+      const past = await app.inject({
+        method: 'POST',
+        url: '/api/campaigns',
+        payload: { name: 'Hier', campaign_type: 'standard', start_date: plusDays(today, -1) },
+      });
+      expect(past.statusCode).toBe(400);
+      expect(past.json()).toMatchObject({
+        reason: 'TOO_SOON',
+        message: 'The start date must be at least 0 working day(s) ahead.',
+        first_available_start_date: today,
+      });
+    } finally {
+      await db.update(dispatchConfig).set({ campaignLeadWorkingDays: 2 });
+    }
   });
 
   it('CF-S1 HARDENING: a date-less draft no longer submits (400 MISSING_DATES, stays draft)', async () => {

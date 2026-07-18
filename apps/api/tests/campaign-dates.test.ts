@@ -35,6 +35,30 @@ describe('premiereDateDisponible — the RULED counting matrix', () => {
   });
 });
 
+describe('CF-D1 — the lead parameter (calibratable; default 2 pinned above)', () => {
+  it('lead 0 → the floor is TODAY, whatever the weekday (week-ends included)', () => {
+    expect(premiereDateDisponible(at('2026-07-17'), 0)).toBe('2026-07-17'); // vendredi
+    expect(premiereDateDisponible(at('2026-07-18'), 0)).toBe('2026-07-18'); // samedi — today, NOT pushed to lundi
+    expect(premiereDateDisponible(at('2026-07-19'), 0)).toBe('2026-07-19'); // dimanche
+  });
+  it('lead 1 → the next jour ouvré (vendredi → lundi, samedi → lundi)', () => {
+    expect(premiereDateDisponible(at('2026-07-17'), 1)).toBe('2026-07-20');
+    expect(premiereDateDisponible(at('2026-07-18'), 1)).toBe('2026-07-20');
+    expect(premiereDateDisponible(at('2026-07-13'), 1)).toBe('2026-07-14');
+  });
+  it('startDateViolation at lead 0: today is legal, yesterday stays TOO_SOON', () => {
+    const saturday = at('2026-07-18');
+    expect(startDateViolation('2026-07-18', saturday, 0)).toBeNull();
+    expect(startDateViolation('2026-07-19', saturday, 0)).toBeNull();
+    expect(startDateViolation('2026-07-17', saturday, 0)).toBe('TOO_SOON');
+  });
+  it('an explicit lead 2 matches the default (the ven→mar example is the SAME rule)', () => {
+    expect(premiereDateDisponible(at('2026-07-17'), 2)).toBe('2026-07-21');
+    expect(startDateViolation('2026-07-20', at('2026-07-17'), 2)).toBe('TOO_SOON');
+    expect(startDateViolation('2026-07-21', at('2026-07-17'), 2)).toBeNull();
+  });
+});
+
 describe('timezone pinning — the rule counts the Africa/Tunis calendar date', () => {
   it('23:30 UTC on Friday is ALREADY Saturday in Tunis (UTC+1) → the samedi floor applies', () => {
     // 2026-07-17T23:30Z = 2026-07-18 00:30 Africa/Tunis
