@@ -2,7 +2,7 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
-  DollarSign,
+  Banknote,
   Grid3X3,
   List,
   Loader2,
@@ -473,7 +473,7 @@ export default function OwnerCampaigns() {
                             <div className="grid grid-cols-2 gap-6 mb-4 w-full">
                               <div>
                                 <div className="inline-flex items-center gap-1 text-[11px] uppercase tracking-wide text-[#7A7A7A]">
-                                  <DollarSign className="h-3.5 w-3.5 text-brand-primary" />
+                                  <Banknote className="h-3.5 w-3.5 text-brand-primary" />
                                   Revenu
                                 </div>
                                 <p className="text-base font-semibold text-[#171717]">
@@ -534,7 +534,7 @@ export default function OwnerCampaigns() {
                           Date de fin
                         </div>
                         <div className="inline-flex items-center gap-1 font-medium">
-                          <DollarSign className="h-3.5 w-3.5" />
+                          <Banknote className="h-3.5 w-3.5" />
                           Revenu
                         </div>
                         <div className="inline-flex items-center gap-1 font-medium">

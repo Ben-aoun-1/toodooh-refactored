@@ -13,8 +13,11 @@ import {
   toWire,
   needsTargetingFlush,
   categoryLineLabel,
+  categoriesHelperLine,
   firstAvailableCategoryLine,
+  selectedCategoryIds,
   toCategoryOnly,
+  toggleCategoryLine,
 } from './targeting-lines';
 
 const cat = (categoryId: string | null, cls: TargetingLine['class']): TargetingLine => ({
@@ -201,5 +204,47 @@ describe('categoryLineLabel', () => {
     const name = (id: string) => (id === 'r' ? 'Restaurant' : undefined);
     expect(categoryLineLabel({ categoryId: 'r', class: null }, name)).toBe('Restaurant');
     expect(categoryLineLabel({ categoryId: null, class: null }, name)).toBe('Tout le réseau');
+  });
+});
+
+// ── CF-U1 (Mejri item 2) — the checkbox-grid helpers: the CONTROL changed, the wire did not ─────
+describe('toggleCategoryLine / selectedCategoryIds (the grid ↔ lines mapping)', () => {
+  it('checking a category adds ONE category-only line (class = null — the CF-W1 wire)', () => {
+    const lines = toggleCategoryLine([], 'r');
+    expect(lines).toEqual([{ categoryId: 'r', class: null }]);
+    expect(toWire(lines)).toEqual([{ category_id: 'r', class: null }]);
+  });
+
+  it('unchecking removes exactly that category line, preserving the others', () => {
+    const start: TargetingLine[] = [
+      { categoryId: 'r', class: null },
+      { categoryId: 'g', class: null },
+    ];
+    expect(toggleCategoryLine(start, 'r')).toEqual([{ categoryId: 'g', class: null }]);
+  });
+
+  it('round-trips: toggle twice = back to the starting set', () => {
+    const start: TargetingLine[] = [{ categoryId: 'g', class: null }];
+    expect(toggleCategoryLine(toggleCategoryLine(start, 'r'), 'r')).toEqual(start);
+  });
+
+  it('selectedCategoryIds lists the specific categories, never the all-network line', () => {
+    expect(
+      selectedCategoryIds([
+        { categoryId: 'r', class: null },
+        { categoryId: null, class: null },
+        { categoryId: 'g', class: null },
+      ]),
+    ).toEqual(['r', 'g']);
+    expect(selectedCategoryIds([])).toEqual([]);
+  });
+});
+
+describe('categoriesHelperLine (the mockup copy, pinned)', () => {
+  it('renders the count into the exact French helper line', () => {
+    expect(categoriesHelperLine(1)).toBe(
+      'Vous avez sélectionné 1 catégorie(s). Plus votre ciblage est large, plus vous augmentez votre portée.',
+    );
+    expect(categoriesHelperLine(0)).toContain('0 catégorie(s)');
   });
 });

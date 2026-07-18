@@ -406,6 +406,22 @@ export default function NewCampaign() {
     [state.draftCampaignId, updateCampaign, setState],
   );
 
+  // CF-U1 (Mejri item 4) — an already-selected spot can be DESELECTED: mirrors the select
+  // (PATCH creative_id: null + clear the wizard state); the creative step gate re-blocks Suivant.
+  const handleDeselectCreative = useCallback(async () => {
+    if (!state.draftCampaignId) return;
+    try {
+      await updateCampaign.mutateAsync({
+        id: state.draftCampaignId,
+        input: { creative_id: null },
+      });
+      setState((prev) => ({ ...prev, creativeId: null }));
+    } catch (error) {
+      toast.error(getErrorMessage(error) || 'Erreur lors de la désélection de la création');
+      log.error({ err: error }, 'unlink creative failed');
+    }
+  }, [state.draftCampaignId, updateCampaign, setState]);
+
   const handleBreadcrumbClick = useCallback(
     (target: number) => {
       void wiz.goToStep(target).then((moved) => {
@@ -464,6 +480,7 @@ export default function NewCampaign() {
         <StepZones
           zoneIds={state.zoneIds}
           setZoneIds={setZoneIds}
+          draftCampaignId={state.draftCampaignId || null}
           saving={savingZones}
           onNext={handleZonesNext}
           onBack={() => wiz.prevStep()}
@@ -477,6 +494,7 @@ export default function NewCampaign() {
           userId={user?.id}
           selectedCreativeId={state.creativeId}
           onSelectCreative={handleSelectCreative}
+          onDeselectCreative={handleDeselectCreative}
           linking={updateCampaign.isPending}
           onNext={() => {
             void wiz.nextStep();

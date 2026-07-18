@@ -3,7 +3,7 @@ import {
   Plus,
   AlertTriangle,
   CheckCircle,
-  DollarSign,
+  Banknote,
   Monitor,
   Calendar,
   CalendarX,
@@ -613,7 +613,7 @@ export default function OwnerDashboard() {
                     <span className="text-xs font-semibold text-[#c9a227] whitespace-nowrap truncate min-w-0">
                       Revenus cumulés
                     </span>
-                    <DollarSign className="h-5 w-5 text-[#c9a227] flex-shrink-0" />
+                    <Banknote className="h-5 w-5 text-[#c9a227] flex-shrink-0" />
                   </div>
                   <p className="text-3xl font-bold text-[#1a1a1a] tabular-nums font-sans mt-auto">
                     {accountLoading
@@ -930,7 +930,7 @@ export default function OwnerDashboard() {
                   {/* Section Mes Revenus */}
                   <div className="mb-8">
                     <h3 className="text-2xl font-bold text-gray-900 mb-4 flex items-center">
-                      <DollarSign className="h-6 w-6 text-brand-primary mr-2" />
+                      <Banknote className="h-6 w-6 text-brand-primary mr-2" />
                       Mes Revenus
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -960,7 +960,7 @@ export default function OwnerDashboard() {
                             </p>
                           </div>
                           <div className="p-3 rounded-xl bg-gradient-to-br from-[#00263A] to-brand-primary shadow-lg group-hover:scale-110 transition-transform flex-shrink-0 ml-3">
-                            <DollarSign className="h-6 w-6 text-white" />
+                            <Banknote className="h-6 w-6 text-white" />
                           </div>
                         </div>
                       </button>

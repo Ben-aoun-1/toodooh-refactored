@@ -1,4 +1,4 @@
-import { Calendar, ChevronRight, DollarSign, Download, Eye, Wallet } from 'lucide-react';
+import { Calendar, ChevronRight, Banknote, Download, Eye, Wallet } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
@@ -134,7 +134,7 @@ export default function OwnerStatementsPage() {
                         <th className="px-5 py-3 pl-6">Désignation</th>
                         <th className="px-5 py-3">
                           <span className="inline-flex items-center gap-1.5">
-                            <DollarSign className="w-3.5 h-3.5" />
+                            <Banknote className="w-3.5 h-3.5" />
                             Montant
                           </span>
                         </th>

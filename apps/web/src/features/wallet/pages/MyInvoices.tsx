@@ -3,7 +3,7 @@ import {
   FileText,
   Loader2,
   Search,
-  DollarSign,
+  Banknote,
   Calendar,
   Eye,
   ChevronLeft,
@@ -16,6 +16,7 @@ import { useInvoices } from '@/features/wallet/hooks/useInvoices';
 import { type InvoiceRow, invoiceDesignation } from '@/features/wallet/lib/wallet-ledger';
 import { factureFilename, walletService } from '@/features/wallet/services/wallet.service';
 import { logger } from '@/lib/logger';
+import { htTtcLabel } from '@/lib/money';
 
 const log = logger.child({ module: 'MyInvoices' });
 
@@ -74,11 +75,6 @@ export default function MyInvoices() {
     });
   };
 
-  const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
-      amount,
-    ) + ' TND';
-
   return (
     <div className="space-y-6">
       {/* Table card */}
@@ -121,7 +117,7 @@ export default function MyInvoices() {
                   </th>
                   <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">
                     <span className="inline-flex items-center gap-1">
-                      <DollarSign className="h-3 w-3" /> Montant
+                      <Banknote className="h-3 w-3" /> Montant
                     </span>
                   </th>
                   <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">
@@ -145,7 +141,7 @@ export default function MyInvoices() {
                       <p className="text-xs text-gray-400 mt-0.5">{facture.numero}</p>
                     </td>
                     <td className="px-5 py-4 text-sm font-semibold text-gray-900">
-                      {formatCurrency(facture.montant)}
+                      {htTtcLabel(facture.montant)}
                     </td>
                     <td className="px-5 py-4 text-sm text-gray-500">
                       {formatDate(facture.date_emission)}

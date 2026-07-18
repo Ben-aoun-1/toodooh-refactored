@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 
+import GradientPillButton from '@/components/GradientPillButton';
 import { startFloorHelperText } from '@/features/campaigns/lib/wizard-dates';
 
 interface StepDatesProps {
@@ -193,20 +194,14 @@ export default function StepDates({
           <ArrowRight className="h-4 w-4 rotate-180" />
           Retour
         </button>
-        <button
-          type="button"
+        <GradientPillButton
           onClick={handleNext}
           disabled={nextDisabled}
-          className={`px-6 py-3 rounded-xl font-semibold transition-all flex items-center space-x-2 shadow-lg ${
-            nextDisabled
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : 'bg-gradient-to-r from-brand-primary to-brand-deep text-white hover:from-brand-primary/90 hover:to-brand-deep'
-          }`}
+          icon={<Calendar className="h-4 w-4" />}
+          trailingIcon={<ArrowRight className="h-4 w-4" />}
         >
-          <Calendar className="h-4 w-4" />
-          <span>Suivant</span>
-          <ArrowRight className="h-4 w-4" />
-        </button>
+          Suivant
+        </GradientPillButton>
       </div>
     </div>
   );

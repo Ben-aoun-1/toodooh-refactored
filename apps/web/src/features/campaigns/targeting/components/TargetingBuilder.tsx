@@ -5,12 +5,12 @@ import { useState } from 'react';
 import {
   type TargetingLine,
   allNetworkLine,
-  categoryLineLabel,
+  categoriesHelperLine,
   duplicateIndexOf,
-  firstAvailableCategoryLine,
   firstAvailableLine,
   isAllNetwork,
   lineLabel,
+  selectedCategoryIds,
 } from '../lib/targeting-lines';
 
 import { CategorySelect, type CategoryOption } from './CategorySelect';
@@ -80,10 +80,7 @@ export function TargetingBuilder({
 
   const removeLine = (index: number) => onChange(value.filter((_, i) => i !== index));
 
-  const nextSeed = () =>
-    categoryOnly
-      ? firstAvailableCategoryLine(value, categoryIds)
-      : firstAvailableLine(value, categoryIds);
+  const nextSeed = () => firstAvailableLine(value, categoryIds);
 
   const addLine = () => {
     const seed = nextSeed();
@@ -96,15 +93,27 @@ export function TargetingBuilder({
 
   const addExhausted = nextSeed() === null;
 
+  // CF-U1 (Mejri item 2) — the category-only mode is a CHECKBOX GRID: a checked category ⟺ one
+  // category-only line {categoryId, class: null}. Same lines, same replace-set wire — only the
+  // control changed. Mirrors the pure toggleCategoryLine, keeping the existing lines' React keys.
+  const checkedIds = selectedCategoryIds(value);
+  const toggleCategory = (categoryId: string) => {
+    const idx = value.findIndex((line) => line.categoryId === categoryId);
+    if (idx !== -1) onChange(value.filter((_, i) => i !== idx));
+    else onChange([...value, newBuilderLine({ categoryId, class: null })]);
+  };
+
   return (
     <section className="space-y-5">
       <header className="space-y-1">
         <h2 className="text-xl font-semibold text-brand-deep">
-          Quelles audiences voulez-vous toucher&nbsp;?
+          {categoryOnly
+            ? 'Définissez votre ciblage thématique'
+            : 'Quelles audiences voulez-vous toucher ?'}
         </h2>
         <p className="text-sm text-gray-500">
           {categoryOnly
-            ? 'Ciblez par type de lieu, ou diffusez sur l’ensemble du réseau.'
+            ? 'Cochez les catégories de lieux à cibler, ou diffusez sur l’ensemble du réseau.'
             : 'Ciblez par type de lieu et par standing, ou diffusez sur l’ensemble du réseau.'}
         </p>
       </header>
@@ -150,7 +159,63 @@ export function TargetingBuilder({
       </button>
 
       <AnimatePresence mode="wait" initial={false}>
-        {allNetwork ? (
+        {categoryOnly ? (
+          /* CF-U1 (Mejri item 2) — the mockup's checkbox grid: every advertiser-facing category
+             as a check tile; « Tout le réseau » above stays the master toggle (checked → the grid
+             is disabled and cleared). */
+          <motion.div
+            key="grid-state"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="space-y-4"
+          >
+            <div
+              className={`grid gap-3 sm:grid-cols-2 lg:grid-cols-3 ${allNetwork ? 'opacity-50' : ''}`}
+            >
+              {categories.map((cat) => {
+                const checked = !allNetwork && checkedIds.includes(cat.id);
+                return (
+                  <label
+                    key={cat.id}
+                    className={`flex cursor-pointer items-center gap-3 rounded-xl border-2 px-4 py-3.5 transition-all ${
+                      checked
+                        ? 'border-brand-primary bg-brand-primary/5'
+                        : 'border-gray-200 bg-white hover:border-gray-300'
+                    } ${disabled || allNetwork ? 'cursor-not-allowed' : ''}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={disabled || allNetwork}
+                      onChange={() => toggleCategory(cat.id)}
+                      className="h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 accent-brand-primary disabled:cursor-not-allowed"
+                    />
+                    <span
+                      className={`truncate text-sm font-medium ${
+                        checked ? 'text-brand-deep' : 'text-gray-700'
+                      }`}
+                    >
+                      {cat.name}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+
+            <div className="flex items-start gap-2.5 rounded-xl bg-gray-50 px-4 py-3">
+              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gray-200 text-[11px] font-bold text-gray-600">
+                i
+              </span>
+              <p className="text-sm text-gray-600">
+                {allNetwork
+                  ? 'Vous ciblez l’ensemble des écrans — le ciblage par catégorie est désactivé tant que “Tout le réseau” est actif.'
+                  : categoriesHelperLine(checkedIds.length)}
+              </p>
+            </div>
+          </motion.div>
+        ) : allNetwork ? (
           <motion.div
             key="all-state"
             initial={{ opacity: 0 }}
@@ -197,16 +262,14 @@ export function TargetingBuilder({
                           onChange={(categoryId) => editLine(index, { categoryId })}
                         />
                       </div>
-                      {!categoryOnly && (
-                        <div className="flex-1">
-                          <ClassSegmentedControl
-                            value={line.class}
-                            groupId={line.key}
-                            disabled={disabled}
-                            onChange={(cls) => editLine(index, { class: cls })}
-                          />
-                        </div>
-                      )}
+                      <div className="flex-1">
+                        <ClassSegmentedControl
+                          value={line.class}
+                          groupId={line.key}
+                          disabled={disabled}
+                          onChange={(cls) => editLine(index, { class: cls })}
+                        />
+                      </div>
                       <button
                         type="button"
                         aria-label="Retirer cette audience"
@@ -268,9 +331,7 @@ export function TargetingBuilder({
                         exit={{ opacity: 0, scale: 0.85 }}
                         className="inline-flex items-center gap-1.5 rounded-full bg-brand-primary/15 py-1 pl-3 pr-1.5 text-sm font-medium text-brand-deep"
                       >
-                        {categoryOnly
-                          ? categoryLineLabel(line, categoryName)
-                          : lineLabel(line, categoryName)}
+                        {lineLabel(line, categoryName)}
                         <button
                           type="button"
                           aria-label={`Retirer ${lineLabel(line, categoryName)}`}

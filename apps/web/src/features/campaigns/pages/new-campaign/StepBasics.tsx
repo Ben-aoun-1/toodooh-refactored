@@ -1,6 +1,8 @@
 import { AlertCircle, ArrowRight, Calendar, Crosshair, Monitor } from 'lucide-react';
 import { useState } from 'react';
 
+import GradientPillButton from '@/components/GradientPillButton';
+
 interface StepBasicsProps {
   campaignName: string;
   setCampaignName: (value: string) => void;
@@ -123,20 +125,15 @@ export default function StepBasics({
       </div>
 
       <div className="flex justify-end items-center">
-        <button
-          type="button"
+        <GradientPillButton
           onClick={handleNext}
           disabled={nextDisabled}
-          className={`px-6 py-3 rounded-xl font-semibold transition-all flex items-center space-x-2 shadow-lg ${
-            nextDisabled
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : 'bg-gradient-to-r from-brand-primary to-brand-deep text-white hover:from-brand-primary/90 hover:to-brand-deep'
-          }`}
+          loading={creating}
+          icon={<Calendar className="h-4 w-4" />}
+          trailingIcon={<ArrowRight className="h-4 w-4" />}
         >
-          <Calendar className="h-4 w-4" />
-          <span>{creating ? 'Création…' : 'Suivant'}</span>
-          <ArrowRight className="h-4 w-4" />
-        </button>
+          {creating ? 'Création…' : 'Suivant'}
+        </GradientPillButton>
       </div>
     </div>
   );

@@ -93,14 +93,16 @@ export async function performCreateDraft(args: {
 /**
  * The full draft PATCH body (CF-W1): dates now arrive at the Période step (after create-early),
  * so save/submit persist the WHOLE editable state, not just the budget. An emptied name is
- * omitted (the API's name is min-1; the draft keeps its stored name).
+ * omitted (the API's name is min-1; the draft keeps its stored name). CF-U1 (Mejri item 6): an
+ * UNTOUCHED budget (state null) is OMITTED — the draft keeps its NULL and never inherits the
+ * slider default; an explicitly set value (any re-drag) persists as before.
  */
 function draftPatch(state: WizardState): UpdateCampaignInput {
   return {
     ...(state.campaignName.trim() ? { name: state.campaignName.trim() } : {}),
     start_date: state.startDate,
     end_date: state.endDate,
-    requested_budget: state.requestedBudget,
+    ...(state.requestedBudget != null ? { requested_budget: state.requestedBudget } : {}),
     // CF-Z1 — replace-set: [] legitimately clears (whole network on the zone criterion).
     zone_ids: state.zoneIds,
   };
@@ -132,11 +134,11 @@ export async function performSubmit(args: {
 }
 
 /**
- * Enregistrer (save-draft, NO submit): PATCH the indicative requested_budget onto the draft and stop
- * — the campaign stays a draft the advertiser can resume later. Shares performSubmit's guards (a
- * created draft + a positive budget, both gated by the step validators) so the function is safe to
- * call directly. The API's requested_budget is strictly positive, so a non-positive budget is
- * rejected here rather than round-tripping to a 400.
+ * Enregistrer (save-draft, NO submit): PATCH the draft state and stop — the campaign stays a
+ * draft the advertiser can resume later. CF-U1 (Mejri item 6): a NULL budget is a LEGITIMATE
+ * draft state (per-step Enregistrer runs long before Validation), so only an explicitly set
+ * non-positive value is rejected (the API's requested_budget is strictly positive — fail here
+ * rather than round-tripping to a 400). The positive-budget requirement lives at SUBMIT.
  */
 export async function performSaveDraft(args: {
   state: WizardState;
@@ -146,7 +148,7 @@ export async function performSaveDraft(args: {
   if (!state.draftCampaignId) {
     return { kind: 'error', error: new Error('La campagne n’a pas encore été créée') };
   }
-  if (state.requestedBudget == null || state.requestedBudget <= 0) {
+  if (state.requestedBudget != null && state.requestedBudget <= 0) {
     return { kind: 'error', error: new Error('Le budget doit être supérieur à 0 dinar') };
   }
   try {

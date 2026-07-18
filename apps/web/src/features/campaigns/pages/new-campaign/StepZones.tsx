@@ -1,12 +1,20 @@
 import { ArrowRight, Check, Loader2, MapPin } from 'lucide-react';
+import { Suspense, lazy } from 'react';
 
+import GradientPillButton from '@/components/GradientPillButton';
+import { useCampaignCoverage } from '@/features/campaigns/hooks/useCampaignApi';
 import { useZones } from '@/features/campaigns/hooks/useZones';
 import { toggleZone } from '@/features/campaigns/lib/zones-selection';
+
+// CF-U1 (Mejri item 3) — the leaflet map is a lazy chunk: the wizard stays light until this step.
+const ZonesCoverageMap = lazy(() => import('./ZonesCoverageMap'));
 
 interface StepZonesProps {
   /** The selected zone ids (wizard state; [] = whole network on the zone criterion). */
   zoneIds: string[];
   setZoneIds: (next: string[]) => void;
+  /** CF-U1 — the create-early draft id: the coverage map plots GET /:id/coverage. */
+  draftCampaignId: string | null;
   onNext: () => void | Promise<void>;
   onBack: () => void;
   /** True while the zone replace-set PATCH is in flight (Suivant persists dirty selections). */
@@ -14,13 +22,22 @@ interface StepZonesProps {
 }
 
 /**
- * « Zones géographiques » step (CF-Z1 — the former coverage-map slot; NO map in this lane).
- * Chips from GET /api/zones (V1: exactly « Grand Tunis », preselected for a fresh campaign by
- * the orchestrator). Deselecting everything = whole-network semantics (VF US-2.1), said in the
- * helper line. More zones arrive as data (predefined list or map picking — operator pending).
+ * « Zones géographiques » step (CF-Z1 slot). Chips from GET /api/zones (V1: exactly « Grand
+ * Tunis », preselected for a fresh campaign by the orchestrator); deselecting everything =
+ * whole-network semantics (VF US-2.1). CF-U1 (Mejri item 3): the read-only coverage map returns
+ * UNDER the chips — the targeting-matched venues over Grand Tunis. Zone selection stays in the
+ * chips; the map only shows where the campaign would land.
  */
-export default function StepZones({ zoneIds, setZoneIds, onNext, onBack, saving }: StepZonesProps) {
+export default function StepZones({
+  zoneIds,
+  setZoneIds,
+  draftCampaignId,
+  onNext,
+  onBack,
+  saving,
+}: StepZonesProps) {
   const zones = useZones();
+  const coverage = useCampaignCoverage(draftCampaignId);
 
   return (
     <div className="space-y-6">
@@ -75,6 +92,22 @@ export default function StepZones({ zoneIds, setZoneIds, onNext, onBack, saving 
                   ? 'Aucune zone sélectionnée : votre campagne sera diffusée sur tout le réseau.'
                   : 'Votre campagne sera diffusée dans les zones sélectionnées.'}
               </p>
+
+              {/* CF-U1 — the read-only coverage preview, under the chips. */}
+              <Suspense
+                fallback={
+                  <div className="flex h-72 items-center justify-center rounded-2xl border border-gray-200 bg-gray-50">
+                    <Loader2 className="h-6 w-6 animate-spin text-brand-deep" />
+                  </div>
+                }
+              >
+                <ZonesCoverageMap
+                  venues={coverage.data?.screenhosts ?? []}
+                  isLoading={Boolean(draftCampaignId) && coverage.isLoading}
+                  isError={coverage.isError}
+                />
+              </Suspense>
+
               <p className="text-xs text-gray-400">D’autres zones seront bientôt disponibles.</p>
             </>
           )}
@@ -90,16 +123,13 @@ export default function StepZones({ zoneIds, setZoneIds, onNext, onBack, saving 
           <ArrowRight className="h-4 w-4 rotate-180" />
           Retour
         </button>
-        <button
-          type="button"
+        <GradientPillButton
           onClick={() => void onNext()}
-          disabled={saving}
-          className="px-6 py-3 rounded-xl font-semibold transition-all flex items-center space-x-2 shadow-lg bg-gradient-to-r from-brand-primary to-brand-deep text-white hover:from-brand-primary/90 hover:to-brand-deep disabled:opacity-60"
+          loading={saving}
+          trailingIcon={<ArrowRight className="h-4 w-4" />}
         >
-          {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-          <span>Suivant</span>
-          <ArrowRight className="h-4 w-4" />
-        </button>
+          Suivant
+        </GradientPillButton>
       </div>
     </div>
   );

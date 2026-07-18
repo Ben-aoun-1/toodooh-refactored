@@ -31,6 +31,15 @@ export function useCampaign(id: string | null) {
   });
 }
 
+/** CF-U1 — the coverage-map venues (GET /:id/coverage); idle until the draft exists. */
+export function useCampaignCoverage(campaignId: string | null) {
+  return useQuery({
+    queryKey: campaignsKeys.coverage(campaignId ?? ''),
+    queryFn: () => campaignsApi.coverage(campaignId as string),
+    enabled: Boolean(campaignId),
+  });
+}
+
 export function useCreateCampaign(userId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({

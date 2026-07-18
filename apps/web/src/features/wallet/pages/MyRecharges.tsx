@@ -3,7 +3,7 @@ import {
   Plus,
   Clock,
   Search,
-  DollarSign,
+  Banknote,
   X,
   ArrowUpRight,
   ArrowDownLeft,
@@ -19,6 +19,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { useCreateRecharge } from '@/features/wallet/hooks/useCreateRecharge';
 import { useWalletTransactions } from '@/features/wallet/hooks/useWalletTransactions';
+import { RECHARGE_PAYMENT_METHOD } from '@/features/wallet/lib/wallet-ledger';
+import { htTtcLabel } from '@/lib/money';
 
 const QUICK_AMOUNTS = [
   { value: 1000, label: '1 000 TND', tag: 'Populaire' },
@@ -37,11 +39,9 @@ export default function MyRecharges() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<TabFilter>('all');
   const [showNewRechargeModal, setShowNewRechargeModal] = useState(false);
-  const [newRecharge, setNewRecharge] = useState({
-    amount: '',
-    payment_method: 'card',
-    description: '',
-  });
+  // CF-U1 item 8 — the modal collects the AMOUNT only: the api takes {amount}, the payment
+  // method is fixed (bank transfer) and the description was never persisted.
+  const [newAmount, setNewAmount] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -73,7 +73,7 @@ export default function MyRecharges() {
   }, [activeTab, searchQuery]);
 
   const handleQuickRecharge = (amount: number) => {
-    setNewRecharge({ amount: amount.toString(), payment_method: 'card', description: '' });
+    setNewAmount(amount.toString());
     setShowNewRechargeModal(true);
   };
 
@@ -83,7 +83,7 @@ export default function MyRecharges() {
       toast.error('Vous devez être connecté');
       return;
     }
-    if (!newRecharge.amount || parseFloat(newRecharge.amount) < 10) {
+    if (!newAmount || parseFloat(newAmount) < 10) {
       toast.error('Le montant minimum est de 10 TND');
       return;
     }
@@ -93,12 +93,12 @@ export default function MyRecharges() {
       // CF-M1 — the live API takes the amount only (bank-transfer flow; the facture carries the
       // payment coordinates). The 201 row's FCT- reference is the advertiser's wire reference.
       const created = await createRecharge.mutateAsync({
-        amount: parseFloat(newRecharge.amount),
+        amount: parseFloat(newAmount),
       });
       toast.success(`Recharge créée — référence ${created.reference}. En attente de validation.`, {
         duration: 6000,
       });
-      setNewRecharge({ amount: '', payment_method: 'card', description: '' });
+      setNewAmount('');
       setShowNewRechargeModal(false);
     } catch (_error) {
       toast.error('Erreur lors de la création de la recharge');
@@ -109,11 +109,6 @@ export default function MyRecharges() {
 
   const formatDate = (d: Date) =>
     d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-
-  const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
-      amount,
-    ) + ' TND';
 
   return (
     <div className="space-y-6">
@@ -137,8 +132,9 @@ export default function MyRecharges() {
             </div>
             <span className="text-sm text-white/70 font-medium">Solde disponible</span>
           </div>
+          {/* CF-U1 (Mejri item 6) — the solde carries its TTC like every advertiser montant. */}
           <p className="text-3xl md:text-4xl font-bold text-white tracking-tight tabular-nums">
-            {loading ? '...' : formatCurrency(balance)}
+            {loading ? '...' : htTtcLabel(balance)}
           </p>
         </div>
         <div className="flex items-center gap-4 relative z-10">
@@ -237,7 +233,7 @@ export default function MyRecharges() {
                   </th>
                   <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">
                     <span className="inline-flex items-center gap-1">
-                      <DollarSign className="h-3 w-3" /> Montant
+                      <Banknote className="h-3 w-3" /> Montant
                     </span>
                   </th>
                   <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">
@@ -277,7 +273,7 @@ export default function MyRecharges() {
                         className={`text-sm font-semibold ${tx.type === 'recharge' ? 'text-green-600' : 'text-gray-900'}`}
                       >
                         {tx.type === 'recharge' ? '+' : '-'}
-                        {formatCurrency(tx.amount)}
+                        {htTtcLabel(tx.amount)}
                       </span>
                     </td>
                     <td className="px-5 py-4 text-sm text-gray-500">{formatDate(tx.date)}</td>
@@ -354,8 +350,8 @@ export default function MyRecharges() {
                 </label>
                 <input
                   type="number"
-                  value={newRecharge.amount}
-                  onChange={(e) => setNewRecharge({ ...newRecharge, amount: e.target.value })}
+                  value={newAmount}
+                  onChange={(e) => setNewAmount(e.target.value)}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary/40 focus:border-brand-primary transition-all"
                   placeholder="Entrez le montant"
                   min="10"
@@ -366,43 +362,13 @@ export default function MyRecharges() {
                 <p className="text-xs text-gray-400 mt-1">Montant minimum : 10 TND</p>
               </div>
 
-              <div>
-                <label
-                  className="block text-sm font-medium text-gray-700 mb-2"
-                  htmlFor="payment-method"
-                >
-                  Méthode de paiement *
-                </label>
-                <select
-                  value={newRecharge.payment_method}
-                  onChange={(e) =>
-                    setNewRecharge({ ...newRecharge, payment_method: e.target.value })
-                  }
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary/40 focus:border-brand-primary transition-all"
-                  required
-                  id="payment-method"
-                >
-                  <option value="card">Carte bancaire</option>
-                  <option value="bank">Virement bancaire</option>
-                  <option value="cash">Espèces</option>
-                </select>
-              </div>
-
-              <div>
-                <label
-                  className="block text-sm font-medium text-gray-700 mb-2"
-                  htmlFor="description"
-                >
-                  Description (optionnel)
-                </label>
-                <textarea
-                  value={newRecharge.description}
-                  onChange={(e) => setNewRecharge({ ...newRecharge, description: e.target.value })}
-                  rows={3}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary/40 focus:border-brand-primary transition-all resize-none"
-                  placeholder="Description de la recharge"
-                  id="description"
-                ></textarea>
+              {/* CF-U1 item 8 — the method is FIXED (bank transfer): a static line, not a control.
+                  The old select/description inputs collected values the api never received. */}
+              <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                <span className="text-sm font-medium text-gray-700">Méthode de paiement</span>
+                <span className="text-sm font-semibold text-gray-900">
+                  {RECHARGE_PAYMENT_METHOD}
+                </span>
               </div>
 
               <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
@@ -423,7 +389,7 @@ export default function MyRecharges() {
                   type="button"
                   onClick={() => {
                     setShowNewRechargeModal(false);
-                    setNewRecharge({ amount: '', payment_method: 'card', description: '' });
+                    setNewAmount('');
                   }}
                   className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-all font-medium"
                   disabled={submitting}

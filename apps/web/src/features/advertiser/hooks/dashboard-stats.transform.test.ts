@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { htTtcLabel } from '@/lib/money';
+
 import { computeDashboardStats } from './dashboard-stats.transform';
 
 // Fixed reference date so the current/previous-year bucketing is deterministic.
@@ -43,11 +45,13 @@ describe('computeDashboardStats', () => {
     expect(result.stats.prevYearCampaigns).toBe(0);
   });
 
-  it('formats the balance as a fr-FR TND string and echoes the raw amount', () => {
-    const result = computeDashboardStats([], 1234.5, NOW);
+  it('formats the balance as the shared HT (TTC) label and echoes the raw amount (CF-U1)', () => {
+    const result = computeDashboardStats([], 1000, NOW);
 
-    expect(result.stats.balance).toMatch(/TND$/);
-    expect(result.availableBalanceTnd).toBe(1234.5);
+    // The SHARED money lib is the one formatter (TVA lives there, nowhere else).
+    expect(result.stats.balance).toBe(htTtcLabel(1000));
+    expect(result.stats.balance).toMatch(/TND HT \(.+TND TTC\)$/);
+    expect(result.availableBalanceTnd).toBe(1000);
   });
 
   it('rounds the conversion rate to one decimal place', () => {
