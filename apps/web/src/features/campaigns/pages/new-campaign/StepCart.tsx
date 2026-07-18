@@ -1,6 +1,6 @@
 import {
   ArrowRight,
-  DollarSign,
+  Banknote,
   Info,
   Loader2,
   Network,
@@ -9,8 +9,8 @@ import {
   TrendingUp,
 } from 'lucide-react';
 
+import GradientPillButton from '@/components/GradientPillButton';
 import {
-  CART_BUDGET_DEFAULT_TND,
   CART_BUDGET_MAX_TND,
   CART_BUDGET_MIN_TND,
   CART_BUDGET_STEP_TND,
@@ -22,6 +22,7 @@ import { estimateImpressions } from '@/features/campaigns/lib/impressions';
 import { toChipLabel } from '@/features/campaigns/lib/targeting-chip-label';
 import { zonesRecapLabel } from '@/features/campaigns/lib/zones-selection';
 import { useCampaignTargeting } from '@/features/campaigns/targeting/hooks/useCampaignTargeting';
+import { htTtcLabel, ttcParenthetical } from '@/lib/money';
 
 import CreativePreviewTile from './CreativePreviewTile';
 
@@ -79,14 +80,17 @@ export default function StepCart({
   const { data: creatives = [] } = useMyCreatives(userId);
   const previewUrl = useCreativePreviewUrl(creativeId);
 
-  // Controlled slider. A null budget (an old draft loaded without one) renders at the default MAX
-  // position; the orchestrator seeds the state to MAX so submit works untouched.
-  const value = requestedBudget ?? CART_BUDGET_DEFAULT_TND;
+  // CF-U1 (Mejri item 6) — the budget-null contract: an UNTOUCHED budget is null and DISPLAYS as
+  // « — » (no phantom default); the first drag of the cursor sets a real value. Enregistrer /
+  // Soumettre stay locked until a positive amount is explicitly chosen.
+  const value = requestedBudget;
   const busy = submitting || saving;
-  const canAct = !busy && value > 0;
+  const canAct = !busy && value != null && value > 0;
 
-  // Impressions estimate — null while the CPM is loading/errored so the tile renders "—", never NaN.
-  const impressions = estimateImpressions(value, pricing.data?.standard_cpm_tnd ?? null);
+  // Impressions estimate — null while the budget is unset or the CPM is loading/errored, so the
+  // tile renders "—", never NaN.
+  const impressions =
+    value == null ? null : estimateImpressions(value, pricing.data?.standard_cpm_tnd ?? null);
 
   const chips = targeting.rows.length ? targeting.rows.map(toChipLabel) : ['Toutes catégories'];
 
@@ -204,10 +208,13 @@ export default function StepCart({
             <div className="mt-5 grid grid-cols-2 gap-3">
               <div className="rounded-2xl bg-brand-primary/10 p-4">
                 <span className="mb-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white">
-                  <DollarSign className="h-4 w-4 text-brand-deep" />
+                  <Banknote className="h-4 w-4 text-brand-deep" />
                 </span>
                 <p className="text-sm text-gray-600">Montant estimé</p>
-                <p className="mt-0.5 text-lg font-bold text-brand-deep">{tnd.format(value)} TND</p>
+                {/* CF-U1 — every displayed montant carries its TTC (Mejri item 6). */}
+                <p className="mt-0.5 text-lg font-bold text-brand-deep">
+                  {value == null ? '—' : htTtcLabel(value)}
+                </p>
               </div>
               <div className="rounded-2xl bg-brand-accent/10 p-4">
                 <span className="mb-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white">
@@ -222,8 +229,22 @@ export default function StepCart({
 
             <div className="mt-4 rounded-2xl border border-gray-200 p-5">
               <div className="mb-4 text-center">
-                <span className="text-3xl font-bold text-gray-900">{tnd.format(value)}</span>
-                <span className="ml-1 text-base font-medium text-gray-400">TND</span>
+                <span className="text-3xl font-bold text-gray-900">
+                  {value == null ? '—' : tnd.format(value)}
+                </span>
+                <span className="ml-1 text-base font-medium text-gray-400">
+                  {value == null ? '' : 'TND HT'}
+                </span>
+                {value != null && (
+                  <p className="mt-1 text-sm font-medium text-gray-500">
+                    {ttcParenthetical(value)}
+                  </p>
+                )}
+                {value == null && (
+                  <p className="mt-1 text-sm text-gray-500">
+                    Déplacez le curseur pour renseigner votre budget.
+                  </p>
+                )}
               </div>
 
               <input
@@ -232,10 +253,12 @@ export default function StepCart({
                 min={CART_BUDGET_MIN_TND}
                 max={CART_BUDGET_MAX_TND}
                 step={CART_BUDGET_STEP_TND}
-                value={value}
+                value={value ?? CART_BUDGET_MIN_TND}
                 onChange={(e) => setRequestedBudget(Number(e.target.value))}
                 aria-label="Budget indicatif (TND)"
-                aria-valuetext={`${tnd.format(value)} TND`}
+                aria-valuetext={
+                  value == null ? 'Aucun budget renseigné' : `${tnd.format(value)} TND`
+                }
                 className="w-full cursor-pointer accent-brand-primary"
               />
               <div className="mt-1 flex justify-between text-xs font-medium text-gray-400">
@@ -315,23 +338,14 @@ export default function StepCart({
             {saving && <Loader2 className="h-4 w-4 animate-spin" />}
             <span>{saving ? 'Enregistrement…' : 'Enregistrer'}</span>
           </button>
-          <button
-            type="button"
+          <GradientPillButton
             onClick={() => void onSubmit()}
             disabled={!canAct}
-            className={`flex items-center justify-center gap-2 rounded-xl px-6 py-3 font-semibold shadow-lg transition-all ${
-              !canAct
-                ? 'cursor-not-allowed bg-gray-300 text-gray-500'
-                : 'bg-gradient-to-r from-brand-primary to-brand-deep text-white hover:from-brand-primary/90 hover:to-brand-deep'
-            }`}
+            loading={submitting}
+            icon={<Send className="h-4 w-4" />}
           >
-            {submitting ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
-            <span>{submitting ? 'Envoi…' : 'Soumettre la campagne'}</span>
-          </button>
+            {submitting ? 'Envoi…' : 'Soumettre la campagne'}
+          </GradientPillButton>
         </div>
       </div>
     </div>

@@ -1,6 +1,5 @@
 import { parseCampaignUiDate, toLocalDateOnlyString } from '@/features/campaigns/lib/wizard-dates';
 
-import { CART_BUDGET_DEFAULT_TND } from './cart-budget';
 import type { WizardState } from './wizard-types';
 
 /**
@@ -37,8 +36,11 @@ export function buildInitialWizardState(args: BuildInitialWizardStateArgs): Wiza
     startDate: startRaw ? toLocalDateOnlyString(startRaw) : null,
     endDate: endRaw ? toLocalDateOnlyString(endRaw) : null,
     creativeId: c?.creative_id ?? null,
-    // Interim budget slider defaults to its MAX position; an edit-mode record keeps its saved value.
-    requestedBudget: c?.requested_budget ?? CART_BUDGET_DEFAULT_TND,
+    // CF-U1 (Mejri item 6) — the budget-null contract: NULL until the advertiser explicitly drags
+    // the Validation slider. Seeding the slider default here was the « 5 000 TND » phantom: every
+    // per-step Enregistrer persisted a budget nobody chose. An edit-mode record keeps its saved
+    // value (possibly null).
+    requestedBudget: c?.requested_budget ?? null,
     // CF-Z1 — a resumed campaign keeps its persisted zones (possibly none = whole network); a
     // fresh wizard starts empty and the Zones step defaults it once the zones load.
     zoneIds: (c?.zones ?? []).map((z) => z.zone_id),

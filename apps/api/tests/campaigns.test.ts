@@ -64,6 +64,8 @@ const seedCampaign = async (
     status?: 'draft' | 'pending' | 'upcoming' | 'active' | 'rejected' | 'completed';
     startDate?: string | null;
     endDate?: string | null;
+    /** CF-U1 — submit now gates on a positive budget; submit-bound fixtures set one. */
+    budget?: number;
   } = {},
 ): Promise<string> => {
   const [c] = await db
@@ -75,6 +77,7 @@ const seedCampaign = async (
       status: opts.status ?? 'draft',
       startDate: opts.startDate ?? null,
       endDate: opts.endDate ?? null,
+      requestedBudget: opts.budget != null ? String(opts.budget) : null,
     })
     .returning();
   return c?.id ?? '';
@@ -412,7 +415,8 @@ describe('campaigns draft lifecycle (advertiser, real Postgres)', () => {
     const patched = await app.inject({
       method: 'PATCH',
       url: `/api/campaigns/${id}`,
-      payload: { start_date: nextSaturday(plusDays(saturday, 1)) },
+      // CF-U1 — submit gates on a positive budget; the wizard PATCHes it at Validation.
+      payload: { start_date: nextSaturday(plusDays(saturday, 1)), requested_budget: 1200 },
     });
     expect(patched.statusCode).toBe(200);
 
@@ -690,6 +694,7 @@ describe('campaigns draft lifecycle (advertiser, real Postgres)', () => {
       status: 'rejected',
       startDate: floorDate(),
       endDate: plusDays(floorDate(), 20),
+      budget: 1000, // CF-U1 — resubmit passes the budget gate like any submit
     });
     await db
       .update(campaigns)
@@ -815,11 +820,12 @@ describe('campaigns draft lifecycle (advertiser, real Postgres)', () => {
   // ── POST /api/campaigns/:id/submit ───────────────────────────────────────────
   it('submits a draft → pending and stamps submitted_at (200)', async () => {
     const me = await seedUser();
-    // CF-S1 — submit now requires BOTH dates (the wizard always sends them).
+    // CF-S1 — submit requires BOTH dates; CF-U1 — and a positive budget.
     const id = await seedCampaign(me, {
       status: 'draft',
       startDate: floorDate(),
       endDate: plusDays(floorDate(), 20),
+      budget: 1000,
     });
     mockSession(me);
     const res = await app.inject({ method: 'POST', url: `/api/campaigns/${id}/submit` });

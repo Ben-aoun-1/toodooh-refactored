@@ -4,7 +4,7 @@ import {
   Search,
   ArrowDownLeft,
   ArrowUpRight,
-  DollarSign,
+  Banknote,
   Calendar,
   X,
   ArrowRight,
@@ -378,7 +378,7 @@ export default function OwnerRevenue() {
                         <th className="px-5 py-3 pl-6">Désignation</th>
                         <th className="px-5 py-3">
                           <span className="inline-flex items-center gap-1.5">
-                            <DollarSign className="w-3.5 h-3.5" />
+                            <Banknote className="w-3.5 h-3.5" />
                             Montant
                           </span>
                         </th>

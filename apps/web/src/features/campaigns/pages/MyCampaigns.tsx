@@ -5,7 +5,7 @@ import {
   ChevronRight,
   Calendar,
   TrendingUp,
-  DollarSign,
+  Banknote,
   MoreVertical,
   Plus,
   MapPin,
@@ -39,6 +39,7 @@ import {
 import { campaignStatusUi } from '@/features/campaigns/lib/campaign-status';
 import { useWizardResumeStore } from '@/features/campaigns/stores/wizard-resume.store';
 import { logger } from '@/lib/logger';
+import { htTtcOrDash } from '@/lib/money';
 
 const log = logger.child({ module: 'MyCampaigns' });
 
@@ -648,15 +649,13 @@ export default function MyCampaigns() {
                 <div className="flex items-center justify-between gap-4 mb-4 mt-auto">
                   <div>
                     <div className="flex items-center gap-1 text-xs text-gray-500">
-                      <DollarSign className="h-3.5 w-3.5 text-[#60ba76]" />
+                      <Banknote className="h-3.5 w-3.5 text-[#60ba76]" />
                       <span>BUDGET</span>
                     </div>
+                    {/* CF-U1 (Mejri item 6) — null renders « — » (no phantom 5 000); a set
+                        budget carries its TTC. */}
                     <p className="text-base font-bold text-gray-900 tabular-nums">
-                      {new Intl.NumberFormat('en-US', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      }).format(campaign.budget)}{' '}
-                      TND
+                      {htTtcOrDash(campaign.budget)}
                     </p>
                   </div>
                   <div className="flex items-start gap-1.5 justify-end">
@@ -755,7 +754,7 @@ export default function MyCampaigns() {
                   </th>
                   <th className="px-5 py-3.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     <span className="inline-flex items-center gap-1.5">
-                      <DollarSign className="h-3.5 w-3.5" />
+                      <Banknote className="h-3.5 w-3.5" />
                       Budget
                     </span>
                   </th>
@@ -796,11 +795,8 @@ export default function MyCampaigns() {
                           year: 'numeric',
                         })
                       : '—';
-                    const budgetStr =
-                      new Intl.NumberFormat('en-US', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      }).format(campaign.budget || 0) + ' TND';
+                    // CF-U1 (Mejri item 6) — « — » for a null budget; HT (TTC) otherwise.
+                    const budgetStr = htTtcOrDash(campaign.budget);
                     const impressionsStr = (campaign.validated_impressions || 0)
                       .toLocaleString('fr-FR')
                       .replace(/\s/g, ' ');

@@ -151,3 +151,25 @@ export const toCategoryOnly = (lines: readonly TargetingLine[]): TargetingLine[]
   }
   return out;
 };
+
+// ── CF-U1 — the checkbox-grid presentation (Mejri item 2). Same lines, same wire: a checked
+// category ⟺ one category-only line {categoryId, class: null}; the control changed, not the
+// semantics. ────────────────────────────────────────────────────────────────────────────────────
+
+/** The category ids currently targeted (specific lines only — all-network is the toggle's state). */
+export const selectedCategoryIds = (lines: readonly TargetingLine[]): string[] =>
+  lines.flatMap((line) => (line.categoryId !== null ? [line.categoryId] : []));
+
+/** Check/uncheck one category: adds the category-only line, or removes an existing one. */
+export const toggleCategoryLine = (
+  lines: readonly TargetingLine[],
+  categoryId: string,
+): TargetingLine[] => {
+  const existing = lines.findIndex((line) => line.categoryId === categoryId);
+  if (existing !== -1) return lines.filter((_, i) => i !== existing);
+  return [...lines, { categoryId, class: null }];
+};
+
+/** The mockup's helper line — « Vous avez sélectionné N catégorie(s). … » */
+export const categoriesHelperLine = (count: number): string =>
+  `Vous avez sélectionné ${count} catégorie(s). Plus votre ciblage est large, plus vous augmentez votre portée.`;

@@ -1,5 +1,5 @@
 import {
-  DollarSign,
+  Banknote,
   CheckCircle,
   XCircle,
   Clock,
@@ -136,7 +136,7 @@ export default function RechargeManagement() {
               <p className="text-sm text-gray-600 mb-1">Total Recharges</p>
               <p className="text-2xl font-bold text-gray-900">{stats.total_recharges}</p>
             </div>
-            <DollarSign className="h-10 w-10 text-blue-500" />
+            <Banknote className="h-10 w-10 text-blue-500" />
           </div>
         </div>
         <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-yellow-500">

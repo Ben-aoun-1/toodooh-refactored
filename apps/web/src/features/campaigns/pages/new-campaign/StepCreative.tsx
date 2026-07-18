@@ -6,10 +6,12 @@ import {
   Info,
   Loader2,
   Upload,
+  X,
 } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 
+import GradientPillButton from '@/components/GradientPillButton';
 import { useCreativeUpload, useMyCreatives } from '@/features/campaigns/hooks/useCreativeApi';
 import {
   PHOTO_ACCEPT,
@@ -44,6 +46,8 @@ interface StepCreativeProps {
   selectedCreativeId: string | null;
   /** Link a creative onto the draft (PATCH creative_id) — owned by the orchestrator. */
   onSelectCreative: (creativeId: string) => void | Promise<void>;
+  /** CF-U1 (Mejri item 4) — unlink the selected creative (PATCH creative_id: null + clear state). */
+  onDeselectCreative: () => void | Promise<void>;
   /** True while the link PATCH is in flight (disables the picker). */
   linking: boolean;
   onNext: () => void | Promise<void>;
@@ -61,6 +65,7 @@ export default function StepCreative({
   userId,
   selectedCreativeId,
   onSelectCreative,
+  onDeselectCreative,
   linking,
   onNext,
   onBack,
@@ -231,41 +236,58 @@ export default function StepCreative({
                 {creatives.map((creative: CreativeView) => {
                   const isSelected = creative.id === selectedCreativeId;
                   return (
-                    <button
-                      key={creative.id}
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void onSelectCreative(creative.id)}
-                      className={`relative text-left p-4 rounded-xl border-2 transition-all disabled:opacity-60 ${
-                        isSelected
-                          ? 'border-brand-primary bg-brand-primary/5'
-                          : 'border-gray-200 bg-white hover:border-gray-300'
-                      }`}
-                    >
-                      {isSelected && (
-                        <CheckCircle className="absolute top-3 right-3 h-5 w-5 text-brand-primary" />
-                      )}
-                      <div className="flex items-center gap-2 mb-1">
-                        {creative.creative_type === 'video' ? (
-                          <Film className="h-4 w-4 text-gray-500" />
-                        ) : (
-                          <ImageIcon className="h-4 w-4 text-gray-500" />
+                    <div key={creative.id} className="relative">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void onSelectCreative(creative.id)}
+                        aria-pressed={isSelected}
+                        className={`w-full relative text-left p-4 rounded-xl border-2 transition-all disabled:opacity-60 ${
+                          isSelected
+                            ? 'border-brand-primary bg-brand-primary/5'
+                            : 'border-gray-200 bg-white hover:border-gray-300'
+                        }`}
+                      >
+                        {isSelected && (
+                          <CheckCircle className="absolute top-3 right-10 h-5 w-5 text-brand-primary" />
                         )}
-                        <span className="font-medium text-gray-900 text-sm truncate">
-                          {creative.title || creative.original_filename || 'Création'}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-gray-500">
-                        <span>{creative.duration_seconds ?? '—'}s</span>
-                        <span
-                          className={`px-2 py-0.5 rounded-full font-medium ${
-                            STATUS_STYLE[creative.validation_status] ?? 'bg-gray-100 text-gray-600'
-                          }`}
+                        <div className="flex items-center gap-2 mb-1">
+                          {creative.creative_type === 'video' ? (
+                            <Film className="h-4 w-4 text-gray-500" />
+                          ) : (
+                            <ImageIcon className="h-4 w-4 text-gray-500" />
+                          )}
+                          <span className="font-medium text-gray-900 text-sm truncate">
+                            {creative.title || creative.original_filename || 'Création'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                          <span>{creative.duration_seconds ?? '—'}s</span>
+                          <span
+                            className={`px-2 py-0.5 rounded-full font-medium ${
+                              STATUS_STYLE[creative.validation_status] ??
+                              'bg-gray-100 text-gray-600'
+                            }`}
+                          >
+                            {STATUS_LABEL[creative.validation_status] ?? creative.validation_status}
+                          </span>
+                        </div>
+                      </button>
+                      {/* CF-U1 (Mejri item 4) — the selected tile gains a deselect affordance;
+                          the step gate re-blocks Suivant once nothing is selected. */}
+                      {isSelected && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void onDeselectCreative()}
+                          aria-label="Désélectionner cette création"
+                          title="Désélectionner"
+                          className="absolute top-2.5 right-2.5 flex h-6 w-6 items-center justify-center rounded-full bg-white text-gray-400 shadow-sm ring-1 ring-gray-200 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
                         >
-                          {STATUS_LABEL[creative.validation_status] ?? creative.validation_status}
-                        </span>
-                      </div>
-                    </button>
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
                   );
                 })}
               </div>
@@ -297,19 +319,13 @@ export default function StepCreative({
           <ArrowRight className="h-4 w-4 rotate-180" />
           Retour
         </button>
-        <button
-          type="button"
+        <GradientPillButton
           onClick={handleNext}
           disabled={!selectedCreativeId || busy}
-          className={`px-6 py-3 rounded-xl font-semibold transition-all flex items-center space-x-2 shadow-lg ${
-            !selectedCreativeId || busy
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : 'bg-gradient-to-r from-brand-primary to-brand-deep text-white hover:from-brand-primary/90 hover:to-brand-deep'
-          }`}
+          trailingIcon={<ArrowRight className="h-4 w-4" />}
         >
-          <span>Suivant</span>
-          <ArrowRight className="h-4 w-4" />
-        </button>
+          Suivant
+        </GradientPillButton>
       </div>
     </div>
   );

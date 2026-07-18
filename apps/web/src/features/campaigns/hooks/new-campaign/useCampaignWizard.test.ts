@@ -377,3 +377,42 @@ describe('singleFlight (ensureDraft concurrency guard)', () => {
     expect(run).toHaveBeenCalledTimes(2);
   });
 });
+
+// ── CF-U1 (Mejri item 6) — the budget-null contract, wizard side ───────────────────────────────
+describe('budget-null contract (CF-U1)', () => {
+  it('performSaveDraft with an UNTOUCHED budget (null) succeeds and OMITS requested_budget', async () => {
+    const update = vi.fn().mockResolvedValue(fakeCampaign({ requested_budget: null }));
+    const state = validBasics({ draftCampaignId: 'cmp-9', requestedBudget: null });
+    const result = await performSaveDraft({ state, deps: { update } });
+    expect(result.kind).toBe('success');
+    expect(update).toHaveBeenCalledWith('cmp-9', {
+      name: state.campaignName.trim(),
+      start_date: state.startDate,
+      end_date: state.endDate,
+      zone_ids: state.zoneIds,
+    });
+    const patch = update.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect('requested_budget' in patch).toBe(false); // the draft keeps its NULL — no phantom 5 000
+  });
+
+  it('an explicitly set budget still rides the PATCH (any re-drag persists)', async () => {
+    const update = vi.fn().mockResolvedValue(fakeCampaign({ requested_budget: 50 }));
+    const state = validBasics({ draftCampaignId: 'cmp-9', requestedBudget: 50 });
+    await performSaveDraft({ state, deps: { update } });
+    expect(update.mock.calls[0]?.[1]).toMatchObject({ requested_budget: 50 });
+  });
+
+  it('performSubmit still refuses a NULL budget without calling the API (the submit gate)', async () => {
+    const deps = {
+      update: vi.fn().mockResolvedValue(fakeCampaign()),
+      submit: vi.fn().mockResolvedValue(fakeCampaign({ status: 'pending' })),
+    };
+    const result = await performSubmit({
+      state: validBasics({ draftCampaignId: 'cmp-9', requestedBudget: null }),
+      deps,
+    });
+    expect(result.kind).toBe('error');
+    expect(deps.update).not.toHaveBeenCalled();
+    expect(deps.submit).not.toHaveBeenCalled();
+  });
+});

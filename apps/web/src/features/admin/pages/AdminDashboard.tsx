@@ -3,7 +3,7 @@ import {
   Monitor,
   Video,
   TrendingUp,
-  DollarSign,
+  Banknote,
   Activity,
   AlertCircle,
   CheckCircle,
@@ -88,7 +88,7 @@ export default function AdminDashboard() {
                   {formatCurrency(revenueStats?.total_tnd ?? 0)}
                 </p>
               </div>
-              <DollarSign className="h-12 w-12 text-green-200" />
+              <Banknote className="h-12 w-12 text-green-200" />
             </div>
           </div>
 
@@ -244,7 +244,7 @@ export default function AdminDashboard() {
                     {formatCurrency(campaignsStats?.average_budget_tnd ?? 0)}
                   </p>
                 </div>
-                <DollarSign className="h-8 w-8 text-purple-500" />
+                <Banknote className="h-8 w-8 text-purple-500" />
               </div>
             </div>
           </div>

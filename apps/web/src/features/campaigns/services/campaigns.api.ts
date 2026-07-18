@@ -54,9 +54,21 @@ export interface UpdateCampaignInput {
   creative_id?: string | null;
 }
 
+/** CF-U1 — one plottable venue of the coverage preview (GET /:id/coverage, kept at CF-Z1). */
+export interface CoverageVenue {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+}
+
 export const campaignsApi = {
   create(input: CreateCampaignInput): Promise<CampaignView> {
     return apiClient.post<CampaignView>('/campaigns', input);
+  },
+  /** The active, coordinate-bearing venues matching the campaign's targeting (map preview). */
+  coverage(id: string): Promise<{ screenhosts: CoverageVenue[] }> {
+    return apiClient.get<{ screenhosts: CoverageVenue[] }>(`/campaigns/${id}/coverage`);
   },
   mine(): Promise<CampaignView[]> {
     return apiClient.get<CampaignView[]>('/campaigns/mine');

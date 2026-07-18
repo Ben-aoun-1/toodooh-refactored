@@ -12,7 +12,7 @@ import {
   Calendar,
   Megaphone,
   Monitor,
-  DollarSign,
+  Banknote,
   MapPin,
   Sliders,
   Coins,
@@ -210,7 +210,7 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
                         : 'text-gray-700 hover:bg-gray-100 hover:text-brand-primary'
                     }`}
                   >
-                    <DollarSign className="mr-3 h-5 w-5" />
+                    <Banknote className="mr-3 h-5 w-5" />
                     Recharges
                   </button>
                 </>

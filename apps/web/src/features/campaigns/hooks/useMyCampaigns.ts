@@ -21,7 +21,10 @@ export interface MyCampaignRow {
   endDate: Date | null;
   start_date: string | null;
   end_date: string | null;
-  budget: number;
+  /** CF-U1 — NULL until the advertiser sets it (no phantom defaults; renders « — »). */
+  budget: number | null;
+  /** CF-U1 — the wire field, riding the edit-mode record so Reprendre rehydrates the budget. */
+  requested_budget: number | null;
   content_validation_status: string | null;
   submitted_at: string | null;
   /** CF-Q1 — « Motif du refus » shown on Non validé campaigns (null otherwise). */
@@ -53,7 +56,8 @@ function toRow(c: CampaignView): MyCampaignRow {
     endDate: c.end_date ? new Date(c.end_date) : null,
     start_date: c.start_date,
     end_date: c.end_date,
-    budget: c.requested_budget ?? 0,
+    budget: c.requested_budget ?? null,
+    requested_budget: c.requested_budget ?? null,
     content_validation_status: c.content_validation_status,
     submitted_at: c.submitted_at,
     reject_reason: c.reject_reason,

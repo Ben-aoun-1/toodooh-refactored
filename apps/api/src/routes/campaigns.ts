@@ -467,6 +467,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         status: campaigns.status,
         startDate: campaigns.startDate,
         endDate: campaigns.endDate,
+        requestedBudget: campaigns.requestedBudget,
       })
       .from(campaigns)
       .where(and(eq(campaigns.id, parsedParams.data.id), eq(campaigns.advertiserId, userId)))
@@ -492,6 +493,16 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     // CF-Q2 — re-check the floor at submit time: a draft saved days ago may now be too soon.
     const violation = startDateViolation(existing.startDate);
     if (violation) return reply.status(400).send(startDateRejection(violation));
+    // CF-U1 — the budget-null contract: requested_budget stays NULL until the advertiser sets it
+    // at Validation, so the positive-budget requirement the wizard gated CLIENT-side now holds
+    // server-side too (activation derives i_cible from the budget — a budget-less pending row
+    // would dead-end there, exactly like a date-less one).
+    if (existing.requestedBudget === null || Number(existing.requestedBudget) <= 0) {
+      return reply.status(400).send({
+        error: 'MISSING_BUDGET',
+        message: 'A campaign needs a positive requested budget before submission.',
+      });
+    }
     // CF-S1 — a resubmitted Non validé sheds its rejection audit with the status.
     const [updated] = await db
       .update(campaigns)

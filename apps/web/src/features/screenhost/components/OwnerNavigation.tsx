@@ -3,7 +3,7 @@ import {
   Menu,
   X,
   Home,
-  DollarSign,
+  Banknote,
   Calendar,
   CalendarDays,
   ChevronLeft,
@@ -88,7 +88,7 @@ const navigation = [
   {
     name: 'Mes revenus',
     href: '/owner-revenue',
-    icon: DollarSign,
+    icon: Banknote,
     iconSrc: financeIcon,
     iconSrcActive: financeIconActive,
   },

@@ -2,6 +2,7 @@ import { ArrowRight, Target } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 
+import GradientPillButton from '@/components/GradientPillButton';
 import {
   CampaignTargetingPanel,
   type CampaignTargetingPanelHandle,
@@ -73,14 +74,12 @@ export default function StepTargeting({
           <ArrowRight className="h-4 w-4 rotate-180" />
           Retour
         </button>
-        <button
-          type="button"
+        <GradientPillButton
           onClick={() => void handleNext()}
-          className="px-6 py-3 rounded-xl font-semibold transition-all flex items-center space-x-2 shadow-lg bg-gradient-to-r from-brand-primary to-brand-deep text-white hover:from-brand-primary/90 hover:to-brand-deep"
+          trailingIcon={<ArrowRight className="h-4 w-4" />}
         >
-          <span>Suivant</span>
-          <ArrowRight className="h-4 w-4" />
-        </button>
+          Suivant
+        </GradientPillButton>
       </div>
     </div>
   );

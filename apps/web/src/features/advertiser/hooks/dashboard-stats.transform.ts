@@ -11,6 +11,10 @@
  * No imports from `react`, `react-query`, or `supabase` — pure in / pure out.
  */
 
+// CF-U1 (Mejri item 6) — the balance card montant carries its TTC like every advertiser montant;
+// the formatter (and the 19% rate) live in the shared money lib (still pure).
+import { htTtcLabel } from '@/lib/money';
+
 export interface DashboardStats {
   activeCampaigns: number;
   campaignsDiffused: number;
@@ -30,7 +34,7 @@ export const INITIAL_STATS: DashboardStats = {
   campaignsDiffused: 0,
   totalViews: 0,
   conversionRate: 0,
-  balance: '0 TND',
+  balance: '0 TND HT (0 TND TTC)',
   totalBudget: 0,
   totalDurationSeconds: 0,
   prevYearCampaigns: 0,
@@ -52,11 +56,6 @@ export interface DashboardStatsResult {
   availableBalanceTnd: number;
   totalCreatedCampaignsCount: number;
 }
-
-const formatAmountFr = (amount: number) =>
-  `${new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
-    amount,
-  )} TND`;
 
 /**
  * Compute the advertiser dashboard stats. `now` is injectable so the
@@ -110,7 +109,7 @@ export function computeDashboardStats(
       campaignsDiffused,
       totalViews,
       conversionRate: Math.round(conversionRate * 10) / 10,
-      balance: formatAmountFr(balance),
+      balance: htTtcLabel(balance),
       totalBudget,
       totalDurationSeconds,
       prevYearCampaigns,
