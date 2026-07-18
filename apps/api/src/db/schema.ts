@@ -1018,6 +1018,53 @@ export const campaignDispatchAllocation = pgTable(
 
 export type CampaignDispatchAllocation = typeof campaignDispatchAllocation.$inferSelect;
 
+// ── redispatch rounds (E6 — the rattrapage audit trail) ──────────────────────
+// One row per EXECUTED rattrapage round (a round is only recorded when it changed state: placed
+// volume and/or consumed stored reliquat). The ledger makes the detector STATELESS: net missed =
+// gross missed − Σ prior rounds' missed-sourced placements (placed_fact − reliquat_consumed_fact),
+// so a re-tick with no new proofs never double-counts. Also E4's future TxActivité input.
+// Facturable integers throughout (the plan's billing unit); the physical per-SH detail lives in
+// the JSONB snapshots.
+export interface RedispatchMissedFrom {
+  screenhost_id: string;
+  slots: number; // elapsed-undelivered slot count at round time
+  imp_physical: number; // Σ physical impressions of those slots
+}
+
+export interface RedispatchPlacedTo {
+  screenhost_id: string;
+  added_fact: number; // facturable share placed onto this screenhost this round
+  merged: boolean; // true = absorbed into an existing allocation (re-consent), false = new row
+}
+
+export const campaignRedispatchRounds = pgTable(
+  'campaign_redispatch_rounds',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    planId: uuid('plan_id')
+      .notNull()
+      .references(() => campaignDispatchPlan.id, { onDelete: 'cascade' }),
+    roundTs: timestamp('round_ts', { withTimezone: true }).notNull().defaultNow(),
+    // Stored-reliquat facturable volume this round consumed (reliquat-FIRST attribution: a
+    // placement consumes the stored crumb before the missed volume, so the crumb rides the first
+    // material round; placed_fact − reliquat_consumed_fact = the missed-sourced placement the NET
+    // reconciliation deducts).
+    reliquatConsumedFact: integer('reliquat_consumed_fact').notNull().default(0),
+    missedFact: integer('missed_fact').notNull(), // NET missed facturable targeted this round
+    missedFrom: jsonb('missed_from').$type<RedispatchMissedFrom[]>().notNull(),
+    placedFact: integer('placed_fact').notNull(),
+    placedTo: jsonb('placed_to').$type<RedispatchPlacedTo[]>().notNull(),
+    residualFact: integer('residual_fact').notNull(), // V − placed (waits for reconcile / later ticks)
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('campaign_redispatch_rounds_campaign_id_idx').on(table.campaignId)],
+);
+
+export type CampaignRedispatchRound = typeof campaignRedispatchRounds.$inferSelect;
+
 // ── recharges + wallet (L-wallet — manual/offline top-up) ───────────────────
 // A screencaster (the `advertiser` role) tops up their wallet by BANK TRANSFER — there is NO online
 // gateway (operator ruling 2026-06-27, "fake money"/manual). The flow: POST /api/recharges creates a

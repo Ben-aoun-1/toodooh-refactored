@@ -1,5 +1,4 @@
-import { formatInTimeZone } from 'date-fns-tz';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 import { db } from '../../db/client.js';
 import {
@@ -7,27 +6,16 @@ import {
   type CampaignScreenhostPayout,
   campaignDispatchAllocation,
   campaignDispatchPlan,
+  campaignRedispatchRounds,
   campaignReconciliation,
   campaignScreenhostPayout,
-  proofOfPlay,
 } from '../../db/schema.js';
 import { S_MIN_TND } from '../vf-constants.js';
 
-import {
-  type AllocationInput,
-  type CampaignValuation,
-  reconcileCampaign,
-  slotKey,
-} from './valuation.js';
-
-// Créneau date+hour are Africa/Tunis (the playout window pins to Tunis); bucket a proof's SERVER
-// received_at into the same zone so a proof slot matches a planned créneau slot.
-const PLAYOUT_TZ = 'Africa/Tunis';
-const proofSlotKey = (receivedAt: Date): string =>
-  slotKey(
-    formatInTimeZone(receivedAt, PLAYOUT_TZ, 'yyyy-MM-dd'),
-    Number(formatInTimeZone(receivedAt, PLAYOUT_TZ, 'H')),
-  );
+// E6 — the delivered-per-créneau bucketing is SHARED with the redispatch detector
+// (delivered-slots.ts): one FIX A implementation, zero drift between detection and settlement.
+import { loadDeliveredSlots } from './delivered-slots.js';
+import { type AllocationInput, type CampaignValuation, reconcileCampaign } from './valuation.js';
 
 export type ReconcileResult =
   | { status: 'NO_PLAN' }
@@ -73,29 +61,35 @@ export const reconcileCampaignById = async (
     .from(campaignDispatchAllocation)
     .where(eq(campaignDispatchAllocation.planId, plan.id));
 
-  // Delivered SLOTS per screenhost: bucket each VIDEO_ENDED proof's SERVER received_at into its
-  // (date,hour) (Africa/Tunis). A Set ⇒ binary per slot — looping VIDEO_ENDED within an hour credits
-  // that slot ONCE (spam-resistant, FIX A).
-  const proofRows = await db
-    .select({ screenhostId: proofOfPlay.screenhostId, receivedAt: proofOfPlay.receivedAt })
-    .from(proofOfPlay)
-    .where(and(eq(proofOfPlay.campaignId, campaignId), eq(proofOfPlay.eventType, 'VIDEO_ENDED')));
-  const deliveredBySh = new Map<string, Set<string>>();
-  for (const row of proofRows) {
-    let set = deliveredBySh.get(row.screenhostId);
-    if (!set) {
-      set = new Set<string>();
-      deliveredBySh.set(row.screenhostId, set);
-    }
-    set.add(proofSlotKey(row.receivedAt));
-  }
+  // Delivered SLOTS per screenhost — the shared FIX A bucketing (binary per Tunis (date,hour)).
+  const deliveredBySh = await loadDeliveredSlots(campaignId);
+
+  // E6 — the NET context: the plan's frozen T (physical → facturable), the CURRENT stored
+  // reliquat (never delivered, never replaced → part of the net gap by construction), and the
+  // rounds ledger's missed-sourced placements (the double-count the NET math removes — a
+  // replaced-and-delivered slot can never also be refunded).
+  const rounds = await db
+    .select({
+      placedFact: campaignRedispatchRounds.placedFact,
+      reliquatConsumedFact: campaignRedispatchRounds.reliquatConsumedFact,
+    })
+    .from(campaignRedispatchRounds)
+    .where(eq(campaignRedispatchRounds.campaignId, campaignId));
+  const replacedMissedFact = rounds.reduce(
+    (sum, r) => sum + Math.max(0, r.placedFact - r.reliquatConsumedFact),
+    0,
+  );
 
   const inputs: AllocationInput[] = allocations.map((a) => ({
     screenhostId: a.screenhostId,
     creneaux: a.creneaux.map((c) => ({ date: c.date, hour: c.hour, impressions: c.impressions })),
     deliveredSlots: deliveredBySh.get(a.screenhostId) ?? new Set<string>(),
   }));
-  const valuation = reconcileCampaign(inputs, cpm, sMin);
+  const valuation = reconcileCampaign(inputs, cpm, sMin, {
+    t: Number(plan.tTierCoef),
+    reliquatStockeFact: plan.reliquatStocke,
+    replacedMissedFact,
+  });
 
   const persisted = await db
     .transaction(async (tx) => {
