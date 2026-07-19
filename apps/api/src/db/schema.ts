@@ -915,6 +915,10 @@ export const dispatchConfig = pgTable(
     t10s: numeric('t_10s', { precision: 4, scale: 2 }).notNull().default('0.60'),
     t20s: numeric('t_20s', { precision: 4, scale: 2 }).notNull().default('0.70'),
     t30s: numeric('t_30s', { precision: 4, scale: 2 }).notNull().default('0.80'),
+    // CF-D1 — the campaign start-date lead in WORKING days (the J+2 floor, now calibratable for
+    // field testing; 0 = the floor is TODAY). Admin-editable 0–30; weekend-start legality
+    // (ruling #10) is untouched — only the lead moves.
+    campaignLeadWorkingDays: integer('campaign_lead_working_days').notNull().default(2),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()

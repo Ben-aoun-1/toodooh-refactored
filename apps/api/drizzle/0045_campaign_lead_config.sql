@@ -1,0 +1,1 @@
+ALTER TABLE "dispatch_config" ADD COLUMN "campaign_lead_working_days" integer DEFAULT 2 NOT NULL;

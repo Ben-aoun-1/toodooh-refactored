@@ -1,4 +1,4 @@
-import { Coins, Eye, Loader2, Save } from 'lucide-react';
+import { CalendarClock, Coins, Eye, Loader2, Save } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 
@@ -8,6 +8,7 @@ import {
   type CpmPatch,
   attentionOrderingValid,
   parseAttention,
+  parseCampaignLead,
 } from '@/features/admin/services/admin-dispatch-config.service';
 import { getErrorMessage } from '@/lib/errors';
 
@@ -27,6 +28,8 @@ export default function DispatchConfigManagement() {
   const [t10, setT10] = useState('');
   const [t20, setT20] = useState('');
   const [t30, setT30] = useState('');
+  // CF-D1 — the campaign start-date lead (jours ouvrés).
+  const [lead, setLead] = useState('');
 
   // Seed the editable inputs from the loaded config (guarded on `loading` so the undefined
   // placeholder does not churn the effect before the first read settles).
@@ -37,6 +40,7 @@ export default function DispatchConfigManagement() {
     setT10(String(config.t_10s));
     setT20(String(config.t_20s));
     setT30(String(config.t_30s));
+    setLead(String(config.campaign_lead_working_days));
   }, [loading, config]);
 
   useEffect(() => {
@@ -63,6 +67,12 @@ export default function DispatchConfigManagement() {
       toast.error("L'ordre requis est T ≤ 10 s ≤ T ≤ 20 s ≤ T ≤ 30 s");
       return;
     }
+    // CF-D1 — the lead: an integer count of jours ouvrés in [0, 30] (mirrors the server bounds).
+    const leadNum = parseCampaignLead(lead);
+    if (leadNum === null) {
+      toast.error('Le délai de lancement doit être un entier entre 0 et 30');
+      return;
+    }
 
     // Send only the changed knobs (PATCH is partial). Nothing changed → no-op.
     const patch: CpmPatch = {};
@@ -71,6 +81,7 @@ export default function DispatchConfigManagement() {
     if (t10Num !== config.t_10s) patch.t_10s = t10Num;
     if (t20Num !== config.t_20s) patch.t_20s = t20Num;
     if (t30Num !== config.t_30s) patch.t_30s = t30Num;
+    if (leadNum !== config.campaign_lead_working_days) patch.campaign_lead_working_days = leadNum;
     if (Object.keys(patch).length === 0) {
       toast('Aucune modification à enregistrer');
       return;
@@ -157,6 +168,38 @@ export default function DispatchConfigManagement() {
                 )}
                 Enregistrer
               </button>
+            </div>
+          </div>
+
+          {/* CF-D1 — the campaign start-date lead, saved by the same Enregistrer. */}
+          <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+            <div className="flex items-center gap-2 mb-1">
+              <CalendarClock className="h-5 w-5 text-brand-primary" />
+              <h3 className="text-lg font-semibold text-gray-900">Délai de lancement</h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">
+              Nombre de jours ouvrés minimum entre aujourd'hui et le début d'une campagne. Attention
+              : 0 autorise un démarrage le jour même — réservé aux tests terrain.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label
+                  className="block text-sm font-medium text-gray-700 mb-2"
+                  htmlFor="campaign-lead"
+                >
+                  Délai de lancement (jours ouvrés)
+                </label>
+                <input
+                  id="campaign-lead"
+                  type="number"
+                  step="1"
+                  min="0"
+                  max="30"
+                  value={lead}
+                  onChange={(e) => setLead(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
+                />
+              </div>
             </div>
           </div>
 

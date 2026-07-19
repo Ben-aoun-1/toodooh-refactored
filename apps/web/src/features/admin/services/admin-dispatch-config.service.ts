@@ -20,6 +20,8 @@ export interface DispatchConfigView {
   t_10s: number;
   t_20s: number;
   t_30s: number;
+  /** CF-D1 — the campaign start-date lead in jours ouvrés (0–30; 0 = floor is today, tests only). */
+  campaign_lead_working_days: number;
 }
 
 // A partial edit — any subset of the editable knobs. The server refines that at least one is
@@ -31,6 +33,7 @@ export interface CpmPatch {
   t_10s?: number;
   t_20s?: number;
   t_30s?: number;
+  campaign_lead_working_days?: number;
 }
 
 // ── E1 — the attention-T client checks, mirrors of the server rules (pinned by unit test) ───────
@@ -43,6 +46,13 @@ export function parseAttention(raw: string): number | null {
 /** The VF ordering: a longer spot holds attention better — t_10s ≤ t_20s ≤ t_30s. */
 export const attentionOrderingValid = (t10: number, t20: number, t30: number): boolean =>
   t10 <= t20 && t20 <= t30;
+
+/** CF-D1 — the campaign lead: an integer count of jours ouvrés in [0, 30] (server bounds). */
+export function parseCampaignLead(raw: string): number | null {
+  if (raw.trim() === '') return null; // Number('') is 0 — an empty field is NOT a zero lead
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 0 && n <= 30 ? n : null;
+}
 
 export const adminDispatchConfigService = {
   async get(): Promise<DispatchConfigView> {

@@ -48,6 +48,8 @@ export const DISPATCH_CONFIG_DEFAULTS = {
   t10s: 0.6,
   t20s: 0.7,
   t30s: 0.8,
+  // CF-D1 — the campaign start-date lead (working days; 0 = the floor is today, tests only).
+  campaignLeadWorkingDays: 2,
 } as const;
 
 /**

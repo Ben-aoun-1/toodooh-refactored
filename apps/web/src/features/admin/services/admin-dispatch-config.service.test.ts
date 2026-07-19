@@ -7,6 +7,7 @@ import {
   adminDispatchConfigService,
   attentionOrderingValid,
   parseAttention,
+  parseCampaignLead,
 } from './admin-dispatch-config.service';
 
 const CONFIG = {
@@ -70,5 +71,22 @@ describe('attentionOrderingValid (t_10s ≤ t_20s ≤ t_30s)', () => {
     expect(attentionOrderingValid(0.7, 0.7, 0.7)).toBe(true);
     expect(attentionOrderingValid(0.8, 0.7, 0.9)).toBe(false);
     expect(attentionOrderingValid(0.6, 0.9, 0.8)).toBe(false);
+  });
+});
+
+// ── CF-D1 — the campaign lead input mirrors the server bounds (integer in [0, 30]) ──────────────
+describe('parseCampaignLead (integer jours ouvrés in [0, 30])', () => {
+  it('accepts the bounds — 0 (floor = today, tests) and 30 — and the default 2', () => {
+    expect(parseCampaignLead('0')).toBe(0);
+    expect(parseCampaignLead('2')).toBe(2);
+    expect(parseCampaignLead('30')).toBe(30);
+  });
+
+  it('rejects negatives, above 30, non-integers and non-numbers', () => {
+    expect(parseCampaignLead('-1')).toBeNull();
+    expect(parseCampaignLead('31')).toBeNull();
+    expect(parseCampaignLead('2.5')).toBeNull();
+    expect(parseCampaignLead('abc')).toBeNull();
+    expect(parseCampaignLead('')).toBeNull();
   });
 });

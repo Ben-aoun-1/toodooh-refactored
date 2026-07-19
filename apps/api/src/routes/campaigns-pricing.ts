@@ -20,9 +20,10 @@ export const campaignsPricingRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(200).send({
         standard_cpm_tnd: cfg.standardCpmTnd,
         event_cpm_tnd: cfg.eventCpmTnd,
-        // CF-Q2 (spec §1.4) — the J+2-working-days start floor, computed server-side in ONE
-        // place (lib/campaign-dates) so the wizard consumes it instead of hardcoding the rule.
-        first_available_start_date: premiereDateDisponible(),
+        // CF-Q2 (spec §1.4) — the working-day start floor, computed server-side in ONE place
+        // (lib/campaign-dates) so the wizard consumes it instead of hardcoding the rule.
+        // CF-D1 — the lead is the calibratable dispatch_config value (default 2; 0 → today).
+        first_available_start_date: premiereDateDisponible(new Date(), cfg.campaignLeadWorkingDays),
       });
     },
   );

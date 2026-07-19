@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { auth } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
 import { type NewUser, dispatchConfig, users } from '../src/db/schema.js';
-import { isJourOuvre, premiereDateDisponible } from '../src/lib/campaign-dates.js';
+import { isJourOuvre, premiereDateDisponible, tunisDateOf } from '../src/lib/campaign-dates.js';
 import { adminDispatchConfigRoutes } from '../src/routes/admin-dispatch-config.js';
 import { campaignsPricingRoutes } from '../src/routes/campaigns-pricing.js';
 
@@ -46,7 +46,10 @@ const seedUser = async (values: Partial<NewUser> = {}): Promise<string> => {
 };
 
 const restoreCpmDefaults = async (): Promise<void> => {
-  await db.update(dispatchConfig).set({ standardCpmTnd: '15.000', eventCpmTnd: '30.000' });
+  // CF-D1 — the lead joins the restore (its test edits the same singleton).
+  await db
+    .update(dispatchConfig)
+    .set({ standardCpmTnd: '15.000', eventCpmTnd: '30.000', campaignLeadWorkingDays: 2 });
 };
 
 describe('advertiser pricing-config — GET /api/campaigns/pricing-config (real Postgres)', () => {
@@ -110,6 +113,27 @@ describe('advertiser pricing-config — GET /api/campaigns/pricing-config (real 
     expect(body.first_available_start_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(isJourOuvre(body.first_available_start_date)).toBe(true);
     expect(body.first_available_start_date > new Date().toISOString().slice(0, 10)).toBe(true);
+  });
+
+  it('CF-D1 — first_available_start_date follows the configured lead (2 → floor; 0 → TODAY)', async () => {
+    // Default lead 2: the wire floor equals the lib's default computation (pinned exactly above).
+    mockSession(await seedUser({ role: 'advertiser' }), 'advertiser');
+    let body = (await getPricing()).json() as { first_available_start_date: string };
+    expect(body.first_available_start_date).toBe(premiereDateDisponible(new Date(), 2));
+
+    // Admin drops the lead to 0 (tests-only calibration)…
+    mockSession(await seedUser({ role: 'admin' }), 'admin');
+    const patched = await app.inject({
+      method: 'PATCH',
+      url: '/api/admin/dispatch-config',
+      payload: { campaign_lead_working_days: 0 },
+    });
+    expect(patched.statusCode).toBe(200);
+
+    // …and the advertiser floor collapses to TODAY (the wizard consumes this, no wizard change).
+    mockSession(await seedUser({ role: 'advertiser' }), 'advertiser');
+    body = (await getPricing()).json() as { first_available_start_date: string };
+    expect(body.first_available_start_date).toBe(tunisDateOf(new Date()));
   });
 
   it('reflects an admin CPM edit — admin PATCH then advertiser GET sees the new value', async () => {

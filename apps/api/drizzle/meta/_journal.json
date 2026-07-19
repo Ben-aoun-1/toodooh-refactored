@@ -316,6 +316,13 @@
       "when": 1784386344403,
       "tag": "0044_redispatch_rounds",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1784395151465,
+      "tag": "0045_campaign_lead_config",
+      "breakpoints": true
     }
   ]
 }
