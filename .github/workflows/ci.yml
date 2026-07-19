@@ -72,7 +72,8 @@ jobs:
           # api 0 + web 15 later-slice errors (react-leaflet in /admin-zones + wizard Step4,
           # file-saver, the dooh engine, the database.types propagation) that clear at the last
           # Supabase removal (#15), when this drops to 0. A set-diff CI check is a banked chore.
-          TYPECHECK_BASELINE=15
+          # Ratcheted 15 → 14 at CF-D1: the OwnerScreens rewrite killed its baseline error.
+          TYPECHECK_BASELINE=14
           pnpm typecheck 2>&1 | tee typecheck.log || true
           n=$(grep -c 'error TS' typecheck.log || true)
           echo "typecheck errors: $n (baseline $TYPECHECK_BASELINE)"
