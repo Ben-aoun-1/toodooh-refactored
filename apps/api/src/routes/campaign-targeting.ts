@@ -3,8 +3,14 @@ import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
 import { db } from '../db/client.js';
-import { businessSectors, campaignTargeting, campaigns, screenhosts } from '../db/schema.js';
-import { screenhostMatchesTargeting } from '../lib/dispatch/eligibility.js';
+import {
+  businessSectors,
+  campaignTargeting,
+  campaignZones,
+  campaigns,
+  screenhosts,
+} from '../db/schema.js';
+import { screenhostMatchesTargeting, screenhostMatchesZones } from '../lib/dispatch/eligibility.js';
 import { requireAdvertiser } from '../middleware/require-advertiser.js';
 import { requireAuth } from '../middleware/require-auth.js';
 
@@ -80,15 +86,18 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
     return reply.status(200).send({ lines: await readLines(campaign.id) });
   });
 
-  // GET /api/campaigns/:id/coverage — the ACTIVE, coordinate-bearing screenhosts that MATCH the
-  // campaign's targeting (category × class), for the advertiser's coverage-map preview. Owner-scoped
-  // to the campaign (a foreign/missing id is a 404, never a leak — an advertiser cannot enumerate the
-  // network through someone else's draft). Matching reuses the dispatch eligibility primitive
-  // (screenhostMatchesTargeting) so the preview mirrors L-disp's HARD targeting filter exactly.
-  // NOTE: this is the VISUAL coverage (active ∩ has-coordinates ∩ matches-targeting) — NOT the full
-  // dispatch pool: it deliberately omits the horaires/capacity gates (those decide deliverability,
-  // not "is this venue on the map"). No targeting lines ⇒ nothing matches ⇒ empty (mirrors the
-  // engine's NO_TARGETING). Coordinates are numeric in the DB → coerced to numbers for the map.
+  // GET /api/campaigns/:id/coverage — the ACTIVE, coordinate-bearing screenhosts the campaign
+  // would land on, for the advertiser's coverage-map preview. Owner-scoped to the campaign (a
+  // foreign/missing id is a 404, never a leak — an advertiser cannot enumerate the network through
+  // someone else's draft). Matching reuses the dispatch eligibility primitives
+  // (screenhostMatchesTargeting / screenhostMatchesZones) so the preview mirrors L-disp exactly.
+  // NOTE: this is the VISUAL coverage (active ∩ has-coordinates ∩ matches) — NOT the full dispatch
+  // pool: it deliberately omits the horaires/capacity gates (those decide deliverability, not "is
+  // this venue on the map"). CF-U2 (VF US-2.1) — NO targeting lines = the WHOLE NETWORK (the
+  // engine treats empty targeting as no criterion, not as nothing). The zone clause (CF-Z1)
+  // applies on EVERY path — the engine's eligibility does, so a targeted+zoned campaign's map
+  // must not show venues dispatch will exclude. Coordinates are numeric in the DB → coerced to
+  // numbers for the map.
   app.get('/api/campaigns/:id/coverage', advertiserGuard, async (request, reply) => {
     const parsedParams = idParamSchema.safeParse(request.params);
     if (!parsedParams.success) return reply.status(400).send(invalidId);
@@ -105,8 +114,8 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
       .from(campaignTargeting)
       .where(eq(campaignTargeting.campaignId, campaign.id));
 
-    // Pull active venues that have a plottable coordinate, then apply the category × class matcher in
-    // memory (the matcher is the shared dispatch primitive; the SQL only narrows to active + located).
+    // Pull active venues that have a plottable coordinate, then apply the matchers in memory (the
+    // matchers are the shared dispatch primitives; the SQL only narrows to active + located).
     const venues = await db
       .select({
         id: screenhosts.id,
@@ -115,6 +124,7 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
         longitude: screenhosts.longitude,
         businessSectorId: screenhosts.businessSectorId,
         class: screenhosts.class,
+        zoneId: screenhosts.zoneId,
       })
       .from(screenhosts)
       .where(
@@ -125,16 +135,30 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
         ),
       );
 
-    const matching = venues
-      .filter((v) =>
-        screenhostMatchesTargeting({ businessSectorId: v.businessSectorId, class: v.class }, lines),
-      )
-      .map((v) => ({
-        id: v.id,
-        name: v.name,
-        latitude: Number(v.latitude),
-        longitude: Number(v.longitude),
-      }));
+    const zoneRows = await db
+      .select({ zoneId: campaignZones.zoneId })
+      .from(campaignZones)
+      .where(eq(campaignZones.campaignId, campaign.id));
+    const zoneIds = zoneRows.map((z) => z.zoneId);
+
+    // The zone clause gates every path; the targeting matcher only refines when lines exist.
+    const eligible = venues
+      .filter((v) => screenhostMatchesZones(v.zoneId, zoneIds))
+      .filter(
+        (v) =>
+          lines.length === 0 ||
+          screenhostMatchesTargeting(
+            { businessSectorId: v.businessSectorId, class: v.class },
+            lines,
+          ),
+      );
+
+    const matching = eligible.map((v) => ({
+      id: v.id,
+      name: v.name,
+      latitude: Number(v.latitude),
+      longitude: Number(v.longitude),
+    }));
 
     return reply.status(200).send({ screenhosts: matching });
   });

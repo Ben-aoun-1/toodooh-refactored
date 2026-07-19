@@ -4,7 +4,15 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 
 import { auth } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
-import { type NewUser, businessSectors, campaigns, screenhosts, users } from '../src/db/schema.js';
+import {
+  type NewUser,
+  businessSectors,
+  campaignZones,
+  campaigns,
+  screenhosts,
+  users,
+  zones,
+} from '../src/db/schema.js';
 import { campaignTargetingRoutes } from '../src/routes/campaign-targeting.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
@@ -59,6 +67,7 @@ const seedScreenhost = async (opts: {
   active?: boolean;
   lat?: string | null;
   lng?: string | null;
+  zoneId?: string | null;
 }): Promise<string> => {
   const [sh] = await db
     .insert(screenhosts)
@@ -69,9 +78,24 @@ const seedScreenhost = async (opts: {
       isActive: opts.active ?? true,
       latitude: opts.lat === undefined ? '36.80000000' : opts.lat,
       longitude: opts.lng === undefined ? '10.18000000' : opts.lng,
+      zoneId: opts.zoneId ?? null,
     })
     .returning();
   return sh?.id ?? '';
+};
+
+// CF-U2 — a zone + campaign-zone pair for the whole-network coverage tests. Zone names are
+// globally unique and zones SURVIVE resetAuthTables (not an auth table), so a per-run counter
+// would collide with rows a previous run left behind — suffix with a uuid instead.
+const seedZone = async (name: string): Promise<string> => {
+  const [z] = await db
+    .insert(zones)
+    .values({ name: `${name} ${crypto.randomUUID()}` })
+    .returning();
+  return z?.id ?? '';
+};
+const linkCampaignZone = async (campaignId: string, zoneId: string): Promise<void> => {
+  await db.insert(campaignZones).values({ campaignId, zoneId });
 };
 
 const ownerCategoryIds = async (): Promise<string[]> => {
@@ -298,15 +322,107 @@ describe('campaign targeting (advertiser, real Postgres)', () => {
     expect(typeof dots[0]?.longitude).toBe('number');
   });
 
-  it('coverage is empty when the campaign has no targeting lines (nothing matches)', async () => {
+  // ── CF-U2 (VF US-2.1) — NO targeting = the WHOLE NETWORK, zone-filtered when zoned ────────────
+  it('coverage with NO targeting returns ALL active, located venues (whole network)', async () => {
     const me = await seedUser();
     const id = await seedCampaign(me);
-    const [catA] = await ownerCategoryIds();
-    await seedScreenhost({ categoryId: catA ?? null, cls: 'premium' });
+    const [catA, catB] = await ownerCategoryIds();
+    await seedScreenhost({ categoryId: catA ?? null, cls: 'premium', name: 'A' });
+    await seedScreenhost({ categoryId: catB ?? null, cls: 'moyen', name: 'B' });
+    await seedScreenhost({ categoryId: null, cls: null, name: 'Unclassified' });
     mockSession(me);
     const res = await coverage(id);
     expect(res.statusCode).toBe(200);
-    expect(coverageDots(res)).toHaveLength(0);
+    expect(coverageDots(res)).toHaveLength(3); // the whole network, not [] (mirror retired)
+  });
+
+  it('the no-targeting default still respects the campaign zones (CF-Z1)', async () => {
+    const me = await seedUser();
+    const id = await seedCampaign(me);
+    const [catA] = await ownerCategoryIds();
+    const zoneIn = await seedZone('Zone In');
+    const zoneOut = await seedZone('Zone Out');
+    const inZone = await seedScreenhost({
+      categoryId: catA ?? null,
+      cls: 'premium',
+      name: 'InZone',
+      zoneId: zoneIn,
+    });
+    await seedScreenhost({
+      categoryId: catA ?? null,
+      cls: 'premium',
+      name: 'OutZone',
+      zoneId: zoneOut,
+    });
+    await seedScreenhost({
+      categoryId: catA ?? null,
+      cls: 'premium',
+      name: 'NoZone',
+      zoneId: null,
+    });
+    await linkCampaignZone(id, zoneIn);
+    mockSession(me);
+    const res = await coverage(id);
+    expect(res.statusCode).toBe(200);
+    const dots = coverageDots(res);
+    expect(dots).toHaveLength(1); // zone-scoped: the out-of-zone and NULL-zone venues are excluded
+    expect(dots[0]?.id).toBe(inZone);
+  });
+
+  it('AMENDMENT — the zone clause gates the TARGETED path too (dispatch mirror)', async () => {
+    // Since CF-Z1 the engine applies screenhostMatchesZones on every eligibility path; a
+    // targeted+zoned campaign's preview must not show venues dispatch will exclude.
+    const me = await seedUser();
+    const id = await seedCampaign(me);
+    const [catA] = await ownerCategoryIds();
+    const zoneIn = await seedZone('Zone In');
+    const zoneOut = await seedZone('Zone Out');
+    const inZone = await seedScreenhost({
+      categoryId: catA ?? null,
+      cls: 'premium',
+      name: 'MatchInZone',
+      zoneId: zoneIn,
+    });
+    await seedScreenhost({
+      categoryId: catA ?? null,
+      cls: 'premium',
+      name: 'MatchOutZone',
+      zoneId: zoneOut,
+    });
+    mockSession(me);
+    await put(id, [{ category_id: catA ?? null, class: 'premium' }]);
+    await linkCampaignZone(id, zoneIn);
+    const res = await coverage(id);
+    expect(res.statusCode).toBe(200);
+    const dots = coverageDots(res);
+    expect(dots).toHaveLength(1); // both match the targeting; only the in-zone venue survives
+    expect(dots[0]?.id).toBe(inZone);
+  });
+
+  it('the no-targeting default still excludes inactive and unlocated venues', async () => {
+    const me = await seedUser();
+    const id = await seedCampaign(me);
+    const [catA] = await ownerCategoryIds();
+    const located = await seedScreenhost({ categoryId: catA ?? null, cls: 'premium', name: 'Ok' });
+    await seedScreenhost({
+      categoryId: catA ?? null,
+      cls: 'premium',
+      name: 'Inactive',
+      active: false,
+    });
+    await seedScreenhost({
+      categoryId: catA ?? null,
+      cls: 'premium',
+      name: 'NoCoords',
+      lat: null,
+      lng: null,
+    });
+    mockSession(me);
+    const res = await coverage(id);
+    expect(res.statusCode).toBe(200);
+    const dots = coverageDots(res);
+    expect(dots).toHaveLength(1);
+    expect(dots[0]?.id).toBe(located);
   });
 
   it('the ALL/ALL line covers every active, coordinate-bearing venue', async () => {
