@@ -15,6 +15,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { toast } from 'react-hot-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
 
+import PageHeader from '@/components/PageHeader';
 import { useBusinessProfile } from '@/features/auth/hooks/useBusinessProfile';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
@@ -256,18 +257,11 @@ export default function OwnerRevenue() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className="flex justify-between items-center gap-4 py-4 sm:py-5">
                 <div className="flex items-center gap-4 min-w-0 flex-1">
-                  <div
-                    className="flex-shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-full border border-gray-200 bg-white flex items-center justify-center"
-                    aria-hidden
-                  >
-                    <Wallet className="w-6 h-6 sm:w-7 sm:h-7 text-gray-500" strokeWidth={1.75} />
-                  </div>
                   <div className="min-w-0">
-                    <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Mes Revenus</h1>
-                    <p className="text-sm text-gray-500 mt-1 leading-snug max-w-3xl hidden sm:block">
-                      Consultez les revenus générés par les campagnes diffusées au sein de votre
-                      établissement
-                    </p>
+                    <PageHeader
+                      title="Mes Revenus"
+                      subtitle="Consultez les revenus générés par les campagnes diffusées au sein de votre établissement"
+                    />
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">

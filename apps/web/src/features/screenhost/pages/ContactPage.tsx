@@ -14,6 +14,7 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
+import PageHeader from '@/components/PageHeader';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
 
@@ -166,13 +167,7 @@ export default function ContactPage() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className="flex justify-between items-center h-16">
                 <div className="flex items-center space-x-4">
-                  <div>
-                    <h1 className="text-2xl font-bold text-gray-900 flex items-center">
-                      <MessageCircle className="h-6 w-6 text-brand-primary mr-2" />
-                      Nous Contacter
-                    </h1>
-                    <p className="text-sm text-gray-600 mt-1">Support et assistance technique</p>
-                  </div>
+                  <PageHeader title="Nous Contacter" subtitle="Support et assistance technique" />
                   <span className="px-3 py-1 text-sm font-medium bg-brand-primary/10 text-brand-primary border border-brand-primary/20 rounded-full">
                     Support 24/7
                   </span>

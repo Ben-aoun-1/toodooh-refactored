@@ -1,8 +1,9 @@
-import { Calendar, Loader2, TrendingUp } from 'lucide-react';
+import { Calendar, Loader2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
+import PageHeader from '@/components/PageHeader';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { logger } from '@/lib/logger';
 
@@ -271,19 +272,10 @@ export default function OwnerPerformance() {
           <div className="flex-1 overflow-y-auto">
             <div className="mx-auto w-full max-w-[1180px] px-5 pb-16 pt-[26px] sm:px-10 sm:pb-24">
               <header className="mb-7 flex flex-col justify-between gap-4 border-b border-perf-line py-[22px] sm:flex-row sm:items-center sm:gap-6">
-                <div className="flex items-center gap-3.5">
-                  <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[10px] bg-perf-lavender text-brand-accent">
-                    <TrendingUp className="h-[19px] w-[19px]" aria-hidden />
-                  </div>
-                  <div className="min-w-0">
-                    <h1 className="text-[19px] font-semibold tracking-[-0.015em] text-perf-ink">
-                      Mes performances
-                    </h1>
-                    <p className="mt-0.5 text-[13px] text-perf-grey">
-                      Analysez l'activité de votre établissement et développez vos revenus
-                    </p>
-                  </div>
-                </div>
+                <PageHeader
+                  title="Mes performances"
+                  subtitle="Analysez l'activité de votre établissement et développez vos revenus"
+                />
                 <div className="flex flex-shrink-0 flex-wrap items-center gap-3">
                   <button
                     type="button"

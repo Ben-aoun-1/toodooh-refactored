@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import PageHeader from '@/components/PageHeader';
 import { useBusinessProfile } from '@/features/auth/hooks/useBusinessProfile';
 import { useGovernorates } from '@/features/auth/hooks/useGovernorates';
 import { useOwnerBusinessSectors } from '@/features/auth/hooks/useOwnerBusinessSectors';
@@ -115,10 +116,10 @@ export default function OwnerSettings() {
         <OwnerNavigation isDisabled={isDisabled} />
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
           <header className="bg-white border-b border-gray-200 px-4 sm:px-6 lg:px-8 py-4 shrink-0">
-            <h1 className="text-xl font-bold text-gray-900">Paramètres</h1>
-            <p className="text-sm text-gray-500 mt-0.5">
-              Gérez les informations de votre compte propriétaire
-            </p>
+            <PageHeader
+              title="Paramètres"
+              subtitle="Gérez les informations de votre compte propriétaire"
+            />
           </header>
           <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-6">
             <ProfileSettings

@@ -1,7 +1,8 @@
-import { Calendar, ChevronLeft, ChevronRight, Megaphone, Users, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Megaphone, Users, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 
+import PageHeader from '@/components/PageHeader';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
 import OwnerNotificationsBell from '@/features/screenhost/components/OwnerNotificationsBell';
@@ -261,17 +262,11 @@ export default function OwnerCalendarDevices() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-start gap-3 min-w-0">
-                  <div className="h-10 w-10 rounded-full border border-gray-200 bg-white flex items-center justify-center">
-                    <Calendar className="h-5 w-5 text-gray-700" />
-                  </div>
                   <div className="min-w-0">
-                    <h1 className="text-xl font-semibold text-[#171717] truncate">
-                      Mon calendrier et mes dispositifs de diffusion
-                    </h1>
-                    <p className="text-sm text-gray-500 truncate">
-                      Planifiez les périodes d&apos;activation de votre établissement et suivez le
-                      statut de vos dispositifs de diffusion
-                    </p>
+                    <PageHeader
+                      title="Mon calendrier et mes dispositifs de diffusion"
+                      subtitle="Planifiez les périodes d'activation de votre établissement et suivez le statut de vos dispositifs de diffusion"
+                    />
                   </div>
                 </div>
                 <OwnerNotificationsBell userId={user?.id} />

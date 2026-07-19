@@ -12,6 +12,14 @@ interface WizardExitDialogProps {
 }
 
 /**
+ * CF-U2 — the dialog's stacking layer. Anything that hosts high-z internals (the leaflet map's
+ * panes run z 200–800 INSIDE their wrapper) must trap them in its own stacking context at a
+ * z-index BELOW this (ZonesCoverageMap pins MAP_STACK_Z = 0); the regression test asserts the
+ * ordering so the popup can never sink under the map again.
+ */
+export const EXIT_DIALOG_Z = 50;
+
+/**
  * CF-W1 (spec §1.9) — the 3-button exit popup: Quitter (leave, fresh drafts are deleted) /
  * Annuler (stay, nothing lost) / Enregistrer (save → toast → leave). Tab close/refresh uses the
  * NATIVE beforeunload prompt instead (custom buttons are a platform impossibility there).

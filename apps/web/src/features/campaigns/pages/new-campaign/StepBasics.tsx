@@ -1,7 +1,8 @@
-import { AlertCircle, ArrowRight, Calendar, Crosshair, Monitor } from 'lucide-react';
+import { AlertCircle, ArrowRight, Calendar, Crosshair, Megaphone, Monitor } from 'lucide-react';
 import { useState } from 'react';
 
-import GradientPillButton from '@/components/GradientPillButton';
+import PillButton from '@/components/PillButton';
+import StepSectionHeading from '@/features/campaigns/pages/new-campaign/StepSectionHeading';
 
 interface StepBasicsProps {
   campaignName: string;
@@ -46,10 +47,11 @@ export default function StepBasics({
     <div className="space-y-6">
       <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
         <div className="p-6 border-b border-gray-200">
-          <h2 className="text-xl font-bold text-[#00263A]">Nom et type</h2>
-          <p className="text-gray-600 mt-1">
-            Nommez votre campagne et choisissez son type de diffusion
-          </p>
+          <StepSectionHeading
+            icon={Megaphone}
+            title="Nom et type"
+            subtitle="Nommez votre campagne et choisissez son type de diffusion"
+          />
         </div>
         <div className="p-6 space-y-6">
           <div>
@@ -125,7 +127,7 @@ export default function StepBasics({
       </div>
 
       <div className="flex justify-end items-center">
-        <GradientPillButton
+        <PillButton
           onClick={handleNext}
           disabled={nextDisabled}
           loading={creating}
@@ -133,7 +135,7 @@ export default function StepBasics({
           trailingIcon={<ArrowRight className="h-4 w-4" />}
         >
           {creating ? 'Création…' : 'Suivant'}
-        </GradientPillButton>
+        </PillButton>
       </div>
     </div>
   );
