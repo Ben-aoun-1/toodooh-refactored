@@ -21,6 +21,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 
 import 'react-datepicker/dist/react-datepicker.css';
 import campagneIcon from '@/assets/sidebar/campagnes.png';
+import PageHeader from '@/components/PageHeader';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import CampaignDrawer from '@/features/campaigns/components/CampaignDrawer';
 import { useDeleteCampaign, useReplayCampaign } from '@/features/campaigns/hooks/useCampaignApi';
@@ -335,10 +336,7 @@ export default function MyCampaigns() {
       {/* Header Section */}
       <div className="bg-white rounded-xl p-6 border border-gray-200">
         <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-semibold mb-1 text-[#171717]">Mes campagnes</h1>
-            <p className="text-sm font-normal text-[#5C5C5C]">Gérez vos campagnes actives</p>
-          </div>
+          <PageHeader title="Mes campagnes" subtitle="Gérez vos campagnes actives" />
           <button
             onClick={() => navigate('/new-campaign')}
             className="bg-brand-primary text-[#171717] rounded-lg px-5 py-2.5 font-medium hover:opacity-90 transition-opacity flex items-center gap-2"

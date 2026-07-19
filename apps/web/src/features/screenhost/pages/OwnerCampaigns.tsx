@@ -17,6 +17,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
 
+import PageHeader from '@/components/PageHeader';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import CampaignDrawer from '@/features/campaigns/components/CampaignDrawer';
 import { useOwnerCampaignApprovalMutations } from '@/features/campaigns/hooks/useOwnerCampaignApprovalMutations';
@@ -303,10 +304,10 @@ export default function OwnerCampaigns() {
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <h1 className="text-xl font-semibold text-[#171717]">Mes campagnes</h1>
-                  <p className="text-sm text-[#5C5C5C] hidden sm:block">
-                    Campagnes diffusees sur vos localites
-                  </p>
+                  <PageHeader
+                    title="Mes campagnes"
+                    subtitle="Campagnes diffusees sur vos localites"
+                  />
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <button

@@ -1,8 +1,9 @@
-import { ArrowRight, Target } from 'lucide-react';
+import { ArrowRight, ListChecks } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 
-import GradientPillButton from '@/components/GradientPillButton';
+import PillButton from '@/components/PillButton';
+import StepSectionHeading from '@/features/campaigns/pages/new-campaign/StepSectionHeading';
 import {
   CampaignTargetingPanel,
   type CampaignTargetingPanelHandle,
@@ -50,15 +51,11 @@ export default function StepTargeting({
     <div className="space-y-6">
       <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
         <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center space-x-3">
-            <div className="p-2 rounded-lg bg-gradient-to-r from-brand-primary to-brand-deep">
-              <Target className="h-5 w-5 text-white" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-[#00263A]">Catégories</h2>
-              <p className="text-gray-600">Choisissez les catégories de lieux à cibler</p>
-            </div>
-          </div>
+          <StepSectionHeading
+            icon={ListChecks}
+            title="Catégories"
+            subtitle="Choisissez les catégories de lieux à cibler"
+          />
         </div>
         <div className="p-6">
           <CampaignTargetingPanel ref={panelRef} campaignId={draftCampaignId} categoryOnly />
@@ -74,12 +71,12 @@ export default function StepTargeting({
           <ArrowRight className="h-4 w-4 rotate-180" />
           Retour
         </button>
-        <GradientPillButton
+        <PillButton
           onClick={() => void handleNext()}
           trailingIcon={<ArrowRight className="h-4 w-4" />}
         >
           Suivant
-        </GradientPillButton>
+        </PillButton>
       </div>
     </div>
   );

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
+import PageHeader from '@/components/PageHeader';
 import { authService } from '@/features/auth/services/auth.service';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
@@ -125,7 +126,9 @@ export default function OwnerStatementsPage() {
 
           <div className="flex-1 overflow-y-auto">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-              <h1 className="text-xl font-semibold text-gray-900 mb-4">Tous les relevés</h1>
+              <div className="mb-4">
+                <PageHeader title="Tous les relevés" />
+              </div>
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[640px]">

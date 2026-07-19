@@ -9,7 +9,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 
-import GradientPillButton from '@/components/GradientPillButton';
+import PillButton from '@/components/PillButton';
 import {
   CART_BUDGET_MAX_TND,
   CART_BUDGET_MIN_TND,
@@ -21,6 +21,7 @@ import { formatUiDate, inclusiveDayCount } from '@/features/campaigns/lib/campai
 import { estimateImpressions } from '@/features/campaigns/lib/impressions';
 import { toChipLabel } from '@/features/campaigns/lib/targeting-chip-label';
 import { zonesRecapLabel } from '@/features/campaigns/lib/zones-selection';
+import StepSectionHeading from '@/features/campaigns/pages/new-campaign/StepSectionHeading';
 import { useCampaignTargeting } from '@/features/campaigns/targeting/hooks/useCampaignTargeting';
 import { htTtcLabel, ttcParenthetical } from '@/lib/money';
 
@@ -100,10 +101,11 @@ export default function StepCart({
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm sm:p-8">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">Validation</h2>
-          <p className="mt-1 text-gray-600">Vérifiez et confirmez votre campagne</p>
-        </div>
+        <StepSectionHeading
+          icon={Banknote}
+          title="Validation"
+          subtitle="Vérifiez et confirmez votre campagne"
+        />
 
         <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* LEFT — Récapitulatif */}
@@ -338,14 +340,14 @@ export default function StepCart({
             {saving && <Loader2 className="h-4 w-4 animate-spin" />}
             <span>{saving ? 'Enregistrement…' : 'Enregistrer'}</span>
           </button>
-          <GradientPillButton
+          <PillButton
             onClick={() => void onSubmit()}
             disabled={!canAct}
             loading={submitting}
             icon={<Send className="h-4 w-4" />}
           >
             {submitting ? 'Envoi…' : 'Soumettre la campagne'}
-          </GradientPillButton>
+          </PillButton>
         </div>
       </div>
     </div>

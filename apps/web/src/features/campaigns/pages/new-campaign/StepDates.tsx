@@ -3,8 +3,9 @@ import { useMemo, useState } from 'react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 
-import GradientPillButton from '@/components/GradientPillButton';
+import PillButton from '@/components/PillButton';
 import { startFloorHelperText } from '@/features/campaigns/lib/wizard-dates';
+import StepSectionHeading from '@/features/campaigns/pages/new-campaign/StepSectionHeading';
 
 interface StepDatesProps {
   startDate: Date | null;
@@ -98,8 +99,11 @@ export default function StepDates({
     <div className="space-y-6">
       <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
         <div className="p-6 border-b border-gray-200">
-          <h2 className="text-xl font-bold text-[#00263A]">Période</h2>
-          <p className="text-gray-600 mt-1">Choisissez la période de diffusion de votre campagne</p>
+          <StepSectionHeading
+            icon={Calendar}
+            title="Période"
+            subtitle="Choisissez la période de diffusion de votre campagne"
+          />
         </div>
         <div className="p-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -194,14 +198,14 @@ export default function StepDates({
           <ArrowRight className="h-4 w-4 rotate-180" />
           Retour
         </button>
-        <GradientPillButton
+        <PillButton
           onClick={handleNext}
           disabled={nextDisabled}
           icon={<Calendar className="h-4 w-4" />}
           trailingIcon={<ArrowRight className="h-4 w-4" />}
         >
           Suivant
-        </GradientPillButton>
+        </PillButton>
       </div>
     </div>
   );

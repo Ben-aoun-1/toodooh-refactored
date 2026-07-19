@@ -3,6 +3,7 @@ import {
   CheckCircle,
   Film,
   Image as ImageIcon,
+  ImagePlus,
   Info,
   Loader2,
   Upload,
@@ -11,8 +12,9 @@ import {
 import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 
-import GradientPillButton from '@/components/GradientPillButton';
+import PillButton from '@/components/PillButton';
 import { useCreativeUpload, useMyCreatives } from '@/features/campaigns/hooks/useCreativeApi';
+import StepSectionHeading from '@/features/campaigns/pages/new-campaign/StepSectionHeading';
 import {
   PHOTO_ACCEPT,
   VIDEO_ACCEPT,
@@ -132,8 +134,11 @@ export default function StepCreative({
     <div className="space-y-6">
       <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
         <div className="p-6 border-b border-gray-200">
-          <h2 className="text-xl font-bold text-[#00263A]">Création</h2>
-          <p className="text-gray-600 mt-1">Téléversez ou choisissez le visuel à diffuser</p>
+          <StepSectionHeading
+            icon={ImagePlus}
+            title="Création"
+            subtitle="Téléversez ou choisissez le visuel à diffuser"
+          />
         </div>
 
         <div className="p-6 space-y-6">
@@ -319,13 +324,13 @@ export default function StepCreative({
           <ArrowRight className="h-4 w-4 rotate-180" />
           Retour
         </button>
-        <GradientPillButton
+        <PillButton
           onClick={handleNext}
           disabled={!selectedCreativeId || busy}
           trailingIcon={<ArrowRight className="h-4 w-4" />}
         >
           Suivant
-        </GradientPillButton>
+        </PillButton>
       </div>
     </div>
   );

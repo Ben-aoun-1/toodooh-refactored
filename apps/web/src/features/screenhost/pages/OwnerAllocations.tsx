@@ -2,6 +2,7 @@ import { Check, MonitorPlay, Play, X } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 
+import PageHeader from '@/components/PageHeader';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import AllocationSpotViewer from '@/features/screenhost/components/AllocationSpotViewer';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
@@ -86,12 +87,10 @@ export default function OwnerAllocations() {
           <header className="bg-white border-b border-[#EBEBEB]">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
               <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h1 className="text-xl font-semibold text-[#171717]">Campagnes à valider</h1>
-                  <p className="text-sm text-[#5C5C5C]">
-                    Acceptez ou refusez la diffusion sur vos écrans
-                  </p>
-                </div>
+                <PageHeader
+                  title="Campagnes à valider"
+                  subtitle="Acceptez ou refusez la diffusion sur vos écrans"
+                />
                 <OwnerNotificationsBell userId={user?.id} />
               </div>
             </div>
