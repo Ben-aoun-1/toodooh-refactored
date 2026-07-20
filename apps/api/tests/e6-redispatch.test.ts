@@ -146,6 +146,8 @@ const seedCampaignWithPlan = async (opts: {
   start: string;
   end: string;
   reliquat?: number;
+  /** E5.1 — a ZERO-LINE campaign (empty targeting = the whole network). */
+  noTargeting?: boolean;
 }): Promise<Fixture> => {
   const advertiserId = await seedUser({ role: 'advertiser' });
   const [campaign] = await db
@@ -160,8 +162,10 @@ const seedCampaignWithPlan = async (opts: {
     })
     .returning();
   const campaignId = campaign?.id ?? '';
-  const cat = await ownerSectorId();
-  await db.insert(campaignTargeting).values({ campaignId, categoryId: cat, class: null });
+  if (opts.noTargeting !== true) {
+    const cat = await ownerSectorId();
+    await db.insert(campaignTargeting).values({ campaignId, categoryId: cat, class: null });
+  }
   const [creative] = await db
     .insert(creatives)
     .values({
@@ -344,6 +348,29 @@ describe('E6 redispatch (real Postgres)', () => {
       { screenhost_id: A.shId, slots: 3, imp_physical: 4800 },
     ]);
     expect(await notifsFor(B.ownerId)).toHaveLength(1);
+  });
+
+  it('E5.1 PIN: a ZERO-LINE campaign’s manquement redispatches (empty targeting = whole network)', async () => {
+    const cat = await ownerSectorId();
+    const A = await seedVenue(cat, 90, 100, 'dead');
+    const B = await seedVenue(cat, 80, 100, 'alive');
+    const f = await seedCampaignWithPlan({
+      name: 'E6 WholeNet',
+      start: MON,
+      end: TUE,
+      noTargeting: true, // zero lines — pre-E5.1 the assembly refused and nothing was placeable
+    });
+    await seedAllocation(f.planId, A.shId, 20000, 16, creneauxFor([MON, TUE], 1600, 16));
+    await deliverSlot(f, A, MON, 8);
+    await deliverSlot(f, A, MON, 9);
+
+    const outcome = await runRedispatchRound(
+      { id: f.campaignId, name: 'E6 WholeNet', startDate: MON, endDate: TUE },
+      NOW,
+    );
+    expect(outcome.status).toBe('PLACED');
+    if (outcome.status !== 'PLACED') return;
+    expect(outcome.placedTo).toEqual([{ screenhost_id: B.shId, added_fact: 2880, merged: false }]);
   });
 
   it('IDEMPOTENT: a second tick with no new proofs/slots re-counts nothing and records no round', async () => {

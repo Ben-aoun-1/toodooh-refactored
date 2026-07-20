@@ -72,16 +72,14 @@ export const runRefusalCascade = async (
     );
   const excludeScreenhostIds = [...new Set(refusedRows.map((r) => r.screenhostId))];
 
-  const assembled = await assemblePool(
+  // E5.1 — the pool always assembles (zero targeting lines = the whole network); the defensive
+  // NO_TARGETING fallback is gone with the retired status.
+  const { pool, windowDays } = await assemblePool(
     tx,
     campaign,
     { s, t, fMaxSeconds: plan.fMaxSeconds },
     { excludeScreenhostIds, excludeAllocationId: refused.id, lockOccupancy: true },
   );
-  // NO_TARGETING cannot happen for a dispatched campaign (dispatch required targeting) — treat it
-  // as an empty pool defensively rather than failing the refusal.
-  const pool = assembled.status === 'OK' ? assembled.pool : [];
-  const windowDays = assembled.status === 'OK' ? assembled.windowDays : [];
 
   // THE SAME remplissage as dispatch — selection() verbatim, over the residual pool, for V.
   const eligible: EligibleScreenhost[] = pool.map((p) => ({

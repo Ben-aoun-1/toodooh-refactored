@@ -345,12 +345,14 @@ describe('campaign dispatch entrypoint (L-disp, real Postgres)', () => {
     expect(Number.isInteger(body.allocations[0]?.ii_potentiel ?? -1)).toBe(true);
   });
 
-  it('400 when the campaign has no targeting', async () => {
+  it('E5.1 — a zero-line campaign PROCEEDS (whole network); with no venues at all it is a clôture 422, never the retired 400', async () => {
     const admin = await seedUser({ role: 'admin' });
     const advertiser = await seedUser({ role: 'advertiser' });
     const campaignId = await seedCampaign(advertiser);
     mockSession(admin);
-    expect((await dispatch(campaignId, { i_cible: 1000, cpm: 10, s: 10 })).statusCode).toBe(400);
+    const res = await dispatch(campaignId, { i_cible: 1000, cpm: 10, s: 10 });
+    expect(res.statusCode).toBe(422); // empty pool on its own merits (NOT_DELIVERABLE)
+    expect(res.json()).toMatchObject({ error: 'NOT_DELIVERABLE' });
   });
 
   it('400 when the campaign has no window (start/end date)', async () => {

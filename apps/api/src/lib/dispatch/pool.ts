@@ -60,9 +60,13 @@ export interface AssemblePoolInputs {
   fMaxSeconds: number; // F — hourly broadcast cap
 }
 
-export type AssemblePoolResult =
-  | { status: 'NO_TARGETING' }
-  | { status: 'OK'; windowDays: WindowDay[]; pool: PoolEntry[] };
+// E5.1 — the NO_TARGETING refusal RETIRED (VF US-2.1): zero targeting lines = the whole network,
+// so the pool always assembles; the matcher owns the empty-set semantics. The result collapses to
+// the plain assembled shape.
+export interface AssemblePoolResult {
+  windowDays: WindowDay[];
+  pool: PoolEntry[];
+}
 
 export const assemblePool = async (
   executor: DbExecutor,
@@ -74,7 +78,6 @@ export const assemblePool = async (
     .select({ categoryId: campaignTargeting.categoryId, class: campaignTargeting.class })
     .from(campaignTargeting)
     .where(eq(campaignTargeting.campaignId, campaign.id));
-  if (lines.length === 0) return { status: 'NO_TARGETING' };
 
   const windowDays = buildWindowDays(campaign.startDate, campaign.endDate);
 
@@ -238,5 +241,5 @@ export const assemblePool = async (
     });
   }
 
-  return { status: 'OK', windowDays, pool };
+  return { windowDays, pool };
 };

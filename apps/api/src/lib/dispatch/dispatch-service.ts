@@ -26,9 +26,11 @@ export interface DispatchInputs {
   s: number;
 }
 
+// E5.1 — NO_TARGETING retired (VF US-2.1): zero targeting lines = the whole network, so a
+// zero-line campaign proceeds through pooling → selection → plan like any other (TOO_THIN /
+// NO_ELIGIBLE still possible on their own merits).
 export type DispatchResult =
   | { status: 'NO_WINDOW' }
-  | { status: 'NO_TARGETING' }
   | { status: 'ALREADY_DISPATCHED' }
   | { status: 'TOO_THIN'; nMin: number; nMax: number }
   | { status: 'NO_ELIGIBLE' }
@@ -70,14 +72,12 @@ export const runDispatch = async (
     .transaction(async (tx): Promise<DispatchResult> => {
       // E3 — the pool assembly + occupancy netting live in assemblePool (shared with the refusal
       // cascade and later redispatch); dispatch runs it with no exclusions.
-      const assembled = await assemblePool(
+      const { windowDays, pool } = await assemblePool(
         tx,
         { id: campaign.id, startDate, endDate },
         { s: inputs.s, t, fMaxSeconds: config.fMaxSeconds },
         { lockOccupancy: true },
       );
-      if (assembled.status === 'NO_TARGETING') return { status: 'NO_TARGETING' };
-      const { windowDays, pool } = assembled;
 
       const built = buildPlan({
         iCible: inputs.iCible,

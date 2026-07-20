@@ -23,6 +23,12 @@ export const screenhostMatchesTargeting = (
   sh: ScreenhostLite,
   lines: readonly TargetingLineLite[],
 ): boolean =>
+  // E5.1 (VF US-2.1, canonical): an EMPTY targeting set = the whole network is targeted on this
+  // criterion — every venue passes. This is THE single home of the empty-set semantics: pool
+  // assembly, the cascade, redispatch and the coverage preview all read it from here, so the
+  // wizard's « Tout le réseau » promise (toggle ON = the null/null line, toggle OFF / skip /
+  // full deselect = zero lines) delivers identically on both wire shapes.
+  lines.length === 0 ||
   lines.some(
     (line) =>
       (line.categoryId === null || line.categoryId === sh.businessSectorId) &&

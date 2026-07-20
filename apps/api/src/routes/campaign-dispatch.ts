@@ -106,13 +106,7 @@ export const campaignDispatchRoutes: FastifyPluginAsync = async (app) => {
         fields: [{ field: 'window', reason: 'campaign requires a start_date and end_date' }],
       });
     }
-    if (result.status === 'NO_TARGETING') {
-      return reply.status(400).send({
-        error: 'INVALID_INPUT',
-        message: 'Validation failed',
-        fields: [{ field: 'targeting', reason: 'campaign requires at least one targeting line' }],
-      });
-    }
+    // E5.1 — the NO_TARGETING refusal retired: zero targeting lines = the whole network.
     if (result.status === 'ALREADY_DISPATCHED') {
       return reply.status(409).send({
         error: 'CONFLICT',
