@@ -12,6 +12,7 @@ import {
   creatives,
   zones,
 } from '../db/schema.js';
+import { MIN_CAMPAIGN_BUDGET_TND } from '../lib/campaign-budget.js';
 import { computeCampaignCmax } from '../lib/campaign-cmax.js';
 import {
   type StartDateViolation,
@@ -579,6 +580,15 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(400).send({
         error: 'MISSING_BUDGET',
         message: 'A campaign needs a positive requested budget before submission.',
+      });
+    }
+    // CF-U3 (Mejri) — the budget floor: below 100 TND is refused BEFORE the ceiling gate (a
+    // sub-floor ask is never deliverable business, whatever the inventory says).
+    if (Number(existing.requestedBudget) < MIN_CAMPAIGN_BUDGET_TND) {
+      return reply.status(400).send({
+        error: 'BUDGET_BELOW_MINIMUM',
+        message: `A campaign budget must be at least ${MIN_CAMPAIGN_BUDGET_TND} TND.`,
+        minimum_tnd: MIN_CAMPAIGN_BUDGET_TND,
       });
     }
     // E5 (VF US-1.4) — C_max revalidation at submit: the budget must be deliverable against LIVE
