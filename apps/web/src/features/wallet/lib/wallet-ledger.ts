@@ -66,6 +66,8 @@ export interface InvoiceRow {
   montant: number;
   date_emission: string;
   statut: RechargeRow['status'];
+  /** CF-M2 — drives the « Ajouter/Remplacer/Voir le justificatif » row affordances. */
+  has_document: boolean;
 }
 
 export const invoiceRows = (recharges: readonly RechargeRow[]): InvoiceRow[] =>
@@ -75,6 +77,7 @@ export const invoiceRows = (recharges: readonly RechargeRow[]): InvoiceRow[] =>
     montant: r.amount_tnd,
     date_emission: r.created_at,
     statut: r.status,
+    has_document: r.has_document,
   }));
 
 /** « Facture Juillet 2026 » — the designation MyInvoices renders (no per-facture description). */

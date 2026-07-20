@@ -28,6 +28,27 @@ export function useAdminRecharges() {
   };
 }
 
+/**
+ * CF-M2 — the presigned justificatif URL for the review modal. Fetched only while the modal is
+ * open on a documented recharge; the URL is short-TTL (300s server-side), so nothing is cached:
+ * every open presigns fresh (staleTime 0 / gcTime 0) and an expired link can never be reused.
+ */
+export function useRechargeDocumentUrl(rechargeId: string | undefined, enabled: boolean) {
+  const query = useQuery({
+    queryKey: adminKeys.rechargeDocumentUrl(rechargeId ?? ''),
+    queryFn: () => adminRechargesService.documentUrl(rechargeId ?? ''),
+    enabled: enabled && !!rechargeId,
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
+  });
+  return {
+    url: query.data?.url,
+    loading: query.isLoading,
+    isError: query.isError,
+  };
+}
+
 export interface AdvertiserIdentity {
   business_name: string;
   email: string;

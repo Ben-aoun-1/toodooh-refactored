@@ -1,7 +1,9 @@
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Download,
   FileText,
   Loader2,
+  Paperclip,
   Search,
   Banknote,
   Calendar,
@@ -9,10 +11,17 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
+import { toast } from 'react-hot-toast';
 
 import { useAuthStore } from '@/features/auth/stores/auth.store';
+import { walletKeys } from '@/features/wallet/hooks/queryKeys';
 import { useInvoices } from '@/features/wallet/hooks/useInvoices';
+import {
+  JUSTIFICATIF_ACCEPT,
+  isJustificatifTooLarge,
+  justificatifAffordances,
+} from '@/features/wallet/lib/recharge-document';
 import { type InvoiceRow, invoiceDesignation } from '@/features/wallet/lib/wallet-ledger';
 import { factureFilename, walletService } from '@/features/wallet/services/wallet.service';
 import { logger } from '@/lib/logger';
@@ -22,9 +31,14 @@ const log = logger.child({ module: 'MyInvoices' });
 
 export default function MyInvoices() {
   const user = useAuthStore((state) => state.user);
+  const queryClient = useQueryClient();
   const { invoices, loading } = useInvoices(user?.id);
   const [search, setSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  // CF-M2 — one hidden file input serves every row; the clicked row's id is held here.
+  const attachTargetRef = useRef<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
   const PAGE_SIZE = 8;
 
   const filtered = useMemo(() => {
@@ -75,8 +89,59 @@ export default function MyInvoices() {
     });
   };
 
+  // CF-M2 — attach/replace the justificatif on a PENDING recharge (POST :id/document). The row
+  // to attach to is remembered, the shared hidden input opens, and the picked file uploads.
+  const handleAttachClick = (facture: InvoiceRow) => {
+    attachTargetRef.current = facture.id;
+    fileInputRef.current?.click();
+  };
+
+  const handleFilePicked = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] ?? null;
+    e.target.value = '';
+    const targetId = attachTargetRef.current;
+    attachTargetRef.current = null;
+    if (!file || !targetId) return;
+    if (isJustificatifTooLarge(file)) {
+      toast.error('Le justificatif ne doit pas dépasser 10 Mo');
+      return;
+    }
+    try {
+      setUploadingId(targetId);
+      await walletService.uploadJustificatif(targetId, file);
+      toast.success('Justificatif envoyé');
+      void queryClient.invalidateQueries({ queryKey: walletKeys.recharges(user?.id ?? '') });
+    } catch (error) {
+      log.error({ error }, 'Erreur lors de l’envoi du justificatif');
+      toast.error('Erreur lors de l’envoi du justificatif. Veuillez réessayer.');
+    } finally {
+      setUploadingId(null);
+    }
+  };
+
+  // CF-M2 — presigned short-TTL view: fetched on click, consumed immediately in a new tab.
+  const handleViewJustificatif = async (facture: InvoiceRow) => {
+    try {
+      const { url } = await walletService.getJustificatifUrl(facture.id);
+      window.open(url, '_blank', 'noopener');
+    } catch (error) {
+      log.error({ error }, 'Erreur lors de l’ouverture du justificatif');
+      toast.error('Erreur lors de l’ouverture du justificatif. Veuillez réessayer.');
+    }
+  };
+
   return (
     <div className="space-y-6">
+      {/* CF-M2 — the shared hidden input the attach/replace buttons open. */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={JUSTIFICATIF_ACCEPT}
+        onChange={(e) => void handleFilePicked(e)}
+        className="hidden"
+        aria-hidden="true"
+        tabIndex={-1}
+      />
       {/* Table card */}
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
         {/* Header with search */}
@@ -148,6 +213,38 @@ export default function MyInvoices() {
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex items-center justify-end gap-2">
+                        {/* CF-M2 — justificatif affordances per state: attach/replace while
+                            PENDING, view whenever a document exists. */}
+                        {(() => {
+                          const aff = justificatifAffordances(facture);
+                          return (
+                            <>
+                              {aff.canView && (
+                                <button
+                                  onClick={() => void handleViewJustificatif(facture)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+                                >
+                                  <Paperclip className="h-3.5 w-3.5" />
+                                  Voir le justificatif
+                                </button>
+                              )}
+                              {aff.canAttach && (
+                                <button
+                                  onClick={() => handleAttachClick(facture)}
+                                  disabled={uploadingId === facture.id}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  {uploadingId === facture.id ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  ) : (
+                                    <Paperclip className="h-3.5 w-3.5" />
+                                  )}
+                                  {aff.attachLabel}
+                                </button>
+                              )}
+                            </>
+                          );
+                        })()}
                         <button
                           onClick={() => handleDownloadPDF(facture)}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"

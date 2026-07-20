@@ -23,6 +23,24 @@ export const isValidAmount = (amount: number): boolean =>
   amount <= MAX_RECHARGE_TND &&
   Number(amount.toFixed(2)) === amount;
 
+// ── CF-M2 — the bank-transfer justificatif (proof-of-transfer document) ──────
+// OPTIONAL always: the admin may confirm a doc-less recharge (admin judgement). Accepted as
+// PDF/JPEG/PNG up to 10 MB, byte-sniffed (CF-SH1 posture) — a declared mimetype that does not
+// match the bytes is a 400, never stored.
+export const MAX_JUSTIFICATIF_BYTES = 10 * 1024 * 1024;
+
+// Declared mime → the stored object's extension. Doubles as the accepted-mime set.
+export const JUSTIFICATIF_MIME_TO_EXT: Record<string, string> = {
+  'application/pdf': 'pdf',
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+};
+
+// One object per recharge, keyed by mime-derived extension: a same-type re-upload overwrites in
+// place; a cross-type one writes a new key and the route removes the old object.
+export const justificatifKey = (rechargeId: string, mime: string): string =>
+  `recharges/${rechargeId}/justificatif.${JUSTIFICATIF_MIME_TO_EXT[mime] ?? 'bin'}`;
+
 // Advertiser-facing projection (snake_case wire). amount as a number for ergonomics; the exact value
 // lives in the numeric column and in SUM(...). validated_by stays internal (admin id is admin-only).
 export const rechargeView = (row: Recharge) => ({
@@ -34,15 +52,20 @@ export const rechargeView = (row: Recharge) => ({
   confirmed_at: row.confirmedAt,
   created_at: row.createdAt,
   updated_at: row.updatedAt,
+  // CF-M2 — document presence, never the key (the object is reached only via the presign routes).
+  has_document: row.documentKey !== null,
+  document_uploaded_at: row.documentUploadedAt,
 });
 
 export type RechargeView = ReturnType<typeof rechargeView>;
 
-// Admin view = the advertiser projection + the owner id and the confirming admin id (audit).
+// Admin view = the advertiser projection + the owner id and the confirming admin id (audit), plus
+// the document mime so the review modal can pick its render mode (image inline vs PDF open-in-tab).
 export const adminRechargeView = (row: Recharge) => ({
   ...rechargeView(row),
   advertiser_id: row.advertiserId,
   confirmed_by: row.confirmedBy,
+  document_mime: row.documentMime,
 });
 
 export interface WalletBalance {

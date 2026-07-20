@@ -1103,6 +1103,14 @@ export const recharges = pgTable(
     confirmedBy: uuid('confirmed_by').references(() => users.id),
     confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
     rejectReason: text('reject_reason'),
+    // CF-M2 — the OPTIONAL bank-transfer justificatif (proof-of-transfer document) the advertiser
+    // attaches while the recharge is PENDING, reviewed by the admin alongside the amount before
+    // confirming. All three are NULL until an upload; a re-upload while pending replaces them (and
+    // the old MinIO object). The document never gates confirm/reject — admin judgement covers
+    // doc-less confirms. document_key is the MinIO object key (recharges/<id>/justificatif.<ext>).
+    documentKey: text('document_key'),
+    documentMime: text('document_mime'),
+    documentUploadedAt: timestamp('document_uploaded_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
