@@ -141,16 +141,12 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
       .where(eq(campaignZones.campaignId, campaign.id));
     const zoneIds = zoneRows.map((z) => z.zoneId);
 
-    // The zone clause gates every path; the targeting matcher only refines when lines exist.
+    // The zone clause gates every path; the matcher owns the empty-set semantics (E5.1 —
+    // zero lines = whole network), so the preview provably mirrors dispatch with no local guard.
     const eligible = venues
       .filter((v) => screenhostMatchesZones(v.zoneId, zoneIds))
-      .filter(
-        (v) =>
-          lines.length === 0 ||
-          screenhostMatchesTargeting(
-            { businessSectorId: v.businessSectorId, class: v.class },
-            lines,
-          ),
+      .filter((v) =>
+        screenhostMatchesTargeting({ businessSectorId: v.businessSectorId, class: v.class }, lines),
       );
 
     const matching = eligible.map((v) => ({

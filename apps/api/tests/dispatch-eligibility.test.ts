@@ -52,14 +52,14 @@ describe('screenhostMatchesTargeting — category × class with NULL = "toutes"'
     ).toBe(true);
   });
 
-  it('matches if ANY line matches; no lines → not eligible', () => {
+  it('matches if ANY line matches; NO lines → matches ALL (E5.1, VF US-2.1: empty = whole network)', () => {
     expect(
       screenhostMatchesTargeting(restaurant, [
         { categoryId: 'cat-x', class: 'moyen' },
         { categoryId: 'cat-r', class: 'premium' },
       ]),
     ).toBe(true);
-    expect(screenhostMatchesTargeting(restaurant, [])).toBe(false);
+    expect(screenhostMatchesTargeting(restaurant, [])).toBe(true);
   });
 });
 

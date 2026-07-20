@@ -289,10 +289,27 @@ describe('E5 — GET /api/campaigns/:id/cmax + the submit C_max gate (real Postg
     expect(res.json()).toEqual({ c_max_tnd: 540, i_max_facturable: 36_000, eligible_count: 1 });
   });
 
-  it('zero targeting lines folds to a zero ceiling (dispatch would refuse the campaign as-is)', async () => {
+  it('E5.1 — a ZERO-LINE campaign prices the FULL network (VF US-2.1: empty = whole network)', async () => {
     const advertiser = await seedUser();
+    const owner = await seedUser({ role: 'individual_owner' });
+    const [sectorA, sectorB] = await ownerSectorIds();
+    await seedVenue(owner, sectorA);
+    await seedVenue(owner, sectorB); // a DIFFERENT sector — only whole-network semantics sums both
+    const creativeId = await seedCreative(advertiser, 10);
+    const campaignId = await seedCampaign(advertiser, { creativeId }); // NO targeting rows
+    mockSession(advertiser);
+    const res = await getCmax(campaignId);
+    expect(res.json()).toEqual({ c_max_tnd: 1080, i_max_facturable: 72_000, eligible_count: 2 });
+  });
+
+  it('impossible targeting still yields the zero ceiling (the FE zero-state premise holds)', async () => {
+    const advertiser = await seedUser();
+    const owner = await seedUser({ role: 'individual_owner' });
+    const [sectorA, sectorB] = await ownerSectorIds();
+    await seedVenue(owner, sectorA);
     const creativeId = await seedCreative(advertiser, 10);
     const campaignId = await seedCampaign(advertiser, { creativeId });
+    await targetSector(campaignId, sectorB); // targeted sector has NO venues
     mockSession(advertiser);
     const res = await getCmax(campaignId);
     expect(res.json()).toEqual({ c_max_tnd: 0, i_max_facturable: 0, eligible_count: 0 });

@@ -213,14 +213,13 @@ export const runRedispatchRound = async (
       .filter((a) => excludeScreenhostIds.includes(a.screenhostId))
       .map((a) => a.id);
 
-    const assembled = await assemblePool(
+    // E5.1 — the pool always assembles (zero targeting lines = the whole network).
+    const { pool, windowDays } = await assemblePool(
       tx,
       { id: campaign.id, startDate: effectiveStart, endDate: campaign.endDate },
       { s, t, fMaxSeconds: plan.fMaxSeconds },
       { excludeScreenhostIds, excludeAllocationIds, lockOccupancy: true },
     );
-    const pool = assembled.status === 'OK' ? assembled.pool : [];
-    const windowDays = assembled.status === 'OK' ? assembled.windowDays : [];
 
     // THE SAME remplissage as dispatch/cascade — selection() verbatim, frozen plan params.
     const eligible: EligibleScreenhost[] = pool.map((p) => ({

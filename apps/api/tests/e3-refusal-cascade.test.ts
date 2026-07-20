@@ -196,6 +196,31 @@ describe('E3 refusal cascade (US-2.8, real Postgres, via the reject route)', () 
     });
   };
 
+  it('E5.1 PIN: a ZERO-LINE campaign’s refusal cascades (empty targeting = whole network)', async () => {
+    const advertiser = await seedUser({ role: 'advertiser' });
+    const [oA, oB, oC] = await Promise.all(
+      Array.from({ length: 3 }, () => seedUser({ role: 'individual_owner' })),
+    );
+    const cat = await ownerSectorId();
+    const shA = await seedVenue(oA ?? '', cat, 90, 100); // 36 000
+    const shB = await seedVenue(oB ?? '', cat, 80, 100); // partial 2 400
+    const shC = await seedVenue(oC ?? '', cat, 70, 10); // 3 600 — the absorber
+    const campaignId = await seedCampaign(advertiser, 'Cascade WholeNet');
+    // NO targeting rows — pre-E5.1 both the dispatch and the cascade assembly refused.
+
+    await dispatchNow(campaignId, 'Cascade WholeNet', 38400);
+    await setCampaignStatus(campaignId, 'pending');
+    const allocB = await allocOn(campaignId, shB);
+    expect(allocB?.iiPotentiel).toBe(2400);
+
+    const res = await reject(oB ?? '', allocB?.id ?? '');
+    expect(res.statusCode).toBe(200);
+    const onC = await allocOn(campaignId, shC);
+    expect(onC?.statutAcceptation).toBe('EN_ATTENTE');
+    expect(onC?.iiPotentiel).toBe(2400);
+    expect(await allocOn(campaignId, shA)).toBeDefined(); // the retained venue untouched
+  });
+
   it('HAPPY PATH: the refused share lands on the next-best SPS venue (new EN_ATTENTE row + notification)', async () => {
     const advertiser = await seedUser({ role: 'advertiser' });
     const [oA, oB, oC, oD] = await Promise.all(

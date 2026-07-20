@@ -245,13 +245,7 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
         fields: [{ field: 'window', reason: 'campaign requires a start_date and end_date' }],
       });
     }
-    if (result.status === 'NO_TARGETING') {
-      return reply.status(400).send({
-        error: 'INVALID_INPUT',
-        message: 'Validation failed',
-        fields: [{ field: 'targeting', reason: 'campaign requires at least one targeting line' }],
-      });
-    }
+    // E5.1 — the NO_TARGETING refusal retired: zero targeting lines = the whole network.
     // Clôture — NOT a deliverable plan → do NOT activate; the campaign stays pending (renvoi curseur).
     if (result.status === 'TOO_THIN') {
       return reply.status(422).send({

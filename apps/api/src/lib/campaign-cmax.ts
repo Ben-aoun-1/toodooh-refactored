@@ -36,22 +36,19 @@ export const computeCampaignCmax = async (
   const config = await getDispatchConfig();
   const t = tForDuration(spotSeconds, config);
   const cpm = cpmForCampaign(campaign.campaignType, config);
-  const assembled = await assemblePool(
+  // E5.1 (VF US-2.1) — zero targeting lines = the whole network: the pool assembles over every
+  // eligible venue and the ceiling prices the full inventory (the old NO_TARGETING zero-fold
+  // retired with the status).
+  const { pool } = await assemblePool(
     db,
     { id: campaign.id, startDate: campaign.startDate, endDate: campaign.endDate },
     { s: spotSeconds, t, fMaxSeconds: config.fMaxSeconds },
   );
-  // Zero targeting lines folds to ZERO inventory: dispatch would refuse the campaign as-is
-  // (NO_TARGETING at activation), so the honest ceiling is 0 — the FE zero-state tells the
-  // advertiser to widen categories/zones instead of promising undeliverable budget.
-  if (assembled.status === 'NO_TARGETING') {
-    return { cMaxTnd: 0, iMaxFacturable: 0, eligibleCount: 0, cpmTnd: cpm };
-  }
-  const iMax = assembled.pool.reduce((sum, entry) => sum + entry.residualCapacity, 0);
+  const iMax = pool.reduce((sum, entry) => sum + entry.residualCapacity, 0);
   return {
     cMaxTnd: Math.floor((cpm * iMax) / 1000),
     iMaxFacturable: iMax,
-    eligibleCount: assembled.pool.length,
+    eligibleCount: pool.length,
     cpmTnd: cpm,
   };
 };
