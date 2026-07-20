@@ -40,12 +40,25 @@ import {
   isValidAgentCode,
   normalizeAgentCode,
 } from '@/features/auth/utils/agent-code';
+import { reconcileAutofill } from '@/features/auth/utils/autofill-sync';
 import {
   emptyOwnerVolets,
   ownerVoletsComplete,
   type OwnerVoletFiles,
 } from '@/features/auth/utils/owner-signup-volets';
-import { isValidPassword, passwordChecks } from '@/features/auth/utils/password';
+import { passwordChecks } from '@/features/auth/utils/password';
+import { PHONE_FORMAT_ERROR, canonicalTunisiaPhone } from '@/features/auth/utils/phone';
+import { probeWithTimeout } from '@/features/auth/utils/probe-timeout';
+import {
+  EMAIL_REGEX,
+  POSTAL_CODE_ERROR,
+  TAX_NUMBER_ERROR,
+  isValidPostalCode,
+  isValidTaxNumber,
+  stepFieldErrors,
+  type StepErrorCtx,
+  type StepErrors,
+} from '@/features/auth/utils/signup-step-errors';
 import { getErrorMessage } from '@/lib/errors';
 
 import SignupDocumentSlots from './SignupDocumentSlots';
@@ -234,6 +247,10 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
   // F5: agent-code FORMAT error (Kais QA ruling 2026-06-11 — numeric, no fixed length). Format
   // only: resolution stays server-side (unmatched codes are accepted and stored unlinked).
   const [agentCodeError, setAgentCodeError] = useState<string | null>(null);
+  // Prod-blocker lane — the always-clickable Suivant's per-field messages (fields WITHOUT a
+  // dedicated error state above; email/phone/agent/tax/postal keep theirs). Set on click from
+  // utils/signup-step-errors; each field's onChange clears its own key.
+  const [fieldErrors, setFieldErrors] = useState<StepErrors>({});
   const [confirmPassword, setConfirmPassword] = useState('');
   const [formData, setFormData] = useState<Partial<SignUpData>>({
     email: '',
@@ -334,23 +351,12 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
     }
   }, [selectedProfileType, sectors]);
 
-  const validatePassword = (pw: string) => isValidPassword(pw);
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  const normalizePhone = (value: string) => (value || '').replace(/\s+/g, '').trim();
-  const isValidTunisiaPhone = (value: string) => /^\+216\d{8}$/.test(normalizePhone(value));
-  // C5 (#8a): mirror the backend matricule rule (apps/api/src/validation/tax-number.ts).
-  const isValidTaxNumber = (value: string) => /^[A-Za-z0-9/]{7,20}$/.test(value);
-  const TAX_NUMBER_ERROR = 'Matricule invalide (7 à 20 caractères alphanumériques ou /).';
-  // C5: mirror the backend postal rule (signup zod + the users CHECK, ^\d{4}$).
-  const isValidPostalCode = (value: string) => /^\d{4}$/.test(value);
-  const POSTAL_CODE_ERROR = 'Code postal invalide (4 chiffres).';
+  // Validators + their messages moved to utils/signup-step-errors (prod-blocker lane) — the
+  // always-clickable Suivant and this component must read the SAME rules, so one home only.
   const pwChecks = passwordChecks(formData.password || '');
   const pwHasUpper = pwChecks.upper;
   const pwHasDigit = pwChecks.digit;
   const pwHasMinLen = pwChecks.minLen;
-  const pwMatch = Boolean(
-    formData.password && confirmPassword && formData.password === confirmPassword,
-  );
 
   // Sync contact_name from nom + prénom
   useEffect(() => {
@@ -369,46 +375,58 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
     const normalizedEmail = String(formData.email || '')
       .trim()
       .toLowerCase();
-    const normalizedPhone = normalizePhone(String(formData.contact_phone || ''));
+    // Canonicalization layer (prod-blocker lane): every real-world spelling — spaces, dashes,
+    // 00216/216 prefixes, bare 8 digits — normalizes BEFORE the unchanged wire contract.
+    const canonicalPhone = canonicalTunisiaPhone(String(formData.contact_phone || ''));
 
     const checkEmail = scope === 'both' || scope === 'email';
     const checkPhone = scope === 'both' || scope === 'phone';
 
-    if (checkEmail && !emailRegex.test(normalizedEmail)) {
+    if (checkEmail && !EMAIL_REGEX.test(normalizedEmail)) {
       setEmailConflict('Format email invalide');
       if (showToast) toast.error('📧 Veuillez saisir une adresse email valide.');
       return false;
     }
 
-    if (checkPhone && !isValidTunisiaPhone(normalizedPhone)) {
-      setPhoneConflict('Numéro invalide (format attendu: +216XXXXXXXX)');
-      if (showToast) toast.error('📞 Numéro invalide. Utilisez le format +216XXXXXXXX.');
+    if (checkPhone && canonicalPhone === null) {
+      setPhoneConflict(PHONE_FORMAT_ERROR);
+      if (showToast) toast.error(`📞 ${PHONE_FORMAT_ERROR}`);
       return false;
     }
 
     if (checkEmail) setEmailConflict(null);
-    if (checkPhone) setPhoneConflict(null);
+    if (checkPhone) {
+      setPhoneConflict(null);
+      // The gate passed: pin the canonical +216XXXXXXXX into state so the payload never
+      // carries a raw spelling (wire semantics unchanged).
+      if (canonicalPhone !== null && canonicalPhone !== formData.contact_phone) {
+        setFormData((prev) => ({ ...prev, contact_phone: canonicalPhone }));
+      }
+    }
     return true;
   };
 
   // Availability layer (async, format pre-checked by the caller): asks the rate-limited
   // endpoint whether the email is taken and mirrors the verdict into `emailConflict` (the
-  // same state the inline <p> and canGoNext already consume). The last verdict is cached
+  // same state the inline <p> and the Suivant flow already consume). The last verdict is cached
   // per email so blur + Suivant don't double-spend the 10/min rate limit. `null` from the
   // service (429/network) fails OPEN — the signup submit stays the server-side authority.
   const EMAIL_TAKEN_ERROR =
     'Un compte existe déjà avec cet e-mail. Connectez-vous ou utilisez une autre adresse.';
   const lastAvailability = useRef<{ email: string; available: boolean } | null>(null);
 
-  const checkEmailAvailable = async (): Promise<boolean> => {
-    const normalizedEmail = String(formData.email || '')
-      .trim()
-      .toLowerCase();
+  // `emailRaw` lets the Suivant click validate the DOM-synced value without waiting a render
+  // (state updates are async). Bounded by probeWithTimeout: a HUNG probe fails OPEN like a
+  // network error — pending can never hold the gate (prod-blocker lane).
+  const checkEmailAvailable = async (
+    emailRaw: string = String(formData.email || ''),
+  ): Promise<boolean> => {
+    const normalizedEmail = emailRaw.trim().toLowerCase();
     let available: boolean | null;
     if (lastAvailability.current?.email === normalizedEmail) {
       available = lastAvailability.current.available;
     } else {
-      available = await authService.checkEmailAvailability(normalizedEmail);
+      available = await probeWithTimeout(authService.checkEmailAvailability(normalizedEmail));
       if (available === null) return true; // unknown → don't block; server decides at submit
       lastAvailability.current = { email: normalizedEmail, available };
     }
@@ -417,19 +435,21 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
   };
 
   // Kais QA3 — matricule-fiscal availability, mirroring checkEmailAvailable. The verdict mirrors
-  // into taxNumberError (the same state the inline <p> + canGoNext already consume), cached per
+  // into taxNumberError (the same state the inline <p> + the Suivant flow already consume), cached per
   // value so blur + Suivant don't double-spend the 10/min limit. `null` (429/network) fails OPEN.
   const TAX_TAKEN_ERROR = 'Ce matricule fiscal est déjà enregistré. Utilisez-en un autre.';
   const lastTaxAvailability = useRef<{ taxNumber: string; available: boolean } | null>(null);
 
-  const checkTaxAvailable = async (): Promise<boolean> => {
-    const taxNumber = String(formData.tax_number || '').trim();
+  const checkTaxAvailable = async (
+    taxRaw: string = String(formData.tax_number || ''),
+  ): Promise<boolean> => {
+    const taxNumber = taxRaw.trim();
     if (!taxNumber || !isValidTaxNumber(taxNumber)) return true; // the format gate owns these
     let available: boolean | null;
     if (lastTaxAvailability.current?.taxNumber === taxNumber) {
       available = lastTaxAvailability.current.available;
     } else {
-      available = await authService.checkTaxAvailability(taxNumber);
+      available = await probeWithTimeout(authService.checkTaxAvailability(taxNumber));
       if (available === null) return true; // unknown → don't block; server decides at submit
       lastTaxAvailability.current = { taxNumber, available };
     }
@@ -437,87 +457,171 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
     return available;
   };
 
-  /* ── navigation helpers ── */
-  const canGoNext = () => {
-    switch (currentStep) {
-      case 0:
-        return Boolean(selectedProfileType);
-      case 1:
-        return Boolean(
-          lastName.trim() &&
-          firstName.trim() &&
-          fonction.trim() &&
-          formData.agent_toodooh?.trim() &&
-          isValidAgentCode(String(formData.agent_toodooh || '').trim()) &&
-          formData.email?.trim() &&
-          emailRegex.test(String(formData.email || '').trim()) &&
-          formData.password &&
-          validatePassword(formData.password) &&
-          pwMatch &&
-          formData.contact_phone &&
-          isValidTunisiaPhone(String(formData.contact_phone || '')) &&
-          !emailConflict &&
-          !phoneConflict,
-        );
-      case 2:
-        if (selectedProfileType === 'individual_owner') {
-          return Boolean(
-            etablissementName.trim() &&
-            formData.tax_number?.trim() &&
-            isValidTaxNumber(String(formData.tax_number || '')) &&
-            !taxNumberError &&
-            formData.business_sector_id &&
-            etablissementScreens &&
-            etablissementRooms.trim() &&
-            // H1 — the hour selects only misvalidate on fermeture ≤ ouverture; skip bypasses.
-            (ownerHoursLater || isValidHoursWindow(ownerOpeningHour, ownerClosingHour)),
-          );
-        }
-        return Boolean(
-          formData.business_name?.trim() &&
-          formData.tax_number?.trim() &&
-          isValidTaxNumber(String(formData.tax_number || '')) &&
-          !taxNumberError &&
-          (selectedProfileType === 'agency' ? true : formData.business_sector_id) &&
-          formData.company_size &&
-          formData.street_address?.trim() &&
-          formData.city?.trim() &&
-          formData.zone?.trim() &&
-          (selectedProfileType === 'fleet_owner'
-            ? isValidPostalCode(String(formData.postal_code || '').trim())
-            : true) &&
-          formData.governorate_id,
-        );
-      case 3:
-        if (isOwner) {
-          if (selectedProfileType === 'fleet_owner') return fleetEstablishments.length >= 1;
-          return Boolean(
-            formData.street_address?.trim() &&
-            formData.city?.trim() &&
-            isValidPostalCode(String(formData.postal_code || '').trim()) &&
-            formData.zone?.trim() &&
-            formData.governorate_id,
-          );
-        }
-        return Boolean(
-          formData.street_address?.trim() &&
-          formData.city?.trim() &&
-          isValidPostalCode(String(formData.postal_code || '').trim()) &&
-          formData.governorate_id,
-        );
-      case 4:
-        return true;
-      default:
-        return false;
+  /* ── navigation helpers (prod-blocker lane) ──
+     The old boolean canGoNext() fed `disabled=` on Suivant — a silently-held gate. It is replaced
+     by utils/signup-step-errors.stepFieldErrors (SAME conditions, per-field French messages): the
+     button is always clickable, a click DOM-syncs (autofill that never dispatched an event), then
+     either advances or names what is wrong under the field. */
+
+  const stepErrorCtx = (): StepErrorCtx => ({
+    profileType: selectedProfileType,
+    lastName,
+    firstName,
+    fonction,
+    email: String(formData.email || ''),
+    phone: String(formData.contact_phone || ''),
+    agentCode: String(formData.agent_toodooh || ''),
+    password: String(formData.password || ''),
+    confirmPassword,
+    etablissementName,
+    taxNumber: String(formData.tax_number || ''),
+    businessSectorId: String(formData.business_sector_id || ''),
+    etablissementScreens,
+    etablissementRooms,
+    hoursLater: ownerHoursLater,
+    hoursValid: isValidHoursWindow(ownerOpeningHour, ownerClosingHour),
+    businessName: String(formData.business_name || ''),
+    companySize: String(formData.company_size || ''),
+    streetAddress: String(formData.street_address || ''),
+    city: String(formData.city || ''),
+    zone: String(formData.zone || ''),
+    postalCode: String(formData.postal_code || ''),
+    governorateId: String(formData.governorate_id || ''),
+    fleetCount: fleetEstablishments.length,
+  });
+
+  const readDom = (...ids: string[]): string | undefined => {
+    for (const id of ids) {
+      const el = document.getElementById(id);
+      if (el instanceof HTMLInputElement) return el.value;
     }
+    return undefined;
   };
 
+  // The DOM ids feeding the autofill-sync seam, per step — TEXT inputs only (selects commit
+  // change events reliably). The -2/-3 suffixes are the profile-variant duplicates.
+  const domReadsForStep = (step: number): Partial<Record<string, string | undefined>> => {
+    if (step === 1) {
+      return {
+        lastName: readDom('signup-last-name'),
+        firstName: readDom('signup-first-name'),
+        fonction: readDom('signup-fonction'),
+        email: readDom('signup-email'),
+        phone: readDom('signup-phone'),
+        agentCode: readDom('signup-agent-code'),
+        password: readDom('signup-password'),
+        confirmPassword: readDom('signup-confirm-password'),
+      };
+    }
+    if (step === 2) {
+      return {
+        etablissementName: readDom('etablissement-name'),
+        taxNumber: readDom('tax-number', 'tax-number-2'),
+        etablissementRooms: readDom('etablissement-rooms'),
+        businessName: readDom('business-name'),
+        streetAddress: readDom('street-address'),
+        city: readDom('city'),
+        zone: readDom('zone'),
+        postalCode: readDom('postal-code'),
+      };
+    }
+    if (step === 3) {
+      return {
+        streetAddress: readDom('street-address-3'),
+        city: readDom('city-3'),
+        zone: readDom('zone-3'),
+        postalCode: readDom('postal-code-2'),
+      };
+    }
+    return {};
+  };
+
+  // Write DOM-won values back into React state so the re-render matches what the user sees.
+  const writeBackSynced = (values: Record<string, string>, keys: string[]): void => {
+    const patch: Partial<SignUpData> = {};
+    for (const key of keys) {
+      const v = values[key] ?? '';
+      if (key === 'lastName') setLastName(v);
+      else if (key === 'firstName') setFirstName(v);
+      else if (key === 'fonction') setFonction(v);
+      else if (key === 'confirmPassword') setConfirmPassword(v);
+      else if (key === 'etablissementName') setEtablissementName(v);
+      else if (key === 'etablissementRooms') setEtablissementRooms(v);
+      else if (key === 'email') patch.email = v;
+      else if (key === 'phone') patch.contact_phone = v;
+      else if (key === 'agentCode') patch.agent_toodooh = normalizeAgentCode(v);
+      else if (key === 'password') patch.password = v;
+      else if (key === 'taxNumber') patch.tax_number = v;
+      else if (key === 'businessName') patch.business_name = v;
+      else if (key === 'streetAddress') patch.street_address = v;
+      else if (key === 'city') patch.city = v;
+      else if (key === 'zone') patch.zone = v;
+      else if (key === 'postalCode') patch.postal_code = v;
+    }
+    if (Object.keys(patch).length > 0) setFormData((prev) => ({ ...prev, ...patch }));
+  };
+
+  // The DOM-sync seam: reconcile the live input values into state AND return a fresh ctx so
+  // validation runs on what the user sees without waiting a render.
+  const syncStepFromDom = (step: number): StepErrorCtx => {
+    const ctx = stepErrorCtx();
+    const dom = domReadsForStep(step);
+    const stateSlice: Record<string, string> = {};
+    for (const key of Object.keys(dom)) {
+      const current = ctx[key as keyof StepErrorCtx];
+      stateSlice[key] = typeof current === 'string' ? current : '';
+    }
+    const { next, changedKeys } = reconcileAutofill(stateSlice, dom);
+    if (changedKeys.length > 0) writeBackSynced(next, changedKeys);
+    const merged: StepErrorCtx = { ...ctx, ...next };
+    merged.agentCode = normalizeAgentCode(merged.agentCode);
+    return merged;
+  };
+
+  // Route each field's message into its home: the five dedicated states keep their inline <p>;
+  // everything else renders through `fieldError(key)`.
+  const applyStepErrors = (errors: StepErrors): void => {
+    setEmailConflict(errors['email'] ?? null);
+    setPhoneConflict(errors['phone'] ?? null);
+    setAgentCodeError(errors['agentCode'] ?? null);
+    setTaxNumberError(errors['taxNumber'] ?? null);
+    setPostalCodeError(errors['postalCode'] ?? null);
+    const rest: StepErrors = {};
+    for (const [key, message] of Object.entries(errors)) {
+      if (!['email', 'phone', 'agentCode', 'taxNumber', 'postalCode'].includes(key)) {
+        rest[key] = message;
+      }
+    }
+    setFieldErrors(rest);
+  };
+
+  const clearFieldError = (key: string): void => {
+    setFieldErrors((prev) => {
+      if (!(key in prev)) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
+  const fieldError = (key: string) =>
+    fieldErrors[key] ? <p className="text-xs text-red-600 mt-1">{fieldErrors[key]}</p> : null;
+
   const goNext = async () => {
-    if (currentStep >= 4 || !canGoNext()) return;
+    if (currentStep >= 4) return;
+    const ctx = syncStepFromDom(currentStep);
+    const errors = stepFieldErrors(currentStep, ctx);
+    applyStepErrors(errors);
+    if (Object.keys(errors).length > 0) return;
     if (currentStep === 1) {
-      // Format first (sync), then availability (async, cached) — ruling 2026-06-10.
-      if (!validateUniqueCredentials(true)) return;
-      if (!(await checkEmailAvailable())) {
+      // The format gate passed on the (possibly just-synced) values: pin the canonical
+      // +216XXXXXXXX into state for the unchanged wire contract, then the availability layer
+      // (bounded probe, fail-open, cached — ruling 2026-06-10).
+      const canonicalPhone = canonicalTunisiaPhone(ctx.phone);
+      if (canonicalPhone !== null && canonicalPhone !== formData.contact_phone) {
+        setFormData((prev) => ({ ...prev, contact_phone: canonicalPhone }));
+      }
+      if (!(await checkEmailAvailable(ctx.email))) {
         toast.error(EMAIL_TAKEN_ERROR);
         return;
       }
@@ -526,8 +630,8 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
     }
     if (currentStep === 2) {
       // Kais QA3 — surface a duplicate matricule BEFORE the last step (mirror step 1's email gate).
-      // Format is already enforced by canGoNext; this adds the availability layer.
-      if (!(await checkTaxAvailable())) {
+      // Format is already enforced by the step errors; this adds the availability layer.
+      if (!(await checkTaxAvailable(ctx.taxNumber))) {
         toast.error(TAX_TAKEN_ERROR);
         return;
       }
@@ -541,9 +645,9 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             : parseInt(etablissementScreens, 10);
       setFormData((prev) => ({
         ...prev,
-        business_name: etablissementName.trim(),
+        business_name: ctx.etablissementName.trim(),
         number_of_screens: Number.isNaN(screensNum) ? undefined : screensNum,
-        number_of_rooms: parseInt(etablissementRooms, 10) || undefined,
+        number_of_rooms: parseInt(ctx.etablissementRooms, 10) || undefined,
       }));
     }
     if (isOwner && currentStep === 3 && selectedProfileType === 'individual_owner') {
@@ -624,6 +728,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
       // H1 — the establishment's working hours; skipped = omitted (NULL columns server-side).
       ...hoursPayload(fleetDraftHoursLater, fleetDraftOpeningHour, fleetDraftClosingHour),
     };
+    clearFieldError('fleet');
     setFleetEstablishments((prev) => [...prev, row]);
     setFleetDraftName('');
     setFleetDraftScreens('');
@@ -868,10 +973,14 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             type="text"
             required
             value={lastName}
-            onChange={(e) => setLastName(e.target.value)}
+            onChange={(e) => {
+              clearFieldError('lastName');
+              setLastName(e.target.value);
+            }}
             className={inputClass}
             placeholder="Nom"
           />
+          {fieldError('lastName')}
         </div>
         {/* Prénom */}
         <div>
@@ -883,10 +992,14 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             type="text"
             required
             value={firstName}
-            onChange={(e) => setFirstName(e.target.value)}
+            onChange={(e) => {
+              clearFieldError('firstName');
+              setFirstName(e.target.value);
+            }}
             className={inputClass}
             placeholder="Prénom"
           />
+          {fieldError('firstName')}
         </div>
         {/* Fonction */}
         <div>
@@ -898,10 +1011,14 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             type="text"
             required
             value={fonction}
-            onChange={(e) => setFonction(e.target.value)}
+            onChange={(e) => {
+              clearFieldError('fonction');
+              setFonction(e.target.value);
+            }}
             className={inputClass}
             placeholder="Fonction"
           />
+          {fieldError('fonction')}
         </div>
         {/* Email */}
         <div>
@@ -938,14 +1055,27 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             required
             value={formData.contact_phone}
             onChange={(e) => {
+              // Prod-blocker lane: capture RAW. The old eager +216-forcing manufactured broken
+              // values out of already-prefixed entries (216… became +216216…); canonicalization
+              // now happens at blur / Suivant / submit, before the unchanged wire contract.
               setPhoneConflict(null);
-              const v = normalizePhone(e.target.value);
-              if (!v || v.length < 4) setFormData({ ...formData, contact_phone: '+216' });
-              else if (v.startsWith('+216')) setFormData({ ...formData, contact_phone: v });
-              else setFormData({ ...formData, contact_phone: '+216' + v.replace(/^\+/, '') });
+              setFormData({ ...formData, contact_phone: e.target.value });
             }}
-            onBlur={() => {
-              if (formData.contact_phone?.trim()) void validateUniqueCredentials(false, 'phone');
+            onBlur={(e) => {
+              // Read the DOM value (autofill truth), canonicalize on success, name the expected
+              // format on failure. The pristine '+216' prefill stays silent — the Suivant click
+              // is the told-what's-wrong moment.
+              const raw = e.target.value;
+              const canonical = canonicalTunisiaPhone(raw);
+              if (canonical !== null) {
+                setPhoneConflict(null);
+                setFormData((prev) => ({ ...prev, contact_phone: canonical }));
+              } else {
+                setFormData((prev) => ({ ...prev, contact_phone: raw }));
+                if (raw.trim() !== '' && raw.trim() !== '+216') {
+                  setPhoneConflict(PHONE_FORMAT_ERROR);
+                }
+              }
             }}
             className={inputClass}
             placeholder="+21612345678"
@@ -991,10 +1121,14 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             type={showPassword ? 'text' : 'password'}
             required
             value={formData.password}
-            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+            onChange={(e) => {
+              clearFieldError('password');
+              setFormData({ ...formData, password: e.target.value });
+            }}
             className={inputClass}
             placeholder="••••••••••"
           />
+          {fieldError('password')}
         </div>
         {/* Confirmer mot de passe */}
         <div>
@@ -1006,10 +1140,14 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             type={showConfirmPassword ? 'text' : 'password'}
             required
             value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
+            onChange={(e) => {
+              clearFieldError('confirmPassword');
+              setConfirmPassword(e.target.value);
+            }}
             className={inputClass}
             placeholder="••••••••••"
           />
+          {fieldError('confirmPassword')}
         </div>
       </div>
       {/* Password strength indicators */}
@@ -1138,11 +1276,15 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
                 type="text"
                 required
                 value={etablissementName}
-                onChange={(e) => setEtablissementName(e.target.value)}
+                onChange={(e) => {
+                  clearFieldError('etablissementName');
+                  setEtablissementName(e.target.value);
+                }}
                 className={inputClass}
                 placeholder="Nom de l'établissement"
                 id="etablissement-name"
               />
+              {fieldError('etablissementName')}
             </div>
             <div>
               <label className={labelClass} htmlFor="tax-number">
@@ -1176,7 +1318,10 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
               <select
                 required
                 value={formData.business_sector_id}
-                onChange={(e) => setFormData({ ...formData, business_sector_id: e.target.value })}
+                onChange={(e) => {
+                  clearFieldError('businessSector');
+                  setFormData({ ...formData, business_sector_id: e.target.value });
+                }}
                 className={inputClass}
                 id="business-sector-id"
               >
@@ -1187,6 +1332,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
                   </option>
                 ))}
               </select>
+              {fieldError('businessSector')}
             </div>
             <div>
               <label className={labelClass} htmlFor="etablissement-screens">
@@ -1195,7 +1341,10 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
               <select
                 required
                 value={etablissementScreens}
-                onChange={(e) => setEtablissementScreens(e.target.value)}
+                onChange={(e) => {
+                  clearFieldError('screens');
+                  setEtablissementScreens(e.target.value);
+                }}
                 className={inputClass}
                 id="etablissement-screens"
               >
@@ -1205,6 +1354,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
                   </option>
                 ))}
               </select>
+              {fieldError('screens')}
             </div>
             <div>
               <label className={labelClass} htmlFor="etablissement-rooms">
@@ -1214,22 +1364,37 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
                 type="text"
                 required
                 value={etablissementRooms}
-                onChange={(e) => setEtablissementRooms(e.target.value)}
+                onChange={(e) => {
+                  clearFieldError('rooms');
+                  setEtablissementRooms(e.target.value);
+                }}
                 className={inputClass}
                 placeholder="2"
                 id="etablissement-rooms"
               />
+              {fieldError('rooms')}
             </div>
           </div>
+          {/* H1 capture untouched — only the setters clear this step's hours message. */}
           {renderWorkingHoursFields({
             idPrefix: 'owner',
             opening: ownerOpeningHour,
-            setOpening: setOwnerOpeningHour,
+            setOpening: (v) => {
+              clearFieldError('hours');
+              setOwnerOpeningHour(v);
+            },
             closing: ownerClosingHour,
-            setClosing: setOwnerClosingHour,
+            setClosing: (v) => {
+              clearFieldError('hours');
+              setOwnerClosingHour(v);
+            },
             later: ownerHoursLater,
-            setLater: setOwnerHoursLater,
+            setLater: (v) => {
+              clearFieldError('hours');
+              setOwnerHoursLater(v);
+            },
           })}
+          {fieldError('hours')}
         </>
       ) : (
         <>
@@ -1285,11 +1450,15 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
                 type="text"
                 required
                 value={formData.business_name}
-                onChange={(e) => setFormData({ ...formData, business_name: e.target.value })}
+                onChange={(e) => {
+                  clearFieldError('businessName');
+                  setFormData({ ...formData, business_name: e.target.value });
+                }}
                 className={inputClass}
                 placeholder="Nom de l'entreprise"
                 id="business-name"
               />
+              {fieldError('businessName')}
             </div>
             <div>
               <label className={labelClass} htmlFor="tax-number-2">
@@ -1336,7 +1505,10 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
                   id="signup-business-sector"
                   required
                   value={formData.business_sector_id}
-                  onChange={(e) => setFormData({ ...formData, business_sector_id: e.target.value })}
+                  onChange={(e) => {
+                    clearFieldError('businessSector');
+                    setFormData({ ...formData, business_sector_id: e.target.value });
+                  }}
                   className={inputClass}
                 >
                   {selectedProfileType === 'advertiser' && (
@@ -1350,6 +1522,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
                   ))}
                 </select>
               )}
+              {fieldError('businessSector')}
             </div>
             <div>
               <label className={labelClass} htmlFor="company-size">
@@ -1359,7 +1532,10 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
               <select
                 required
                 value={formData.company_size || ''}
-                onChange={(e) => setFormData({ ...formData, company_size: e.target.value })}
+                onChange={(e) => {
+                  clearFieldError('companySize');
+                  setFormData({ ...formData, company_size: e.target.value });
+                }}
                 className={inputClass}
                 id="company-size"
               >
@@ -1370,6 +1546,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
                   </option>
                 ))}
               </select>
+              {fieldError('companySize')}
             </div>
           </div>
 
@@ -1381,11 +1558,15 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
               type="text"
               required
               value={formData.street_address}
-              onChange={(e) => setFormData({ ...formData, street_address: e.target.value })}
+              onChange={(e) => {
+                clearFieldError('streetAddress');
+                setFormData({ ...formData, street_address: e.target.value });
+              }}
               className={inputClass}
               placeholder="Adresse"
               id="street-address"
             />
+            {fieldError('streetAddress')}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -1397,11 +1578,15 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
                 type="text"
                 required
                 value={formData.city}
-                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                onChange={(e) => {
+                  clearFieldError('city');
+                  setFormData({ ...formData, city: e.target.value });
+                }}
                 className={inputClass}
                 placeholder="Ville"
                 id="city"
               />
+              {fieldError('city')}
             </div>
             <div>
               <label className={labelClass} htmlFor="zone">
@@ -1411,11 +1596,15 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
                 type="text"
                 required
                 value={formData.zone}
-                onChange={(e) => setFormData({ ...formData, zone: e.target.value })}
+                onChange={(e) => {
+                  clearFieldError('zone');
+                  setFormData({ ...formData, zone: e.target.value });
+                }}
                 className={inputClass}
                 placeholder="1000"
                 id="zone"
               />
+              {fieldError('zone')}
             </div>
           </div>
           {selectedProfileType === 'fleet_owner' && (
@@ -1451,7 +1640,10 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             <select
               required
               value={formData.governorate_id}
-              onChange={(e) => setFormData({ ...formData, governorate_id: e.target.value })}
+              onChange={(e) => {
+                clearFieldError('governorate');
+                setFormData({ ...formData, governorate_id: e.target.value });
+              }}
               className={inputClass}
               id="governorate-id"
             >
@@ -1462,6 +1654,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
                 </option>
               ))}
             </select>
+            {fieldError('governorate')}
           </div>
         </>
       )}
@@ -1614,6 +1807,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
         <p className="text-sm text-gray-500 max-w-lg mx-auto">
           Ajouter les établissements éligibles à la diffusion de spots publicitaires
         </p>
+        <div className="mt-2 flex justify-center">{fieldError('fleet')}</div>
       </div>
 
       {fleetEstablishments.length > 0 && (
@@ -2109,11 +2303,15 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             type="text"
             required
             value={formData.street_address}
-            onChange={(e) => setFormData({ ...formData, street_address: e.target.value })}
+            onChange={(e) => {
+              clearFieldError('streetAddress');
+              setFormData({ ...formData, street_address: e.target.value });
+            }}
             className={inputClass}
             placeholder="123 Rue de la Paix"
             id="street-address-3"
           />
+          {fieldError('streetAddress')}
         </div>
         <div>
           <label className={labelClass} htmlFor="city-3">
@@ -2123,11 +2321,15 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             type="text"
             required
             value={formData.city}
-            onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+            onChange={(e) => {
+              clearFieldError('city');
+              setFormData({ ...formData, city: e.target.value });
+            }}
             className={inputClass}
             placeholder="Tunis"
             id="city-3"
           />
+          {fieldError('city')}
         </div>
         <div>
           <label className={labelClass} htmlFor="postal-code-2">
@@ -2160,7 +2362,10 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             <select
               required
               value={formData.zone}
-              onChange={(e) => setFormData({ ...formData, zone: e.target.value })}
+              onChange={(e) => {
+                clearFieldError('zone');
+                setFormData({ ...formData, zone: e.target.value });
+              }}
               className={inputClass}
               id="zone-3"
             >
@@ -2171,6 +2376,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
                 </option>
               ))}
             </select>
+            {fieldError('zone')}
           </div>
         )}
         <div className="md:col-span-2">
@@ -2180,7 +2386,10 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
           <select
             required
             value={formData.governorate_id}
-            onChange={(e) => setFormData({ ...formData, governorate_id: e.target.value })}
+            onChange={(e) => {
+              clearFieldError('governorate');
+              setFormData({ ...formData, governorate_id: e.target.value });
+            }}
             className={inputClass}
             id="governorate-id-3"
           >
@@ -2191,6 +2400,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
               </option>
             ))}
           </select>
+          {fieldError('governorate')}
         </div>
         {selectedProfileType === 'individual_owner' && (
           <div className="md:col-span-2">
@@ -2348,8 +2558,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
           <button
             type="button"
             onClick={() => void goNext()}
-            disabled={!canGoNext()}
-            className="py-3.5 rounded-xl font-semibold text-sm text-brand-deep transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            className="py-3.5 rounded-xl font-semibold text-sm text-brand-deep transition-all"
             style={{ background: '#76E6AB' }}
           >
             Suivant
@@ -2372,8 +2581,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             <button
               type="button"
               onClick={() => void goNext()}
-              disabled={!canGoNext()}
-              className="flex-1 py-3.5 rounded-xl font-semibold text-sm text-brand-deep transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex-1 py-3.5 rounded-xl font-semibold text-sm text-brand-deep transition-all"
               style={{ background: '#76E6AB' }}
             >
               Suivant
