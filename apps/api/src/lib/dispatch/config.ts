@@ -20,6 +20,14 @@ export interface ResolvedDispatchConfig {
   campaignLeadWorkingDays: number;
 }
 
+// The CPM (TND/1000) a campaign prices at: event campaigns at event_cpm_tnd, everything else at
+// standard_cpm_tnd (operator ruling 15/30). ONE home (E5) — the activation derivation
+// (routes/admin-campaigns.ts) and the C_max ceiling (lib/campaign-cmax.ts) must price identically.
+export const cpmForCampaign = (
+  campaignType: string,
+  cfg: { standardCpmTnd: number; eventCpmTnd: number },
+): number => (campaignType === 'event' ? cfg.eventCpmTnd : cfg.standardCpmTnd);
+
 // Read the singleton dispatch config (numeric columns come back as strings → coerce to numbers).
 // Falls back to the V1 defaults when no row exists, so dispatch always has a coherent config.
 export const getDispatchConfig = async (): Promise<ResolvedDispatchConfig> => {

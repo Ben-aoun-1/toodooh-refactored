@@ -11,7 +11,7 @@ import {
   creatives,
 } from '../db/schema.js';
 import { tunisDateOf } from '../lib/campaign-dates.js';
-import { getDispatchConfig } from '../lib/dispatch/config.js';
+import { cpmForCampaign, getDispatchConfig } from '../lib/dispatch/config.js';
 import { runDispatch } from '../lib/dispatch/dispatch-service.js';
 import { walletBalance } from '../lib/recharges.js';
 import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
@@ -43,12 +43,7 @@ const listQuerySchema = z.object({
 });
 const rejectBodySchema = z.object({ reason: z.string().trim().min(1).max(2000) });
 
-// The CPM (TND/1000) a campaign prices at: event campaigns at event_cpm_tnd, everything else at
-// standard_cpm_tnd (operator ruling 15/30). Single source of truth for the list + activate paths.
-const cpmForCampaign = (
-  campaignType: string,
-  cfg: { standardCpmTnd: number; eventCpmTnd: number },
-): number => (campaignType === 'event' ? cfg.eventCpmTnd : cfg.standardCpmTnd);
+// cpmForCampaign moved to lib/dispatch/config.ts (E5) — the C_max ceiling must price identically.
 
 // Derived I_cible from the indicative budget at the given CPM, or null when un-derivable (no budget /
 // non-positive budget). ⌊budget·1000 / cpm⌋; a sub-CPM budget floors to 0 → null (not deliverable).
