@@ -1,0 +1,57 @@
+import { db } from '../db/client.js';
+
+import { cpmForCampaign, getDispatchConfig } from './dispatch/config.js';
+import { assemblePool } from './dispatch/pool.js';
+import { tForDuration } from './dispatch/thresholds.js';
+
+// E5 (VF US-1.3/1.4) — the C_max ceiling the budget cursor is bounded by:
+//
+//   I_max = Σ Ii over the campaign's ELIGIBLE pool     (targeting ∩ zones ∩ active ∩ hours ∩
+//                                                       capacity, engagement-netted, T-weighted)
+//   C_max = ⌊ (CPM × I_max) ÷ 1000 ⌋                    (FLOOR to whole TND — the promise must
+//                                                       be deliverable)
+//
+// The cursor MUST read the same occupancy truth as dispatch: assemblePool (E3) is that truth —
+// each pool entry's residualCapacity is the venue's FACTURABLE capacity for the window (T-weighted
+// since E1, netted of other campaigns' engaged broadcast seconds), so I_max is their plain sum.
+// CONSUMED, never modified; the read-only path takes no occupancy locks (dispatch's freeze does).
+//
+// Post-submit shrinkage is dispatch's problem BY DESIGN: occupancy taken between submit and
+// activation surfaces there as TOO_THIN (clôture, renvoi curseur) or a genuine PARTIAL — the
+// submit-time gate only refuses promises that are already impossible at click time.
+
+export interface CampaignCmax {
+  /** ⌊CPM × I_max ÷ 1000⌋ — whole TND. */
+  cMaxTnd: number;
+  iMaxFacturable: number;
+  eligibleCount: number;
+  /** The CPM the ceiling priced at (event vs standard) — handy for callers/tests. */
+  cpmTnd: number;
+}
+
+export const computeCampaignCmax = async (
+  campaign: { id: string; startDate: string; endDate: string; campaignType: string },
+  spotSeconds: number,
+): Promise<CampaignCmax> => {
+  const config = await getDispatchConfig();
+  const t = tForDuration(spotSeconds, config);
+  const cpm = cpmForCampaign(campaign.campaignType, config);
+  const assembled = await assemblePool(
+    db,
+    { id: campaign.id, startDate: campaign.startDate, endDate: campaign.endDate },
+    { s: spotSeconds, t, fMaxSeconds: config.fMaxSeconds },
+  );
+  // Zero targeting lines folds to ZERO inventory: dispatch would refuse the campaign as-is
+  // (NO_TARGETING at activation), so the honest ceiling is 0 — the FE zero-state tells the
+  // advertiser to widen categories/zones instead of promising undeliverable budget.
+  if (assembled.status === 'NO_TARGETING') {
+    return { cMaxTnd: 0, iMaxFacturable: 0, eligibleCount: 0, cpmTnd: cpm };
+  }
+  const iMax = assembled.pool.reduce((sum, entry) => sum + entry.residualCapacity, 0);
+  return {
+    cMaxTnd: Math.floor((cpm * iMax) / 1000),
+    iMaxFacturable: iMax,
+    eligibleCount: assembled.pool.length,
+    cpmTnd: cpm,
+  };
+};

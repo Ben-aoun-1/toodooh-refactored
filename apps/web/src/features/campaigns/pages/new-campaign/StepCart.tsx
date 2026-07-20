@@ -1,4 +1,5 @@
 import {
+  AlertTriangle,
   ArrowRight,
   Banknote,
   Info,
@@ -8,16 +9,23 @@ import {
   Target,
   TrendingUp,
 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 import PillButton from '@/components/PillButton';
 import {
-  CART_BUDGET_MAX_TND,
   CART_BUDGET_MIN_TND,
   CART_BUDGET_STEP_TND,
 } from '@/features/campaigns/hooks/new-campaign/cart-budget';
+import { useCampaignCmax } from '@/features/campaigns/hooks/useCampaignCmax';
 import { useCreativePreviewUrl, useMyCreatives } from '@/features/campaigns/hooks/useCreativeApi';
 import { usePricingConfig } from '@/features/campaigns/hooks/usePricingConfig';
 import { formatUiDate, inclusiveDayCount } from '@/features/campaigns/lib/campaign-summary';
+import {
+  CMAX_PULLBACK_NOTICE,
+  CMAX_ZERO_STATE,
+  clampBudgetToCmax,
+  cmaxHelperLine,
+} from '@/features/campaigns/lib/cmax-budget';
 import { estimateImpressions } from '@/features/campaigns/lib/impressions';
 import { toChipLabel } from '@/features/campaigns/lib/targeting-chip-label';
 import { zonesRecapLabel } from '@/features/campaigns/lib/zones-selection';
@@ -80,13 +88,32 @@ export default function StepCart({
   const pricing = usePricingConfig();
   const { data: creatives = [] } = useMyCreatives(userId);
   const previewUrl = useCreativePreviewUrl(creativeId);
+  // E5 (VF US-1.3) — the live ceiling bounding the cursor (assemblePool's occupancy truth;
+  // short staleTime + focus-refetch in the hook keep it live-ish without hammering).
+  const cmax = useCampaignCmax(draftCampaignId);
+  const [pullbackNotice, setPullbackNotice] = useState(false);
 
   // CF-U1 (Mejri item 6) — the budget-null contract: an UNTOUCHED budget is null and DISPLAYS as
   // « — » (no phantom default); the first drag of the cursor sets a real value. Enregistrer /
   // Soumettre stay locked until a positive amount is explicitly chosen.
   const value = requestedBudget;
   const busy = submitting || saving;
-  const canAct = !busy && value != null && value > 0;
+  const cMaxTnd = cmax.data?.c_max_tnd;
+  const zeroInventory = cMaxTnd === 0;
+  // E5 — the zero-state blocks the step ("told-at-selection" instead of a doomed TOO_THIN at
+  // approval); an unknown ceiling (loading/error) leaves the server gate as the authority.
+  const canAct = !busy && value != null && value > 0 && !zeroInventory;
+
+  // Pull-back (US-1.4): a budget above a freshly-fetched ceiling is clamped down with a VISIBLE
+  // notice — never silently. A zero ceiling clears the budget (the zero-state owns the step).
+  useEffect(() => {
+    if (cMaxTnd === undefined) return;
+    const { next, clamped } = clampBudgetToCmax(value, cMaxTnd);
+    if (clamped) {
+      setRequestedBudget(next);
+      setPullbackNotice(true);
+    }
+  }, [cMaxTnd, value, setRequestedBudget]);
 
   // Impressions estimate — null while the budget is unset or the CPM is loading/errored, so the
   // tile renders "—", never NaN.
@@ -249,24 +276,62 @@ export default function StepCart({
                 )}
               </div>
 
+              {/* E5 — the slider max IS the live C_max (the interim flat 5 000 retired). While the
+                  ceiling loads (or errored) the cursor is held; zero inventory disables it with the
+                  honest empty-state below. */}
               <input
                 id="cart-budget"
                 type="range"
                 min={CART_BUDGET_MIN_TND}
-                max={CART_BUDGET_MAX_TND}
+                max={cMaxTnd ?? CART_BUDGET_MIN_TND}
                 step={CART_BUDGET_STEP_TND}
                 value={value ?? CART_BUDGET_MIN_TND}
-                onChange={(e) => setRequestedBudget(Number(e.target.value))}
+                onChange={(e) => {
+                  setPullbackNotice(false);
+                  setRequestedBudget(Number(e.target.value));
+                }}
+                disabled={cMaxTnd === undefined || zeroInventory}
                 aria-label="Budget indicatif (TND)"
                 aria-valuetext={
                   value == null ? 'Aucun budget renseigné' : `${tnd.format(value)} TND`
                 }
-                className="w-full cursor-pointer accent-brand-primary"
+                className="w-full cursor-pointer accent-brand-primary disabled:cursor-not-allowed disabled:opacity-40"
               />
               <div className="mt-1 flex justify-between text-xs font-medium text-gray-400">
                 <span>MIN: {tnd.format(CART_BUDGET_MIN_TND)} TND</span>
-                <span>MAX: {tnd.format(CART_BUDGET_MAX_TND)} TND</span>
+                <span>MAX: {cMaxTnd === undefined ? '…' : `${tnd.format(cMaxTnd)} TND`}</span>
               </div>
+
+              {/* E5 — the ceiling, said out loud (US-1.3): computed on the REAL inventory. */}
+              {cmax.isLoading && (
+                <p className="mt-2 inline-flex items-center gap-2 text-xs text-gray-500">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Calcul du budget maximum disponible…
+                </p>
+              )}
+              {cmax.isError && (
+                <p className="mt-2 text-xs text-red-600">
+                  Impossible de calculer le budget maximum — revenez sur cette étape pour réessayer.
+                </p>
+              )}
+              {cmax.data !== undefined && !zeroInventory && (
+                <p className="mt-2 text-xs text-gray-500">
+                  {cmaxHelperLine(cmax.data.c_max_tnd, cmax.data.eligible_count)}
+                </p>
+              )}
+
+              {zeroInventory && (
+                <div className="mt-3 flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <AlertTriangle className="h-5 w-5 flex-shrink-0 text-amber-600" />
+                  <p className="text-sm text-amber-800">{CMAX_ZERO_STATE}</p>
+                </div>
+              )}
+              {pullbackNotice && !zeroInventory && (
+                <div className="mt-3 flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <AlertTriangle className="h-5 w-5 flex-shrink-0 text-amber-600" />
+                  <p className="text-sm text-amber-800">{CMAX_PULLBACK_NOTICE}</p>
+                </div>
+              )}
 
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <div className="min-w-0">
@@ -299,7 +364,7 @@ export default function StepCart({
                     readOnly
                     aria-readonly="true"
                     tabIndex={-1}
-                    value={`Max: ${tnd.format(CART_BUDGET_MAX_TND)} TND`}
+                    value={`Max: ${cMaxTnd === undefined ? '…' : `${tnd.format(cMaxTnd)} TND`}`}
                     className="w-full cursor-not-allowed rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-400"
                   />
                 </div>

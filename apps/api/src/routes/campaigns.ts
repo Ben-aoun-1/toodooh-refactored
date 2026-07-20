@@ -12,6 +12,7 @@ import {
   creatives,
   zones,
 } from '../db/schema.js';
+import { computeCampaignCmax } from '../lib/campaign-cmax.js';
 import {
   type StartDateViolation,
   premiereDateDisponible,
@@ -460,6 +461,69 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     return reply.status(200).send(campaignView(updated as CampaignRow));
   });
 
+  // GET /api/campaigns/:id/cmax — E5 (VF US-1.3): the live C_max ceiling for the Validation-step
+  // budget cursor. Owner-scoped (foreign ≡ missing 404). Requires dates + a linked creative with a
+  // duration (the spot length S prices the pool) — else 409 CMAX_REQUIRES naming what's missing.
+  // NO caching beyond the request: the cursor must reflect live occupancy (the FE layer handles
+  // staleness with a short staleTime).
+  app.get('/api/campaigns/:id/cmax', advertiserGuard, async (request, reply) => {
+    const parsedParams = idParamSchema.safeParse(request.params);
+    if (!parsedParams.success) return reply.status(400).send(invalidId);
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply
+        .status(401)
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+    }
+    const [row] = await db
+      .select({
+        id: campaigns.id,
+        startDate: campaigns.startDate,
+        endDate: campaigns.endDate,
+        campaignType: campaigns.campaignType,
+        creativeId: campaigns.creativeId,
+        creativeDurationSeconds: creatives.durationSeconds,
+      })
+      .from(campaigns)
+      .leftJoin(creatives, eq(campaigns.creativeId, creatives.id))
+      .where(and(eq(campaigns.id, parsedParams.data.id), eq(campaigns.advertiserId, userId)))
+      .limit(1);
+    if (!row) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such campaign.' });
+    }
+    const missing: string[] = [];
+    if (!row.startDate || !row.endDate) missing.push('dates');
+    // The spot length S: only a linked creative with a positive duration can price the pool.
+    const spotSeconds =
+      row.creativeId !== null &&
+      row.creativeDurationSeconds !== null &&
+      row.creativeDurationSeconds > 0
+        ? row.creativeDurationSeconds
+        : null;
+    if (spotSeconds === null) missing.push('creative');
+    if (!row.startDate || !row.endDate || spotSeconds === null) {
+      return reply.status(409).send({
+        error: 'CMAX_REQUIRES',
+        message: 'C_max needs the campaign dates and a linked creative with a duration.',
+        missing,
+      });
+    }
+    const cmax = await computeCampaignCmax(
+      {
+        id: row.id,
+        startDate: row.startDate,
+        endDate: row.endDate,
+        campaignType: row.campaignType,
+      },
+      spotSeconds,
+    );
+    return reply.status(200).send({
+      c_max_tnd: cmax.cMaxTnd,
+      i_max_facturable: cmax.iMaxFacturable,
+      eligible_count: cmax.eligibleCount,
+    });
+  });
+
   // POST /api/campaigns/:id/submit — owner-scoped draft→pending (stamps submitted_at).
   app.post('/api/campaigns/:id/submit', advertiserGuard, async (request, reply) => {
     const parsedParams = idParamSchema.safeParse(request.params);
@@ -477,8 +541,12 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         startDate: campaigns.startDate,
         endDate: campaigns.endDate,
         requestedBudget: campaigns.requestedBudget,
+        campaignType: campaigns.campaignType,
+        creativeId: campaigns.creativeId,
+        creativeDurationSeconds: creatives.durationSeconds,
       })
       .from(campaigns)
+      .leftJoin(creatives, eq(campaigns.creativeId, creatives.id))
       .where(and(eq(campaigns.id, parsedParams.data.id), eq(campaigns.advertiserId, userId)))
       .limit(1);
     if (!existing) {
@@ -512,6 +580,35 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         error: 'MISSING_BUDGET',
         message: 'A campaign needs a positive requested budget before submission.',
       });
+    }
+    // E5 (VF US-1.4) — C_max revalidation at submit: the budget must be deliverable against LIVE
+    // occupancy ("si l'annonceur tente de fixer C_cible > C_max → refus"). == C_max passes; only
+    // strictly-over is refused, carrying the ceiling so the advertiser adjusts. Skipped when no
+    // creative duration exists to price the pool (the wizard guarantees one; an API-level submit
+    // without it dead-ends at activation's 422 anyway). Post-submit shrinkage is dispatch's
+    // problem BY DESIGN — occupancy taken after this click surfaces at activation as TOO_THIN
+    // (clôture, renvoi curseur) or a genuine PARTIAL.
+    if (
+      existing.creativeId !== null &&
+      existing.creativeDurationSeconds !== null &&
+      existing.creativeDurationSeconds > 0
+    ) {
+      const cmax = await computeCampaignCmax(
+        {
+          id: existing.id,
+          startDate: existing.startDate,
+          endDate: existing.endDate,
+          campaignType: existing.campaignType,
+        },
+        existing.creativeDurationSeconds,
+      );
+      if (Number(existing.requestedBudget) > cmax.cMaxTnd) {
+        return reply.status(400).send({
+          error: 'BUDGET_EXCEEDS_CMAX',
+          message: 'The requested budget exceeds the available inventory for this targeting.',
+          c_max_tnd: cmax.cMaxTnd,
+        });
+      }
     }
     // CF-S1 — a resubmitted Non validé sheds its rejection audit with the status.
     const [updated] = await db

@@ -1,4 +1,5 @@
 import 'react-datepicker/dist/react-datepicker.css';
+import { useQueryClient } from '@tanstack/react-query';
 import { ChevronRight, Save, X } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'react-hot-toast';
@@ -27,6 +28,7 @@ import type {
   UseCampaignWizardOptions,
   WizardState,
 } from '@/features/campaigns/hooks/new-campaign/wizard-types';
+import { campaignsKeys } from '@/features/campaigns/hooks/queryKeys';
 import {
   useCreateCampaign,
   useDeleteCampaign,
@@ -35,6 +37,7 @@ import {
 } from '@/features/campaigns/hooks/useCampaignApi';
 import { usePricingConfig } from '@/features/campaigns/hooks/usePricingConfig';
 import { useZones } from '@/features/campaigns/hooks/useZones';
+import { isBudgetExceedsCmax } from '@/features/campaigns/lib/cmax-budget';
 import { quitDeletesDraft, shouldArmExitGuard } from '@/features/campaigns/lib/exit-intercept';
 import { setNavigationGuard } from '@/features/campaigns/lib/navigation-guard';
 import { parseCampaignUiDate, toLocalDateOnlyString } from '@/features/campaigns/lib/wizard-dates';
@@ -101,6 +104,7 @@ export default function NewCampaign() {
   const updateCampaign = useUpdateCampaign(user?.id);
   const submitCampaign = useSubmitCampaign(user?.id);
   const deleteCampaign = useDeleteCampaign(user?.id);
+  const queryClient = useQueryClient();
 
   const wizOpts = useMemo<UseCampaignWizardOptions>(
     () => ({
@@ -292,11 +296,24 @@ export default function NewCampaign() {
       armedRef.current = false; // CF-W1 — no orphan intercept after a successful submit
       toast.success('Campagne soumise pour validation.');
       navigate('/my-campaigns?status=pending');
+    } else if (isBudgetExceedsCmax(result.error)) {
+      // E5 (US-1.4) — the server's ceiling gate fired (occupancy moved since the read): re-read
+      // the LIVE ceiling; the Validation step's pull-back effect re-clamps with its notice.
+      toast.error(
+        'Le budget dépasse l’inventaire disponible — le plafond a été recalculé, ajustez votre budget.',
+        { duration: 8000 },
+      );
+      if (state.draftCampaignId) {
+        void queryClient.invalidateQueries({
+          queryKey: campaignsKeys.cmax(state.draftCampaignId),
+        });
+      }
+      log.warn({ err: result.error }, 'campaign submit refused: budget exceeds live C_max');
     } else {
       toast.error(getErrorMessage(result.error) || 'Erreur lors de la soumission de la campagne');
       log.error({ err: result.error }, 'campaign submit failed');
     }
-  }, [wiz, navigate, state.draftCampaignId, clearResumeStep]);
+  }, [wiz, navigate, state.draftCampaignId, clearResumeStep, queryClient]);
 
   // CF-W1 §1.8 — Enregistrer on EVERY step: flush targeting if that step is live, create the
   // draft when it does not exist yet (step-1 pre-draft), persist the full state, toast, leave.
