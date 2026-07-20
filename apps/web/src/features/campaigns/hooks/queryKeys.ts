@@ -30,6 +30,9 @@ export const campaignsKeys = {
   /** A single campaign's detail view (`CampaignDetails` — Commit 7b). */
   detail: (id: string) => [...campaignsKeys.all, 'detail', id] as const,
 
+  /** E5 — the live C_max ceiling for the Validation-step budget cursor (GET /:id/cmax). */
+  cmax: (id: string) => [...campaignsKeys.all, 'cmax', id] as const,
+
   /** Persisted `campaign_categories` rows for a campaign (edit-mode hydration). */
   categories: (campaignId: string) => [...campaignsKeys.all, 'categories', campaignId] as const,
 

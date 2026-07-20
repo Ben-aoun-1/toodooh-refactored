@@ -62,9 +62,25 @@ export interface CoverageVenue {
   longitude: number;
 }
 
+/** E5 (VF US-1.3) — the live C_max ceiling bounding the Validation-step budget cursor. */
+export interface CampaignCmaxRead {
+  /** ⌊CPM × I_max ÷ 1000⌋ — whole TND (the server floors; the promise must be deliverable). */
+  c_max_tnd: number;
+  i_max_facturable: number;
+  eligible_count: number;
+}
+
 export const campaignsApi = {
   create(input: CreateCampaignInput): Promise<CampaignView> {
     return apiClient.post<CampaignView>('/campaigns', input);
+  },
+  /**
+   * E5 — GET /:id/cmax: the ceiling computed on assemblePool's LIVE occupancy truth. 409
+   * CMAX_REQUIRES until the campaign has dates + a creative (the wizard guarantees both before
+   * Validation mounts).
+   */
+  cmax(id: string): Promise<CampaignCmaxRead> {
+    return apiClient.get<CampaignCmaxRead>(`/campaigns/${id}/cmax`);
   },
   /** The active, coordinate-bearing venues matching the campaign's targeting (map preview). */
   coverage(id: string): Promise<{ screenhosts: CoverageVenue[] }> {
