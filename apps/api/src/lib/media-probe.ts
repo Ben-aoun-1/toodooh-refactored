@@ -22,7 +22,7 @@ const execFileAsync = promisify(execFile);
 // linking, moderation and playout of already-stored rows are untouched.
 
 /** Containers the sniffer can recognize. `null` = none of them (unknown bytes). */
-export type SniffedContainer = 'mp4' | 'mov' | 'webm' | 'jpeg' | 'png' | 'webp' | null;
+export type SniffedContainer = 'mp4' | 'mov' | 'webm' | 'jpeg' | 'png' | 'webp' | 'pdf' | null;
 
 // ISO base-media major brands accepted as "mp4 family". A QuickTime file carries 'qt  '.
 const MP4_BRANDS = new Set([
@@ -69,6 +69,9 @@ export function sniffContainer(bytes: Buffer): SniffedContainer {
   ) {
     return 'png';
   }
+  // PDF: '%PDF-' (CF-M2 — the recharge justificatif accepts PDFs; creatives never do, their
+  // declared-mime gate rejects application/pdf before this sniff is consulted).
+  if (bytes.length >= 5 && bytes.toString('latin1', 0, 5) === '%PDF-') return 'pdf';
   return null;
 }
 
@@ -78,6 +81,7 @@ const DECLARED_TO_CONTAINER: Record<string, SniffedContainer> = {
   'video/quicktime': 'mov',
   'image/jpeg': 'jpeg',
   'image/png': 'png',
+  'application/pdf': 'pdf',
 };
 
 /** True when the declared mimetype and the sniffed bytes agree. */

@@ -6,6 +6,7 @@ import { db } from '../db/client.js';
 import { type Recharge, recharges } from '../db/schema.js';
 import { adminRechargeView } from '../lib/recharges.js';
 import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
+import { storage } from '../storage/s3-storage.js';
 
 // Admin recharge moderation (L-wallet) — the manual-payment confirmation step. An admin reconciles a
 // bank transfer against a recharge's reference and CONFIRMS receipt (→ credits the derived balance)
@@ -123,5 +124,30 @@ export const adminRechargesRoutes: FastifyPluginAsync = async (app) => {
       return sendNotPending(reply, request, current ?? existing);
     }
     return reply.status(200).send(adminRechargeView(updated));
+  });
+
+  // GET /api/admin/recharges/:id/document-url — short-TTL presigned view of a recharge's
+  // justificatif (CF-M2), so the admin reviews document + amount together before deciding. Same
+  // 5-minute TTL as the advertiser route; a recharge without a document is a plain 404.
+  app.get('/api/admin/recharges/:id/document-url', adminGuard, async (request, reply) => {
+    const parsed = idParamSchema.safeParse(request.params);
+    if (!parsed.success) return invalidField(reply, 'id', 'must be a uuid');
+
+    const [row] = await db
+      .select({ documentKey: recharges.documentKey })
+      .from(recharges)
+      .where(eq(recharges.id, parsed.data.id))
+      .limit(1);
+    if (!row || row.documentKey === null) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such document.' });
+    }
+    const result = await storage.getPresignedUrl({ key: row.documentKey, expiresInSeconds: 300 });
+    if ('error' in result) {
+      return reply.status(502).send({
+        error: 'STORAGE_ERROR',
+        message: 'Could not generate a document URL. Please retry.',
+      });
+    }
+    return reply.status(200).send({ url: result.url });
   });
 };
