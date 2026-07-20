@@ -37,7 +37,11 @@ import {
 } from '@/features/campaigns/hooks/useCampaignApi';
 import { usePricingConfig } from '@/features/campaigns/hooks/usePricingConfig';
 import { useZones } from '@/features/campaigns/hooks/useZones';
-import { isBudgetExceedsCmax } from '@/features/campaigns/lib/cmax-budget';
+import {
+  BUDGET_FLOOR_ERROR,
+  isBudgetBelowMinimum,
+  isBudgetExceedsCmax,
+} from '@/features/campaigns/lib/cmax-budget';
 import { quitDeletesDraft, shouldArmExitGuard } from '@/features/campaigns/lib/exit-intercept';
 import { setNavigationGuard } from '@/features/campaigns/lib/navigation-guard';
 import { parseCampaignUiDate, toLocalDateOnlyString } from '@/features/campaigns/lib/wizard-dates';
@@ -296,6 +300,10 @@ export default function NewCampaign() {
       armedRef.current = false; // CF-W1 — no orphan intercept after a successful submit
       toast.success('Campagne soumise pour validation.');
       navigate('/my-campaigns?status=pending');
+    } else if (isBudgetBelowMinimum(result.error)) {
+      // CF-U3 — the server floor refusal, in French (the slider min already enforces it for any
+      // fresh drag; this catches legacy sub-floor drafts).
+      toast.error(BUDGET_FLOOR_ERROR, { duration: 6000 });
     } else if (isBudgetExceedsCmax(result.error)) {
       // E5 (US-1.4) — the server's ceiling gate fired (occupancy moved since the read): re-read
       // the LIVE ceiling; the Validation step's pull-back effect re-clamps with its notice.

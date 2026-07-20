@@ -1,3 +1,5 @@
+import { CAMPAIGN_BUDGET_FLOOR_TND } from '@/features/campaigns/lib/cmax-budget';
+
 import type { StepDescriptor, WizardState } from './wizard-types';
 
 /** Basics gate (CF-W1 « Nom et type »): a name. The type chips are UI-only (Réseau Toodooh
@@ -35,9 +37,9 @@ export function validateCreative(state: WizardState): boolean {
   return Boolean(state.creativeId);
 }
 
-/** Cart gate: a positive indicative budget (TND). */
+/** Cart gate: an indicative budget at or above the 100 TND floor (CF-U3 — mirrors the submit gate). */
 export function validateCart(state: WizardState): boolean {
-  return state.requestedBudget != null && state.requestedBudget > 0;
+  return state.requestedBudget != null && state.requestedBudget >= CAMPAIGN_BUDGET_FLOOR_TND;
 }
 
 // CF-W1 (spec §1.2) — the 6-step order: name+type first, categories second, dates third.

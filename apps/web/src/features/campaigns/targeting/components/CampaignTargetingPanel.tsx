@@ -1,4 +1,4 @@
-import { AlertCircle, Check, Loader2 } from 'lucide-react';
+import { AlertCircle, Loader2 } from 'lucide-react';
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 
 import { useOwnerBusinessSectors } from '@/features/auth/hooks/useOwnerBusinessSectors';
@@ -58,14 +58,12 @@ export const CampaignTargetingPanel = forwardRef<
     [lines, targeting.rows],
   );
 
-  const onSave = async () => {
-    if (!campaignId) return;
-    await targeting.save(toWire(lines)).catch(() => undefined);
-  };
-
   // CF-Q1 — silent-loss gap: edits lived only in `lines` until the panel's own save button.
   // Suivant now flushes through this handle: clean or no-draft → advance freely; dirty → the
   // SAME replace-set save, and a failure blocks the advance (saveError renders below).
+  // CF-U3 (Mejri item 2) — the « Enregistrer le ciblage » button is GONE: this flush (wired to
+  // Suivant, the header Enregistrer and the exit intercept) is the ONLY save path; the dirty
+  // state keeps feeding it unchanged.
   useImperativeHandle(ref, () => ({
     flush: async () => {
       if (!needsTargetingFlush(campaignId, dirty)) return true;
@@ -103,34 +101,14 @@ export const CampaignTargetingPanel = forwardRef<
         </p>
       )}
 
-      <div className="flex items-center justify-end gap-3">
-        {!campaignId && (
-          <span className="text-sm text-gray-400">
-            Le ciblage sera enregistré à la création de la campagne.
-          </span>
-        )}
-        {targeting.saveError && (
-          <span className="flex items-center gap-1.5 text-sm text-red-500">
-            <AlertCircle className="h-4 w-4" />
-            Échec de l’enregistrement.
-          </span>
-        )}
-        {targeting.isSaved && !dirty && !targeting.saveError && (
-          <span className="flex items-center gap-1.5 text-sm text-brand-deep">
-            <Check className="h-4 w-4" />
-            Ciblage enregistré
-          </span>
-        )}
-        <button
-          type="button"
-          disabled={!campaignId || !dirty || targeting.isSaving}
-          onClick={onSave}
-          className="inline-flex items-center gap-2 rounded-xl bg-brand-deep px-5 py-2.5 font-medium text-white transition-colors hover:bg-brand-deep/90 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {targeting.isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
-          {targeting.isSaving ? 'Enregistrement…' : 'Enregistrer le ciblage'}
-        </button>
-      </div>
+      {/* CF-U3 (Mejri item 2) — no dedicated save button: Suivant/Enregistrer flush the panel.
+          Only the flush FAILURE needs a voice here (it blocks the advance). */}
+      {targeting.saveError && (
+        <p className="flex items-center justify-end gap-1.5 text-sm text-red-500">
+          <AlertCircle className="h-4 w-4" />
+          Échec de l’enregistrement du ciblage — réessayez avec Suivant.
+        </p>
+      )}
     </div>
   );
 });

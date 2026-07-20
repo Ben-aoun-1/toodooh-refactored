@@ -32,6 +32,12 @@ import {
   rejectReasonToShow,
 } from '@/features/campaigns/lib/campaign-actions';
 import {
+  STATUS_FILTER_OPTIONS,
+  campaignMatchesCategory,
+  categoryFilterOptions,
+  statusFilterFromSearch,
+} from '@/features/campaigns/lib/campaign-filters';
+import {
   REPLAY_ERROR_TOAST,
   REPLAY_SUCCESS_TOAST,
   canReplayCampaign,
@@ -71,15 +77,18 @@ export default function MyCampaigns() {
     endDate: null,
   });
 
-  // Appliquer le filtre statut depuis l'URL (?status=completed ou ?status=draft)
+  // Appliquer le filtre statut depuis l'URL (?status=<the six enum ids>). CF-U3 (Mejri item 7):
+  // keyed on location.key, not location.search — a SAME-URL navigate (the bell's « Consulter »
+  // while already on /my-campaigns?status=draft after tab changes) pushes a new history entry
+  // with a new key, so the filter re-applies instead of the click being silently swallowed.
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const statusParam = params.get('status');
-    if (statusParam === 'completed' || statusParam === 'draft') {
+    const statusParam = statusFilterFromSearch(location.search);
+    if (statusParam !== null) {
       setFilters((prev) => ({ ...prev, status: statusParam }));
       setCurrentPage(1);
     }
-  }, [location.search]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- location.key covers every navigate (incl. same-URL)
+  }, [location.key]);
   const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
@@ -112,7 +121,9 @@ export default function MyCampaigns() {
           : !campaign.event_id;
       return (
         (!filters.client || campaign.name.toLowerCase().includes(filters.client.toLowerCase())) &&
-        (!filters.category || campaign.category === filters.category) &&
+        // CF-U3 (Mejri item 5) — match the TARGETING categories (the chips the card shows);
+        // whole-network campaigns match every category (see campaignMatchesCategory).
+        campaignMatchesCategory(campaign.selected_categories, filters.category) &&
         statusMatch &&
         typeMatch &&
         (!filters.startDate ||
@@ -130,20 +141,9 @@ export default function MyCampaigns() {
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedCampaigns = filteredCampaigns.slice(startIndex, startIndex + itemsPerPage);
 
-  const uniqueCategories =
-    campaigns.length > 0
-      ? [
-          ...new Set(
-            campaigns
-              .flatMap((c) =>
-                c.selected_categories?.length ? c.selected_categories : [c.category],
-              )
-              .filter((category): category is string => Boolean(category)),
-          ),
-        ]
-      : [];
-  const uniqueStatuses =
-    campaigns.length > 0 ? [...new Set(campaigns.map((c) => c.status).filter(Boolean))] : [];
+  // CF-U3 (item 5) — options from the campaigns' real targeting chips (whole-network excluded:
+  // those campaigns match every category, so the chip is not an option).
+  const uniqueCategories = categoryFilterOptions(campaigns);
 
   // État pour le modal de consultation
   // TODO(phase-1): typed source [supabase] — see #15
@@ -495,9 +495,11 @@ export default function MyCampaigns() {
                   id="status"
                 >
                   <option value="">Tous les statuts</option>
-                  {uniqueStatuses.map((status) => (
-                    <option key={status} value={status}>
-                      {status}
+                  {/* CF-U3 (item 6) — the six real statuses, French labels from the CF-S1 single
+                      map (no second list; values wired to the enum ids). */}
+                  {STATUS_FILTER_OPTIONS.map(({ value, label }) => (
+                    <option key={value} value={value}>
+                      {label}
                     </option>
                   ))}
                 </select>
