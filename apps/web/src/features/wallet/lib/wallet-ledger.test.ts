@@ -20,6 +20,8 @@ const recharge = (over: Partial<RechargeRow> = {}): RechargeRow => ({
   confirmed_at: '2026-07-10T10:00:00.000Z',
   created_at: '2026-07-01T10:00:00.000Z',
   updated_at: '2026-07-10T10:00:00.000Z',
+  has_document: false,
+  document_uploaded_at: null,
   ...over,
 });
 
@@ -107,7 +109,7 @@ describe('invoiceRows (CF-M1 — every recharge IS a facture, FCT- reference min
   it('maps the wire rows to the MyInvoices shape, all statuses included', () => {
     const rows = invoiceRows([
       recharge({ id: 'r1', status: 'pending', reference: 'FCT-BBBB2222', amount_tnd: 500 }),
-      recharge({ id: 'r2', status: 'confirmed' }),
+      recharge({ id: 'r2', status: 'confirmed', has_document: true }),
     ]);
     expect(rows).toEqual([
       {
@@ -116,6 +118,7 @@ describe('invoiceRows (CF-M1 — every recharge IS a facture, FCT- reference min
         montant: 500,
         date_emission: '2026-07-01T10:00:00.000Z',
         statut: 'pending',
+        has_document: false,
       },
       {
         id: 'r2',
@@ -123,6 +126,7 @@ describe('invoiceRows (CF-M1 — every recharge IS a facture, FCT- reference min
         montant: 1000,
         date_emission: '2026-07-01T10:00:00.000Z',
         statut: 'confirmed',
+        has_document: true,
       },
     ]);
   });

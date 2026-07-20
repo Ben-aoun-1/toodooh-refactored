@@ -7,6 +7,7 @@ const spies = vi.hoisted(() => ({
   get: vi.fn(),
   post: vi.fn(),
   getBlob: vi.fn(),
+  postForm: vi.fn(),
 }));
 vi.mock('@/lib/api-client', () => ({ apiClient: spies }));
 
@@ -16,6 +17,7 @@ beforeEach(() => {
   spies.get.mockReset();
   spies.post.mockReset();
   spies.getBlob.mockReset();
+  spies.postForm.mockReset();
 });
 
 describe('walletService (CF-M1 — the live money wire)', () => {
@@ -48,5 +50,24 @@ describe('walletService (CF-M1 — the live money wire)', () => {
 
   it('factureFilename mirrors the server content-disposition', () => {
     expect(factureFilename('FCT-AAAA1111')).toBe('facture-FCT-AAAA1111.pdf');
+  });
+
+  it('uploadJustificatif → multipart POST /recharges/:id/document with the file part (CF-M2)', async () => {
+    const row = { id: 'r1', has_document: true };
+    spies.postForm.mockResolvedValue(row);
+    const file = new File(['%PDF-1.4'], 'virement.pdf', { type: 'application/pdf' });
+    await expect(walletService.uploadJustificatif('r1', file)).resolves.toEqual(row);
+    expect(spies.postForm).toHaveBeenCalledTimes(1);
+    const [path, form] = spies.postForm.mock.calls[0] as [string, FormData];
+    expect(path).toBe('/recharges/r1/document');
+    expect(form.get('file')).toBe(file);
+  });
+
+  it('getJustificatifUrl → GET /recharges/:id/document-url (CF-M2 presigned view)', async () => {
+    spies.get.mockResolvedValue({ url: 'https://minio/presigned' });
+    await expect(walletService.getJustificatifUrl('r1')).resolves.toEqual({
+      url: 'https://minio/presigned',
+    });
+    expect(spies.get).toHaveBeenCalledWith('/recharges/r1/document-url');
   });
 });

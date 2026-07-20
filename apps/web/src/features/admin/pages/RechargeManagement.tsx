@@ -12,6 +12,10 @@ import { useMemo, useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
+import RechargeDetailsModal, {
+  STATUS_COLORS,
+  STATUS_LABELS,
+} from '@/features/admin/components/RechargeDetailsModal';
 import {
   useAdminRecharges,
   useAdvertiserIdentities,
@@ -29,18 +33,8 @@ import { getErrorMessage } from '@/lib/errors';
 // manual admin create-recharge flow + advertiser picker, payment_method, and the confirming admin's
 // name are GONE — no new-engine source (advertisers self-top-up via the wallet; see the service
 // header). Filter/search/pagination + the stat cards are derived client-side over the one list.
-
-const STATUS_COLORS: Record<AdminRechargeStatus, string> = {
-  pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-  confirmed: 'bg-green-100 text-green-800 border-green-200',
-  rejected: 'bg-red-100 text-red-800 border-red-200',
-};
-
-const STATUS_LABELS: Record<AdminRechargeStatus, string> = {
-  pending: 'En attente',
-  confirmed: 'Validée',
-  rejected: 'Rejetée',
-};
+// CF-M2: documented recharges badge « Justificatif ✓ » in the queue; the details modal (extracted
+// to RechargeDetailsModal) shows the document next to the amount + FCT reference.
 
 const PER_PAGE = 20;
 
@@ -263,11 +257,20 @@ export default function RechargeManagement() {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span
-                      className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full border ${STATUS_COLORS[recharge.status]}`}
-                    >
-                      {STATUS_LABELS[recharge.status]}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full border ${STATUS_COLORS[recharge.status]}`}
+                      >
+                        {STATUS_LABELS[recharge.status]}
+                      </span>
+                      {/* CF-M2 — documented recharges are badged so the queue shows at a glance
+                          which requests carry their bank-transfer proof. */}
+                      {recharge.has_document && (
+                        <span className="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200">
+                          Justificatif ✓
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {new Date(recharge.created_at).toLocaleDateString('fr-FR')}
@@ -350,81 +353,17 @@ export default function RechargeManagement() {
         </div>
       </div>
 
-      {/* Modal Détails */}
+      {/* Modal Détails (extracted — CF-M2 adds the justificatif display) */}
       {showDetailsModal && selectedRecharge && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <h3 className="text-2xl font-bold text-[#00263A] mb-6">Détails de la recharge</h3>
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <span className="text-sm font-medium text-gray-600">Référence</span>
-                    <p className="text-lg font-bold text-gray-900">{selectedRecharge.reference}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm font-medium text-gray-600">Statut</span>
-                    <p>
-                      <span
-                        className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full border ${STATUS_COLORS[selectedRecharge.status]}`}
-                      >
-                        {STATUS_LABELS[selectedRecharge.status]}
-                      </span>
-                    </p>
-                  </div>
-                </div>
-                <div>
-                  <span className="text-sm font-medium text-gray-600">Annonceur</span>
-                  <p className="text-lg font-semibold text-gray-900">
-                    {advertiserName(selectedRecharge)}
-                  </p>
-                  <p className="text-sm text-gray-500">{advertiserEmail(selectedRecharge)}</p>
-                </div>
-                <div>
-                  <span className="text-sm font-medium text-gray-600">Montant</span>
-                  <p className="text-2xl font-bold text-brand-primary">
-                    {adminRechargesService.formatAmount(selectedRecharge.amount_tnd)}
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <span className="text-sm font-medium text-gray-600">Date de création</span>
-                    <p className="text-sm text-gray-900">
-                      {new Date(selectedRecharge.created_at).toLocaleString('fr-FR')}
-                    </p>
-                  </div>
-                  {selectedRecharge.confirmed_at && (
-                    <div>
-                      <span className="text-sm font-medium text-gray-600">Date de validation</span>
-                      <p className="text-sm text-gray-900">
-                        {new Date(selectedRecharge.confirmed_at).toLocaleString('fr-FR')}
-                      </p>
-                    </div>
-                  )}
-                </div>
-                {selectedRecharge.reject_reason && (
-                  <div>
-                    <span className="text-sm font-medium text-gray-600">Raison du rejet</span>
-                    <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-lg">
-                      {selectedRecharge.reject_reason}
-                    </p>
-                  </div>
-                )}
-              </div>
-              <div className="mt-6 flex justify-end">
-                <button
-                  onClick={() => {
-                    setShowDetailsModal(false);
-                    setSelectedRecharge(null);
-                  }}
-                  className="px-6 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
-                >
-                  Fermer
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <RechargeDetailsModal
+          recharge={selectedRecharge}
+          advertiserName={advertiserName(selectedRecharge)}
+          advertiserEmail={advertiserEmail(selectedRecharge)}
+          onClose={() => {
+            setShowDetailsModal(false);
+            setSelectedRecharge(null);
+          }}
+        />
       )}
 
       {/* Modal Validation */}

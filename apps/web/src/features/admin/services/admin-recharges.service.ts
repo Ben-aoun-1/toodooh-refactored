@@ -28,7 +28,20 @@ export interface AdminRecharge {
   confirmed_by: string | null;
   created_at: string;
   updated_at: string;
+  /** CF-M2 — the justificatif de virement: presence badges the queue, mime picks the render mode. */
+  has_document: boolean;
+  document_uploaded_at: string | null;
+  document_mime: string | null;
 }
+
+/**
+ * CF-M2 — how the review modal shows the justificatif: images render INLINE next to the amount +
+ * FCT reference; a PDF opens in its own tab (browsers own PDF rendering — no inline viewer here).
+ */
+export type DocumentDisplayMode = 'image' | 'pdf';
+
+export const documentDisplayMode = (mime: string | null): DocumentDisplayMode =>
+  mime !== null && mime.startsWith('image/') ? 'image' : 'pdf';
 
 export interface RechargeStats {
   total_recharges: number;
@@ -72,6 +85,11 @@ export const adminRechargesService = {
   // pending → rejected; a reason is REQUIRED (surfaced to the advertiser as reject_reason).
   async reject(id: string, reason: string): Promise<AdminRecharge> {
     return apiClient.post<AdminRecharge>(`/admin/recharges/${id}/reject`, { reason });
+  },
+
+  // CF-M2 — short-TTL (300s) presigned view URL of a recharge's justificatif; 404 when doc-less.
+  async documentUrl(id: string): Promise<{ url: string }> {
+    return apiClient.get<{ url: string }>(`/admin/recharges/${id}/document-url`);
   },
 
   formatAmount(amount: number): string {

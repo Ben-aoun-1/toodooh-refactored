@@ -1,10 +1,8 @@
 import {
   Wallet,
   Plus,
-  Clock,
   Search,
   Banknote,
-  X,
   ArrowUpRight,
   ArrowDownLeft,
   FileText,
@@ -17,9 +15,9 @@ import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 import { useAuthStore } from '@/features/auth/stores/auth.store';
+import NewRechargeModal from '@/features/wallet/components/NewRechargeModal';
 import { useCreateRecharge } from '@/features/wallet/hooks/useCreateRecharge';
 import { useWalletTransactions } from '@/features/wallet/hooks/useWalletTransactions';
-import { RECHARGE_PAYMENT_METHOD } from '@/features/wallet/lib/wallet-ledger';
 import { htTtcLabel } from '@/lib/money';
 
 const QUICK_AMOUNTS = [
@@ -77,27 +75,31 @@ export default function MyRecharges() {
     setShowNewRechargeModal(true);
   };
 
-  const handleSubmitRecharge = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmitRecharge = async (amount: number, file: File | null) => {
     if (!user?.id) {
       toast.error('Vous devez être connecté');
       return;
     }
-    if (!newAmount || parseFloat(newAmount) < 10) {
-      toast.error('Le montant minimum est de 10 TND');
-      return;
-    }
-
     try {
       setSubmitting(true);
       // CF-M1 — the live API takes the amount only (bank-transfer flow; the facture carries the
       // payment coordinates). The 201 row's FCT- reference is the advertiser's wire reference.
-      const created = await createRecharge.mutateAsync({
-        amount: parseFloat(newAmount),
+      // CF-M2 — the optional justificatif rides a SECOND call behind the create: a document
+      // failure never loses the created recharge (documentError → toast + attach later from
+      // Mes factures).
+      const { recharge: created, documentError } = await createRecharge.mutateAsync({
+        amount,
+        file,
       });
       toast.success(`Recharge créée — référence ${created.reference}. En attente de validation.`, {
         duration: 6000,
       });
+      if (documentError) {
+        toast.error(
+          'Le justificatif n’a pas pu être envoyé — la recharge est bien créée. Vous pouvez l’ajouter depuis Mes factures.',
+          { duration: 8000 },
+        );
+      }
       setNewAmount('');
       setShowNewRechargeModal(false);
     } catch (_error) {
@@ -326,88 +328,19 @@ export default function MyRecharges() {
         )}
       </div>
 
-      {/* ── New Recharge Modal ── */}
+      {/* ── New Recharge Modal (extracted — CF-M2 adds the optional justificatif input) ── */}
       {showNewRechargeModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl border border-gray-100">
-            <div className="flex justify-between items-center mb-6">
-              <div>
-                <h3 className="text-xl font-bold text-gray-900">Nouvelle Recharge</h3>
-                <p className="text-sm text-gray-500">Rechargez votre compte</p>
-              </div>
-              <button
-                onClick={() => setShowNewRechargeModal(false)}
-                className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-              >
-                <X className="h-5 w-5 text-gray-400" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmitRecharge} className="space-y-5">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="amount">
-                  Montant (TND) *
-                </label>
-                <input
-                  type="number"
-                  value={newAmount}
-                  onChange={(e) => setNewAmount(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-primary/40 focus:border-brand-primary transition-all"
-                  placeholder="Entrez le montant"
-                  min="10"
-                  step="0.01"
-                  required
-                  id="amount"
-                />
-                <p className="text-xs text-gray-400 mt-1">Montant minimum : 10 TND</p>
-              </div>
-
-              {/* CF-U1 item 8 — the method is FIXED (bank transfer): a static line, not a control.
-                  The old select/description inputs collected values the api never received. */}
-              <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-                <span className="text-sm font-medium text-gray-700">Méthode de paiement</span>
-                <span className="text-sm font-semibold text-gray-900">
-                  {RECHARGE_PAYMENT_METHOD}
-                </span>
-              </div>
-
-              <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
-                <div className="flex items-start gap-3">
-                  <Clock className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-sm text-yellow-800 font-medium">En attente de validation</p>
-                    <p className="text-xs text-yellow-700 mt-1">
-                      Votre recharge sera validée par un administrateur avant d&apos;être créditée
-                      sur votre compte.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowNewRechargeModal(false);
-                    setNewAmount('');
-                  }}
-                  className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-all font-medium"
-                  disabled={submitting}
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="flex-1 py-3 px-6 rounded-xl font-semibold text-brand-deep transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                  style={{ background: '#76E6AB' }}
-                >
-                  {submitting ? 'Envoi en cours...' : 'Confirmer'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <NewRechargeModal
+          initialAmount={newAmount}
+          submitting={submitting}
+          onClose={() => {
+            setShowNewRechargeModal(false);
+            setNewAmount('');
+          }}
+          onSubmit={(amount, file) => {
+            void handleSubmitRecharge(amount, file);
+          }}
+        />
       )}
     </div>
   );

@@ -26,6 +26,9 @@ export interface RechargeRow {
   confirmed_at: string | null;
   created_at: string;
   updated_at: string;
+  /** CF-M2 — whether a justificatif de virement is attached (the key itself stays server-side). */
+  has_document: boolean;
+  document_uploaded_at: string | null;
 }
 
 export interface WalletBalance {
@@ -57,5 +60,20 @@ export const walletService = {
   /** The server-rendered facture PDF (the REAL invoice, bank-details block included). */
   downloadFacture(id: string): Promise<Blob> {
     return apiClient.getBlob(`/recharges/${id}/facture`);
+  },
+
+  /**
+   * CF-M2 — attach (or replace) the justificatif de virement on a PENDING recharge
+   * (POST /api/recharges/:id/document — multipart, PDF/JPEG/PNG ≤ 10 Mo, byte-sniffed server-side).
+   */
+  uploadJustificatif(id: string, file: File): Promise<RechargeRow> {
+    const form = new FormData();
+    form.append('file', file);
+    return apiClient.postForm<RechargeRow>(`/recharges/${id}/document`, form);
+  },
+
+  /** CF-M2 — short-TTL presigned view URL of the caller's justificatif (owner-scoped, 404 doc-less). */
+  getJustificatifUrl(id: string): Promise<{ url: string }> {
+    return apiClient.get<{ url: string }>(`/recharges/${id}/document-url`);
   },
 };

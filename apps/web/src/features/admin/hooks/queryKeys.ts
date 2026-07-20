@@ -21,6 +21,8 @@ export const adminKeys = {
   rechargeStats: () => [...adminKeys.all, 'rechargeStats'] as const,
   /** Approved-advertiser picker for the manual-recharge form. */
   rechargeAdvertisers: () => [...adminKeys.all, 'rechargeAdvertisers'] as const,
+  /** CF-M2 — one recharge's presigned justificatif URL (short-TTL; fetched per modal open). */
+  rechargeDocumentUrl: (id: string) => [...adminKeys.all, 'rechargeDocumentUrl', id] as const,
 
   /** Video-validation list, filtered by status (`adminVideoService.getVideos`). */
   videos: (status: string) => [...adminKeys.all, 'videos', status] as const,
