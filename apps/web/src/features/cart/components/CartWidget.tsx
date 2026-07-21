@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { CART_WIDGET_Z_CLASS } from '@/features/cart/lib/cart-confirm';
-import { htTtcLabel } from '@/lib/money';
+import { htTtcLabel, htTtcOrDash } from '@/lib/money';
 
 import { useCartRead } from '../hooks/useCart';
 
@@ -46,8 +46,9 @@ export default function CartWidget() {
             {preview.map((item) => (
               <li key={item.id} className="flex items-center justify-between gap-2 text-sm">
                 <span className="truncate text-gray-700">{item.name}</span>
+                {/* CF-U4 — the mini-line montant rides the house formatter too. */}
                 <span className="flex-shrink-0 font-medium text-gray-900">
-                  {item.requested_budget == null ? '—' : `${item.requested_budget} TND`}
+                  {htTtcOrDash(item.requested_budget)}
                 </span>
               </li>
             ))}
