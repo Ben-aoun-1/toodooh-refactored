@@ -22,6 +22,7 @@ import supportIconActive from '@/assets/supports.png';
 import ContentErrorBoundary from '@/components/ContentErrorBoundary';
 import { ModalProvider, useModal } from '@/contexts/ModalContext';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
+import CartWidget from '@/features/cart/components/CartWidget';
 
 import PageHeader from './PageHeader';
 import SidebarNavItem from './SidebarNavItem';
@@ -245,6 +246,9 @@ function AdvertiserLayoutChrome({ children, userName }: AdvertiserLayoutProps) {
           <ContentErrorBoundary>{children}</ContentErrorBoundary>
         </main>
       </div>
+      {/* CF-C1 — the floating panier widget: once here = every advertiser route; hides itself
+          when the cart is empty or on /my-cart. z-40 (below modals/drawers). */}
+      <CartWidget />
     </div>
   );
 }

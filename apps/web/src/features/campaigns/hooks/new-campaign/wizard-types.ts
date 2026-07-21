@@ -61,8 +61,8 @@ export interface StepDescriptor {
 
 export type CreateDraftResult = { kind: 'success'; id: string } | { kind: 'error'; error: Error };
 
-export type SubmitResult =
-  | { kind: 'success'; campaign: CampaignView }
+export type AddToCartResult =
+  | { kind: 'success'; campaignId: string }
   | { kind: 'error'; error: Error };
 
 export type SaveDraftResult =
@@ -77,8 +77,9 @@ export interface UseCampaignWizardOptions {
   createDraft: (input: CreateCampaignInput) => Promise<CampaignView>;
   /** PATCH /api/campaigns/:id — used to write requested_budget (and to link the creative). */
   updateCampaign: (id: string, input: UpdateCampaignInput) => Promise<CampaignView>;
-  /** POST /api/campaigns/:id/submit — the single draft → pending transition. */
-  submitCampaign: (id: string) => Promise<CampaignView>;
+  /** CF-C1 — POST /api/cart/items: the wizard's final action queues the draft in the panier
+   * (the submit path retired from the wizard; cart/confirm consumes its gates api-side). */
+  addToCart: (campaignId: string) => Promise<unknown>;
 }
 
 export interface UseCampaignWizardReturn {
@@ -95,11 +96,11 @@ export interface UseCampaignWizardReturn {
   canGoToStep: (n: number) => boolean;
   /** Idempotent create-early: POSTs the draft once, threads the id into state. */
   ensureDraft: () => Promise<CreateDraftResult>;
-  /** PATCH requested_budget, then POST /:id/submit. */
-  submit: () => Promise<SubmitResult>;
+  /** CF-C1 — PATCH the draft state, then add it to the panier (« Ajouter au panier »). */
+  addToCart: () => Promise<AddToCartResult>;
   /** Enregistrer: PATCH requested_budget only — the campaign stays a draft (no submit). */
   saveDraft: () => Promise<SaveDraftResult>;
   creatingDraft: boolean;
-  submitting: boolean;
+  addingToCart: boolean;
   savingDraft: boolean;
 }

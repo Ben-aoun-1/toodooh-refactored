@@ -5,7 +5,7 @@ import {
   Info,
   Loader2,
   Network,
-  Send,
+  ShoppingCart,
   Target,
   TrendingUp,
 } from 'lucide-react';
@@ -408,13 +408,15 @@ export default function StepCart({
             {saving && <Loader2 className="h-4 w-4 animate-spin" />}
             <span>{saving ? 'Enregistrement…' : 'Enregistrer'}</span>
           </button>
+          {/* CF-C1 — the wizard's final action: queue in the panier; the launch lives on the
+              cart page (« Confirmer et lancer »). */}
           <PillButton
             onClick={() => void onSubmit()}
             disabled={!canAct}
             loading={submitting}
-            icon={<Send className="h-4 w-4" />}
+            icon={<ShoppingCart className="h-4 w-4" />}
           >
-            {submitting ? 'Envoi…' : 'Soumettre la campagne'}
+            {submitting ? 'Ajout…' : 'Ajouter au panier'}
           </PillButton>
         </div>
       </div>

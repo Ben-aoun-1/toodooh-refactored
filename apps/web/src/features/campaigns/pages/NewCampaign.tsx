@@ -32,7 +32,6 @@ import { campaignsKeys } from '@/features/campaigns/hooks/queryKeys';
 import {
   useCreateCampaign,
   useDeleteCampaign,
-  useSubmitCampaign,
   useUpdateCampaign,
 } from '@/features/campaigns/hooks/useCampaignApi';
 import { usePricingConfig } from '@/features/campaigns/hooks/usePricingConfig';
@@ -53,6 +52,7 @@ import StepDates from '@/features/campaigns/pages/new-campaign/StepDates';
 import StepTargeting from '@/features/campaigns/pages/new-campaign/StepTargeting';
 import StepZones from '@/features/campaigns/pages/new-campaign/StepZones';
 import { useWizardResumeStore } from '@/features/campaigns/stores/wizard-resume.store';
+import { useCartMutations } from '@/features/cart/hooks/useCart';
 import { getErrorMessage } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 
@@ -106,8 +106,8 @@ export default function NewCampaign() {
 
   const createCampaign = useCreateCampaign(user?.id);
   const updateCampaign = useUpdateCampaign(user?.id);
-  const submitCampaign = useSubmitCampaign(user?.id);
   const deleteCampaign = useDeleteCampaign(user?.id);
+  const { addToCart: addToCartMutation } = useCartMutations(user?.id);
   const queryClient = useQueryClient();
 
   const wizOpts = useMemo<UseCampaignWizardOptions>(
@@ -116,9 +116,9 @@ export default function NewCampaign() {
       initialStep: initialStepRef.current,
       createDraft: (input) => createCampaign.mutateAsync(input),
       updateCampaign: (id, input) => updateCampaign.mutateAsync({ id, input }),
-      submitCampaign: (id) => submitCampaign.mutateAsync(id),
+      addToCart: (campaignId) => addToCartMutation.mutateAsync(campaignId),
     }),
-    [createCampaign, updateCampaign, submitCampaign],
+    [createCampaign, updateCampaign, addToCartMutation],
   );
 
   const wiz = useCampaignWizard(wizOpts);
@@ -293,13 +293,15 @@ export default function NewCampaign() {
     [setState],
   );
 
-  const handleSubmit = useCallback(async () => {
-    const result = await wiz.submit();
+  // CF-C1 — « Ajouter au panier »: the wizard's final action queues the draft; the launch is
+  // the cart page's ONE « Confirmer et lancer » (the submit path retired from the wizard).
+  const handleAddToCart = useCallback(async () => {
+    const result = await wiz.addToCart();
     if (result.kind === 'success') {
       if (state.draftCampaignId) clearResumeStep(state.draftCampaignId); // CF-Q2 key hygiene
-      armedRef.current = false; // CF-W1 — no orphan intercept after a successful submit
-      toast.success('Campagne soumise pour validation.');
-      navigate('/my-campaigns?status=pending');
+      armedRef.current = false; // CF-W1 — no orphan intercept after a successful add
+      toast.success('Campagne ajoutée au panier.');
+      navigate('/my-cart');
     } else if (isBudgetBelowMinimum(result.error)) {
       // CF-U3 — the server floor refusal, in French (the slider min already enforces it for any
       // fresh drag; this catches legacy sub-floor drafts).
@@ -316,10 +318,10 @@ export default function NewCampaign() {
           queryKey: campaignsKeys.cmax(state.draftCampaignId),
         });
       }
-      log.warn({ err: result.error }, 'campaign submit refused: budget exceeds live C_max');
+      log.warn({ err: result.error }, 'add-to-cart refused: budget exceeds live C_max');
     } else {
-      toast.error(getErrorMessage(result.error) || 'Erreur lors de la soumission de la campagne');
-      log.error({ err: result.error }, 'campaign submit failed');
+      toast.error(getErrorMessage(result.error) || 'Erreur lors de l’ajout au panier');
+      log.error({ err: result.error }, 'add-to-cart failed');
     }
   }, [wiz, navigate, state.draftCampaignId, clearResumeStep, queryClient]);
 
@@ -544,8 +546,8 @@ export default function NewCampaign() {
           creativeId={state.creativeId}
           onBack={() => wiz.prevStep()}
           onSaveDraft={handleSaveDraft}
-          onSubmit={handleSubmit}
-          submitting={wiz.submitting}
+          onSubmit={handleAddToCart}
+          submitting={wiz.addingToCart}
           saving={wiz.savingDraft}
         />
       );
