@@ -20,6 +20,19 @@ export const BRAND = '#00b3a6';
 export const INK = '#1a1a1a';
 export const MUTED = '#6b7280';
 
+// CF-C1 (ruling #2's banked half) — the api-side TVA rate, ONE home, mirror-pinned against the
+// web's lib/money.ts TVA_RATE (the two apps don't share a package). The recharge amount is HT:
+// the advertiser WIRES the TTC, the wallet CREDITS the HT — both stated on the facture.
+export const TVA_RATE = 0.19;
+
+/** TTC from HT — the money.ts rounding convention (2 decimals, round-half-up via Math.round). */
+export const ttcFromHt = (amountHt: number): number =>
+  Math.round(amountHt * (1 + TVA_RATE) * 100) / 100;
+
+/** The TVA line amount, additive-consistent: HT + TVA always equals the printed TTC. */
+export const tvaFromHt = (amountHt: number): number =>
+  Math.round((ttcFromHt(amountHt) - amountHt) * 100) / 100;
+
 export interface FactureBankDetails {
   beneficiary: string;
   bankName: string;
@@ -102,22 +115,36 @@ export const renderFacturePdf = (data: FactureData): Promise<Buffer> =>
     doc.fillColor(MUTED).font('Helvetica').fontSize(10).text('Facturé à', left, 148);
     doc.fillColor(INK).font('Helvetica-Bold').fontSize(13).text(data.advertiserName, left, 162);
 
-    // ── line item + amount due ───────────────────────────────────────────────────
+    // ── line item + the HT / TVA / TTC block (CF-C1, ruling #2's banked half) ─────
+    // The recharge amount is HT: the wallet credits the HT; the wire carries the TTC.
+    const ht = data.amountTnd;
+    const tva = tvaFromHt(ht);
+    const ttc = ttcFromHt(ht);
     doc.fillColor(MUTED).font('Helvetica').fontSize(10).text('Description', left, 210);
     doc
       .fillColor(INK)
       .font('Helvetica')
       .fontSize(12)
       .text('Rechargement de compte (crédit publicitaire)', left, 224);
-    doc.fillColor(MUTED).font('Helvetica').fontSize(10).text('Montant à régler', left, 258);
+    const moneyLine = (label: string, value: string, yLine: number, bold = false): void => {
+      doc.fillColor(MUTED).font('Helvetica').fontSize(10).text(label, left, yLine, { width: 160 });
+      doc
+        .fillColor(bold ? BRAND : INK)
+        .font(bold ? 'Helvetica-Bold' : 'Helvetica')
+        .fontSize(bold ? 14 : 11)
+        .text(value, left + 170, yLine - (bold ? 2 : 0));
+    };
+    moneyLine('Montant HT', formatTnd(ht), 254);
+    moneyLine(`TVA (${Math.round(TVA_RATE * 100)} %)`, formatTnd(tva), 274);
+    moneyLine('Total TTC (à régler)', formatTnd(ttc), 294, true);
     doc
-      .fillColor(BRAND)
-      .font('Helvetica-Bold')
-      .fontSize(22)
-      .text(formatTnd(data.amountTnd), left, 272);
+      .fillColor(MUTED)
+      .font('Helvetica')
+      .fontSize(9)
+      .text(`Montant crédité au solde : ${formatTnd(ht)} HT`, left, 318);
 
     // ── bank-transfer coordinates ────────────────────────────────────────────────
-    let y = 340;
+    let y = 356;
     doc
       .fillColor(INK)
       .font('Helvetica-Bold')
@@ -143,9 +170,12 @@ export const renderFacturePdf = (data: FactureData): Promise<Buffer> =>
       .fillColor(MUTED)
       .font('Helvetica')
       .fontSize(9)
-      .text(`Merci d'indiquer la référence ${data.reference} dans le motif du virement.`, left, y, {
-        width,
-      });
+      .text(
+        `Merci d'effectuer un virement de ${formatTnd(ttcFromHt(data.amountTnd))} TTC en indiquant la référence ${data.reference} dans le motif.`,
+        left,
+        y,
+        { width },
+      );
 
     // ── footer ────────────────────────────────────────────────────────────────────
     doc

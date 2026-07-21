@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { auth } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
 import { type NewUser, recharges, users } from '../src/db/schema.js';
-import { renderFacturePdf } from '../src/lib/facture.js';
+import { TVA_RATE, renderFacturePdf, ttcFromHt, tvaFromHt } from '../src/lib/facture.js';
 import { rechargesRoutes } from '../src/routes/recharges.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
@@ -69,6 +69,36 @@ describe('facture PDF builder', () => {
     const text = pdfText(pdf);
     expect(text).toContain('FCT-ABCD1234');
     expect(text).toContain('150.50');
+  });
+
+  it('CF-C1 — carries the HT / TVA (19 %) / TTC lines, the TTC wire amount and the HT credit note', async () => {
+    const pdf = await renderFacturePdf({
+      reference: 'FCT-TVA00001',
+      amountTnd: 150.5,
+      advertiserName: 'Acme Cafe',
+      issuedAt: new Date('2026-07-21T10:00:00Z'),
+      bank: { beneficiary: 'TOODOOH', bankName: 'BIAT', rib: '08 123 456', iban: 'TN59 1234' },
+    });
+    const text = pdfText(pdf);
+    // 150.50 HT → TVA 28.60, TTC 179.10 (the money.ts rounding convention, 2 decimals).
+    expect(text).toContain('Montant HT');
+    expect(text).toContain('150.50 TND');
+    expect(text).toContain('TVA (19 %)');
+    expect(text).toContain('28.60 TND');
+    expect(text).toContain('Total TTC');
+    expect(text).toContain('179.10 TND');
+    // The wire instruction states the TTC; the wallet credits the HT.
+    expect(text).toContain('virement de 179.10 TND TTC');
+    expect(text).toContain('Montant crédité au solde : 150.50 TND HT');
+  });
+
+  it('CF-C1 — the api TVA constant mirrors the web lib/money.ts rate (0.19) and rounds to 2 decimals', () => {
+    expect(TVA_RATE).toBe(0.19);
+    expect(ttcFromHt(150.5)).toBe(179.1);
+    expect(tvaFromHt(150.5)).toBe(28.6);
+    expect(ttcFromHt(100)).toBe(119);
+    // HT + TVA always equals the printed TTC (additive-consistent lines).
+    expect(Math.round((tvaFromHt(333.33) + 333.33) * 100) / 100).toBe(ttcFromHt(333.33));
   });
 });
 
