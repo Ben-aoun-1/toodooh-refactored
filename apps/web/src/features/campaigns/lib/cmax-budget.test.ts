@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  BUDGET_FLOOR_ERROR,
+  CAMPAIGN_BUDGET_FLOOR_TND,
   CMAX_PULLBACK_NOTICE,
   CMAX_ZERO_STATE,
   clampBudgetToCmax,
   cmaxHelperLine,
+  isBudgetBelowMinimum,
   isBudgetExceedsCmax,
+  isInventoryInsufficient,
 } from './cmax-budget';
 
 // E5 (VF US-1.4) — the pure cursor-vs-ceiling rules behind the bounded Validation slider.
@@ -28,21 +32,41 @@ describe('clampBudgetToCmax — the pull-back', () => {
     expect(clampBudgetToCmax(null, 0)).toEqual({ next: null, clamped: false });
   });
 
-  it('zero ceiling with a set budget: the budget CLEARS (0 is not a valid budget)', () => {
+  it('a sub-floor ceiling with a higher budget: the budget CLEARS (insufficient inventory owns the step)', () => {
     expect(clampBudgetToCmax(300, 0)).toEqual({ next: null, clamped: true });
+    expect(clampBudgetToCmax(300, 99)).toEqual({ next: null, clamped: true });
+  });
+
+  it('CF-U3 — a stored sub-floor budget is NEVER auto-raised (the submit gate owns it)', () => {
+    expect(clampBudgetToCmax(50, 540)).toEqual({ next: 50, clamped: false });
   });
 });
 
-describe('cmaxHelperLine — the ceiling said out loud', () => {
-  it('works the eligible count in, singular and plural', () => {
+describe('the 100 TND floor (CF-U3 — mirrors the api MIN_CAMPAIGN_BUDGET_TND)', () => {
+  it('constant + insufficiency threshold', () => {
+    expect(CAMPAIGN_BUDGET_FLOOR_TND).toBe(100);
+    expect(isInventoryInsufficient(99)).toBe(true);
+    expect(isInventoryInsufficient(100)).toBe(false);
+    expect(isInventoryInsufficient(0)).toBe(true);
+  });
+
+  it('the server refusal detector + the French message', () => {
+    expect(isBudgetBelowMinimum({ code: 'BUDGET_BELOW_MINIMUM', message: 'x' })).toBe(true);
+    expect(isBudgetBelowMinimum({ code: 'BUDGET_EXCEEDS_CMAX', message: 'x' })).toBe(false);
+    expect(BUDGET_FLOOR_ERROR).toBe("Le budget minimum d'une campagne est de 100 TND.");
+  });
+});
+
+describe('cmaxHelperLine — ceiling AND floor said out loud (CF-U3)', () => {
+  it('works the floor + eligible count in, singular and plural', () => {
     expect(cmaxHelperLine(540, 1)).toBe(
-      "Budget maximum disponible : 540 TND — calculé sur l'inventaire réel de votre ciblage (1 établissement éligible).",
+      "Budget maximum disponible : 540 TND (minimum : 100 TND) — calculé sur l'inventaire réel de votre ciblage (1 établissement éligible).",
     );
     // The thousands separator is the fr-TN runtime's (NBSP variants differ per ICU) — pin via
     // the same formatter rather than a literal.
     const int = new Intl.NumberFormat('fr-TN', { maximumFractionDigits: 0 });
     expect(cmaxHelperLine(1080, 2)).toBe(
-      `Budget maximum disponible : ${int.format(1080)} TND — calculé sur l'inventaire réel de votre ciblage (2 établissements éligibles).`,
+      `Budget maximum disponible : ${int.format(1080)} TND (minimum : 100 TND) — calculé sur l'inventaire réel de votre ciblage (2 établissements éligibles).`,
     );
   });
 });

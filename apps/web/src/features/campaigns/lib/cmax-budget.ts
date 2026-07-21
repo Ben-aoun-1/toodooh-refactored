@@ -8,6 +8,17 @@ import { isErrorWithCode } from '@/lib/errors';
 
 const int = new Intl.NumberFormat('fr-TN', { maximumFractionDigits: 0 });
 
+/**
+ * CF-U3 (Mejri) — the campaign budget FLOOR, mirroring the api's MIN_CAMPAIGN_BUDGET_TND
+ * (lib/campaign-budget.ts; the two apps don't share a package — the mirror is test-pinned).
+ * The slider min, the [floor, C_max] clamp and the insufficient-inventory threshold all read it.
+ */
+export const CAMPAIGN_BUDGET_FLOOR_TND = 100;
+
+/** C_max below the floor ⇒ nothing sellable for this targeting (the zero-state treatment). */
+export const isInventoryInsufficient = (cMaxTnd: number): boolean =>
+  cMaxTnd < CAMPAIGN_BUDGET_FLOOR_TND;
+
 export interface BudgetClampResult {
   next: number | null;
   /** True when the value was pulled back — the caller MUST surface the notice. */
@@ -15,18 +26,21 @@ export interface BudgetClampResult {
 }
 
 /**
- * Pull-back (US-1.4): a budget over the ceiling clamps down to it; a zero ceiling clears the
- * budget entirely (0 is not a valid budget — the zero-state blocks the step instead). At or
- * under the ceiling nothing moves.
+ * Pull-back (US-1.4): a budget over the ceiling clamps down to it; a ceiling below the floor
+ * clears the budget entirely (the insufficient-inventory state blocks the step instead). A
+ * stored sub-floor budget is NEVER auto-raised (raising an ask without consent is worse than
+ * refusing — the submit gate + the French message own that case). At or under the ceiling
+ * nothing moves.
  */
 export const clampBudgetToCmax = (value: number | null, cMaxTnd: number): BudgetClampResult => {
   if (value == null || value <= cMaxTnd) return { next: value, clamped: false };
-  return { next: cMaxTnd > 0 ? cMaxTnd : null, clamped: true };
+  return { next: isInventoryInsufficient(cMaxTnd) ? null : cMaxTnd, clamped: true };
 };
 
-/** « Budget maximum disponible : … » — the helper line under the slider, eligible_count worked in. */
+/** « Budget maximum disponible : … » — the helper line under the slider; ceiling, floor and
+ * eligible_count all said out loud. */
 export const cmaxHelperLine = (cMaxTnd: number, eligibleCount: number): string =>
-  `Budget maximum disponible : ${int.format(cMaxTnd)} TND — calculé sur l'inventaire réel de votre ciblage (${int.format(eligibleCount)} établissement${eligibleCount > 1 ? 's' : ''} éligible${eligibleCount > 1 ? 's' : ''}).`;
+  `Budget maximum disponible : ${int.format(cMaxTnd)} TND (minimum : ${int.format(CAMPAIGN_BUDGET_FLOOR_TND)} TND) — calculé sur l'inventaire réel de votre ciblage (${int.format(eligibleCount)} établissement${eligibleCount > 1 ? 's' : ''} éligible${eligibleCount > 1 ? 's' : ''}).`;
 
 export const CMAX_PULLBACK_NOTICE = 'Le budget a été ajusté à l’inventaire disponible.';
 export const CMAX_ZERO_STATE =
@@ -35,3 +49,9 @@ export const CMAX_ZERO_STATE =
 /** The submit-time refusal (server gate) — the FE re-reads the live ceiling and re-clamps. */
 export const isBudgetExceedsCmax = (err: unknown): boolean =>
   isErrorWithCode(err) && err.code === 'BUDGET_EXCEEDS_CMAX';
+
+/** CF-U3 — the server floor refusal, surfaced in French by the wizard. */
+export const isBudgetBelowMinimum = (err: unknown): boolean =>
+  isErrorWithCode(err) && err.code === 'BUDGET_BELOW_MINIMUM';
+
+export const BUDGET_FLOOR_ERROR = `Le budget minimum d'une campagne est de ${int.format(CAMPAIGN_BUDGET_FLOOR_TND)} TND.`;

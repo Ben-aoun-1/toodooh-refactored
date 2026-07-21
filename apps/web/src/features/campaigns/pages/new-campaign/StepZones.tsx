@@ -67,7 +67,8 @@ export default function StepZones({
 
   return (
     <div className="space-y-6">
-      <div className="relative">
+      {/* CF-U3 — the .relative overlay wrapper retired with the absolute corner square. */}
+      <div>
         <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
           <div className="p-6 border-b border-gray-200">
             <StepSectionHeading
@@ -120,15 +121,15 @@ export default function StepZones({
                 {mapExpanded && coverageMap}
 
                 <p className="text-xs text-gray-400">D’autres zones seront bientôt disponibles.</p>
+
+                {/* CF-U3 (Mejri item 3) — collapsed: anchored bottom-right INSIDE the card, in
+                    flow (the old absolute overhang drifted/overflowed on narrow viewports and
+                    covered the footer buttons). The expanded view above is unchanged. */}
+                {!mapExpanded && <div className="flex justify-end">{coverageMap}</div>}
               </>
             )}
           </div>
         </div>
-
-        {/* CF-U2 — collapsed: a corner square floating over the card's bottom-right edge. */}
-        {!mapExpanded && !zones.isLoading && !zones.isError && (
-          <div className="absolute -bottom-5 right-5 z-10">{coverageMap}</div>
-        )}
       </div>
 
       <div className="flex items-center justify-between">
