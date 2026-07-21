@@ -855,6 +855,31 @@ export const campaignZones = pgTable(
   (table) => [unique('campaign_zones_pair_unique').on(table.campaignId, table.zoneId)],
 );
 
+// ── cart_items (CF-C1, spec §1.10–1.14) ─────────────────────────────────────
+// The advertiser's panier: finished DRAFT campaigns queued for a single « Confirmer et lancer ».
+// One row per campaign (UNIQUE — a campaign sits in at most one cart), FK cascade both ways: a
+// deleted user or campaign takes its cart row along. A carted draft is EXEMPT from the CF-S2
+// past-start deletion tick (the cart is the advertiser's explicit "I'm launching this" intent);
+// removing the item (« conserver en brouillon ») re-exposes it to the tick. NO money fields —
+// the confirm flips statuses only (activation's funding gate + settlement debit are unchanged).
+export const cartItems = pgTable(
+  'cart_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .unique()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    addedAt: timestamp('added_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('cart_items_user_id_idx').on(table.userId)],
+);
+
+export type CartItem = typeof cartItems.$inferSelect;
+
 export const campaignTargeting = pgTable(
   'campaign_targeting',
   {

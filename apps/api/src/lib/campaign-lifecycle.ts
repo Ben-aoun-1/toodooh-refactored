@@ -1,8 +1,8 @@
-import { and, eq, isNotNull, isNull, lt, lte } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, lt, lte, notExists } from 'drizzle-orm';
 import type { FastifyBaseLogger } from 'fastify';
 
 import { db } from '../db/client.js';
-import { campaigns, notifications } from '../db/schema.js';
+import { campaigns, cartItems, notifications } from '../db/schema.js';
 
 import { plusCalendarDays, tunisDateOf } from './campaign-dates.js';
 
@@ -26,8 +26,9 @@ export function onCampaignCompleted(campaignId: string): void {
 // CF-S2 — the copy now WARNS about the auto-deletion (spec §1.14, reinstated by operator-accepted
 // veto): a draft that sails past its start date is deleted by this same tick.
 export const DRAFT_REMINDER_TITLE = 'Votre campagne démarre bientôt';
+// CF-C1 — the cart exists now: the J-3 copy speaks the panier language again (spec §3.2).
 export const draftReminderBody = (name: string): string =>
-  `Votre campagne ${name} doit commencer dans 3 jours. Terminez le processus et soumettez-la pour la lancer — sans quoi elle sera supprimée automatiquement à sa date de début.`;
+  `Votre campagne ${name} doit commencer dans 3 jours. Terminez le processus et ajoutez-la au panier pour la lancer — sans quoi elle sera supprimée automatiquement à sa date de début.`;
 
 export interface LifecycleTickResult {
   activated: number;
@@ -101,6 +102,9 @@ export async function runCampaignLifecycleTick(
   // compares); ONLY status='draft' — pending/rejected/anything-submitted is never touched.
   // targeting + zone rows go via their FK cascades; a reminder notification survives with its
   // campaign_id nulled (FK set-null) so the warning trail outlives the draft.
+  // CF-C1 — carted drafts are EXEMPT: the panier is the advertiser's explicit launch intent, so
+  // the tick never deletes a campaign sitting in a cart (« les brouillons dans le panier ne
+  // s'auto-suppriment jamais »). Removing the item re-exposes the draft to this pass.
   const deleted = await db
     .delete(campaigns)
     .where(
@@ -108,6 +112,7 @@ export async function runCampaignLifecycleTick(
         eq(campaigns.status, 'draft'),
         isNotNull(campaigns.startDate),
         lt(campaigns.startDate, today),
+        notExists(db.select().from(cartItems).where(eq(cartItems.campaignId, campaigns.id))),
       ),
     )
     .returning({ id: campaigns.id });
