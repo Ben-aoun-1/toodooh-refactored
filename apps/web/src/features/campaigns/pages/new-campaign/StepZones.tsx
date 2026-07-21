@@ -61,6 +61,7 @@ export default function StepZones({
         isError={coverage.isError}
         expanded={mapExpanded}
         onToggle={() => setMapExpanded((v) => !v)}
+        wholeNetwork={zoneIds.length === 0}
       />
     </Suspense>
   );
@@ -117,15 +118,12 @@ export default function StepZones({
                     : 'Votre campagne sera diffusée dans les zones sélectionnées.'}
                 </p>
 
-                {/* CF-U1/CF-U2 — the read-only coverage preview: full-width here when expanded. */}
-                {mapExpanded && coverageMap}
-
                 <p className="text-xs text-gray-400">D’autres zones seront bientôt disponibles.</p>
 
-                {/* CF-U3 (Mejri item 3) — collapsed: anchored bottom-right INSIDE the card, in
-                    flow (the old absolute overhang drifted/overflowed on narrow viewports and
-                    covered the footer buttons). The expanded view above is unchanged. */}
-                {!mapExpanded && <div className="flex justify-end">{coverageMap}</div>}
+                {/* CF-U3 — anchored bottom-right INSIDE the card, in flow. CF-U4 — ONE mount for
+                    BOTH states (no remount on toggle), so the wrapper's height transition
+                    actually animates the expand/collapse. */}
+                <div className={mapExpanded ? '' : 'flex justify-end'}>{coverageMap}</div>
               </>
             )}
           </div>
