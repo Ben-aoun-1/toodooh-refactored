@@ -3,16 +3,16 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { useWizard } from '@/hooks/useWizard';
 
 import {
+  performAddToCart,
   performCreateDraft,
   performSaveDraft,
-  performSubmit,
   singleFlight,
 } from './wizard-serialize';
 import { canStepBeReached, getStepList } from './wizard-steps';
 import type {
+  AddToCartResult,
   CreateDraftResult,
   SaveDraftResult,
-  SubmitResult,
   UseCampaignWizardOptions,
   UseCampaignWizardReturn,
   WizardState,
@@ -32,7 +32,7 @@ import type {
 export function useCampaignWizard(opts: UseCampaignWizardOptions): UseCampaignWizardReturn {
   const [state, setStateImpl] = useState<WizardState>(opts.initialState);
   const [creatingDraft, setCreatingDraft] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [addingToCart, setAddingToCart] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
 
   const setState = useCallback((updater: (prev: WizardState) => WizardState) => {
@@ -54,7 +54,7 @@ export function useCampaignWizard(opts: UseCampaignWizardOptions): UseCampaignWi
   // async draft-create can complete before the move (avoiding a stale-closure predicate race).
   const wiz = useWizard({ totalSteps, initialStep: opts.initialStep ?? 1 });
 
-  const { createDraft, updateCampaign, submitCampaign } = opts;
+  const { createDraft, updateCampaign, addToCart: addToCartDep } = opts;
 
   // In-flight create-early dedup. A useRef holds the single shared POST promise across renders so any
   // number of concurrent ensureDraft callers (Basics "Suivant" + a breadcrumb click under prod latency)
@@ -104,17 +104,18 @@ export function useCampaignWizard(opts: UseCampaignWizardOptions): UseCampaignWi
     return true;
   }, [wiz]);
 
-  const submit = useCallback(async (): Promise<SubmitResult> => {
-    setSubmitting(true);
+  // CF-C1 — the wizard's final action: PATCH the draft state, then queue it in the panier.
+  const addToCart = useCallback(async (): Promise<AddToCartResult> => {
+    setAddingToCart(true);
     try {
-      return await performSubmit({
+      return await performAddToCart({
         state,
-        deps: { update: updateCampaign, submit: submitCampaign },
+        deps: { update: updateCampaign, addToCart: addToCartDep },
       });
     } finally {
-      setSubmitting(false);
+      setAddingToCart(false);
     }
-  }, [state, updateCampaign, submitCampaign]);
+  }, [state, updateCampaign, addToCartDep]);
 
   const saveDraft = useCallback(async (): Promise<SaveDraftResult> => {
     setSavingDraft(true);
@@ -136,10 +137,10 @@ export function useCampaignWizard(opts: UseCampaignWizardOptions): UseCampaignWi
     prevStep,
     canGoToStep,
     ensureDraft,
-    submit,
+    addToCart,
     saveDraft,
     creatingDraft,
-    submitting,
+    addingToCart,
     savingDraft,
   };
 }

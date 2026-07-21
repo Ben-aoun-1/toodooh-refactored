@@ -129,7 +129,7 @@ type UpdateInput = z.infer<typeof updateSchema>;
 // Advertiser-facing projection — the validated_* approval-audit columns are intentionally
 // omitted. reject_reason/rejected_at ARE exposed (CF-Q1): the admin stores a mandatory reason on
 // reject, and the advertiser must be able to learn why their campaign was refused.
-const campaignSelection = {
+export const campaignSelection = {
   id: campaigns.id,
   name: campaigns.name,
   campaignType: campaigns.campaignType,
@@ -147,7 +147,7 @@ const campaignSelection = {
   updatedAt: campaigns.updatedAt,
 };
 
-type CampaignRow = Pick<
+export type CampaignRow = Pick<
   typeof campaigns.$inferSelect,
   | 'id'
   | 'name'
@@ -169,7 +169,7 @@ type CampaignRow = Pick<
 // of the linked creative, or null when no creative is linked. It is NEVER a stored campaign column —
 // reads LEFT JOIN creatives to compute it. CRUD writes never link a creative (creative_id is set in
 // a later lane), so a created/edited/submitted campaign always derives null here.
-const campaignView = (
+export const campaignView = (
   row: CampaignRow,
   contentValidationStatus: string | null = null,
 ): {

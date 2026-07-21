@@ -27,6 +27,9 @@ export class ApiError extends Error {
   readonly code: string;
   readonly fields?: ApiErrorField[];
   readonly requestId?: string;
+  /** CF-C1 — the RAW response body: structured refusals (the cart confirm's per-item reasons +
+   * solde payload) need more than code/message. `unknown` — consumers type-guard. */
+  readonly body?: unknown;
 
   constructor(args: {
     status: number;
@@ -34,6 +37,7 @@ export class ApiError extends Error {
     message: string;
     fields?: ApiErrorField[];
     requestId?: string;
+    body?: unknown;
   }) {
     super(args.message);
     this.name = 'ApiError';
@@ -41,6 +45,7 @@ export class ApiError extends Error {
     this.code = args.code;
     this.fields = args.fields;
     this.requestId = args.requestId;
+    this.body = args.body;
   }
 }
 
@@ -66,7 +71,7 @@ function toApiError(status: number, raw: unknown, headerRequestId: string | null
   const fields = Array.isArray(body.fields) ? (body.fields as ApiErrorField[]) : undefined;
   const requestId =
     typeof body.requestId === 'string' ? body.requestId : (headerRequestId ?? undefined);
-  return new ApiError({ status, code, message, fields, requestId });
+  return new ApiError({ status, code, message, fields, requestId, body: raw });
 }
 
 async function request<T>(

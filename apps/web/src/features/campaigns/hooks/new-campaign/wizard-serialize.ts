@@ -4,7 +4,12 @@ import type {
   UpdateCampaignInput,
 } from '@/features/campaigns/services/campaigns.api';
 
-import type { CreateDraftResult, SaveDraftResult, SubmitResult, WizardState } from './wizard-types';
+import type {
+  AddToCartResult,
+  CreateDraftResult,
+  SaveDraftResult,
+  WizardState,
+} from './wizard-types';
 
 export interface CreateDraftDeps {
   create: (input: CreateCampaignInput) => Promise<CampaignView>;
@@ -34,9 +39,9 @@ export function singleFlight<T>(slot: PromiseSlot<T>, run: () => Promise<T>): Pr
   return flight;
 }
 
-export interface SubmitDeps {
+export interface AddToCartDeps {
   update: (id: string, input: UpdateCampaignInput) => Promise<CampaignView>;
-  submit: (id: string) => Promise<CampaignView>;
+  addToCart: (campaignId: string) => Promise<unknown>;
 }
 
 export interface SaveDraftDeps {
@@ -109,14 +114,15 @@ function draftPatch(state: WizardState): UpdateCampaignInput {
 }
 
 /**
- * Interim cart submit: PATCH the draft state (name/dates/indicative budget), then POST /:id/submit
- * (draft → pending). Requires the create-early draft and a positive budget — both gated by the step
- * validators, re-checked here so the function is safe to call directly.
+ * CF-C1 — « Ajouter au panier »: PATCH the draft state (name/dates/indicative budget), then add
+ * the campaign to the cart (the submit path retired from the wizard — cart/confirm consumes the
+ * submit gates api-side). Requires the create-early draft and a positive budget, both gated by
+ * the step validators, re-checked here so the function is safe to call directly.
  */
-export async function performSubmit(args: {
+export async function performAddToCart(args: {
   state: WizardState;
-  deps: SubmitDeps;
-}): Promise<SubmitResult> {
+  deps: AddToCartDeps;
+}): Promise<AddToCartResult> {
   const { state, deps } = args;
   if (!state.draftCampaignId) {
     return { kind: 'error', error: new Error('La campagne n’a pas encore été créée') };
@@ -126,8 +132,8 @@ export async function performSubmit(args: {
   }
   try {
     await deps.update(state.draftCampaignId, draftPatch(state));
-    const campaign = await deps.submit(state.draftCampaignId);
-    return { kind: 'success', campaign };
+    await deps.addToCart(state.draftCampaignId);
+    return { kind: 'success', campaignId: state.draftCampaignId };
   } catch (e) {
     return { kind: 'error', error: e instanceof Error ? e : new Error(String(e)) };
   }

@@ -20,6 +20,7 @@ const MyCampaigns = lazy(() => import('@/features/campaigns/pages/MyCampaigns'))
 const Events = lazy(() => import('@/features/events/pages/Events'));
 const MyRecharges = lazy(() => import('@/features/wallet/pages/MyRecharges'));
 const MyInvoices = lazy(() => import('@/features/wallet/pages/MyInvoices'));
+const MyCart = lazy(() => import('@/features/cart/pages/MyCart'));
 const AdvertiserPerformancePlaceholder = lazy(
   () => import('@/features/performances/pages/AdvertiserPerformancePlaceholder'),
 );
@@ -374,6 +375,16 @@ export default function App() {
                 <AdvertiserRoute>
                   <AdvertiserLayout>
                     <NewCampaign />
+                  </AdvertiserLayout>
+                </AdvertiserRoute>
+              }
+            />
+            <Route
+              path="/my-cart"
+              element={
+                <AdvertiserRoute>
+                  <AdvertiserLayout>
+                    <MyCart />
                   </AdvertiserLayout>
                 </AdvertiserRoute>
               }

@@ -5,7 +5,7 @@ import type { CampaignView } from '@/features/campaigns/services/campaigns.api';
 import {
   performCreateDraft,
   performSaveDraft,
-  performSubmit,
+  performAddToCart,
   serializeCreate,
   singleFlight,
 } from './wizard-serialize';
@@ -210,24 +210,24 @@ describe('performCreateDraft', () => {
   });
 });
 
-describe('performSubmit', () => {
+describe('performAddToCart (CF-C1 — « Ajouter au panier », the submit path retired)', () => {
   function makeDeps() {
     return {
       update: vi.fn().mockResolvedValue(fakeCampaign()),
-      submit: vi.fn().mockResolvedValue(fakeCampaign({ status: 'pending' })),
+      addToCart: vi.fn().mockResolvedValue({ campaign_id: 'cmp-9' }),
     };
   }
 
-  it('PATCHes the FULL draft (name/dates/budget — CF-W1) then submits on the happy path', async () => {
+  it('PATCHes the FULL draft (name/dates/budget — CF-W1) then adds to the cart', async () => {
     const deps = makeDeps();
     const state = validBasics({
       draftCampaignId: 'cmp-9',
       creativeId: 'crv-1',
       requestedBudget: 750,
     });
-    const result = await performSubmit({ state, deps });
+    const result = await performAddToCart({ state, deps });
     expect(result.kind).toBe('success');
-    if (result.kind === 'success') expect(result.campaign.status).toBe('pending');
+    if (result.kind === 'success') expect(result.campaignId).toBe('cmp-9');
     expect(deps.update).toHaveBeenCalledWith('cmp-9', {
       name: state.campaignName.trim(),
       start_date: state.startDate,
@@ -235,23 +235,23 @@ describe('performSubmit', () => {
       requested_budget: 750,
       zone_ids: state.zoneIds,
     });
-    expect(deps.submit).toHaveBeenCalledWith('cmp-9');
+    expect(deps.addToCart).toHaveBeenCalledWith('cmp-9');
   });
 
   it('errors without calling the API when there is no draft id', async () => {
     const deps = makeDeps();
-    const result = await performSubmit({
+    const result = await performAddToCart({
       state: validBasics({ requestedBudget: 750 }),
       deps,
     });
     expect(result.kind).toBe('error');
     expect(deps.update).not.toHaveBeenCalled();
-    expect(deps.submit).not.toHaveBeenCalled();
+    expect(deps.addToCart).not.toHaveBeenCalled();
   });
 
   it('errors without calling the API when the budget is not positive', async () => {
     const deps = makeDeps();
-    const result = await performSubmit({
+    const result = await performAddToCart({
       state: validBasics({ draftCampaignId: 'cmp-9', requestedBudget: 0 }),
       deps,
     });
@@ -259,13 +259,13 @@ describe('performSubmit', () => {
     expect(deps.update).not.toHaveBeenCalled();
   });
 
-  it('surfaces an API error from submit', async () => {
+  it('surfaces an API error from the cart add (the precise gate code rides the error)', async () => {
     const deps = makeDeps();
-    deps.submit.mockRejectedValueOnce(new Error('submit failed'));
+    deps.addToCart.mockRejectedValueOnce(new Error('BUDGET_EXCEEDS_CMAX'));
     const state = validBasics({ draftCampaignId: 'cmp-9', requestedBudget: 750 });
-    const result = await performSubmit({ state, deps });
+    const result = await performAddToCart({ state, deps });
     expect(result.kind).toBe('error');
-    if (result.kind === 'error') expect(result.error.message).toBe('submit failed');
+    if (result.kind === 'error') expect(result.error.message).toBe('BUDGET_EXCEEDS_CMAX');
   });
 });
 
@@ -404,17 +404,17 @@ describe('budget-null contract (CF-U1)', () => {
     expect(update.mock.calls[0]?.[1]).toMatchObject({ requested_budget: 50 });
   });
 
-  it('performSubmit still refuses a NULL budget without calling the API (the submit gate)', async () => {
+  it('performAddToCart still refuses a NULL budget without calling the API (the cart gate)', async () => {
     const deps = {
       update: vi.fn().mockResolvedValue(fakeCampaign()),
-      submit: vi.fn().mockResolvedValue(fakeCampaign({ status: 'pending' })),
+      addToCart: vi.fn().mockResolvedValue({ campaign_id: 'cmp-9' }),
     };
-    const result = await performSubmit({
+    const result = await performAddToCart({
       state: validBasics({ draftCampaignId: 'cmp-9', requestedBudget: null }),
       deps,
     });
     expect(result.kind).toBe('error');
     expect(deps.update).not.toHaveBeenCalled();
-    expect(deps.submit).not.toHaveBeenCalled();
+    expect(deps.addToCart).not.toHaveBeenCalled();
   });
 });

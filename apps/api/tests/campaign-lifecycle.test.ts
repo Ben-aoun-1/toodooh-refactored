@@ -8,6 +8,7 @@ import {
   campaignTargeting,
   campaignZones,
   campaigns,
+  cartItems,
   notifications,
   users,
   zones,
@@ -190,10 +191,9 @@ describe('J-3 draft reminder (real Postgres)', () => {
     expect(rows[0]?.type).toBe('campaign_draft_reminder');
     expect(rows[0]?.campaignId).toBe(j3);
     expect(rows[0]?.title).toBe(DRAFT_REMINDER_TITLE);
-    // CF-S2 — the copy now WARNS about the auto-deletion at start date (spec §1.14 reinstated);
-    // cart CTA still adapted (« soumettez-la ») until the cart lane lands.
+    // CF-C1 — the cart exists: the CTA speaks the panier language (spec §3.2 restored).
     expect(rows[0]?.body).toBe(
-      'Votre campagne LC draft doit commencer dans 3 jours. Terminez le processus et soumettez-la pour la lancer — sans quoi elle sera supprimée automatiquement à sa date de début.',
+      'Votre campagne LC draft doit commencer dans 3 jours. Terminez le processus et ajoutez-la au panier pour la lancer — sans quoi elle sera supprimée automatiquement à sa date de début.',
     );
     expect(rows[0]?.body).toBe(draftReminderBody('LC draft'));
 
@@ -232,6 +232,22 @@ describe('draft auto-deletion at start date (real Postgres)', () => {
 
   const exists = async (id: string): Promise<boolean> =>
     (await db.select({ id: campaigns.id }).from(campaigns).where(eq(campaigns.id, id))).length > 0;
+
+  it('CF-C1 — a CARTED past-start draft SURVIVES the tick; un-carting re-exposes it', async () => {
+    const adv = await seedUser();
+    const carted = await seedCampaign(adv, 'draft', { start: '2026-07-01', end: '2026-08-01' });
+    const uncarted = await seedCampaign(adv, 'draft', { start: '2026-07-01', end: '2026-08-01' });
+    await db.insert(cartItems).values({ userId: adv, campaignId: carted });
+
+    await runCampaignLifecycleTick(silentLog, NOW);
+    expect(await exists(carted)).toBe(true); // the panier is explicit launch intent
+    expect(await exists(uncarted)).toBe(false); // same shape, no cart row → deleted
+
+    // « Conserver en brouillon » removes the item — the NEXT tick deletes the draft.
+    await db.delete(cartItems).where(eq(cartItems.campaignId, carted));
+    await runCampaignLifecycleTick(silentLog, NOW);
+    expect(await exists(carted)).toBe(false);
+  });
 
   it('deletion matrix: strictly-past draft deleted; today-start / date-less / non-draft never', async () => {
     const adv = await seedUser();
