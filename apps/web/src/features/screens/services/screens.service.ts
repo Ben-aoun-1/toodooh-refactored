@@ -111,15 +111,6 @@ export interface CreateScreenData {
   orientation?: 'landscape' | 'portrait' | 'square';
 }
 
-export interface CreateUnavailabilityData {
-  screen_id: string;
-  start_date: string;
-  end_date: string;
-  start_time: string;
-  end_time: string;
-  reason: string;
-}
-
 export type ScreenStatus = 'active' | 'inactive' | 'maintenance' | 'unavailable';
 
 export interface UpdateScreenData {
@@ -302,50 +293,8 @@ class ScreensService {
     return data;
   }
 
-  // Récupérer les périodes d'indisponibilité d'un écran
-  async getUnavailabilityPeriods(screenId?: string): Promise<UnavailabilityPeriod[]> {
-    let query = supabase
-      .from('screen_unavailability_periods')
-      .select('*')
-      .order('start_date', { ascending: true });
-
-    if (screenId) {
-      query = query.eq('screen_id', screenId);
-    }
-
-    const { data, error } = await query;
-    if (error) throw error;
-    return data || [];
-  }
-
-  // Créer une période d'indisponibilité
-  async createUnavailabilityPeriod(
-    unavailabilityData: CreateUnavailabilityData,
-  ): Promise<UnavailabilityPeriod> {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) throw new Error('Utilisateur non connecté');
-
-    const { data, error } = await supabase
-      .from('screen_unavailability_periods')
-      .insert({
-        ...unavailabilityData,
-        created_by: user.id,
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
-  }
-
-  // Supprimer une période d'indisponibilité
-  async deleteUnavailabilityPeriod(id: string): Promise<void> {
-    const { error } = await supabase.from('screen_unavailability_periods').delete().eq('id', id);
-
-    if (error) throw error;
-  }
+  // E2 — the unavailability read/write paths are GONE: screenhost_unavailability lives on
+  // the live api (screenhost-unavailability.service). Only legacy TYPE consumers remain below.
 
   // Récupérer les statistiques d'un écran
   async getScreenStatistics(screenId: string, days: number = 30): Promise<ScreenStatistics[]> {
