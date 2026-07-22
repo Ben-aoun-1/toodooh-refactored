@@ -41,6 +41,8 @@ export interface MyCampaignRow {
   video_id: string | null;
   selected_categories: string[];
   selected_zones: string[];
+  /** CF-B1 — the untrimmed wire row (the Booster modal needs targeting category_ids + zones). */
+  raw: CampaignView;
   validated_impressions: number;
 }
 
@@ -73,6 +75,7 @@ function toRow(c: CampaignView): MyCampaignRow {
     selected_categories: (c.targeting ?? []).map(toChipLabel),
     selected_zones: [],
     validated_impressions: c.delivered_impressions ?? 0,
+    raw: c,
   };
 }
 
