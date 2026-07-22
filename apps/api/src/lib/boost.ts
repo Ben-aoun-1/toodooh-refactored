@@ -264,7 +264,7 @@ export const runBoost = async (
 
       // Own allocations ENGAGED (ruling 4) — no excludeAllocationIds. Preview is a read: no
       // occupancy locks; apply locks (it is about to allocate).
-      const { pool, windowDays } = await assemblePool(
+      const { pool } = await assemblePool(
         tx,
         { id: campaign.id, startDate: effectiveStart, endDate: newEndDate },
         { s, t, fMaxSeconds: plan.fMaxSeconds },
@@ -342,7 +342,8 @@ export const runBoost = async (
           plan.rMinEfficace,
           p.repsCap,
         );
-        const futureDelta = buildCreneaux(windowDays, p.slots, rIAdd).filter((c) =>
+        // E2 — the venue's own available days (one day source with its priced capacity).
+        const futureDelta = buildCreneaux(p.days, p.slots, rIAdd).filter((c) =>
           isFuture(c, nowSlot),
         );
         if (futureDelta.length === 0) continue;

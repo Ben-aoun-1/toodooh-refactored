@@ -22,7 +22,9 @@ import {
   screens,
   users,
   zones,
+  screenhostUnavailability,
 } from '../db/schema.js';
+import { tunisDateOf } from '../lib/campaign-dates.js';
 import { runRefusalCascade } from '../lib/dispatch/cascade.js';
 import { REDISPATCH_HEARTBEAT_TOLERANCE_MS } from '../lib/dispatch/redispatch.js';
 import { buildEligibilityPatch } from '../lib/eligibility-patch.js';
@@ -361,6 +363,136 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // ── H2 — owner opening-hours editor ────────────────────────────────────────────────────────────
+  // ── E2 (VF jours_dispo_i) — owner-declared per-day unavailability ─────────
+  // VENUE-level only. The engine reads this at pool assembly: capacity, créneaux and C_max all
+  // shrink together; a venue unavailable across the whole window drops from the pool. FROZEN
+  // plans are never rewritten by a later declaration (ruling 2 — the H2 hours precedent above:
+  // timing semantics live at the POOL, not on persisted plans).
+
+  // GET /api/screenhosts/:id/unavailability?from&to — the declared days in [from, to] (both
+  // required, ISO dates). Owner-scoped: a foreign or missing id is an indistinguishable 404.
+  const unavailabilityRangeSchema = z.object({ from: z.iso.date(), to: z.iso.date() });
+  app.get('/api/screenhosts/:id/unavailability', ownerGuard, async (request, reply) => {
+    const parsedParams = idParamSchema.safeParse(request.params);
+    if (!parsedParams.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: [{ field: 'id', reason: 'must be a uuid' }],
+      });
+    }
+    const parsedQuery = unavailabilityRangeSchema.safeParse(request.query);
+    if (!parsedQuery.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: parsedQuery.error.issues.map((i) => ({
+          field: i.path.join('.') || 'range',
+          reason: i.message,
+        })),
+      });
+    }
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply
+        .status(401)
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+    }
+    const [owned] = await db
+      .select({ id: screenhosts.id })
+      .from(screenhosts)
+      .where(and(eq(screenhosts.id, parsedParams.data.id), eq(screenhosts.ownerId, userId)))
+      .limit(1);
+    if (!owned) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
+    }
+    const rows = await db
+      .select({ day: screenhostUnavailability.day })
+      .from(screenhostUnavailability)
+      .where(
+        and(
+          eq(screenhostUnavailability.screenhostId, owned.id),
+          gte(screenhostUnavailability.day, parsedQuery.data.from),
+          lte(screenhostUnavailability.day, parsedQuery.data.to),
+        ),
+      )
+      .orderBy(asc(screenhostUnavailability.day));
+    return reply.status(200).send({ days: rows.map((r) => r.day) });
+  });
+
+  // PUT /api/screenhosts/:id/unavailability {day, unavailable} — declare or undeclare ONE day.
+  // FUTURE-only (Tunis calendar): today and the past are history — frozen créneaux there are the
+  // E6 detector's business, not the owner's eraser. Idempotent both directions (re-declare = the
+  // UNIQUE no-op; un-declare an available day = delete 0 rows, still 200).
+  const unavailabilityPutSchema = z.object({
+    day: z.iso.date(),
+    unavailable: z.boolean(),
+  });
+  app.put('/api/screenhosts/:id/unavailability', ownerGuard, async (request, reply) => {
+    const parsedParams = idParamSchema.safeParse(request.params);
+    if (!parsedParams.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: [{ field: 'id', reason: 'must be a uuid' }],
+      });
+    }
+    const parsed = unavailabilityPutSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: parsed.error.issues.map((i) => ({
+          field: i.path.join('.') || 'body',
+          reason: i.message,
+        })),
+      });
+    }
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply
+        .status(401)
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+    }
+    if (parsed.data.day <= tunisDateOf(new Date())) {
+      return reply.status(400).send({
+        error: 'PAST_OR_TODAY',
+        message: 'Only future days can be declared or undeclared.',
+        day: parsed.data.day,
+      });
+    }
+    const [owned] = await db
+      .select({ id: screenhosts.id })
+      .from(screenhosts)
+      .where(and(eq(screenhosts.id, parsedParams.data.id), eq(screenhosts.ownerId, userId)))
+      .limit(1);
+    if (!owned) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
+    }
+    if (parsed.data.unavailable) {
+      await db
+        .insert(screenhostUnavailability)
+        .values({ screenhostId: owned.id, day: parsed.data.day })
+        .onConflictDoNothing();
+    } else {
+      await db
+        .delete(screenhostUnavailability)
+        .where(
+          and(
+            eq(screenhostUnavailability.screenhostId, owned.id),
+            eq(screenhostUnavailability.day, parsed.data.day),
+          ),
+        );
+    }
+    return reply
+      .status(200)
+      .send({
+        screenhost_id: owned.id,
+        day: parsed.data.day,
+        unavailable: parsed.data.unavailable,
+      });
+  });
+
   // PATCH /api/screenhosts/:id/hours — the OWNER edits their venue's single-window hours
   // post-signup. Same columns as every other writer (signup, admin eligibility PATCH, C3 ingest —
   // all untouched); STRICTER pair semantics than the admin's partial patch: BOTH ints 0–23 with

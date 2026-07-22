@@ -74,7 +74,7 @@ export const runRefusalCascade = async (
 
   // E5.1 — the pool always assembles (zero targeting lines = the whole network); the defensive
   // NO_TARGETING fallback is gone with the retired status.
-  const { pool, windowDays } = await assemblePool(
+  const { pool } = await assemblePool(
     tx,
     campaign,
     { s, t, fMaxSeconds: plan.fMaxSeconds },
@@ -134,7 +134,7 @@ export const runRefusalCascade = async (
           iiPotentiel: totalAi,
           rI,
           revenuPrevisionnel: String((totalAi * cpm) / 1000),
-          creneaux: buildCreneaux(windowDays, p.slots, rI),
+          creneaux: buildCreneaux(p.days, p.slots, rI),
           statutAcceptation: 'EN_ATTENTE',
         })
         .where(eq(campaignDispatchAllocation.id, existing.id));
@@ -154,7 +154,7 @@ export const runRefusalCascade = async (
         iiPotentiel: ret.ai,
         rI,
         revenuPrevisionnel: String((ret.ai * cpm) / 1000),
-        creneaux: buildCreneaux(windowDays, p.slots, rI),
+        creneaux: buildCreneaux(p.days, p.slots, rI),
       });
       createdAllocations += 1;
     }

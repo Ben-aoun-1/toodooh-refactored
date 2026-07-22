@@ -23,6 +23,10 @@ export interface PoolEntry {
   // Σ over all campaigns of r_i×S ≤ F on every screen even when campaigns have different spot durations.
   repsCap: number;
   slots: { dayOfWeek: number; hour: number; affluence: number }[]; // broadcastable (weekday,hour)→Ai
+  // E2 (jours_dispo_i) — THIS venue's available window days (the global window minus its declared
+  // unavailability). The ONE day source: capacity was computed over these, and every créneaux
+  // builder MUST iterate these (never the global windowDays) so placements and capacity agree.
+  days: WindowDay[];
 }
 
 export interface WindowDay {
@@ -153,7 +157,8 @@ export const buildPlan = (input: BuildPlanInput): BuiltPlan => {
       iiPotentiel: ret.ai,
       rI,
       revenuPrevisionnel: (ret.ai * cpm) / 1000,
-      creneaux: buildCreneaux(input.windowDays, p.slots, rI),
+      // E2 — the venue's OWN available days, not the global window (one day source).
+      creneaux: buildCreneaux(p.days, p.slots, rI),
     });
   }
 

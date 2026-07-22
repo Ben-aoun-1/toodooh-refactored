@@ -34,6 +34,7 @@ const poolEntry = (
     slots?: PoolEntry['slots'];
   },
 ): PoolEntry => ({
+  days: WINDOW,
   id,
   sps,
   anciennete: 0,

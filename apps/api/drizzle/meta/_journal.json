@@ -351,6 +351,13 @@
       "when": 1784744692247,
       "tag": "0049_campaign_boosts",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1784759148032,
+      "tag": "0050_screenhost_unavailability",
+      "breakpoints": true
     }
   ]
 }

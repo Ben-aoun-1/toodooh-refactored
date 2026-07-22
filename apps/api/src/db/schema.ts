@@ -449,6 +449,31 @@ export const screenhostAffluence = pgTable(
 export type ScreenhostAffluence = typeof screenhostAffluence.$inferSelect;
 export type NewScreenhostAffluence = typeof screenhostAffluence.$inferInsert;
 
+// ── screenhost unavailability (E2, VF jours_dispo_i) ────────────────────────
+// Owner-declared per-day unavailability, VENUE-level (never per-screen). The engine's day source:
+// assemblePool filters each venue's window days by this set — capacity (Hi), créneaux and the
+// C_max ceiling all shrink together (ONE day source); a venue unavailable across the ENTIRE
+// window drops from the pool (US-2.1). FROZEN PLANS ARE NEVER REWRITTEN by a later declaration
+// (ruling 2, the H2 precedent): a declared day with frozen créneaux still counts manquements and
+// rides E6's rattrapage. One row per declared day; undeclaring deletes the row.
+export const screenhostUnavailability = pgTable(
+  'screenhost_unavailability',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    screenhostId: uuid('screenhost_id')
+      .notNull()
+      .references(() => screenhosts.id, { onDelete: 'cascade' }),
+    day: date('day').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('screenhost_unavailability_day_uq').on(table.screenhostId, table.day),
+    index('screenhost_unavailability_screenhost_id_idx').on(table.screenhostId),
+  ],
+);
+
+export type ScreenhostUnavailability = typeof screenhostUnavailability.$inferSelect;
+
 // Monthly screenhost stats — the ACTUAL monthly audience the hub pushes (operator ruling: real
 // monthly figures, NOT toodooh's rolling weekly affluence average). One row per (screenhost, month);
 // the owner downloads a branded PDF report from it. UNIQUE(screenhost, month) → latest-value-wins
