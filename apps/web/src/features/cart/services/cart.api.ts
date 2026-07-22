@@ -18,6 +18,14 @@ export interface CartRead {
   count: number;
 }
 
+export interface CartConfirmResult {
+  confirmed: CampaignView[];
+  /** CF-SK1 — already-approved spots: launched on the spot, never queued for review. */
+  launched: CampaignView[];
+  /** New spots: draft → pending, waiting on the admin. */
+  pending_review: CampaignView[];
+}
+
 export const cartApi = {
   read(): Promise<CartRead> {
     return apiClient.get<CartRead>('/cart');
@@ -30,8 +38,13 @@ export const cartApi = {
   remove(campaignId: string): Promise<{ removed: boolean; campaign_id: string }> {
     return apiClient.del(`/cart/items/${campaignId}`);
   },
-  /** ONE confirm launches them all; failures carry per-item reasons (+ solde) in ApiError.body. */
-  confirm(): Promise<{ confirmed: CampaignView[] }> {
+  /**
+   * ONE confirm launches them all; failures carry per-item reasons (+ solde) in ApiError.body.
+   * CF-SK1 — the outcome SPLITS: `launched` skipped review entirely (their spot was already
+   * approved — ruling #9) and are upcoming/active; `pending_review` await the admin. `confirmed`
+   * is the union (back-compatible).
+   */
+  confirm(): Promise<CartConfirmResult> {
     return apiClient.post('/cart/confirm');
   },
 };

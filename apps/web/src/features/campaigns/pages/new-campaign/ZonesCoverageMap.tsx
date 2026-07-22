@@ -46,9 +46,8 @@ const MARKER_STYLE: L.CircleMarkerOptions = {
 
 // The click popup, built via DOM nodes (never innerHTML — venue names are user data) with
 // self-contained inline styles so it needs nothing from the app stylesheet.
-// NOTE (CF-U4 flag): the chartered CATEGORY chip needs the venue's sector NAME on the coverage
-// wire (CoverageVenue carries id/name/lat/lng only) — an api projection field this WEB-ONLY lane
-// cannot add. Until then the chip is the truthful « Établissement couvert ».
+// CF-SK1 rider — the coverage projection now carries sector_name, so the chip shows the REAL
+// category; the CF-U4 « Établissement couvert » wording stays as the fallback for a NULL sector.
 const buildPopupContent = (venue: CoverageVenue): HTMLElement => {
   const root = document.createElement('div');
   root.style.cssText = 'padding:2px 4px;min-width:140px;';
@@ -56,7 +55,7 @@ const buildPopupContent = (venue: CoverageVenue): HTMLElement => {
   name.textContent = venue.name;
   name.style.cssText = 'margin:0;font-weight:700;font-size:14px;color:#1a1a1a;';
   const chip = document.createElement('span');
-  chip.textContent = 'Établissement couvert';
+  chip.textContent = venue.sector_name ?? 'Établissement couvert';
   chip.style.cssText =
     'display:inline-block;margin-top:6px;padding:2px 10px;border-radius:9999px;background:#E3F7EC;border:1px solid #76E6AB;color:#1A3C34;font-size:11px;font-weight:600;';
   root.append(name, chip);

@@ -60,6 +60,8 @@ export interface CoverageVenue {
   name: string;
   latitude: number;
   longitude: number;
+  /** CF-SK1 rider — the venue's sector name for the map popup's category chip (NULL = unset). */
+  sector_name: string | null;
 }
 
 /** E5 (VF US-1.3) — the live C_max ceiling bounding the Validation-step budget cursor. */
