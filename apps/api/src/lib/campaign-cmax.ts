@@ -1,4 +1,7 @@
+import { eq } from 'drizzle-orm';
+
 import { db } from '../db/client.js';
+import { campaignDispatchAllocation, campaignDispatchPlan } from '../db/schema.js';
 
 import { cpmForCampaign, getDispatchConfig } from './dispatch/config.js';
 import { assemblePool } from './dispatch/pool.js';
@@ -39,10 +42,30 @@ export const computeCampaignCmax = async (
   // E5.1 (VF US-2.1) — zero targeting lines = the whole network: the pool assembles over every
   // eligible venue and the ceiling prices the full inventory (the old NO_TARGETING zero-fold
   // retired with the status).
+  //
+  // CF-SK1 amendment — the campaign's OWN frozen allocations are EXCLUDED from the engagement
+  // netting (the E6 seam): its own seconds are its delivery, not competition. Without this, a
+  // draft carrying a frozen plan (a cart skip item whose confirm later failed on another item)
+  // re-prices against itself on retry — the ceiling collapses below its own budget and the cart
+  // wedges on BUDGET_EXCEEDS_CMAX forever. Plan-less campaigns are untouched (empty exclusion).
+  const [ownPlan] = await db
+    .select({ id: campaignDispatchPlan.id })
+    .from(campaignDispatchPlan)
+    .where(eq(campaignDispatchPlan.campaignId, campaign.id))
+    .limit(1);
+  const ownAllocationIds = ownPlan
+    ? (
+        await db
+          .select({ id: campaignDispatchAllocation.id })
+          .from(campaignDispatchAllocation)
+          .where(eq(campaignDispatchAllocation.planId, ownPlan.id))
+      ).map((a) => a.id)
+    : [];
   const { pool } = await assemblePool(
     db,
     { id: campaign.id, startDate: campaign.startDate, endDate: campaign.endDate },
     { s: spotSeconds, t, fMaxSeconds: config.fMaxSeconds },
+    { excludeAllocationIds: ownAllocationIds },
   );
   const iMax = pool.reduce((sum, entry) => sum + entry.residualCapacity, 0);
   return {

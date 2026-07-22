@@ -125,8 +125,12 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
         businessSectorId: screenhosts.businessSectorId,
         class: screenhosts.class,
         zoneId: screenhosts.zoneId,
+        // CF-SK1 rider — the venue's sector NAME so the map popup can chip the real category
+        // (CF-U4 shipped a truthful « Établissement couvert » placeholder pending this field).
+        sectorName: businessSectors.name,
       })
       .from(screenhosts)
+      .leftJoin(businessSectors, eq(screenhosts.businessSectorId, businessSectors.id))
       .where(
         and(
           eq(screenhosts.isActive, true),
@@ -154,6 +158,7 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
       name: v.name,
       latitude: Number(v.latitude),
       longitude: Number(v.longitude),
+      sector_name: v.sectorName,
     }));
 
     return reply.status(200).send({ screenhosts: matching });
