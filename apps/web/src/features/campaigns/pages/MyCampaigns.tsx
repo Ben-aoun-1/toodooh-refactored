@@ -23,9 +23,11 @@ import 'react-datepicker/dist/react-datepicker.css';
 import campagneIcon from '@/assets/sidebar/campagnes.png';
 import PageHeader from '@/components/PageHeader';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
+import BoostCampaignModal from '@/features/campaigns/components/BoostCampaignModal';
 import CampaignDrawer from '@/features/campaigns/components/CampaignDrawer';
 import { useDeleteCampaign, useReplayCampaign } from '@/features/campaigns/hooks/useCampaignApi';
 import { useMyCampaigns } from '@/features/campaigns/hooks/useMyCampaigns';
+import { canBoostCampaign } from '@/features/campaigns/lib/boost-rules';
 import {
   canDeleteDraftCampaign,
   canResumeCampaign,
@@ -44,6 +46,7 @@ import {
   performReplay,
 } from '@/features/campaigns/lib/campaign-replay';
 import { campaignStatusUi } from '@/features/campaigns/lib/campaign-status';
+import type { CampaignView } from '@/features/campaigns/services/campaigns.api';
 import { useWizardResumeStore } from '@/features/campaigns/stores/wizard-resume.store';
 import { logger } from '@/lib/logger';
 import { htTtcOrDash } from '@/lib/money';
@@ -98,6 +101,8 @@ export default function MyCampaigns() {
   // optimistic `setCampaigns` patches dropped (mutations now
   // invalidate-and-refetch), no local mirror is needed.
   const { campaigns, loading, isError } = useMyCampaigns(user?.id);
+  // CF-B1 — the Booster modal's target (the untrimmed wire row).
+  const [boostTarget, setBoostTarget] = useState<CampaignView | null>(null);
   const deleteCampaign = useDeleteCampaign(user?.id);
   const replayCampaign = useReplayCampaign(user?.id);
 
@@ -597,7 +602,6 @@ export default function MyCampaigns() {
               start && end
                 ? `${start.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })} - ${end.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}`
                 : '—';
-            const isActive = campaign.status === 'active';
             return (
               <div
                 key={campaign.id}
@@ -708,11 +712,11 @@ export default function MyCampaigns() {
                       <Trash2 className="h-4 w-4" /> Supprimer
                     </button>
                   )}
-                  {isActive && (
+                  {canBoostCampaign(campaign.status) && (
                     <button
                       type="button"
-                      disabled
-                      className="flex-1 py-2 rounded-lg text-sm font-medium inline-flex items-center justify-center gap-1.5 bg-gray-100 text-gray-400 cursor-not-allowed"
+                      onClick={() => setBoostTarget(campaign.raw)}
+                      className="flex-1 py-2 rounded-lg text-sm font-medium inline-flex items-center justify-center gap-1.5 transition-colors bg-[#e3f7ec] text-[#66bc74] hover:bg-[#cceee0]"
                     >
                       <Rocket className="h-4 w-4" /> Booster
                     </button>
@@ -907,11 +911,14 @@ export default function MyCampaigns() {
                                       Rejouer
                                     </button>
                                   )}
-                                  {campaign.status === 'active' && (
+                                  {canBoostCampaign(campaign.status) && (
                                     <button
                                       type="button"
-                                      disabled
-                                      className="w-full px-3 py-2 text-left text-sm text-gray-400 cursor-not-allowed"
+                                      onClick={() => {
+                                        setOpenActionRowId(null);
+                                        setBoostTarget(campaign.raw);
+                                      }}
+                                      className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
                                     >
                                       Booster
                                     </button>
@@ -1072,11 +1079,15 @@ export default function MyCampaigns() {
                         <RotateCcw className="h-5 w-5" />
                         Reprendre
                       </button>
-                    ) : selectedCampaign.status === 'active' ? (
+                    ) : canBoostCampaign(selectedCampaign.status) ? (
                       <button
                         type="button"
-                        disabled
-                        className="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-[10px] border text-sm font-medium bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
+                        onClick={() => {
+                          const c = selectedCampaign;
+                          closeDetailsDrawer();
+                          setTimeout(() => setBoostTarget(c.raw), 320);
+                        }}
+                        className="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-[10px] border border-[#1FC16B] text-sm font-medium text-[#1FC16B] bg-[#E3F7EC] hover:opacity-90 transition-opacity"
                         style={{ boxShadow: '0px 1px 2px rgba(10, 13, 20, 0.0313726)' }}
                       >
                         <Rocket className="h-5 w-5" />
@@ -1104,6 +1115,13 @@ export default function MyCampaigns() {
             />
           );
         })()}
+      {boostTarget && (
+        <BoostCampaignModal
+          campaign={boostTarget}
+          userId={user?.id}
+          onClose={() => setBoostTarget(null)}
+        />
+      )}
     </div>
   );
 }
