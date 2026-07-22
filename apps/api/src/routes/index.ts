@@ -9,6 +9,7 @@ import { adminRechargesRoutes } from './admin-recharges.js';
 import { adminReconcileRoutes } from './admin-reconcile.js';
 import { adminRoutes } from './admin.js';
 import { agentRoutes } from './agent.js';
+import { campaignBoostRoutes } from './campaign-boost.js';
 import { campaignDispatchRoutes } from './campaign-dispatch.js';
 import { campaignTargetingRoutes } from './campaign-targeting.js';
 import { campaignsPricingRoutes } from './campaigns-pricing.js';
@@ -69,6 +70,7 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   // L-target — campaign audience targeting (category × class lines, ALL=toutes); owner-scoped to the
   // campaign's advertiser, replace-set write, draft-only. Dedup + category validation server-side.
   await app.register(campaignTargetingRoutes);
+  await app.register(campaignBoostRoutes);
   // L-disp — admin/internal dispatch entrypoint: builds + freezes the PlanDiffusion (A.7).
   await app.register(campaignDispatchRoutes);
   // L-wallet — advertiser wallet surface: POST recharge (manual bank-transfer top-up → pending +

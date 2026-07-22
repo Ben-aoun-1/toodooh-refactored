@@ -1101,6 +1101,34 @@ export const campaignRedispatchRounds = pgTable(
 
 export type CampaignRedispatchRound = typeof campaignRedispatchRounds.$inferSelect;
 
+// ── campaign boosts (CF-B1, spec §3.3) ──────────────────────────────────────
+// « Booster » on an Active/À venir campaign — STRICTLY ADDITIVE: the end date can only grow (the
+// start is frozen), zones/categories only append, and the complementary budget dispatches over
+// the merged perimeter under the SAME rules as any dispatch (pool → selection → EN_ATTENTE
+// placements, merge = re-consent). One row per applied boost: the immutable audit of what was
+// added and what the placement covered (placed_fact — the rest rode the stored reliquat, E3).
+export const campaignBoosts = pgTable(
+  'campaign_boosts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    amountTnd: numeric('amount_tnd', { precision: 12, scale: 2 }).notNull(),
+    previousEndDate: date('previous_end_date').notNull(),
+    newEndDate: date('new_end_date').notNull(),
+    addedZoneIds: jsonb('added_zone_ids').$type<string[]>().notNull().default([]),
+    addedCategoryIds: jsonb('added_category_ids').$type<string[]>().notNull().default([]),
+    placedFact: integer('placed_fact').notNull(),
+    appliedAt: timestamp('applied_at', { withTimezone: true }).notNull().defaultNow(),
+    // The advertiser who applied it (owner-scoped route — boosts are self-serve, ruled deviation #1).
+    appliedBy: uuid('applied_by').references(() => users.id),
+  },
+  (table) => [index('campaign_boosts_campaign_id_idx').on(table.campaignId)],
+);
+
+export type CampaignBoost = typeof campaignBoosts.$inferSelect;
+
 // ── recharges + wallet (L-wallet — manual/offline top-up) ───────────────────
 // A screencaster (the `advertiser` role) tops up their wallet by BANK TRANSFER — there is NO online
 // gateway (operator ruling 2026-06-27, "fake money"/manual). The flow: POST /api/recharges creates a
