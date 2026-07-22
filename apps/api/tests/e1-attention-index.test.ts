@@ -74,6 +74,7 @@ describe('capacity × T — Ii = Ii_brut × T (facturable), same T back-converts
     const pool: PoolEntry[] = [
       {
         id: 'A',
+        days: windowDays,
         sps: 9,
         anciennete: 0,
         revenuJour: 0,

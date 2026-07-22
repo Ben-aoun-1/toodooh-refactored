@@ -214,7 +214,7 @@ export const runRedispatchRound = async (
       .map((a) => a.id);
 
     // E5.1 — the pool always assembles (zero targeting lines = the whole network).
-    const { pool, windowDays } = await assemblePool(
+    const { pool } = await assemblePool(
       tx,
       { id: campaign.id, startDate: effectiveStart, endDate: campaign.endDate },
       { s, t, fMaxSeconds: plan.fMaxSeconds },
@@ -268,9 +268,8 @@ export const runRedispatchRound = async (
       // FUTURE-ONLY créneaux: buildCreneaux over the remaining window, minus today's
       // already-started hours. An empty result (e.g. the window ends within the current hour)
       // means this placement cannot air — skip it (its volume stays unplaced).
-      const futureDelta = buildCreneaux(windowDays, p.slots, rIAdd).filter((c) =>
-        isFuture(c, nowSlot),
-      );
+      // E2 — p.days: the replacement venue's OWN declared days are skipped here too.
+      const futureDelta = buildCreneaux(p.days, p.slots, rIAdd).filter((c) => isFuture(c, nowSlot));
       if (futureDelta.length === 0) continue;
 
       const existing = existingBySh.get(ret.id);

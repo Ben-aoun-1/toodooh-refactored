@@ -1,4 +1,4 @@
-import { and, eq, inArray, notInArray, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, lte, notInArray, sql } from 'drizzle-orm';
 
 import { type DrizzleDb } from '../../db/client.js';
 import {
@@ -7,6 +7,7 @@ import {
   campaignTargeting,
   campaignZones,
   screenhostAffluence,
+  screenhostUnavailability,
   screenhosts,
 } from '../../db/schema.js';
 
@@ -150,6 +151,33 @@ export const assemblePool = async (
     ...(opts.excludeAllocationId === undefined ? [] : [opts.excludeAllocationId]),
     ...(opts.excludeAllocationIds ?? []),
   ];
+  // E2 (VF jours_dispo_i) — the candidates' owner-declared unavailable days inside the window.
+  // ONE day source: the per-venue filtered days drive capacity (Hi), avgAffluence AND créneaux
+  // (PoolEntry.days is what buildCreneaux consumers iterate), so they can never diverge.
+  const windowStart = windowDays[0]?.date ?? campaign.startDate;
+  const windowEnd = windowDays[windowDays.length - 1]?.date ?? campaign.endDate;
+  const unavailabilityRows = candidateIds.length
+    ? await executor
+        .select({
+          screenhostId: screenhostUnavailability.screenhostId,
+          day: screenhostUnavailability.day,
+        })
+        .from(screenhostUnavailability)
+        .where(
+          and(
+            inArray(screenhostUnavailability.screenhostId, candidateIds),
+            gte(screenhostUnavailability.day, windowStart),
+            lte(screenhostUnavailability.day, windowEnd),
+          ),
+        )
+    : [];
+  const unavailableBySh = new Map<string, Set<string>>();
+  for (const u of unavailabilityRows) {
+    const set = unavailableBySh.get(u.screenhostId) ?? new Set<string>();
+    set.add(u.day);
+    unavailableBySh.set(u.screenhostId, set);
+  }
+
   const engagementRows = candidateIds.length
     ? await executor
         .select({
@@ -188,21 +216,26 @@ export const assemblePool = async (
       (engagedSecondsById.get(e.screenhostId) ?? 0) + e.rI * e.spotSeconds,
     );
 
-  const windowWeekdays = [...new Set(windowDays.map((d) => d.dayOfWeek))];
-
   const pool: PoolEntry[] = [];
   for (const sh of candidates) {
+    // E2 — jours_dispo_i: this venue's window days MINUS its declared unavailability. Zero
+    // available days = ineligible for the whole window → out of the pool (US-2.1); a partial
+    // declaration shrinks Hi (and so capacity and C_max) exactly proportionally.
+    const declared = unavailableBySh.get(sh.id);
+    const days = declared ? windowDays.filter((d) => !declared.has(d.date)) : windowDays;
+    if (days.length === 0) continue;
+    const venueWeekdays = [...new Set(days.map((d) => d.dayOfWeek))];
     const bHours = broadcastableHours(sh.openingHour, sh.closingHour);
-    const slots = windowWeekdays.flatMap((dow) =>
+    const slots = venueWeekdays.flatMap((dow) =>
       bHours.map((hour) => ({
         dayOfWeek: dow,
         hour,
         affluence: affByKey.get(`${sh.id}:${dow}:${hour}`) ?? 0,
       })),
     );
-    const hours = windowDays.length * bHours.length; // Hi — broadcastable slots over the window
+    const hours = days.length * bHours.length; // Hi — broadcastable slots over the AVAILABLE days
     let totalAffluence = 0;
-    for (const day of windowDays) {
+    for (const day of days) {
       for (const hour of bHours)
         totalAffluence += affByKey.get(`${sh.id}:${day.dayOfWeek}:${hour}`) ?? 0;
     }
@@ -238,6 +271,7 @@ export const assemblePool = async (
       residualCapacity,
       repsCap: rEff,
       slots,
+      days,
     });
   }
 
