@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   ArrowRight,
+  BadgeCheck,
   Banknote,
   Info,
   Loader2,
@@ -33,6 +34,7 @@ import { toChipLabel } from '@/features/campaigns/lib/targeting-chip-label';
 import { zonesRecapLabel } from '@/features/campaigns/lib/zones-selection';
 import StepSectionHeading from '@/features/campaigns/pages/new-campaign/StepSectionHeading';
 import { useCampaignTargeting } from '@/features/campaigns/targeting/hooks/useCampaignTargeting';
+import { approvedSpotNotice } from '@/features/cart/lib/confirm-outcome';
 import { htTtcLabel, ttcParenthetical } from '@/lib/money';
 
 import CreativePreviewTile from './CreativePreviewTile';
@@ -127,6 +129,9 @@ export default function StepCart({
 
   const durationDays = inclusiveDayCount(startDate, endDate);
   const linkedCreative = creativeId ? creatives.find((c) => c.id === creativeId) : undefined;
+  // CF-SK1 (ruling #9) — an already-approved spot skips admin review entirely: say so here, so
+  // the advertiser knows the confirm launches immediately. Only 'approved' earns the line.
+  const approvedNotice = approvedSpotNotice(linkedCreative?.validation_status);
 
   return (
     <div className="space-y-6">
@@ -373,6 +378,13 @@ export default function StepCart({
                 </div>
               </div>
             </div>
+
+            {approvedNotice && (
+              <div className="mt-4 flex gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                <BadgeCheck className="h-5 w-5 flex-shrink-0 text-emerald-600" />
+                <p className="text-sm text-emerald-800">{approvedNotice}</p>
+              </div>
+            )}
 
             <div className="mt-4 flex gap-3 rounded-xl border border-slate-100 bg-slate-50/80 p-4">
               <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-slate-200">

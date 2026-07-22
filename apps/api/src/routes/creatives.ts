@@ -8,6 +8,11 @@ import { z } from 'zod';
 import { db } from '../db/client.js';
 import { creatives } from '../db/schema.js';
 import {
+  findInheritableApproval,
+  hashCreativeBytes,
+  inheritedApprovalNote,
+} from '../lib/creative-identity.js';
+import {
   MAX_CREATIVE_BYTES,
   MAX_VIDEO_DURATION_SECONDS,
   creativeView,
@@ -198,6 +203,12 @@ export const creativesRoutes: FastifyPluginAsync = async (app) => {
         .send({ error: 'STORAGE_ERROR', message: 'Creative storage failed. Please retry.' });
     }
 
+    // CF-SK1 (ruling #9) — the spot's identity: same bytes + same owner + a prior APPROVED
+    // creative ⇒ born approved (the admin already reviewed these exact frames), with the
+    // inheritance recorded in the moderation trail. Anything else stays 'pending' as today.
+    const fileHash = hashCreativeBytes(body);
+    const inherited = await findInheritableApproval(userId, fileHash);
+
     const [row] = await db
       .insert(creatives)
       .values({
@@ -210,6 +221,14 @@ export const creativesRoutes: FastifyPluginAsync = async (app) => {
         mimeType: data.mimetype,
         originalFilename: data.filename,
         sizeBytes: body.length,
+        fileHash,
+        ...(inherited
+          ? {
+              validationStatus: 'approved' as const,
+              validatedAt: new Date(),
+              validationNotes: inheritedApprovalNote(inherited.sourceCreativeId),
+            }
+          : {}),
       })
       .returning();
     if (!row) {

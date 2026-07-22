@@ -12,6 +12,7 @@ import { zonesRecapLabel } from '@/features/campaigns/lib/zones-selection';
 import RemoveCartItemDialog from '@/features/cart/components/RemoveCartItemDialog';
 import { useCartMutations, useCartRead } from '@/features/cart/hooks/useCart';
 import { cartReasonFr, parseCartConfirmFailure } from '@/features/cart/lib/cart-confirm';
+import { confirmSuccessMessage } from '@/features/cart/lib/confirm-outcome';
 import { getErrorMessage } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { htTtcOrDash, formatTnd, ttcFromHt } from '@/lib/money';
@@ -83,11 +84,16 @@ export default function MyCart() {
     setSolde(null);
     try {
       const result = await confirmCart.mutateAsync();
+      // CF-SK1 — the outcome can SPLIT: approved spots launched, new spots queued for review.
+      // Land unfiltered so both groups are visible; the toast carries the split.
       toast.success(
-        `${result.confirmed.length} campagne${result.confirmed.length > 1 ? 's' : ''} lancée${result.confirmed.length > 1 ? 's' : ''} — en attente de validation.`,
-        { duration: 6000 },
+        confirmSuccessMessage({
+          launched: result.launched?.length ?? 0,
+          pendingReview: result.pending_review?.length ?? result.confirmed.length,
+        }),
+        { duration: 7000 },
       );
-      navigate('/my-campaigns?status=pending');
+      navigate('/my-campaigns');
     } catch (error) {
       const failure = parseCartConfirmFailure(error);
       if (failure) {

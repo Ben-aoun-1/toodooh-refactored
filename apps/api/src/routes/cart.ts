@@ -3,7 +3,8 @@ import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
 import { db } from '../db/client.js';
-import { cartItems, campaigns, creatives } from '../db/schema.js';
+import { type Campaign, cartItems, campaigns, creatives } from '../db/schema.js';
+import { finalizeActivation, prepareActivation } from '../lib/activation-service.js';
 import { MIN_CAMPAIGN_BUDGET_TND } from '../lib/campaign-budget.js';
 import { computeCampaignCmax } from '../lib/campaign-cmax.js';
 import { startDateViolation } from '../lib/campaign-dates.js';
@@ -32,6 +33,8 @@ const sendUnauthenticated = (reply: FastifyReply) =>
 interface GateRow {
   campaign: CampaignRow & { advertiserId: string };
   creativeDurationSeconds: number | null;
+  /** CF-SK1 — 'approved' ⇒ this item SKIPS review and activates at confirm (ruling #9). */
+  contentValidationStatus: string | null;
 }
 
 /**
@@ -66,6 +69,7 @@ const loadGateRow = async (campaignId: string, userId: string): Promise<GateRow 
     .select({
       campaign: { ...campaignSelection, advertiserId: campaigns.advertiserId },
       creativeDurationSeconds: creatives.durationSeconds,
+      contentValidationStatus: creatives.validationStatus,
     })
     .from(campaigns)
     .leftJoin(creatives, eq(campaigns.creativeId, creatives.id))
@@ -220,40 +224,122 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
       });
     }
 
-    const campaignIds = carted.map((c) => c.campaignId);
-    const confirmed = await db
+    // CF-SK1 (ruling #9) — the SKIP fork: an item whose spot is ALREADY APPROVED needs no
+    // admin review, so it launches at confirm (draft → upcoming/active, date-routed, via the
+    // SAME activation core the admin route runs, activated_by NULL = system). Items whose spot
+    // is pending/rejected take the normal draft → pending path and wait for the admin.
+    //
+    // TWO PHASES (the CF-SK1 amendment, ratified): PREPARE freezes (or RESUMES) every skip
+    // item's plan first — no flips; then ONE transaction flips everything (skip items →
+    // upcoming/active AND review items → pending) and clears the cart. A dispatch failure on
+    // ANY skip item therefore fails the WHOLE confirm with NO visible state change (the CF-C1
+    // atomic ruling): the cart stays intact and nothing flips anywhere. The only residue of a
+    // partial failure is an EARLIER item's frozen plan (irrevocable by design, invisible to the
+    // advertiser) — and the retry RESUMES it: runDispatch short-circuits to ALREADY_DISPATCHED
+    // (no re-pool, no duplicate owner notifications — those were inserted inside the one-shot
+    // freeze tx) and the gate re-prices fairly because computeCampaignCmax excludes the
+    // campaign's OWN allocations from the engagement netting.
+    const skipItems: {
+      campaignId: string;
+      row: NonNullable<Awaited<ReturnType<typeof loadGateRow>>>;
+    }[] = [];
+    const reviewIds: string[] = [];
+    for (const { campaignId } of carted) {
+      const row = await loadGateRow(campaignId, userId);
+      if (!row) continue; // revalidation above already proved every item loads
+      if (row.contentValidationStatus === 'approved') skipItems.push({ campaignId, row });
+      else reviewIds.push(campaignId);
+    }
+
+    // PHASE 1 — prepare (gate → dispatch/resume → plan loaded). No status flips yet.
+    const preparedSkips: { full: Campaign }[] = [];
+    for (const { campaignId, row } of skipItems) {
+      const [full] = await db.select().from(campaigns).where(eq(campaigns.id, campaignId)).limit(1);
+      if (!full) {
+        return reply.status(400).send({
+          error: 'CART_CONFIRM_FAILED',
+          message: 'One or more cart items are no longer launchable.',
+          items: [{ campaign_id: campaignId, reason: 'NOT_FOUND' }],
+        });
+      }
+      const prepared = await prepareActivation({
+        campaign: full,
+        contentValidationStatus: row.contentValidationStatus,
+        creativeDurationSeconds: row.creativeDurationSeconds,
+        fromStatus: 'draft',
+      });
+      if (prepared.status !== 'READY') {
+        const reason =
+          prepared.status === 'NOT_DELIVERABLE'
+            ? prepared.reason === 'too_thin'
+              ? 'TOO_THIN'
+              : 'NO_ELIGIBLE'
+            : prepared.status === 'NOT_ACTIVATABLE'
+              ? prepared.reason.toUpperCase()
+              : prepared.status;
+        return reply.status(400).send({
+          error: 'CART_CONFIRM_FAILED',
+          message: 'One or more cart items could not be launched.',
+          items: [{ campaign_id: campaignId, reason }],
+        });
+      }
+      preparedSkips.push({ full });
+    }
+
+    // PHASE 2 — ONE transaction: every flip (skip AND review) + the cart clear, all-or-nothing.
+    const result = await db
       .transaction(async (tx) => {
-        const updated = await tx
-          .update(campaigns)
-          .set({ status: 'pending', submittedAt: new Date(), rejectedAt: null, rejectReason: null })
-          .where(
-            and(
-              inArray(campaigns.id, campaignIds),
-              eq(campaigns.advertiserId, userId),
-              eq(campaigns.status, 'draft'),
-            ),
-          )
-          .returning(campaignSelection);
-        if (updated.length !== campaignIds.length) {
-          // A mid-flight race (an item flipped between revalidation and here): all-or-nothing.
-          throw new Error('CART_CONFIRM_RACE');
+        const launched: CampaignRow[] = [];
+        for (const { full } of preparedSkips) {
+          const flipped = await finalizeActivation(tx, full, {
+            activatedBy: null, // system activation — the spot was already cleared by the admin
+            fromStatus: 'draft',
+          });
+          if ('currentStatus' in flipped) throw new Error('CART_CONFIRM_RACE');
+          launched.push(flipped.activated as CampaignRow);
+        }
+        let updated: CampaignRow[] = [];
+        if (reviewIds.length > 0) {
+          updated = (await tx
+            .update(campaigns)
+            .set({
+              status: 'pending',
+              submittedAt: new Date(),
+              rejectedAt: null,
+              rejectReason: null,
+            })
+            .where(
+              and(
+                inArray(campaigns.id, reviewIds),
+                eq(campaigns.advertiserId, userId),
+                eq(campaigns.status, 'draft'),
+              ),
+            )
+            .returning(campaignSelection)) as CampaignRow[];
+          if (updated.length !== reviewIds.length) {
+            // A mid-flight race (an item flipped between revalidation and here): all-or-nothing.
+            throw new Error('CART_CONFIRM_RACE');
+          }
         }
         await tx.delete(cartItems).where(eq(cartItems.userId, userId));
-        return updated;
+        return { launched, updated };
       })
       .catch((err: unknown) => {
         if (err instanceof Error && err.message === 'CART_CONFIRM_RACE') return null;
         throw err;
       });
-    if (confirmed === null) {
+    if (result === null) {
       return reply.status(400).send({
         error: 'CART_CONFIRM_FAILED',
         message: 'One or more cart items changed during the confirm. Nothing was launched.',
         items: [],
       });
     }
-    return reply
-      .status(200)
-      .send({ confirmed: confirmed.map((row) => campaignView(row as CampaignRow)) });
+    // The response splits the two outcomes so the FE can word the mixed toast (CF-SK1).
+    return reply.status(200).send({
+      confirmed: [...result.launched, ...result.updated].map((row) => campaignView(row)),
+      launched: result.launched.map((row) => campaignView(row)),
+      pending_review: result.updated.map((row) => campaignView(row)),
+    });
   });
 };

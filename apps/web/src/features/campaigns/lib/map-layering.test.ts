@@ -70,6 +70,8 @@ describe('coverage-map layering', () => {
     expect(src).toContain('CARTO');
     expect(src).toContain('buildPopupContent');
     expect(src).toContain('bindPopup');
+    // CF-SK1 rider — the chip now shows the REAL category, with the CF-U4 wording as fallback.
+    expect(src).toContain("venue.sector_name ?? 'Établissement couvert'");
     expect(src).toContain('Tout le réseau — ');
     expect(src).toContain('couvert');
     // Every layer class comes from map-layering.ts — no locally hardcoded z-[…] leaks in.

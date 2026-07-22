@@ -3,16 +3,9 @@ import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import { db } from '../db/client.js';
-import {
-  type Campaign,
-  campaignDispatchAllocation,
-  campaignDispatchPlan,
-  campaigns,
-  creatives,
-} from '../db/schema.js';
-import { tunisDateOf } from '../lib/campaign-dates.js';
+import { type Campaign, campaigns, creatives } from '../db/schema.js';
+import { activateCampaign } from '../lib/activation-service.js';
 import { cpmForCampaign, getDispatchConfig } from '../lib/dispatch/config.js';
-import { runDispatch } from '../lib/dispatch/dispatch-service.js';
 import { walletBalance } from '../lib/recharges.js';
 import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
 
@@ -95,20 +88,7 @@ const adminCampaignView = (row: Campaign, contentValidationStatus: string | null
   updated_at: row.updatedAt,
 });
 
-// Load the frozen plan + its allocations for a campaign (for the activation summary).
-const loadPlan = async (campaignId: string) => {
-  const [plan] = await db
-    .select()
-    .from(campaignDispatchPlan)
-    .where(eq(campaignDispatchPlan.campaignId, campaignId))
-    .limit(1);
-  if (!plan) return null;
-  const allocations = await db
-    .select()
-    .from(campaignDispatchAllocation)
-    .where(eq(campaignDispatchAllocation.planId, plan.id));
-  return { plan, allocations };
-};
+// loadPlan moved into the activation core (lib/activation-service) with the rest of the chain.
 
 export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
   const adminGuard = { preHandler: [requireAuth, requireAdmin] };
@@ -173,125 +153,94 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
     if (!row) return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such campaign.' });
     const { campaign, contentValidationStatus, creativeDurationSeconds } = row;
 
-    // GATE — pending → approved creative. NO debit (deferred to L-redisp).
-    if (campaign.status !== 'pending') {
-      return sendNotPending(reply, request, campaign.status, 'activated');
-    }
-    if (contentValidationStatus !== 'approved') {
-      return reply.status(422).send({
-        error: 'NOT_ACTIVATABLE',
-        reason: 'content_not_approved',
-        message: 'The linked creative is not admin-approved (or no creative is linked).',
-        content_validation_status: contentValidationStatus,
-      });
-    }
+    // CF-SK1 — the gate chain, dispatch and the date-routed flip now live in the shared
+    // activation core (lib/activation-service); this route keeps its HTTP shell and maps the
+    // outcomes back to the exact bodies it always returned (behavior byte-unchanged).
+    const outcome = await activateCampaign({
+      campaign,
+      contentValidationStatus,
+      creativeDurationSeconds,
+      activatedBy: adminId,
+      fromStatus: 'pending',
+    });
 
-    // DERIVE the engine inputs (no admin-supplied pricing). cpm by type → i_cible from budget;
-    // s = creative duration; t = neutral default. Each derivation that can't complete is a 422 with a
-    // machine reason so the queue can tell the operator WHAT to fix (set a budget / a creative duration).
-    const config = await getDispatchConfig();
-    const cpm = cpmForCampaign(campaign.campaignType, config);
-    const requestedBudget =
-      campaign.requestedBudget === null ? null : Number(campaign.requestedBudget);
-    if (requestedBudget === null || requestedBudget <= 0) {
-      return reply.status(422).send({
-        error: 'NOT_ACTIVATABLE',
-        reason: 'no_budget',
-        message: 'The campaign has no indicative budget to derive a target from.',
-        requested_budget: requestedBudget,
-      });
+    if (outcome.status === 'WRONG_STATUS') {
+      return sendNotPending(reply, request, outcome.currentStatus, 'activated');
     }
-    if (creativeDurationSeconds === null || creativeDurationSeconds <= 0) {
-      return reply.status(422).send({
-        error: 'NOT_ACTIVATABLE',
-        reason: 'no_duration',
-        message: 'The linked creative has no diffusion duration to use as the spot length.',
-        duration_seconds: creativeDurationSeconds,
-      });
-    }
-    const iCible = deriveICible(requestedBudget, cpm);
-    if (iCible === null) {
-      return reply.status(422).send({
-        error: 'NOT_ACTIVATABLE',
-        reason: 'budget_too_low',
-        message: 'The indicative budget is below one CPM unit — no impressions can be targeted.',
-        requested_budget: requestedBudget,
-        cpm_tnd: cpm,
-      });
-    }
-    const s = creativeDurationSeconds;
-    // E1 (VF) — T is duration-derived inside runDispatch (tForDuration), no longer passed here.
-
-    // Funded gate: balance >= the advertiser's indicative budget (the ask). NO debit (L-redisp bills
-    // actual aired impressions at reconciliation).
-    const budget = requestedBudget;
-    const balance = (await walletBalance(campaign.advertiserId)).balance_tnd;
-    if (balance < budget) {
+    if (outcome.status === 'NOT_ACTIVATABLE') {
+      if (outcome.reason === 'content_not_approved') {
+        return reply.status(422).send({
+          error: 'NOT_ACTIVATABLE',
+          reason: 'content_not_approved',
+          message: 'The linked creative is not admin-approved (or no creative is linked).',
+          content_validation_status: outcome.contentValidationStatus,
+        });
+      }
+      if (outcome.reason === 'no_budget') {
+        return reply.status(422).send({
+          error: 'NOT_ACTIVATABLE',
+          reason: 'no_budget',
+          message: 'The campaign has no indicative budget to derive a target from.',
+          requested_budget: outcome.requestedBudget,
+        });
+      }
+      if (outcome.reason === 'no_duration') {
+        return reply.status(422).send({
+          error: 'NOT_ACTIVATABLE',
+          reason: 'no_duration',
+          message: 'The linked creative has no diffusion duration to use as the spot length.',
+          duration_seconds: outcome.durationSeconds,
+        });
+      }
+      if (outcome.reason === 'budget_too_low') {
+        return reply.status(422).send({
+          error: 'NOT_ACTIVATABLE',
+          reason: 'budget_too_low',
+          message: 'The indicative budget is below one CPM unit — no impressions can be targeted.',
+          requested_budget: outcome.requestedBudget,
+          cpm_tnd: outcome.cpmTnd,
+        });
+      }
       return reply.status(422).send({
         error: 'NOT_ACTIVATABLE',
         reason: 'insufficient_balance',
         message: 'The advertiser wallet balance is below the campaign budget.',
-        required_tnd: budget,
-        available_tnd: balance,
+        required_tnd: outcome.requiredTnd,
+        available_tnd: outcome.availableTnd,
       });
     }
-
-    // Dispatch (reuse the engine). Every DispatchResult case is handled.
-    const result = await runDispatch(campaign, { iCible, cpm, s });
-    if (result.status === 'NO_WINDOW') {
+    if (outcome.status === 'NO_WINDOW') {
       return reply.status(400).send({
         error: 'INVALID_INPUT',
         message: 'Validation failed',
         fields: [{ field: 'window', reason: 'campaign requires a start_date and end_date' }],
       });
     }
-    // E5.1 — the NO_TARGETING refusal retired: zero targeting lines = the whole network.
-    // Clôture — NOT a deliverable plan → do NOT activate; the campaign stays pending (renvoi curseur).
-    if (result.status === 'TOO_THIN') {
-      return reply.status(422).send({
-        error: 'NOT_DELIVERABLE',
-        reason: 'too_thin',
-        message:
-          'Covering I_cible would exceed materiality (N_min > N_max). Lower the cursor or broaden targeting, then retry.',
-        n_min: result.nMin,
-        n_max: result.nMax,
-      });
-    }
-    if (result.status === 'NO_ELIGIBLE') {
+    if (outcome.status === 'NOT_DELIVERABLE') {
+      if (outcome.reason === 'too_thin') {
+        return reply.status(422).send({
+          error: 'NOT_DELIVERABLE',
+          reason: 'too_thin',
+          message:
+            'Covering I_cible would exceed materiality (N_min > N_max). Lower the cursor or broaden targeting, then retry.',
+          n_min: outcome.nMin,
+          n_max: outcome.nMax,
+        });
+      }
       return reply.status(422).send({
         error: 'NOT_DELIVERABLE',
         reason: 'no_eligible',
         message: 'No eligible screenhost could be allocated. Adjust targeting/window, then retry.',
       });
     }
-
-    // OK (just frozen) or ALREADY_DISPATCHED (a prior /dispatch froze it) → activate.
-    const loaded = await loadPlan(campaign.id);
-    if (!loaded) {
+    if (outcome.status === 'PLAN_MISSING') {
       return reply.status(500).send({ error: 'INTERNAL_ERROR', message: 'Dispatch plan missing.' });
     }
-    // CF-S1 — approval routes by date (Tunis calendar): a future start is 'upcoming' (the
-    // lifecycle job flips it to 'active' on day one); today-or-past goes straight to 'active'.
-    // Dispatch already ran above either way (the plan freezes at approval, unchanged).
-    const approvedStatus =
-      campaign.startDate && campaign.startDate > tunisDateOf(new Date()) ? 'upcoming' : 'active';
-    const [activated] = await db
-      .update(campaigns)
-      .set({ status: approvedStatus, activatedAt: new Date(), activatedBy: adminId })
-      // Atomic transition: a concurrent activate can't double-flip (lost race → 0 rows → 409).
-      .where(and(eq(campaigns.id, id), eq(campaigns.status, 'pending')))
-      .returning();
-    if (!activated) {
-      const [current] = await db
-        .select({ status: campaigns.status })
-        .from(campaigns)
-        .where(eq(campaigns.id, id))
-        .limit(1);
-      return sendNotPending(reply, request, current?.status ?? campaign.status, 'activated');
-    }
+
+    const activated = outcome.campaign;
     return reply.status(200).send({
       campaign: adminCampaignView(activated, contentValidationStatus),
-      ...planView(loaded.plan, loaded.allocations),
+      ...planView(outcome.plan, outcome.allocations),
     });
   });
 

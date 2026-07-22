@@ -804,6 +804,11 @@ export const creatives = pgTable(
     originalFilename: text('original_filename'),
     mimeType: text('mime_type'),
     sizeBytes: integer('size_bytes'),
+    // CF-SK1 (spec §2.1, ruling #9) — the spot's IDENTITY: sha256 of the uploaded bytes (hex).
+    // A re-upload of the SAME bytes by the SAME owner whose prior creative is approved inherits
+    // that approval (the admin already reviewed those exact frames); different bytes = a new spot
+    // that gets reviewed. NULL on legacy rows — a NULL never matches anything.
+    fileHash: text('file_hash'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
@@ -813,6 +818,8 @@ export const creatives = pgTable(
   (table) => [
     index('creatives_advertiser_id_idx').on(table.advertiserId),
     index('creatives_validation_status_idx').on(table.validationStatus),
+    // The inheritance lookup is always (owner, hash) — cross-owner matching is FORBIDDEN.
+    index('creatives_advertiser_file_hash_idx').on(table.advertiserId, table.fileHash),
   ],
 );
 

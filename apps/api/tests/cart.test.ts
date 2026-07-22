@@ -97,7 +97,9 @@ const seedCreative = async (advertiserId: string): Promise<string> => {
       creativeType: 'video',
       storageKey: `creatives/cart/${seq}-${Math.random().toString(16).slice(2)}`,
       durationSeconds: 10,
-      validationStatus: 'approved',
+      // CF-SK1 — these fixtures exercise the REVIEW path (draft → pending): an APPROVED spot
+      // now SKIPS pending entirely (that path is owned by cart-approved-skip.test.ts).
+      validationStatus: 'pending',
     })
     .returning();
   return c?.id ?? '';
