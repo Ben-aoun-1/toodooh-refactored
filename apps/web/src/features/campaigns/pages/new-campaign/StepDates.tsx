@@ -17,6 +17,8 @@ interface StepDatesProps {
   setStartDate: (next: Date | null) => void;
   setEndDate: (next: Date | null) => void;
   onNext: () => void | Promise<void>;
+  /** CF-HF2 — true while the persist-on-advance PATCH is in flight (Suivant locks). */
+  saving?: boolean;
   onBack: () => void;
 }
 
@@ -49,6 +51,7 @@ export default function StepDates({
   setStartDate,
   setEndDate,
   onNext,
+  saving = false,
   onBack,
 }: StepDatesProps) {
   const [dateErrors, setDateErrors] = useState<{ start?: string; end?: string }>({});
@@ -93,7 +96,7 @@ export default function StepDates({
     void onNext();
   };
 
-  const nextDisabled = !startDate || !endDate || startDate >= endDate;
+  const nextDisabled = !startDate || !endDate || startDate >= endDate || saving;
 
   return (
     <div className="space-y-6">

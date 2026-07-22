@@ -19,6 +19,7 @@ import ariane6 from '@/assets/ariane/6.png';
 import ariane6s from '@/assets/ariane/6s.png';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import WizardExitDialog from '@/features/campaigns/components/WizardExitDialog';
+import { persistDatesForAdvance } from '@/features/campaigns/hooks/new-campaign/dates-advance';
 import { useCampaignWizard } from '@/features/campaigns/hooks/new-campaign/useCampaignWizard';
 import { buildInitialWizardState } from '@/features/campaigns/hooks/new-campaign/wizard-init';
 import { resolveResumeStep } from '@/features/campaigns/hooks/new-campaign/wizard-resume';
@@ -157,6 +158,31 @@ export default function NewCampaign() {
 
   // Advancing from the Zones step persists a dirty selection first (replace-set PATCH — same
   // block-on-failure semantics as the targeting flush). Save/submit also carry zone_ids.
+  // CF-HF2 (prod bug): advancing from Période used to leave the dates client-only — Validation
+  // then mounted with a server-side dateless draft and GET /:id/cmax 409'd (CMAX_REQUIRES), so
+  // the budget step was unusable straight-through. Persist-then-advance, the zones idiom: dirty-
+  // checked PATCH, block the advance on failure with the same error-toast voice.
+  const persistedDatesRef = useRef<string | null>(null);
+  const [savingDates, setSavingDates] = useState(false);
+  const handleDatesNext = useCallback(async () => {
+    setSavingDates(true);
+    const result = await persistDatesForAdvance({
+      draftCampaignId: state.draftCampaignId || null,
+      startDate: state.startDate,
+      endDate: state.endDate,
+      persistedWire: persistedDatesRef.current,
+      update: (id, input) => updateCampaign.mutateAsync({ id, input }),
+    });
+    setSavingDates(false);
+    if (!result.ok) {
+      toast.error("Échec de l'enregistrement des dates");
+      log.error({ err: result.error }, 'dates persist-on-advance failed');
+      return;
+    }
+    persistedDatesRef.current = result.wire;
+    void wiz.nextStep();
+  }, [state.draftCampaignId, state.startDate, state.endDate, updateCampaign, wiz]);
+
   const persistedZonesRef = useRef<string | null>(null);
   const [savingZones, setSavingZones] = useState(false);
   const handleZonesNext = useCallback(async () => {
@@ -483,9 +509,8 @@ export default function NewCampaign() {
           firstAvailableStartDate={firstAvailableStartDate}
           setStartDate={setStartDate}
           setEndDate={setEndDate}
-          onNext={() => {
-            void wiz.nextStep();
-          }}
+          saving={savingDates}
+          onNext={handleDatesNext}
           onBack={() => wiz.prevStep()}
         />
       );
