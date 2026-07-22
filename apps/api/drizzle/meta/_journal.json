@@ -337,6 +337,13 @@
       "when": 1784635730478,
       "tag": "0047_cart_items",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1784738965892,
+      "tag": "0048_creative_file_hash",
+      "breakpoints": true
     }
   ]
 }
