@@ -10,8 +10,10 @@ import {
   NO_CHANGES_TOAST,
   VENUE_CLASS_OPTIONS,
   buildEligibilityPatch,
+  eligibilityReadiness,
   formStateFromView,
   mapEligibilityServerErrors,
+  readinessBadgeLabel,
   validateEligibilityForm,
   type EligibilityFieldErrors,
 } from '@/features/admin/lib/venue-eligibility';
@@ -86,6 +88,8 @@ export default function ScreenhostEligibilityCard({
   const fieldError = (key: keyof EligibilityFieldErrors) =>
     errors[key] ? <p className="mt-1 text-sm text-red-600">{errors[key]}</p> : null;
 
+  const readiness = eligibilityReadiness(view);
+
   const idFor = (field: string) => `eligibility-${field}-${screenhost.id}`;
 
   return (
@@ -98,6 +102,17 @@ export default function ScreenhostEligibilityCard({
           <SlidersHorizontal className="h-5 w-5 text-brand-deep flex-shrink-0" />
           <h3 className="text-sm font-semibold text-gray-900 truncate">{screenhost.name}</h3>
         </div>
+        {/* EL1 commit 2 — the readiness verdict on the venue row, from the SAVED view (not the
+            in-progress form): flips only once the fields actually persist. */}
+        {readiness.eligible ? (
+          <span className="text-xs font-medium text-green-800 bg-green-100 rounded-full px-3 py-1 flex-shrink-0">
+            {readinessBadgeLabel(readiness)}
+          </span>
+        ) : (
+          <span className="text-xs font-medium text-amber-700 bg-amber-50 rounded-full px-3 py-1 flex-shrink-0">
+            {readinessBadgeLabel(readiness)}
+          </span>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

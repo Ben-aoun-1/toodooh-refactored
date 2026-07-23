@@ -123,3 +123,40 @@ export const mapEligibilityServerErrors = (
   }
   return errors;
 };
+
+// ── EL1 commit 2 — the per-venue readiness badge ─────────────────────────────────────────────────
+
+export interface EligibilityReadiness {
+  eligible: boolean;
+  /** French field names, fixed order: catégorie, horaires, capacité. Empty when eligible. */
+  missing: string[];
+}
+
+export const READINESS_ELIGIBLE_LABEL = 'Éligible au dispatch';
+
+/**
+ * The badge's verdict — mirrors the US-2.1 hard pool gates the admin can act on here: catégorie
+ * set, a NON-EMPTY horaires window (both bounds, ouverture < fermeture — a half-set or inverted
+ * pair yields no broadcastable hours and the pool skips the venue), capacité set. Classe and
+ * affluence are not part of this badge (classe only narrows class-targeted campaigns; affluence
+ * is S-W2's surface).
+ */
+export const eligibilityReadiness = (
+  view: Pick<
+    ScreenhostEligibility,
+    'business_sector_id' | 'opening_hour' | 'closing_hour' | 'broadcast_capacity'
+  >,
+): EligibilityReadiness => {
+  const missing: string[] = [];
+  if (view.business_sector_id === null) missing.push('catégorie');
+  const hasWindow =
+    view.opening_hour !== null &&
+    view.closing_hour !== null &&
+    view.opening_hour < view.closing_hour;
+  if (!hasWindow) missing.push('horaires');
+  if (view.broadcast_capacity === null) missing.push('capacité');
+  return { eligible: missing.length === 0, missing };
+};
+
+export const readinessBadgeLabel = (readiness: EligibilityReadiness): string =>
+  readiness.eligible ? READINESS_ELIGIBLE_LABEL : `Incomplet — ${readiness.missing.join(', ')}`;

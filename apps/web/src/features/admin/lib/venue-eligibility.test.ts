@@ -7,10 +7,13 @@ import {
   CAPACITY_ERROR,
   ELIGIBILITY_CONSEQUENCE_NOTE,
   HOURS_PAIR_ERROR,
+  READINESS_ELIGIBLE_LABEL,
   SECTOR_INVALID_ERROR,
   buildEligibilityPatch,
+  eligibilityReadiness,
   formStateFromView,
   mapEligibilityServerErrors,
+  readinessBadgeLabel,
   validateEligibilityForm,
 } from './venue-eligibility';
 
@@ -157,6 +160,71 @@ describe('pinned copy', () => {
   it('pins the null-clearing consequence note (charter verbatim)', () => {
     expect(ELIGIBILITY_CONSEQUENCE_NOTE).toBe(
       "Sans horaires ou capacité, l'établissement est exclu des prochaines campagnes.",
+    );
+  });
+});
+
+describe('eligibilityReadiness — the badge matrix (catégorie × horaires × capacité)', () => {
+  const withFields = (sector: boolean, hours: boolean, capacity: boolean) => ({
+    ...emptyView,
+    business_sector_id: sector ? 'sec-1' : null,
+    opening_hour: hours ? 8 : null,
+    closing_hour: hours ? 22 : null,
+    broadcast_capacity: capacity ? 40 : null,
+  });
+
+  it('is eligible only when ALL of catégorie, horaires, capacité are present', () => {
+    expect(eligibilityReadiness(withFields(true, true, true))).toEqual({
+      eligible: true,
+      missing: [],
+    });
+  });
+
+  it.each([
+    [false, true, true, ['catégorie']],
+    [true, false, true, ['horaires']],
+    [true, true, false, ['capacité']],
+    [false, false, true, ['catégorie', 'horaires']],
+    [false, true, false, ['catégorie', 'capacité']],
+    [true, false, false, ['horaires', 'capacité']],
+    [false, false, false, ['catégorie', 'horaires', 'capacité']],
+  ])(
+    'lists the missing fields in fixed order (sector=%s hours=%s capacity=%s → %j)',
+    (sector, hours, capacity, missing) => {
+      expect(eligibilityReadiness(withFields(sector, hours, capacity))).toEqual({
+        eligible: false,
+        missing,
+      });
+    },
+  );
+
+  it('counts a half-set hours pair as missing horaires', () => {
+    expect(eligibilityReadiness({ ...withFields(true, false, true), opening_hour: 8 })).toEqual({
+      eligible: false,
+      missing: ['horaires'],
+    });
+  });
+
+  it('counts a set-but-empty window (ouverture ≥ fermeture) as missing horaires — mirrors the pool gate', () => {
+    expect(
+      eligibilityReadiness({
+        ...withFields(true, false, true),
+        opening_hour: 22,
+        closing_hour: 8,
+      }),
+    ).toEqual({ eligible: false, missing: ['horaires'] });
+  });
+});
+
+describe('readinessBadgeLabel', () => {
+  it('labels the eligible state', () => {
+    expect(readinessBadgeLabel({ eligible: true, missing: [] })).toBe(READINESS_ELIGIBLE_LABEL);
+    expect(READINESS_ELIGIBLE_LABEL).toBe('Éligible au dispatch');
+  });
+
+  it('lists the missing fields after « Incomplet — »', () => {
+    expect(readinessBadgeLabel({ eligible: false, missing: ['horaires', 'capacité'] })).toBe(
+      'Incomplet — horaires, capacité',
     );
   });
 });
