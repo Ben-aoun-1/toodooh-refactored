@@ -50,6 +50,11 @@ export const DISPATCH_CONFIG_DEFAULTS = {
   t30s: 0.8,
   // CF-D1 — the campaign start-date lead (working days; 0 = the floor is today, tests only).
   campaignLeadWorkingDays: 2,
+  // E7 (VF EPIC 5) — the reversement split (Σ must be 100; the rail validates at every split).
+  pctSh: 50,
+  pctToodooh: 44,
+  pctAgentSh: 3,
+  pctAgentSc: 3,
 } as const;
 
 /**

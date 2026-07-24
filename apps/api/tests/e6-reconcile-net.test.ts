@@ -296,10 +296,11 @@ describe('reconcileCampaignById — NET context wired from the plan + rounds led
     expect(result.valuation.refundTnd).toBe(0);
     // budget = (15 000×0.6 − 3 000 + 500)×0.01 = 65; Σ earn = 10 000×0.6×0.01 = 60 → spend 65.
     expect(result.valuation.spendTnd).toBe(65);
-    // Payouts keep their BASIS: each SH is paid its own delivered créneaux only.
+    // Payouts keep their BASIS: each SH is paid its own delivered créneaux only — at the E7
+    // 50 % SH share of the delivered value (base 30 TND each → payable 15).
     const byShId = new Map(result.payouts.map((p) => [p.screenhostId, Number(p.earningsTnd)]));
-    expect(byShId.get(shA?.id ?? '')).toBe(30); // A: 5 000 phys × 0.6 × 0.01
-    expect(byShId.get(shC?.id ?? '')).toBe(30); // C: its replacement slot
+    expect(byShId.get(shA?.id ?? '')).toBe(15); // A: 5 000 phys × 0.6 × 0.01 × 50 %
+    expect(byShId.get(shC?.id ?? '')).toBe(15); // C: its replacement slot × 50 %
     const [persisted] = await db.select().from(campaigns).where(eq(campaigns.id, campaignId));
     expect(persisted).toBeDefined();
   });

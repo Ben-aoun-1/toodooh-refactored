@@ -18,6 +18,12 @@ export interface ResolvedDispatchConfig {
   t30s: number;
   // CF-D1 — the campaign start-date lead in working days (the calibratable J+2 floor).
   campaignLeadWorkingDays: number;
+  // E7 (VF EPIC 5) — the reversement split percentages (50/44/3/3 canonical; Σ = 100 validated
+  // by the rail at split time).
+  pctSh: number;
+  pctToodooh: number;
+  pctAgentSh: number;
+  pctAgentSc: number;
 }
 
 // The CPM (TND/1000) a campaign prices at: event campaigns at event_cpm_tnd, everything else at
@@ -45,6 +51,10 @@ export const getDispatchConfig = async (): Promise<ResolvedDispatchConfig> => {
         t20s: Number(row.t20s),
         t30s: Number(row.t30s),
         campaignLeadWorkingDays: row.campaignLeadWorkingDays,
+        pctSh: Number(row.pctSh),
+        pctToodooh: Number(row.pctToodooh),
+        pctAgentSh: Number(row.pctAgentSh),
+        pctAgentSc: Number(row.pctAgentSc),
       }
     : { ...DISPATCH_CONFIG_DEFAULTS };
   // SUPERSEDED on the dispatch path (E3, Mariem 2026-07-15): the materiality divisor and no-crumb
