@@ -10,6 +10,7 @@ import {
   campaigns,
 } from '../db/schema.js';
 import { runDispatch } from '../lib/dispatch/dispatch-service.js';
+import { createEngineTrace } from '../lib/engine-journal/trace.js';
 import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
 
 // Dispatch entrypoint (L-disp). Admin/internal trigger — synthetic I_cible/CPM/S/T inputs for now
@@ -93,11 +94,16 @@ export const campaignDispatchRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such campaign.' });
     }
 
-    const result = await runDispatch(campaign, {
-      iCible: parsed.data.i_cible,
-      cpm: parsed.data.cpm,
-      s: parsed.data.s,
-    });
+    const result = await runDispatch(
+      campaign,
+      {
+        iCible: parsed.data.i_cible,
+        cpm: parsed.data.cpm,
+        s: parsed.data.s,
+      },
+      // LOG1 — journal this admin/internal dispatch entry too (flushed inside runDispatch).
+      createEngineTrace('dispatch', campaign.id),
+    );
 
     if (result.status === 'NO_WINDOW') {
       return reply.status(400).send({

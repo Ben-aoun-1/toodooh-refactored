@@ -1376,6 +1376,35 @@ export const reversementLines = pgTable(
 
 export type ReversementLine = typeof reversementLines.$inferSelect;
 
+// ── engine journal (LOG1) ────────────────────────────────────────────────────
+// OBSERVE-ONLY diagnostics: why the engine did what it did, per run. One run-summary row
+// (event_type='run', outcome committed|rolled_back + reason) + N event rows sharing run_id,
+// written in ONE batch AFTER the engine transaction resolves — a rolled-back run keeps its trace
+// (that is the point: the operator sees WHY a dispatch refused). The engine's behavior is
+// byte-unchanged: every seam defaults to a no-op collector, and a flush failure warns and
+// swallows (lib/engine-journal/trace.ts). Payloads are aggregate-only (reasons, counts, montants
+// — never PII); in-run ordering rides payload.seq (a batch shares created_at). Previews are
+// never journaled.
+export const engineEvents = pgTable(
+  'engine_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    runId: uuid('run_id').notNull(),
+    phase: text('phase').notNull(), // dispatch | cascade | redispatch | settlement | boost
+    eventType: text('event_type').notNull(), // 'run' = the summary row
+    screenhostId: uuid('screenhost_id').references(() => screenhosts.id, { onDelete: 'set null' }),
+    payload: jsonb('payload').$type<Record<string, unknown>>().notNull().default({}),
+    outcome: text('outcome'), // committed | rolled_back — ONLY on the run-summary row
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('engine_events_campaign_created_idx').on(table.campaignId, table.createdAt)],
+);
+
+export type EngineEvent = typeof engineEvents.$inferSelect;
+
 // ── notifications (in-app notification ledger) ───────────────────────────────
 // A per-user notification feed (greenfield — NOT the parked feat/remaining-gaps backend). Rows are
 // created server-side by producers (e.g. the dispatch producer notifies each allocated screenhost

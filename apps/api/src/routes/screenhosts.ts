@@ -28,6 +28,7 @@ import { tunisDateOf } from '../lib/campaign-dates.js';
 import { runRefusalCascade } from '../lib/dispatch/cascade.js';
 import { REDISPATCH_HEARTBEAT_TOLERANCE_MS } from '../lib/dispatch/redispatch.js';
 import { buildEligibilityPatch } from '../lib/eligibility-patch.js';
+import { createEngineTrace, type EngineTrace } from '../lib/engine-journal/trace.js';
 import { assembleReportData } from '../lib/report/assemble.js';
 import { pistesForReportCached } from '../lib/report/recommendations.js';
 import { renderPdf } from '../lib/report/render.js';
@@ -1337,75 +1338,93 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
     }
 
-    const outcome = await db.transaction(async (tx) => {
-      const [row] = await tx
-        .select({
-          allocation: campaignDispatchAllocation,
-          plan: campaignDispatchPlan,
-          campaignId: campaigns.id,
-          campaignName: campaigns.name,
-          campaignStatus: campaigns.status,
-          campaignStart: campaigns.startDate,
-          campaignEnd: campaigns.endDate,
-        })
-        .from(campaignDispatchAllocation)
-        .innerJoin(
-          campaignDispatchPlan,
-          eq(campaignDispatchAllocation.planId, campaignDispatchPlan.id),
-        )
-        .innerJoin(campaigns, eq(campaignDispatchPlan.campaignId, campaigns.id))
-        .where(
-          and(
-            eq(campaignDispatchAllocation.id, parsedParams.data.id),
-            inArray(
-              campaignDispatchAllocation.screenhostId,
-              tx
-                .select({ id: screenhosts.id })
-                .from(screenhosts)
-                .where(eq(screenhosts.ownerId, userId)),
+    // LOG1 — assigned inside the tx closure when the cascade actually fires (that is where the
+    // campaign id is first known); flushed AFTER the tx resolves, on both outcomes. A ref holder,
+    // not a bare let: TS's CFA cannot see the closure assignment and would narrow a let to never.
+    const cascadeTrace: { current: EngineTrace | null } = { current: null };
+    const outcome = await db
+      .transaction(async (tx) => {
+        const [row] = await tx
+          .select({
+            allocation: campaignDispatchAllocation,
+            plan: campaignDispatchPlan,
+            campaignId: campaigns.id,
+            campaignName: campaigns.name,
+            campaignStatus: campaigns.status,
+            campaignStart: campaigns.startDate,
+            campaignEnd: campaigns.endDate,
+          })
+          .from(campaignDispatchAllocation)
+          .innerJoin(
+            campaignDispatchPlan,
+            eq(campaignDispatchAllocation.planId, campaignDispatchPlan.id),
+          )
+          .innerJoin(campaigns, eq(campaignDispatchPlan.campaignId, campaigns.id))
+          .where(
+            and(
+              eq(campaignDispatchAllocation.id, parsedParams.data.id),
+              inArray(
+                campaignDispatchAllocation.screenhostId,
+                tx
+                  .select({ id: screenhosts.id })
+                  .from(screenhosts)
+                  .where(eq(screenhosts.ownerId, userId)),
+              ),
             ),
-          ),
-        )
-        .limit(1)
-        .for('update', { of: campaignDispatchAllocation });
-      if (!row) return { kind: 'not_found' as const };
+          )
+          .limit(1)
+          .for('update', { of: campaignDispatchAllocation });
+        if (!row) return { kind: 'not_found' as const };
 
-      const current = row.allocation.statutAcceptation;
-      // Idempotent re-decide (incl. re-REFUSE: no second cascade).
-      if (current === statut) return { kind: 'ok' as const, id: row.allocation.id, statut };
-      // Refusal is final — the cascade may already have re-placed this share.
-      if (current === 'REFUSE') return { kind: 'refused_final' as const };
+        const current = row.allocation.statutAcceptation;
+        // Idempotent re-decide (incl. re-REFUSE: no second cascade).
+        if (current === statut) return { kind: 'ok' as const, id: row.allocation.id, statut };
+        // Refusal is final — the cascade may already have re-placed this share.
+        if (current === 'REFUSE') return { kind: 'refused_final' as const };
 
-      await tx
-        .update(campaignDispatchAllocation)
-        .set({ statutAcceptation: statut })
-        .where(eq(campaignDispatchAllocation.id, row.allocation.id));
+        await tx
+          .update(campaignDispatchAllocation)
+          .set({ statutAcceptation: statut })
+          .where(eq(campaignDispatchAllocation.id, row.allocation.id));
 
-      // Cascade only PRE-DIFFUSION (pending/upcoming). A refusal while the campaign is ACTIVE
-      // stays non-cascading — mid-flight re-placement is E6's (redispatch) job.
-      if (
-        statut === 'REFUSE' &&
-        (row.campaignStatus === 'pending' || row.campaignStatus === 'upcoming') &&
-        row.campaignStart !== null &&
-        row.campaignEnd !== null
-      ) {
-        await runRefusalCascade(tx, {
-          plan: row.plan,
-          campaign: {
-            id: row.campaignId,
-            name: row.campaignName,
-            startDate: row.campaignStart,
-            endDate: row.campaignEnd,
-          },
-          refused: {
-            id: row.allocation.id,
-            screenhostId: row.allocation.screenhostId,
-            iiPotentiel: row.allocation.iiPotentiel,
-          },
-        });
-      }
-      return { kind: 'ok' as const, id: row.allocation.id, statut };
-    });
+        // Cascade only PRE-DIFFUSION (pending/upcoming). A refusal while the campaign is ACTIVE
+        // stays non-cascading — mid-flight re-placement is E6's (redispatch) job.
+        if (
+          statut === 'REFUSE' &&
+          (row.campaignStatus === 'pending' || row.campaignStatus === 'upcoming') &&
+          row.campaignStart !== null &&
+          row.campaignEnd !== null
+        ) {
+          // LOG1 — the cascade runs on THIS tx, so the collector (constructed here, where the
+          // campaign id is first known) only buffers; the flush is below, after the tx resolves.
+          cascadeTrace.current = createEngineTrace('cascade', row.campaignId);
+          await runRefusalCascade(
+            tx,
+            {
+              plan: row.plan,
+              campaign: {
+                id: row.campaignId,
+                name: row.campaignName,
+                startDate: row.campaignStart,
+                endDate: row.campaignEnd,
+              },
+              refused: {
+                id: row.allocation.id,
+                screenhostId: row.allocation.screenhostId,
+                iiPotentiel: row.allocation.iiPotentiel,
+              },
+            },
+            cascadeTrace.current,
+          );
+        }
+        return { kind: 'ok' as const, id: row.allocation.id, statut };
+      })
+      .catch(async (err: unknown) => {
+        // LOG1 — the tx rolled back; keep the cascade's trace with its reasons, rethrow verbatim.
+        await cascadeTrace.current?.finish('rolled_back', { reason: 'ERROR' });
+        throw err;
+      });
+    if (cascadeTrace.current) await cascadeTrace.current.finish('committed', {});
 
     if (outcome.kind === 'not_found') {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such allocation.' });

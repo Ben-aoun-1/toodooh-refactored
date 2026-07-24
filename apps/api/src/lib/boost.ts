@@ -23,6 +23,7 @@ import { assemblePool } from './dispatch/pool.js';
 import { isFuture, tunisNowSlot } from './dispatch/redispatch.js';
 import { type EligibleScreenhost, selection } from './dispatch/selection.js';
 import { seuilImpressions } from './dispatch/thresholds.js';
+import { NOOP_TRACE, type EngineTrace } from './engine-journal/trace.js';
 import { walletBalance } from './recharges.js';
 
 // CF-B1 (spec §3.3) — « Booster »: STRICTLY ADDITIVE on an Active/À venir campaign. The end date
@@ -175,6 +176,8 @@ interface BoostRunOpts {
   /** Apply only: the advertiser applying the boost (audit). */
   appliedBy?: string;
   now?: Date;
+  /** LOG1 — observe-only journal (APPLY path only; previews are never journaled). */
+  trace?: EngineTrace;
 }
 
 /**
@@ -189,9 +192,12 @@ export const runBoost = async (
 ): Promise<BoostPreview | BoostApplied | BoostRefusal> => {
   const now = opts.now ?? new Date();
   const nowSlot = tunisNowSlot(now);
+  // LOG1 — no-op unless the APPLY route opts in; the preview sentinel path never flushes, so a
+  // preview run leaves no journal row even if a trace were passed.
+  const trace = opts.previewOnly ? NOOP_TRACE : (opts.trace ?? NOOP_TRACE);
 
   try {
-    return await db.transaction(async (tx) => {
+    const applied = await db.transaction(async (tx) => {
       // Owner-scoped load (foreign ≡ missing) + the status gate.
       const [campaign] = await tx
         .select()
@@ -264,11 +270,19 @@ export const runBoost = async (
 
       // Own allocations ENGAGED (ruling 4) — no excludeAllocationIds. Preview is a read: no
       // occupancy locks; apply locks (it is about to allocate).
+      // LOG1 — the added perimeter, before pooling over the merged state.
+      trace.event('perimeter_added', {
+        endExtended,
+        newEndDate: endExtended ? newEndDate : null,
+        addedCategories: categoryIds.length,
+        addedZones: zoneIds.length,
+      });
+
       const { pool } = await assemblePool(
         tx,
         { id: campaign.id, startDate: effectiveStart, endDate: newEndDate },
         { s, t, fMaxSeconds: plan.fMaxSeconds },
-        { excludeScreenhostIds: refuserIds, lockOccupancy: !opts.previewOnly },
+        { excludeScreenhostIds: refuserIds, lockOccupancy: !opts.previewOnly, trace },
       );
 
       const iMaxFact = pool.reduce((sum, p) => sum + p.residualCapacity, 0);
@@ -375,6 +389,15 @@ export const runBoost = async (
         }
         placedFact += ret.ai;
         notifyIds.push(ret.id);
+        trace.event(
+          'allocation_placed',
+          {
+            impressions: ret.ai,
+            valueTnd: round4((ret.ai * cpm) / 1000),
+            merged: existing !== undefined,
+          },
+          ret.id,
+        );
       }
 
       if (placedFact === 0) throw new BoostRefused({ status: 'NO_ELIGIBLE' });
@@ -383,6 +406,7 @@ export const runBoost = async (
       const leftover = vFact - placedFact;
       const reliquatAddedFact = leftover > 0 && leftover < seuil ? leftover : 0;
       if (reliquatAddedFact > 0) {
+        trace.event('reliquat_stored', { impressions: reliquatAddedFact, seuil });
         await tx
           .update(campaignDispatchPlan)
           .set({ reliquatStocke: plan.reliquatStocke + reliquatAddedFact })
@@ -440,9 +464,22 @@ export const runBoost = async (
         reliquatAddedFact,
       } satisfies BoostApplied;
     });
+    // LOG1 — flush post-commit (apply path only; a preview never reaches here).
+    await trace.finish('committed', {
+      placedFact: applied.placedFact,
+      vFact: applied.vFact,
+      newEndDate: applied.newEndDate,
+      reliquatAddedFact: applied.reliquatAddedFact,
+    });
+    return applied;
   } catch (err: unknown) {
-    if (err instanceof PreviewRollback) return err.preview;
-    if (err instanceof BoostRefused) return err.refusal;
+    if (err instanceof PreviewRollback) return err.preview; // previews are never journaled
+    if (err instanceof BoostRefused) {
+      // LOG1 — the refusal rolled the tx back; its trace explains why.
+      await trace.finish('rolled_back', { reason: err.refusal.status });
+      return err.refusal;
+    }
+    await trace.finish('rolled_back', { reason: 'ERROR' });
     throw err;
   }
 };

@@ -10,6 +10,7 @@ import {
   screenhosts,
 } from '../../db/schema.js';
 import { logger } from '../../logger.js';
+import { NOOP_TRACE, type EngineTrace } from '../engine-journal/trace.js';
 
 import { getDispatchConfig } from './config.js';
 import { buildPlan } from './plan.js';
@@ -41,6 +42,9 @@ export type DispatchResult =
 export const runDispatch = async (
   campaign: Pick<Campaign, 'id' | 'name' | 'startDate' | 'endDate'>,
   inputs: DispatchInputs,
+  // LOG1 — observe-only journal (default no-op: behavior byte-unchanged). Events buffer in
+  // memory during the tx; the flush happens BELOW, after the tx + catch chain resolves.
+  trace: EngineTrace = NOOP_TRACE,
 ): Promise<DispatchResult> => {
   if (!campaign.startDate || !campaign.endDate) return { status: 'NO_WINDOW' };
   // Captured as non-null consts: the guard's narrowing does not flow into the tx closure below.
@@ -76,7 +80,7 @@ export const runDispatch = async (
         tx,
         { id: campaign.id, startDate, endDate },
         { s: inputs.s, t, fMaxSeconds: config.fMaxSeconds },
-        { lockOccupancy: true },
+        { lockOccupancy: true, trace },
       );
 
       const built = buildPlan({
@@ -99,6 +103,23 @@ export const runDispatch = async (
       // and re-dispatch (renvoi curseur). A genuine PARTIAL (nRetenus>0, not too-thin) IS delivered → frozen.
       if (built.isTooThin) return { status: 'TOO_THIN', nMin: built.nMin, nMax: built.nMax };
       if (built.nRetenus === 0) return { status: 'NO_ELIGIBLE' };
+
+      // LOG1 — the SÉLECTION outcome, read post-hoc from the built plan (selection/plan stay pure
+      // and untouched): each placement with its venue/impressions/value, the stored reliquat, and
+      // a partial-coverage closure.
+      for (const a of built.allocations) {
+        trace.event(
+          'allocation_placed',
+          { impressions: a.iiPotentiel, valueTnd: a.revenuPrevisionnel, rI: a.rI },
+          a.screenhostId,
+        );
+      }
+      if (built.reliquatStocke > 0) {
+        trace.event('reliquat_stored', { impressions: built.reliquatStocke, seuil });
+      }
+      if (built.isPartial) {
+        trace.event('partial_coverage', { couvert: built.couvert, iCible: inputs.iCible });
+      }
 
       // E3 amendment — a sub-seuil uncovered remainder is stored on the plan for E6, not dropped.
       if (built.reliquatStocke > 0) {
@@ -174,12 +195,34 @@ export const runDispatch = async (
       }
       return { status: 'OK', plan: planRow, allocationCount: built.allocations.length };
     })
-    .catch((err: unknown): DispatchResult => {
+    .catch(async (err: unknown): Promise<DispatchResult> => {
       // Lost the check-then-insert race against the unique index (campaign_dispatch_plan_campaign_uq):
       // a concurrent dispatch already froze the plan. Surface the irrevocable conflict, not a 500.
       if ((err as { code?: string }).code === '23505') return { status: 'ALREADY_DISPATCHED' };
+      // LOG1 — a genuine failure rolled the tx back; the trace keeps its reasons.
+      await trace.finish('rolled_back', { reason: 'ERROR' });
       throw err;
     });
+
+  // LOG1 — flush POST-outcome (the tx above has committed or rolled back). A clôture refusal
+  // (TOO_THIN / NO_ELIGIBLE) froze nothing — its run reads « rolled_back » with the reason, WITH
+  // the exclusion trace that explains it (the operator's whole use case). ALREADY_DISPATCHED ran
+  // no engine work → no run row.
+  if (outcome.status === 'OK') {
+    await trace.finish('committed', {
+      status: 'OK',
+      couvert: outcome.plan.couvert,
+      nRetenus: outcome.plan.nRetenus,
+      isPartial: outcome.plan.isPartial,
+      reliquatStocke: outcome.plan.reliquatStocke,
+      allocationCount: outcome.allocationCount,
+    });
+  } else if (outcome.status === 'TOO_THIN' || outcome.status === 'NO_ELIGIBLE') {
+    await trace.finish('rolled_back', {
+      reason: outcome.status,
+      ...(outcome.status === 'TOO_THIN' ? { nMin: outcome.nMin, nMax: outcome.nMax } : {}),
+    });
+  }
 
   return outcome;
 };

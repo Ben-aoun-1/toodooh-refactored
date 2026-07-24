@@ -2,6 +2,7 @@ import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
 import { type BoostRefusal, runBoost } from '../lib/boost.js';
+import { createEngineTrace } from '../lib/engine-journal/trace.js';
 import { requireAdvertiser } from '../middleware/require-advertiser.js';
 import { requireAuth } from '../middleware/require-auth.js';
 
@@ -124,7 +125,13 @@ export const campaignBoostRoutes: FastifyPluginAsync = async (app) => {
         addedZoneIds: parsedBody.data.added_zone_ids,
         addedCategoryIds: parsedBody.data.added_category_ids,
       },
-      { previewOnly: false, amountTnd: parsedBody.data.amount_tnd, appliedBy: userId },
+      {
+        previewOnly: false,
+        amountTnd: parsedBody.data.amount_tnd,
+        appliedBy: userId,
+        // LOG1 — journal the APPLY (previews never journal; flushed inside runBoost, post-tx).
+        trace: createEngineTrace('boost', parsedParams.data.id),
+      },
     );
     if (result.status !== 'APPLIED') return sendRefusal(reply, result as BoostRefusal);
     return reply.status(200).send({

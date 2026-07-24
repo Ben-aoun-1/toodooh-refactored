@@ -5,6 +5,7 @@ import { db } from '../db/client.js';
 import { campaignDispatchPlan, campaigns } from '../db/schema.js';
 
 import { runRedispatchRound } from './dispatch/redispatch.js';
+import { createEngineTrace } from './engine-journal/trace.js';
 
 // E6 — the rattrapage tick: for each ACTIVE campaign with a frozen plan, run at most ONE
 // redispatch round (detection → total-validation → placement, lib/dispatch/redispatch.ts). The
@@ -48,6 +49,8 @@ export async function runCampaignRedispatchTick(
       const outcome = await runRedispatchRound(
         { id: row.id, name: row.name, startDate: row.startDate, endDate: row.endDate },
         now,
+        // LOG1 — journal the production ticks (flushed inside runRedispatchRound, post-tx).
+        createEngineTrace('redispatch', row.id),
       );
       if (outcome.status === 'PLACED') placedRounds += 1;
     } catch (err: unknown) {

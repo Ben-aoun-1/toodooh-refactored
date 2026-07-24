@@ -8,6 +8,7 @@ import {
   screenhosts,
 } from '../../db/schema.js';
 import { logger } from '../../logger.js';
+import { NOOP_TRACE, type EngineTrace } from '../engine-journal/trace.js';
 
 import { computeR, computeRi, physicalFromFacturable } from './eligibility.js';
 import { buildCreneaux } from './plan.js';
@@ -47,9 +48,13 @@ export interface CascadeOutcome {
 export const runRefusalCascade = async (
   tx: DbExecutor,
   input: CascadeInput,
+  // LOG1 — observe-only journal (default no-op). The cascade runs on the CALLER's tx, so it can
+  // only buffer; the reject route owns the post-outcome flush.
+  trace: EngineTrace = NOOP_TRACE,
 ): Promise<CascadeOutcome> => {
   const { plan, campaign, refused } = input;
   const v = refused.iiPotentiel;
+  trace.event('refusal_received', { impressions: v }, refused.screenhostId);
   const s = plan.sSpotSeconds;
   const t = Number(plan.tTierCoef);
   const cpm = Number(plan.cpm);
@@ -78,7 +83,7 @@ export const runRefusalCascade = async (
     tx,
     campaign,
     { s, t, fMaxSeconds: plan.fMaxSeconds },
-    { excludeScreenhostIds, excludeAllocationId: refused.id, lockOccupancy: true },
+    { excludeScreenhostIds, excludeAllocationId: refused.id, lockOccupancy: true, trace },
   );
 
   // THE SAME remplissage as dispatch — selection() verbatim, over the residual pool, for V.
@@ -139,6 +144,11 @@ export const runRefusalCascade = async (
         })
         .where(eq(campaignDispatchAllocation.id, existing.id));
       updatedAllocations += 1;
+      trace.event(
+        'replacement_placed',
+        { impressions: ret.ai, valueTnd: (ret.ai * cpm) / 1000, merged: true },
+        ret.id,
+      );
     } else {
       // Fresh screenhost — same shape as a dispatch allocation (EN_ATTENTE by default).
       const rI = computeRi(
@@ -157,6 +167,11 @@ export const runRefusalCascade = async (
         creneaux: buildCreneaux(p.days, p.slots, rI),
       });
       createdAllocations += 1;
+      trace.event(
+        'replacement_placed',
+        { impressions: ret.ai, valueTnd: (ret.ai * cpm) / 1000, merged: false },
+        ret.id,
+      );
     }
   }
 
@@ -191,6 +206,7 @@ export const runRefusalCascade = async (
   let flippedPartial = false;
   if (shortfall > 0 && shortfall < seuil) {
     reliquatStored = shortfall;
+    trace.event('reliquat_stored', { impressions: shortfall, seuil });
     await tx
       .update(campaignDispatchPlan)
       .set({ reliquatStocke: sql`${campaignDispatchPlan.reliquatStocke} + ${shortfall}` })
@@ -201,6 +217,7 @@ export const runRefusalCascade = async (
     );
   } else if (shortfall >= seuil) {
     flippedPartial = true;
+    trace.event('partial_coverage', { shortfall, seuil });
     await tx
       .update(campaignDispatchPlan)
       .set({ isPartial: true })
