@@ -1,3 +1,4 @@
+import type { EngineJournal, EngineJournalRun } from '@/features/admin/lib/engine-journal';
 import type { AdminCampaignReversements } from '@/features/admin/lib/reversements';
 import type {
   AdminCampaignRow,
@@ -40,5 +41,12 @@ export const adminCampaignsService = {
   // E7 — the settlement's per-SH 50/44/3/3 breakdown + totals (empty lines = not settled yet).
   async getReversements(id: string): Promise<AdminCampaignReversements> {
     return apiClient.get<AdminCampaignReversements>(`/admin/campaigns/${id}/reversements`);
+  },
+
+  // LOG1 — the engine journal: runs newest-first with their events. One 50-run page (the modal's
+  // working set; total_runs says when more history exists server-side).
+  async getEngineJournal(id: string, phase?: EngineJournalRun['phase']): Promise<EngineJournal> {
+    const qs = phase ? `?limit=50&phase=${phase}` : '?limit=50';
+    return apiClient.get<EngineJournal>(`/admin/campaigns/${id}/engine-journal${qs}`);
   },
 };

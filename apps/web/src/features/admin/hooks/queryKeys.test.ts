@@ -53,6 +53,18 @@ describe('adminKeys', () => {
     expect(adminKeys.users()).not.toEqual(adminKeys.admins());
   });
 
+  it('keys the engine journal per campaign id × phase filter (LOG1)', () => {
+    expect(adminKeys.campaignEngineJournal('c1', 'all')).toEqual([
+      'admin',
+      'campaignEngineJournal',
+      'c1',
+      'all',
+    ]);
+    expect(adminKeys.campaignEngineJournal('c1', 'dispatch')).not.toEqual(
+      adminKeys.campaignEngineJournal('c1', 'settlement'),
+    );
+  });
+
   it('keys one reversements breakdown per campaign id (E7)', () => {
     expect(adminKeys.campaignReversements('c1')).toEqual(['admin', 'campaignReversements', 'c1']);
     expect(adminKeys.campaignReversements('c1')).not.toEqual(adminKeys.campaignReversements('c2'));
