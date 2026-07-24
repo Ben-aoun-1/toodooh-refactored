@@ -35,6 +35,8 @@ export const adminKeys = {
 
   /** Campaign-review queue (ACTIVATION keystone), filtered by status (`adminCampaignsService.list`). */
   campaigns: (status: string) => [...adminKeys.all, 'campaigns', status] as const,
+  /** E7 — one campaign's settlement reversement breakdown (`adminCampaignsService.getReversements`). */
+  campaignReversements: (id: string) => [...adminKeys.all, 'campaignReversements', id] as const,
   /** Prefix for invalidating every campaign-review-list variant. */
   campaignsAll: () => [...adminKeys.all, 'campaigns'] as const,
 

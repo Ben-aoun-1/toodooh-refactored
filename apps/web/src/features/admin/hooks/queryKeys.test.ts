@@ -53,6 +53,11 @@ describe('adminKeys', () => {
     expect(adminKeys.users()).not.toEqual(adminKeys.admins());
   });
 
+  it('keys one reversements breakdown per campaign id (E7)', () => {
+    expect(adminKeys.campaignReversements('c1')).toEqual(['admin', 'campaignReversements', 'c1']);
+    expect(adminKeys.campaignReversements('c1')).not.toEqual(adminKeys.campaignReversements('c2'));
+  });
+
   it('keys one screenhost eligibility view per venue id (EL1)', () => {
     expect(adminKeys.screenhostEligibility('sh-1')).toEqual([
       'admin',

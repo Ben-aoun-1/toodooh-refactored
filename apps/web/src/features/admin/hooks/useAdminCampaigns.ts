@@ -26,6 +26,18 @@ export function useAdminCampaigns(status: CampaignStatusFilter): {
 }
 
 /**
+ * E7 — one campaign's settlement reversement breakdown (empty lines = not settled yet). Fetched
+ * when the examen modal opens on a campaign; the section renders only when lines exist.
+ */
+export function useCampaignReversements(campaignId: string | null) {
+  return useQuery({
+    queryKey: adminKeys.campaignReversements(campaignId ?? ''),
+    queryFn: () => adminCampaignsService.getReversements(campaignId ?? ''),
+    enabled: campaignId !== null,
+  });
+}
+
+/**
  * Activate (approve) / reject mutations for the campaign-review queue. Both throw ApiError on failure
  * (the page branches in its try/catch). On success we invalidate every campaign-review-list variant
  * (a flip changes which status bucket a campaign is in) PLUS the legacy monitoring views the activated

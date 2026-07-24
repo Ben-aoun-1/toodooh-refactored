@@ -140,6 +140,84 @@ describe('admin screenhost eligibility (L-inv, real Postgres)', () => {
     expect((res.json() as Eligibility).class).toBe('moyen'); // untouched
   });
 
+  // ── E7 / EL1 rider — the hour-pair refines close the raw-API incoherent-hours hole. The PATCH
+  // is PARTIAL, so the rules apply to the RESULTING state (stored ⊕ patch), never the bare body:
+  // a one-sided patch whose RESULT is a coherent window stays legal (the EL1 dirty-fields editor
+  // sends exactly those), while any patch whose result is half-set or inverted is a 400 with the
+  // owner /hours route's messages.
+  describe('hour-pair refines on the RESULTING state (EL1 rider)', () => {
+    it('rejects an ouverture whose result has no fermeture (set-together)', async () => {
+      const admin = await seedUser({ role: 'admin' });
+      const sh = await seedScreenhost();
+      mockSession(admin);
+      const res = await patch(sh, { opening_hour: 8 });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().fields).toEqual([
+        {
+          field: 'closing_hour',
+          reason: 'opening_hour and closing_hour must be set together or both null',
+        },
+      ]);
+    });
+
+    it('rejects a fermeture whose result has no ouverture (set-together)', async () => {
+      const admin = await seedUser({ role: 'admin' });
+      const sh = await seedScreenhost();
+      mockSession(admin);
+      const res = await patch(sh, { closing_hour: 22 });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().fields[0].field).toBe('closing_hour');
+    });
+
+    it('rejects a one-sided null that strands the other bound', async () => {
+      const admin = await seedUser({ role: 'admin' });
+      const sh = await seedScreenhost();
+      mockSession(admin);
+      await patch(sh, { opening_hour: 8, closing_hour: 18 });
+      const res = await patch(sh, { opening_hour: null });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('rejects a result with ouverture ≥ fermeture (strict order, body × stored)', async () => {
+      const admin = await seedUser({ role: 'admin' });
+      const sh = await seedScreenhost();
+      mockSession(admin);
+      // Both in the body, inverted.
+      const both = await patch(sh, { opening_hour: 22, closing_hour: 8 });
+      expect(both.statusCode).toBe(400);
+      expect(both.json().fields).toEqual([
+        { field: 'closing_hour', reason: 'opening_hour must be strictly before closing_hour' },
+      ]);
+      // Equal pair.
+      expect((await patch(sh, { opening_hour: 8, closing_hour: 8 })).statusCode).toBe(400);
+      // One-sided against the STORED other bound.
+      await patch(sh, { opening_hour: 8, closing_hour: 18 });
+      expect((await patch(sh, { opening_hour: 20 })).statusCode).toBe(400);
+    });
+
+    it('accepts a one-sided patch whose RESULT is coherent (the EL1 dirty-fields case)', async () => {
+      const admin = await seedUser({ role: 'admin' });
+      const sh = await seedScreenhost();
+      mockSession(admin);
+      await patch(sh, { opening_hour: 8, closing_hour: 18 });
+      const res = await patch(sh, { opening_hour: 9 });
+      expect(res.statusCode).toBe(200);
+      expect((res.json() as Eligibility).opening_hour).toBe(9);
+      expect((res.json() as Eligibility).closing_hour).toBe(18);
+    });
+
+    it('accepts the both-null clear and the coherent full pair', async () => {
+      const admin = await seedUser({ role: 'admin' });
+      const sh = await seedScreenhost();
+      mockSession(admin);
+      await patch(sh, { opening_hour: 8, closing_hour: 18 });
+      const cleared = await patch(sh, { opening_hour: null, closing_hour: null });
+      expect(cleared.statusCode).toBe(200);
+      expect((cleared.json() as Eligibility).opening_hour).toBeNull();
+      expect((cleared.json() as Eligibility).closing_hour).toBeNull();
+    });
+  });
+
   it('rejects an invalid class (400)', async () => {
     const admin = await seedUser({ role: 'admin' });
     const sh = await seedScreenhost();
