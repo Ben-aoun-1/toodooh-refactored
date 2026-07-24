@@ -211,10 +211,11 @@ describe('admin reconciliation (L-redisp, real Postgres)', () => {
       refund_tnd: 0,
       spend_tnd: 200,
     });
-    expect(body.screenhosts[0]).toMatchObject({ delivered_imp: 20000, earnings_tnd: 200 });
+    // E7 — the venue payable is the 50 % SH line of the 200 TND delivered value (was 100 %).
+    expect(body.screenhosts[0]).toMatchObject({ delivered_imp: 20000, earnings_tnd: 100 });
   });
 
-  it('partially aired → manquement valued, refund = residual, spend == Σ earnings, SH earns its share', async () => {
+  it('partially aired → manquement valued, refund = residual, SH earns its 50 % share', async () => {
     const s = await seedScenario();
     await deliverSlot(s, '2024-01-01', 8); // 1 of 2 créneaux → 10000
     mockSession(s.admin);
@@ -227,8 +228,10 @@ describe('admin reconciliation (L-redisp, real Postgres)', () => {
       refund_tnd: 100,
       spend_tnd: 100,
     });
-    expect(body.screenhosts[0]).toMatchObject({ delivered_imp: 10000, earnings_tnd: 100 });
-    expect(body.spend_tnd).toBe(body.screenhosts.reduce((sum, p) => sum + p.earnings_tnd, 0));
+    // E7 — spend still equals the DELIVERED value (100, the reversement base); the venue payable
+    // is the 50 % SH line of it. The E6 advertiser-side identity is unchanged.
+    expect(body.screenhosts[0]).toMatchObject({ delivered_imp: 10000, earnings_tnd: 50 });
+    expect(body.spend_tnd).toBe(2 * body.screenhosts.reduce((sum, p) => sum + p.earnings_tnd, 0));
   });
 
   it('SPAM-RESISTANCE: many VIDEO_ENDED in ONE hour credit that créneau ONCE (not inflated)', async () => {

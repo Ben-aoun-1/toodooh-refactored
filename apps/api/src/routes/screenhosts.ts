@@ -484,13 +484,11 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
           ),
         );
     }
-    return reply
-      .status(200)
-      .send({
-        screenhost_id: owned.id,
-        day: parsed.data.day,
-        unavailable: parsed.data.unavailable,
-      });
+    return reply.status(200).send({
+      screenhost_id: owned.id,
+      day: parsed.data.day,
+      unavailable: parsed.data.unavailable,
+    });
   });
 
   // PATCH /api/screenhosts/:id/hours — the OWNER edits their venue's single-window hours
@@ -1113,12 +1111,51 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const [existing] = await db
-      .select({ id: screenhosts.id })
+      .select({
+        id: screenhosts.id,
+        openingHour: screenhosts.openingHour,
+        closingHour: screenhosts.closingHour,
+      })
       .from(screenhosts)
       .where(eq(screenhosts.id, parsedParams.data.id))
       .limit(1);
     if (!existing) {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
+    }
+
+    // E7 (EL1 rider) — the hour-pair refines the owner /hours PATCH already enforces, applied to
+    // the RESULTING state (stored ⊕ patch) because this PATCH is partial: a one-sided patch whose
+    // result is a coherent window stays legal (the admin editor sends dirty fields only), while
+    // any result that is half-set or inverted is refused — closing the raw-API hole where a venue
+    // could hold incoherent hours the pool silently skips.
+    const effectiveOpening =
+      parsed.data.opening_hour !== undefined ? parsed.data.opening_hour : existing.openingHour;
+    const effectiveClosing =
+      parsed.data.closing_hour !== undefined ? parsed.data.closing_hour : existing.closingHour;
+    if ((effectiveOpening === null) !== (effectiveClosing === null)) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: [
+          {
+            field: 'closing_hour',
+            reason: 'opening_hour and closing_hour must be set together or both null',
+          },
+        ],
+      });
+    }
+    if (
+      effectiveOpening !== null &&
+      effectiveClosing !== null &&
+      effectiveOpening >= effectiveClosing
+    ) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: [
+          { field: 'closing_hour', reason: 'opening_hour must be strictly before closing_hour' },
+        ],
+      });
     }
 
     if (parsed.data.business_sector_id != null) {

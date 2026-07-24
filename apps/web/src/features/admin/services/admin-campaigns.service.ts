@@ -1,3 +1,4 @@
+import type { AdminCampaignReversements } from '@/features/admin/lib/reversements';
 import type {
   AdminCampaignRow,
   CampaignStatusFilter,
@@ -34,5 +35,10 @@ export const adminCampaignsService = {
   // Reject — pending→rejected; a reason is REQUIRED (surfaced to the advertiser as reject_reason).
   async reject(id: string, reason: string): Promise<AdminCampaignRow> {
     return apiClient.post<AdminCampaignRow>(`/admin/campaigns/${id}/reject`, { reason });
+  },
+
+  // E7 — the settlement's per-SH 50/44/3/3 breakdown + totals (empty lines = not settled yet).
+  async getReversements(id: string): Promise<AdminCampaignReversements> {
+    return apiClient.get<AdminCampaignReversements>(`/admin/campaigns/${id}/reversements`);
   },
 };

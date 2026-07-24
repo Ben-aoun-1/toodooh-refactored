@@ -8,7 +8,9 @@ import { adminKeys } from '@/features/admin/hooks/queryKeys';
 import {
   useAdminCampaigns,
   useAdminCampaignMutations,
+  useCampaignReversements,
 } from '@/features/admin/hooks/useAdminCampaigns';
+import { REVERSEMENT_ROW_LABELS, reversementDisplayRows } from '@/features/admin/lib/reversements';
 import { adminCreativesService } from '@/features/admin/services/admin-creatives.service';
 import type {
   AdminCampaignRow,
@@ -95,6 +97,8 @@ export default function CampaignReviewQueue() {
   const creativeById = new Map<string, AdminCreativeView>((creatives ?? []).map((c) => [c.id, c]));
 
   const [selected, setSelected] = useState<AdminCampaignRow | null>(null);
+  // E7 — the settlement breakdown for the examen modal (empty lines until reconciled).
+  const { data: reversements } = useCampaignReversements(selected?.id ?? null);
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
   const [mediaLoading, setMediaLoading] = useState(false);
   const [reason, setReason] = useState('');
@@ -363,6 +367,62 @@ export default function CampaignReviewQueue() {
                       <p className="whitespace-pre-wrap text-sm text-gray-900">
                         {selected.reject_reason}
                       </p>
+                    </div>
+                  )}
+
+                  {/* E7 — Reversements (rendu uniquement une fois la campagne réconciliée) */}
+                  {reversements && reversements.lines.length > 0 && (
+                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                      <p className="mb-2 text-sm font-medium text-gray-700">
+                        Reversements (règlement)
+                      </p>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full text-sm">
+                          <thead>
+                            <tr className="text-left text-xs uppercase text-gray-500">
+                              <th className="py-1 pr-3">Établissement</th>
+                              <th className="py-1 pr-3">Base</th>
+                              <th className="py-1 pr-3">{REVERSEMENT_ROW_LABELS.sh}</th>
+                              <th className="py-1 pr-3">{REVERSEMENT_ROW_LABELS.toodooh}</th>
+                              <th className="py-1 pr-3">{REVERSEMENT_ROW_LABELS.agentSh}</th>
+                              <th className="py-1 pr-3">{REVERSEMENT_ROW_LABELS.agentSc}</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-200">
+                            {reversements.lines.map((line) => (
+                              <tr key={line.screenhost_id}>
+                                <td className="py-1 pr-3 text-gray-900">{line.screenhost_name}</td>
+                                <td className="py-1 pr-3 tabular-nums">
+                                  {TND(line.base_value_tnd)}
+                                </td>
+                                <td className="py-1 pr-3 tabular-nums">
+                                  {TND(line.sh_amount_tnd)}
+                                </td>
+                                <td className="py-1 pr-3 tabular-nums">
+                                  {TND(line.toodooh_amount_tnd)}
+                                </td>
+                                <td className="py-1 pr-3 tabular-nums">
+                                  {TND(line.agent_sh_amount_tnd)}
+                                </td>
+                                <td className="py-1 pr-3 tabular-nums">
+                                  {TND(line.agent_sc_amount_tnd)}
+                                </td>
+                              </tr>
+                            ))}
+                            <tr className="font-medium text-gray-900">
+                              <td className="py-1 pr-3">Totaux</td>
+                              <td className="py-1 pr-3 tabular-nums">
+                                {TND(reversements.totals.base_value_tnd)}
+                              </td>
+                              {reversementDisplayRows(reversements.totals).map((row) => (
+                                <td key={row.key} className="py-1 pr-3 tabular-nums">
+                                  {TND(row.amountTnd)}
+                                </td>
+                              ))}
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   )}
 

@@ -976,6 +976,13 @@ export const dispatchConfig = pgTable(
     // field testing; 0 = the floor is TODAY). Admin-editable 0–30; weekend-start legality
     // (ruling #10) is untouched — only the lead moves.
     campaignLeadWorkingDays: integer('campaign_lead_working_days').notNull().default(2),
+    // E7 (VF EPIC 5) — the reversement split, calibratable but defaulting to the canonical
+    // 50 % SH / 44 % Toodooh / 3 % Agent SH / 3 % Agent SC. The rail validates Σ = 100 at every
+    // split — a drifted config fails the settlement loudly rather than mis-splitting money.
+    pctSh: numeric('pct_sh', { precision: 5, scale: 2 }).notNull().default('50.00'),
+    pctToodooh: numeric('pct_toodooh', { precision: 5, scale: 2 }).notNull().default('44.00'),
+    pctAgentSh: numeric('pct_agent_sh', { precision: 5, scale: 2 }).notNull().default('3.00'),
+    pctAgentSc: numeric('pct_agent_sc', { precision: 5, scale: 2 }).notNull().default('3.00'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
@@ -1328,6 +1335,46 @@ export const campaignScreenhostPayout = pgTable(
 );
 
 export type CampaignScreenhostPayout = typeof campaignScreenhostPayout.$inferSelect;
+
+// ── reversement lines (E7, VF EPIC 5) ────────────────────────────────────────
+// One row per (settlement × screenhost) with a POSITIVE base: the four-way split of the delivered
+// value — 50 % SH / 44 % Toodooh / 3 % Agent SH / 3 % Agent SC (calibratable via dispatch_config,
+// Σ = 100 enforced by the rail). Amounts are EXACT-SUM by construction (integer millimes at
+// computation; the floor residue rides the Toodooh line), stored as TND numeric. `source` is the
+// origin discriminator ('campaign' today; 'event' RESERVED — D51: the Event engine reuses this
+// rail, so nothing here branches on origin). agent_sh_id / agent_sc_id resolve from
+// agent_referrals at settlement time (the venue owner's / the advertiser's referring agent) and
+// stay NULL when no referral exists — the 3 % amounts are still recorded (payout mechanics are a
+// later lane; this is the ledger). Pre-E7 settlements are NEVER restated: lines exist only for
+// reconciliations executed after this ships.
+export const reversementLines = pgTable(
+  'reversement_lines',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    source: text('source').notNull().default('campaign'),
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'restrict' }),
+    screenhostId: uuid('screenhost_id')
+      .notNull()
+      .references(() => screenhosts.id, { onDelete: 'restrict' }),
+    baseValueTnd: numeric('base_value_tnd', { precision: 14, scale: 4 }).notNull(),
+    shAmountTnd: numeric('sh_amount_tnd', { precision: 14, scale: 4 }).notNull(),
+    toodoohAmountTnd: numeric('toodooh_amount_tnd', { precision: 14, scale: 4 }).notNull(),
+    agentShAmountTnd: numeric('agent_sh_amount_tnd', { precision: 14, scale: 4 }).notNull(),
+    agentScAmountTnd: numeric('agent_sc_amount_tnd', { precision: 14, scale: 4 }).notNull(),
+    agentShId: uuid('agent_sh_id').references(() => users.id, { onDelete: 'set null' }),
+    agentScId: uuid('agent_sc_id').references(() => users.id, { onDelete: 'set null' }),
+    settledAt: timestamp('settled_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('reversement_lines_campaign_id_idx').on(table.campaignId),
+    index('reversement_lines_screenhost_id_idx').on(table.screenhostId),
+  ],
+);
+
+export type ReversementLine = typeof reversementLines.$inferSelect;
 
 // ── notifications (in-app notification ledger) ───────────────────────────────
 // A per-user notification feed (greenfield — NOT the parked feat/remaining-gaps backend). Rows are
