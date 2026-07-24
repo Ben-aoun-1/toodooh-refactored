@@ -10,6 +10,7 @@ import {
   screenhostUnavailability,
   screenhosts,
 } from '../../db/schema.js';
+import { NOOP_TRACE, type EngineTrace } from '../engine-journal/trace.js';
 
 import {
   broadcastableHours,
@@ -48,6 +49,10 @@ export interface AssemblePoolOpts {
   // transaction (xact locks release at commit/rollback); the allocating callers (dispatch freeze,
   // refusal cascade) pass true, read-only assembly does not.
   lockOccupancy?: boolean;
+  // LOG1 — observe-only journal collector (buffers in memory; flushed by the run's owner AFTER
+  // the tx). Absent = NOOP: the assembly's behavior AND its query count are byte-unchanged (the
+  // one extra inactive-venue read below is gated on trace.enabled).
+  trace?: EngineTrace;
 }
 
 // US-4.4 — keyspace 1 of pg_advisory_xact_lock(int4, int4) for per-screenhost occupancy; key 2 is
@@ -90,24 +95,24 @@ export const assemblePool = async (
   const campaignZoneIds = zoneRows.map((z) => z.zoneId);
 
   const excluded = new Set(opts.excludeScreenhostIds ?? []);
+  const trace = opts.trace ?? NOOP_TRACE;
 
   // Hard filters: active + horaires set + capacity present + matches targeting (category × class)
   // + in a targeted zone (CF-Z1 — with prod entirely Grand Tunis this changes nothing today).
-  const candidates = (
-    await executor
-      .select({
-        id: screenhosts.id,
-        sps: screenhosts.sps,
-        businessSectorId: screenhosts.businessSectorId,
-        class: screenhosts.class,
-        zoneId: screenhosts.zoneId,
-        openingHour: screenhosts.openingHour,
-        closingHour: screenhosts.closingHour,
-        broadcastCapacity: screenhosts.broadcastCapacity,
-      })
-      .from(screenhosts)
-      .where(eq(screenhosts.isActive, true))
-  ).filter(
+  const activeRows = await executor
+    .select({
+      id: screenhosts.id,
+      sps: screenhosts.sps,
+      businessSectorId: screenhosts.businessSectorId,
+      class: screenhosts.class,
+      zoneId: screenhosts.zoneId,
+      openingHour: screenhosts.openingHour,
+      closingHour: screenhosts.closingHour,
+      broadcastCapacity: screenhosts.broadcastCapacity,
+    })
+    .from(screenhosts)
+    .where(eq(screenhosts.isActive, true));
+  const candidates = activeRows.filter(
     (sh) =>
       !excluded.has(sh.id) &&
       sh.broadcastCapacity !== null &&
@@ -118,6 +123,51 @@ export const assemblePool = async (
       ) &&
       screenhostMatchesZones(sh.zoneId, campaignZoneIds),
   );
+
+  // LOG1 — observe-only exclusion journaling: re-evaluate the SAME pure predicates on the rows
+  // the filter rejected (first failing reason wins; the filter itself is untouched). The
+  // inactive-venue set needs one EXTRA read — gated on trace.enabled so the default path keeps
+  // its exact query count; only inactive venues that would OTHERWISE match (targeting + zone) are
+  // reported, the operator-relevant set.
+  if (trace.enabled) {
+    const kept = new Set(candidates.map((c) => c.id));
+    for (const sh of activeRows) {
+      if (kept.has(sh.id)) continue;
+      const reason = excluded.has(sh.id)
+        ? 'excluded'
+        : sh.broadcastCapacity === null
+          ? 'capacity_missing'
+          : broadcastableHours(sh.openingHour, sh.closingHour).length === 0
+            ? 'hours_missing'
+            : !screenhostMatchesTargeting(
+                  { businessSectorId: sh.businessSectorId, class: sh.class },
+                  lines,
+                )
+              ? 'targeting_mismatch'
+              : 'zone_mismatch';
+      trace.event('venue_excluded', { reason }, sh.id);
+    }
+    const inactiveRows = await executor
+      .select({
+        id: screenhosts.id,
+        businessSectorId: screenhosts.businessSectorId,
+        class: screenhosts.class,
+        zoneId: screenhosts.zoneId,
+      })
+      .from(screenhosts)
+      .where(eq(screenhosts.isActive, false));
+    for (const sh of inactiveRows) {
+      if (
+        screenhostMatchesTargeting(
+          { businessSectorId: sh.businessSectorId, class: sh.class },
+          lines,
+        ) &&
+        screenhostMatchesZones(sh.zoneId, campaignZoneIds)
+      ) {
+        trace.event('venue_excluded', { reason: 'inactive' }, sh.id);
+      }
+    }
+  }
 
   const candidateIds = candidates.map((c) => c.id);
 
@@ -223,7 +273,10 @@ export const assemblePool = async (
     // declaration shrinks Hi (and so capacity and C_max) exactly proportionally.
     const declared = unavailableBySh.get(sh.id);
     const days = declared ? windowDays.filter((d) => !declared.has(d.date)) : windowDays;
-    if (days.length === 0) continue;
+    if (days.length === 0) {
+      trace.event('venue_excluded', { reason: 'no_available_days' }, sh.id);
+      continue;
+    }
     const venueWeekdays = [...new Set(days.map((d) => d.dayOfWeek))];
     const bHours = broadcastableHours(sh.openingHour, sh.closingHour);
     const slots = venueWeekdays.flatMap((dow) =>
@@ -255,7 +308,19 @@ export const assemblePool = async (
       facturableFromPhysical(capaciteUtile(avgAffluence, hours, rEff), inputs.t),
     );
     const residualCapacity = capacite; // the F-cap is baked into R_eff — no impression subtraction
-    if (residualCapacity <= 0) continue; // no residual broadcast budget (or zero affluence) → skip
+    if (residualCapacity <= 0) {
+      // No residual broadcast budget (or zero affluence) → skip.
+      trace.event(
+        'venue_excluded',
+        {
+          reason: 'no_residual_capacity',
+          engagedSeconds: engagedSecondsById.get(sh.id) ?? 0,
+          avgAffluence,
+        },
+        sh.id,
+      );
+      continue;
+    }
     pool.push({
       id: sh.id,
       sps: Number(sh.sps),
@@ -275,5 +340,11 @@ export const assemblePool = async (
     });
   }
 
+  trace.event('pool_assembled', {
+    poolSize: pool.length,
+    windowDays: windowDays.length,
+    windowStart,
+    windowEnd,
+  });
   return { windowDays, pool };
 };

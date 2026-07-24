@@ -11,6 +11,7 @@ import {
 import { tunisDateOf } from './campaign-dates.js';
 import { cpmForCampaign, getDispatchConfig } from './dispatch/config.js';
 import { runDispatch } from './dispatch/dispatch-service.js';
+import { createEngineTrace } from './engine-journal/trace.js';
 import { walletBalance } from './recharges.js';
 
 // CF-SK1 — THE ACTIVATION CORE, extracted VERBATIM from the admin activate route
@@ -155,8 +156,14 @@ export const prepareActivation = async (
     };
   }
 
-  // Dispatch (reuse the engine). Every DispatchResult case is handled.
-  const result = await runDispatch(campaign, { iCible, cpm, s });
+  // Dispatch (reuse the engine). Every DispatchResult case is handled. LOG1 — the production
+  // entry constructs the journal collector; runDispatch buffers and flushes it POST-outcome
+  // (committed OR rolled-back clôture), so the operator can see WHY an activation refused.
+  const result = await runDispatch(
+    campaign,
+    { iCible, cpm, s },
+    createEngineTrace('dispatch', campaign.id),
+  );
   if (result.status === 'NO_WINDOW') return { status: 'NO_WINDOW' };
   // Clôture — NOT a deliverable plan → do NOT activate; the campaign keeps its status.
   if (result.status === 'TOO_THIN') {

@@ -15,6 +15,7 @@ import {
   screenhosts,
 } from '../../db/schema.js';
 import { getDispatchConfig } from '../dispatch/config.js';
+import { createEngineTrace } from '../engine-journal/trace.js';
 import {
   computeReversement,
   millimesToTnd,
@@ -110,6 +111,10 @@ export const reconcileCampaignById = async (
   // in spend but in NO line — it rests with the platform, unsplit. Splits are computed BEFORE the
   // transaction (a drifted Σ≠100 config throws here and nothing persists). Pre-E7 settlements are
   // never restated — the ALREADY_RECONCILED short-circuit above is the only path to old rows.
+  // LOG1 — the settlement journal (observe-only; flushed post-tx below). Constructed after the
+  // ALREADY_RECONCILED / NO_PLAN short-circuits: only a run that actually settles is journaled.
+  const trace = createEngineTrace('settlement', campaignId);
+
   const cfg = await getDispatchConfig();
   const pcts = {
     sh: cfg.pctSh,
@@ -118,15 +123,22 @@ export const reconcileCampaignById = async (
     agentSc: cfg.pctAgentSc,
   };
   const cCibleTnd = (plan.iCible * cpm) / 1000;
-  const splits = valuation.perScreenhost
-    .filter((p) => p.deliveredImp > 0)
-    .map((p) => ({
-      screenhostId: p.screenhostId,
-      split: computeReversement(
-        reversementBaseMillimes(p.deliveredImp * t, plan.iCible, cCibleTnd),
-        pcts,
-      ),
-    }));
+  let splits: { screenhostId: string; split: ReturnType<typeof computeReversement> }[];
+  try {
+    splits = valuation.perScreenhost
+      .filter((p) => p.deliveredImp > 0)
+      .map((p) => ({
+        screenhostId: p.screenhostId,
+        split: computeReversement(
+          reversementBaseMillimes(p.deliveredImp * t, plan.iCible, cCibleTnd),
+          pcts,
+        ),
+      }));
+  } catch (err: unknown) {
+    // A drifted Σ≠100 config refuses the settlement BEFORE anything persists — journal it.
+    await trace.finish('rolled_back', { reason: 'INVALID_SPLIT_CONFIG' });
+    throw err;
+  }
   const shAmountBySh = new Map(
     splits.map((s) => [s.screenhostId, millimesToTnd(s.split.shMillimes)]),
   );
@@ -162,6 +174,28 @@ export const reconcileCampaignById = async (
         .where(inArray(agentReferrals.referredUserId, referredIds))
     : [];
   const agentByReferred = new Map(referralRows.map((r) => [r.referredUserId, r.agentUserId]));
+
+  // LOG1 — the split lines + refund/residue, buffered pre-tx (the amounts are already final).
+  for (const { screenhostId, split } of splits) {
+    trace.event(
+      'split_recorded',
+      {
+        baseTnd: millimesToTnd(split.baseMillimes),
+        shTnd: millimesToTnd(split.shMillimes),
+        toodoohTnd: millimesToTnd(split.toodoohMillimes),
+        agentShTnd: millimesToTnd(split.agentShMillimes),
+        agentScTnd: millimesToTnd(split.agentScMillimes),
+      },
+      screenhostId,
+    );
+  }
+  if (valuation.refundTnd > 0) {
+    trace.event('refund_issued', { amountTnd: valuation.refundTnd });
+  } else {
+    const sumBasesTnd = splits.reduce((s, x) => s + millimesToTnd(x.split.baseMillimes), 0);
+    const residueTnd = Math.round((valuation.spendTnd - sumBasesTnd) * 1e4) / 1e4;
+    if (residueTnd > 0) trace.event('residue_kept', { amountTnd: residueTnd });
+  }
 
   const persisted = await db
     .transaction(async (tx) => {
@@ -219,12 +253,23 @@ export const reconcileCampaignById = async (
       }
       return { recon, payouts };
     })
-    .catch((err: unknown) => {
+    .catch(async (err: unknown) => {
       // Lost the race against the unique(campaign_id) — a concurrent reconcile already settled.
       if ((err as { code?: string }).code === '23505') return null;
+      // LOG1 — the settlement tx rolled back; keep the trace, rethrow verbatim.
+      await trace.finish('rolled_back', { reason: 'ERROR' });
       throw err;
     });
-  if (persisted === null) return { status: 'ALREADY_RECONCILED' };
+  if (persisted === null) return { status: 'ALREADY_RECONCILED' }; // race loser: no run journaled
+
+  // LOG1 — flush post-commit.
+  await trace.finish('committed', {
+    status: valuation.status,
+    spendTnd: valuation.spendTnd,
+    refundTnd: valuation.refundTnd,
+    expectedImp: valuation.expectedImp,
+    deliveredImp: valuation.deliveredImp,
+  });
 
   return {
     status: 'OK',

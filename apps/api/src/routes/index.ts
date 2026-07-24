@@ -4,6 +4,7 @@ import { adminAccountsRoutes } from './admin-accounts.js';
 import { adminCampaignsRoutes } from './admin-campaigns.js';
 import { adminCreativesRoutes } from './admin-creatives.js';
 import { adminDispatchConfigRoutes } from './admin-dispatch-config.js';
+import { adminEngineJournalRoutes } from './admin-engine-journal.js';
 import { adminPlatformStatsRoutes } from './admin-platform-stats.js';
 import { adminRechargesRoutes } from './admin-recharges.js';
 import { adminReconcileRoutes } from './admin-reconcile.js';
@@ -99,6 +100,7 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   // L-redisp — admin reconciliation: value plan-promised vs proof-aired at clôture, settle the
   // screencaster wallet (the spend) + record screenhost earnings. Idempotent per campaign.
   await app.register(adminReconcileRoutes);
+  await app.register(adminEngineJournalRoutes);
   // Superadmin-only internal-account creation (staff admins + agents) — slice-2 A.
   await app.register(adminAccountsRoutes);
   // S-T1 — service-authenticated toodooh↔wedooh sync surface (/api/internal/*): B1 locations read,

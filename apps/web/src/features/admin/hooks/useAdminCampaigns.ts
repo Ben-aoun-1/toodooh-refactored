@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import type { EnginePhaseFilter } from '@/features/admin/lib/engine-journal';
 import { adminCampaignsService } from '@/features/admin/services/admin-campaigns.service';
 import type {
   AdminCampaignRow,
@@ -33,6 +34,18 @@ export function useCampaignReversements(campaignId: string | null) {
   return useQuery({
     queryKey: adminKeys.campaignReversements(campaignId ?? ''),
     queryFn: () => adminCampaignsService.getReversements(campaignId ?? ''),
+    enabled: campaignId !== null,
+  });
+}
+
+/**
+ * LOG1 — the engine journal for the examen modal, keyed by the phase filter ('all' = no filter).
+ */
+export function useCampaignEngineJournal(campaignId: string | null, phase: EnginePhaseFilter) {
+  return useQuery({
+    queryKey: adminKeys.campaignEngineJournal(campaignId ?? '', phase),
+    queryFn: () =>
+      adminCampaignsService.getEngineJournal(campaignId ?? '', phase === 'all' ? undefined : phase),
     enabled: campaignId !== null,
   });
 }

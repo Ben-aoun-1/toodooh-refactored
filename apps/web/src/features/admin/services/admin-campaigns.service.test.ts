@@ -33,3 +33,23 @@ describe('adminCampaignsService.getReversements', () => {
     await expect(adminCampaignsService.getReversements('c1')).rejects.toThrow('boom');
   });
 });
+
+describe('adminCampaignsService.getEngineJournal', () => {
+  beforeEach(() => {
+    getMock.mockReset();
+  });
+
+  it('GETs the journal without a phase filter', async () => {
+    getMock.mockResolvedValue({ campaign_id: 'c1', total_runs: 0, runs: [] });
+    await adminCampaignsService.getEngineJournal('c1');
+    expect(getMock).toHaveBeenCalledWith('/admin/campaigns/c1/engine-journal?limit=50');
+  });
+
+  it('appends the phase filter when given', async () => {
+    getMock.mockResolvedValue({ campaign_id: 'c1', total_runs: 0, runs: [] });
+    await adminCampaignsService.getEngineJournal('c1', 'settlement');
+    expect(getMock).toHaveBeenCalledWith(
+      '/admin/campaigns/c1/engine-journal?limit=50&phase=settlement',
+    );
+  });
+});
