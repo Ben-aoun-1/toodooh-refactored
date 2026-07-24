@@ -53,6 +53,17 @@ describe('adminKeys', () => {
     expect(adminKeys.users()).not.toEqual(adminKeys.admins());
   });
 
+  it('keys one screenhost eligibility view per venue id (EL1)', () => {
+    expect(adminKeys.screenhostEligibility('sh-1')).toEqual([
+      'admin',
+      'screenhostEligibility',
+      'sh-1',
+    ]);
+    expect(adminKeys.screenhostEligibility('sh-1')).not.toEqual(
+      adminKeys.screenhostEligibility('sh-2'),
+    );
+  });
+
   it('keys the 6c catalog reads — events, platform stats, per-location affluence', () => {
     expect(adminKeys.events()).toEqual(['admin', 'events']);
     expect(adminKeys.platformStats()).toEqual(['admin', 'platformStats']);

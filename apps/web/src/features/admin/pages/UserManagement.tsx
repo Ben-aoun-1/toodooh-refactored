@@ -19,12 +19,14 @@ import {
   CreditCard,
   Wifi,
   Ban,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { useLocation } from 'react-router-dom';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
+import AdminUserEligibilitySlot from '@/features/admin/components/AdminUserEligibilitySlot';
 import AdminUserWifiSlot from '@/features/admin/components/AdminUserWifiSlot';
 import UserDocumentReviewGroup from '@/features/admin/components/UserDocumentReviewGroup';
 import { adminKeys } from '@/features/admin/hooks/queryKeys';
@@ -808,6 +810,23 @@ export default function UserManagement() {
                               WiFi du lieu
                             </h4>
                             <AdminUserWifiSlot
+                              screenhosts={
+                                users.find((u) => u.id === selectedUser.id)?.screenhosts ??
+                                selectedUser.screenhosts
+                              }
+                            />
+                          </div>
+                        )}
+
+                        {/* Éligibilité dispatch (propriétaires) — catégorie/classe/horaires/
+                            capacité, les entrées L-disp par lieu (PATCH admin, EL1) */}
+                        {isOwnerProfile(selectedUser.profile_type) && (
+                          <div className="bg-gray-50 p-4 rounded-lg">
+                            <h4 className="font-semibold text-gray-900 mb-3 flex items-center">
+                              <SlidersHorizontal className="h-5 w-5 mr-2 text-brand-primary" />
+                              Éligibilité dispatch
+                            </h4>
+                            <AdminUserEligibilitySlot
                               screenhosts={
                                 users.find((u) => u.id === selectedUser.id)?.screenhosts ??
                                 selectedUser.screenhosts
