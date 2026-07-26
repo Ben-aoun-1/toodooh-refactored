@@ -1,4 +1,3 @@
-import { eq } from 'drizzle-orm';
 import Fastify from 'fastify';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -62,8 +61,8 @@ describe('recharges + wallet (advertiser, real Postgres)', () => {
     await sql.end();
   });
 
-  // ── POST /api/recharges ────────────────────────────────────────────────────
-  it('creates a PENDING recharge with a FCT- reference (201; amount persisted)', async () => {
+  // ── POST /api/recharges — RETIRED by FCT1 ──────────────────────────────────
+  it('POST /api/recharges is retired (410, French reason, no row)', async () => {
     const me = await seedUser();
     mockSession(me);
     const res = await app.inject({
@@ -71,50 +70,11 @@ describe('recharges + wallet (advertiser, real Postgres)', () => {
       url: '/api/recharges',
       payload: { amount: 150.5 },
     });
-    expect(res.statusCode).toBe(201);
-    const body = res.json() as Record<string, unknown>;
-    expect(body).toMatchObject({ amount_tnd: 150.5, status: 'pending', reject_reason: null });
-    expect(body['id']).toBeDefined();
-    expect(body['reference']).toMatch(/^FCT-[0-9A-F]{8}$/);
-    const [row] = await db
-      .select()
-      .from(recharges)
-      .where(eq(recharges.id, body['id'] as string));
-    expect(row?.advertiserId).toBe(me);
-    expect(row?.amountTnd).toBe('150.50');
-    expect(row?.status).toBe('pending');
-  });
-
-  it('rejects a non-positive amount (400, no row)', async () => {
-    const me = await seedUser();
-    mockSession(me);
-    const res = await app.inject({ method: 'POST', url: '/api/recharges', payload: { amount: 0 } });
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(410);
+    const body = res.json() as { error: string; message: string };
+    expect(body.error).toBe('GONE');
+    expect(body.message).toContain("n'est plus disponible");
     expect(await db.$count(recharges)).toBe(0);
-  });
-
-  it('rejects an amount with more than 2 decimals (400, no row)', async () => {
-    const me = await seedUser();
-    mockSession(me);
-    const res = await app.inject({
-      method: 'POST',
-      url: '/api/recharges',
-      payload: { amount: 10.123 },
-    });
-    expect(res.statusCode).toBe(400);
-    expect(await db.$count(recharges)).toBe(0);
-  });
-
-  it('rejects a missing/non-numeric amount (400)', async () => {
-    const me = await seedUser();
-    mockSession(me);
-    expect(
-      (await app.inject({ method: 'POST', url: '/api/recharges', payload: {} })).statusCode,
-    ).toBe(400);
-    expect(
-      (await app.inject({ method: 'POST', url: '/api/recharges', payload: { amount: '50' } }))
-        .statusCode,
-    ).toBe(400);
   });
 
   it('requires authentication (401)', async () => {
@@ -160,14 +120,12 @@ describe('recharges + wallet (advertiser, real Postgres)', () => {
   // ── GET /api/wallet/balance (DERIVED — confirmed only) ──────────────────────
   it('balance is 0 with no confirmed recharges', async () => {
     const me = await seedUser();
-    await db
-      .insert(recharges)
-      .values({
-        advertiserId: me,
-        amountTnd: '40.00',
-        reference: 'FCT-CCCC0001',
-        status: 'pending',
-      });
+    await db.insert(recharges).values({
+      advertiserId: me,
+      amountTnd: '40.00',
+      reference: 'FCT-CCCC0001',
+      status: 'pending',
+    });
     mockSession(me);
     const res = await app.inject({ method: 'GET', url: '/api/wallet/balance' });
     expect(res.statusCode).toBe(200);

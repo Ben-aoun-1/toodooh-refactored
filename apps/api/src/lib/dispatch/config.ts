@@ -24,6 +24,11 @@ export interface ResolvedDispatchConfig {
   pctToodooh: number;
   pctAgentSh: number;
   pctAgentSc: number;
+  // FCT1 — Toodooh's bank coordinates ('—' = not provisioned; SQL-settable, never code).
+  bankRib: string;
+  bankIban: string;
+  bankBic: string;
+  bankDomiciliation: string;
 }
 
 // The CPM (TND/1000) a campaign prices at: event campaigns at event_cpm_tnd, everything else at
@@ -55,6 +60,10 @@ export const getDispatchConfig = async (): Promise<ResolvedDispatchConfig> => {
         pctToodooh: Number(row.pctToodooh),
         pctAgentSh: Number(row.pctAgentSh),
         pctAgentSc: Number(row.pctAgentSc),
+        bankRib: row.bankRib,
+        bankIban: row.bankIban,
+        bankBic: row.bankBic,
+        bankDomiciliation: row.bankDomiciliation,
       }
     : { ...DISPATCH_CONFIG_DEFAULTS };
   // SUPERSEDED on the dispatch path (E3, Mariem 2026-07-15): the materiality divisor and no-crumb

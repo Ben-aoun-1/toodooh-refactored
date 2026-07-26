@@ -55,6 +55,12 @@ export const DISPATCH_CONFIG_DEFAULTS = {
   pctToodooh: 44,
   pctAgentSh: 3,
   pctAgentSc: 3,
+  // FCT1 — Toodooh's bank coordinates for the virement « Pour info » block. '—' = not provisioned
+  // (the web shows its placeholder line); the operator sets real values by SQL UPDATE, never code.
+  bankRib: '—',
+  bankIban: '—',
+  bankBic: '—',
+  bankDomiciliation: '—',
 } as const;
 
 /**
