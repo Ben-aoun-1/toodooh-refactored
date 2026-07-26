@@ -12,10 +12,7 @@ import { useMemo, useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
-import RechargeDetailsModal, {
-  STATUS_COLORS,
-  STATUS_LABELS,
-} from '@/features/admin/components/RechargeDetailsModal';
+import RechargeDetailsModal from '@/features/admin/components/RechargeDetailsModal';
 import {
   useAdminRecharges,
   useAdvertiserIdentities,
@@ -25,16 +22,23 @@ import {
   adminRechargesService,
   computeRechargeStats,
   type AdminRecharge,
-  type AdminRechargeStatus,
 } from '@/features/admin/services/admin-recharges.service';
+import {
+  ADMIN_STATUS_FILTER_LABELS,
+  isAdminDecidable,
+  methodLabel,
+  statusChipClass,
+  statusLabel,
+} from '@/features/wallet/lib/recharge-methods';
 import { getErrorMessage } from '@/lib/errors';
 
-// De-Supabase: the queue, confirm and reject now ride the EXISTING /api/admin/recharges API. The
-// manual admin create-recharge flow + advertiser picker, payment_method, and the confirming admin's
-// name are GONE — no new-engine source (advertisers self-top-up via the wallet; see the service
-// header). Filter/search/pagination + the stat cards are derived client-side over the one list.
-// CF-M2: documented recharges badge « Justificatif ✓ » in the queue; the details modal (extracted
-// to RechargeDetailsModal) shows the document next to the amount + FCT reference.
+// The recharge moderation queue over /api/admin/recharges. FCT1: the table gains the Type column
+// (Virement / Bon de commande / « — » legacy) and the PER-METHOD status labels from the shared
+// wallet lib; the status filter offers the display labels; Valider/Annuler show on the DECIDABLE
+// rows (virement + legacy while pending, bon once « Bon retourné signé » — « Bon émis » rows are
+// server-excluded and never reach this page). Annuler requires a reason (surfaced to the
+// screencaster). Filter/search/pagination + the stat cards stay client-side over the one list.
+// CF-M2: documented recharges badge « Justificatif ✓ »; the details modal shows the file(s).
 
 const PER_PAGE = 20;
 
@@ -48,7 +52,8 @@ export default function RechargeManagement() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | AdminRechargeStatus>('all');
+  // FCT1 — filtered by DISPLAY label (the per-method labels are the admin's vocabulary).
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -58,11 +63,12 @@ export default function RechargeManagement() {
 
   const stats = useMemo(() => computeRechargeStats(recharges), [recharges]);
 
-  // Client-side filter (status) + search (reference) over the full list.
+  // Client-side filter (per-method status label) + search (reference) over the full list.
   const filtered = useMemo(() => {
     const needle = searchTerm.trim().toLowerCase();
     return recharges.filter((r) => {
-      const matchesStatus = statusFilter === 'all' || r.status === statusFilter;
+      const matchesStatus =
+        statusFilter === 'all' || statusLabel(r.method, r.status) === statusFilter;
       const matchesSearch = needle === '' || r.reference.toLowerCase().includes(needle);
       return matchesStatus && matchesSearch;
     });
@@ -90,17 +96,17 @@ export default function RechargeManagement() {
 
   const handleReject = async () => {
     if (!selectedRecharge || !rejectReason.trim()) {
-      toast.error('Veuillez indiquer une raison de rejet');
+      toast.error("Veuillez indiquer une raison d'annulation");
       return;
     }
     try {
       await rejectRecharge.mutateAsync({ id: selectedRecharge.id, reason: rejectReason });
-      toast.success('Recharge rejetée');
+      toast.success('Demande annulée');
       setShowRejectModal(false);
       setRejectReason('');
       setSelectedRecharge(null);
     } catch (e: unknown) {
-      toast.error(getErrorMessage(e) || 'Erreur lors du rejet');
+      toast.error(getErrorMessage(e) || "Erreur lors de l'annulation");
     }
   };
 
@@ -181,16 +187,18 @@ export default function RechargeManagement() {
             <select
               value={statusFilter}
               onChange={(e) => {
-                setStatusFilter(e.target.value as 'all' | AdminRechargeStatus);
+                setStatusFilter(e.target.value);
                 setCurrentPage(1);
               }}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
               id="status-filter"
             >
               <option value="all">Tous les statuts</option>
-              <option value="pending">En attente</option>
-              <option value="confirmed">Validées</option>
-              <option value="rejected">Rejetées</option>
+              {ADMIN_STATUS_FILTER_LABELS.map((label) => (
+                <option key={label} value={label}>
+                  {label}
+                </option>
+              ))}
             </select>
           </div>
           <div className="md:col-span-2">
@@ -229,6 +237,9 @@ export default function RechargeManagement() {
                   Montant
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Type
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Statut
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -257,11 +268,14 @@ export default function RechargeManagement() {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-600">{methodLabel(recharge.method)}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center gap-2">
                       <span
-                        className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full border ${STATUS_COLORS[recharge.status]}`}
+                        className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full border ${statusChipClass(recharge.status)}`}
                       >
-                        {STATUS_LABELS[recharge.status]}
+                        {statusLabel(recharge.method, recharge.status)}
                       </span>
                       {/* CF-M2 — documented recharges are badged so the queue shows at a glance
                           which requests carry their bank-transfer proof. */}
@@ -287,7 +301,7 @@ export default function RechargeManagement() {
                       >
                         <Eye className="h-5 w-5" />
                       </button>
-                      {recharge.status === 'pending' && (
+                      {isAdminDecidable(recharge) && (
                         <>
                           <button
                             onClick={() => {
@@ -305,7 +319,7 @@ export default function RechargeManagement() {
                               setShowRejectModal(true);
                             }}
                             className="text-red-600 hover:text-red-900"
-                            title="Rejeter"
+                            title="Annuler"
                           >
                             <XCircle className="h-5 w-5" />
                           </button>
@@ -317,7 +331,7 @@ export default function RechargeManagement() {
               ))}
               {pageRows.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-6 py-10 text-center text-sm text-gray-500">
+                  <td colSpan={7} className="px-6 py-10 text-center text-sm text-gray-500">
                     Aucune recharge à afficher
                   </td>
                 </tr>
@@ -410,14 +424,14 @@ export default function RechargeManagement() {
         </div>
       )}
 
-      {/* Modal Rejet */}
+      {/* Modal Annulation (FCT1 — the reject action, per-method « Annulée » status label) */}
       {showRejectModal && selectedRecharge && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full">
             <div className="p-6">
-              <h3 className="text-2xl font-bold text-[#00263A] mb-4">Rejeter la recharge</h3>
+              <h3 className="text-2xl font-bold text-[#00263A] mb-4">Annuler la demande</h3>
               <div className="mb-4">
-                <p className="text-gray-700">Veuillez indiquer la raison du rejet :</p>
+                <p className="text-gray-700">Veuillez indiquer la raison de l&apos;annulation :</p>
                 <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4">
                   <p className="text-sm font-medium text-red-800">
                     Référence: {selectedRecharge.reference}
@@ -432,13 +446,13 @@ export default function RechargeManagement() {
                   className="block text-sm font-medium text-gray-700 mb-2"
                   htmlFor="reject-reason"
                 >
-                  Raison du rejet *
+                  Raison de l&apos;annulation *
                 </label>
                 <textarea
                   value={rejectReason}
                   onChange={(e) => setRejectReason(e.target.value)}
                   rows={4}
-                  placeholder="Indiquer la raison du rejet..."
+                  placeholder="Indiquer la raison de l'annulation..."
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                   required
                   id="reject-reason"
@@ -453,7 +467,7 @@ export default function RechargeManagement() {
                   }}
                   className="px-6 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
                 >
-                  Annuler
+                  Fermer
                 </button>
                 <button
                   onClick={handleReject}
@@ -461,7 +475,7 @@ export default function RechargeManagement() {
                   className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <XCircle className="h-5 w-5" />
-                  <span>Rejeter</span>
+                  <span>Annuler la demande</span>
                 </button>
               </div>
             </div>

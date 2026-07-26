@@ -97,7 +97,10 @@ export default function ScreenhostEligibilityCard({
       onSubmit={(e) => void handleSave(e)}
       className="rounded-xl border border-gray-200 bg-white p-5 space-y-4"
     >
-      <div className="flex items-center justify-between gap-3">
+      {/* FCT1 rider — flex-wrap: the long « Incomplet — … » badge used to be flex-shrink-0 in a
+          nowrap row and crushed the truncating venue name to zero width on narrow cards; wrapping
+          drops the badge to its own line instead, so the name survives. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <div className="flex items-center gap-2 min-w-0">
           <SlidersHorizontal className="h-5 w-5 text-brand-deep flex-shrink-0" />
           <h3 className="text-sm font-semibold text-gray-900 truncate">{screenhost.name}</h3>
@@ -105,11 +108,11 @@ export default function ScreenhostEligibilityCard({
         {/* EL1 commit 2 — the readiness verdict on the venue row, from the SAVED view (not the
             in-progress form): flips only once the fields actually persist. */}
         {readiness.eligible ? (
-          <span className="text-xs font-medium text-green-800 bg-green-100 rounded-full px-3 py-1 flex-shrink-0">
+          <span className="text-xs font-medium text-green-800 bg-green-100 rounded-full px-3 py-1 flex-shrink-0 max-w-full truncate">
             {readinessBadgeLabel(readiness)}
           </span>
         ) : (
-          <span className="text-xs font-medium text-amber-700 bg-amber-50 rounded-full px-3 py-1 flex-shrink-0">
+          <span className="text-xs font-medium text-amber-700 bg-amber-50 rounded-full px-3 py-1 flex-shrink-0 max-w-full truncate">
             {readinessBadgeLabel(readiness)}
           </span>
         )}

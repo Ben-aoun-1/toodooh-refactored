@@ -29,15 +29,20 @@ export function useAdminRecharges() {
 }
 
 /**
- * CF-M2 — the presigned justificatif URL for the review modal. Fetched only while the modal is
- * open on a documented recharge; the URL is short-TTL (300s server-side), so nothing is cached:
- * every open presigns fresh (staleTime 0 / gcTime 0) and an expired link can never be reused.
+ * CF-M2/FCT1 — the presigned recharge-file URLs for the review modal (justificatif, generated
+ * bon, signed bon). Fetched only while the modal is open on a row that carries the file; the URL
+ * is short-TTL (300s server-side), so nothing is cached: every open presigns fresh
+ * (staleTime 0 / gcTime 0) and an expired link can never be reused.
  */
-export function useRechargeDocumentUrl(rechargeId: string | undefined, enabled: boolean) {
+const usePresignedRechargeFile = (
+  key: readonly unknown[],
+  fetcher: () => Promise<{ url: string }>,
+  enabled: boolean,
+) => {
   const query = useQuery({
-    queryKey: adminKeys.rechargeDocumentUrl(rechargeId ?? ''),
-    queryFn: () => adminRechargesService.documentUrl(rechargeId ?? ''),
-    enabled: enabled && !!rechargeId,
+    queryKey: key,
+    queryFn: fetcher,
+    enabled,
     staleTime: 0,
     gcTime: 0,
     retry: false,
@@ -47,6 +52,30 @@ export function useRechargeDocumentUrl(rechargeId: string | undefined, enabled: 
     loading: query.isLoading,
     isError: query.isError,
   };
+};
+
+export function useRechargeDocumentUrl(rechargeId: string | undefined, enabled: boolean) {
+  return usePresignedRechargeFile(
+    adminKeys.rechargeDocumentUrl(rechargeId ?? ''),
+    () => adminRechargesService.documentUrl(rechargeId ?? ''),
+    enabled && !!rechargeId,
+  );
+}
+
+export function useRechargeBonUrl(rechargeId: string | undefined, enabled: boolean) {
+  return usePresignedRechargeFile(
+    adminKeys.rechargeBonUrl(rechargeId ?? ''),
+    () => adminRechargesService.bonUrl(rechargeId ?? ''),
+    enabled && !!rechargeId,
+  );
+}
+
+export function useRechargeSignedBonUrl(rechargeId: string | undefined, enabled: boolean) {
+  return usePresignedRechargeFile(
+    adminKeys.rechargeSignedBonUrl(rechargeId ?? ''),
+    () => adminRechargesService.signedBonUrl(rechargeId ?? ''),
+    enabled && !!rechargeId,
+  );
 }
 
 export interface AdvertiserIdentity {

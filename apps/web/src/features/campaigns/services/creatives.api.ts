@@ -17,7 +17,8 @@ export interface CreativeView {
   validation_notes: string | null;
   validated_at: string | null;
   original_filename: string | null;
-  mime_type: string;
+  /** Nullable — backfilled prod rows don't know their mime (db comment); guard before .startsWith. */
+  mime_type: string | null;
   size_bytes: number | null;
   created_at: string;
   updated_at: string;

@@ -14,6 +14,9 @@ export const walletKeys = {
   /** The user's recharges (GET /api/recharges/mine) — the ledger's credits AND the factures. */
   recharges: (userId: string) => [...walletKeys.all, 'recharges', userId] as const,
 
+  /** FCT1 — Toodooh's bank coordinates for the « Pour info » block (config-backed, user-free). */
+  bankCoordinates: () => [...walletKeys.all, 'bankCoordinates'] as const,
+
   /** Owner revenue summary (`revenueService.getRevenueStats`). */
   revenueStats: (userId: string) => [...walletKeys.all, 'revenueStats', userId] as const,
 
