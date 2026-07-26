@@ -28,6 +28,7 @@ const OwnerDashboard = lazy(() => import('@/features/screenhost/pages/OwnerDashb
 const Login = lazy(() => import('@/features/auth/pages/Login'));
 const SignUp = lazy(() => import('@/features/auth/pages/SignUp'));
 const SignUpSuccess = lazy(() => import('@/features/auth/pages/SignUpSuccess'));
+const AppTvDownload = lazy(() => import('@/features/apptv/pages/AppTvDownload'));
 const ResetPassword = lazy(() => import('@/features/auth/pages/ResetPassword'));
 const UpdatePassword = lazy(() => import('@/features/auth/pages/UpdatePassword'));
 const VerifyEmail = lazy(() => import('@/features/auth/pages/VerifyEmail'));
@@ -287,6 +288,11 @@ export default function App() {
             {/* Verify-email result (Phase-1f F3): the better-auth callbackURL target. Standalone —
                 the just-verified user is logged out and must always see the result. */}
             <Route path="/verify-email" element={<VerifyEmail />} />
+
+            {/* APPTV-1 — the PUBLIC TV-app download page. Standalone on purpose (the
+                /verify-email idiom): no guard, no PublicRoute (which bounces authed users) —
+                reachable logged-out AND logged-in; a TV browser may open it on the television. */}
+            <Route path="/apptv" element={<AppTvDownload />} />
 
             {/* N3 — account-status screen for a rejected end-user (gated to a signed-in rejected account). */}
             <Route
