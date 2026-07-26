@@ -69,6 +69,7 @@ services:
       # wedooh.too-dooh.com server block (host PM2 app via bridge gateway) — added 2026-06-10
       - ./nginx/wedooh.conf:/etc/nginx/conf.d/wedooh.conf:ro
       - ./www:/srv/toodooh/www:ro
+      - /srv/toodooh/apk:/srv/toodooh/apk:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - certbot-webroot:/var/www/certbot
     networks: [internal]
