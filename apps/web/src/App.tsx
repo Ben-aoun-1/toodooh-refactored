@@ -376,16 +376,6 @@ export default function App() {
               }
             />
             <Route
-              path="/new-event-campaign"
-              element={
-                <AdvertiserRoute>
-                  <AdvertiserLayout>
-                    <NewCampaign />
-                  </AdvertiserLayout>
-                </AdvertiserRoute>
-              }
-            />
-            <Route
               path="/my-cart"
               element={
                 <AdvertiserRoute>

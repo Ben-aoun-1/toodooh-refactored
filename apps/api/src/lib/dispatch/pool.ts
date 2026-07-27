@@ -6,6 +6,7 @@ import {
   campaignDispatchPlan,
   campaignTargeting,
   campaignZones,
+  hourReservations,
   screenhostAffluence,
   screenhostUnavailability,
   screenhosts,
@@ -228,6 +229,34 @@ export const assemblePool = async (
     unavailableBySh.set(u.screenhostId, set);
   }
 
+  // EV1 — hour_reservations: venue-hours held by SOMETHING ELSE (whatever writes the table —
+  // the engine is deliberately blind to what; no event semantics here). A reserved (day, hour)
+  // cell drops out of Hi and its affluence out of the venue's total below, shrinking capacity and
+  // C_max by exactly that hour's worth. With the table empty this fetch returns nothing and the
+  // cell loop is arithmetically identical to pre-EV1 (pinned byte-identical in tests).
+  const reservationRows = candidateIds.length
+    ? await executor
+        .select({
+          screenhostId: hourReservations.screenhostId,
+          day: hourReservations.day,
+          hour: hourReservations.hour,
+        })
+        .from(hourReservations)
+        .where(
+          and(
+            inArray(hourReservations.screenhostId, candidateIds),
+            gte(hourReservations.day, windowStart),
+            lte(hourReservations.day, windowEnd),
+          ),
+        )
+    : [];
+  const reservedBySh = new Map<string, Set<string>>();
+  for (const r of reservationRows) {
+    const set = reservedBySh.get(r.screenhostId) ?? new Set<string>();
+    set.add(`${r.day}:${r.hour}`);
+    reservedBySh.set(r.screenhostId, set);
+  }
+
   const engagementRows = candidateIds.length
     ? await executor
         .select({
@@ -286,11 +315,17 @@ export const assemblePool = async (
         affluence: affByKey.get(`${sh.id}:${dow}:${hour}`) ?? 0,
       })),
     );
-    const hours = days.length * bHours.length; // Hi — broadcastable slots over the AVAILABLE days
+    // Hi — broadcastable slots over the AVAILABLE days, minus any reserved (day, hour) cells
+    // (EV1 seam — with no reservations this counts exactly days.length × bHours.length as before).
+    const reserved = reservedBySh.get(sh.id);
+    let hours = 0;
     let totalAffluence = 0;
     for (const day of days) {
-      for (const hour of bHours)
+      for (const hour of bHours) {
+        if (reserved?.has(`${day.date}:${hour}`)) continue;
+        hours += 1;
         totalAffluence += affByKey.get(`${sh.id}:${day.dayOfWeek}:${hour}`) ?? 0;
+      }
     }
     const avgAffluence = hours > 0 ? totalAffluence / hours : 0;
     // Floor to whole impressions: capaciteUtile round-trips through FP (avgAffluence = total/hours

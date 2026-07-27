@@ -5,6 +5,7 @@ import { adminCampaignsRoutes } from './admin-campaigns.js';
 import { adminCreativesRoutes } from './admin-creatives.js';
 import { adminDispatchConfigRoutes } from './admin-dispatch-config.js';
 import { adminEngineJournalRoutes } from './admin-engine-journal.js';
+import { adminEventsRoutes } from './admin-events.js';
 import { adminPlatformStatsRoutes } from './admin-platform-stats.js';
 import { adminRechargesRoutes } from './admin-recharges.js';
 import { adminReconcileRoutes } from './admin-reconcile.js';
@@ -20,6 +21,7 @@ import { cartRoutes } from './cart.js';
 import { creativesRoutes } from './creatives.js';
 import { deviceAuthRoutes } from './device-auth.js';
 import { emailAvailabilityRoute } from './email-availability.js';
+import { eventsRoutes } from './events.js';
 import { internalRoutes } from './internal.js';
 import { meRoutes } from './me.js';
 import { notificationsRoutes } from './notifications.js';
@@ -71,6 +73,9 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   // L-spot — advertiser creative library (greenfield): upload (video|photo) + owner-scoped reads.
   // MinIO storage-first/no-orphan; admin moderation lives in admin-creatives.
   await app.register(creativesRoutes);
+  // EV1 — the sport-event catalogue: official reads + the shared suggestion list + « Suggérer un
+  // match ». Positioning (EV3) and pricing (EV2) are NOT here.
+  await app.register(eventsRoutes);
   // L-target — campaign audience targeting (category × class lines, ALL=toutes); owner-scoped to the
   // campaign's advertiser, replace-set write, draft-only. Dedup + category validation server-side.
   await app.register(campaignTargetingRoutes);
@@ -111,6 +116,8 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   // screencaster wallet (the spend) + record screenhost earnings. Idempotent per campaign.
   await app.register(adminReconcileRoutes);
   await app.register(adminEngineJournalRoutes);
+  // EV1 — admin event management (§10 field set, type locked Sport, annuler, affiche upload).
+  await app.register(adminEventsRoutes);
   // Superadmin-only internal-account creation (staff admins + agents) — slice-2 A.
   await app.register(adminAccountsRoutes);
   // S-T1 — service-authenticated toodooh↔wedooh sync surface (/api/internal/*): B1 locations read,

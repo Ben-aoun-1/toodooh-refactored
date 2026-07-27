@@ -1567,3 +1567,71 @@ export const notifications = pgTable(
 
 export type Notification = typeof notifications.$inferSelect;
 export type NewNotification = typeof notifications.$inferInsert;
+
+// ── events (EV1 — the sport-event catalogue) ─────────────────────────────────
+// Sport-only V1: `type` is CHECK-locked to 'sport' (the column exists so a later vertical is a
+// CHECK change, not a migration of meaning). Official events are admin-created; 'suggested' rows
+// come from advertisers (« Suggérer un match ») and carry suggested_by — they are SHARED (every
+// advertiser sees them) but never join the official catalogue. The diffusion window (kickoff ± 1 h
+// + the six 20-min blocs) is ALWAYS derived by lib/fenetre-diffusion — deliberately NO stored
+// window/bloc columns, so an admin date edit can never leave a stale window behind. `annule` is a
+// soft cancel (the row keeps its history); image_key follows the storage-key-not-URL idiom
+// (presigned on read).
+export const events = pgTable(
+  'events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull(),
+    description: text('description'),
+    imageKey: text('image_key'),
+    type: text('type').notNull().default('sport'),
+    category: text('category'),
+    kickoffAt: timestamp('kickoff_at', { withTimezone: true }).notNull(),
+    endsAt: timestamp('ends_at', { withTimezone: true }).notNull(),
+    annule: boolean('annule').notNull().default(false),
+    source: text('source').notNull().default('official'),
+    suggestedBy: uuid('suggested_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('events_kickoff_at_idx').on(table.kickoffAt),
+    check('events_type_sport', sql`${table.type} = 'sport'`),
+    check('events_ends_after_kickoff', sql`${table.endsAt} > ${table.kickoffAt}`),
+    check('events_source_valid', sql`${table.source} in ('official', 'suggested')`),
+  ],
+);
+
+export type EventRow = typeof events.$inferSelect;
+export type NewEventRow = typeof events.$inferInsert;
+
+// ── hour_reservations (EV1 — the slots_evt seam, D51) ────────────────────────
+// A reserved venue-hour: (screenhost, calendar day, hour) held for an event. WRITTEN BY NOTHING
+// in EV1 — the positioning parcours (EV3) will produce rows; assemblePool already SUBTRACTS any
+// row generically (a reserved hour shrinks that venue's capacity/C_max), with no event semantics
+// in the engine. With the table empty the pool math is byte-identical to pre-EV1 (pinned).
+export const hourReservations = pgTable(
+  'hour_reservations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    screenhostId: uuid('screenhost_id')
+      .notNull()
+      .references(() => screenhosts.id, { onDelete: 'cascade' }),
+    day: date('day').notNull(),
+    hour: integer('hour').notNull(),
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique('hour_reservations_cell_uq').on(
+      table.screenhostId,
+      table.day,
+      table.hour,
+      table.eventId,
+    ),
+    check('hour_reservations_hour_range', sql`${table.hour} >= 0 and ${table.hour} <= 23`),
+  ],
+);
+
+export type HourReservation = typeof hourReservations.$inferSelect;
