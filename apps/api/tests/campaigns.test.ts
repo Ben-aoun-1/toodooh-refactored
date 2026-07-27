@@ -390,7 +390,7 @@ describe('campaigns draft lifecycle (advertiser, real Postgres)', () => {
     expect(res.json()).toEqual({
       error: 'INVALID_START_DATE',
       reason: 'TOO_SOON',
-      message: 'The start date must be at least 2 working day(s) ahead.',
+      message: 'La date de début doit être au moins 2 jour(s) ouvré(s) plus tard.',
       first_available_start_date: floorDate(),
     });
     expect(await db.select().from(campaigns)).toHaveLength(0); // nothing persisted
@@ -495,7 +495,7 @@ describe('campaigns draft lifecycle (advertiser, real Postgres)', () => {
       expect(past.statusCode).toBe(400);
       expect(past.json()).toMatchObject({
         reason: 'TOO_SOON',
-        message: 'The start date must be at least 0 working day(s) ahead.',
+        message: 'La date de début doit être au moins 0 jour(s) ouvré(s) plus tard.',
         first_available_start_date: today,
       });
     } finally {

@@ -1,10 +1,12 @@
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import { db } from '../db/client.js';
 import {
   businessSectors,
+  campaignDispatchAllocation,
+  campaignDispatchPlan,
   campaignReconciliation,
   campaignTargeting,
   campaignZones,
@@ -38,7 +40,7 @@ import { requireAuth } from '../middleware/require-auth.js';
 const startDateRejection = (violation: StartDateViolation, leadWorkingDays: number) => ({
   error: 'INVALID_START_DATE',
   reason: violation,
-  message: `The start date must be at least ${leadWorkingDays} working day(s) ahead.`,
+  message: `La date de début doit être au moins ${leadWorkingDays} jour(s) ouvré(s) plus tard.`,
   first_available_start_date: premiereDateDisponible(new Date(), leadWorkingDays),
 });
 
@@ -59,7 +61,7 @@ async function invalidZoneIds(zoneIds: readonly string[]): Promise<string[]> {
 
 const invalidZoneRejection = (unknown: readonly string[]) => ({
   error: 'INVALID_ZONE',
-  message: 'One or more zone_ids do not reference an active zone.',
+  message: 'Une ou plusieurs zones sélectionnées ne sont pas actives.',
   unknown_zone_ids: [...unknown],
 });
 
@@ -225,7 +227,7 @@ const buildUpdatePatch = (data: UpdateInput): Partial<typeof campaigns.$inferIns
 
 const invalidId = {
   error: 'INVALID_INPUT',
-  message: 'Validation failed',
+  message: 'Validation échouée',
   fields: [{ field: 'id', reason: 'must be a uuid' }],
 };
 
@@ -238,7 +240,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     if (!parsed.success) {
       return reply.status(400).send({
         error: 'INVALID_INPUT',
-        message: 'Validation failed',
+        message: 'Validation échouée',
         fields: parsed.error.issues.map((i) => ({ field: i.path.join('.'), reason: i.message })),
       });
     }
@@ -246,7 +248,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     if (!userId) {
       return reply
         .status(401)
-        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentification requise.' });
     }
     if (parsed.data.start_date) {
       const lead = await campaignLead();
@@ -291,7 +293,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     if (!userId) {
       return reply
         .status(401)
-        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentification requise.' });
     }
     const rows = await db
       .select({
@@ -339,6 +341,27 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
 
     const zoneMap = await zonesByCampaign(ids);
 
+    // CF-HF3 (Mejri item 3) — « Impressions prévues »: the FROZEN plan's placed facturable
+    // (Σ allocations.ii_potentiel over the campaign's unique plan), null when no plan exists yet
+    // (the web falls back to the budget-derived estimate). A pure READ of the plan — the display
+    // rule never recomputes engine numbers.
+    const plannedByCampaign = new Map<string, number>();
+    if (ids.length > 0) {
+      const planned = await db
+        .select({
+          campaignId: campaignDispatchPlan.campaignId,
+          placedFact: sql<string>`coalesce(sum(${campaignDispatchAllocation.iiPotentiel}), 0)`,
+        })
+        .from(campaignDispatchPlan)
+        .innerJoin(
+          campaignDispatchAllocation,
+          eq(campaignDispatchAllocation.planId, campaignDispatchPlan.id),
+        )
+        .where(inArray(campaignDispatchPlan.campaignId, ids))
+        .groupBy(campaignDispatchPlan.campaignId);
+      for (const p of planned) plannedByCampaign.set(p.campaignId, Number(p.placedFact));
+    }
+
     return reply.status(200).send(
       rows.map((r) => ({
         ...campaignView(r, r.contentValidationStatus),
@@ -348,6 +371,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         spend_tnd: r.spendTnd == null ? null : Number(r.spendTnd),
         reconciled_at: r.reconciledAt ?? null,
         targeting: targetingByCampaign.get(r.id) ?? [],
+        planned_impressions: plannedByCampaign.get(r.id) ?? null,
       })),
     );
   });
@@ -360,7 +384,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     if (!userId) {
       return reply
         .status(401)
-        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentification requise.' });
     }
     const [row] = await db
       .select({ ...campaignSelection, contentValidationStatus: creatives.validationStatus })
@@ -369,7 +393,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
       .where(and(eq(campaigns.id, parsedParams.data.id), eq(campaigns.advertiserId, userId)))
       .limit(1);
     if (!row) {
-      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such campaign.' });
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'Campagne introuvable.' });
     }
     const zoneMap = await zonesByCampaign([row.id]);
     return reply.status(200).send({
@@ -386,7 +410,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     if (!parsed.success) {
       return reply.status(400).send({
         error: 'INVALID_INPUT',
-        message: 'Validation failed',
+        message: 'Validation échouée',
         fields: parsed.error.issues.map((i) => ({ field: i.path.join('.'), reason: i.message })),
       });
     }
@@ -394,7 +418,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     if (!userId) {
       return reply
         .status(401)
-        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentification requise.' });
     }
     // CF-Q2 — an explicit null still clears the date; only a SET start date meets the floor.
     if (parsed.data.start_date) {
@@ -414,14 +438,14 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
       .where(and(eq(campaigns.id, parsedParams.data.id), eq(campaigns.advertiserId, userId)))
       .limit(1);
     if (!existing) {
-      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such campaign.' });
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'Campagne introuvable.' });
     }
     // CF-S1 — a Non validé campaign is RECOVERABLE: editable like a draft (resubmit clears the
     // rejection audit below in /submit).
     if (existing.status !== 'draft' && existing.status !== 'rejected') {
       return reply.status(409).send({
         error: 'CONFLICT',
-        message: 'Only a draft or rejected campaign can be edited.',
+        message: 'Seule une campagne en brouillon ou rejetée peut être modifiée.',
         statusCode: 409,
       });
     }
@@ -434,7 +458,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         .where(and(eq(creatives.id, parsed.data.creative_id), eq(creatives.advertiserId, userId)))
         .limit(1);
       if (!creative) {
-        return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such creative.' });
+        return reply.status(404).send({ error: 'NOT_FOUND', message: 'Créative introuvable.' });
       }
     }
     // CF-Z1 — a zone-only PATCH has an empty columns patch: skip the UPDATE (drizzle rejects an
@@ -474,7 +498,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     if (!userId) {
       return reply
         .status(401)
-        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentification requise.' });
     }
     const [row] = await db
       .select({
@@ -490,7 +514,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
       .where(and(eq(campaigns.id, parsedParams.data.id), eq(campaigns.advertiserId, userId)))
       .limit(1);
     if (!row) {
-      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such campaign.' });
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'Campagne introuvable.' });
     }
     const missing: string[] = [];
     if (!row.startDate || !row.endDate) missing.push('dates');
@@ -533,7 +557,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     if (!userId) {
       return reply
         .status(401)
-        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentification requise.' });
     }
     const [existing] = await db
       .select({
@@ -551,7 +575,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
       .where(and(eq(campaigns.id, parsedParams.data.id), eq(campaigns.advertiserId, userId)))
       .limit(1);
     if (!existing) {
-      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such campaign.' });
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'Campagne introuvable.' });
     }
     if (existing.status !== 'draft' && existing.status !== 'rejected') {
       return reply.status(409).send({
@@ -658,7 +682,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     if (!userId) {
       return reply
         .status(401)
-        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentification requise.' });
     }
     // Owner-scope in the WHERE: a foreign id is indistinguishable from a missing one.
     const [source] = await db
@@ -667,7 +691,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
       .where(and(eq(campaigns.id, parsedParams.data.id), eq(campaigns.advertiserId, userId)))
       .limit(1);
     if (!source) {
-      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such campaign.' });
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'Campagne introuvable.' });
     }
     // Rejouer is a Passée-only affordance (spec §3.3) — a draft is resumable, a rejected one is
     // recoverable, a live one is running; none of them is REPLAYABLE.
@@ -752,7 +776,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     if (!userId) {
       return reply
         .status(401)
-        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentification requise.' });
     }
     const [existing] = await db
       .select({ id: campaigns.id, status: campaigns.status })
@@ -760,7 +784,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
       .where(and(eq(campaigns.id, parsedParams.data.id), eq(campaigns.advertiserId, userId)))
       .limit(1);
     if (!existing) {
-      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such campaign.' });
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'Campagne introuvable.' });
     }
     if (existing.status !== 'draft') {
       return reply.status(409).send({
