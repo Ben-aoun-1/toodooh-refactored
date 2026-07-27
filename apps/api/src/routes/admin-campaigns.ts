@@ -49,7 +49,7 @@ const deriveICible = (requestedBudget: number | null, cpm: number): number | nul
 const invalidField = (reply: FastifyReply, field: string, reason: string) =>
   reply
     .status(400)
-    .send({ error: 'INVALID_INPUT', message: 'Validation failed', fields: [{ field, reason }] });
+    .send({ error: 'INVALID_INPUT', message: 'Validation échouée', fields: [{ field, reason }] });
 
 // 409 for a campaign that is not pending (can't activate/reject a draft/active/rejected one). Carries
 // the current status so the admin UI shows "already active/rejected" instead of a blind retry.
@@ -61,7 +61,8 @@ const sendNotPending = (
 ) =>
   reply.status(409).send({
     error: 'CONFLICT',
-    message: `Only a pending campaign can be ${verb} (currently ${status}).`,
+    // CF-HF3 — French; `verb` is now the French participle ('activée' / 'rejetée').
+    message: `Seule une campagne en attente peut être ${verb} (statut actuel : ${status}).`,
     statusCode: 409,
     requestId: request.id,
     currentStatus: status,
@@ -136,7 +137,7 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
     if (!adminId) {
       return reply
         .status(401)
-        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentification requise.' });
     }
     const { id } = parsedParams.data;
 
@@ -150,7 +151,8 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
       .leftJoin(creatives, eq(campaigns.creativeId, creatives.id))
       .where(eq(campaigns.id, id))
       .limit(1);
-    if (!row) return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such campaign.' });
+    if (!row)
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'Campagne introuvable.' });
     const { campaign, contentValidationStatus, creativeDurationSeconds } = row;
 
     // CF-SK1 — the gate chain, dispatch and the date-routed flip now live in the shared
@@ -164,15 +166,24 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
       fromStatus: 'pending',
     });
 
+    // CF-HF3 (Mejri item 6) — the messages below reach the operator's toast VERBATIM
+    // (CampaignReviewQueue renders getErrorMessage): French, precise. The `reason` codes are the
+    // wire contract and stay untouched. Item 4's fix rides here too: the old content_not_approved
+    // sentence "(or no creative is linked)" conflated TWO states — a campaign with NO creative
+    // and one whose creative awaits moderation now get DISTINCT French messages (the gate itself
+    // was always type-agnostic — an approved IMAGE activates like a video, pinned in tests).
     if (outcome.status === 'WRONG_STATUS') {
-      return sendNotPending(reply, request, outcome.currentStatus, 'activated');
+      return sendNotPending(reply, request, outcome.currentStatus, 'activée');
     }
     if (outcome.status === 'NOT_ACTIVATABLE') {
       if (outcome.reason === 'content_not_approved') {
         return reply.status(422).send({
           error: 'NOT_ACTIVATABLE',
           reason: 'content_not_approved',
-          message: 'The linked creative is not admin-approved (or no creative is linked).',
+          message:
+            outcome.contentValidationStatus === null
+              ? "Aucun spot n'est associé à cette campagne."
+              : "Le spot lié n'est pas encore approuvé par la modération.",
           content_validation_status: outcome.contentValidationStatus,
         });
       }
@@ -180,7 +191,7 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
         return reply.status(422).send({
           error: 'NOT_ACTIVATABLE',
           reason: 'no_budget',
-          message: 'The campaign has no indicative budget to derive a target from.',
+          message: "La campagne n'a pas de budget indicatif pour dériver un objectif.",
           requested_budget: outcome.requestedBudget,
         });
       }
@@ -188,7 +199,7 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
         return reply.status(422).send({
           error: 'NOT_ACTIVATABLE',
           reason: 'no_duration',
-          message: 'The linked creative has no diffusion duration to use as the spot length.',
+          message: "Le spot lié n'a pas de durée de diffusion (longueur du spot).",
           duration_seconds: outcome.durationSeconds,
         });
       }
@@ -196,7 +207,8 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
         return reply.status(422).send({
           error: 'NOT_ACTIVATABLE',
           reason: 'budget_too_low',
-          message: 'The indicative budget is below one CPM unit — no impressions can be targeted.',
+          message:
+            'Le budget indicatif est inférieur à une unité CPM — aucune impression ciblable.',
           requested_budget: outcome.requestedBudget,
           cpm_tnd: outcome.cpmTnd,
         });
@@ -204,15 +216,16 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(422).send({
         error: 'NOT_ACTIVATABLE',
         reason: 'insufficient_balance',
-        message: 'The advertiser wallet balance is below the campaign budget.',
+        message: "Le solde de l'annonceur est inférieur au budget de la campagne.",
         required_tnd: outcome.requiredTnd,
         available_tnd: outcome.availableTnd,
       });
     }
     if (outcome.status === 'NO_WINDOW') {
+      // The useful text used to hide in fields[] behind a bare 'Validation failed' — surface it.
       return reply.status(400).send({
         error: 'INVALID_INPUT',
-        message: 'Validation failed',
+        message: 'La campagne doit avoir une date de début et une date de fin.',
         fields: [{ field: 'window', reason: 'campaign requires a start_date and end_date' }],
       });
     }
@@ -222,7 +235,7 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
           error: 'NOT_DELIVERABLE',
           reason: 'too_thin',
           message:
-            'Covering I_cible would exceed materiality (N_min > N_max). Lower the cursor or broaden targeting, then retry.',
+            "Couvrir l'objectif dépasserait la matérialité (N_min > N_max). Réduisez le budget ou élargissez le ciblage, puis réessayez.",
           n_min: outcome.nMin,
           n_max: outcome.nMax,
         });
@@ -230,11 +243,14 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(422).send({
         error: 'NOT_DELIVERABLE',
         reason: 'no_eligible',
-        message: 'No eligible screenhost could be allocated. Adjust targeting/window, then retry.',
+        message:
+          'Aucun établissement éligible n’a pu être alloué. Ajustez le ciblage ou la période, puis réessayez.',
       });
     }
     if (outcome.status === 'PLAN_MISSING') {
-      return reply.status(500).send({ error: 'INTERNAL_ERROR', message: 'Dispatch plan missing.' });
+      return reply
+        .status(500)
+        .send({ error: 'INTERNAL_ERROR', message: 'Plan de diffusion introuvable.' });
     }
 
     const activated = outcome.campaign;
@@ -253,7 +269,7 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
     if (!parsedBody.success) {
       return reply.status(400).send({
         error: 'INVALID_INPUT',
-        message: 'Validation failed',
+        message: 'Validation échouée',
         fields: parsedBody.error.issues.map((i) => ({
           field: i.path.join('.'),
           reason: i.message,
@@ -264,7 +280,7 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
     if (!adminId) {
       return reply
         .status(401)
-        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentification requise.' });
     }
     const { id } = parsedParams.data;
     const [existing] = await db
@@ -273,9 +289,9 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
       .where(eq(campaigns.id, id))
       .limit(1);
     if (!existing)
-      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such campaign.' });
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'Campagne introuvable.' });
     if (existing.status !== 'pending')
-      return sendNotPending(reply, request, existing.status, 'rejected');
+      return sendNotPending(reply, request, existing.status, 'rejetée');
 
     const [updated] = await db
       .update(campaigns)
@@ -288,7 +304,7 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
         .from(campaigns)
         .where(eq(campaigns.id, id))
         .limit(1);
-      return sendNotPending(reply, request, current?.status ?? existing.status, 'rejected');
+      return sendNotPending(reply, request, current?.status ?? existing.status, 'rejetée');
     }
     return reply.status(200).send(adminCampaignView(updated, null));
   });

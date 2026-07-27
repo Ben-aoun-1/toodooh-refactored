@@ -57,6 +57,11 @@ describe('cartReasonFr — every api gate code speaks French', () => {
     'BUDGET_BELOW_MINIMUM',
     'BUDGET_EXCEEDS_CMAX',
     'NOT_FOUND',
+    // CF-HF3 — the CF-SK1 approved-skip refusal codes were unmapped and said nothing useful.
+    'CONTENT_NOT_APPROVED',
+    'NO_DURATION',
+    'BUDGET_TOO_LOW',
+    'INSUFFICIENT_BALANCE',
   ])('%s has a dedicated message', (code) => {
     expect(cartReasonFr(code)).not.toBe(cartReasonFr('SOMETHING_UNKNOWN'));
   });

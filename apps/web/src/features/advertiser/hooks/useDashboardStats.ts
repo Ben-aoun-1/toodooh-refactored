@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 
+import { campaignsApi } from '@/features/campaigns/services/campaigns.api';
 import { walletService } from '@/features/wallet/services/wallet.service';
 import { logger } from '@/lib/logger';
 
@@ -31,14 +32,24 @@ interface UseDashboardStatsResult {
  * recharges from another session, and the balance card must show the credit without a manual
  * refresh.
  *
- * The CAMPAIGN stats legs (views/budget/year buckets) were Supabase reads — disabled in prod (the
- * lazy client throws, so this whole query errored and every stat rendered 0). They now compute
- * over an EMPTY list: identical rendered output, no dead client. De-Supabase backlog: a live
- * source for views/budget aggregates (GET /api/campaigns/mine has requested_budget/status but no
- * views) — see #15.
+ * CF-HF3 (Mejri item 3) — the CAMPAIGN legs are live too: GET /api/campaigns/mine feeds the
+ * views/budget/year buckets (views = the RECONCILED delivered impressions — « Impressions
+ * générées » counts real deliveries, 0 until a settlement writes one). The old hardcoded empty
+ * list (the Supabase-era stub) is retired. A campaigns-fetch error degrades to the empty list,
+ * mirroring the balance leg.
  */
 async function fetchDashboardStats(): Promise<DashboardStatsResult> {
-  const campaigns: DashboardStatsCampaignRow[] = [];
+  let campaigns: DashboardStatsCampaignRow[] = [];
+  try {
+    campaigns = (await campaignsApi.mine()).map((c) => ({
+      status: c.status,
+      views: c.delivered_impressions ?? 0,
+      budget: c.requested_budget,
+      created_at: c.created_at,
+    }));
+  } catch (e) {
+    log.error({ error: e }, 'Erreur récupération campagnes (stats)');
+  }
 
   let balance = 0;
   try {

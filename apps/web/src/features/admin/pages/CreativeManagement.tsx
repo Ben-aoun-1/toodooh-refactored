@@ -106,7 +106,7 @@ export default function CreativeManagement() {
   };
 
   const formatDate = (dateString: string | null) => {
-    if (!dateString) return 'N/A';
+    if (!dateString) return '—';
     return new Date(dateString).toLocaleDateString('fr-FR', {
       year: 'numeric',
       month: 'long',
@@ -117,12 +117,12 @@ export default function CreativeManagement() {
   };
 
   const formatFileSize = (bytes: number | null) => {
-    if (!bytes) return 'N/A';
-    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+    if (!bytes) return '—';
+    return `${(bytes / (1024 * 1024)).toFixed(2)} Mo`;
   };
 
   const formatDuration = (seconds: number | null) => {
-    if (!seconds) return 'N/A';
+    if (!seconds) return '—';
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
@@ -282,7 +282,7 @@ export default function CreativeManagement() {
                   <div>
                     <p className="text-sm font-medium text-gray-700">Fichier:</p>
                     <p className="text-sm text-gray-900">
-                      {selected.original_filename || selected.title || 'N/A'}
+                      {selected.original_filename || selected.title || '—'}
                     </p>
                   </div>
                   <div>

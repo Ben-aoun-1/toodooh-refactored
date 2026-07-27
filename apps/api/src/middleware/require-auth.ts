@@ -1,7 +1,10 @@
 import { fromNodeHeaders } from 'better-auth/node';
+import { eq } from 'drizzle-orm';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { auth } from '../auth/auth.js';
+import { db } from '../db/client.js';
+import { users } from '../db/schema.js';
 
 export interface AuthUser {
   id: string;
@@ -17,25 +20,45 @@ declare module 'fastify' {
 
 // Reusable session-guard preHandler. Validates the better-auth session and attaches
 // request.user; shaped-401 on no/invalid session. Every authenticated route attaches
-// this via { preHandler: requireAuth }. This commit only VALIDATES sessions; creation
-// is Phase-1d sign-in. getSession({ headers }) returns { session, user } | null
-// (Commit 3 §2.2) — null → 401, never throws on the no-session path.
+// this via { preHandler: requireAuth }. getSession({ headers }) returns { session, user } | null
+// — null → 401, never throws on the no-session path.
+//
+// CF-HF3 (Mejri item 5) — role resolution HARDENED: the old `role ?? 'advertiser'` silently
+// DEGRADED a session whose serialized user lacked the role additionalField, turning a genuine
+// admin into an advertiser and 403-ing every /api/admin/* call with « Accès administrateur
+// requis » despite a valid admin session. A role/status-less session user now resolves from the
+// users row instead of assuming; the defaults only apply when the row itself is gone.
 export const requireAuth = async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
   const session = await auth.api.getSession({ headers: fromNodeHeaders(request.headers) });
   if (!session) {
     await reply.status(401).send({
       error: 'UNAUTHENTICATED',
-      message: 'Authentication required.',
+      message: 'Authentification requise.',
       statusCode: 401,
       requestId: request.id,
     });
     return;
   }
   const sessionUser = session.user as { id: string; role?: string; status?: string };
+  let role = sessionUser.role;
+  let status = sessionUser.status;
+  if (role === undefined || status === undefined) {
+    try {
+      const [row] = await db
+        .select({ role: users.role, status: users.status })
+        .from(users)
+        .where(eq(users.id, sessionUser.id))
+        .limit(1);
+      role ??= row?.role;
+      status ??= row?.status;
+    } catch {
+      // Unresolvable (e.g. a malformed id) — fall through to the conservative defaults below.
+    }
+  }
   request.user = {
     id: sessionUser.id,
-    role: sessionUser.role ?? 'advertiser',
-    status: sessionUser.status ?? 'pending',
+    role: role ?? 'advertiser',
+    status: status ?? 'pending',
   };
 };
 
@@ -50,7 +73,7 @@ export const requireRole =
     if (role === undefined || !allowed.includes(role)) {
       await reply.status(403).send({
         error: 'FORBIDDEN',
-        message: 'Insufficient privileges for this action.',
+        message: 'Privilèges insuffisants pour cette action.',
         statusCode: 403,
         requestId: request.id,
       });
@@ -76,7 +99,7 @@ export const requireActiveAccount = async (
   if (INACTIVE_STATUSES.has(request.user?.status ?? '')) {
     await reply.status(403).send({
       error: 'ACCOUNT_NOT_ACTIVE',
-      message: 'Your account does not have access to this resource.',
+      message: "Votre compte n'a pas accès à cette ressource.",
       statusCode: 403,
       requestId: request.id,
     });
@@ -95,7 +118,8 @@ export const requireAdmin = async (request: FastifyRequest, reply: FastifyReply)
   if (role === undefined || !ADMIN_ROLES.has(role)) {
     await reply.status(403).send({
       error: 'FORBIDDEN',
-      message: 'Administrator access required.',
+      // CF-HF3 — French (the old 'Administrator access required.' reached admin toasts verbatim).
+      message: 'Accès administrateur requis.',
       statusCode: 403,
       requestId: request.id,
     });

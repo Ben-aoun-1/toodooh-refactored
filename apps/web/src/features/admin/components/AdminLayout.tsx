@@ -118,7 +118,9 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
             <div className="flex items-center justify-between h-16 px-6 border-b border-gray-200">
               <div className="flex items-center">
                 <Shield className="h-8 w-8 text-brand-primary" />
-                <span className="ml-2 text-lg font-semibold text-gray-900">Admin Panel</span>
+                <span className="ml-2 text-lg font-semibold text-gray-900">
+                  Panneau d'administration
+                </span>
               </div>
               <button
                 onClick={() => setSidebarOpen(false)}

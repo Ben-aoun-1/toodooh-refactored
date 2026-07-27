@@ -42,7 +42,7 @@ const TND = (n: number | null): string =>
   n === null ? '—' : `${n.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} TND`;
 
 const formatDate = (dateString: string | null): string => {
-  if (!dateString) return 'N/A';
+  if (!dateString) return '—';
   return new Date(dateString).toLocaleDateString('fr-FR', {
     year: 'numeric',
     month: 'long',

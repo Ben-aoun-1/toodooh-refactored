@@ -5,6 +5,7 @@ import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 import { useOwnerBusinessSectors } from '@/features/auth/hooks/useOwnerBusinessSectors';
+import { CART_BUDGET_STEP_TND } from '@/features/campaigns/hooks/new-campaign/cart-budget';
 import { campaignsKeys } from '@/features/campaigns/hooks/queryKeys';
 import { useZones } from '@/features/campaigns/hooks/useZones';
 import {
@@ -266,7 +267,7 @@ export default function BoostCampaignModal({ campaign, userId, onClose }: BoostC
                   type="range"
                   min={CAMPAIGN_BUDGET_FLOOR_TND}
                   max={sliderMax}
-                  step={10}
+                  step={CART_BUDGET_STEP_TND}
                   value={amount ?? CAMPAIGN_BUDGET_FLOOR_TND}
                   onChange={(e) => setAmount(Number(e.target.value))}
                   className="w-full accent-brand-primary"

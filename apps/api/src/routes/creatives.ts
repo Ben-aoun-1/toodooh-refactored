@@ -50,12 +50,12 @@ const uploadQuerySchema = z.object({
 });
 
 const sendUnauthenticated = (reply: FastifyReply) =>
-  reply.status(401).send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+  reply.status(401).send({ error: 'UNAUTHENTICATED', message: 'Authentification requise.' });
 
 const invalidField = (reply: FastifyReply, field: string, reason: string) =>
   reply
     .status(400)
-    .send({ error: 'INVALID_INPUT', message: 'Validation failed', fields: [{ field, reason }] });
+    .send({ error: 'INVALID_INPUT', message: 'Validation échouée', fields: [{ field, reason }] });
 
 export const creativesRoutes: FastifyPluginAsync = async (app) => {
   // Framework-level guard: busboy stops at fileSize, so an oversized upload is never fully buffered.
@@ -72,7 +72,7 @@ export const creativesRoutes: FastifyPluginAsync = async (app) => {
     if (!parsedQuery.success) {
       return reply.status(400).send({
         error: 'INVALID_INPUT',
-        message: 'Validation failed',
+        message: 'Validation échouée',
         fields: parsedQuery.error.issues.map((i) => ({
           field: i.path.join('.'),
           reason: i.message,
@@ -106,13 +106,13 @@ export const creativesRoutes: FastifyPluginAsync = async (app) => {
     } catch {
       return reply.status(413).send({
         error: 'PAYLOAD_TOO_LARGE',
-        message: `File exceeds the ${MAX_CREATIVE_BYTES}-byte limit.`,
+        message: `Le fichier dépasse la limite de ${MAX_CREATIVE_BYTES} octets.`,
       });
     }
     if (data.file.truncated) {
       return reply.status(413).send({
         error: 'PAYLOAD_TOO_LARGE',
-        message: `File exceeds the ${MAX_CREATIVE_BYTES}-byte limit.`,
+        message: `Le fichier dépasse la limite de ${MAX_CREATIVE_BYTES} octets.`,
       });
     }
     if (!mimeAllowedForKind(type, data.mimetype)) {
@@ -200,7 +200,10 @@ export const creativesRoutes: FastifyPluginAsync = async (app) => {
       // Storage failed → do NOT touch the table. Advertiser retries; no orphan key reference.
       return reply
         .status(502)
-        .send({ error: 'STORAGE_ERROR', message: 'Creative storage failed. Please retry.' });
+        .send({
+          error: 'STORAGE_ERROR',
+          message: 'Le stockage de la créative a échoué. Veuillez réessayer.',
+        });
     }
 
     // CF-SK1 (ruling #9) — the spot's identity: same bytes + same owner + a prior APPROVED
@@ -234,7 +237,7 @@ export const creativesRoutes: FastifyPluginAsync = async (app) => {
     if (!row) {
       return reply
         .status(500)
-        .send({ error: 'INTERNAL_ERROR', message: 'Creative record write failed.' });
+        .send({ error: 'INTERNAL_ERROR', message: "L'enregistrement de la créative a échoué." });
     }
     return reply.status(201).send(creativeView(row));
   });
@@ -262,7 +265,8 @@ export const creativesRoutes: FastifyPluginAsync = async (app) => {
       .from(creatives)
       .where(and(eq(creatives.id, parsed.data.id), eq(creatives.advertiserId, userId)))
       .limit(1);
-    if (!row) return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such creative.' });
+    if (!row)
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'Créative introuvable.' });
     return reply.status(200).send(creativeView(row));
   });
 
@@ -277,12 +281,13 @@ export const creativesRoutes: FastifyPluginAsync = async (app) => {
       .from(creatives)
       .where(and(eq(creatives.id, parsed.data.id), eq(creatives.advertiserId, userId)))
       .limit(1);
-    if (!row) return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such creative.' });
+    if (!row)
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'Créative introuvable.' });
     const result = await storage.getPresignedUrl({ key: row.storageKey });
     if ('error' in result) {
       return reply.status(502).send({
         error: 'STORAGE_ERROR',
-        message: 'Could not generate a creative URL. Please retry.',
+        message: "Impossible de générer l'URL de la créative. Veuillez réessayer.",
       });
     }
     return reply.status(200).send({ url: result.url });

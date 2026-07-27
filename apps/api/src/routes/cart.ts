@@ -27,7 +27,7 @@ const addBodySchema = z.object({ campaign_id: z.uuid() });
 const campaignIdParamSchema = z.object({ campaign_id: z.uuid() });
 
 const sendUnauthenticated = (reply: FastifyReply) =>
-  reply.status(401).send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+  reply.status(401).send({ error: 'UNAUTHENTICATED', message: 'Authentification requise.' });
 
 // One row shape for the gate: the campaign + its creative duration (the C_max spot length).
 interface GateRow {
@@ -88,7 +88,7 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
     if (!parsed.success) {
       return reply.status(400).send({
         error: 'INVALID_INPUT',
-        message: 'Validation failed',
+        message: 'Validation échouée',
         fields: [{ field: 'campaign_id', reason: 'must be a uuid' }],
       });
     }
@@ -96,14 +96,15 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
     if (!userId) return sendUnauthenticated(reply);
 
     const row = await loadGateRow(parsed.data.campaign_id, userId);
-    if (!row) return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such campaign.' });
+    if (!row)
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'Campagne introuvable.' });
 
     const lead = (await getDispatchConfig()).campaignLeadWorkingDays;
     const reason = await cartGateReason(row, lead);
     if (reason !== null) {
       return reply.status(400).send({
         error: reason,
-        message: 'The campaign is not ready for the cart.',
+        message: "La campagne n'est pas prête pour le panier.",
       });
     }
 
@@ -129,7 +130,7 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
     if (!parsed.success) {
       return reply.status(400).send({
         error: 'INVALID_INPUT',
-        message: 'Validation failed',
+        message: 'Validation échouée',
         fields: [{ field: 'campaign_id', reason: 'must be a uuid' }],
       });
     }

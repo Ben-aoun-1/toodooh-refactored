@@ -26,7 +26,9 @@ import { useAuthStore } from '@/features/auth/stores/auth.store';
 import BoostCampaignModal from '@/features/campaigns/components/BoostCampaignModal';
 import CampaignDrawer from '@/features/campaigns/components/CampaignDrawer';
 import { useDeleteCampaign, useReplayCampaign } from '@/features/campaigns/hooks/useCampaignApi';
+import { useCreativePreviewUrl, useMyCreatives } from '@/features/campaigns/hooks/useCreativeApi';
 import { useMyCampaigns } from '@/features/campaigns/hooks/useMyCampaigns';
+import { usePricingConfig } from '@/features/campaigns/hooks/usePricingConfig';
 import { canBoostCampaign } from '@/features/campaigns/lib/boost-rules';
 import {
   canDeleteDraftCampaign,
@@ -39,6 +41,10 @@ import {
   categoryFilterOptions,
   statusFilterFromSearch,
 } from '@/features/campaigns/lib/campaign-filters';
+import {
+  formatImpressions,
+  impressionsDisplay,
+} from '@/features/campaigns/lib/campaign-impressions';
 import {
   REPLAY_ERROR_TOAST,
   REPLAY_SUCCESS_TOAST,
@@ -165,8 +171,18 @@ export default function MyCampaigns() {
     setTimeout(() => setSelectedCampaign(null), 300);
   };
 
-  // Fonction pour consulter une campagne — la vidéo est chargée par
-  // `useVideoById` dès que `selectedCampaign` change (Commit 7b).
+  // CF-HF3 (Mejri items 2–3) — the Consulter drawer's live data: the pricing CPM feeds the
+  // budget-derived « prévues » fallback; the linked creative previews via the wizard's presign
+  // (image AND video — the dead undefined-video legacy prop is retired for this variant).
+  const pricing = usePricingConfig();
+  const { data: myCreatives = [] } = useMyCreatives(user?.id);
+  const selectedCreativeId: string | null = selectedCampaign?.creative_id ?? null;
+  const previewUrl = useCreativePreviewUrl(selectedCreativeId);
+  const selectedCreative = selectedCreativeId
+    ? (myCreatives.find((c) => c.id === selectedCreativeId) ?? null)
+    : null;
+
+  // Fonction pour consulter une campagne.
   // TODO(phase-1): typed source [supabase] — see #15
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleViewCampaign = (campaign: any) => {
@@ -662,17 +678,29 @@ export default function MyCampaigns() {
                       {htTtcOrDash(campaign.budget)}
                     </p>
                   </div>
-                  <div className="flex items-start gap-1.5 justify-end">
-                    <div className="flex flex-col items-start">
-                      <TrendingUp className="h-3.5 w-3.5 text-[#7e51f5] flex-shrink-0" />
-                      <p className="text-base font-bold text-gray-900 tabular-nums mt-0.5">
-                        {(campaign.validated_impressions || 0)
-                          .toLocaleString('fr-FR')
-                          .replace(/\s/g, ' ')}
-                      </p>
-                    </div>
-                    <div className="text-right text-xs text-gray-500 pt-0.5">IMPRESSIONS</div>
-                  </div>
+                  {/* CF-HF3 (Mejri item 3) — the display rule: prévues (plan facturable, else the
+                      budget estimate), + validées once Active/Passée. Never a fake 0. */}
+                  {(() => {
+                    const imp = impressionsDisplay(campaign, pricing.data);
+                    return (
+                      <div className="flex items-start gap-1.5 justify-end">
+                        <div className="flex flex-col items-end">
+                          <div className="flex items-center gap-1 text-xs text-gray-500">
+                            <TrendingUp className="h-3.5 w-3.5 text-[#7e51f5] flex-shrink-0" />
+                            <span>PRÉVUES</span>
+                          </div>
+                          <p className="text-base font-bold text-gray-900 tabular-nums mt-0.5">
+                            {formatImpressions(imp.prevues)}
+                          </p>
+                          {imp.showValidees && (
+                            <p className="text-xs text-gray-500 tabular-nums">
+                              validées : {formatImpressions(imp.validees)}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div className="flex gap-2 pt-4 mt-4 border-t border-gray-200 -mx-5 px-5">
                   <button
@@ -801,9 +829,8 @@ export default function MyCampaigns() {
                       : '—';
                     // CF-U1 (Mejri item 6) — « — » for a null budget; HT (TTC) otherwise.
                     const budgetStr = htTtcOrDash(campaign.budget);
-                    const impressionsStr = (campaign.validated_impressions || 0)
-                      .toLocaleString('fr-FR')
-                      .replace(/\s/g, ' ');
+                    // CF-HF3 (Mejri item 3) — the display rule, never a fake 0.
+                    const imp = impressionsDisplay(campaign, pricing.data);
                     const isMenuOpen = openActionRowId === campaign.id;
                     return (
                       <tr key={campaign.id} className="hover:bg-gray-50/50 transition-colors">
@@ -834,9 +861,10 @@ export default function MyCampaigns() {
                         <td className="px-5 py-3.5 text-sm text-gray-900">{startStr}</td>
                         <td className="px-5 py-3.5 text-sm text-gray-900">{endStr}</td>
                         <td className="px-5 py-3.5 text-sm text-gray-900">
+                          {/* CF-HF3 — an empty selection IS a targeting: whole network. */}
                           {campaign.selected_zones && campaign.selected_zones.length > 0
                             ? campaign.selected_zones.join(', ')
-                            : '—'}
+                            : 'Tout le réseau'}
                         </td>
                         <td className="px-5 py-3.5">
                           <div className="flex flex-wrap gap-1">
@@ -854,7 +882,12 @@ export default function MyCampaigns() {
                           {budgetStr}
                         </td>
                         <td className="px-5 py-3.5 text-sm text-gray-900 tabular-nums">
-                          {impressionsStr}
+                          <div>Prévues : {formatImpressions(imp.prevues)}</div>
+                          {imp.showValidees && (
+                            <div className="text-xs text-gray-500">
+                              Validées : {formatImpressions(imp.validees)}
+                            </div>
+                          )}
                         </td>
                         <td className="px-5 py-3.5 text-right">
                           <div className="relative flex justify-end">
@@ -1010,7 +1043,18 @@ export default function MyCampaigns() {
               open={showDetailsModal}
               onClose={closeDetailsDrawer}
               campaign={selectedCampaign}
-              video={undefined}
+              creative={
+                selectedCreativeId
+                  ? {
+                      creativeType: selectedCreative?.creative_type,
+                      title: selectedCreative?.title ?? null,
+                      durationSeconds: selectedCreative?.duration_seconds ?? null,
+                      url: previewUrl.data?.url,
+                      isLoading: previewUrl.isLoading,
+                    }
+                  : null
+              }
+              impressions={impressionsDisplay(selectedCampaign, pricing.data)}
               variant="advertiser"
               statusBadge={
                 <span

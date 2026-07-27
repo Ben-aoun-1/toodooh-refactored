@@ -40,7 +40,7 @@ export const adminCreativesRoutes: FastifyPluginAsync = async (app) => {
     if (!parsedQuery.success) {
       return reply.status(400).send({
         error: 'INVALID_INPUT',
-        message: 'Validation failed',
+        message: 'Validation échouée',
         fields: [{ field: 'status', reason: 'must be pending, approved or rejected' }],
       });
     }
@@ -59,7 +59,7 @@ export const adminCreativesRoutes: FastifyPluginAsync = async (app) => {
     if (!parsed.success) {
       return reply.status(400).send({
         error: 'INVALID_INPUT',
-        message: 'Validation failed',
+        message: 'Validation échouée',
         fields: [{ field: 'id', reason: 'must be a uuid' }],
       });
     }
@@ -68,15 +68,14 @@ export const adminCreativesRoutes: FastifyPluginAsync = async (app) => {
       .from(creatives)
       .where(eq(creatives.id, parsed.data.id))
       .limit(1);
-    if (!row) return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such creative.' });
+    if (!row)
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'Créative introuvable.' });
     const result = await storage.getPresignedUrl({ key: row.storageKey });
     if ('error' in result) {
-      return reply
-        .status(502)
-        .send({
-          error: 'STORAGE_ERROR',
-          message: 'Could not generate a creative URL. Please retry.',
-        });
+      return reply.status(502).send({
+        error: 'STORAGE_ERROR',
+        message: "Impossible de générer l'URL de la créative. Veuillez réessayer.",
+      });
     }
     return reply.status(200).send({ url: result.url });
   });
@@ -87,7 +86,7 @@ export const adminCreativesRoutes: FastifyPluginAsync = async (app) => {
     if (!parsedParams.success) {
       return reply.status(400).send({
         error: 'INVALID_INPUT',
-        message: 'Validation failed',
+        message: 'Validation échouée',
         fields: [{ field: 'id', reason: 'must be a uuid' }],
       });
     }
@@ -95,7 +94,7 @@ export const adminCreativesRoutes: FastifyPluginAsync = async (app) => {
     if (!parsedBody.success) {
       return reply.status(400).send({
         error: 'INVALID_INPUT',
-        message: 'Validation failed',
+        message: 'Validation échouée',
         fields: parsedBody.error.issues.map((i) => ({
           field: i.path.join('.'),
           reason: i.message,
@@ -106,7 +105,7 @@ export const adminCreativesRoutes: FastifyPluginAsync = async (app) => {
     if (!adminId) {
       return reply
         .status(401)
-        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentification requise.' });
     }
     const [updated] = await db
       .update(creatives)
@@ -119,7 +118,7 @@ export const adminCreativesRoutes: FastifyPluginAsync = async (app) => {
       .where(eq(creatives.id, parsedParams.data.id))
       .returning();
     if (!updated)
-      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such creative.' });
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'Créative introuvable.' });
     return reply.status(200).send(adminCreativeView(updated));
   });
 
@@ -129,7 +128,7 @@ export const adminCreativesRoutes: FastifyPluginAsync = async (app) => {
     if (!parsedParams.success) {
       return reply.status(400).send({
         error: 'INVALID_INPUT',
-        message: 'Validation failed',
+        message: 'Validation échouée',
         fields: [{ field: 'id', reason: 'must be a uuid' }],
       });
     }
@@ -137,7 +136,7 @@ export const adminCreativesRoutes: FastifyPluginAsync = async (app) => {
     if (!parsedBody.success) {
       return reply.status(400).send({
         error: 'INVALID_INPUT',
-        message: 'Validation failed',
+        message: 'Validation échouée',
         fields: parsedBody.error.issues.map((i) => ({
           field: i.path.join('.'),
           reason: i.message,
@@ -148,7 +147,7 @@ export const adminCreativesRoutes: FastifyPluginAsync = async (app) => {
     if (!adminId) {
       return reply
         .status(401)
-        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentification requise.' });
     }
     const [updated] = await db
       .update(creatives)
@@ -161,7 +160,7 @@ export const adminCreativesRoutes: FastifyPluginAsync = async (app) => {
       .where(eq(creatives.id, parsedParams.data.id))
       .returning();
     if (!updated)
-      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such creative.' });
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'Créative introuvable.' });
     return reply.status(200).send(adminCreativeView(updated));
   });
 };
