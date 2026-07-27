@@ -27,6 +27,9 @@ export const adminKeys = {
   rechargeBonUrl: (id: string) => [...adminKeys.all, 'rechargeBonUrl', id] as const,
   /** FCT1 — one recharge's presigned SIGNED-bon URL (short-TTL; fetched per modal open). */
   rechargeSignedBonUrl: (id: string) => [...adminKeys.all, 'rechargeSignedBonUrl', id] as const,
+  /** FCT2 — one advertiser's wallet-adjustment audit trail (US-FCT-9). */
+  walletAdjustments: (advertiserId: string) =>
+    [...adminKeys.all, 'walletAdjustments', advertiserId] as const,
 
   /** Video-validation list, filtered by status (`adminVideoService.getVideos`). */
   videos: (status: string) => [...adminKeys.all, 'videos', status] as const,

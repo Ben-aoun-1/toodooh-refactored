@@ -59,6 +59,18 @@ describe('adminRechargesService.documentUrl (CF-M2 — the admin presigned view)
     await adminRechargesService.signedBonUrl('r1');
     expect(spies.get).toHaveBeenCalledWith('/admin/recharges/r1/signed-bon-url');
   });
+
+  it('FCT2 — adjustWallet posts the SIGNED amount + reason; walletAdjustments reads the audit', async () => {
+    spies.post.mockResolvedValue({ id: 'a1' });
+    await adminRechargesService.adjustWallet('adv1', -30.25, 'Trop-perçu');
+    expect(spies.post).toHaveBeenCalledWith('/admin/advertisers/adv1/wallet-adjustment', {
+      amount_tnd: -30.25,
+      reason: 'Trop-perçu',
+    });
+    spies.get.mockResolvedValue([]);
+    await adminRechargesService.walletAdjustments('adv1');
+    expect(spies.get).toHaveBeenCalledWith('/admin/advertisers/adv1/wallet-adjustments');
+  });
 });
 
 describe('documentDisplayMode (image inline vs PDF open-in-tab)', () => {

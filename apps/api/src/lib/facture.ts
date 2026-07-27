@@ -6,10 +6,15 @@ import PDFDocument from 'pdfkit';
 import type { Env } from '../env.js';
 import { logger } from '../logger.js';
 
-// Facture (invoice) PDF capability (L-wallet) — a clean, branded recharge invoice rendered from row
-// data + static config. pdfkit is the dependency-light choice (pure JS, no native deps, no headless
-// Chromium); the document streams. This is the reusable PDF seam L-report inherits — renderFacturePdf
-// returns a Buffer so callers may stream it (the recharge facture route does) or persist it later.
+import type { ResolvedDispatchConfig } from './dispatch/config.js';
+
+// « Récapitulatif de commande » PDF capability (L-wallet) — the per-recharge document, rendered
+// from row data + config. FCT2 (US-FCT-12) RELABELED it from « FACTURE »: recharges never invoice —
+// the ONE real invoice is the monthly consolidated facture (lib/monthly-invoice-pdf.ts, on
+// proof-verified consumption). The artifact itself is KEPT byte-for-byte in structure: same
+// HT/TVA/TTC block, same bank coordinates, same on-the-fly render; only the title/filename changed.
+// pdfkit is the dependency-light choice (pure JS, no native deps, no headless Chromium); the
+// document streams. renderFacturePdf returns a Buffer so callers may stream it or persist it later.
 
 const log = logger.child({ module: 'facture' });
 
@@ -56,6 +61,38 @@ export const factureBankDetailsFromEnv = (e: Env): FactureBankDetails => ({
   iban: e.FACTURE_BANK_IBAN,
 });
 
+// FCT2 — bank-coords CONVERGENCE: dispatch_config.bank_* is the ONE forward home (FCT1's « Pour
+// info » block already reads it); the FACTURE_BANK_* env block survives only as a TRANSITION
+// fallback (config '—' → env → '—'), logged once and flagged for removal once the operator copies
+// the prod env values into config (one SQL at deploy). Field mapping: rib/iban are 1:1;
+// « Banque » ↔ bank_domiciliation (the bank + agency IS the domiciliation); « Bénéficiaire » has
+// no config home and stays env-only ('TOODOOH' default — not a secret).
+let envFallbackLogged = false;
+export const resolveFactureBankDetails = (
+  e: Env,
+  cfg: Pick<ResolvedDispatchConfig, 'bankRib' | 'bankIban' | 'bankDomiciliation'>,
+): FactureBankDetails => {
+  const pick = (configValue: string, envValue: string): string =>
+    configValue !== '—' ? configValue : envValue;
+  const details: FactureBankDetails = {
+    beneficiary: e.FACTURE_BANK_BENEFICIARY,
+    bankName: pick(cfg.bankDomiciliation, e.FACTURE_BANK_NAME),
+    rib: pick(cfg.bankRib, e.FACTURE_BANK_RIB),
+    iban: pick(cfg.bankIban, e.FACTURE_BANK_IBAN),
+  };
+  const envSupplied =
+    (cfg.bankRib === '—' && e.FACTURE_BANK_RIB !== '—') ||
+    (cfg.bankIban === '—' && e.FACTURE_BANK_IBAN !== '—') ||
+    (cfg.bankDomiciliation === '—' && e.FACTURE_BANK_NAME !== '—');
+  if (envSupplied && !envFallbackLogged) {
+    envFallbackLogged = true;
+    log.warn(
+      'facture bank coordinates served from the FACTURE_BANK_* env fallback — provision dispatch_config.bank_* and remove the env block (FCT2 transition)',
+    );
+  }
+  return details;
+};
+
 // Logo: a committed package asset resolved relative to THIS module via import.meta.url, so it works
 // from both src/ (tsx/vitest) and dist/ (compiled) — assets/ is a sibling of both. Read once + cached;
 // a missing/unreadable asset degrades to a text wordmark (never fails the facture).
@@ -99,9 +136,15 @@ export const renderFacturePdf = (data: FactureData): Promise<Buffer> =>
     } else {
       doc.fillColor(BRAND).font('Helvetica-Bold').fontSize(24).text('toodooh', left, 56);
     }
-    doc.fillColor(INK).font('Helvetica-Bold').fontSize(20).text('FACTURE', left, 52, {
-      align: 'right',
-    });
+    // FCT2 (US-FCT-12) — the relabel: this document is NOT an invoice (recharges never invoice);
+    // the real facture is the monthly consolidated one.
+    doc
+      .fillColor(INK)
+      .font('Helvetica-Bold')
+      .fontSize(15)
+      .text('RÉCAPITULATIF DE COMMANDE', left, 56, {
+        align: 'right',
+      });
     doc
       .fillColor(MUTED)
       .font('Helvetica')

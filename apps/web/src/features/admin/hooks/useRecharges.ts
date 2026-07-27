@@ -157,3 +157,45 @@ export function useRechargeMutations() {
 
   return { confirmRecharge, rejectRecharge };
 }
+
+/**
+ * FCT2 (US-FCT-9) — the SIGNED, audited solde adjustment. Reaches the SAME advertiser money keys
+ * a recharge decision does (balance/recharges/dashboardStats — the pinned trio, reused not
+ * extended) PLUS the advertiser's adjustment history (the third ledger row type) and this
+ * advertiser's admin audit trail.
+ */
+export function useAdjustWallet() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      advertiserId,
+      amountTnd,
+      reason,
+    }: {
+      advertiserId: string;
+      amountTnd: number;
+      reason: string;
+    }) => adminRechargesService.adjustWallet(advertiserId, amountTnd, reason),
+    onSuccess: (created) => {
+      for (const key of rechargeDecisionInvalidationKeys(created.advertiser_id)) {
+        void queryClient.invalidateQueries({ queryKey: key });
+      }
+      void queryClient.invalidateQueries({
+        queryKey: walletKeys.adjustments(created.advertiser_id),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: adminKeys.walletAdjustments(created.advertiser_id),
+      });
+    },
+  });
+}
+
+/** FCT2 — the audit trail shown in the adjustment modal (always fresh — audits never cache long). */
+export function useWalletAdjustments(advertiserId: string | undefined) {
+  return useQuery({
+    queryKey: adminKeys.walletAdjustments(advertiserId ?? ''),
+    queryFn: () => adminRechargesService.walletAdjustments(advertiserId ?? ''),
+    enabled: !!advertiserId,
+    staleTime: 0,
+  });
+}

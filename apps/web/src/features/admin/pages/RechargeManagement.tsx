@@ -11,6 +11,7 @@ import {
 import { useMemo, useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 
+import AdjustWalletModal from '@/features/admin/components/AdjustWalletModal';
 import AdminLayout from '@/features/admin/components/AdminLayout';
 import RechargeDetailsModal from '@/features/admin/components/RechargeDetailsModal';
 import {
@@ -51,6 +52,8 @@ export default function RechargeManagement() {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
+  // FCT2 (US-FCT-9) — the « $ » solde adjustment, targeting the row's advertiser.
+  const [showAdjustModal, setShowAdjustModal] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   // FCT1 — filtered by DISPLAY label (the per-method labels are the admin's vocabulary).
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -301,6 +304,17 @@ export default function RechargeManagement() {
                       >
                         <Eye className="h-5 w-5" />
                       </button>
+                      {/* FCT2 — « $ »: adjust the ROW'S advertiser's solde (any row, any status). */}
+                      <button
+                        onClick={() => {
+                          setSelectedRecharge(recharge);
+                          setShowAdjustModal(true);
+                        }}
+                        className="text-emerald-600 hover:text-emerald-900"
+                        title="Ajuster le solde"
+                      >
+                        <Banknote className="h-5 w-5" />
+                      </button>
                       {isAdminDecidable(recharge) && (
                         <>
                           <button
@@ -375,6 +389,18 @@ export default function RechargeManagement() {
           advertiserEmail={advertiserEmail(selectedRecharge)}
           onClose={() => {
             setShowDetailsModal(false);
+            setSelectedRecharge(null);
+          }}
+        />
+      )}
+
+      {/* FCT2 — Modal Ajustement du solde (US-FCT-9) */}
+      {showAdjustModal && selectedRecharge && (
+        <AdjustWalletModal
+          advertiserId={selectedRecharge.advertiser_id}
+          advertiserName={advertiserName(selectedRecharge)}
+          onClose={() => {
+            setShowAdjustModal(false);
             setSelectedRecharge(null);
           }}
         />

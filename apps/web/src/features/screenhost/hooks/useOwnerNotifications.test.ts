@@ -26,6 +26,10 @@ describe('actionFor (bell CTA routing by type)', () => {
     expect(actionFor(notif('dispatch_pending_acceptance')).actionPath).toBe('/owner-allocations');
   });
 
+  it('FCT2 — routes reversement_statement_ready to the relevés page', () => {
+    expect(actionFor(notif('reversement_statement_ready')).actionPath).toBe('/owner-statements');
+  });
+
   it('keeps every other type on the campaigns fallback', () => {
     for (const type of ['campaign_activated', 'campaign_rejected', 'some_future_type']) {
       expect(actionFor(notif(type)).actionPath).toBe('/owner-campaigns');

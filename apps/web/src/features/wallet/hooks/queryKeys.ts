@@ -17,6 +17,12 @@ export const walletKeys = {
   /** FCT1 — Toodooh's bank coordinates for the « Pour info » block (config-backed, user-free). */
   bankCoordinates: () => [...walletKeys.all, 'bankCoordinates'] as const,
 
+  /** FCT2 — the user's admin solde adjustments (GET /api/wallet/adjustments) — the ledger's 3rd row type. */
+  adjustments: (userId: string) => [...walletKeys.all, 'adjustments', userId] as const,
+
+  /** FCT2 — the user's monthly consolidated invoices (GET /api/wallet/invoices). */
+  invoices: (userId: string) => [...walletKeys.all, 'invoices', userId] as const,
+
   /** Owner revenue summary (`revenueService.getRevenueStats`). */
   revenueStats: (userId: string) => [...walletKeys.all, 'revenueStats', userId] as const,
 

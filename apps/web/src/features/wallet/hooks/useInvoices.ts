@@ -12,11 +12,11 @@ interface UseInvoicesResult {
 }
 
 /**
- * CF-M1 — the factures ARE the recharges: every row of GET /api/recharges/mine carries its FCT-
- * reference, and the server renders the PDF on demand (GET /api/recharges/:id/facture). Shares
- * the walletKeys.recharges cache with the ledger; replaces the Supabase RPC/fallback chain (and
- * its `any` rows) with the typed live wire. Focus-refetch 'always': facture statuses move on
- * admin action in another session.
+ * FCT2 relabel — these rows are the « Récapitulatifs de commande »: every row of
+ * GET /api/recharges/mine carries its reference, and the server renders the PDF on demand
+ * (GET /api/recharges/:id/facture — recapitulatif-<ref>.pdf). The REAL factures are the MONTHLY
+ * consolidated ones (useMonthlyInvoices below). Shares the walletKeys.recharges cache with the
+ * ledger. Focus-refetch 'always': statuses move on admin action in another session.
  */
 export function useInvoices(userId: string | undefined): UseInvoicesResult {
   const query = useQuery({
@@ -28,4 +28,14 @@ export function useInvoices(userId: string | undefined): UseInvoicesResult {
 
   const invoices = useMemo(() => invoiceRows(query.data ?? []), [query.data]);
   return { invoices, loading: query.isLoading };
+}
+
+/** FCT2 — the monthly consolidated invoices (US-FCT-11): the ONE real facture per month. */
+export function useMonthlyInvoices(userId: string | undefined) {
+  return useQuery({
+    queryKey: walletKeys.invoices(userId ?? ''),
+    queryFn: () => walletService.listInvoices(),
+    enabled: !!userId,
+    refetchOnWindowFocus: 'always',
+  });
 }

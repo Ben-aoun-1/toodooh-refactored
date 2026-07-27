@@ -10,6 +10,7 @@ import { buildErrorHandler, buildNotFoundHandler } from './error-handler.js';
 import { startCampaignLifecycleJob } from './lib/campaign-lifecycle.js';
 import { startCampaignRedispatchJob } from './lib/campaign-redispatch.js';
 import { isMediaProbeEnabled } from './lib/media-probe.js';
+import { startMonthlyBillingJob } from './lib/monthly-billing.js';
 import { startMonthlyReportJob } from './lib/report/monthly-job.js';
 import { isRecommendationsEnabled } from './lib/report/recommendations.js';
 import { isSyncEnabled, sweepUnexported } from './lib/wedooh-sync.js';
@@ -99,6 +100,9 @@ const start = async (): Promise<void> => {
     // the total ≥ S_min). AFTER the lifecycle job: a campaign flipped active this hour gets its
     // first redispatch look in the same boot sequence.
     startCampaignRedispatchJob(app.log);
+    // FCT2 — month-end billing: the monthly consolidated invoices (proof-verified consumption)
+    // + the venue relevés de reversement, previous CLOSED Tunis month, UNIQUE-idempotent.
+    startMonthlyBillingJob(app.log);
 
     // R2 — AI report recommendations: ONE boot warning when the key is unprovisioned (the
     // wedooh-sync degradation pattern); every report gracefully keeps the generic pistes.

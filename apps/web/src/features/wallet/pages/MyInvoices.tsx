@@ -15,24 +15,29 @@ import { useEffect, useRef, useState, useMemo } from 'react';
 import { toast } from 'react-hot-toast';
 
 import { useAuthStore } from '@/features/auth/stores/auth.store';
+import MonthlyInvoicesSection from '@/features/wallet/components/MonthlyInvoicesSection';
 import { walletKeys } from '@/features/wallet/hooks/queryKeys';
-import { useInvoices } from '@/features/wallet/hooks/useInvoices';
+import { useInvoices, useMonthlyInvoices } from '@/features/wallet/hooks/useInvoices';
 import {
   JUSTIFICATIF_ACCEPT,
   isJustificatifTooLarge,
   justificatifAffordances,
 } from '@/features/wallet/lib/recharge-document';
-import { type InvoiceRow, invoiceDesignation } from '@/features/wallet/lib/wallet-ledger';
-import { factureFilename, walletService } from '@/features/wallet/services/wallet.service';
+import { type InvoiceRow, recapitulatifDesignation } from '@/features/wallet/lib/wallet-ledger';
+import { recapitulatifFilename, walletService } from '@/features/wallet/services/wallet.service';
 import { logger } from '@/lib/logger';
 import { htTtcLabel } from '@/lib/money';
 
 const log = logger.child({ module: 'MyInvoices' });
 
+// FCT2 (US-FCT-11..12) — the page hosts BOTH document families: the MONTHLY consolidated
+// factures (the real invoices, on proof-verified consumption) and the per-recharge
+// « Récapitulatifs de commande » (the relabeled ex-factures — recharges never invoice).
 export default function MyInvoices() {
   const user = useAuthStore((state) => state.user);
   const queryClient = useQueryClient();
   const { invoices, loading } = useInvoices(user?.id);
+  const monthlyInvoices = useMonthlyInvoices(user?.id);
   const [search, setSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   // CF-M2 — one hidden file input serves every row; the clicked row's id is held here.
@@ -47,7 +52,7 @@ export default function MyInvoices() {
     return invoices.filter(
       (f) =>
         f.numero.toLowerCase().includes(q) ||
-        invoiceDesignation(f.date_emission).toLowerCase().includes(q),
+        recapitulatifDesignation(f.date_emission).toLowerCase().includes(q),
     );
   }, [invoices, search]);
 
@@ -61,22 +66,22 @@ export default function MyInvoices() {
     setCurrentPage(1);
   }, [search]);
 
-  // CF-M1 — the facture is the SERVER's pdfkit render (bank-details block included), streamed
-  // owner-scoped from GET /api/recharges/:id/facture; the client-side jsPDF generator is deleted.
+  // The récapitulatif is the SERVER's pdfkit render (bank-details block included), streamed
+  // owner-scoped from GET /api/recharges/:id/facture (path kept for wire compat — FCT2 relabel).
   const handleDownloadPDF = async (facture: InvoiceRow) => {
     try {
       const blob = await walletService.downloadFacture(facture.id);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = factureFilename(facture.numero);
+      a.download = recapitulatifFilename(facture.numero);
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
     } catch (error) {
-      log.error({ error }, 'Erreur lors du téléchargement de la facture');
-      alert('Erreur lors du téléchargement de la facture. Veuillez réessayer.');
+      log.error({ error }, 'Erreur lors du téléchargement du récapitulatif');
+      toast.error('Erreur lors du téléchargement du récapitulatif. Veuillez réessayer.');
     }
   };
 
@@ -142,13 +147,21 @@ export default function MyInvoices() {
         aria-hidden="true"
         tabIndex={-1}
       />
-      {/* Table card */}
+      {/* FCT2 — the REAL invoices: one consolidated facture per month of consumption. */}
+      <MonthlyInvoicesSection
+        invoices={monthlyInvoices.data ?? []}
+        loading={monthlyInvoices.isLoading}
+      />
+
+      {/* The per-recharge « Récapitulatifs de commande » (FCT2 relabel — recharges never invoice). */}
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
         {/* Header with search */}
         <div className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100">
           <div>
-            <h2 className="text-base font-bold text-gray-900">Liste des factures</h2>
-            <p className="text-xs text-gray-500">Consultez et téléchargez vos factures</p>
+            <h2 className="text-base font-bold text-gray-900">Récapitulatifs de commande</h2>
+            <p className="text-xs text-gray-500">
+              Un récapitulatif par demande de recharge (ce ne sont pas des factures)
+            </p>
           </div>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -170,7 +183,7 @@ export default function MyInvoices() {
         ) : filtered.length === 0 ? (
           <div className="p-12 text-center">
             <FileText className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-sm text-gray-500">Aucune facture trouvée</p>
+            <p className="text-sm text-gray-500">Aucun récapitulatif trouvé</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -201,7 +214,7 @@ export default function MyInvoices() {
                   >
                     <td className="px-5 py-4">
                       <p className="text-sm font-semibold text-gray-900">
-                        {invoiceDesignation(facture.date_emission)}
+                        {recapitulatifDesignation(facture.date_emission)}
                       </p>
                       <p className="text-xs text-gray-400 mt-0.5">{facture.numero}</p>
                     </td>
@@ -273,7 +286,8 @@ export default function MyInvoices() {
           <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-between">
             <p className="text-xs text-gray-500">
               {(currentPage - 1) * PAGE_SIZE + 1}–
-              {Math.min(currentPage * PAGE_SIZE, filtered.length)} sur {filtered.length} factures
+              {Math.min(currentPage * PAGE_SIZE, filtered.length)} sur {filtered.length}{' '}
+              récapitulatifs
             </p>
             <div className="flex items-center gap-1">
               <button

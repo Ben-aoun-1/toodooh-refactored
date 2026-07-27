@@ -287,13 +287,21 @@ export default function MyRecharges() {
                   >
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
+                        {/* FCT2 — three row types: recharge credit (green ↓), campaign debit at
+                            launch day (gray ↑), SIGNED admin adjustment (green ↓ / red ↑). */}
                         <div
                           className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                            tx.type === 'recharge' ? 'bg-green-50' : 'bg-gray-100'
+                            tx.type === 'recharge' || (tx.type === 'adjustment' && tx.amount > 0)
+                              ? 'bg-green-50'
+                              : tx.type === 'adjustment'
+                                ? 'bg-red-50'
+                                : 'bg-gray-100'
                           }`}
                         >
-                          {tx.type === 'recharge' ? (
+                          {tx.type === 'recharge' || (tx.type === 'adjustment' && tx.amount > 0) ? (
                             <ArrowDownLeft className="h-4 w-4 text-green-600" />
+                          ) : tx.type === 'adjustment' ? (
+                            <ArrowUpRight className="h-4 w-4 text-red-600" />
                           ) : (
                             <ArrowUpRight className="h-4 w-4 text-gray-500" />
                           )}
@@ -303,10 +311,18 @@ export default function MyRecharges() {
                     </td>
                     <td className="px-5 py-4">
                       <span
-                        className={`text-sm font-semibold ${tx.type === 'recharge' ? 'text-green-600' : 'text-gray-900'}`}
+                        className={`text-sm font-semibold ${
+                          tx.type === 'recharge' || (tx.type === 'adjustment' && tx.amount > 0)
+                            ? 'text-green-600'
+                            : tx.type === 'adjustment'
+                              ? 'text-red-600'
+                              : 'text-gray-900'
+                        }`}
                       >
-                        {tx.type === 'recharge' ? '+' : '-'}
-                        {htTtcLabel(tx.amount)}
+                        {tx.type === 'expense' || (tx.type === 'adjustment' && tx.amount < 0)
+                          ? '-'
+                          : '+'}
+                        {htTtcLabel(Math.abs(tx.amount))}
                       </span>
                     </td>
                     <td className="px-5 py-4 text-sm text-gray-500">{formatDate(tx.date)}</td>

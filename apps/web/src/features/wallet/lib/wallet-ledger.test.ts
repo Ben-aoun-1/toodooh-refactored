@@ -4,11 +4,13 @@ import type { CampaignView } from '@/features/campaigns/services/campaigns.api';
 import type { RechargeRow } from '@/features/wallet/services/wallet.service';
 
 import {
+  ADJUSTMENT_DESIGNATION,
   RECHARGE_DESIGNATION,
   RECHARGE_PAYMENT_METHOD,
   composeLedger,
-  invoiceDesignation,
   invoiceRows,
+  monthlyInvoiceDesignation,
+  recapitulatifDesignation,
 } from './wallet-ledger';
 
 const recharge = (over: Partial<RechargeRow> = {}): RechargeRow => ({
@@ -92,23 +94,33 @@ describe('composeLedger (CF-M1 — live credits/debits, reconciling with /api/wa
     ]);
   });
 
-  it('debits = campaigns WITH a reconciled net spend; unreconciled campaigns show no line', () => {
+  // ── FCT2 (US-FCT-14) — debits AT LAUNCH DAY, the VISIBLE view ────────────────
+  it('debits = LAUNCHED campaigns (active/completed), VISIBLE from and DATED at the start day', () => {
     const lines = composeLedger(
       [],
       [
-        campaign({ id: 'c1', spend_tnd: 240 }),
-        campaign({ id: 'c2', spend_tnd: null, reconciled_at: null }), // active, not settled
-        campaign({ id: 'c3', spend_tnd: undefined, reconciled_at: undefined }), // list variant
+        campaign({ id: 'c1', status: 'active', spend_tnd: null, reconciled_at: null }),
+        // Before the start day: not launched yet → ABSENT (upcoming/pending/draft).
+        campaign({ id: 'c2', status: 'upcoming', spend_tnd: null, reconciled_at: null }),
+        campaign({ id: 'c3', status: 'pending', spend_tnd: null, reconciled_at: null }),
+        campaign({ id: 'c4', status: 'draft', start_date: null }),
       ],
     );
     expect(lines).toHaveLength(1);
-    expect(lines[0]).toMatchObject({
-      id: 'c-c1',
-      type: 'expense',
-      designation: 'Campagne Été',
-      amount: 240,
-    });
-    expect(lines[0]?.date.toISOString()).toBe('2026-06-08T09:00:00.000Z');
+    expect(lines[0]).toMatchObject({ id: 'c-c1', type: 'expense', designation: 'Campagne Été' });
+    // Dated at the LAUNCH day — never the reconciliation instant.
+    expect(lines[0]?.date.toISOString()).toBe('2026-06-01T00:00:00.000Z');
+  });
+
+  it('the debit amount: the engaged ask while running, the reconciled NET once settled — the DATE never moves', () => {
+    const [running] = composeLedger(
+      [],
+      [campaign({ status: 'active', spend_tnd: null, reconciled_at: null })],
+    );
+    expect(running?.amount).toBe(300); // requested_budget — the engaged ask
+    const [settled] = composeLedger([], [campaign({ status: 'completed', spend_tnd: 240 })]);
+    expect(settled?.amount).toBe(240); // the reconciled NET
+    expect(settled?.date.toISOString()).toBe('2026-06-01T00:00:00.000Z'); // still launch day
   });
 
   it('a zero-spend reconciliation still shows (0 TND settled is a real outcome, not absence)', () => {
@@ -117,16 +129,43 @@ describe('composeLedger (CF-M1 — live credits/debits, reconciling with /api/wa
     expect(lines[0]?.amount).toBe(0);
   });
 
-  it('merges and sorts newest-first across both kinds', () => {
+  // ── FCT2 (US-FCT-9) — the THIRD row type: signed admin adjustments ───────────
+  it('adjustments: SIGNED rows with the reason surfaced, merged into the ledger', () => {
+    const lines = composeLedger(
+      [],
+      [],
+      [
+        {
+          id: 'a1',
+          amount_tnd: 150.5,
+          reason: 'Geste commercial',
+          created_at: '2026-07-15T10:00:00.000Z',
+        },
+        { id: 'a2', amount_tnd: -30, reason: 'Trop-perçu', created_at: '2026-07-16T10:00:00.000Z' },
+      ],
+    );
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toMatchObject({
+      id: 'a-a2',
+      type: 'adjustment',
+      designation: ADJUSTMENT_DESIGNATION,
+      amount: -30,
+      paymentMethod: 'Trop-perçu',
+    });
+    expect(lines[1]).toMatchObject({ id: 'a-a1', amount: 150.5 });
+  });
+
+  it('merges and sorts newest-first across the THREE kinds', () => {
     const lines = composeLedger(
       [recharge({ id: 'r1', confirmed_at: '2026-07-10T10:00:00.000Z' })],
-      [campaign({ id: 'c1', reconciled_at: '2026-07-12T10:00:00.000Z' })],
+      [campaign({ id: 'c1', status: 'active', start_date: '2026-07-12' })],
+      [{ id: 'a1', amount_tnd: 10, reason: 'x', created_at: '2026-07-11T10:00:00.000Z' }],
     );
-    expect(lines.map((l) => l.id)).toEqual(['c-c1', 'r-r1']);
+    expect(lines.map((l) => l.id)).toEqual(['c-c1', 'a-a1', 'r-r1']);
   });
 });
 
-describe('invoiceRows (CF-M1 — every recharge IS a facture, FCT- reference minted at creation)', () => {
+describe('invoiceRows (FCT2 — every recharge HAS a récapitulatif; the real factures are monthly)', () => {
   it('maps the wire rows to the MyInvoices shape, all statuses included', () => {
     const rows = invoiceRows([
       recharge({ id: 'r1', status: 'pending', reference: 'FCT-BBBB2222', amount_tnd: 500 }),
@@ -153,13 +192,18 @@ describe('invoiceRows (CF-M1 — every recharge IS a facture, FCT- reference min
   });
 });
 
-describe('invoiceDesignation', () => {
-  it('renders « Facture <Mois> <Année> » in French from the emission date', () => {
-    expect(invoiceDesignation('2026-07-01T10:00:00.000Z')).toBe('Facture Juillet 2026');
-    expect(invoiceDesignation('2026-01-15T00:00:00.000Z')).toBe('Facture Janvier 2026');
+describe('the FCT2 relabel — récapitulatif vs the real monthly facture', () => {
+  it('recapitulatifDesignation renders « Récapitulatif de commande — <Mois> <Année> » (never « Facture »)', () => {
+    expect(recapitulatifDesignation('2026-07-01T10:00:00.000Z')).toBe(
+      'Récapitulatif de commande — Juillet 2026',
+    );
+    expect(recapitulatifDesignation('not-a-date')).toBe('Récapitulatif de commande');
+    expect(recapitulatifDesignation('2026-07-01T10:00:00.000Z')).not.toContain('Facture');
   });
 
-  it('falls back to « Facture » on an unparseable date', () => {
-    expect(invoiceDesignation('not-a-date')).toBe('Facture');
+  it('monthlyInvoiceDesignation renders « Facture <Mois> <Année> » from the YYYY-MM month key', () => {
+    expect(monthlyInvoiceDesignation('2026-07')).toBe('Facture Juillet 2026');
+    expect(monthlyInvoiceDesignation('2026-01')).toBe('Facture Janvier 2026');
+    expect(monthlyInvoiceDesignation('nope')).toBe('Facture');
   });
 });

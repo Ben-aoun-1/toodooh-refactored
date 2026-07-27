@@ -61,8 +61,8 @@ export function previousClosedMonth(now: Date): ClosedMonth {
   };
 }
 
-/** French month label for the notification body ('2026-06' → 'juin 2026'). */
-const monthLabelFr = (month: string): string => {
+/** French month label ('2026-06' → 'juin 2026') — exported for the FCT2 billing documents. */
+export const monthLabelFr = (month: string): string => {
   const name = MONTHS_FR[Number(month.slice(5, 7)) - 1] ?? month;
   return `${name} ${month.slice(0, 4)}`;
 };

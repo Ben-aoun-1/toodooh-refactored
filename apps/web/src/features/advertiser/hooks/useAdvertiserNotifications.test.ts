@@ -36,6 +36,17 @@ describe('actionFor (advertiser bell CTA routing by type)', () => {
     }
   });
 
+  it('FCT2 — the monthly facture routes to Mes factures; a solde adjustment to Mes finances', () => {
+    expect(actionFor(notif({ type: 'monthly_invoice_ready' }))).toEqual({
+      label: 'Consulter',
+      path: '/my-invoices',
+    });
+    expect(actionFor(notif({ type: 'wallet_adjustment' }))).toEqual({
+      label: 'Consulter',
+      path: '/my-recharges',
+    });
+  });
+
   it('gives every unknown type NO CTA (rendered plainly, forward-compatible)', () => {
     for (const type of ['account_approved', 'video_approved', 'some_future_type']) {
       expect(actionFor(notif({ type }))).toBeNull();

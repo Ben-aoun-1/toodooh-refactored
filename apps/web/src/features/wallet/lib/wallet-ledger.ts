@@ -1,22 +1,22 @@
 import type { CampaignView } from '@/features/campaigns/services/campaigns.api';
-import type { RechargeRow } from '@/features/wallet/services/wallet.service';
+import type { AdjustmentRow, RechargeRow } from '@/features/wallet/services/wallet.service';
 
 /**
- * CF-M1 — pure composition of the MyRecharges ledger from the LIVE endpoints, replacing the
- * Supabase merge (completed recharges + budget×TVA guesses). The lines now reconcile EXACTLY with
- * GET /api/wallet/balance:
- *   credits — CONFIRMED recharges (what walletBalance sums as credited_tnd), dated at
- *             confirmation (the moment the money entered the balance);
- *   debits  — each campaign's RECONCILED net spend (spend_tnd, the same 1:1 reconciliation row
- *             walletBalance sums as debited_tnd), dated at reconciliation. A campaign with no
- *             reconciliation row yet has cost the wallet nothing and shows no line.
- * Payment method: « Bon de commande » for bon-method credits, « Virement bancaire » otherwise
- * (virement rows AND legacy method-less rows — bank transfer was the only pre-FCT1 channel).
+ * The Mes finances ledger, pure composition from the LIVE endpoints. FCT2 — THREE row types:
+ *   credits     — CONFIRMED recharges, dated at confirmation (when the money entered the balance);
+ *   debits      — LAUNCHED campaigns (status active/completed), VISIBLE FROM AND DATED AT the
+ *                 campaign's start day (US-FCT-14's visible view). The AMOUNT shows the reconciled
+ *                 NET spend once settled, the engaged budget before. NOTE the deliberate
+ *                 asymmetry: the BALANCE still moves only at reconciliation (the funded gates'
+ *                 read-only posture is untouched) — the history anticipates, the money does not.
+ *   adjustments — the admin solde corrections (US-FCT-9), SIGNED, dated at creation, reason shown.
+ * Payment method: « Bon de commande » for bon-method credits, « Virement bancaire » otherwise.
  */
 export interface LedgerTransaction {
   id: string;
-  type: 'recharge' | 'expense';
+  type: 'recharge' | 'expense' | 'adjustment';
   designation: string;
+  /** SIGNED for adjustments; positive for recharges/expenses (the sign rides `type`). */
   amount: number;
   date: Date;
   paymentMethod?: string;
@@ -24,10 +24,16 @@ export interface LedgerTransaction {
 
 export const RECHARGE_DESIGNATION = 'Rechargement wallet';
 export const RECHARGE_PAYMENT_METHOD = 'Virement bancaire';
+export const ADJUSTMENT_DESIGNATION = 'Ajustement de solde';
+
+/** A campaign debit is visible once the campaign LAUNCHED (reached its start day). */
+const isLaunched = (c: CampaignView): boolean =>
+  (c.status === 'active' || c.status === 'completed') && c.start_date !== null;
 
 export const composeLedger = (
   recharges: readonly RechargeRow[],
   campaigns: readonly CampaignView[],
+  adjustments: readonly AdjustmentRow[] = [],
 ): LedgerTransaction[] => {
   const lines: LedgerTransaction[] = [];
   for (const r of recharges) {
@@ -42,13 +48,26 @@ export const composeLedger = (
     });
   }
   for (const c of campaigns) {
-    if (c.spend_tnd === null || c.spend_tnd === undefined) continue;
+    if (!isLaunched(c)) continue;
     lines.push({
       id: `c-${c.id}`,
       type: 'expense',
       designation: c.name || 'Campagne',
-      amount: c.spend_tnd,
-      date: new Date(c.reconciled_at ?? c.created_at),
+      // The reconciled NET once settled; the engaged ask before (0 only for a budget-less draft
+      // that somehow launched — renders honestly as 0, never NaN).
+      amount: c.spend_tnd ?? c.requested_budget ?? 0,
+      // Dated at the LAUNCH DAY (date-only string → UTC midnight, the formatDate convention).
+      date: new Date(c.start_date ?? c.created_at),
+    });
+  }
+  for (const a of adjustments) {
+    lines.push({
+      id: `a-${a.id}`,
+      type: 'adjustment',
+      designation: ADJUSTMENT_DESIGNATION,
+      amount: a.amount_tnd,
+      date: new Date(a.created_at),
+      paymentMethod: a.reason,
     });
   }
   lines.sort((a, b) => b.date.getTime() - a.date.getTime());
@@ -56,9 +75,9 @@ export const composeLedger = (
 };
 
 /**
- * The MyInvoices rows — every recharge IS a facture (the FCT- reference is minted at creation and
- * the server PDF is downloadable immediately: it carries the bank coordinates the advertiser
- * wires to). Newest first, as served.
+ * The MyInvoices « Récapitulatifs de commande » rows (FCT2 relabel — every recharge HAS a
+ * récapitulatif; the real factures are the MONTHLY consolidated ones, listed separately).
+ * Newest first, as served.
  */
 export interface InvoiceRow {
   id: string;
@@ -80,10 +99,18 @@ export const invoiceRows = (recharges: readonly RechargeRow[]): InvoiceRow[] =>
     has_document: r.has_document,
   }));
 
-/** « Facture Juillet 2026 » — the designation MyInvoices renders (no per-facture description). */
-export const invoiceDesignation = (dateEmission: string): string => {
+/** « Récapitulatif de commande — Juillet 2026 » (FCT2 relabel of the old facture designation). */
+export const recapitulatifDesignation = (dateEmission: string): string => {
   const d = new Date(dateEmission);
-  if (Number.isNaN(d.getTime())) return 'Facture';
+  if (Number.isNaN(d.getTime())) return 'Récapitulatif de commande';
   const month = d.toLocaleDateString('fr-FR', { month: 'long' });
-  return `Facture ${month.charAt(0).toUpperCase() + month.slice(1)} ${d.getFullYear()}`;
+  return `Récapitulatif de commande — ${month.charAt(0).toUpperCase() + month.slice(1)} ${d.getFullYear()}`;
+};
+
+/** « Facture Juillet 2026 » — the MONTHLY consolidated invoice designation ('YYYY-MM' input). */
+export const monthlyInvoiceDesignation = (month: string): string => {
+  const d = new Date(`${month}-01T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return 'Facture';
+  const label = d.toLocaleDateString('fr-FR', { month: 'long', timeZone: 'UTC' });
+  return `Facture ${label.charAt(0).toUpperCase() + label.slice(1)} ${month.slice(0, 4)}`;
 };
