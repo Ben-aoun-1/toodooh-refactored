@@ -43,7 +43,10 @@ export interface MyCampaignRow {
   selected_zones: string[];
   /** CF-B1 — the untrimmed wire row (the Booster modal needs targeting category_ids + zones). */
   raw: CampaignView;
-  validated_impressions: number;
+  /** CF-HF3 — NULL until the admin reconcile writes delivered (null ≠ 0; renders '—'). */
+  validated_impressions: number | null;
+  /** CF-HF3 — the frozen plan's placed facturable (« Impressions prévues »); null pre-plan. */
+  planned_impressions: number | null;
 }
 
 // Targeting chip labels come from the shared lib (`toChipLabel`) so this list and the wizard's
@@ -70,11 +73,14 @@ function toRow(c: CampaignView): MyCampaignRow {
     category: null,
     event_id: undefined,
     video_id: null,
-    // Targeting chips + delivered impressions now come from the engine (campaign_targeting +
-    // campaign_reconciliation). selected_zones stays empty — the engine has no geographic zones.
+    // Targeting chips + impressions come from the engine (campaign_targeting +
+    // campaign_reconciliation + the frozen plan). CF-HF3: selected_zones carries the REAL wire
+    // zone names (the old empty [] predated CF-Z1 and blanked the Consulter zones), and
+    // validated stays NULL-honest — the display rule renders '—', never a fake 0.
     selected_categories: (c.targeting ?? []).map(toChipLabel),
-    selected_zones: [],
-    validated_impressions: c.delivered_impressions ?? 0,
+    selected_zones: (c.zones ?? []).map((z) => z.name),
+    validated_impressions: c.delivered_impressions ?? null,
+    planned_impressions: c.planned_impressions ?? null,
     raw: c,
   };
 }

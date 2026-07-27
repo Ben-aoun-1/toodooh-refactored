@@ -21,6 +21,12 @@ export const CART_REASON_FR: Record<string, string> = {
   BUDGET_BELOW_MINIMUM: 'Le budget est sous le minimum de 100 TND.',
   BUDGET_EXCEEDS_CMAX: 'Le budget dépasse l’inventaire disponible — ajustez-le dans l’éditeur.',
   NOT_FOUND: 'Cette campagne n’existe plus.',
+  // CF-HF3 — the CF-SK1 approved-skip path uppercases prepareActivation's refusal reasons; these
+  // four were unmapped and fell back to the say-nothing generic line.
+  CONTENT_NOT_APPROVED: 'Le spot n’est pas encore approuvé par la modération.',
+  NO_DURATION: 'Le spot n’a pas de durée de diffusion.',
+  BUDGET_TOO_LOW: 'Le budget est inférieur à une unité CPM — aucune impression ciblable.',
+  INSUFFICIENT_BALANCE: 'Le solde est insuffisant pour cette campagne.',
 };
 
 export const cartReasonFr = (reason: string): string =>

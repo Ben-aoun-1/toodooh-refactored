@@ -31,6 +31,8 @@ export interface CampaignView {
   delivered_impressions?: number | null;
   spend_tnd?: number | null;
   reconciled_at?: string | null;
+  /** CF-HF3 — the frozen plan's placed facturable (Σ ii_potentiel); null until a plan exists. */
+  planned_impressions?: number | null;
 }
 
 export interface CreateCampaignInput {

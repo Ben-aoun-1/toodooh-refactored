@@ -3,6 +3,11 @@ import { useNavigate } from 'react-router-dom';
 
 import statIcon5 from '@/assets/stats/5.png';
 import type { LastCampaign } from '@/features/advertiser/hooks/useLastCampaigns';
+import { usePricingConfig } from '@/features/campaigns/hooks/usePricingConfig';
+import {
+  formatImpressions,
+  impressionsDisplay,
+} from '@/features/campaigns/lib/campaign-impressions';
 import { htTtcOrDash } from '@/lib/money';
 
 const STATUS_MAP: Record<string, { label: string; bg: string; text: string; dot: string }> = {
@@ -21,6 +26,8 @@ interface LastCampaignsGridProps {
 
 export default function LastCampaignsGrid({ campaigns, loading }: LastCampaignsGridProps) {
   const navigate = useNavigate();
+  // CF-HF3 — the CPM feed for the budget-derived « prévues » fallback (per campaign type).
+  const pricing = usePricingConfig();
 
   return (
     <div className="mb-10 rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
@@ -77,9 +84,10 @@ export default function LastCampaignsGrid({ campaigns, loading }: LastCampaignsG
                       </span>
                       <span className="flex items-center gap-1.5">
                         <MapPin className="h-3.5 w-3.5 flex-shrink-0 text-gray-500" />
+                        {/* CF-HF3 — an empty selection IS a targeting: whole network. */}
                         {campaign.selected_zones && campaign.selected_zones.length > 0
                           ? campaign.selected_zones.join(', ')
-                          : '—'}
+                          : 'Tout le réseau'}
                       </span>
                     </div>
                     <div className="flex flex-wrap gap-1.5 mb-3">
@@ -103,17 +111,29 @@ export default function LastCampaignsGrid({ campaigns, loading }: LastCampaignsG
                           {htTtcOrDash(campaign.budget)}
                         </p>
                       </div>
-                      <div className="flex items-start gap-1.5 justify-end">
-                        <div className="flex flex-col items-start">
-                          <TrendingUp className="h-3.5 w-3.5 text-[#7e51f5] flex-shrink-0" />
-                          <p className="text-base font-bold text-gray-900 tabular-nums mt-0.5">
-                            {(campaign.validated_impressions || 0)
-                              .toLocaleString('fr-FR')
-                              .replace(/\s/g, ' ')}
-                          </p>
-                        </div>
-                        <div className="text-right text-xs text-gray-500 pt-0.5">IMPRESSIONS</div>
-                      </div>
+                      {/* CF-HF3 (Mejri item 3) — the display rule: prévues + validées once
+                          Active/Passée; never a fake 0. */}
+                      {(() => {
+                        const imp = impressionsDisplay(campaign, pricing.data);
+                        return (
+                          <div className="flex items-start gap-1.5 justify-end">
+                            <div className="flex flex-col items-end">
+                              <div className="flex items-center gap-1 text-xs text-gray-500">
+                                <TrendingUp className="h-3.5 w-3.5 text-[#7e51f5] flex-shrink-0" />
+                                <span>PRÉVUES</span>
+                              </div>
+                              <p className="text-base font-bold text-gray-900 tabular-nums mt-0.5">
+                                {formatImpressions(imp.prevues)}
+                              </p>
+                              {imp.showValidees && (
+                                <p className="text-xs text-gray-500 tabular-nums">
+                                  validées : {formatImpressions(imp.validees)}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                     <div className="flex gap-2 pt-4 mt-4 border-t border-gray-200 -mx-5 px-5">
                       <button

@@ -3,6 +3,14 @@ import { type ReactNode } from 'react';
 
 import Drawer from '@/components/Drawer';
 import { rejectReasonToShow } from '@/features/campaigns/lib/campaign-actions';
+import {
+  PREVUES_LABEL,
+  VALIDEES_LABEL,
+  formatImpressions,
+  type ImpressionsDisplay,
+} from '@/features/campaigns/lib/campaign-impressions';
+import CreativePreviewTile from '@/features/campaigns/pages/new-campaign/CreativePreviewTile';
+import type { CreativeType } from '@/features/campaigns/services/creatives.api';
 
 /**
  * Structural shape of the campaign a drawer renders. Loose by design: the
@@ -18,11 +26,20 @@ export interface CampaignDrawerCampaign {
   selected_categories?: string[];
   category?: string;
   selected_zones?: string[];
-  validated_impressions?: number;
+  validated_impressions?: number | null;
   /** CF-Q1 — the admin's mandatory rejection reason (advertiser, « Non validé » campaigns). */
   reject_reason?: string | null;
   // owner-only
   ownerLocationsCount?: number;
+}
+
+/** CF-HF3 — the advertiser spot preview (BOTH types, by creative_type — the wizard tile). */
+export interface CampaignDrawerCreative {
+  creativeType?: CreativeType;
+  title?: string | null;
+  durationSeconds?: number | null;
+  url?: string;
+  isLoading?: boolean;
 }
 
 interface CampaignDrawerProps {
@@ -30,6 +47,10 @@ interface CampaignDrawerProps {
   onClose: () => void;
   campaign: CampaignDrawerCampaign | null;
   video?: { url?: string | null } | null;
+  /** CF-HF3 (advertiser) — when present, the Spot section renders the type-aware tile. */
+  creative?: CampaignDrawerCreative | null;
+  /** CF-HF3 (advertiser) — the per-status impressions rule, computed by the page. */
+  impressions?: ImpressionsDisplay | null;
   /** Named `variant` (not `role`) to avoid the jsx-a11y/aria-role lint on `role=`. */
   variant: 'advertiser' | 'owner';
   /**
@@ -64,6 +85,8 @@ export default function CampaignDrawer({
   onClose,
   campaign,
   video,
+  creative,
+  impressions,
   variant,
   statusBadge,
   footerSlot,
@@ -195,60 +218,78 @@ export default function CampaignDrawer({
             </div>
           </Section>
 
-          <Section label="Impressions validées">
+          {/* CF-HF3 (Mejri item 3) — the display rule: prévues always; validées only once the
+              campaign is Active/Passée; '—' for a not-yet value, never a fake 0. */}
+          <Section label={PREVUES_LABEL}>
             <div className="text-sm font-semibold text-[#171717]">
-              {(campaign.validated_impressions || 0).toLocaleString('fr-FR')}
+              {formatImpressions(impressions?.prevues ?? null)}
             </div>
           </Section>
+          {impressions?.showValidees && (
+            <Section label={VALIDEES_LABEL}>
+              <div className="text-sm font-semibold text-[#171717]">
+                {formatImpressions(impressions.validees)}
+              </div>
+            </Section>
+          )}
 
           <Section label="Zones géographiques">
             <div
               className="flex flex-wrap gap-2 text-xs font-medium text-[#171717]"
               style={{ letterSpacing: '-0.006em', lineHeight: '16px' }}
             >
-              {zones.length > 0 ? (
-                zones.map((zone: string) => (
-                  <span
-                    key={zone}
-                    className="inline-flex items-center px-2 py-1 rounded bg-white border border-brand-primary"
-                  >
-                    {zone}
-                  </span>
-                ))
-              ) : (
-                <span>—</span>
-              )}
+              {/* CF-HF3 (Mejri item 2) — an empty selection IS a targeting: whole network. */}
+              {(zones.length > 0 ? zones : ['Tout le réseau']).map((zone: string) => (
+                <span
+                  key={zone}
+                  className="inline-flex items-center px-2 py-1 rounded bg-white border border-brand-primary"
+                >
+                  {zone}
+                </span>
+              ))}
             </div>
           </Section>
 
           <Section label="Spot">
-            <div className="rounded-xl border border-[#EBEBEB] overflow-hidden bg-black/5 relative">
-              {video?.url ? (
-                <div className="relative">
-                  <video
-                    src={video.url}
-                    controls
-                    className="w-full aspect-video object-contain rounded-xl"
-                    muted
-                    playsInline
-                  >
-                    <track kind="captions" />
-                  </video>
-                  <div
-                    className="absolute inset-x-0 bottom-0 h-24 pointer-events-none"
-                    style={{
-                      background:
-                        'linear-gradient(180deg, rgba(13, 15, 20, 0) 0%, rgba(13, 15, 20, 0.9) 80.37%)',
-                      backdropFilter: 'blur(1px)',
-                    }}
-                  />
-                </div>
-              ) : (
-                <div className="aspect-video flex items-center justify-center text-[#A3A3A3] text-sm">
-                  Aucun spot
-                </div>
-              )}
-            </div>
+            {/* CF-HF3 (Mejri item 2) — the wizard's type-aware tile: image AND video render
+                (the old unconditional <video> painted a black box for a photo creative). */}
+            {creative ? (
+              <CreativePreviewTile
+                creativeType={creative.creativeType}
+                title={creative.title ?? null}
+                durationSeconds={creative.durationSeconds ?? null}
+                url={creative.url}
+                isLoading={creative.isLoading ?? false}
+              />
+            ) : (
+              <div className="rounded-xl border border-[#EBEBEB] overflow-hidden bg-black/5 relative">
+                {video?.url ? (
+                  <div className="relative">
+                    <video
+                      src={video.url}
+                      controls
+                      className="w-full aspect-video object-contain rounded-xl"
+                      muted
+                      playsInline
+                    >
+                      <track kind="captions" />
+                    </video>
+                    <div
+                      className="absolute inset-x-0 bottom-0 h-24 pointer-events-none"
+                      style={{
+                        background:
+                          'linear-gradient(180deg, rgba(13, 15, 20, 0) 0%, rgba(13, 15, 20, 0.9) 80.37%)',
+                        backdropFilter: 'blur(1px)',
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div className="aspect-video flex items-center justify-center text-[#A3A3A3] text-sm">
+                    Aucun spot
+                  </div>
+                )}
+              </div>
+            )}
           </Section>
         </div>
       ) : (
