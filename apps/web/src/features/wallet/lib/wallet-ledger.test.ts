@@ -22,6 +22,11 @@ const recharge = (over: Partial<RechargeRow> = {}): RechargeRow => ({
   updated_at: '2026-07-10T10:00:00.000Z',
   has_document: false,
   document_uploaded_at: null,
+  method: null,
+  has_bon: false,
+  has_signed_bon: false,
+  signed_bon_deposited_at: null,
+  cancelled_at: null,
   ...over,
 });
 
@@ -69,6 +74,22 @@ describe('composeLedger (CF-M1 — live credits/debits, reconciling with /api/wa
   it('credits are dated at CONFIRMATION (when the money entered the balance), not creation', () => {
     const [line] = composeLedger([recharge()], []);
     expect(line?.date.toISOString()).toBe('2026-07-10T10:00:00.000Z');
+  });
+
+  it('FCT1 — a bon-method credit carries « Bon de commande »; virement/legacy stay « Virement bancaire »', () => {
+    const lines = composeLedger(
+      [
+        recharge({ id: 'r1', method: 'bon_de_commande' }),
+        recharge({ id: 'r2', method: 'virement' }),
+        recharge({ id: 'r3', method: null }),
+      ],
+      [],
+    );
+    expect(lines.map((l) => l.paymentMethod)).toEqual([
+      'Bon de commande',
+      RECHARGE_PAYMENT_METHOD,
+      RECHARGE_PAYMENT_METHOD,
+    ]);
   });
 
   it('debits = campaigns WITH a reconciled net spend; unreconciled campaigns show no line', () => {

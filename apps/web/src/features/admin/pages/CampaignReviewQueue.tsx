@@ -314,11 +314,13 @@ export default function CampaignReviewQueue() {
                   ) : mediaLoading ? (
                     <div className="my-12 h-10 w-10 animate-spin rounded-full border-b-2 border-white"></div>
                   ) : mediaUrl && selectedCreative ? (
-                    selectedCreative.mime_type.startsWith('video/') ? (
+                    /* FCT1 rider — mime_type is NULLABLE (backfilled rows): the optional chain is
+                       the white-screen guard; a mime-less creative falls through to the <img>. */
+                    selectedCreative.mime_type?.startsWith('video/') ? (
                       <video controls className="max-h-96 w-full">
                         {/* Empty caption track — satisfies jsx-a11y/media-has-caption. */}
                         <track kind="captions" />
-                        <source src={mediaUrl} type={selectedCreative.mime_type} />
+                        <source src={mediaUrl} type={selectedCreative.mime_type ?? undefined} />
                       </video>
                     ) : (
                       <img

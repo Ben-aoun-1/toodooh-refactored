@@ -1,19 +1,19 @@
+import type { RechargeMethod } from '@/features/wallet/lib/recharge-methods';
 import { apiClient } from '@/lib/api-client';
 
-// Admin recharge moderation over REST — the manual-payment confirmation queue, repointed off the dead
-// Supabase `recharges`/admin_profiles reads onto the EXISTING new-engine API (GET /api/admin/recharges
-// + POST :id/confirm | :id/reject). apiClient prepends BASE='/api', so paths are WITHOUT the /api
-// prefix; every route is [requireAuth, requireAdmin] server-side. Methods throw ApiError on failure.
+// Admin recharge moderation over REST — the manual-payment confirmation queue (GET
+// /api/admin/recharges + POST :id/confirm | :id/reject). apiClient prepends BASE='/api', so paths
+// are WITHOUT the /api prefix; every route is [requireAuth, requireAdmin] server-side. Methods
+// throw ApiError on failure.
 //
-// New-engine status model is pending → confirmed | rejected (the legacy completed/failed/cancelled
-// quartet is gone; confirm CREDITS the derived balance, reject carries a reason). Fields the existing
-// endpoint does NOT expose are FLAGGED, not faked: payment_method (not modelled), the confirming
-// admin's NAME (only confirmed_by id; admins aren't in the moderation user list), and the
-// manual-create flow + advertiser picker (no admin create-recharge endpoint exists — advertisers
-// self-initiate top-ups via POST /api/wallet). Advertiser business_name/email are enriched from
-// GET /api/admin/users?status=approved (see the hook), not from this view.
+// FCT1 — the per-method model: virement runs pending («En attente de réception») → confirmed
+// («Créditée») | rejected («Annulée»); a bon reaches the queue only as 'bon_returned' («Bon
+// retourné signé») — 'bon_issued' rows are SERVER-EXCLUDED (screencaster-only) and never appear
+// here. Legacy rows (method null) keep the as-found pending/confirmed/rejected labels. Confirm
+// CREDITS the derived balance AT VALIDATION; reject carries a required reason. Advertiser
+// business_name/email are enriched from GET /api/admin/users?status=approved (see the hook).
 
-export type AdminRechargeStatus = 'pending' | 'confirmed' | 'rejected';
+export type AdminRechargeStatus = 'pending' | 'confirmed' | 'rejected' | 'bon_returned';
 
 // The admin projection (lib/recharges.adminRechargeView): the advertiser-facing fields + advertiser_id
 // + confirmed_by (audit). amount is a number (the numeric column's exact value).
@@ -32,6 +32,13 @@ export interface AdminRecharge {
   has_document: boolean;
   document_uploaded_at: string | null;
   document_mime: string | null;
+  /** FCT1 — null = legacy row (renders as-found: « — » type, as-found status labels). */
+  method: RechargeMethod | null;
+  has_bon: boolean;
+  has_signed_bon: boolean;
+  signed_bon_mime: string | null;
+  signed_bon_deposited_at: string | null;
+  cancelled_at: string | null;
 }
 
 /**
@@ -54,18 +61,21 @@ export interface RechargeStats {
 }
 
 // Counters for the stat cards, DERIVED client-side from the full list (the endpoint returns every
-// row when unfiltered, so this mirrors the old Supabase select-then-reduce — no stats endpoint needed).
+// row when unfiltered, so this mirrors the old Supabase select-then-reduce — no stats endpoint
+// needed). FCT1: « En attente » counts the ACTIONABLE rows — pending AND bon_returned (a returned
+// signed bon awaits the same Valider).
 export function computeRechargeStats(rows: AdminRecharge[]): RechargeStats {
-  const sumOf = (s: AdminRechargeStatus) =>
-    rows.filter((r) => r.status === s).reduce((acc, r) => acc + r.amount_tnd, 0);
+  const awaiting = (r: AdminRecharge) => r.status === 'pending' || r.status === 'bon_returned';
   return {
     total_recharges: rows.length,
-    pending_count: rows.filter((r) => r.status === 'pending').length,
+    pending_count: rows.filter(awaiting).length,
     confirmed_count: rows.filter((r) => r.status === 'confirmed').length,
     rejected_count: rows.filter((r) => r.status === 'rejected').length,
     total_amount: rows.reduce((acc, r) => acc + r.amount_tnd, 0),
-    pending_amount: sumOf('pending'),
-    confirmed_amount: sumOf('confirmed'),
+    pending_amount: rows.filter(awaiting).reduce((acc, r) => acc + r.amount_tnd, 0),
+    confirmed_amount: rows
+      .filter((r) => r.status === 'confirmed')
+      .reduce((acc, r) => acc + r.amount_tnd, 0),
   };
 }
 
@@ -90,6 +100,16 @@ export const adminRechargesService = {
   // CF-M2 — short-TTL (300s) presigned view URL of a recharge's justificatif; 404 when doc-less.
   async documentUrl(id: string): Promise<{ url: string }> {
     return apiClient.get<{ url: string }>(`/admin/recharges/${id}/document-url`);
+  },
+
+  // FCT1 — the GENERATED bon PDF (cross-check the signed copy against it); same presign posture.
+  async bonUrl(id: string): Promise<{ url: string }> {
+    return apiClient.get<{ url: string }>(`/admin/recharges/${id}/bon-url`);
+  },
+
+  // FCT1 — the DEPOSITED signed bon; 404 until the screencaster deposits it.
+  async signedBonUrl(id: string): Promise<{ url: string }> {
+    return apiClient.get<{ url: string }>(`/admin/recharges/${id}/signed-bon-url`);
   },
 
   formatAmount(amount: number): string {

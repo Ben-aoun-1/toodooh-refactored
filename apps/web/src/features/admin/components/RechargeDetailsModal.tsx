@@ -1,25 +1,16 @@
-import { ExternalLink, Loader2, Paperclip } from 'lucide-react';
+import { ExternalLink, FileText, Loader2, Paperclip } from 'lucide-react';
 
-import { useRechargeDocumentUrl } from '@/features/admin/hooks/useRecharges';
+import {
+  useRechargeBonUrl,
+  useRechargeDocumentUrl,
+  useRechargeSignedBonUrl,
+} from '@/features/admin/hooks/useRecharges';
 import {
   adminRechargesService,
   documentDisplayMode,
   type AdminRecharge,
-  type AdminRechargeStatus,
 } from '@/features/admin/services/admin-recharges.service';
-
-// One home for the recharge-status pill styling — the queue table and this modal share it.
-export const STATUS_COLORS: Record<AdminRechargeStatus, string> = {
-  pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-  confirmed: 'bg-green-100 text-green-800 border-green-200',
-  rejected: 'bg-red-100 text-red-800 border-red-200',
-};
-
-export const STATUS_LABELS: Record<AdminRechargeStatus, string> = {
-  pending: 'En attente',
-  confirmed: 'Validée',
-  rejected: 'Rejetée',
-};
+import { methodLabel, statusChipClass, statusLabel } from '@/features/wallet/lib/recharge-methods';
 
 interface RechargeDetailsModalProps {
   recharge: AdminRecharge;
@@ -29,11 +20,12 @@ interface RechargeDetailsModalProps {
 }
 
 /**
- * The « Détails de la recharge » review modal, extracted verbatim from RechargeManagement.
- * CF-M2 adds the justificatif de virement next to the amount + FCT reference: an image renders
- * inline, a PDF opens in its own tab from the short-TTL presigned URL (fetched per open, never
- * cached). Confirm/reject stay on the page — the document never gates them (admin judgement
- * covers doc-less confirms).
+ * The « Détails de la recharge » review modal. CF-M2 put the justificatif de virement next to the
+ * amount + reference: an image renders inline, a PDF opens in its own tab from the short-TTL
+ * presigned URL (fetched per open, never cached). FCT1 adds the Type line (per-method status
+ * labels from the shared wallet lib) and, for bon rows, the deposited SIGNED bon plus the
+ * GENERATED bon to cross-check it against. Confirm/reject stay on the page — the files never gate
+ * them (admin judgement covers doc-less confirms).
  */
 export default function RechargeDetailsModal({
   recharge,
@@ -41,8 +33,12 @@ export default function RechargeDetailsModal({
   advertiserEmail,
   onClose,
 }: RechargeDetailsModalProps) {
+  const isBon = recharge.method === 'bon_de_commande';
   const document = useRechargeDocumentUrl(recharge.id, recharge.has_document);
+  const bon = useRechargeBonUrl(recharge.id, isBon && recharge.has_bon);
+  const signedBon = useRechargeSignedBonUrl(recharge.id, isBon && recharge.has_signed_bon);
   const mode = documentDisplayMode(recharge.document_mime);
+  const signedBonMode = documentDisplayMode(recharge.signed_bon_mime);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -59,12 +55,16 @@ export default function RechargeDetailsModal({
                 <span className="text-sm font-medium text-gray-600">Statut</span>
                 <p>
                   <span
-                    className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full border ${STATUS_COLORS[recharge.status]}`}
+                    className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full border ${statusChipClass(recharge.status)}`}
                   >
-                    {STATUS_LABELS[recharge.status]}
+                    {statusLabel(recharge.method, recharge.status)}
                   </span>
                 </p>
               </div>
+            </div>
+            <div>
+              <span className="text-sm font-medium text-gray-600">Type</span>
+              <p className="text-sm font-semibold text-gray-900">{methodLabel(recharge.method)}</p>
             </div>
             <div>
               <span className="text-sm font-medium text-gray-600">Annonceur</span>
@@ -78,52 +78,133 @@ export default function RechargeDetailsModal({
               </p>
             </div>
 
-            {/* CF-M2 — the justificatif, reviewed together with the amount + reference. */}
-            <div>
-              <span className="text-sm font-medium text-gray-600 inline-flex items-center gap-1.5">
-                <Paperclip className="h-4 w-4" />
-                Justificatif de virement
-              </span>
-              {!recharge.has_document ? (
-                <p className="text-sm text-gray-500 mt-1">Aucun justificatif fourni</p>
-              ) : (
-                <div className="mt-2 space-y-2">
-                  {recharge.document_uploaded_at && (
-                    <p className="text-xs text-gray-500">
-                      Déposé le {new Date(recharge.document_uploaded_at).toLocaleString('fr-FR')}
-                    </p>
+            {/* CF-M2 — the justificatif, reviewed together with the amount + reference (virement
+                and legacy rows only — a bon carries its signed copy instead). */}
+            {!isBon && (
+              <div>
+                <span className="text-sm font-medium text-gray-600 inline-flex items-center gap-1.5">
+                  <Paperclip className="h-4 w-4" />
+                  Justificatif de virement
+                </span>
+                {!recharge.has_document ? (
+                  <p className="text-sm text-gray-500 mt-1">Aucun justificatif fourni</p>
+                ) : (
+                  <div className="mt-2 space-y-2">
+                    {recharge.document_uploaded_at && (
+                      <p className="text-xs text-gray-500">
+                        Déposé le {new Date(recharge.document_uploaded_at).toLocaleString('fr-FR')}
+                      </p>
+                    )}
+                    {document.loading && (
+                      <p className="text-sm text-gray-500 inline-flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Chargement du justificatif...
+                      </p>
+                    )}
+                    {document.isError && (
+                      <p className="text-sm text-red-600">
+                        Impossible de charger le justificatif. Fermez et rouvrez les détails pour
+                        réessayer.
+                      </p>
+                    )}
+                    {document.url !== undefined &&
+                      (mode === 'image' ? (
+                        <img
+                          src={document.url}
+                          alt="Justificatif de virement"
+                          className="max-h-80 w-auto rounded-lg border border-gray-200"
+                        />
+                      ) : (
+                        <button
+                          onClick={() => window.open(document.url, '_blank', 'noopener')}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                          Ouvrir le justificatif (PDF)
+                        </button>
+                      ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* FCT1 — the bon files: the deposited SIGNED copy + the GENERATED bon to cross-check. */}
+            {isBon && (
+              <div className="space-y-4">
+                <div>
+                  <span className="text-sm font-medium text-gray-600 inline-flex items-center gap-1.5">
+                    <Paperclip className="h-4 w-4" />
+                    Bon retourné signé
+                  </span>
+                  {!recharge.has_signed_bon ? (
+                    <p className="text-sm text-gray-500 mt-1">Aucun bon signé déposé</p>
+                  ) : (
+                    <div className="mt-2 space-y-2">
+                      {recharge.signed_bon_deposited_at && (
+                        <p className="text-xs text-gray-500">
+                          Déposé le{' '}
+                          {new Date(recharge.signed_bon_deposited_at).toLocaleString('fr-FR')}
+                        </p>
+                      )}
+                      {signedBon.loading && (
+                        <p className="text-sm text-gray-500 inline-flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Chargement du bon signé...
+                        </p>
+                      )}
+                      {signedBon.isError && (
+                        <p className="text-sm text-red-600">
+                          Impossible de charger le bon signé. Fermez et rouvrez les détails pour
+                          réessayer.
+                        </p>
+                      )}
+                      {signedBon.url !== undefined &&
+                        (signedBonMode === 'image' ? (
+                          <img
+                            src={signedBon.url}
+                            alt="Bon de commande signé"
+                            className="max-h-80 w-auto rounded-lg border border-gray-200"
+                          />
+                        ) : (
+                          <button
+                            onClick={() => window.open(signedBon.url, '_blank', 'noopener')}
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                            Ouvrir le bon signé (PDF)
+                          </button>
+                        ))}
+                    </div>
                   )}
-                  {document.loading && (
-                    <p className="text-sm text-gray-500 inline-flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Chargement du justificatif...
-                    </p>
-                  )}
-                  {document.isError && (
-                    <p className="text-sm text-red-600">
-                      Impossible de charger le justificatif. Fermez et rouvrez les détails pour
-                      réessayer.
-                    </p>
-                  )}
-                  {document.url !== undefined &&
-                    (mode === 'image' ? (
-                      <img
-                        src={document.url}
-                        alt="Justificatif de virement"
-                        className="max-h-80 w-auto rounded-lg border border-gray-200"
-                      />
-                    ) : (
-                      <button
-                        onClick={() => window.open(document.url, '_blank', 'noopener')}
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                        Ouvrir le justificatif (PDF)
-                      </button>
-                    ))}
                 </div>
-              )}
-            </div>
+                {recharge.has_bon && (
+                  <div>
+                    <span className="text-sm font-medium text-gray-600 inline-flex items-center gap-1.5">
+                      <FileText className="h-4 w-4" />
+                      Bon de commande généré
+                    </span>
+                    <div className="mt-2">
+                      {bon.url !== undefined ? (
+                        <button
+                          onClick={() => window.open(bon.url, '_blank', 'noopener')}
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                          Ouvrir le bon généré (PDF)
+                        </button>
+                      ) : bon.isError ? (
+                        <p className="text-sm text-red-600">Impossible de charger le bon généré.</p>
+                      ) : (
+                        <p className="text-sm text-gray-500 inline-flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Chargement...
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <div>

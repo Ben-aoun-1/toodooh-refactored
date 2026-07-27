@@ -983,6 +983,15 @@ export const dispatchConfig = pgTable(
     pctToodooh: numeric('pct_toodooh', { precision: 5, scale: 2 }).notNull().default('44.00'),
     pctAgentSh: numeric('pct_agent_sh', { precision: 5, scale: 2 }).notNull().default('3.00'),
     pctAgentSc: numeric('pct_agent_sc', { precision: 5, scale: 2 }).notNull().default('3.00'),
+    // FCT1 — Toodooh's OWN bank coordinates shown on the virement « Pour info » block. '—' is the
+    // not-provisioned placeholder (the FACTURE_BANK_* env posture): the web shows « Coordonnées
+    // bancaires communiquées prochainement. » until the operator sets the real values with a plain
+    // SQL UPDATE — config, never code, never a secret in source. Widening this singleton is the
+    // established pattern (campaign_lead 0045, agent pcts 0051 are not dispatch thresholds either).
+    bankRib: text('bank_rib').notNull().default('—'),
+    bankIban: text('bank_iban').notNull().default('—'),
+    bankBic: text('bank_bic').notNull().default('—'),
+    bankDomiciliation: text('bank_domiciliation').notNull().default('—'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
@@ -1174,7 +1183,27 @@ export type CampaignBoost = typeof campaignBoosts.$inferSelect;
 // confirmed row is a no-op on the SUM). DEBITS (campaign spend) need pricing and are DEFERRED — the
 // balance seam is credited(confirmed) − debited(0 today); a future debit ledger subtracts its own
 // SUM at the same point (lib/recharges.ts walletBalance). confirmed_by/at audit the confirming admin.
-export const rechargeStatus = pgEnum('recharge_status', ['pending', 'confirmed', 'rejected']);
+//
+// FCT1 (recharge parcours v2) — TWO explicit manual methods with per-method lifecycles that both
+// TERMINATE in the same 'confirmed'/'rejected' pair, so walletBalance's SUM over 'confirmed' is the
+// unchanged single credit path:
+//   virement:        pending («En attente de réception») → confirmed («Créditée») | rejected («Annulée»)
+//   bon_de_commande: bon_issued («Bon émis») → bon_returned («Bon retourné signé»)
+//                    → confirmed («Fonds reçus») | rejected («Annulée»)
+// 'bon_issued' rows are SCREENCASTER-ONLY — the admin queue excludes them until the signed bon is
+// deposited. Legacy rows (method NULL) keep the original pending/confirmed/rejected lifecycle and
+// labels. The French labels live web-side; the enum stays English per the *_status convention.
+export const rechargeStatus = pgEnum('recharge_status', [
+  'pending',
+  'confirmed',
+  'rejected',
+  'bon_issued',
+  'bon_returned',
+]);
+
+// FCT1 — the two manual top-up methods (there is NO online gateway; card was never modelled).
+// NULL = a legacy row created before the method split; legacy rows render as-found.
+export const rechargeMethod = pgEnum('recharge_method', ['virement', 'bon_de_commande']);
 
 export const recharges = pgTable(
   'recharges',
@@ -1203,6 +1232,20 @@ export const recharges = pgTable(
     documentKey: text('document_key'),
     documentMime: text('document_mime'),
     documentUploadedAt: timestamp('document_uploaded_at', { withTimezone: true }),
+    // FCT1 — the recharge method (NULL = legacy row, pre-method-split; renders as-found). For
+    // virement the CF-M2 document_* columns above ARE the (now MANDATORY at creation) justificatif.
+    method: rechargeMethod('method'),
+    // FCT1 bon de commande — the GENERATED bon PDF (recharges/<id>/bon.pdf, written at creation)
+    // and the SIGNED bon the screencaster deposits (recharges/<id>/bon-signe.<ext>, mime-derived
+    // like the justificatif). Keys never leave the api — presign/stream routes only.
+    bonKey: text('bon_key'),
+    signedBonKey: text('signed_bon_key'),
+    signedBonMime: text('signed_bon_mime'),
+    // FCT1 transition audit — deposit stamps the bon_issued → bon_returned move; cancelled_at
+    // stamps rejected (both methods; legacy rejects predate it and stay NULL). created_at covers
+    // creation, confirmed_at covers the credit.
+    signedBonDepositedAt: timestamp('signed_bon_deposited_at', { withTimezone: true }),
+    cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()

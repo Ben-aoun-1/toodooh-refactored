@@ -1,3 +1,5 @@
+import { randomBytes } from 'node:crypto';
+
 import { and, eq, sql } from 'drizzle-orm';
 
 import { db } from '../db/client.js';
@@ -10,10 +12,34 @@ import { type Recharge, campaignReconciliation, campaigns, recharges } from '../
 // pricing awaits Youssef. Adjustable; flagged.
 export const MAX_RECHARGE_TND = 1_000_000;
 
+// FCT1 (US-FCT-2) — the per-demande floor for BOTH v2 methods, server-enforced at creation. Legacy
+// rows predate it and render as-found; the retired generic POST had no floor beyond > 0.
+export const MIN_RECHARGE_TND = 500;
+
 // Human invoice reference, DERIVED from the recharge id so it is unique by construction (the id is
 // unique) — no separate counter or uniqueness race. FCT- + the first 8 hex of the uuid, uppercased.
+// LEGACY (pre-FCT1) — kept so existing rows' references stay decodable; v2 rows use
+// makeMethodReference below.
 export const makeReference = (rechargeId: string): string =>
   `FCT-${rechargeId.replace(/-/g, '').slice(0, 8).toUpperCase()}`;
+
+// FCT1 — v2 references: VIR-/BC- + 8 uppercase alphanumerics, RANDOM (not id-derived: the chartered
+// format spans the full A-Z0-9 alphabet, which 8 hex chars can't reach). Uniqueness rests on the
+// column's UNIQUE constraint — the caller retries on a 23505 collision (~36⁻⁸ per attempt).
+const REFERENCE_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+export const REFERENCE_PATTERN = /^(VIR|BC)-[A-Z0-9]{8}$/;
+export const makeMethodReference = (method: 'virement' | 'bon_de_commande'): string => {
+  const prefix = method === 'virement' ? 'VIR' : 'BC';
+  const bytes = randomBytes(8);
+  let suffix = '';
+  for (const byte of bytes) suffix += REFERENCE_ALPHABET.charAt(byte % REFERENCE_ALPHABET.length);
+  return `${prefix}-${suffix}`;
+};
+
+// The house 23505 detection (reconcile-service/dispatch-service idiom) — the reference-collision
+// retry loop keys on it.
+export const isUniqueViolation = (err: unknown): boolean =>
+  (err as { code?: string }).code === '23505';
 
 // A valid top-up amount: finite, strictly positive, within the sanity bound, and at most 2 decimals
 // (TND has 1000-millime precision; we cap at the centime/2-decimal the facture prints).
@@ -41,6 +67,20 @@ export const JUSTIFICATIF_MIME_TO_EXT: Record<string, string> = {
 export const justificatifKey = (rechargeId: string, mime: string): string =>
   `recharges/${rechargeId}/justificatif.${JUSTIFICATIF_MIME_TO_EXT[mime] ?? 'bin'}`;
 
+// ── FCT1 — bon de commande objects ───────────────────────────────────────────
+// The GENERATED bon is always a PDF at a fixed key (re-rendered on a reference-collision retry, the
+// same key overwrites in place). The SIGNED bon follows the justificatif idiom exactly — same
+// accepted-mime set, mime-derived extension.
+export const bonKey = (rechargeId: string): string => `recharges/${rechargeId}/bon.pdf`;
+export const signedBonKey = (rechargeId: string, mime: string): string =>
+  `recharges/${rechargeId}/bon-signe.${JUSTIFICATIF_MIME_TO_EXT[mime] ?? 'bin'}`;
+
+// FCT1 — the admin-actionable predicate, ONE home so confirm/reject can't drift: a virement (and a
+// legacy method-less row) is decidable while 'pending'; a bon only once the signed bon is deposited
+// ('bon_returned'). 'bon_issued' is NOT decidable — it is invisible to the admin queue by design.
+export const isAdminDecidable = (row: Pick<Recharge, 'method' | 'status'>): boolean =>
+  row.method === 'bon_de_commande' ? row.status === 'bon_returned' : row.status === 'pending';
+
 // Advertiser-facing projection (snake_case wire). amount as a number for ergonomics; the exact value
 // lives in the numeric column and in SUM(...). validated_by stays internal (admin id is admin-only).
 export const rechargeView = (row: Recharge) => ({
@@ -55,17 +95,24 @@ export const rechargeView = (row: Recharge) => ({
   // CF-M2 — document presence, never the key (the object is reached only via the presign routes).
   has_document: row.documentKey !== null,
   document_uploaded_at: row.documentUploadedAt,
+  // FCT1 — method + bon-object presence (keys stay internal, same posture as the justificatif).
+  method: row.method,
+  has_bon: row.bonKey !== null,
+  has_signed_bon: row.signedBonKey !== null,
+  signed_bon_deposited_at: row.signedBonDepositedAt,
+  cancelled_at: row.cancelledAt,
 });
 
 export type RechargeView = ReturnType<typeof rechargeView>;
 
 // Admin view = the advertiser projection + the owner id and the confirming admin id (audit), plus
-// the document mime so the review modal can pick its render mode (image inline vs PDF open-in-tab).
+// the document mimes so the review modal can pick its render mode (image inline vs PDF open-in-tab).
 export const adminRechargeView = (row: Recharge) => ({
   ...rechargeView(row),
   advertiser_id: row.advertiserId,
   confirmed_by: row.confirmedBy,
   document_mime: row.documentMime,
+  signed_bon_mime: row.signedBonMime,
 });
 
 export interface WalletBalance {

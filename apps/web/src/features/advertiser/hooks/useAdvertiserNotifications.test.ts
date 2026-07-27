@@ -23,6 +23,19 @@ describe('actionFor (advertiser bell CTA routing by type)', () => {
     });
   });
 
+  it('FCT1 — routes every recharge transition to the wallet (prefix-matched)', () => {
+    for (const type of [
+      'recharge_virement_created',
+      'recharge_bon_issued',
+      'recharge_bon_returned',
+      'recharge_credited',
+      'recharge_funds_received',
+      'recharge_cancelled',
+    ]) {
+      expect(actionFor(notif({ type }))).toEqual({ label: 'Consulter', path: '/my-recharges' });
+    }
+  });
+
   it('gives every unknown type NO CTA (rendered plainly, forward-compatible)', () => {
     for (const type of ['account_approved', 'video_approved', 'some_future_type']) {
       expect(actionFor(notif({ type }))).toBeNull();

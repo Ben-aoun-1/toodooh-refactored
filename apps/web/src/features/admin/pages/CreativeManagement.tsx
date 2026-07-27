@@ -257,12 +257,13 @@ export default function CreativeManagement() {
                   {mediaLoading ? (
                     <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-white my-12"></div>
                   ) : mediaUrl ? (
-                    selected.mime_type.startsWith('video/') ? (
+                    /* FCT1 rider — mime_type is NULLABLE (backfilled rows): guard the startsWith. */
+                    selected.mime_type?.startsWith('video/') ? (
                       <video controls className="w-full max-h-96">
                         {/* Empty caption track — satisfies jsx-a11y/media-has-caption for
                             advertiser-uploaded media that has no caption file. */}
                         <track kind="captions" />
-                        <source src={mediaUrl} type={selected.mime_type} />
+                        <source src={mediaUrl} type={selected.mime_type ?? undefined} />
                         Votre navigateur ne supporte pas la lecture de vidéos.
                       </video>
                     ) : (
@@ -288,7 +289,7 @@ export default function CreativeManagement() {
                     <p className="text-sm font-medium text-gray-700">Type / MIME:</p>
                     <p className="text-sm text-gray-900">
                       {selected.creative_type === 'video' ? 'Vidéo' : 'Image'} •{' '}
-                      {selected.mime_type}
+                      {selected.mime_type ?? '—'}
                     </p>
                   </div>
                   <div>

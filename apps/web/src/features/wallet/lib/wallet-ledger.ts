@@ -10,8 +10,8 @@ import type { RechargeRow } from '@/features/wallet/services/wallet.service';
  *   debits  — each campaign's RECONCILED net spend (spend_tnd, the same 1:1 reconciliation row
  *             walletBalance sums as debited_tnd), dated at reconciliation. A campaign with no
  *             reconciliation row yet has cost the wallet nothing and shows no line.
- * Payment method is « Virement bancaire » on every credit — bank transfer is the ONLY recharge
- * channel (operator ruling; no online gateway).
+ * Payment method: « Bon de commande » for bon-method credits, « Virement bancaire » otherwise
+ * (virement rows AND legacy method-less rows — bank transfer was the only pre-FCT1 channel).
  */
 export interface LedgerTransaction {
   id: string;
@@ -38,7 +38,7 @@ export const composeLedger = (
       designation: RECHARGE_DESIGNATION,
       amount: r.amount_tnd,
       date: new Date(r.confirmed_at ?? r.created_at),
-      paymentMethod: RECHARGE_PAYMENT_METHOD,
+      paymentMethod: r.method === 'bon_de_commande' ? 'Bon de commande' : RECHARGE_PAYMENT_METHOD,
     });
   }
   for (const c of campaigns) {

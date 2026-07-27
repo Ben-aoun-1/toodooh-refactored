@@ -11,7 +11,7 @@ const spies = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/api-client', () => ({ apiClient: spies }));
 
-import { factureFilename, walletService } from './wallet.service';
+import { bonFilename, factureFilename, walletService } from './wallet.service';
 
 beforeEach(() => {
   spies.get.mockReset();
@@ -34,11 +34,52 @@ describe('walletService (CF-M1 — the live money wire)', () => {
     expect(spies.get).toHaveBeenCalledWith('/recharges/mine');
   });
 
-  it('createRecharge → POST /recharges with {amount} ONLY (bank-transfer flow takes no method)', async () => {
-    const row = { id: 'r1', reference: 'FCT-AAAA1111', status: 'pending', amount_tnd: 1000 };
+  it('FCT1 — createVirement → ONE multipart POST /recharges/virement?amount= with the file part only', async () => {
+    const row = { id: 'r1', reference: 'VIR-AAAA1111', status: 'pending', method: 'virement' };
+    spies.postForm.mockResolvedValue(row);
+    const file = new File(['%PDF-1.4'], 'virement.pdf', { type: 'application/pdf' });
+    await expect(walletService.createVirement(1000, file)).resolves.toEqual(row);
+    expect(spies.postForm).toHaveBeenCalledTimes(1);
+    const [path, form] = spies.postForm.mock.calls[0] as [string, FormData];
+    expect(path).toBe('/recharges/virement?amount=1000');
+    expect(form.get('file')).toBe(file);
+    // The retired generic create is NEVER called (the api 410s it).
+    expect(spies.post).not.toHaveBeenCalled();
+  });
+
+  it('FCT1 — createBon → POST /recharges/bon with {amount}', async () => {
+    const row = { id: 'r2', reference: 'BC-AAAA1111', status: 'bon_issued' };
     spies.post.mockResolvedValue(row);
-    await expect(walletService.createRecharge(1000)).resolves.toEqual(row);
-    expect(spies.post).toHaveBeenCalledWith('/recharges', { amount: 1000 });
+    await expect(walletService.createBon(2500)).resolves.toEqual(row);
+    expect(spies.post).toHaveBeenCalledWith('/recharges/bon', { amount: 2500 });
+  });
+
+  it('FCT1 — downloadBon → the stored pdf as a blob from GET /recharges/:id/bon', async () => {
+    const pdf = new Blob(['%PDF-1.3'], { type: 'application/pdf' });
+    spies.getBlob.mockResolvedValue(pdf);
+    await expect(walletService.downloadBon('r2')).resolves.toBe(pdf);
+    expect(spies.getBlob).toHaveBeenCalledWith('/recharges/r2/bon');
+  });
+
+  it('FCT1 — uploadSignedBon → multipart POST /recharges/:id/signed-bon with the file part', async () => {
+    const row = { id: 'r2', status: 'bon_returned', has_signed_bon: true };
+    spies.postForm.mockResolvedValue(row);
+    const file = new File(['%PDF-1.4'], 'bon-signe.pdf', { type: 'application/pdf' });
+    await expect(walletService.uploadSignedBon('r2', file)).resolves.toEqual(row);
+    const [path, form] = spies.postForm.mock.calls[0] as [string, FormData];
+    expect(path).toBe('/recharges/r2/signed-bon');
+    expect(form.get('file')).toBe(file);
+  });
+
+  it('FCT1 — getBankCoordinates → GET /recharges/bank-coordinates (the « Pour info » quartet)', async () => {
+    const coords = { rib: '—', iban: '—', bic: '—', domiciliation: '—' };
+    spies.get.mockResolvedValue(coords);
+    await expect(walletService.getBankCoordinates()).resolves.toEqual(coords);
+    expect(spies.get).toHaveBeenCalledWith('/recharges/bank-coordinates');
+  });
+
+  it('FCT1 — bonFilename mirrors the server content-disposition', () => {
+    expect(bonFilename('BC-AAAA1111')).toBe('bon-commande-BC-AAAA1111.pdf');
   });
 
   it('downloadFacture → the SERVER pdf as a blob from GET /recharges/:id/facture', async () => {

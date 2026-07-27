@@ -1,12 +1,13 @@
 import type { RechargeRow } from '@/features/wallet/services/wallet.service';
 
 /**
- * CF-M2 — the justificatif de virement seam, pure and testable.
+ * CF-M2 — the justificatif de virement rules, pure and testable.
  *
- * The recharge request and its document are TWO wire calls (the POST stays {amount} — CF-M1/U1):
- * the recharge is created first, the document is attached after. A document failure must NEVER
- * lose the created recharge — the caller gets the created row back with `documentError` set and
- * the row keeps its « Ajouter le justificatif » affordance for a retry (MyInvoices).
+ * FCT1 retired the create-then-attach two-call seam (createRechargeWithDocument): a virement
+ * demande is now created WITH its mandatory justificatif in ONE multipart call
+ * (walletService.createVirement). What stays here: the accepted-type/size mirrors and the
+ * MyInvoices per-row affordances (attach-later still exists for LEGACY pending rows and as the
+ * replace path on a pending virement).
  */
 
 /** Accepted justificatif types — mirrors the server gate (PDF/JPEG/PNG, byte-sniffed there). */
@@ -16,37 +17,6 @@ export const MAX_JUSTIFICATIF_BYTES = 10 * 1024 * 1024;
 
 export const isJustificatifTooLarge = (file: Pick<File, 'size'>): boolean =>
   file.size > MAX_JUSTIFICATIF_BYTES;
-
-export interface CreateRechargeWithDocumentResult {
-  recharge: RechargeRow;
-  /** True when the recharge was created but the document upload failed (toast + retry later). */
-  documentError: boolean;
-}
-
-interface CreateRechargeDeps {
-  createRecharge: (amountTnd: number) => Promise<RechargeRow>;
-  uploadJustificatif: (id: string, file: File) => Promise<RechargeRow>;
-}
-
-/**
- * Create the recharge, then attach the optional justificatif. A create failure throws (nothing
- * exists yet); a document failure resolves with the CREATED recharge + documentError so the UI
- * can toast and keep the row (the document is re-attachable while pending).
- */
-export const createRechargeWithDocument = async (
-  deps: CreateRechargeDeps,
-  amountTnd: number,
-  file: File | null,
-): Promise<CreateRechargeWithDocumentResult> => {
-  const recharge = await deps.createRecharge(amountTnd);
-  if (file === null) return { recharge, documentError: false };
-  try {
-    const updated = await deps.uploadJustificatif(recharge.id, file);
-    return { recharge: updated, documentError: false };
-  } catch {
-    return { recharge, documentError: true };
-  }
-};
 
 export interface JustificatifAffordances {
   /** Attach/replace is PENDING-only (the API 409s a decided recharge). */

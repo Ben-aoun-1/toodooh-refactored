@@ -1,25 +1,39 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, isNull, ne, or } from 'drizzle-orm';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import { db } from '../db/client.js';
-import { type Recharge, recharges } from '../db/schema.js';
-import { adminRechargeView } from '../lib/recharges.js';
+import { type Recharge, notifications, recharges } from '../db/schema.js';
+import { advertiserRechargeNotification } from '../lib/recharge-notifications.js';
+import { adminRechargeView, isAdminDecidable } from '../lib/recharges.js';
 import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
 import { storage } from '../storage/s3-storage.js';
 
 // Admin recharge moderation (L-wallet) — the manual-payment confirmation step. An admin reconciles a
-// bank transfer against a recharge's reference and CONFIRMS receipt (→ credits the derived balance)
-// or REJECTS it (→ a reason surfaced to the advertiser). Mirrors the admin creative/account review:
-// every route is [requireAuth, requireAdmin]; a non-admin gets 403, a missing recharge 404. Both
-// transitions are pending→x only — a confirm/reject of a non-pending recharge 409s, and the UPDATE's
-// WHERE status='pending' makes the confirm ATOMIC (a re-confirm can never double-credit).
+// bank transfer (or a returned signed bon, FCT1) against a recharge's reference and CONFIRMS receipt
+// (→ credits the derived balance) or REJECTS/cancels it (→ a reason surfaced to the advertiser).
+// Mirrors the admin creative/account review: every route is [requireAuth, requireAdmin]; a non-admin
+// gets 403, a missing recharge 404. Decidable states are per-method (lib/recharges.ts
+// isAdminDecidable): virement + legacy while 'pending', bon only once 'bon_returned' — and the
+// UPDATE's WHERE re-encodes the SAME predicate so the transition stays ATOMIC (a re-confirm can
+// never double-credit). FCT1 pins: 'bon_issued' rows NEVER appear in the queue (screencaster-only
+// until the signed bon is deposited), and every decision notifies the screencaster in French.
 
 const idParamSchema = z.object({ id: z.uuid() });
+// 'bon_issued' is deliberately NOT requestable — those rows are invisible to the admin queue.
 const listQuerySchema = z.object({
-  status: z.enum(['pending', 'confirmed', 'rejected']).optional(),
+  status: z.enum(['pending', 'confirmed', 'rejected', 'bon_returned']).optional(),
 });
 const rejectBodySchema = z.object({ reason: z.string().trim().min(1).max(2000) });
+
+// The atomic decidable predicate — the SQL mirror of isAdminDecidable, used in the UPDATE WHERE.
+// The isNull branch is load-bearing: `method <> 'bon_de_commande'` is NULL (not true) for legacy
+// rows in SQL.
+const decidableWhere = or(
+  and(isNull(recharges.method), eq(recharges.status, 'pending')),
+  and(eq(recharges.method, 'virement'), eq(recharges.status, 'pending')),
+  and(eq(recharges.method, 'bon_de_commande'), eq(recharges.status, 'bon_returned')),
+);
 
 const invalidField = (reply: FastifyReply, field: string, reason: string) =>
   reply
@@ -40,23 +54,29 @@ const sendNotPending = (reply: FastifyReply, request: FastifyRequest, row: Recha
 export const adminRechargesRoutes: FastifyPluginAsync = async (app) => {
   const adminGuard = { preHandler: [requireAuth, requireAdmin] };
 
-  // GET /api/admin/recharges[?status=] — the moderation queue (newest first); optional status filter.
+  // GET /api/admin/recharges[?status=] — the moderation queue (newest first); optional status
+  // filter. FCT1 PIN: 'bon_issued' rows are ALWAYS excluded — a bon is invisible to the admin
+  // until the screencaster deposits the signed copy.
   app.get('/api/admin/recharges', adminGuard, async (request, reply) => {
     const parsedQuery = listQuerySchema.safeParse(request.query);
     if (!parsedQuery.success) {
-      return invalidField(reply, 'status', 'must be pending, confirmed or rejected');
+      return invalidField(reply, 'status', 'must be pending, confirmed, rejected or bon_returned');
     }
     const { status } = parsedQuery.data;
     const rows = await db
       .select()
       .from(recharges)
-      .where(status ? eq(recharges.status, status) : undefined)
+      .where(
+        and(ne(recharges.status, 'bon_issued'), status ? eq(recharges.status, status) : undefined),
+      )
       .orderBy(desc(recharges.createdAt));
     return reply.status(200).send(rows.map(adminRechargeView));
   });
 
-  // POST /api/admin/recharges/:id/confirm — pending → confirmed; credits the balance + stamps the
-  // confirm audit (confirmed_by/at). Idempotent: a second confirm 409s and never double-credits.
+  // POST /api/admin/recharges/:id/confirm — decidable → confirmed; credits the balance (the SUM
+  // over 'confirmed' credits the EXACT original amount at THIS moment — never at creation) +
+  // stamps the confirm audit (confirmed_by/at). Idempotent: a second confirm 409s and never
+  // double-credits. Notifies the screencaster («Créditée» / «Fonds reçus» by method).
   app.post('/api/admin/recharges/:id/confirm', adminGuard, async (request, reply) => {
     const parsedParams = idParamSchema.safeParse(request.params);
     if (!parsedParams.success) return invalidField(reply, 'id', 'must be a uuid');
@@ -70,15 +90,28 @@ export const adminRechargesRoutes: FastifyPluginAsync = async (app) => {
     const [existing] = await db.select().from(recharges).where(eq(recharges.id, id)).limit(1);
     if (!existing)
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such recharge.' });
-    if (existing.status !== 'pending') return sendNotPending(reply, request, existing);
+    if (!isAdminDecidable(existing)) return sendNotPending(reply, request, existing);
 
-    const [updated] = await db
-      .update(recharges)
-      .set({ status: 'confirmed', confirmedBy: adminId, confirmedAt: new Date() })
-      // Guard the transition in the WHERE so two concurrent confirms can't both win (atomic, no
-      // double-credit). A lost race returns 0 rows → re-read + 409.
-      .where(and(eq(recharges.id, id), eq(recharges.status, 'pending')))
-      .returning();
+    // Guard the transition in the WHERE so two concurrent confirms can't both win (atomic, no
+    // double-credit). A lost race returns 0 rows → re-read + 409. The notification rides the same
+    // transaction — a credited status and its French notice land (or fail) together.
+    const updated = await db.transaction(async (tx) => {
+      const [flipped] = await tx
+        .update(recharges)
+        .set({ status: 'confirmed', confirmedBy: adminId, confirmedAt: new Date() })
+        .where(and(eq(recharges.id, id), decidableWhere))
+        .returning();
+      if (!flipped) return undefined;
+      await tx
+        .insert(notifications)
+        .values(
+          advertiserRechargeNotification(
+            flipped.method === 'bon_de_commande' ? 'funds_received' : 'credited',
+            flipped,
+          ),
+        );
+      return flipped;
+    });
     if (!updated) {
       const [current] = await db.select().from(recharges).where(eq(recharges.id, id)).limit(1);
       return sendNotPending(reply, request, current ?? existing);
@@ -86,8 +119,9 @@ export const adminRechargesRoutes: FastifyPluginAsync = async (app) => {
     return reply.status(200).send(adminRechargeView(updated));
   });
 
-  // POST /api/admin/recharges/:id/reject {reason} — pending → rejected; a reason is REQUIRED and is
-  // surfaced to the advertiser (reject_reason). Does NOT credit the balance.
+  // POST /api/admin/recharges/:id/reject {reason} — decidable → rejected («Annulée» for method
+  // rows); a reason is REQUIRED and is surfaced to the advertiser (reject_reason + the French
+  // notification). Does NOT credit the balance. cancelled_at stamps the decision (FCT1).
   app.post('/api/admin/recharges/:id/reject', adminGuard, async (request, reply) => {
     const parsedParams = idParamSchema.safeParse(request.params);
     if (!parsedParams.success) return invalidField(reply, 'id', 'must be a uuid');
@@ -112,13 +146,18 @@ export const adminRechargesRoutes: FastifyPluginAsync = async (app) => {
     const [existing] = await db.select().from(recharges).where(eq(recharges.id, id)).limit(1);
     if (!existing)
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such recharge.' });
-    if (existing.status !== 'pending') return sendNotPending(reply, request, existing);
+    if (!isAdminDecidable(existing)) return sendNotPending(reply, request, existing);
 
-    const [updated] = await db
-      .update(recharges)
-      .set({ status: 'rejected', rejectReason: parsedBody.data.reason })
-      .where(and(eq(recharges.id, id), eq(recharges.status, 'pending')))
-      .returning();
+    const updated = await db.transaction(async (tx) => {
+      const [flipped] = await tx
+        .update(recharges)
+        .set({ status: 'rejected', rejectReason: parsedBody.data.reason, cancelledAt: new Date() })
+        .where(and(eq(recharges.id, id), decidableWhere))
+        .returning();
+      if (!flipped) return undefined;
+      await tx.insert(notifications).values(advertiserRechargeNotification('cancelled', flipped));
+      return flipped;
+    });
     if (!updated) {
       const [current] = await db.select().from(recharges).where(eq(recharges.id, id)).limit(1);
       return sendNotPending(reply, request, current ?? existing);
@@ -149,5 +188,44 @@ export const adminRechargesRoutes: FastifyPluginAsync = async (app) => {
       });
     }
     return reply.status(200).send({ url: result.url });
+  });
+
+  // FCT1 — the bon-method files for the admin review modal, same presign posture as the
+  // justificatif (300 s TTL; a recharge without the object is a plain 404). bon-url = the
+  // GENERATED bon (cross-check the signed copy against it); signed-bon-url = the DEPOSITED one.
+  const presignRechargeKey = async (
+    reply: FastifyReply,
+    id: string,
+    column: 'bonKey' | 'signedBonKey',
+  ) => {
+    const [row] = await db
+      .select({ bonKey: recharges.bonKey, signedBonKey: recharges.signedBonKey })
+      .from(recharges)
+      .where(eq(recharges.id, id))
+      .limit(1);
+    const key = row?.[column] ?? null;
+    if (key === null) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such document.' });
+    }
+    const result = await storage.getPresignedUrl({ key, expiresInSeconds: 300 });
+    if ('error' in result) {
+      return reply.status(502).send({
+        error: 'STORAGE_ERROR',
+        message: 'Could not generate a document URL. Please retry.',
+      });
+    }
+    return reply.status(200).send({ url: result.url });
+  };
+
+  app.get('/api/admin/recharges/:id/bon-url', adminGuard, async (request, reply) => {
+    const parsed = idParamSchema.safeParse(request.params);
+    if (!parsed.success) return invalidField(reply, 'id', 'must be a uuid');
+    return presignRechargeKey(reply, parsed.data.id, 'bonKey');
+  });
+
+  app.get('/api/admin/recharges/:id/signed-bon-url', adminGuard, async (request, reply) => {
+    const parsed = idParamSchema.safeParse(request.params);
+    if (!parsed.success) return invalidField(reply, 'id', 'must be a uuid');
+    return presignRechargeKey(reply, parsed.data.id, 'signedBonKey');
   });
 };

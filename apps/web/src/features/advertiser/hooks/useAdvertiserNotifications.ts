@@ -41,10 +41,16 @@ const toDate = (value?: string | null): Date => {
 
 // Bell CTA by notification type (exported for the routing tests). The J-3 draft reminder sends
 // the user to the draft list — MyCampaigns already honors ?status=draft — where Reprendre resumes
-// the wizard. Unknown types get NO CTA (rendered plainly).
+// the wizard. FCT1 — every recharge transition (recharge_virement_created / bon_issued /
+// bon_returned / credited / funds_received / cancelled) routes to the wallet, prefix-matched so a
+// new transition type gets the CTA without an FE change. Unknown types get NO CTA (rendered
+// plainly).
 export const actionFor = (n: ApiNotification): AdvertiserNotificationItem['action'] => {
   if (n.type === 'campaign_draft_reminder') {
     return { label: 'Consulter', path: '/my-campaigns?status=draft' };
+  }
+  if (n.type.startsWith('recharge_')) {
+    return { label: 'Consulter', path: '/my-recharges' };
   }
   return null;
 };

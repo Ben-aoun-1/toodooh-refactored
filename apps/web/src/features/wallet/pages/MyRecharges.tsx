@@ -15,9 +15,18 @@ import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 import { useAuthStore } from '@/features/auth/stores/auth.store';
+import BonReadyModal from '@/features/wallet/components/BonReadyModal';
 import NewRechargeModal from '@/features/wallet/components/NewRechargeModal';
-import { useCreateRecharge } from '@/features/wallet/hooks/useCreateRecharge';
+import PendingBonsSection from '@/features/wallet/components/PendingBonsSection';
+import RechargeRequestsSection from '@/features/wallet/components/RechargeRequestsSection';
+import {
+  useCreateBon,
+  useCreateVirement,
+  useDepositSignedBon,
+  useMyRecharges,
+} from '@/features/wallet/hooks/useRechargeDemandes';
 import { useWalletTransactions } from '@/features/wallet/hooks/useWalletTransactions';
+import type { RechargeRow } from '@/features/wallet/services/wallet.service';
 import { htTtcLabel } from '@/lib/money';
 
 const QUICK_AMOUNTS = [
@@ -33,14 +42,17 @@ export default function MyRecharges() {
   const user = useAuthStore((state) => state.user);
   const navigate = useNavigate();
   const { balance, transactions, loading, isError } = useWalletTransactions(user?.id);
-  const createRecharge = useCreateRecharge(user?.id);
+  // FCT1 — the demandes read (same cache as the ledger) + the three v2 mutations.
+  const myRecharges = useMyRecharges(user?.id);
+  const createVirement = useCreateVirement(user?.id);
+  const createBon = useCreateBon(user?.id);
+  const depositSignedBon = useDepositSignedBon(user?.id);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<TabFilter>('all');
   const [showNewRechargeModal, setShowNewRechargeModal] = useState(false);
-  // CF-U1 item 8 — the modal collects the AMOUNT only: the api takes {amount}, the payment
-  // method is fixed (bank transfer) and the description was never persisted.
   const [newAmount, setNewAmount] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  // FCT1 — the freshly generated bon for the « Votre bon de commande est prêt » popup.
+  const [bonReady, setBonReady] = useState<RechargeRow | null>(null);
 
   useEffect(() => {
     if (isError) toast.error('Erreur lors du chargement');
@@ -75,39 +87,46 @@ export default function MyRecharges() {
     setShowNewRechargeModal(true);
   };
 
-  const handleSubmitRecharge = async (amount: number, file: File | null) => {
-    if (!user?.id) {
-      toast.error('Vous devez être connecté');
-      return;
-    }
+  // FCT1 (US-FCT-3/4) — one multipart call, the justificatif is MANDATORY (the modal enforces it).
+  const handleSubmitVirement = async (amount: number, file: File) => {
     try {
-      setSubmitting(true);
-      // CF-M1 — the live API takes the amount only (bank-transfer flow; the facture carries the
-      // payment coordinates). The 201 row's FCT- reference is the advertiser's wire reference.
-      // CF-M2 — the optional justificatif rides a SECOND call behind the create: a document
-      // failure never loses the created recharge (documentError → toast + attach later from
-      // Mes factures).
-      const { recharge: created, documentError } = await createRecharge.mutateAsync({
-        amount,
-        file,
-      });
-      toast.success(`Recharge créée — référence ${created.reference}. En attente de validation.`, {
+      const created = await createVirement.mutateAsync({ amount, file });
+      toast.success(`Demande ${created.reference} envoyée — en attente de réception du virement.`, {
         duration: 6000,
       });
-      if (documentError) {
-        toast.error(
-          'Le justificatif n’a pas pu être envoyé — la recharge est bien créée. Vous pouvez l’ajouter depuis Mes factures.',
-          { duration: 8000 },
-        );
-      }
       setNewAmount('');
       setShowNewRechargeModal(false);
     } catch (_error) {
-      toast.error('Erreur lors de la création de la recharge');
-    } finally {
-      setSubmitting(false);
+      toast.error('Erreur lors de la création de la demande de recharge');
     }
   };
+
+  // FCT1 (US-FCT-5/6) — the server generates + stores the bon PDF; the popup takes over.
+  const handleSubmitBon = async (amount: number) => {
+    try {
+      const created = await createBon.mutateAsync({ amount });
+      setNewAmount('');
+      setShowNewRechargeModal(false);
+      setBonReady(created);
+    } catch (_error) {
+      toast.error('Erreur lors de la génération du bon de commande');
+    }
+  };
+
+  // FCT1 (US-FCT-7) — deposit the signed bon: « Bon émis » → « Bon retourné signé ».
+  const handleDepositSigned = async (id: string, file: File) => {
+    try {
+      const updated = await depositSignedBon.mutateAsync({ id, file });
+      toast.success(`Bon signé ${updated.reference} déposé — en cours de traitement.`, {
+        duration: 6000,
+      });
+    } catch (_error) {
+      toast.error('Erreur lors du dépôt du bon signé');
+    }
+  };
+
+  const demandes = myRecharges.data ?? [];
+  const pendingBons = demandes.filter((r) => r.status === 'bon_issued');
 
   const formatDate = (d: Date) =>
     d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -179,6 +198,18 @@ export default function MyRecharges() {
           ))}
         </div>
       </div>
+
+      {/* ── FCT1 — the signed-bon deposit sub-section (renders only with « Bon émis » rows) ── */}
+      <PendingBonsSection
+        bons={pendingBons}
+        depositing={depositSignedBon.isPending}
+        onDepositSigned={(id, file) => {
+          void handleDepositSigned(id, file);
+        }}
+      />
+
+      {/* ── FCT1 — the demandes list with the per-method status chips ── */}
+      <RechargeRequestsSection recharges={demandes} loading={myRecharges.isLoading} />
 
       {/* ── Transactions ── */}
       <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
@@ -328,20 +359,26 @@ export default function MyRecharges() {
         )}
       </div>
 
-      {/* ── New Recharge Modal (extracted — CF-M2 adds the optional justificatif input) ── */}
+      {/* ── FCT1 — the two-step montant → méthode modal (two methods, nothing else) ── */}
       {showNewRechargeModal && (
         <NewRechargeModal
           initialAmount={newAmount}
-          submitting={submitting}
+          submitting={createVirement.isPending || createBon.isPending}
           onClose={() => {
             setShowNewRechargeModal(false);
             setNewAmount('');
           }}
-          onSubmit={(amount, file) => {
-            void handleSubmitRecharge(amount, file);
+          onSubmitVirement={(amount, file) => {
+            void handleSubmitVirement(amount, file);
+          }}
+          onSubmitBon={(amount) => {
+            void handleSubmitBon(amount);
           }}
         />
       )}
+
+      {/* ── FCT1 — « Votre bon de commande est prêt » ── */}
+      {bonReady && <BonReadyModal recharge={bonReady} onClose={() => setBonReady(null)} />}
     </div>
   );
 }
