@@ -379,6 +379,13 @@
       "when": 1785107631123,
       "tag": "0053_recharge_methods_bank_coords",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1785146284266,
+      "tag": "0054_wallet_adjustments_monthly_invoices_statements",
+      "breakpoints": true
     }
   ]
 }

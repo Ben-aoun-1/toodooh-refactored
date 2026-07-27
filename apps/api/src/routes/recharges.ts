@@ -10,7 +10,7 @@ import { type Recharge, notifications, recharges, users } from '../db/schema.js'
 import { env } from '../env.js';
 import { renderBonDeCommandePdf } from '../lib/bon-de-commande.js';
 import { getDispatchConfig } from '../lib/dispatch/config.js';
-import { factureBankDetailsFromEnv, renderFacturePdf } from '../lib/facture.js';
+import { renderFacturePdf, resolveFactureBankDetails } from '../lib/facture.js';
 import { declaredMatchesSniffed, sniffContainer } from '../lib/media-probe.js';
 import {
   advertiserRechargeNotification,
@@ -338,9 +338,12 @@ export const rechargesRoutes: FastifyPluginAsync = async (app) => {
     return reply.status(200).send(await walletBalance(userId));
   });
 
-  // GET /api/recharges/:id/facture — stream the invoice PDF (owner-scoped; 404 on a foreign/missing
-  // id). The facture is a deterministic render of the recharge row + the advertiser's name + our
-  // static bank coordinates (env), so it is generated on-the-fly — no stored object to orphan.
+  // GET /api/recharges/:id/facture — stream the « Récapitulatif de commande » PDF (owner-scoped;
+  // 404 on a foreign/missing id). FCT2 relabeled it from « facture » (recharges never invoice —
+  // US-FCT-12; the real invoice is monthly, routes/wallet-documents.ts); the route path stays for
+  // wire compat, the filename follows the new name. Deterministic on-the-fly render of the
+  // recharge row + the advertiser's name + the bank coordinates (dispatch_config with the
+  // FACTURE_BANK_* env fallback during the FCT2 transition).
   app.get('/api/recharges/:id/facture', advertiserGuard, async (request, reply) => {
     const parsed = idParamSchema.safeParse(request.params);
     if (!parsed.success) return invalidField(reply, 'id', 'must be a uuid');
@@ -365,12 +368,12 @@ export const rechargesRoutes: FastifyPluginAsync = async (app) => {
       amountTnd: Number(row.amountTnd),
       advertiserName: row.businessName ?? row.contactName,
       issuedAt: row.createdAt,
-      bank: factureBankDetailsFromEnv(env),
+      bank: resolveFactureBankDetails(env, await getDispatchConfig()),
     });
     return reply
       .status(200)
       .header('content-type', 'application/pdf')
-      .header('content-disposition', `inline; filename="facture-${row.reference}.pdf"`)
+      .header('content-disposition', `inline; filename="recapitulatif-${row.reference}.pdf"`)
       .send(pdf);
   });
 

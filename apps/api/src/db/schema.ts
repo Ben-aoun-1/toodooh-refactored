@@ -1262,6 +1262,96 @@ export const recharges = pgTable(
 export type Recharge = typeof recharges.$inferSelect;
 export type NewRecharge = typeof recharges.$inferInsert;
 
+// ── wallet adjustments (FCT2 / US-FCT-9 — the admin solde correction, ALWAYS audited) ─────────────
+// A SIGNED manual correction of a screencaster's derived balance: walletBalance gains
+// + SUM(amount_tnd) as its third term (credits − reconciliation debits + adjustments), which
+// reaches the three funded gates (cart confirm, activation, boost) automatically — they are pure
+// READS of balance_tnd; no reservation semantics exist to touch. The reason is NOT NULL by charter:
+// no reason → no adjustment. Rows are immutable audit — no update/delete path exists.
+export const walletAdjustments = pgTable(
+  'wallet_adjustments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    advertiserId: uuid('advertiser_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    adminId: uuid('admin_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    // Signed: positive credits, negative debits. Never zero (CHECK — a no-op adjustment is a bug).
+    amountTnd: numeric('amount_tnd', { precision: 12, scale: 2 }).notNull(),
+    reason: text('reason').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('wallet_adjustments_advertiser_id_idx').on(table.advertiserId),
+    check('wallet_adjustments_amount_nonzero', sql`${table.amountTnd} <> 0`),
+  ],
+);
+
+export type WalletAdjustment = typeof walletAdjustments.$inferSelect;
+
+// ── monthly invoices (FCT2 / US-FCT-11..12 — the ONE real invoice per screencaster per month) ────
+// Consolidated on REAL consumption: proof-verified facturable impressions delivered that month
+// (lib/reconcile/valuation.ts deliveredFacturableInRange) × each campaign's frozen plan CPM ÷ 1000,
+// HT + TVA 19 % — NEVER engaged budget, NO per-campaign detail, and recharges NEVER invoice (the
+// per-recharge document is the « Récapitulatif de commande »). Zero consumption → no row. The
+// month-end job writes row + stored PDF (invoices/<advertiserId>/<month>.pdf), idempotent via
+// UNIQUE(advertiser, month) — the screenhost_monthly_reports pattern. NO backfill: only the
+// previous CLOSED Tunis month is ever considered.
+export const monthlyInvoices = pgTable(
+  'monthly_invoices',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    advertiserId: uuid('advertiser_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    month: text('month').notNull(), // 'YYYY-MM' (Africa/Tunis)
+    totalHt: numeric('total_ht', { precision: 14, scale: 4 }).notNull(),
+    tvaTnd: numeric('tva_tnd', { precision: 14, scale: 4 }).notNull(),
+    totalTtc: numeric('total_ttc', { precision: 14, scale: 4 }).notNull(),
+    // FM- + 8 uppercase hex DERIVED from the row id (the makeReference idiom — race-free).
+    reference: text('reference').notNull().unique(),
+    pdfKey: text('pdf_key').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('monthly_invoices_advertiser_month_uq').on(table.advertiserId, table.month),
+    index('monthly_invoices_advertiser_id_idx').on(table.advertiserId),
+    check('monthly_invoices_month_fmt', sql`${table.month} ~ '^\\d{4}-\\d{2}$'`),
+  ],
+);
+
+export type MonthlyInvoice = typeof monthlyInvoices.$inferSelect;
+
+// ── screenhost monthly statements (FCT2 / relevés de reversement) ────────────────────────────────
+// One relevé per (venue, month): Σ reversement_lines.sh_amount_tnd over the lines SETTLED that
+// Tunis month (settled_at bucketing — « venues with settlements that month »; reversement_lines
+// has no month column, so the aggregation SUMs, never assumes one row per pair). Same month-end
+// job, same UNIQUE idempotency, PDF stored at statements/<screenhostId>/<month>.pdf and served
+// THROUGH the api (owner-scoped) like the monthly report.
+export const screenhostMonthlyStatements = pgTable(
+  'screenhost_monthly_statements',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    screenhostId: uuid('screenhost_id')
+      .notNull()
+      .references(() => screenhosts.id, { onDelete: 'cascade' }),
+    month: text('month').notNull(), // 'YYYY-MM' (Africa/Tunis, settled_at bucketing)
+    totalShTnd: numeric('total_sh_tnd', { precision: 14, scale: 4 }).notNull(),
+    // REL- + 8 uppercase hex derived from the row id (the makeReference idiom).
+    reference: text('reference').notNull().unique(),
+    pdfKey: text('pdf_key').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('screenhost_monthly_statements_sh_month_uq').on(table.screenhostId, table.month),
+    check('screenhost_monthly_statements_month_fmt', sql`${table.month} ~ '^\\d{4}-\\d{2}$'`),
+  ],
+);
+
+export type ScreenhostMonthlyStatement = typeof screenhostMonthlyStatements.$inferSelect;
+
 // ── proof_of_play (L-playout — the proof-of-play / billing substrate) ────────
 // The TV player reports VIDEO_STARTED / VIDEO_ENDED over the screen WebSocket; each is resolved to
 // its (campaign, creative) for the screen's screenhost and recorded here. VIDEO_ENDED carries

@@ -60,6 +60,30 @@ export const valueAllocation = (a: AllocationInput, cpm: number, t = 1): Allocat
   };
 };
 
+// FCT2 (US-FCT-11) — the monthly-consumption sum: PROOF-VERIFIED facturable impressions whose
+// créneau date falls in [from, to] (inclusive ISO YYYY-MM-DD, Africa/Tunis — the créneau's own
+// calendar date IS the attribution key; a proof can only ever credit its own slot's date, so no
+// cross-month leak is possible). The exact logical complement of E6's detectMissedSlots: same
+// créneaux, same deliveredSlots gate, same PHYSICAL unit × the plan's frozen T — unfloored, the
+// reconcile convention (valueAllocation), never the E6 detector's Math.floor. An UNPROVEN créneau
+// contributes NOTHING: engaged-but-undelivered is not consumption.
+export const deliveredFacturableInRange = (
+  allocations: readonly AllocationInput[],
+  t: number,
+  from: string,
+  to: string,
+): number => {
+  let physical = 0;
+  for (const a of allocations) {
+    for (const c of a.creneaux) {
+      if (c.date < from || c.date > to) continue;
+      if (!a.deliveredSlots.has(slotKey(c.date, c.hour))) continue;
+      physical += c.impressions;
+    }
+  }
+  return physical * t;
+};
+
 // E6 — the redispatch context the NET settlement needs. Defaults reproduce the pre-E6 math
 // exactly (t 1, no reliquat, nothing replaced), so pre-E6 callers/fixtures are untouched.
 export interface ReconcileNetOpts {

@@ -8,6 +8,7 @@ import { adminEngineJournalRoutes } from './admin-engine-journal.js';
 import { adminPlatformStatsRoutes } from './admin-platform-stats.js';
 import { adminRechargesRoutes } from './admin-recharges.js';
 import { adminReconcileRoutes } from './admin-reconcile.js';
+import { adminWalletRoutes } from './admin-wallet.js';
 import { adminRoutes } from './admin.js';
 import { agentRoutes } from './agent.js';
 import { campaignBoostRoutes } from './campaign-boost.js';
@@ -22,6 +23,7 @@ import { emailAvailabilityRoute } from './email-availability.js';
 import { internalRoutes } from './internal.js';
 import { meRoutes } from './me.js';
 import { notificationsRoutes } from './notifications.js';
+import { ownerStatementsRoutes } from './owner-statements.js';
 import { passwordRoutes } from './password.js';
 import { predefinedZonesRoutes } from './predefined-zones.js';
 import { profileDocumentsRoutes } from './profile-documents.js';
@@ -33,6 +35,7 @@ import { screensRoutes } from './screens.js';
 import { signinRoutes } from './signin.js';
 import { signupRoute } from './signup.js';
 import { taxAvailabilityRoute } from './tax-availability.js';
+import { walletDocumentsRoutes } from './wallet-documents.js';
 import { zonesRoutes } from './zones.js';
 
 // Aggregates all application-shaped /api/* routes. Future routes
@@ -77,6 +80,11 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   // L-wallet — advertiser wallet surface: POST recharge (manual bank-transfer top-up → pending +
   // facture reference), GET own recharges, GET /api/wallet/balance (derived from confirmed recharges).
   await app.register(rechargesRoutes);
+  // FCT2 — the screencaster's money documents: monthly consolidated invoices (list + stored PDF)
+  // + the wallet-adjustment history (the third ledger row type).
+  await app.register(walletDocumentsRoutes);
+  // FCT2 — the owner's « Relevés de reversement »: monthly per-venue statements (list + stored PDF).
+  await app.register(ownerStatementsRoutes);
   await app.register(profileRoutes);
   await app.register(profileDocumentsRoutes);
   await app.register(passwordRoutes);
@@ -87,6 +95,8 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   // L-wallet — admin recharge moderation: the manual-payment queue + confirm (credits the balance,
   // idempotent) / reject (with a reason). The money-confirmation step of the offline top-up flow.
   await app.register(adminRechargesRoutes);
+  // FCT2 — the admin wallet adjustment (signed, audited, reason-required) + its audit trail.
+  await app.register(adminWalletRoutes);
   // ACTIVATION WIRING — admin campaign moderation: the review queue + activate (gate on pending +
   // approved creative + funded, then dispatch → status='active') / reject. The keystone that lets
   // the dispatch → playout → proof-of-play chain run end-to-end.

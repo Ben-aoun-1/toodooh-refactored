@@ -3,7 +3,13 @@ import { randomBytes } from 'node:crypto';
 import { and, eq, sql } from 'drizzle-orm';
 
 import { db } from '../db/client.js';
-import { type Recharge, campaignReconciliation, campaigns, recharges } from '../db/schema.js';
+import {
+  type Recharge,
+  campaignReconciliation,
+  campaigns,
+  recharges,
+  walletAdjustments,
+} from '../db/schema.js';
 
 // Recharge/wallet helpers (L-wallet) shared by the advertiser routes (routes/recharges.ts) and the
 // admin moderation surface (routes/admin-recharges.ts) — single source of truth so the two can't drift.
@@ -119,6 +125,8 @@ export interface WalletBalance {
   balance_tnd: number;
   credited_tnd: number;
   debited_tnd: number;
+  /** FCT2 — the SIGNED sum of admin wallet adjustments (US-FCT-9; audited, reason-required). */
+  adjustments_tnd: number;
   currency: 'TND';
 }
 
@@ -127,7 +135,12 @@ export interface WalletBalance {
 // RECONCILED campaigns (L-redisp §B.4 plugged the debit seam here). spend_tnd is already the NET the
 // advertiser owes (budget − refund), so balance = credited − debited nets the refund automatically —
 // no separate credit needed. Idempotent: one reconciliation row per campaign (unique) ⇒ a re-reconcile
-// can't double-debit. Both SUMs coalesce to 0. (A future debit ledger plugs its own SUM in here only.)
+// can't double-debit. All SUMs coalesce to 0.
+//
+// FCT2 (US-FCT-9) — the third term: + SUM(wallet_adjustments.amount_tnd), SIGNED. This is the ONE
+// seam the adjustments join; the three funded gates (cart confirm, activation, boost) read
+// balance_tnd and therefore see adjustments automatically — their read-only posture (no
+// reservation, debit at reconciliation only) is BYTE-UNTOUCHED.
 export const walletBalance = async (advertiserId: string): Promise<WalletBalance> => {
   const [creditRow] = await db
     .select({ credited: sql<string>`coalesce(sum(${recharges.amountTnd}), 0)` })
@@ -138,12 +151,18 @@ export const walletBalance = async (advertiserId: string): Promise<WalletBalance
     .from(campaignReconciliation)
     .innerJoin(campaigns, eq(campaignReconciliation.campaignId, campaigns.id))
     .where(eq(campaigns.advertiserId, advertiserId));
+  const [adjustmentRow] = await db
+    .select({ adjustments: sql<string>`coalesce(sum(${walletAdjustments.amountTnd}), 0)` })
+    .from(walletAdjustments)
+    .where(eq(walletAdjustments.advertiserId, advertiserId));
   const credited = Number(creditRow?.credited ?? 0);
   const debited = Number(debitRow?.debited ?? 0);
+  const adjustments = Number(adjustmentRow?.adjustments ?? 0);
   return {
-    balance_tnd: credited - debited,
+    balance_tnd: credited - debited + adjustments,
     credited_tnd: credited,
     debited_tnd: debited,
+    adjustments_tnd: adjustments,
     currency: 'TND',
   };
 };
