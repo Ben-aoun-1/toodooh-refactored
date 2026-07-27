@@ -393,6 +393,13 @@
       "when": 1785186608712,
       "tag": "0055_events_hour_reservations",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1785193967007,
+      "tag": "0056_event_pricing_amax",
+      "breakpoints": true
     }
   ]
 }

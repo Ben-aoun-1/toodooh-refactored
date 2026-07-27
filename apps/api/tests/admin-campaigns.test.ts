@@ -262,21 +262,31 @@ describe('admin campaign moderation — activation keystone (real Postgres)', ()
 
   it('prices an event campaign at event_cpm_tnd (plan cpm = 30)', async () => {
     // event campaign, budget 600 @ event CPM 30 → i_cible 20000 (coverable); funded 700.
-    const { admin, campaignId } = await seedActivatable({
-      fundTnd: 700,
-      requestedBudgetTnd: 600,
-      campaignType: 'event',
-    });
-    mockSession(admin);
-    const res = await activate(campaignId);
-    expect(res.statusCode).toBe(200);
-    const [plan] = await db
-      .select()
-      .from(campaignDispatchPlan)
-      .where(eq(campaignDispatchPlan.campaignId, campaignId))
-      .limit(1);
-    expect(Number(plan?.cpm)).toBe(30);
-    expect(plan?.iCible).toBe(20000);
+    // EV2 (architect override): the 30 is THIS test's explicit fixture, self-seeded on the live
+    // dispatch_config singleton and restored after — migration 0056 moved the column's default
+    // to 15, so inheriting the row's value would couple the pin to migration/test order.
+    const [cfgBefore] = await sql`select event_cpm_tnd from dispatch_config`;
+    await sql`update dispatch_config set event_cpm_tnd = '30.000'`;
+    try {
+      const { admin, campaignId } = await seedActivatable({
+        fundTnd: 700,
+        requestedBudgetTnd: 600,
+        campaignType: 'event',
+      });
+      mockSession(admin);
+      const res = await activate(campaignId);
+      expect(res.statusCode).toBe(200);
+      const [plan] = await db
+        .select()
+        .from(campaignDispatchPlan)
+        .where(eq(campaignDispatchPlan.campaignId, campaignId))
+        .limit(1);
+      expect(Number(plan?.cpm)).toBe(30);
+      expect(plan?.iCible).toBe(20000);
+    } finally {
+      const restore = cfgBefore?.['event_cpm_tnd'] as string | undefined;
+      if (restore !== undefined) await sql`update dispatch_config set event_cpm_tnd = ${restore}`;
+    }
   });
 
   it('blocks activation when the campaign has no indicative budget (422 no_budget; not activated)', async () => {

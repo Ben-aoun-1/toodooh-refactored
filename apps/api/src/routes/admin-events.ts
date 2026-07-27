@@ -5,6 +5,9 @@ import { z } from 'zod';
 
 import { db } from '../db/client.js';
 import { events } from '../db/schema.js';
+import { MIN_CAMPAIGN_BUDGET_TND } from '../lib/campaign-budget.js';
+import { getDispatchConfig } from '../lib/dispatch/config.js';
+import { computeEventCmax } from '../lib/event-pricing/pricing.js';
 import { declaredMatchesSniffed, sniffContainer } from '../lib/media-probe.js';
 import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
 import { storage } from '../storage/s3-storage.js';
@@ -242,6 +245,35 @@ export const adminEventsRoutes: FastifyPluginAsync = async (app) => {
       .returning();
     if (!updated) return sendNotFound(reply);
     return reply.status(200).send(eventView(updated, new Date()));
+  });
+
+  // GET /api/admin/events/:id/tarification — EV2: the per-venue pricing detail (the operator's
+  // insight surface). Read-only; annulé events still price (the operator may want the history).
+  app.get('/api/admin/events/:id/tarification', adminGuard, async (request, reply) => {
+    const params = idParamSchema.safeParse(request.params);
+    if (!params.success) return invalidField(reply, 'id', 'must be a uuid');
+    const [row] = await db.select().from(events).where(eq(events.id, params.data.id)).limit(1);
+    if (!row) return sendNotFound(reply);
+    const cfg = await getDispatchConfig();
+    const result = await computeEventCmax(
+      { id: row.id, kickoffAt: row.kickoffAt, endsAt: row.endsAt },
+      cfg.eventCpmTnd,
+    );
+    return reply.status(200).send({
+      c_max_evt_tnd: result.cMaxEvtTnd,
+      i_max: result.iMax,
+      eligible_count: result.eligibleCount,
+      cpm_evt_tnd: result.cpmEvtTnd,
+      min_budget_tnd: MIN_CAMPAIGN_BUDGET_TND,
+      annule: row.annule,
+      venues: result.venues.map((v) => ({
+        screenhost_id: v.screenhostId,
+        name: v.name,
+        amax_pph: v.amaxPph,
+        blocs_disponibles: v.blocsDisponibles,
+        impressions: v.impressions,
+      })),
+    });
   });
 
   // GET /api/admin/events/:id/image-url — presign the affiche for the admin surface.
