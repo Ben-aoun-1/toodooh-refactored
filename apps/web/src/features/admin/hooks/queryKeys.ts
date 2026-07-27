@@ -68,9 +68,10 @@ export const adminKeys = {
   /** Admin-account list for AdminManagement (`adminService.getAdmins`). */
   admins: () => [...adminKeys.all, 'admins'] as const,
 
-  /** Special-event list + stats for EventManagement (`adminEventsService`). */
+  /** EV1 — the full event list for EventManagement (`adminEventsService.list`). */
   events: () => [...adminKeys.all, 'events'] as const,
-  eventStats: () => [...adminKeys.all, 'eventStats'] as const,
+  /** EV1 — one event's presigned affiche URL (admin surface). */
+  eventImageUrl: (id: string) => [...adminKeys.all, 'events', 'imageUrl', id] as const,
 
   /** Paginated, filtered location list for ScreenManagement. */
   adminLocations: (

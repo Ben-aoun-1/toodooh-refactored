@@ -6,7 +6,6 @@ import {
   campaignService,
   type CreateCampaignData,
 } from '@/features/campaigns/services/campaign.service';
-import { eventsKeys } from '@/features/events/hooks/queryKeys';
 import { supabase } from '@/lib/supabase';
 
 import { campaignsKeys } from './queryKeys';
@@ -30,11 +29,6 @@ export interface CampaignStatusPatch {
 interface UpdateCampaignInput {
   id: string;
   patch: CampaignStatusPatch;
-}
-
-interface LinkCampaignToEventInput {
-  campaignId: string;
-  eventId: string;
 }
 
 /**
@@ -97,24 +91,9 @@ export function useCampaignMutations() {
     onSuccess: invalidateCampaignWrite,
   });
 
-  // CF-14 — `linkToEvent` attaches a campaign to a special event:
-  // - (a) `campaignsKeys.all`: the campaign now carries an `event_id`.
-  // - (a) `eventsKeys.all`: the advertiser's event-campaign links change.
-  // - (b) `adminKeys.monitoringCampaigns()`: admin monitoring shows the link.
-  const linkToEvent = useMutation({
-    mutationFn: async ({ campaignId, eventId }: LinkCampaignToEventInput): Promise<void> => {
-      const { error } = await supabase.rpc('link_campaign_to_event', {
-        p_campaign_id: campaignId,
-        p_event_id: eventId,
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: campaignsKeys.all });
-      queryClient.invalidateQueries({ queryKey: eventsKeys.all });
-      queryClient.invalidateQueries({ queryKey: adminKeys.monitoringCampaigns() });
-    },
-  });
+  // EV1 — the Supabase-era `linkToEvent` mutation (the event-link RPC) died with the legacy
+  // events tree: it had ZERO consumers. Event-campaign attachment returns in EV3 through the
+  // positioning parcours, on the live api.
 
-  return { saveDraft, updateCampaign, linkToEvent };
+  return { saveDraft, updateCampaign };
 }

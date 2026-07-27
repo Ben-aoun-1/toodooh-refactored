@@ -1,5 +1,4 @@
 import BalanceCard from '@/features/advertiser/components/dashboard/BalanceCard';
-import FeaturedEventsGrid from '@/features/advertiser/components/dashboard/FeaturedEventsGrid';
 import GettingStartedSection from '@/features/advertiser/components/dashboard/GettingStartedSection';
 import InsightsCard from '@/features/advertiser/components/dashboard/InsightsCard';
 import LastCampaignsGrid from '@/features/advertiser/components/dashboard/LastCampaignsGrid';
@@ -36,7 +35,6 @@ export default function AdvertiserDashboard() {
   return (
     <div className="w-full space-y-8">
       <BalanceCard balance={stats.balance} loading={loadingStats} isDisabled={isDisabled} />
-      <FeaturedEventsGrid />
       <StatsGrid
         campaignsDiffused={stats.campaignsDiffused}
         totalViews={stats.totalViews}

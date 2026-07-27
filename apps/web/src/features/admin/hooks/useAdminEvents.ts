@@ -1,97 +1,73 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { adminEventsService } from '@/features/admin/services/admin-events.service';
-import { advertiserKeys } from '@/features/advertiser/hooks/queryKeys';
+import {
+  type UpsertEventInput,
+  adminEventsService,
+} from '@/features/admin/services/admin-events.service';
 import { eventsKeys } from '@/features/events/hooks/queryKeys';
-import type { CreateEventDTO, EventStats, SpecialEvent } from '@/features/events/types/event';
 
 import { adminKeys } from './queryKeys';
 
-/** The full special-event list (filtering + pagination are client-side in the page). */
-export function useAdminEvents(): { events: SpecialEvent[]; loading: boolean; isError: boolean } {
+// EV1 — every write invalidates BOTH the admin list and the advertiser-facing catalogue caches
+// (an admin create/edit/annuler is immediately visible on /evenements in the same session).
+
+const useInvalidateEvents = () => {
+  const queryClient = useQueryClient();
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: adminKeys.events() });
+    void queryClient.invalidateQueries({ queryKey: eventsKeys.all });
+  };
+};
+
+/** The full event list (official + suggested + annulé; filtering is client-side). */
+export function useAdminEvents() {
   const query = useQuery({
     queryKey: adminKeys.events(),
-    queryFn: () => adminEventsService.getEvents(),
+    queryFn: () => adminEventsService.list(),
+    select: (d) => d.events,
   });
-  return {
-    events: query.data ?? [],
-    loading: query.isLoading,
-    isError: query.isError,
-  };
+  return { events: query.data ?? [], loading: query.isLoading, isError: query.isError };
 }
 
-/** Event counters for the stat cards. */
-export function useAdminEventStats(): { stats: EventStats | undefined } {
-  const query = useQuery({
-    queryKey: adminKeys.eventStats(),
-    queryFn: () => adminEventsService.getStats(),
+export function useCreateEvent() {
+  const invalidate = useInvalidateEvents();
+  return useMutation({
+    mutationFn: (input: UpsertEventInput) => adminEventsService.create(input),
+    onSuccess: invalidate,
   });
-  return { stats: query.data };
 }
 
-interface CreateEventInput {
-  eventData: CreateEventDTO;
-  adminId: string;
+export function useUpdateEvent() {
+  const invalidate = useInvalidateEvents();
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: UpsertEventInput }) =>
+      adminEventsService.update(id, patch),
+    onSuccess: invalidate,
+  });
 }
 
-interface UpdateEventInput {
-  eventId: string;
-  eventData: Partial<CreateEventDTO>;
+export function useAnnulerEvent() {
+  const invalidate = useInvalidateEvents();
+  return useMutation({
+    mutationFn: (id: string) => adminEventsService.annuler(id),
+    onSuccess: invalidate,
+  });
 }
 
-interface ToggleFeaturedInput {
-  eventId: string;
-  isFeatured: boolean;
+export function useUploadEventImage() {
+  const invalidate = useInvalidateEvents();
+  return useMutation({
+    mutationFn: ({ id, file }: { id: string; file: File }) =>
+      adminEventsService.uploadImage(id, file),
+    onSuccess: invalidate,
+  });
 }
 
-/**
- * Event write mutations. The service methods return a truthy result on success
- * (`SpecialEvent | null` for create, `boolean` for the rest), so `onSuccess`
- * invalidates only when the write actually landed.
- *
- * CF-14 invalidation graph:
- * - (a) `adminKeys.events()` + `eventStats()` — the admin's own list / counters,
- *   in this session.
- * - (b) `eventsKeys.all` + `advertiserKeys` `featuredEvents` — the
- *   advertiser-visible events list and featured carousel. Cross-session (admin
- *   ≠ advertiser): a no-op in this QueryClient, kept for intent + hybrid-session
- *   defence; actual advertiser freshness rides their own staleTime.
- */
-export function useAdminEventMutations() {
-  const queryClient = useQueryClient();
-
-  const invalidateEventViews = () => {
-    queryClient.invalidateQueries({ queryKey: adminKeys.events() });
-    queryClient.invalidateQueries({ queryKey: adminKeys.eventStats() });
-    queryClient.invalidateQueries({ queryKey: eventsKeys.all });
-    queryClient.invalidateQueries({ queryKey: [...advertiserKeys.all, 'featuredEvents'] });
-  };
-  const invalidateIfLanded = (result: unknown) => {
-    if (result) invalidateEventViews();
-  };
-
-  const createEvent = useMutation({
-    mutationFn: ({ eventData, adminId }: CreateEventInput) =>
-      adminEventsService.createEvent(eventData, adminId),
-    onSuccess: invalidateIfLanded,
+/** One event's presigned affiche URL (admin list thumbnails). */
+export function useAdminEventImageUrl(id: string, hasImage: boolean) {
+  return useQuery({
+    queryKey: adminKeys.eventImageUrl(id),
+    queryFn: () => adminEventsService.imageUrl(id),
+    enabled: hasImage,
   });
-
-  const updateEvent = useMutation({
-    mutationFn: ({ eventId, eventData }: UpdateEventInput) =>
-      adminEventsService.updateEvent(eventId, eventData),
-    onSuccess: invalidateIfLanded,
-  });
-
-  const deleteEvent = useMutation({
-    mutationFn: (eventId: string) => adminEventsService.deleteEvent(eventId),
-    onSuccess: invalidateIfLanded,
-  });
-
-  const toggleFeatured = useMutation({
-    mutationFn: ({ eventId, isFeatured }: ToggleFeaturedInput) =>
-      adminEventsService.toggleFeatured(eventId, isFeatured),
-    onSuccess: invalidateIfLanded,
-  });
-
-  return { createEvent, updateEvent, deleteEvent, toggleFeatured };
 }

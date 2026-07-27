@@ -24,17 +24,20 @@ interface StepDatesProps {
 
 type DateField = 'start' | 'end';
 
+// EV1 rider (CF-HF3 watch-item, ruled): a ONE-DAY campaign is legal — start = end passes. The
+// old strict < here was the only blocker in the whole chain (the server never mirrored it and the
+// engine's day window is inclusive), so the comparisons and the messages carry the « ou égale ».
 function validateDate(dateType: DateField, date: Date | null, otherDate: Date | null): string {
   if (!date) {
     return dateType === 'start'
       ? 'La date de début est obligatoire'
       : 'La date de fin est obligatoire';
   }
-  if (dateType === 'start' && otherDate && date >= otherDate) {
-    return 'La date de début doit être antérieure à la date de fin';
+  if (dateType === 'start' && otherDate && date > otherDate) {
+    return 'La date de début doit être antérieure ou égale à la date de fin';
   }
-  if (dateType === 'end' && otherDate && date <= otherDate) {
-    return 'La date de fin doit être postérieure à la date de début';
+  if (dateType === 'end' && otherDate && date < otherDate) {
+    return 'La date de fin doit être postérieure ou égale à la date de début';
   }
   return '';
 }
@@ -63,11 +66,12 @@ export default function StepDates({
     return d;
   }, []);
 
+  // INCLUSIVE like the engine + the recap (`inclusiveDayCount`): 30→30 is 1 jour, 30→31 is 2.
   const durationDays = useMemo(() => {
     if (!startDate || !endDate) return 0;
     const ms = endDate.getTime() - startDate.getTime();
-    if (ms <= 0) return 0;
-    return Math.ceil(ms / (1000 * 60 * 60 * 24));
+    if (ms < 0) return 0;
+    return Math.round(ms / (1000 * 60 * 60 * 24)) + 1;
   }, [startDate, endDate]);
 
   const handleDateChange = (dateType: DateField, date: Date | null) => {
@@ -96,7 +100,7 @@ export default function StepDates({
     void onNext();
   };
 
-  const nextDisabled = !startDate || !endDate || startDate >= endDate || saving;
+  const nextDisabled = !startDate || !endDate || startDate > endDate || saving;
 
   return (
     <div className="space-y-6">

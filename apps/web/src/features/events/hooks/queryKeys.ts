@@ -1,16 +1,19 @@
 /**
- * Step 10 — React Query key factory for the `events` feature.
+ * React Query key factory for the `events` feature (EV1 — rebuilt on the live api; the legacy
+ * Supabase list/myCampaigns keys died with their RPCs).
  *
- * Follows the CF-13 convention: one `queryKeys.ts` per feature exporting a
- * named `<feature>Keys` factory; hierarchical readonly tuples; `.all` is the
- * feature-wide invalidation prefix.
+ * CF-13 convention: one `queryKeys.ts` per feature exporting a named `<feature>Keys` factory;
+ * hierarchical readonly tuples; `.all` is the feature-wide invalidation prefix.
  */
 export const eventsKeys = {
   all: ['events'] as const,
 
-  /** The full event list (advertiser-facing, page 1, fixed fetch size). */
-  list: () => [...eventsKeys.all, 'list'] as const,
+  /** The official catalogue (shared — no per-user axis). */
+  catalogue: () => [...eventsKeys.all, 'catalogue'] as const,
 
-  /** The signed-in user's event-campaigns + the event→campaign map. */
-  myCampaigns: (userId: string) => [...eventsKeys.all, 'myCampaigns', userId] as const,
+  /** « Ce que les screencasters suggèrent » — the shared suggestion list. */
+  suggested: () => [...eventsKeys.all, 'suggested'] as const,
+
+  /** A single event's presigned affiche URL. */
+  imageUrl: (eventId: string) => [...eventsKeys.all, 'imageUrl', eventId] as const,
 };
