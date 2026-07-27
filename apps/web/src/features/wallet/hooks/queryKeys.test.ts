@@ -35,12 +35,20 @@ describe('walletKeys', () => {
     );
   });
 
+  it('FCT2 — the adjustments/invoices keys join the factory, user-isolated', () => {
+    expect(walletKeys.adjustments('u1')).toEqual(['wallet', 'adjustments', 'u1']);
+    expect(walletKeys.invoices('u1')).toEqual(['wallet', 'invoices', 'u1']);
+    expect(walletKeys.adjustments('u1')).not.toEqual(walletKeys.adjustments('u2'));
+  });
+
   it('keeps every view key prefix-matchable by walletKeys.all', () => {
     for (const key of [
       walletKeys.balance('u1'),
       walletKeys.recharges('u1'),
       walletKeys.revenueStats('u1'),
       walletKeys.revenueByPeriod('u1', 'monthly'),
+      walletKeys.adjustments('u1'),
+      walletKeys.invoices('u1'),
     ]) {
       expect(key.slice(0, walletKeys.all.length)).toEqual(walletKeys.all);
     }

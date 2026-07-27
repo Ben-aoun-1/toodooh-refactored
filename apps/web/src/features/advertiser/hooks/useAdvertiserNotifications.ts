@@ -52,6 +52,14 @@ export const actionFor = (n: ApiNotification): AdvertiserNotificationItem['actio
   if (n.type.startsWith('recharge_')) {
     return { label: 'Consulter', path: '/my-recharges' };
   }
+  // FCT2 — the monthly consolidated facture lands in « Mes factures »; a solde adjustment shows
+  // in the Mes finances history.
+  if (n.type === 'monthly_invoice_ready') {
+    return { label: 'Consulter', path: '/my-invoices' };
+  }
+  if (n.type === 'wallet_adjustment') {
+    return { label: 'Consulter', path: '/my-recharges' };
+  }
   return null;
 };
 

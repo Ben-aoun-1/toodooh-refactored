@@ -1,33 +1,34 @@
-import { Calendar, ChevronRight, Banknote, Download, Eye, Wallet } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Calendar, ChevronRight, Banknote, Download, Wallet } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 import PageHeader from '@/components/PageHeader';
-import { authService } from '@/features/auth/services/auth.service';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
 import OwnerNotificationsBell from '@/features/screenhost/components/OwnerNotificationsBell';
+import { screenhostKeys } from '@/features/screenhost/hooks/queryKeys';
 import {
-  listOwnerStatementSummaries,
-  getOwnerStatementDetail,
-} from '@/features/screenhost/data/ownerStatementDetails';
-import { exportService } from '@/features/screenhost/services/export.service';
-import { buildStatementRecipient } from '@/features/screenhost/utils/statementRecipient';
+  type OwnerStatementRow,
+  releveFilename,
+  statementDesignation,
+  statementsService,
+} from '@/features/screenhost/services/statements.service';
 
-export interface PaymentStatement {
-  id: string;
-  reference: string;
-  title: string;
-  amount: number;
-  date: string;
-}
-
+// FCT2 — the « Relevés de reversement » page, rewired from the mock module onto the live api:
+// the server generates + stores one relevé per venue per settled month; download streams the
+// STORED PDF (the client-side jsPDF relevé is retired for this surface).
 export default function OwnerStatementsPage() {
   const navigate = useNavigate();
   const { user, needsApproval, validationStatus } = useAuthStore();
   const isDisabled = needsApproval && validationStatus === 'pending';
-  const statements = useMemo<PaymentStatement[]>(() => listOwnerStatementSummaries(), []);
+  const statementsQuery = useQuery({
+    queryKey: screenhostKeys.statements(user?.id ?? ''),
+    queryFn: () => statementsService.list(),
+    enabled: !!user?.id,
+  });
+  const sortedStatements = statementsQuery.data ?? [];
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const formatAmount = useCallback((value: number) => {
@@ -47,32 +48,24 @@ export default function OwnerStatementsPage() {
     });
   }, []);
 
-  const handleDownload = useCallback(
-    async (s: PaymentStatement) => {
-      const detail = getOwnerStatementDetail(s.id);
-      if (!detail) {
-        toast.error('Relevé introuvable');
-        return;
-      }
-      try {
-        setDownloadingId(s.id);
-        const profile = await authService.getBusinessProfile();
-        const recipient = buildStatementRecipient(profile, user?.email ?? null);
-        const name = await exportService.exportOwnerStatementPdf({ detail, recipient });
-        toast.success(`Téléchargement : ${name}`);
-      } catch (_e) {
-        toast.error('Impossible de générer le PDF');
-      } finally {
-        setDownloadingId(null);
-      }
-    },
-    [user?.email],
-  );
-
-  const sortedStatements = useMemo(
-    () => [...statements].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
-    [statements],
-  );
+  const handleDownload = useCallback(async (s: OwnerStatementRow) => {
+    try {
+      setDownloadingId(s.id);
+      const blob = await statementsService.download(s.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = releveFilename(s.reference);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (_e) {
+      toast.error('Impossible de télécharger le relevé. Veuillez réessayer.');
+    } finally {
+      setDownloadingId(null);
+    }
+  }, []);
 
   useEffect(() => {
     if (!user) {
@@ -154,40 +147,39 @@ export default function OwnerStatementsPage() {
                       {sortedStatements.length === 0 ? (
                         <tr>
                           <td colSpan={4} className="px-6 py-12 text-center text-gray-500 text-sm">
-                            Aucun relevé pour le moment.
+                            {statementsQuery.isLoading
+                              ? 'Chargement...'
+                              : 'Aucun relevé pour le moment.'}
                           </td>
                         </tr>
                       ) : (
                         sortedStatements.map((row) => (
                           <tr key={row.id} className="hover:bg-gray-50/80 transition-colors">
                             <td className="px-5 py-4 pl-6">
-                              <p className="text-sm font-medium text-gray-900">{row.title}</p>
-                              <p className="text-xs text-gray-500 mt-0.5">({row.reference})</p>
+                              <p className="text-sm font-medium text-gray-900">
+                                {statementDesignation(row.month)}
+                              </p>
+                              <p className="text-xs text-gray-500 mt-0.5">
+                                {row.screenhost_name} ({row.reference})
+                              </p>
                             </td>
                             <td className="px-5 py-4 text-sm font-medium text-gray-900 tabular-nums">
-                              {formatAmount(row.amount)} TND
+                              {formatAmount(row.total_sh_tnd)} TND
                             </td>
                             <td className="px-5 py-4 text-sm text-gray-700 tabular-nums">
-                              {formatDateFr(row.date)}
+                              {formatDateFr(row.created_at)}
                             </td>
                             <td className="px-5 py-4 pr-6">
                               <div className="flex items-center justify-end gap-2">
                                 <button
                                   type="button"
-                                  onClick={() => navigate(`/owner-statements/${row.id}`)}
-                                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-800 text-sm font-normal hover:bg-gray-50 transition-colors shadow-sm"
-                                >
-                                  <Eye className="w-4 h-4 text-gray-500" />
-                                  Voir
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDownload(row)}
+                                  onClick={() => void handleDownload(row)}
                                   disabled={downloadingId === row.id}
-                                  className="inline-flex items-center justify-center p-2 rounded-lg border border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-50"
+                                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-50"
                                   aria-label={`Télécharger le relevé ${row.reference}`}
                                 >
                                   <Download className="w-4 h-4" />
+                                  Télécharger
                                 </button>
                               </div>
                             </td>

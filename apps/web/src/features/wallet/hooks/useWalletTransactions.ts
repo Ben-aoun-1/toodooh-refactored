@@ -39,17 +39,33 @@ export function useWalletTransactions(userId: string | undefined): UseWalletTran
     enabled: !!userId,
     refetchOnWindowFocus: 'always',
   });
+  // FCT2 — the third row type: admin solde adjustments (signed, reason shown).
+  const adjustmentsQuery = useQuery({
+    queryKey: walletKeys.adjustments(userId ?? ''),
+    queryFn: () => walletService.listAdjustments(),
+    enabled: !!userId,
+    refetchOnWindowFocus: 'always',
+  });
   const campaignsQuery = useMyCampaignsList(userId);
 
   const transactions = useMemo(
-    () => composeLedger(rechargesQuery.data ?? [], campaignsQuery.data ?? []),
-    [rechargesQuery.data, campaignsQuery.data],
+    () =>
+      composeLedger(
+        rechargesQuery.data ?? [],
+        campaignsQuery.data ?? [],
+        adjustmentsQuery.data ?? [],
+      ),
+    [rechargesQuery.data, campaignsQuery.data, adjustmentsQuery.data],
   );
 
   return {
     balance: balanceQuery.data?.balance_tnd ?? 0,
     transactions,
     loading: balanceQuery.isLoading || rechargesQuery.isLoading || campaignsQuery.isLoading,
-    isError: balanceQuery.isError || rechargesQuery.isError || campaignsQuery.isError,
+    isError:
+      balanceQuery.isError ||
+      rechargesQuery.isError ||
+      campaignsQuery.isError ||
+      adjustmentsQuery.isError,
   };
 }

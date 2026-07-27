@@ -21,6 +21,9 @@ export const screenhostKeys = {
   /** The owner notification-bell feed (Commit 8 — D5). */
   notifications: (userId: string) => [...screenhostKeys.all, 'notifications', userId] as const,
 
+  /** FCT2 — the owner's monthly « Relevés de reversement » (GET /api/screenhosts/statements). */
+  statements: (userId: string) => [...screenhostKeys.all, 'statements', userId] as const,
+
   /** The owner's screenhosts WiFi list (GET /api/screenhosts/mine). */
   screenhostsMine: (userId: string) => [...screenhostKeys.all, 'screenhostsMine', userId] as const,
 

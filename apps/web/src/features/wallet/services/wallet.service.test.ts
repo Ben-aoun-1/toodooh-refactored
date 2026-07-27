@@ -11,7 +11,12 @@ const spies = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/api-client', () => ({ apiClient: spies }));
 
-import { bonFilename, factureFilename, walletService } from './wallet.service';
+import {
+  bonFilename,
+  invoiceFilename,
+  recapitulatifFilename,
+  walletService,
+} from './wallet.service';
 
 beforeEach(() => {
   spies.get.mockReset();
@@ -89,8 +94,25 @@ describe('walletService (CF-M1 — the live money wire)', () => {
     expect(spies.getBlob).toHaveBeenCalledWith('/recharges/r1/facture');
   });
 
-  it('factureFilename mirrors the server content-disposition', () => {
-    expect(factureFilename('FCT-AAAA1111')).toBe('facture-FCT-AAAA1111.pdf');
+  it('FCT2 relabel — recapitulatifFilename mirrors the server content-disposition (never facture-)', () => {
+    expect(recapitulatifFilename('FCT-AAAA1111')).toBe('recapitulatif-FCT-AAAA1111.pdf');
+  });
+
+  it('FCT2 — the monthly invoice wire: list, stored-PDF download, facture- filename', async () => {
+    spies.get.mockResolvedValue([]);
+    await walletService.listInvoices();
+    expect(spies.get).toHaveBeenCalledWith('/wallet/invoices');
+    const pdf = new Blob(['%PDF-1.3'], { type: 'application/pdf' });
+    spies.getBlob.mockResolvedValue(pdf);
+    await expect(walletService.downloadInvoice('i1')).resolves.toBe(pdf);
+    expect(spies.getBlob).toHaveBeenCalledWith('/wallet/invoices/i1/pdf');
+    expect(invoiceFilename('FM-AAAA1111')).toBe('facture-FM-AAAA1111.pdf');
+  });
+
+  it('FCT2 — listAdjustments → GET /wallet/adjustments (the third ledger row type)', async () => {
+    spies.get.mockResolvedValue([]);
+    await walletService.listAdjustments();
+    expect(spies.get).toHaveBeenCalledWith('/wallet/adjustments');
   });
 
   it('uploadJustificatif → multipart POST /recharges/:id/document with the file part (CF-M2)', async () => {

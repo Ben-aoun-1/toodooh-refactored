@@ -4,7 +4,9 @@ import {
   useRechargeBonUrl,
   useRechargeDocumentUrl,
   useRechargeSignedBonUrl,
+  useWalletAdjustments,
 } from '@/features/admin/hooks/useRecharges';
+import { signedAmountLabel } from '@/features/admin/lib/wallet-adjustment';
 import {
   adminRechargesService,
   documentDisplayMode,
@@ -37,6 +39,8 @@ export default function RechargeDetailsModal({
   const document = useRechargeDocumentUrl(recharge.id, recharge.has_document);
   const bon = useRechargeBonUrl(recharge.id, isBon && recharge.has_bon);
   const signedBon = useRechargeSignedBonUrl(recharge.id, isBon && recharge.has_signed_bon);
+  // FCT2 (US-FCT-9) — this advertiser's solde-adjustment audit trail.
+  const adjustments = useWalletAdjustments(recharge.advertiser_id);
   const mode = documentDisplayMode(recharge.document_mime);
   const signedBonMode = documentDisplayMode(recharge.signed_bon_mime);
 
@@ -228,6 +232,28 @@ export default function RechargeDetailsModal({
                 <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-lg">
                   {recharge.reject_reason}
                 </p>
+              </div>
+            )}
+
+            {/* FCT2 (US-FCT-9) — the adjustment AUDIT for this screencaster (signed + reason). */}
+            {(adjustments.data?.length ?? 0) > 0 && (
+              <div>
+                <span className="text-sm font-medium text-gray-600">
+                  Ajustements du solde (audit)
+                </span>
+                <ul className="mt-1 space-y-1">
+                  {(adjustments.data ?? []).map((a) => (
+                    <li key={a.id} className="text-sm text-gray-900 bg-gray-50 p-3 rounded-lg">
+                      <span className={a.amount_tnd > 0 ? 'text-green-700' : 'text-red-700'}>
+                        {signedAmountLabel(a.amount_tnd)}
+                      </span>{' '}
+                      — {a.reason}{' '}
+                      <span className="text-xs text-gray-400">
+                        ({new Date(a.created_at).toLocaleDateString('fr-FR')})
+                      </span>
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
           </div>

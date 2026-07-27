@@ -46,6 +46,8 @@ export interface WalletBalance {
   balance_tnd: number;
   credited_tnd: number;
   debited_tnd: number;
+  /** FCT2 — the SIGNED sum of admin wallet adjustments (US-FCT-9). */
+  adjustments_tnd: number;
   currency: 'TND';
 }
 
@@ -56,8 +58,31 @@ export interface BankCoordinatesWire {
   domiciliation: string;
 }
 
-/** The facture download filename — mirrors the server's content-disposition. */
-export const factureFilename = (reference: string): string => `facture-${reference}.pdf`;
+/** FCT2 — one admin solde adjustment as the screencaster sees it (signed amount + the reason). */
+export interface AdjustmentRow {
+  id: string;
+  amount_tnd: number;
+  reason: string;
+  created_at: string;
+}
+
+/** FCT2 — one monthly consolidated invoice (the ONE real facture — US-FCT-11..12). */
+export interface MonthlyInvoiceRow {
+  id: string;
+  month: string; // 'YYYY-MM'
+  total_ht: number;
+  tva_tnd: number;
+  total_ttc: number;
+  reference: string;
+  created_at: string;
+}
+
+/** FCT2 relabel — the per-recharge « Récapitulatif de commande » filename (mirrors the server). */
+export const recapitulatifFilename = (reference: string): string =>
+  `recapitulatif-${reference}.pdf`;
+
+/** The monthly invoice download filename — mirrors GET /wallet/invoices/:id/pdf. */
+export const invoiceFilename = (reference: string): string => `facture-${reference}.pdf`;
 
 /** The bon download filename — mirrors GET /:id/bon's content-disposition. */
 export const bonFilename = (reference: string): string => `bon-commande-${reference}.pdf`;
@@ -105,9 +130,24 @@ export const walletService = {
     return apiClient.get<BankCoordinatesWire>('/recharges/bank-coordinates');
   },
 
-  /** The server-rendered facture PDF (the REAL invoice, bank-details block included). */
+  /** The server-rendered « Récapitulatif de commande » PDF (FCT2 relabel — NOT an invoice). */
   downloadFacture(id: string): Promise<Blob> {
     return apiClient.getBlob(`/recharges/${id}/facture`);
+  },
+
+  /** FCT2 — the caller's admin solde adjustments, newest first (the third ledger row type). */
+  listAdjustments(): Promise<AdjustmentRow[]> {
+    return apiClient.get<AdjustmentRow[]>('/wallet/adjustments');
+  },
+
+  /** FCT2 — the caller's monthly consolidated invoices, newest month first. */
+  listInvoices(): Promise<MonthlyInvoiceRow[]> {
+    return apiClient.get<MonthlyInvoiceRow[]>('/wallet/invoices');
+  },
+
+  /** FCT2 — the STORED monthly invoice PDF (byte-stable fiscal document). */
+  downloadInvoice(id: string): Promise<Blob> {
+    return apiClient.getBlob(`/wallet/invoices/${id}/pdf`);
   },
 
   /**

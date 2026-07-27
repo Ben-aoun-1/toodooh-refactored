@@ -45,6 +45,16 @@ export interface AdminRecharge {
  * CF-M2 — how the review modal shows the justificatif: images render INLINE next to the amount +
  * FCT reference; a PDF opens in its own tab (browsers own PDF rendering — no inline viewer here).
  */
+// FCT2 — one audited solde adjustment (the admin wire: lib/wallet-adjustments.adminAdjustmentView).
+export interface AdminWalletAdjustment {
+  id: string;
+  advertiser_id: string;
+  admin_id: string;
+  amount_tnd: number;
+  reason: string;
+  created_at: string;
+}
+
 export type DocumentDisplayMode = 'image' | 'pdf';
 
 export const documentDisplayMode = (mime: string | null): DocumentDisplayMode =>
@@ -110,6 +120,25 @@ export const adminRechargesService = {
   // FCT1 — the DEPOSITED signed bon; 404 until the screencaster deposits it.
   async signedBonUrl(id: string): Promise<{ url: string }> {
     return apiClient.get<{ url: string }>(`/admin/recharges/${id}/signed-bon-url`);
+  },
+
+  // FCT2 (US-FCT-9) — the SIGNED, audited solde adjustment (reason REQUIRED server-side too).
+  async adjustWallet(
+    advertiserId: string,
+    amountTnd: number,
+    reason: string,
+  ): Promise<AdminWalletAdjustment> {
+    return apiClient.post<AdminWalletAdjustment>(
+      `/admin/advertisers/${advertiserId}/wallet-adjustment`,
+      { amount_tnd: amountTnd, reason },
+    );
+  },
+
+  // FCT2 — the audit trail for one advertiser, newest first.
+  async walletAdjustments(advertiserId: string): Promise<AdminWalletAdjustment[]> {
+    return apiClient.get<AdminWalletAdjustment[]>(
+      `/admin/advertisers/${advertiserId}/wallet-adjustments`,
+    );
   },
 
   formatAmount(amount: number): string {

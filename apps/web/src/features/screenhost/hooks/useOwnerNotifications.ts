@@ -34,6 +34,9 @@ export const actionFor = (n: ApiNotification): { actionLabel: string; actionPath
     return { actionLabel: 'Consulter', actionPath: '/owner-allocations' };
   if (n.type === 'monthly_report_ready')
     return { actionLabel: 'Consulter', actionPath: '/owner-performance' };
+  // FCT2 — the monthly « Relevé de reversement » lands on the statements page.
+  if (n.type === 'reversement_statement_ready')
+    return { actionLabel: 'Consulter', actionPath: '/owner-statements' };
   return { actionLabel: 'Consulter', actionPath: '/owner-campaigns' };
 };
 
