@@ -19,9 +19,29 @@ export interface UpsertEventInput {
   ends_at?: string;
 }
 
+// EV2 — the read-only tarification detail (GET /api/admin/events/:id/tarification).
+export interface EventTarificationView {
+  c_max_evt_tnd: number;
+  i_max: number;
+  eligible_count: number;
+  cpm_evt_tnd: number;
+  min_budget_tnd: number;
+  annule: boolean;
+  venues: {
+    screenhost_id: string;
+    name: string;
+    amax_pph: number;
+    blocs_disponibles: number;
+    impressions: number;
+  }[];
+}
+
 export const adminEventsService = {
   list(): Promise<{ events: AdminEventView[] }> {
     return apiClient.get('/admin/events');
+  },
+  tarification(id: string): Promise<EventTarificationView> {
+    return apiClient.get(`/admin/events/${id}/tarification`);
   },
   create(input: UpsertEventInput): Promise<EventItemView> {
     return apiClient.post('/admin/events', input);

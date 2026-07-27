@@ -71,3 +71,12 @@ export function useAdminEventImageUrl(id: string, hasImage: boolean) {
     enabled: hasImage,
   });
 }
+
+/** EV2 — one event's tarification detail; idle until the modal opens. */
+export function useEventTarification(id: string | null) {
+  return useQuery({
+    queryKey: adminKeys.eventTarification(id ?? ''),
+    queryFn: () => adminEventsService.tarification(id as string),
+    enabled: id !== null,
+  });
+}

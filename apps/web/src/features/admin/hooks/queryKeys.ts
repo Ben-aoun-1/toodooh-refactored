@@ -72,6 +72,8 @@ export const adminKeys = {
   events: () => [...adminKeys.all, 'events'] as const,
   /** EV1 — one event's presigned affiche URL (admin surface). */
   eventImageUrl: (id: string) => [...adminKeys.all, 'events', 'imageUrl', id] as const,
+  /** EV2 — one event's tarification detail (`adminEventsService.tarification`). */
+  eventTarification: (id: string) => [...adminKeys.all, 'events', 'tarification', id] as const,
 
   /** Paginated, filtered location list for ScreenManagement. */
   adminLocations: (
