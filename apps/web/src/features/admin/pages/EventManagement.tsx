@@ -1,9 +1,10 @@
-import { Ban, Pencil, Plus } from 'lucide-react';
+import { Ban, Coins, Pencil, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
 import EventFormModal from '@/features/admin/components/EventFormModal';
+import EventTarificationModal from '@/features/admin/components/EventTarificationModal';
 import { useAdminEvents, useAnnulerEvent } from '@/features/admin/hooks/useAdminEvents';
 import type { AdminEventView } from '@/features/admin/services/admin-events.service';
 import {
@@ -29,6 +30,7 @@ export default function EventManagement() {
     event: null,
   });
   const [confirming, setConfirming] = useState<AdminEventView | null>(null);
+  const [tarification, setTarification] = useState<AdminEventView | null>(null);
 
   const confirmAnnuler = (event: AdminEventView) => {
     annuler.mutate(event.id, {
@@ -118,6 +120,14 @@ export default function EventManagement() {
                       <div className="flex justify-end gap-2">
                         {/* Suggested = read-only (their badge says why); official edits open
                             the §10 modal. Annuler stays available on both until annulé. */}
+                        <button
+                          type="button"
+                          title="Tarification"
+                          onClick={() => setTarification(e)}
+                          className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"
+                        >
+                          <Coins className="h-4 w-4" />
+                        </button>
                         {e.source === 'official' && !e.annule && (
                           <button
                             type="button"
@@ -152,6 +162,14 @@ export default function EventManagement() {
         <EventFormModal
           event={modal.event}
           onClose={() => setModal({ open: false, event: null })}
+        />
+      )}
+
+      {tarification !== null && (
+        <EventTarificationModal
+          eventId={tarification.id}
+          eventName={tarification.name}
+          onClose={() => setTarification(null)}
         />
       )}
 

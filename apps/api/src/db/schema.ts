@@ -256,6 +256,10 @@ export const businessSectors = pgTable('business_sectors', {
   name: text('name').notNull().unique(),
   audience: text('audience').notNull(),
   displayOrder: integer('display_order'),
+  // EV2 (D1) — whether venues of this sector can carry EVENT diffusions. V1: everything is
+  // eligible (seeded true); the column exists so the operator can carve sectors out later
+  // without a migration of meaning.
+  eventEligible: boolean('event_eligible').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -964,7 +968,9 @@ export const dispatchConfig = pgTable(
     standardCpmTnd: numeric('standard_cpm_tnd', { precision: 10, scale: 3 })
       .notNull()
       .default('15.000'),
-    eventCpmTnd: numeric('event_cpm_tnd', { precision: 10, scale: 3 }).notNull().default('30.000'),
+    // EV2 — the event pricing doc moves CPM_evt 30 → 15 (mig 0056 also moves EXISTING rows still
+    // at the old 30 default; a deliberately-edited value is left alone).
+    eventCpmTnd: numeric('event_cpm_tnd', { precision: 10, scale: 3 }).notNull().default('15.000'),
     // E1 (VF) — the attention index T by spot duration bucket (≤10s / ≤20s / ≤30s). Facturable
     // capacity = Ai × Hi × R × T from E1 on; the planning back-conversion divides by the SAME T.
     // Admin-editable within (0, 1] and t_10s ≤ t_20s ≤ t_30s (a longer spot holds attention
@@ -1635,3 +1641,26 @@ export const hourReservations = pgTable(
 );
 
 export type HourReservation = typeof hourReservations.$inferSelect;
+
+// ── screenhost_amax (EV2 — the A_max ratchet store) ──────────────────────────
+// Per venue: the highest hourly affluence EVER known. Ratchets UP on read (the pricing engine
+// persists growth), never down — a shrinking affluence grid does not cheapen history. Venues with
+// no grid and no row price at the UNPERSISTED 50 pers/h fallback (lib/event-pricing).
+export const screenhostAmax = pgTable(
+  'screenhost_amax',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    screenhostId: uuid('screenhost_id')
+      .notNull()
+      .unique()
+      .references(() => screenhosts.id, { onDelete: 'cascade' }),
+    amaxPph: integer('amax_pph').notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [check('screenhost_amax_positive', sql`${table.amaxPph} > 0`)],
+);
+
+export type ScreenhostAmax = typeof screenhostAmax.$inferSelect;

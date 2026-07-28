@@ -4,6 +4,9 @@ import { z } from 'zod';
 
 import { db } from '../db/client.js';
 import { type EventRow, events } from '../db/schema.js';
+import { MIN_CAMPAIGN_BUDGET_TND } from '../lib/campaign-budget.js';
+import { getDispatchConfig } from '../lib/dispatch/config.js';
+import { computeEventCmax } from '../lib/event-pricing/pricing.js';
 import {
   SUGGESTED_MATCH_DURATION_HOURS,
   fenetreDiffusion,
@@ -181,6 +184,36 @@ export const eventsRoutes: FastifyPluginAsync = async (app) => {
         .send({ error: 'INTERNAL', message: "La suggestion n'a pas pu être enregistrée." });
     }
     return reply.status(201).send(eventView(created, new Date()));
+  });
+
+  // GET /api/events/:id/cmax — EV2: the event budget ceiling (the campaign-cmax response idiom).
+  // The event engine prices WITHOUT the attention coefficient; the shared 100 TND floor rides
+  // along so the EV3 slider needs no second read.
+  app.get('/api/events/:id/cmax', advertiserGuard, async (request, reply) => {
+    const parsed = idParamSchema.safeParse(request.params);
+    if (!parsed.success) return invalidField(reply, 'id', 'must be a uuid');
+    const [row] = await db.select().from(events).where(eq(events.id, parsed.data.id)).limit(1);
+    if (!row)
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'Événement introuvable.' });
+    if (row.annule) {
+      return reply.status(409).send({
+        error: 'EVENT_ANNULE',
+        message: 'Cet événement est annulé.',
+        statusCode: 409,
+        requestId: request.id,
+      });
+    }
+    const cfg = await getDispatchConfig();
+    const result = await computeEventCmax(
+      { id: row.id, kickoffAt: row.kickoffAt, endsAt: row.endsAt },
+      cfg.eventCpmTnd,
+    );
+    return reply.status(200).send({
+      c_max_evt_tnd: result.cMaxEvtTnd,
+      i_max: result.iMax,
+      eligible_count: result.eligibleCount,
+      min_budget_tnd: MIN_CAMPAIGN_BUDGET_TND,
+    });
   });
 
   // GET /api/events/:id/image-url — presign the affiche on demand (shared read: any advertiser).
