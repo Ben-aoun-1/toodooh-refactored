@@ -186,6 +186,16 @@ describe('E7 reversement settlement (real Postgres)', () => {
   });
 
   afterAll(async () => {
+    // E4 fixture repair: this suite runs config-less on purpose (deterministic default splits),
+    // but it used to LEAVE the singleton deleted — every later file then read the code fallback
+    // instead of the migration-seeded row, an invisible coupling until the 0056 CPM move made
+    // row-vs-fallback observable. Put the seeded row back before handing the DB on.
+    await db.insert(dispatchConfig).values({
+      seuilDiffusable: 1000,
+      gMois: '100',
+      joursActifs: 30,
+      rMinEfficace: 2,
+    });
     await sql.end();
   });
 

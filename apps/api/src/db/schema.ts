@@ -998,6 +998,24 @@ export const dispatchConfig = pgTable(
     bankIban: text('bank_iban').notNull().default('—'),
     bankBic: text('bank_bic').notNull().default('—'),
     bankDomiciliation: text('bank_domiciliation').notNull().default('—'),
+    // E4 — the SPS weights (Mejri 2026-07-27, Kais-validated): 40 % acceptation + 30 % respect
+    // des événements + 20 % activité + 10 % remplissage. Σ = 100 enforced at the config-edit
+    // path (the columns can't cross-check each other).
+    spsWeightAcceptation: numeric('sps_weight_acceptation', { precision: 5, scale: 2 })
+      .notNull()
+      .default('40'),
+    spsWeightRespectEvenements: numeric('sps_weight_respect_evenements', {
+      precision: 5,
+      scale: 2,
+    })
+      .notNull()
+      .default('30'),
+    spsWeightActivite: numeric('sps_weight_activite', { precision: 5, scale: 2 })
+      .notNull()
+      .default('20'),
+    spsWeightRemplissage: numeric('sps_weight_remplissage', { precision: 5, scale: 2 })
+      .notNull()
+      .default('10'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()

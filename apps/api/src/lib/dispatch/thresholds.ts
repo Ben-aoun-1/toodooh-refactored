@@ -44,7 +44,8 @@ export const DISPATCH_CONFIG_DEFAULTS = {
   rMinEfficace: 2,
   fMaxSeconds: 300,
   standardCpmTnd: 15,
-  eventCpmTnd: 30,
+  // E4 rider — aligned to the post-0056 canon (the EV2 move left this no-row fallback at 30).
+  eventCpmTnd: 15,
   t10s: 0.6,
   t20s: 0.7,
   t30s: 0.8,
@@ -61,6 +62,11 @@ export const DISPATCH_CONFIG_DEFAULTS = {
   bankIban: '—',
   bankBic: '—',
   bankDomiciliation: '—',
+  // E4 — the SPS weights (Mejri 2026-07-27): acceptation/respect/activité/remplissage, Σ = 100.
+  spsWeightAcceptation: 40,
+  spsWeightRespectEvenements: 30,
+  spsWeightActivite: 20,
+  spsWeightRemplissage: 10,
 } as const;
 
 /**

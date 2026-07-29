@@ -29,6 +29,11 @@ export interface ResolvedDispatchConfig {
   bankIban: string;
   bankBic: string;
   bankDomiciliation: string;
+  // E4 — the SPS weights (Σ = 100, enforced at the admin config-edit path).
+  spsWeightAcceptation: number;
+  spsWeightRespectEvenements: number;
+  spsWeightActivite: number;
+  spsWeightRemplissage: number;
 }
 
 // The CPM (TND/1000) a campaign prices at: event campaigns at event_cpm_tnd, everything else at
@@ -64,6 +69,10 @@ export const getDispatchConfig = async (): Promise<ResolvedDispatchConfig> => {
         bankIban: row.bankIban,
         bankBic: row.bankBic,
         bankDomiciliation: row.bankDomiciliation,
+        spsWeightAcceptation: Number(row.spsWeightAcceptation),
+        spsWeightRespectEvenements: Number(row.spsWeightRespectEvenements),
+        spsWeightActivite: Number(row.spsWeightActivite),
+        spsWeightRemplissage: Number(row.spsWeightRemplissage),
       }
     : { ...DISPATCH_CONFIG_DEFAULTS };
   // SUPERSEDED on the dispatch path (E3, Mariem 2026-07-15): the materiality divisor and no-crumb

@@ -13,6 +13,7 @@ import { isMediaProbeEnabled } from './lib/media-probe.js';
 import { startMonthlyBillingJob } from './lib/monthly-billing.js';
 import { startMonthlyReportJob } from './lib/report/monthly-job.js';
 import { isRecommendationsEnabled } from './lib/report/recommendations.js';
+import { startSpsRecomputeJob } from './lib/sps-score.js';
 import { isSyncEnabled, sweepUnexported } from './lib/wedooh-sync.js';
 import { buildLoggerConfig } from './logger.js';
 import { healthRoute } from './routes/health.js';
@@ -103,6 +104,10 @@ const start = async (): Promise<void> => {
     // FCT2 — month-end billing: the monthly consolidated invoices (proof-verified consumption)
     // + the venue relevés de reversement, previous CLOSED Tunis month, UNIQUE-idempotent.
     startMonthlyBillingJob(app.log);
+    // E4 — the SPS daily sweep (boot run + 24 h interval): every active venue's score computed
+    // from the four ruled variables and written to screenhosts.sps (the value dispatch ordering
+    // reads). The flat-50 era ends on the first boot after this deploys.
+    startSpsRecomputeJob(app.log);
 
     // R2 — AI report recommendations: ONE boot warning when the key is unprovisioned (the
     // wedooh-sync degradation pattern); every report gracefully keeps the generic pistes.

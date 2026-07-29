@@ -26,6 +26,7 @@ import {
 } from '../db/schema.js';
 import { tunisDateOf } from '../lib/campaign-dates.js';
 import { runRefusalCascade } from '../lib/dispatch/cascade.js';
+import { getDispatchConfig } from '../lib/dispatch/config.js';
 import { REDISPATCH_HEARTBEAT_TOLERANCE_MS } from '../lib/dispatch/redispatch.js';
 import { buildEligibilityPatch } from '../lib/eligibility-patch.js';
 import { createEngineTrace, type EngineTrace } from '../lib/engine-journal/trace.js';
@@ -33,6 +34,7 @@ import { assembleReportData } from '../lib/report/assemble.js';
 import { pistesForReportCached } from '../lib/report/recommendations.js';
 import { renderPdf } from '../lib/report/render.js';
 import { renderReportHtml } from '../lib/report/template.js';
+import { computeSps, recomputeVenueSps } from '../lib/sps-score.js';
 import { pushApprovedOwnerLocations } from '../lib/wedooh-sync.js';
 import { decryptWifiPassword, encryptWifiPassword } from '../lib/wifi-crypto.js';
 import { requireActiveAccount, requireAdmin, requireAuth } from '../middleware/require-auth.js';
@@ -1090,6 +1092,44 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
     return reply.status(200).send(eligibilityView(row));
   });
 
+  // GET /api/admin/screenhosts/:id/sps — E4: the venue's SPS breakdown, computed LIVE (each
+  // variable, its weight, the weighted total) — the operator's insight surface beside the
+  // eligibility view. The stored screenhosts.sps is the daily job's snapshot; this read shows
+  // where the next write will land.
+  app.get('/api/admin/screenhosts/:id/sps', adminGuard, async (request, reply) => {
+    const parsedParams = idParamSchema.safeParse(request.params);
+    if (!parsedParams.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: [{ field: 'id', reason: 'must be a uuid' }],
+      });
+    }
+    const [row] = await db
+      .select({ id: screenhosts.id, sps: screenhosts.sps })
+      .from(screenhosts)
+      .where(eq(screenhosts.id, parsedParams.data.id))
+      .limit(1);
+    if (!row) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
+    }
+    const cfg = await getDispatchConfig();
+    const { sps, variables } = await computeSps(parsedParams.data.id);
+    return reply.status(200).send({
+      sps,
+      stored_sps: Number(row.sps),
+      variables: {
+        acceptation: { value: variables.acceptation, weight: cfg.spsWeightAcceptation },
+        respect_evenements: {
+          value: variables.respect_evenements,
+          weight: cfg.spsWeightRespectEvenements,
+        },
+        activite: { value: variables.activite, weight: cfg.spsWeightActivite },
+        remplissage: { value: variables.remplissage, weight: cfg.spsWeightRemplissage },
+      },
+    });
+  });
+
   // PATCH /api/admin/screenhosts/:id/eligibility — admin sets category/class/horaires/capacity
   // (null clears a field). A non-null category must be a real OWNER business sector (the same source
   // L-target matches against). SPS is not settable (defaulted; computation deferred).
@@ -1378,7 +1418,14 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
 
         const current = row.allocation.statutAcceptation;
         // Idempotent re-decide (incl. re-REFUSE: no second cascade).
-        if (current === statut) return { kind: 'ok' as const, id: row.allocation.id, statut };
+        if (current === statut)
+          return {
+            kind: 'ok' as const,
+            id: row.allocation.id,
+            statut,
+            screenhostId: row.allocation.screenhostId,
+            changed: false,
+          };
         // Refusal is final — the cascade may already have re-placed this share.
         if (current === 'REFUSE') return { kind: 'refused_final' as const };
 
@@ -1417,7 +1464,13 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
             cascadeTrace.current,
           );
         }
-        return { kind: 'ok' as const, id: row.allocation.id, statut };
+        return {
+          kind: 'ok' as const,
+          id: row.allocation.id,
+          statut,
+          screenhostId: row.allocation.screenhostId,
+          changed: true,
+        };
       })
       .catch(async (err: unknown) => {
         // LOG1 — the tx rolled back; keep the cascade's trace with its reasons, rethrow verbatim.
@@ -1435,6 +1488,18 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         message: 'Allocation déjà refusée — le refus est définitif.',
         statusCode: 409,
       });
+    }
+    // E4 — a genuine decision flip recomputes THIS venue's SPS in-request (acceptation is one of
+    // its variables). Failure-tolerated: the decision stands even if the score write hiccups.
+    if (outcome.changed) {
+      try {
+        await recomputeVenueSps(outcome.screenhostId);
+      } catch (err) {
+        request.log.warn(
+          { err, screenhostId: outcome.screenhostId },
+          'SPS on-decision recompute failed',
+        );
+      }
     }
     return reply.status(200).send({ id: outcome.id, statut_acceptation: outcome.statut });
   };
