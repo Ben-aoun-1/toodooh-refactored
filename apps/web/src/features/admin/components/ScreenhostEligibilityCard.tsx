@@ -2,6 +2,7 @@ import { SlidersHorizontal } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { toast } from 'react-hot-toast';
 
+import ScreenhostSpsBreakdown from '@/features/admin/components/ScreenhostSpsBreakdown';
 import { useUpdateScreenhostEligibility } from '@/features/admin/hooks/useAdminScreenhostEligibility';
 import {
   ELIGIBILITY_CONSEQUENCE_NOTE,
@@ -117,6 +118,10 @@ export default function ScreenhostEligibilityCard({
           </span>
         )}
       </div>
+
+      {/* E4 — the SPS insight beside the readiness badge (read-only; the operator/Mejri read it
+          during testing). */}
+      <ScreenhostSpsBreakdown screenhostId={screenhost.id} />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
