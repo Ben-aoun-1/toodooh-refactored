@@ -30,6 +30,7 @@ import { getDispatchConfig } from '../lib/dispatch/config.js';
 import { REDISPATCH_HEARTBEAT_TOLERANCE_MS } from '../lib/dispatch/redispatch.js';
 import { buildEligibilityPatch } from '../lib/eligibility-patch.js';
 import { createEngineTrace, type EngineTrace } from '../lib/engine-journal/trace.js';
+import { pushPlaylistToVenue } from '../lib/playout/push.js';
 import { assembleReportData } from '../lib/report/assemble.js';
 import { pistesForReportCached } from '../lib/report/recommendations.js';
 import { renderPdf } from '../lib/report/render.js';
@@ -1498,6 +1499,18 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         request.log.warn(
           { err, screenhostId: outcome.screenhostId },
           'SPS on-decision recompute failed',
+        );
+      }
+    }
+    // CF-HF4 — an ACCEPTE flip makes content airable NOW: re-push the venue's playlist to its
+    // connected screens (no reconnect wait). Failure-warn: a dead socket never breaks the flip.
+    if (outcome.changed && statut === 'ACCEPTE') {
+      try {
+        await pushPlaylistToVenue(outcome.screenhostId, request.log);
+      } catch (err) {
+        request.log.warn(
+          { err, screenhostId: outcome.screenhostId },
+          'playlist re-push on accept failed',
         );
       }
     }

@@ -546,6 +546,8 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
       c_max_tnd: cmax.cMaxTnd,
       i_max_facturable: cmax.iMaxFacturable,
       eligible_count: cmax.eligibleCount,
+      // CF-HF4 — the saturated/empty split for the wizard's zero-state message.
+      targeted_count: cmax.targetedCount,
     });
   });
 

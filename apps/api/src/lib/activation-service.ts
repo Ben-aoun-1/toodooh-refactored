@@ -50,7 +50,7 @@ export type ActivationOutcome =
       availableTnd: number;
     }
   | { status: 'NOT_DELIVERABLE'; reason: 'too_thin'; nMin: number; nMax: number }
-  | { status: 'NOT_DELIVERABLE'; reason: 'no_eligible' }
+  | { status: 'NOT_DELIVERABLE'; reason: 'no_eligible' | 'saturated' }
   | { status: 'NO_WINDOW' }
   | { status: 'WRONG_STATUS'; currentStatus: string }
   | { status: 'PLAN_MISSING' };
@@ -169,7 +169,11 @@ export const prepareActivation = async (
   if (result.status === 'TOO_THIN') {
     return { status: 'NOT_DELIVERABLE', reason: 'too_thin', nMin: result.nMin, nMax: result.nMax };
   }
-  if (result.status === 'NO_ELIGIBLE') return { status: 'NOT_DELIVERABLE', reason: 'no_eligible' };
+  if (result.status === 'NO_ELIGIBLE')
+    return {
+      status: 'NOT_DELIVERABLE',
+      reason: result.saturated ? 'saturated' : 'no_eligible',
+    };
 
   // OK (just frozen) or ALREADY_DISPATCHED (a prior freeze — resumed) → the plan is ready.
   const loaded = await loadPlan(campaign.id);

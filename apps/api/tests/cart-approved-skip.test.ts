@@ -300,7 +300,7 @@ describe('CF-SK1 — the approved-spot skip at cart confirm (real Postgres)', ()
     // One venue = 36 000 facturable for the 2-day window (the E5 hand-computation), C_max 540.
     // Item 1 takes the WHOLE ceiling (540 TND → 36 000 impressions); item 2 (500) passes the
     // PRE-confirm gate (virgin pool) but finds an EMPTY pool at dispatch — item 1's freeze
-    // saturated the venue → TOO_THIN (nMin > nMax over the zero-residual pool). A PARTIAL
+    // saturated the venue → INVENTORY_SATURATED (empty pool over zero residual). A PARTIAL
     // shortfall would be absorbed as a partial allocation (the gate and dispatch share
     // assemblePool's semantics) — only full saturation fails a mid-basket dispatch.
     const advertiser = await seedUser();
@@ -332,7 +332,9 @@ describe('CF-SK1 — the approved-spot skip at cart confirm (real Postgres)', ()
     const res1 = await confirm();
     expect(res1.statusCode).toBe(400);
     const body1 = res1.json<{ items: { campaign_id: string; reason: string }[] }>();
-    expect(body1.items).toEqual([{ campaign_id: second, reason: 'TOO_THIN' }]);
+    // CF-HF4 — the mid-basket saturation now speaks its real name (the venue matched the
+    // targeting; item 1's freeze consumed the inventory).
+    expect(body1.items).toEqual([{ campaign_id: second, reason: 'INVENTORY_SATURATED' }]);
     expect((await statusOf(first))?.status).toBe('draft'); // NOT flipped — the amendment's state
     expect(await hasPlan(first)).toBe(true); // …but its plan froze (irrevocable, invisible)
     expect((await statusOf(second))?.status).toBe('draft');

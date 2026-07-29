@@ -28,6 +28,8 @@ export interface CampaignCmax {
   cMaxTnd: number;
   iMaxFacturable: number;
   eligibleCount: number;
+  /** CF-HF4 — targeting-matching venues BEFORE capacity/day exclusions (the saturated/empty split). */
+  targetedCount: number;
   /** The CPM the ceiling priced at (event vs standard) — handy for callers/tests. */
   cpmTnd: number;
 }
@@ -61,7 +63,7 @@ export const computeCampaignCmax = async (
           .where(eq(campaignDispatchAllocation.planId, ownPlan.id))
       ).map((a) => a.id)
     : [];
-  const { pool } = await assemblePool(
+  const { pool, candidateCount } = await assemblePool(
     db,
     { id: campaign.id, startDate: campaign.startDate, endDate: campaign.endDate },
     { s: spotSeconds, t, fMaxSeconds: config.fMaxSeconds },
@@ -72,6 +74,9 @@ export const computeCampaignCmax = async (
     cMaxTnd: Math.floor((cpm * iMax) / 1000),
     iMaxFacturable: iMax,
     eligibleCount: pool.length,
+    // CF-HF4 — the saturated/empty split: candidates that matched the targeting BEFORE the
+    // capacity/day exclusions (0 = nothing matches; > 0 with eligibleCount 0 = saturated).
+    targetedCount: candidateCount,
     cpmTnd: cpm,
   };
 };

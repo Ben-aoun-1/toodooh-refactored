@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import { type BoostRefusal, runBoost } from '../lib/boost.js';
 import { createEngineTrace } from '../lib/engine-journal/trace.js';
+import { pushPlaylistToCampaignVenues } from '../lib/playout/push.js';
 import { requireAdvertiser } from '../middleware/require-advertiser.js';
 import { requireAuth } from '../middleware/require-auth.js';
 
@@ -134,6 +135,13 @@ export const campaignBoostRoutes: FastifyPluginAsync = async (app) => {
       },
     );
     if (result.status !== 'APPLIED') return sendRefusal(reply, result as BoostRefusal);
+    // CF-HF4 — the boost extended/added allocations: re-push every venue of the campaign so
+    // connected screens pick the appended volume without waiting for a reconnect.
+    try {
+      await pushPlaylistToCampaignVenues(parsedParams.data.id, request.log);
+    } catch (err) {
+      request.log.warn({ err }, 'playlist re-push on boost failed');
+    }
     return reply.status(200).send({
       boost_id: result.boostId,
       placed_fact: result.placedFact,

@@ -274,7 +274,9 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
           prepared.status === 'NOT_DELIVERABLE'
             ? prepared.reason === 'too_thin'
               ? 'TOO_THIN'
-              : 'NO_ELIGIBLE'
+              : prepared.reason === 'saturated'
+                ? 'INVENTORY_SATURATED'
+                : 'NO_ELIGIBLE'
             : prepared.status === 'NOT_ACTIVATABLE'
               ? prepared.reason.toUpperCase()
               : prepared.status;

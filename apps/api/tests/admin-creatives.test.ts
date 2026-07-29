@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 
 import { auth } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
-import { type Creative, type NewUser, creatives, users } from '../src/db/schema.js';
+import { type Creative, type NewUser, creatives, users, campaigns } from '../src/db/schema.js';
 import { adminCreativesRoutes } from '../src/routes/admin-creatives.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
@@ -84,17 +84,30 @@ describe('admin creative moderation (real Postgres)', () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it('lists the moderation queue and filters by status', async () => {
+  it('lists the moderation queue and filters by status (CF-HF4: pending rows queue at PANIER-ADD)', async () => {
     const adv = await seedUser();
-    await seedCreative(adv, { status: 'pending' });
-    await seedCreative(adv, { status: 'pending' });
+    const p1 = await seedCreative(adv, { status: 'pending' });
+    const p2 = await seedCreative(adv, { status: 'pending' });
     await seedCreative(adv, { status: 'approved' });
+    // CF-HF4 — a pending creative enters the queue only once a linking campaign reaches the
+    // cart or goes beyond draft; these two are SUBMITTED via a pending campaign each.
+    for (const cr of [p1, p2]) {
+      await db.insert(campaigns).values({
+        advertiserId: adv,
+        name: `Queue ${cr.id.slice(0, 8)}`,
+        campaignType: 'standard',
+        status: 'pending',
+        creativeId: cr.id,
+      });
+    }
+    // …and an UNSUBMITTED orphan stays out of the queue entirely.
+    await seedCreative(adv, { status: 'pending' });
     const admin = await seedUser({ role: 'admin' });
     mockSession(admin);
 
     const all = await app.inject({ method: 'GET', url: '/api/admin/creatives' });
     expect(all.statusCode).toBe(200);
-    expect((all.json() as unknown[]).length).toBe(3);
+    expect((all.json() as unknown[]).length).toBe(3); // the orphan is invisible
 
     const pending = await app.inject({ method: 'GET', url: '/api/admin/creatives?status=pending' });
     expect((pending.json() as unknown[]).length).toBe(2);

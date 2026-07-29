@@ -148,16 +148,16 @@ describe('LOG1 engine journal — per-phase pins (real Postgres)', () => {
     expect(placed[0]?.payload).toHaveProperty('valueTnd');
   });
 
-  it('a TOO_THIN attempt journals a ROLLED-BACK run with its trace (nothing frozen)', async () => {
+  it('an empty-pool refusal journals a ROLLED-BACK run with its trace (nothing frozen)', async () => {
     const advertiser = await seedUser({ role: 'advertiser' });
-    // No venues at all → empty pool → TOO_THIN clôture; nothing persists.
+    // No venues at all → empty pool → NO_ELIGIBLE refusal (CF-HF4 relabel); nothing persists.
     const campaignId = await seedCampaign(advertiser, { start: '2027-01-04', end: '2027-01-08' });
     const result = await runDispatch(
       { id: campaignId, name: 'LOG1', startDate: '2027-01-04', endDate: '2027-01-08' },
       { iCible: 5000, cpm: 10, s: 10 },
       createEngineTrace('dispatch', campaignId),
     );
-    expect(result.status).toBe('TOO_THIN');
+    expect(result.status).toBe('NO_ELIGIBLE');
 
     const [plan] = await db
       .select()
@@ -168,7 +168,7 @@ describe('LOG1 engine journal — per-phase pins (real Postgres)', () => {
     const rows = await eventsFor(campaignId);
     const run = rows.find((r) => r.eventType === 'run');
     expect(run?.outcome).toBe('rolled_back');
-    expect(run?.payload).toMatchObject({ reason: 'TOO_THIN' });
+    expect(run?.payload).toMatchObject({ reason: 'NO_ELIGIBLE' });
     expect(rows.some((r) => r.eventType === 'pool_assembled')).toBe(true);
   });
 
