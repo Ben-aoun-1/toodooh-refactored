@@ -1,0 +1,259 @@
+import { and, eq, gte, inArray, lt, ne } from 'drizzle-orm';
+import type { FastifyBaseLogger } from 'fastify';
+
+import { db } from '../db/client.js';
+import {
+  campaignDispatchAllocation,
+  campaignDispatchPlan,
+  proofOfPlay,
+  screenhostUnavailability,
+  screenhosts,
+} from '../db/schema.js';
+
+import { getDispatchConfig } from './dispatch/config.js';
+import { broadcastableHours } from './dispatch/eligibility.js';
+import { isElapsed, tunisNowSlot } from './dispatch/redispatch.js';
+import { PLAYOUT_TZ, proofSlotKey } from './reconcile/delivered-slots.js';
+import { slotKey } from './reconcile/valuation.js';
+
+// E4 — the SPS score engine (Mejri 2026-07-27, Kais-validated): 40 % taux d'acceptation des
+// campagnes + 30 % respect des événements acceptés + 20 % activité de l'écran + 10 % taux de
+// remplissage, weights admin-editable (Σ = 100). The flat-50 stub retires: a daily job writes
+// every active venue's computed score into screenhosts.sps (the value dispatch ordering already
+// sorts by), and an owner's accept/reject recomputes that venue in-request.
+//
+// PURE DERIVATIONS from existing data — no new tracking tables:
+//  - acceptation:     ACCEPTE ÷ decided allocations, trailing 90 d. The allocation carries no
+//                     decided_at — the window anchors on the allocation's created_at (decisions
+//                     follow dispatch closely; as-found, reported at CF-9). No decisions → 100.
+//  - respect:         the CONSTANT 100 default — no agent-inspection data exists yet (EV5 builds
+//                     the attestation surface); the variable computes as its default BY RULE.
+//  - activité:        proven ÷ scheduled elapsed créneaux (FIX A delivery semantics: ≥1
+//                     VIDEO_ENDED proof received in the créneau's Tunis hour), trailing 30 d,
+//                     ACCEPTE allocations only. Nothing scheduled → 100.
+//  - remplissage:     engaged broadcast seconds (Σ créneau reps × the plan's S) ÷ the venue's
+//                     available F-seconds (fMax × broadcastable hours × the week's NON-DECLARED
+//                     days — an honest E2 declaration never dents the score; ratification
+//                     amendment), current Tunis week. Zero engagement → 0.
+
+export const ACCEPTATION_WINDOW_DAYS = 90;
+export const ACTIVITE_WINDOW_DAYS = 30;
+/** EV5 will replace this constant with attestation-derived data; until then 100 IS the rule. */
+export const EVENT_RESPECT_DEFAULT = 100;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+
+/** The Tunis calendar date (YYYY-MM-DD) of `instant`. */
+const tunisDateOf = (instant: Date): string =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: PLAYOUT_TZ }).format(instant);
+
+/** The Monday (YYYY-MM-DD, Tunis) of the week containing `now`. */
+export const tunisWeekStart = (now: Date): string => {
+  // Tunis is UTC+1 (no DST since 2008): shift, then walk back to Monday in UTC space.
+  const shifted = new Date(now.getTime() + 60 * 60 * 1000);
+  const dow = shifted.getUTCDay(); // 0 = Sunday
+  const back = (dow + 6) % 7; // days since Monday
+  const monday = new Date(shifted.getTime() - back * DAY_MS);
+  return monday.toISOString().slice(0, 10);
+};
+
+export interface SpsVariables {
+  acceptation: number;
+  respect_evenements: number;
+  activite: number;
+  remplissage: number;
+}
+
+export interface SpsResult {
+  sps: number;
+  variables: SpsVariables;
+}
+
+/** The weighted total, clamped to [0, 100] (weights are validated Σ = 100 at the edit path). */
+export const weightedSps = (
+  variables: SpsVariables,
+  weights: {
+    spsWeightAcceptation: number;
+    spsWeightRespectEvenements: number;
+    spsWeightActivite: number;
+    spsWeightRemplissage: number;
+  },
+): number => {
+  const total =
+    (weights.spsWeightAcceptation * variables.acceptation +
+      weights.spsWeightRespectEvenements * variables.respect_evenements +
+      weights.spsWeightActivite * variables.activite +
+      weights.spsWeightRemplissage * variables.remplissage) /
+    100;
+  return round2(Math.min(100, Math.max(0, total)));
+};
+
+/** Compute the venue's SPS breakdown at `now` (live — nothing is written). */
+export const computeSps = async (screenhostId: string, now = new Date()): Promise<SpsResult> => {
+  const cfg = await getDispatchConfig();
+
+  // ── acceptation: decided allocations in the trailing 90 d ──────────────────
+  const decidedSince = new Date(now.getTime() - ACCEPTATION_WINDOW_DAYS * DAY_MS);
+  const decided = await db
+    .select({ statut: campaignDispatchAllocation.statutAcceptation })
+    .from(campaignDispatchAllocation)
+    .where(
+      and(
+        eq(campaignDispatchAllocation.screenhostId, screenhostId),
+        ne(campaignDispatchAllocation.statutAcceptation, 'EN_ATTENTE'),
+        gte(campaignDispatchAllocation.createdAt, decidedSince),
+      ),
+    );
+  const accepted = decided.filter((d) => d.statut === 'ACCEPTE').length;
+  const acceptation = decided.length === 0 ? 100 : round2((accepted / decided.length) * 100);
+
+  // ── the venue's ACCEPTE allocations + their plans (activité + remplissage) ──
+  const allocations = await db
+    .select({
+      creneaux: campaignDispatchAllocation.creneaux,
+      campaignId: campaignDispatchPlan.campaignId,
+      sSpotSeconds: campaignDispatchPlan.sSpotSeconds,
+    })
+    .from(campaignDispatchAllocation)
+    .innerJoin(campaignDispatchPlan, eq(campaignDispatchAllocation.planId, campaignDispatchPlan.id))
+    .where(
+      and(
+        eq(campaignDispatchAllocation.screenhostId, screenhostId),
+        eq(campaignDispatchAllocation.statutAcceptation, 'ACCEPTE'),
+      ),
+    );
+
+  // ── activité: proven ÷ scheduled elapsed créneaux, trailing 30 d ───────────
+  const nowSlot = tunisNowSlot(now);
+  const activiteSinceDate = tunisDateOf(new Date(now.getTime() - ACTIVITE_WINDOW_DAYS * DAY_MS));
+  const campaignIds = [...new Set(allocations.map((a) => a.campaignId))];
+  const proofRows = campaignIds.length
+    ? await db
+        .select({
+          campaignId: proofOfPlay.campaignId,
+          receivedAt: proofOfPlay.receivedAt,
+        })
+        .from(proofOfPlay)
+        .where(
+          and(
+            eq(proofOfPlay.screenhostId, screenhostId),
+            eq(proofOfPlay.eventType, 'VIDEO_ENDED'),
+            inArray(proofOfPlay.campaignId, campaignIds),
+            gte(
+              proofOfPlay.receivedAt,
+              new Date(now.getTime() - (ACTIVITE_WINDOW_DAYS + 1) * DAY_MS),
+            ),
+          ),
+        )
+    : [];
+  const provenKeys = new Set(proofRows.map((p) => `${p.campaignId}:${proofSlotKey(p.receivedAt)}`));
+  let scheduled = 0;
+  let proven = 0;
+  for (const a of allocations) {
+    for (const c of a.creneaux) {
+      if (c.date < activiteSinceDate) continue;
+      if (!isElapsed(c, nowSlot)) continue;
+      scheduled += 1;
+      if (provenKeys.has(`${a.campaignId}:${slotKey(c.date, c.hour)}`)) proven += 1;
+    }
+  }
+  const activite = scheduled === 0 ? 100 : round2((proven / scheduled) * 100);
+
+  // ── remplissage: engaged seconds ÷ available F-seconds, current Tunis week ──
+  const weekStart = tunisWeekStart(now);
+  // Pure CALENDAR arithmetic in UTC space — a +01:00 anchor sliced through toISOString would
+  // land a day early and silently drop Sunday from the week.
+  const weekEnd = new Date(new Date(`${weekStart}T00:00:00Z`).getTime() + 7 * DAY_MS)
+    .toISOString()
+    .slice(0, 10);
+  const [venue] = await db
+    .select({ openingHour: screenhosts.openingHour, closingHour: screenhosts.closingHour })
+    .from(screenhosts)
+    .where(eq(screenhosts.id, screenhostId))
+    .limit(1);
+  const bHours = broadcastableHours(venue?.openingHour ?? null, venue?.closingHour ?? null);
+  // Ratification amendment: E2-declared days leave BOTH sides of the ratio — dispatch schedules
+  // nothing on them (the numerator is already empty there), so counting them in the denominator
+  // would turn honest declaration into a hidden SPS penalty. UNIQUE(screenhost, day) makes the
+  // row count the declared-day count.
+  const declaredRows = await db
+    .select({ day: screenhostUnavailability.day })
+    .from(screenhostUnavailability)
+    .where(
+      and(
+        eq(screenhostUnavailability.screenhostId, screenhostId),
+        gte(screenhostUnavailability.day, weekStart),
+        lt(screenhostUnavailability.day, weekEnd),
+      ),
+    );
+  const availableDays = 7 - declaredRows.length;
+  const availableSeconds = cfg.fMaxSeconds * bHours.length * availableDays;
+  let engagedSeconds = 0;
+  for (const a of allocations) {
+    for (const c of a.creneaux) {
+      if (c.date < weekStart || c.date >= weekEnd) continue;
+      engagedSeconds += c.reps * a.sSpotSeconds;
+    }
+  }
+  const remplissage =
+    availableSeconds === 0 || engagedSeconds === 0
+      ? 0
+      : round2(Math.min(100, (engagedSeconds / availableSeconds) * 100));
+
+  const variables: SpsVariables = {
+    acceptation,
+    respect_evenements: EVENT_RESPECT_DEFAULT,
+    activite,
+    remplissage,
+  };
+  return { sps: weightedSps(variables, cfg), variables };
+};
+
+/** Compute + persist one venue's score (the on-decision hook; failures are the caller's warn). */
+export const recomputeVenueSps = async (
+  screenhostId: string,
+  now = new Date(),
+): Promise<number> => {
+  const { sps } = await computeSps(screenhostId, now);
+  await db
+    .update(screenhosts)
+    .set({ sps: String(sps) })
+    .where(eq(screenhosts.id, screenhostId));
+  return sps;
+};
+
+/** The daily sweep: every ACTIVE venue's score recomputed + written; ONE summary log line. */
+export const runSpsRecomputeTick = async (log: FastifyBaseLogger): Promise<number> => {
+  const started = Date.now();
+  const venues = await db
+    .select({ id: screenhosts.id })
+    .from(screenhosts)
+    .where(eq(screenhosts.isActive, true));
+  let updated = 0;
+  for (const v of venues) {
+    try {
+      await recomputeVenueSps(v.id);
+      updated += 1;
+    } catch (err) {
+      log.warn({ err, screenhostId: v.id }, 'SPS recompute failed for venue');
+    }
+  }
+  log.info({ venues: venues.length, updated, ms: Date.now() - started }, 'SPS daily sweep done');
+  return updated;
+};
+
+/** Boot run + daily unref'd interval (the house job idiom — no cron dependency). */
+export function startSpsRecomputeJob(log: FastifyBaseLogger): void {
+  void runSpsRecomputeTick(log).catch((err: unknown) => log.warn({ err }, 'SPS boot sweep failed'));
+  const timer = setInterval(
+    () => {
+      void runSpsRecomputeTick(log).catch((err: unknown) =>
+        log.warn({ err }, 'SPS daily sweep failed'),
+      );
+    },
+    24 * 60 * 60 * 1000,
+  );
+  timer.unref();
+}

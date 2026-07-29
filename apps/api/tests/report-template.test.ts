@@ -16,6 +16,15 @@ import {
 const baseData = (over: Partial<ReportData> = {}): ReportData => ({
   venueName: 'Café Le Palmier',
   category: 'Café · Salon de thé',
+  sps: {
+    score: 70,
+    criteria: [
+      { label: "Taux d'acceptation des campagnes", weight: 40, value: 50 },
+      { label: 'Respect des événements acceptés', weight: 30, value: 100 },
+      { label: "Activité de l'écran", weight: 20, value: 100 },
+      { label: 'Taux de remplissage', weight: 10, value: 0 },
+    ],
+  },
   range: { from: '2026-06-01', to: '2026-06-30' },
   generatedLabel: '08/07/2026',
   hostHasData: false,
@@ -161,23 +170,33 @@ describe('renderReportHtml — structure shared by both states', () => {
     expect(html).toContain('Votre score de priorité');
   });
 
-  it('renders the full S08 SPS layout — ring, the 4 weighted criteria verbatim, rank card, all À venir', () => {
+  it('renders the E4 S08 SPS card — ring with the REAL score, the 4 ruled criteria + weights + values', () => {
     expect(html).toContain('class="score-ring"');
     expect(html).toContain('Score actuel');
     expect(html).toContain('Classement');
-    const criteria: [string, string][] = [
-      ['Acceptation des campagnes', 'poids 25 %'],
-      ['Respect des événements acceptés', 'poids 30 %'],
-      ['Activité de votre écran', 'poids 20 %'],
-      ['Taux de remplissage', 'poids 10 %'],
+    // The ruled labels + the CONFIG weights (the 25 % placeholder era is over) + the fixture's
+    // real values.
+    const criteria: [string, string, string][] = [
+      ["Taux d'acceptation des campagnes", 'poids 40 %', '50 / 100'],
+      ['Respect des événements acceptés', 'poids 30 %', '100 / 100'],
+      ["Activité de l'écran", 'poids 20 %', '100 / 100'],
+      ['Taux de remplissage', 'poids 10 %', '0 / 100'],
     ];
-    for (const [name, weight] of criteria) {
+    for (const [name, weight, value] of criteria) {
       expect(html).toContain(`<span class="crit-name">${name}</span>`);
       expect(html).toContain(`<span class="crit-weight">${weight}</span>`);
+      expect(html).toContain(`<span class="crit-val">${value}</span>`);
     }
-    // ring + 4 criteria + rank card — the SPS engine does not exist; no number is ever invented
-    expect(count(html, /À venir/g)).toBeGreaterThanOrEqual(6);
+    expect(html).toContain('<span class="v">70</span>'); // the weighted total in the ring
+    expect(html).not.toContain('poids 25 %'); // the placeholder weight set retired
     expect(html).toContain('Comment lire votre score.');
+  });
+
+  it('a null sps block (compute hiccup) keeps the full wait-state — no number is invented', () => {
+    const waitHtml = renderReportHtml(baseData({ sps: null }));
+    expect(count(waitHtml, /À venir/g)).toBeGreaterThanOrEqual(6);
+    expect(waitHtml).toContain("Taux d'acceptation des campagnes");
+    expect(waitHtml).toContain('poids 40 %');
   });
 });
 

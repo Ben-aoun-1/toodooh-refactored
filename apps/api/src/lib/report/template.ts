@@ -507,16 +507,24 @@ export function renderReportHtml(
     ${pisteCards}
   </div>`;
 
-  // ── S08 — full SPS layout, ALL values "À venir" (the SPS engine does not exist) ──────────────
-  const criteria = [
-    ['Acceptation des campagnes', 'poids 25 %'],
-    ['Respect des événements acceptés', 'poids 30 %'],
-    ['Activité de votre écran', 'poids 20 %'],
-    ['Taux de remplissage', 'poids 10 %'],
-  ]
+  // ── S08 — the SPS card (E4): the four ruled variables with their REAL values + the config
+  // weights (40/30/20/10 by default). A null block (compute hiccup) keeps the wait-state — a
+  // report never fails on the score. The Classement stays « À venir » (no ranking data yet).
+  const fmtScore = (n: number): string =>
+    Number.isInteger(n) ? String(n) : n.toFixed(1).replace('.', ',');
+  const criteria = (
+    data.sps?.criteria.map(
+      (c) => [c.label, `poids ${fmtScore(c.weight)} %`, `${fmtScore(c.value)} / 100`] as const,
+    ) ?? [
+      ["Taux d'acceptation des campagnes", 'poids 40 %', 'À venir'] as const,
+      ['Respect des événements acceptés', 'poids 30 %', 'À venir'] as const,
+      ["Activité de l'écran", 'poids 20 %', 'À venir'] as const,
+      ['Taux de remplissage', 'poids 10 %', 'À venir'] as const,
+    ]
+  )
     .map(
-      ([name, weight]) =>
-        `<div class="crit-row"><div class="crit-left"><span class="crit-name">${name}</span><span class="crit-weight">${weight}</span></div><span class="crit-val">À venir</span></div>`,
+      ([name, weight, value]) =>
+        `<div class="crit-row"><div class="crit-left"><span class="crit-name">${name}</span><span class="crit-weight">${weight}</span></div><span class="crit-val">${value}</span></div>`,
     )
     .join('\n        ');
   const s08 = `
@@ -525,7 +533,7 @@ export function renderReportHtml(
     <div class="score-hero">
       <div class="score-current">
         <div class="l">Score actuel</div>
-        <div class="score-ring"><span class="v">À venir</span></div>
+        <div class="score-ring"><span class="v">${data.sps ? fmtScore(data.sps.score) : 'À venir'}</span></div>
       </div>
       <div class="score-crit">
         ${criteria}

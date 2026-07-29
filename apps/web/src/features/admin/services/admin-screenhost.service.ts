@@ -22,6 +22,24 @@ export interface ScreenhostEligibility {
  * The PATCH body — PARTIAL semantics: an omitted field is left unchanged, an explicit null CLEARS
  * it. `sps` is not settable.
  */
+/** E4 — one SPS variable of the admin breakdown (value 0-100, its config weight). */
+export interface SpsVariableView {
+  value: number;
+  weight: number;
+}
+
+/** E4 — GET /api/admin/screenhosts/:id/sps: the live breakdown + the stored daily snapshot. */
+export interface ScreenhostSpsView {
+  sps: number;
+  stored_sps: number;
+  variables: {
+    acceptation: SpsVariableView;
+    respect_evenements: SpsVariableView;
+    activite: SpsVariableView;
+    remplissage: SpsVariableView;
+  };
+}
+
 export interface EligibilityPatch {
   business_sector_id?: string | null;
   class?: VenueClass | null;
@@ -36,6 +54,11 @@ export interface EligibilityPatch {
  * write-only password contract as the owner path; the server fire-and-forgets the wedooh re-push.
  */
 export const adminScreenhostService = {
+  /** E4 — GET /api/admin/screenhosts/:id/sps: the live SPS breakdown (read-only insight). */
+  getSps(id: string): Promise<ScreenhostSpsView> {
+    return apiClient.get<ScreenhostSpsView>(`/admin/screenhosts/${id}/sps`);
+  },
+
   /** PATCH /api/admin/screenhosts/:id/wifi — admin edit of any screenhost. */
   updateWifi(id: string, patch: WifiPatch): Promise<ScreenhostWifi> {
     return apiClient.patch<ScreenhostWifi>(`/admin/screenhosts/${id}/wifi`, patch);

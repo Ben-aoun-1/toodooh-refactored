@@ -28,6 +28,11 @@ const configView = (cfg: ResolvedDispatchConfig) => ({
   t_20s: cfg.t20s,
   t_30s: cfg.t30s,
   campaign_lead_working_days: cfg.campaignLeadWorkingDays,
+  // E4 — the SPS weights (admin-editable; Σ = 100 enforced on the MERGED result below).
+  sps_weight_acceptation: cfg.spsWeightAcceptation,
+  sps_weight_respect_evenements: cfg.spsWeightRespectEvenements,
+  sps_weight_activite: cfg.spsWeightActivite,
+  sps_weight_remplissage: cfg.spsWeightRemplissage,
 });
 
 // At least one knob must be supplied. CPMs: finite, strictly-positive TND/1000 rates (a
@@ -47,6 +52,11 @@ const patchBodySchema = z
     // CF-D1 — the campaign start-date lead (working days). 0 is legal (floor = today, field-test
     // calibration only); 30 caps runaway values. Integer: the lead counts whole jours ouvrés.
     campaign_lead_working_days: z.number().int().min(0).max(30).optional(),
+    // E4 — each weight ∈ [0, 100]; the Σ = 100 rule is judged on the MERGED result in the handler.
+    sps_weight_acceptation: z.number().min(0).max(100).optional(),
+    sps_weight_respect_evenements: z.number().min(0).max(100).optional(),
+    sps_weight_activite: z.number().min(0).max(100).optional(),
+    sps_weight_remplissage: z.number().min(0).max(100).optional(),
   })
   .refine((b) => Object.values(b).some((v) => v !== undefined), {
     message: 'at least one editable field is required',
@@ -92,6 +102,32 @@ export const adminDispatchConfigRoutes: FastifyPluginAsync = async (app) => {
       });
     }
 
+    // E4 — the four SPS weights must sum to EXACTLY 100 on the effective config (a partial
+    // patch is merged over the current values first; the epsilon absorbs FP noise on decimals).
+    const effectiveWeights = {
+      acceptation: parsed.data.sps_weight_acceptation ?? current.spsWeightAcceptation,
+      respect: parsed.data.sps_weight_respect_evenements ?? current.spsWeightRespectEvenements,
+      activite: parsed.data.sps_weight_activite ?? current.spsWeightActivite,
+      remplissage: parsed.data.sps_weight_remplissage ?? current.spsWeightRemplissage,
+    };
+    const weightSum =
+      effectiveWeights.acceptation +
+      effectiveWeights.respect +
+      effectiveWeights.activite +
+      effectiveWeights.remplissage;
+    if (Math.abs(weightSum - 100) > 1e-9) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: [
+          {
+            field: 'sps_weight_acceptation',
+            reason: `les pondérations SPS doivent totaliser 100 (obtenu : ${weightSum})`,
+          },
+        ],
+      });
+    }
+
     // numeric columns take strings; only set the keys the admin actually sent.
     const patch: {
       standardCpmTnd?: string;
@@ -100,6 +136,10 @@ export const adminDispatchConfigRoutes: FastifyPluginAsync = async (app) => {
       t20s?: string;
       t30s?: string;
       campaignLeadWorkingDays?: number;
+      spsWeightAcceptation?: string;
+      spsWeightRespectEvenements?: string;
+      spsWeightActivite?: string;
+      spsWeightRemplissage?: string;
     } = {};
     if (parsed.data.standard_cpm_tnd !== undefined)
       patch.standardCpmTnd = String(parsed.data.standard_cpm_tnd);
@@ -110,6 +150,14 @@ export const adminDispatchConfigRoutes: FastifyPluginAsync = async (app) => {
     if (parsed.data.t_30s !== undefined) patch.t30s = String(parsed.data.t_30s);
     if (parsed.data.campaign_lead_working_days !== undefined)
       patch.campaignLeadWorkingDays = parsed.data.campaign_lead_working_days;
+    if (parsed.data.sps_weight_acceptation !== undefined)
+      patch.spsWeightAcceptation = String(parsed.data.sps_weight_acceptation);
+    if (parsed.data.sps_weight_respect_evenements !== undefined)
+      patch.spsWeightRespectEvenements = String(parsed.data.sps_weight_respect_evenements);
+    if (parsed.data.sps_weight_activite !== undefined)
+      patch.spsWeightActivite = String(parsed.data.sps_weight_activite);
+    if (parsed.data.sps_weight_remplissage !== undefined)
+      patch.spsWeightRemplissage = String(parsed.data.sps_weight_remplissage);
 
     const [existing] = await db.select({ id: dispatchConfig.id }).from(dispatchConfig).limit(1);
     if (existing) {

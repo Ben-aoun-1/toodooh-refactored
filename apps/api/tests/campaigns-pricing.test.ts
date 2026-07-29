@@ -14,7 +14,7 @@ import { resetAuthTables } from './helpers/db-test-setup.js';
 // projects the SAME resolved dispatch_config singleton the admin route reads (V1-default fallback via
 // getDispatchConfig). Any authenticated user may read it (the CPMs price the advertiser's own
 // estimate); an unauthenticated caller 401s. dispatch_config is a SEEDED singleton (migration 0026),
-// NOT an auth table — resetAuthTables doesn't touch it, so the PATCH test restores 15/30 in afterEach.
+// NOT an auth table — resetAuthTables doesn't touch it, so the PATCH test restores 15/15 in afterEach.
 type GetSessionResult = Awaited<ReturnType<typeof auth.api.getSession>>;
 
 const buildApp = () => Fastify({ logger: false });
@@ -49,7 +49,7 @@ const restoreCpmDefaults = async (): Promise<void> => {
   // CF-D1 — the lead joins the restore (its test edits the same singleton).
   await db
     .update(dispatchConfig)
-    .set({ standardCpmTnd: '15.000', eventCpmTnd: '30.000', campaignLeadWorkingDays: 2 });
+    .set({ standardCpmTnd: '15.000', eventCpmTnd: '15.000', campaignLeadWorkingDays: 2 });
 };
 
 describe('advertiser pricing-config — GET /api/campaigns/pricing-config (real Postgres)', () => {
@@ -86,7 +86,7 @@ describe('advertiser pricing-config — GET /api/campaigns/pricing-config (real 
     const body = res.json() as { standard_cpm_tnd: number; event_cpm_tnd: number };
     expect(body).toEqual({
       standard_cpm_tnd: 15,
-      event_cpm_tnd: 30,
+      event_cpm_tnd: 15,
       first_available_start_date: premiereDateDisponible(),
     });
   });
@@ -152,6 +152,6 @@ describe('advertiser pricing-config — GET /api/campaigns/pricing-config (real 
     expect(res.statusCode).toBe(200);
     const body = res.json() as { standard_cpm_tnd: number; event_cpm_tnd: number };
     expect(body.standard_cpm_tnd).toBe(22);
-    expect(body.event_cpm_tnd).toBe(30);
+    expect(body.event_cpm_tnd).toBe(15);
   });
 });

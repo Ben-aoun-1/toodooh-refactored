@@ -18,7 +18,7 @@ describe('getDispatchConfig (seeded singleton, real Postgres)', () => {
       rMinEfficace: 2,
       fMaxSeconds: 300,
       standardCpmTnd: 15,
-      eventCpmTnd: 30,
+      eventCpmTnd: 15,
       // E1 (migration 0042) — the attention T buckets at their VF canonical defaults.
       t10s: 0.6,
       t20s: 0.7,

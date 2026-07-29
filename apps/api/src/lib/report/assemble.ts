@@ -12,6 +12,8 @@ import {
   screenhostMonthlyStats,
   screenhosts,
 } from '../../db/schema.js';
+import { getDispatchConfig } from '../dispatch/config.js';
+import { computeSps } from '../sps-score.js';
 
 import {
   type AudienceKpis,
@@ -84,6 +86,11 @@ export interface ReportData {
     top3: string[];
     rows: ReportCampaignRow[];
   };
+  /** E4 — the venue's SPS breakdown (computed live at assembly; null only on a compute failure). */
+  sps: {
+    score: number;
+    criteria: { label: string; weight: number; value: number }[];
+  } | null;
 }
 
 const typeLabelFr = (raw: string): string =>
@@ -277,6 +284,42 @@ export async function assembleReportData(
     .slice(0, 3)
     .map((l) => l.campaign_name);
 
+  // E4 — the S08 card's live breakdown: the four ruled variables with the CONFIG weights.
+  // A compute hiccup degrades to null (the card keeps its wait-state) — a report render must
+  // never fail on the score.
+  let spsBlock: ReportData['sps'] = null;
+  try {
+    const cfg = await getDispatchConfig();
+    const { sps, variables } = await computeSps(venueId);
+    spsBlock = {
+      score: sps,
+      criteria: [
+        {
+          label: "Taux d'acceptation des campagnes",
+          weight: cfg.spsWeightAcceptation,
+          value: variables.acceptation,
+        },
+        {
+          label: 'Respect des événements acceptés',
+          weight: cfg.spsWeightRespectEvenements,
+          value: variables.respect_evenements,
+        },
+        {
+          label: "Activité de l'écran",
+          weight: cfg.spsWeightActivite,
+          value: variables.activite,
+        },
+        {
+          label: 'Taux de remplissage',
+          weight: cfg.spsWeightRemplissage,
+          value: variables.remplissage,
+        },
+      ],
+    };
+  } catch {
+    spsBlock = null;
+  }
+
   return {
     venueName: venue.name,
     category: categoryLabel(venue.sectorName, venue.class),
@@ -297,6 +340,7 @@ export async function assembleReportData(
         amountLabel: `${formatTndFr(l.earnings_tnd)} TND`,
       })),
     },
+    sps: spsBlock,
     campaignsBlock: {
       count: periodLines.length,
       cumulativeImpressions: periodLines.reduce((s, l) => s + l.delivered_imp, 0),

@@ -336,6 +336,7 @@ describe('generateRecommendationsCached (on-demand path)', () => {
 const reportData = (over: Partial<ReportData> = {}): ReportData => ({
   venueName: 'Café Le Palmier',
   category: 'Café · Salon de thé',
+  sps: null,
   range: { from: '2026-06-01', to: '2026-06-30' },
   generatedLabel: '10/07/2026',
   hostHasData: true,

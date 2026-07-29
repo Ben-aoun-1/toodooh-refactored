@@ -10,7 +10,7 @@ import { resetAuthTables } from './helpers/db-test-setup.js';
 
 // Integration — real Postgres. The CPM-config surface: GET reads the seeded singleton; PATCH edits
 // the admin-editable CPMs (standard/event). dispatch_config is a SEEDED singleton (migration 0026),
-// NOT an auth table — resetAuthTables doesn't touch it, so each test restores 15/30 in afterEach so
+// NOT an auth table — resetAuthTables doesn’t touch it, so each test restores 15/15 in afterEach so
 // the derived-activation tests (which read standard_cpm_tnd) never see a polluted value.
 type GetSessionResult = Awaited<ReturnType<typeof auth.api.getSession>>;
 
@@ -42,7 +42,7 @@ const restoreCpmDefaults = async (): Promise<void> => {
   // CF-D1 — so does the campaign lead.
   await db.update(dispatchConfig).set({
     standardCpmTnd: '15.000',
-    eventCpmTnd: '30.000',
+    eventCpmTnd: '15.000',
     t10s: '0.60',
     t20s: '0.70',
     t30s: '0.80',
@@ -55,6 +55,9 @@ describe('admin dispatch-config — CPM read/edit (real Postgres)', () => {
 
   beforeEach(async () => {
     await resetAuthTables();
+    // E4 fixture repair: pin the entry state too — the first test used to inherit whatever the
+    // previous FILE left on the shared singleton (the restore only ran in afterEach).
+    await restoreCpmDefaults();
     app = buildApp();
     await app.register(adminDispatchConfigRoutes);
     await app.ready();
@@ -82,7 +85,7 @@ describe('admin dispatch-config — CPM read/edit (real Postgres)', () => {
       f_max_seconds: number;
     };
     expect(body.standard_cpm_tnd).toBe(15);
-    expect(body.event_cpm_tnd).toBe(30);
+    expect(body.event_cpm_tnd).toBe(15);
     expect(body.f_max_seconds).toBe(300);
   });
 
@@ -104,7 +107,7 @@ describe('admin dispatch-config — CPM read/edit (real Postgres)', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json() as { standard_cpm_tnd: number; event_cpm_tnd: number };
     expect(body.standard_cpm_tnd).toBe(20);
-    expect(body.event_cpm_tnd).toBe(30);
+    expect(body.event_cpm_tnd).toBe(15);
   });
 
   it('PATCH rejects an empty body (400 — at least one CPM required)', async () => {
