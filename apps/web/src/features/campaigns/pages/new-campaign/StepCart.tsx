@@ -24,7 +24,7 @@ import { formatUiDate, inclusiveDayCount } from '@/features/campaigns/lib/campai
 import {
   CAMPAIGN_BUDGET_FLOOR_TND,
   CMAX_PULLBACK_NOTICE,
-  CMAX_ZERO_STATE,
+  cmaxZeroStateMessage,
   clampBudgetToCmax,
   cmaxHelperLine,
   isInventoryInsufficient,
@@ -331,7 +331,9 @@ export default function StepCart({
               {zeroInventory && (
                 <div className="mt-3 flex gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
                   <AlertTriangle className="h-5 w-5 flex-shrink-0 text-amber-600" />
-                  <p className="text-sm text-amber-800">{CMAX_ZERO_STATE}</p>
+                  <p className="text-sm text-amber-800">
+                    {cmaxZeroStateMessage(cmax.data?.targeted_count)}
+                  </p>
                 </div>
               )}
               {pullbackNotice && !zeroInventory && (

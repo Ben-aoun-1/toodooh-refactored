@@ -45,6 +45,13 @@ export const cmaxHelperLine = (cMaxTnd: number, eligibleCount: number): string =
 export const CMAX_PULLBACK_NOTICE = 'Le budget a été ajusté à l’inventaire disponible.';
 export const CMAX_ZERO_STATE =
   'Aucun inventaire disponible pour ce ciblage — élargissez vos catégories ou zones.';
+// CF-HF4 — saturated ≠ empty targeting: venues MATCH but their capacity is fully engaged.
+export const CMAX_SATURATED_STATE =
+  'Inventaire momentanément saturé sur ce ciblage — réessayez avec une autre période.';
+
+/** Pick the zero-inventory message: matching-but-saturated venues speak the saturated line. */
+export const cmaxZeroStateMessage = (targetedCount: number | undefined): string =>
+  (targetedCount ?? 0) > 0 ? CMAX_SATURATED_STATE : CMAX_ZERO_STATE;
 
 /** The submit-time refusal (server gate) — the FE re-reads the live ceiling and re-clamps. */
 export const isBudgetExceedsCmax = (err: unknown): boolean =>

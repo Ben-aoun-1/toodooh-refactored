@@ -125,11 +125,6 @@ export default function LastCampaignsGrid({ campaigns, loading }: LastCampaignsG
                               <p className="text-base font-bold text-gray-900 tabular-nums mt-0.5">
                                 {formatImpressions(imp.prevues)}
                               </p>
-                              {imp.showValidees && (
-                                <p className="text-xs text-gray-500 tabular-nums">
-                                  validées : {formatImpressions(imp.validees)}
-                                </p>
-                              )}
                             </div>
                           </div>
                         );

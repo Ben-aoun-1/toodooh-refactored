@@ -23,10 +23,10 @@ describe('the Consulter drawer (CampaignDrawer)', () => {
     expect(source).toContain("['Tout le réseau']");
   });
 
-  it('renders the labeled per-status impressions (prévues + validées)', () => {
+  it('renders the labeled impressions PRÉVUES-ONLY (CF-HF4, Kais — validées left the cast side)', () => {
     expect(source).toContain('PREVUES_LABEL');
-    expect(source).toContain('VALIDEES_LABEL');
-    expect(source).toContain('impressions?.showValidees');
+    expect(source).not.toContain('VALIDEES_LABEL');
+    expect(source).not.toContain('showValidees');
   });
 });
 

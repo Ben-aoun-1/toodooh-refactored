@@ -72,6 +72,8 @@ export interface CampaignCmaxRead {
   c_max_tnd: number;
   i_max_facturable: number;
   eligible_count: number;
+  /** CF-HF4 — targeting-matching venues BEFORE capacity exclusions (the saturated/empty split). */
+  targeted_count?: number;
 }
 
 export const campaignsApi = {

@@ -2,116 +2,69 @@ import { describe, expect, it } from 'vitest';
 
 import {
   PREVUES_LABEL,
-  VALIDEES_LABEL,
   cpmForCampaignType,
   formatImpressions,
   impressionsDisplay,
 } from './campaign-impressions';
 
-// CF-HF3 (Mejri item 3) — the ONE impressions display rule, per status: prévues from the frozen
-// plan (else the budget estimate), validées only on Active/Passée, '—' for a not-yet value —
-// never a fake 0 on a funded campaign.
+// CF-HF3 item 3, amended by CF-HF4 (Kais): the advertiser display rule is PRÉVUES-ONLY.
+// prévues = the frozen plan's placed facturable when a plan exists, else the budget estimate;
+// '—' when neither is derivable — never a fake 0 on a funded campaign. The validées numbers left
+// every cast surface (host surfaces keep their own delivered reads — pinned in cf-hf4-pins).
 
-const PRICING = { standard_cpm_tnd: 15, event_cpm_tnd: 30 };
+const PRICING = { standard_cpm_tnd: 15, event_cpm_tnd: 15 };
 
-describe('impressionsDisplay — the per-status matrix', () => {
-  it('a PLANNED campaign shows the frozen plan facturable (the plan wins over the estimate)', () => {
-    const d = impressionsDisplay(
-      {
-        status: 'upcoming',
-        planned_impressions: 18000,
-        requested_budget: 300,
-        validated_impressions: null,
-      },
-      PRICING,
-    );
-    expect(d).toEqual({ prevues: 18000, validees: null, showValidees: false });
-  });
-
-  it('a FUNDED plan-less campaign estimates ⌊budget×1000/cpm⌋ — never a bare 0', () => {
-    for (const status of ['draft', 'pending', 'upcoming']) {
+describe('impressionsDisplay — prévues-only', () => {
+  it('a frozen plan wins: prévues = planned_impressions, whatever the status', () => {
+    for (const status of ['draft', 'pending', 'upcoming', 'active', 'completed']) {
       const d = impressionsDisplay(
-        { status, planned_impressions: null, requested_budget: 300, validated_impressions: null },
+        { status, planned_impressions: 20000, requested_budget: 300 },
         PRICING,
       );
-      expect(d.prevues).toBe(20000); // ⌊300×1000/15⌋
-      expect(d.showValidees).toBe(false);
+      expect(d).toEqual({ prevues: 20000 });
     }
   });
 
-  it('an EVENT campaign estimates at the event CPM (never 2× overstated)', () => {
-    const d = impressionsDisplay(
+  it('no plan → the budget estimate at the type CPM; event campaigns price at the event CPM', () => {
+    const std = impressionsDisplay(
+      { status: 'draft', planned_impressions: null, requested_budget: 300 },
+      PRICING,
+    );
+    expect(std.prevues).toBe(20000); // ⌊300×1000/15⌋
+
+    const evt = impressionsDisplay(
       {
-        status: 'pending',
+        status: 'draft',
         campaign_type: 'event',
         planned_impressions: null,
         requested_budget: 300,
-        validated_impressions: null,
       },
-      PRICING,
+      { standard_cpm_tnd: 15, event_cpm_tnd: 30 },
     );
-    expect(d.prevues).toBe(10000); // ⌊300×1000/30⌋
-    expect(cpmForCampaignType('event', PRICING)).toBe(30);
-    expect(cpmForCampaignType('standard', PRICING)).toBe(15);
+    expect(evt.prevues).toBe(10000); // the event CPM, never the standard one
   });
 
-  it('Active/Passée show BOTH lines; validées stays null-honest until the reconcile writes it', () => {
-    const active = impressionsDisplay(
-      {
-        status: 'active',
-        planned_impressions: 18000,
-        requested_budget: 300,
-        validated_impressions: null,
-      },
-      PRICING,
-    );
-    expect(active.showValidees).toBe(true);
-    expect(active.validees).toBeNull(); // '—', not a fake 0
-    const settled = impressionsDisplay(
-      {
-        status: 'completed',
-        planned_impressions: 18000,
-        requested_budget: 300,
-        validated_impressions: 12000,
-      },
-      PRICING,
-    );
-    expect(settled).toEqual({ prevues: 18000, validees: 12000, showValidees: true });
-  });
-
-  it('no plan, no budget (or no CPM) → prévues null (renders « — », never NaN/0)', () => {
-    expect(
-      impressionsDisplay(
-        { status: 'draft', planned_impressions: null, requested_budget: null },
-        PRICING,
-      ).prevues,
-    ).toBeNull();
-    expect(
-      impressionsDisplay(
-        { status: 'draft', planned_impressions: null, requested_budget: 300 },
-        undefined,
-      ).prevues,
-    ).toBeNull();
-  });
-
-  it('a genuinely ZERO validated settlement renders 0 (a real outcome, not absence)', () => {
+  it('nothing derivable → null (renders — via formatImpressions)', () => {
     const d = impressionsDisplay(
-      {
-        status: 'completed',
-        planned_impressions: 18000,
-        requested_budget: 300,
-        validated_impressions: 0,
-      },
+      { status: 'draft', planned_impressions: null, requested_budget: null },
       PRICING,
     );
-    expect(d.validees).toBe(0);
-    expect(formatImpressions(d.validees)).toBe('0');
+    expect(d.prevues).toBeNull();
+    expect(formatImpressions(d.prevues)).toBe('—');
   });
 
-  it('pins the French labels + the dash', () => {
+  it('formatImpressions: a real 0 stays 0; fr-FR grouping', () => {
+    expect(formatImpressions(0)).toBe('0');
+    expect(formatImpressions(20000)).toBe('20\u202f000'); // fr-FR narrow NBSP grouping
+  });
+
+  it('cpmForCampaignType picks by type and degrades to null', () => {
+    expect(cpmForCampaignType('standard', PRICING)).toBe(15);
+    expect(cpmForCampaignType('event', { event_cpm_tnd: 30 })).toBe(30);
+    expect(cpmForCampaignType('standard', undefined)).toBeNull();
+  });
+
+  it('the label is the ONE French literal', () => {
     expect(PREVUES_LABEL).toBe('Impressions prévues');
-    expect(VALIDEES_LABEL).toBe('Impressions validées');
-    expect(formatImpressions(null)).toBe('—');
-    expect(formatImpressions(20000)).toBe('20 000');
   });
 });

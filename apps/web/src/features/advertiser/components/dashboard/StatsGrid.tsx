@@ -42,7 +42,7 @@ export default function StatsGrid({
       <div className="rounded-xl p-5 min-h-[120px] flex flex-col bg-[#edf1fe] border border-[#6e82f6]/30">
         <div className="flex items-center justify-between gap-2 mb-3 min-h-[1.25rem]">
           <span className="text-xs font-semibold text-[#6e82f6] whitespace-nowrap truncate min-w-0">
-            Impressions générées
+            Impressions prévues
           </span>
           <img src={statIcon4} alt="" className="h-5 w-5 object-contain flex-shrink-0" />
         </div>

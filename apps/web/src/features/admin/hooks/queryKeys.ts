@@ -65,6 +65,8 @@ export const adminKeys = {
   screenhostEligibility: (id: string) => [...adminKeys.all, 'screenhostEligibility', id] as const,
   /** E4 — one venue's live SPS breakdown (`adminScreenhostService.getSps`). */
   screenhostSps: (id: string) => [...adminKeys.all, 'screenhostSps', id] as const,
+  /** CF-HF4 — one venue's live devices (the admin liveness chip). */
+  screenhostDevices: (id: string) => [...adminKeys.all, 'screenhostDevices', id] as const,
   /** One user's grouped documents for the review modal (`adminUserService.getUserDocuments`). */
   userDocuments: (id: string) => [...adminKeys.all, 'userDocuments', id] as const,
   /** Admin-account list for AdminManagement (`adminService.getAdmins`). */
