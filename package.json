@@ -8,7 +8,7 @@
     "node": ">=20 <21"
   },
   "scripts": {
-    "typecheck": "pnpm -r --if-present typecheck",
+    "typecheck": "pnpm -r --if-present --no-bail typecheck",
     "test": "pnpm -r --if-present test",
     "build": "pnpm -r --if-present build",
     "dev": "pnpm -r --if-present --parallel dev",

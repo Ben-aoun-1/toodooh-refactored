@@ -638,7 +638,7 @@ describe('EV5 — event playout, monitoring + settlement (real Postgres)', () =>
   });
 
   describe('the attestation surface (admin + screenhost_agent)', () => {
-    const putAttestation = (eventId: string, venueId: string, body: unknown) =>
+    const putAttestation = (eventId: string, venueId: string, body: Record<string, unknown>) =>
       app.inject({
         method: 'PUT',
         url: `/api/admin/events/${eventId}/attestations/${venueId}`,
