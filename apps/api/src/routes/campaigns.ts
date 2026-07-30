@@ -12,6 +12,7 @@ import {
   campaignZones,
   campaigns,
   creatives,
+  events,
   zones,
 } from '../db/schema.js';
 import { MIN_CAMPAIGN_BUDGET_TND } from '../lib/campaign-budget.js';
@@ -22,6 +23,8 @@ import {
   startDateViolation,
 } from '../lib/campaign-dates.js';
 import { getDispatchConfig } from '../lib/dispatch/config.js';
+import { computeEventCmax } from '../lib/event-pricing/pricing.js';
+import { validateEventSpot } from '../lib/event-pricing/spot.js';
 import { requireAdvertiser } from '../middleware/require-advertiser.js';
 import { requireAuth } from '../middleware/require-auth.js';
 
@@ -145,6 +148,7 @@ export const campaignSelection = {
   rejectReason: campaigns.rejectReason,
   // CF-S1 — the linked creative rides the projection so Reprendre can rehydrate past Création.
   creativeId: campaigns.creativeId,
+  eventId: campaigns.eventId,
   createdAt: campaigns.createdAt,
   updatedAt: campaigns.updatedAt,
 };
@@ -163,6 +167,7 @@ export type CampaignRow = Pick<
   | 'rejectedAt'
   | 'rejectReason'
   | 'creativeId'
+  | 'eventId'
   | 'createdAt'
   | 'updatedAt'
 >;
@@ -188,6 +193,8 @@ export const campaignView = (
   rejected_at: Date | null;
   reject_reason: string | null;
   creative_id: string | null;
+  /** EV3 — the positioned match (campaign_type='event' rows); null for classic campaigns. */
+  event_id: string | null;
   created_at: Date;
   updated_at: Date;
 } => ({
@@ -204,6 +211,7 @@ export const campaignView = (
   rejected_at: row.rejectedAt,
   reject_reason: row.rejectReason,
   creative_id: row.creativeId,
+  event_id: row.eventId,
   created_at: row.createdAt,
   updated_at: row.updatedAt,
 });
@@ -433,7 +441,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     }
     // Owner-scope in the WHERE: a foreign id is indistinguishable from a missing one.
     const [existing] = await db
-      .select({ id: campaigns.id, status: campaigns.status })
+      .select({ id: campaigns.id, status: campaigns.status, eventId: campaigns.eventId })
       .from(campaigns)
       .where(and(eq(campaigns.id, parsedParams.data.id), eq(campaigns.advertiserId, userId)))
       .limit(1);
@@ -449,16 +457,44 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         statusCode: 409,
       });
     }
+    // EV3 — the snapshot invariant: a positioning's dates are the diffusion window captured at
+    // creation and its type is its identity — neither is PATCHable (budget, creative link, zones
+    // and description are). The window itself always derives at read from the event.
+    if (
+      existing.eventId !== null &&
+      (parsed.data.start_date !== undefined ||
+        parsed.data.end_date !== undefined ||
+        parsed.data.campaign_type !== undefined)
+    ) {
+      return reply.status(400).send({
+        error: 'EVENT_FIELDS_LOCKED',
+        message: 'Les dates d’un positionnement suivent la fenêtre de diffusion du match.',
+      });
+    }
     // Linking a creative: it must EXIST and belong to the SAME advertiser — owner-scoped 404 (a
     // foreign or nonexistent creative is indistinguishable from missing). null unlinks (no lookup).
     if (parsed.data.creative_id != null) {
       const [creative] = await db
-        .select({ id: creatives.id })
+        .select({
+          id: creatives.id,
+          creativeType: creatives.creativeType,
+          durationSeconds: creatives.durationSeconds,
+        })
         .from(creatives)
         .where(and(eq(creatives.id, parsed.data.creative_id), eq(creatives.advertiserId, userId)))
         .limit(1);
       if (!creative) {
         return reply.status(404).send({ error: 'NOT_FOUND', message: 'Créative introuvable.' });
+      }
+      // EV3 — an event positioning's spot must fit the 15-second antenne grid (EV2's seam,
+      // wired here): a longer VIDEO can never air in a bloc, so the ATTACH refuses — whether
+      // the spot came fresh from upload or from the bibliothèque (CF-SK1 hash-inherit included:
+      // inheritance moves the validation verdict, never the length).
+      if (existing.eventId !== null) {
+        const verdict = validateEventSpot(creative);
+        if (!verdict.ok) {
+          return reply.status(400).send({ error: 'EVENT_SPOT_TOO_LONG', message: verdict.reason });
+        }
       }
     }
     // CF-Z1 — a zone-only PATCH has an empty columns patch: skip the UPDATE (drizzle rejects an
@@ -506,6 +542,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         startDate: campaigns.startDate,
         endDate: campaigns.endDate,
         campaignType: campaigns.campaignType,
+        eventId: campaigns.eventId,
         creativeId: campaigns.creativeId,
         creativeDurationSeconds: creatives.durationSeconds,
       })
@@ -515,6 +552,29 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
       .limit(1);
     if (!row) {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'Campagne introuvable.' });
+    }
+    // EV3 — a POSITIONING (an event-BOUND row: event_id set — the binding is the discriminator;
+    // a legacy 'event'-TYPED row without a binding stays fully classic) prices via EV2's event
+    // engine (CPM_evt over the A_max blocs): no dates/creative prerequisite (the window is the
+    // event's, there is no T coefficient) and the classic C_max is NEVER consulted (it throws on
+    // bound rows — the engine boundary). Same wire shape so the budget slider reads one contract.
+    if (row.eventId !== null) {
+      const [ev] = await db.select().from(events).where(eq(events.id, row.eventId)).limit(1);
+      if (!ev || ev.annule) {
+        return reply
+          .status(409)
+          .send({ error: 'EVENT_ANNULE', message: 'Cet événement est annulé.' });
+      }
+      const evCmax = await computeEventCmax(
+        { id: ev.id, kickoffAt: ev.kickoffAt, endsAt: ev.endsAt },
+        (await getDispatchConfig()).eventCpmTnd,
+      );
+      return reply.status(200).send({
+        c_max_tnd: evCmax.cMaxEvtTnd,
+        i_max_facturable: evCmax.iMax,
+        eligible_count: evCmax.eligibleCount,
+        targeted_count: evCmax.eligibleCount,
+      });
     }
     const missing: string[] = [];
     if (!row.startDate || !row.endDate) missing.push('dates');
@@ -539,6 +599,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         startDate: row.startDate,
         endDate: row.endDate,
         campaignType: row.campaignType,
+        eventId: row.eventId,
       },
       spotSeconds,
     );
@@ -569,6 +630,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         endDate: campaigns.endDate,
         requestedBudget: campaigns.requestedBudget,
         campaignType: campaigns.campaignType,
+        eventId: campaigns.eventId,
         creativeId: campaigns.creativeId,
         creativeDurationSeconds: creatives.durationSeconds,
       })
@@ -595,9 +657,15 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
       });
     }
     // CF-Q2 — re-check the floor at submit time: a draft saved days ago may now be too soon.
-    const lead = await campaignLead();
-    const violation = startDateViolation(existing.startDate, new Date(), lead);
-    if (violation) return reply.status(400).send(startDateRejection(violation, lead));
+    // EV3 — positionings (event-BOUND rows) skip the floor (the dates are the snapshotted
+    // diffusion window; the kickoff is the truth) — the lifecycle's past-kickoff deletion is the
+    // too-late guard. Legacy 'event'-TYPED rows without a binding stay fully classic.
+    const isEventRow = existing.eventId !== null;
+    if (!isEventRow) {
+      const lead = await campaignLead();
+      const violation = startDateViolation(existing.startDate, new Date(), lead);
+      if (violation) return reply.status(400).send(startDateRejection(violation, lead));
+    }
     // CF-U1 — the budget-null contract: requested_budget stays NULL until the advertiser sets it
     // at Validation, so the positive-budget requirement the wizard gated CLIENT-side now holds
     // server-side too (activation derives i_cible from the budget — a budget-less pending row
@@ -624,7 +692,29 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     // without it dead-ends at activation's 422 anyway). Post-submit shrinkage is dispatch's
     // problem BY DESIGN — occupancy taken after this click surfaces at activation as TOO_THIN
     // (clôture, renvoi curseur) or a genuine PARTIAL.
-    if (
+    // EV3 — the ceiling forks: event rows price via EV2's engine (the classic C_max throws on
+    // them — the engine boundary); the event ceiling needs no creative duration (no T coef).
+    if (isEventRow) {
+      const [ev] = existing.eventId
+        ? await db.select().from(events).where(eq(events.id, existing.eventId)).limit(1)
+        : [];
+      if (!ev || ev.annule) {
+        return reply
+          .status(409)
+          .send({ error: 'EVENT_ANNULE', message: 'Cet événement est annulé.' });
+      }
+      const evCmax = await computeEventCmax(
+        { id: ev.id, kickoffAt: ev.kickoffAt, endsAt: ev.endsAt },
+        (await getDispatchConfig()).eventCpmTnd,
+      );
+      if (Number(existing.requestedBudget) > evCmax.cMaxEvtTnd) {
+        return reply.status(400).send({
+          error: 'BUDGET_EXCEEDS_CMAX',
+          message: 'The requested budget exceeds the available inventory for this targeting.',
+          c_max_tnd: evCmax.cMaxEvtTnd,
+        });
+      }
+    } else if (
       existing.creativeId !== null &&
       existing.creativeDurationSeconds !== null &&
       existing.creativeDurationSeconds > 0
@@ -635,6 +725,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
           startDate: existing.startDate,
           endDate: existing.endDate,
           campaignType: existing.campaignType,
+          eventId: existing.eventId,
         },
         existing.creativeDurationSeconds,
       );

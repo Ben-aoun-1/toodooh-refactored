@@ -13,6 +13,9 @@ import RemoveCartItemDialog from '@/features/cart/components/RemoveCartItemDialo
 import { useCartMutations, useCartRead } from '@/features/cart/hooks/useCart';
 import { cartReasonFr, parseCartConfirmFailure } from '@/features/cart/lib/cart-confirm';
 import { confirmSuccessMessage } from '@/features/cart/lib/confirm-outcome';
+import EventSuggestionsBlock from '@/features/events/components/EventSuggestionsBlock';
+import { formatEventHours } from '@/features/events/lib/event-display';
+import { splitCartSections } from '@/features/events/lib/event-positioning';
 import { getErrorMessage } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { htTtcOrDash, formatTnd, ttcFromHt } from '@/lib/money';
@@ -40,6 +43,9 @@ export default function MyCart() {
   const [confirming, setConfirming] = useState(false);
 
   const items = cart.data?.items ?? [];
+  // EV3 — the panier's two sections: classic campaigns vs event positionings (the BINDING
+  // splits them). The totals stay ONE basket — one solde, one « Confirmer et lancer ».
+  const { campagnes, evenements } = splitCartSections(items);
   const totalHt = cart.data?.total_ht ?? 0;
   const tva = Math.round((ttcFromHt(totalHt) - totalHt) * 100) / 100;
   const ttc = ttcFromHt(totalHt);
@@ -144,7 +150,10 @@ export default function MyCart() {
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {/* ── the lines ── */}
           <div className="space-y-4 lg:col-span-2">
-            {items.map((item) => {
+            {campagnes.length > 0 && (
+              <h3 className="text-sm font-bold uppercase tracking-wide text-gray-500">Campagnes</h3>
+            )}
+            {campagnes.map((item) => {
               const row = rowFor(item.id);
               const reason = itemReasons.get(item.id);
               return (
@@ -208,6 +217,88 @@ export default function MyCart() {
                 </div>
               );
             })}
+
+            {/* EV3 — the ÉVÉNEMENTS section: match name + the DERIVED window (never dates
+                the advertiser chose — the kickoff is the truth). Modifier reopens the
+                parcours; Retirer keeps the CF-C1 remove dialog. */}
+            {evenements.length > 0 && (
+              <h3 className="pt-2 text-sm font-bold uppercase tracking-wide text-gray-500">
+                Événements
+              </h3>
+            )}
+            {evenements.map((item) => {
+              const reason = itemReasons.get(item.id);
+              return (
+                <div
+                  key={item.id}
+                  className={`rounded-2xl border bg-white p-5 ${reason ? 'border-red-300' : 'border-gray-200'}`}
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="font-bold text-gray-900">{item.event?.name ?? item.name}</p>
+                        <span className="inline-flex rounded bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">
+                          Événement
+                        </span>
+                      </div>
+                      <p className="mt-1 text-sm text-gray-500">
+                        {formatUiDate(item.start_date)}
+                        {item.event && (
+                          <>
+                            <span className="mx-2 text-gray-300">|</span>
+                            Fenêtre :{' '}
+                            {formatEventHours(
+                              item.event.fenetre.window_start,
+                              item.event.fenetre.window_end,
+                            )}
+                          </>
+                        )}
+                      </p>
+                    </div>
+                    <p className="text-base font-bold text-gray-900 tabular-nums">
+                      {htTtcOrDash(item.requested_budget)}
+                    </p>
+                  </div>
+                  {reason && (
+                    <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                      {cartReasonFr(reason)}
+                    </p>
+                  )}
+                  <div className="mt-4 flex gap-2 border-t border-gray-100 pt-4">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        navigate(`/evenements/positionnement/${item.id}`, {
+                          state: { resumed: true },
+                        })
+                      }
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      Modifier
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setRemoveTarget({ id: item.id, name: item.event?.name ?? item.name })
+                      }
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Retirer
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* EV3 (voie 3) — matches near the carted CLASSIC campaigns' windows. */}
+            <EventSuggestionsBlock
+              campaignWindows={campagnes.map((c) => ({
+                start_date: c.start_date,
+                end_date: c.end_date,
+              }))}
+            />
           </div>
 
           {/* ── Prêt à diffuser ── */}

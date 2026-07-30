@@ -759,6 +759,11 @@ export const campaigns = pgTable(
     // back to the no-creative state. content_validation_status is DERIVED from the linked creative
     // at read time (L-spot) — there is NO validation column here (bifurcated approval, see above).
     creativeId: uuid('creative_id').references(() => creatives.id, { onDelete: 'set null' }),
+    // EV3 — the positioned match (campaign_type='event' rows only; NULL for classic campaigns).
+    // A positioning IS a campaign row: same statuses, same cart, same queue, same lifecycle —
+    // the engine boundary stays hard (no event row ever reaches dispatch/pool/cmax; EV4 adds
+    // bloc dispatch). RESTRICT: a positioned event is never hard-deleted (annule is soft).
+    eventId: uuid('event_id').references(() => events.id, { onDelete: 'restrict' }),
     // Advertiser's INDICATIVE budget (TND) from the interim manual cart — NOT the engine inputs. The
     // admin sees it in the review queue and derives i_cible/cpm/s/t at activation (the activation
     // endpoint is unchanged). Nullable; L-price replaces the manual cart with the real cursor.
@@ -779,7 +784,11 @@ export const campaigns = pgTable(
       .defaultNow()
       .$onUpdate(() => new Date()),
   },
-  (table) => [index('campaigns_advertiser_id_idx').on(table.advertiserId)],
+  (table) => [
+    index('campaigns_advertiser_id_idx').on(table.advertiserId),
+    // EV3 — the per-event positioning lookups (Mes Événements, the R4/EV5 era reads).
+    index('campaigns_event_id_idx').on(table.eventId),
+  ],
 );
 
 export type Campaign = typeof campaigns.$inferSelect;

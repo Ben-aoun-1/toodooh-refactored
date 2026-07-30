@@ -36,6 +36,7 @@ const campaign = (over: Partial<CampaignView> = {}): CampaignView => ({
   id: 'c1',
   name: 'Campagne Été',
   campaign_type: 'standard',
+  event_id: null,
   status: 'completed',
   start_date: '2026-06-01',
   end_date: '2026-06-07',

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import PageHeader from '@/components/PageHeader';
 
 import EventCard from '../components/EventCard';
+import MesEvenementsStrip from '../components/MesEvenementsStrip';
 import SuggestMatchForm from '../components/SuggestMatchForm';
 import { useEventsCatalogue, useSuggestedEvents } from '../hooks/useEvents';
 import { searchEvents } from '../lib/event-display';
@@ -12,7 +13,8 @@ import { searchEvents } from '../lib/event-display';
  * « Événements » (EV1 — rebuilt on the live api; the Supabase-era RPC page is gone).
  * The official match-card catalogue with équipe/phase search; « Voir plus » unfolds
  * « Ce que les screencasters suggèrent » (the SHARED suggestion list, badged cards) and the
- * « Suggérer un match » form. Positioning is EV3 — every card's CTA renders disabled.
+ * « Suggérer un match » form. EV3 — every card's « Je me positionne » opens the parcours, and
+ * the « Mes Événements » strip (À-venir-only) sits on top.
  */
 export default function Events() {
   const [query, setQuery] = useState('');
@@ -29,6 +31,9 @@ export default function Events() {
         title="Événements"
         subtitle="Profitez des pics d’audience des événements pour amplifier votre impact"
       />
+
+      {/* EV3 (§6) — the advertiser's confirmed positionings, À venir ONLY. */}
+      <MesEvenementsStrip />
 
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />

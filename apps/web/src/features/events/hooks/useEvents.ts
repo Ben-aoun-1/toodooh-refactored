@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { campaignsKeys } from '@/features/campaigns/hooks/queryKeys';
+
 import { type SuggestMatchInput, eventsApi } from '../services/events.api';
 
 import { eventsKeys } from './queryKeys';
@@ -30,6 +32,21 @@ export function useSuggestMatch() {
     mutationFn: (input: SuggestMatchInput) => eventsApi.suggest(input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: eventsKeys.suggested() });
+    },
+  });
+}
+
+/**
+ * EV3 — « Je me positionne »: create the positioning DRAFT (POST /:id/positionner). The caller
+ * navigates into the parcours with the created row; the campaign list cache refreshes so the
+ * new Brouillon shows up in Mes campagnes immediately.
+ */
+export function usePositionner() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (eventId: string) => eventsApi.positionner(eventId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: campaignsKeys.all });
     },
   });
 }

@@ -407,6 +407,13 @@
       "when": 1785331793896,
       "tag": "0057_sps_weights",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1785409843013,
+      "tag": "0058_campaign_event_positioning",
+      "breakpoints": true
     }
   ]
 }

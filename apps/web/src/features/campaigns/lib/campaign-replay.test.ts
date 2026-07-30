@@ -21,6 +21,7 @@ const clone = (overrides: Partial<CampaignView> = {}): CampaignView => ({
   id: 'clone-id',
   name: 'Été 2025',
   campaign_type: 'standard',
+  event_id: null,
   status: 'draft',
   start_date: null,
   end_date: null,

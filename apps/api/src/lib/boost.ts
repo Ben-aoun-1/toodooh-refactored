@@ -53,6 +53,8 @@ export interface BoostAdditions {
 
 export type BoostRefusal =
   | { status: 'NOT_FOUND' }
+  // EV3 — booster is a CLASSIC-campaign surface; boosting a positioning is EV6.
+  | { status: 'EVENT_POSITIONING' }
   | { status: 'NOT_BOOSTABLE'; currentStatus: string }
   | { status: 'NO_PLAN' }
   | { status: 'NO_ADDITION' }
@@ -205,6 +207,11 @@ export const runBoost = async (
         .where(and(eq(campaigns.id, campaignId), eq(campaigns.advertiserId, advertiserId)))
         .limit(1);
       if (!campaign) throw new BoostRefused({ status: 'NOT_FOUND' });
+      // EV3 — THE ENGINE BOUNDARY (pinned): no POSITIONING (event-bound row) ever reaches the
+      // boost dispatch (runDispatch V, plan mutation). Event boost is EV6.
+      if (campaign.eventId !== null) {
+        throw new BoostRefused({ status: 'EVENT_POSITIONING' });
+      }
       if (campaign.status !== 'active' && campaign.status !== 'upcoming') {
         throw new BoostRefused({ status: 'NOT_BOOSTABLE', currentStatus: campaign.status });
       }

@@ -12,11 +12,14 @@ const read = (rel: string): string =>
 describe('the match card (EventCard)', () => {
   const source = read('./components/EventCard.tsx');
 
-  it('renders the positioning CTA DISABLED with « Bientôt disponible » (EV3 seam, CF-Q1 idiom)', () => {
-    expect(source).toContain('disabled');
+  // EV3 — the disabled-CTA pin FLIPS: the parcours is live. « Je me positionne » creates the
+  // positioning draft and opens the 3 steps; only a Terminé match keeps a disabled CTA.
+  it('the positioning CTA is LIVE (EV3): creates the draft and opens the parcours', () => {
     expect(source).toContain('POSITIONNE_CTA');
-    expect(source).toContain('POSITIONNE_SOON');
-    expect(source).not.toContain('onClick={() => navigate'); // the CTA goes nowhere yet
+    expect(source).toContain('usePositionner');
+    expect(source).toContain('/evenements/positionnement/');
+    expect(source).not.toContain('POSITIONNE_SOON'); // « Bientôt disponible » retired with the pin
+    expect(source).toContain("event.statut !== 'termine'"); // a finished match is not positionable
   });
 
   it('badges suggested cards and shows the window line on every card', () => {

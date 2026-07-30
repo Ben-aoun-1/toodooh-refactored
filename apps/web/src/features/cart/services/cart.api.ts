@@ -1,4 +1,5 @@
 import type { CampaignView } from '@/features/campaigns/services/campaigns.api';
+import type { EventItemView } from '@/features/events/services/events.api';
 import { apiClient } from '@/lib/api-client';
 
 /**
@@ -10,6 +11,8 @@ import { apiClient } from '@/lib/api-client';
 
 export interface CartItemView extends CampaignView {
   added_at: string;
+  /** EV3 — the positioned match + its DERIVED window (null on classic campaign items). */
+  event: EventItemView | null;
 }
 
 export interface CartRead {

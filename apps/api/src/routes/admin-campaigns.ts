@@ -268,7 +268,11 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
     }
     return reply.status(200).send({
       campaign: adminCampaignView(activated, contentValidationStatus),
-      ...planView(outcome.plan, outcome.allocations),
+      // EV3 — an event positioning activates with NO plan (the phasing boundary: bloc dispatch
+      // is EV4); classic campaigns keep the byte-identical planView spread.
+      ...(outcome.plan === null
+        ? { plan: null, allocations: [] }
+        : planView(outcome.plan, outcome.allocations)),
     });
   });
 

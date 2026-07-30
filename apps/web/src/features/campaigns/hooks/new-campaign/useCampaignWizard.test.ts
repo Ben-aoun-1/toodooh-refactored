@@ -48,6 +48,7 @@ function fakeCampaign(overrides: Partial<CampaignView> = {}): CampaignView {
     id: 'cmp-1',
     name: 'Demo campaign',
     campaign_type: 'standard',
+    event_id: null,
     status: 'draft',
     start_date: '2026-07-01',
     end_date: '2026-07-15',

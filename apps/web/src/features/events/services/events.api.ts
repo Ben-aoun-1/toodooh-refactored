@@ -35,7 +35,22 @@ export interface SuggestMatchInput {
   kickoff_time: string;
 }
 
+/** EV3 — the parcours entry's response (the created positioning DRAFT row). */
+export interface PositioningCreatedView {
+  id: string;
+  event_id: string;
+  name: string;
+  campaign_type: string;
+  status: string;
+  start_date: string | null;
+  end_date: string | null;
+}
+
 export const eventsApi = {
+  /** EV3 — « Je me positionne »: create the positioning draft (409 annulé/terminé). */
+  positionner(eventId: string): Promise<PositioningCreatedView> {
+    return apiClient.post(`/events/${eventId}/positionner`, {});
+  },
   catalogue(): Promise<{ events: EventItemView[] }> {
     return apiClient.get('/events');
   },
