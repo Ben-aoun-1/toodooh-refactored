@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, lte, notInArray, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, lte, ne, notInArray, sql } from 'drizzle-orm';
 
 import { type DrizzleDb } from '../../db/client.js';
 import {
@@ -6,6 +6,7 @@ import {
   campaignDispatchPlan,
   campaignTargeting,
   campaignZones,
+  campaigns,
   hourReservations,
   screenhostAffluence,
   screenhostUnavailability,
@@ -73,6 +74,9 @@ export interface AssemblePoolInputs {
 export interface AssemblePoolResult {
   windowDays: WindowDay[];
   pool: PoolEntry[];
+  /** CF-HF4 — candidates that matched targeting/zones/hours BEFORE capacity/day exclusions.
+   *  0 = the targeting matches nothing; > 0 with an empty pool = saturated inventory. */
+  candidateCount: number;
 }
 
 export const assemblePool = async (
@@ -257,6 +261,20 @@ export const assemblePool = async (
     reservedBySh.set(r.screenhostId, set);
   }
 
+  // CF-HF4 — the engagement query is WINDOW-OVERLAP-AWARE and terminal-releasing. As found it
+  // had NO filter at all: every allocation ever written (any statut incl. REFUSE, any campaign
+  // status incl. completed, ANY window) engaged forever — accumulated history collapsed every
+  // venue's residual and produced the r_i=1 anti-concentration fingerprint (a September draft
+  // priced against July engagements). Now an allocation engages iff:
+  //   - its campaign's [start, end] INTERSECTS the priced window (per-WINDOW granularity: a
+  //     partial overlap engages its full r_i×S for the whole window — per-day engagement would
+  //     need per-day R_eff plumbing through the fill loop, out of this lane's charter; the
+  //     per-window read is conservative, never overselling);
+  //   - the allocation is not REFUSE (a refusal is terminal — it will never air);
+  //   - the campaign is not ended/settled (completed/rejected engage nothing forward — the
+  //     belt over the overlap test for early-completed campaigns).
+  // EN_ATTENTE within-window still engages (the as-found rule, kept: an undecided allocation
+  // may yet air, so its seconds stay held).
   const engagementRows = candidateIds.length
     ? await executor
         .select({
@@ -269,13 +287,18 @@ export const assemblePool = async (
           campaignDispatchPlan,
           eq(campaignDispatchAllocation.planId, campaignDispatchPlan.id),
         )
+        .innerJoin(campaigns, eq(campaignDispatchPlan.campaignId, campaigns.id))
         .where(
-          excludedAllocationIds.length === 0
-            ? inArray(campaignDispatchAllocation.screenhostId, candidateIds)
-            : and(
-                inArray(campaignDispatchAllocation.screenhostId, candidateIds),
-                notInArray(campaignDispatchAllocation.id, excludedAllocationIds),
-              ),
+          and(
+            inArray(campaignDispatchAllocation.screenhostId, candidateIds),
+            ne(campaignDispatchAllocation.statutAcceptation, 'REFUSE'),
+            notInArray(campaigns.status, ['completed', 'rejected']),
+            lte(campaigns.startDate, windowEnd),
+            gte(campaigns.endDate, windowStart),
+            ...(excludedAllocationIds.length === 0
+              ? []
+              : [notInArray(campaignDispatchAllocation.id, excludedAllocationIds)]),
+          ),
         )
     : [];
 
@@ -381,5 +404,5 @@ export const assemblePool = async (
     windowStart,
     windowEnd,
   });
-  return { windowDays, pool };
+  return { windowDays, pool, candidateCount: candidates.length };
 };

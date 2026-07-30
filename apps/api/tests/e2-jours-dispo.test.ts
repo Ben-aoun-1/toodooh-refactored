@@ -315,9 +315,10 @@ describe('E2 — jours_dispo_i (real Postgres)', () => {
         { id: f.campaignId, name: 'E2', startDate: MON, endDate: TUE },
         { iCible: 10_000, cpm: 15, s: 10 },
       );
-      // An EMPTY pool maps to TOO_THIN by the engine's existing clôture semantics (buildPlan:
-      // pool.length === 0 → isTooThin) — the refusal, not its label, is the US-2.1 requirement.
-      expect(result.status).toBe('TOO_THIN');
+      // CF-HF4 — an EMPTY pool now refuses as NO_ELIGIBLE (saturated: the venue matched the
+      // targeting but had no available day) — the refusal, not its label, is the US-2.1
+      // requirement; the label finally says why.
+      expect(result.status).toBe('NO_ELIGIBLE');
     });
 
     it('C_max shrinks with the declaration — the pinned delta (540 → 270)', async () => {

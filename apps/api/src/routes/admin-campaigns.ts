@@ -6,6 +6,7 @@ import { db } from '../db/client.js';
 import { type Campaign, campaigns, creatives } from '../db/schema.js';
 import { activateCampaign } from '../lib/activation-service.js';
 import { cpmForCampaign, getDispatchConfig } from '../lib/dispatch/config.js';
+import { pushPlaylistToCampaignVenues } from '../lib/playout/push.js';
 import { walletBalance } from '../lib/recharges.js';
 import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
 
@@ -240,11 +241,14 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
           n_max: outcome.nMax,
         });
       }
+      // CF-HF4 — saturated inventory speaks differently from an empty targeting match.
       return reply.status(422).send({
         error: 'NOT_DELIVERABLE',
-        reason: 'no_eligible',
+        reason: outcome.reason,
         message:
-          'Aucun établissement éligible n’a pu être alloué. Ajustez le ciblage ou la période, puis réessayez.',
+          outcome.reason === 'saturated'
+            ? 'Inventaire momentanément saturé sur ce ciblage — réessayez avec une autre période.'
+            : 'Aucun établissement éligible n’a pu être alloué. Ajustez le ciblage ou la période, puis réessayez.',
       });
     }
     if (outcome.status === 'PLAN_MISSING') {
@@ -254,6 +258,14 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const activated = outcome.campaign;
+    // CF-HF4 — re-push the plan's venues (their playlists include the campaign the moment its
+    // allocations flip ACCEPTE; today's fresh allocations are EN_ATTENTE so this is usually a
+    // no-op recompute — kept for the reactivation/carry-over paths). Failure never blocks.
+    try {
+      await pushPlaylistToCampaignVenues(activated.id, request.log);
+    } catch (err) {
+      request.log.warn({ err, campaignId: activated.id }, 'playlist re-push on activate failed');
+    }
     return reply.status(200).send({
       campaign: adminCampaignView(activated, contentValidationStatus),
       ...planView(outcome.plan, outcome.allocations),

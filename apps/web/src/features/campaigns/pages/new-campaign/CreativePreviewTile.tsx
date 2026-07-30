@@ -16,7 +16,7 @@ interface CreativePreviewTileProps {
 /**
  * A 16:9 preview tile for the linked creative on the Validation step. A video shows its poster frame
  * with a centered play overlay (title bottom-left, duration bottom-right, as mocked) — clicking plays
- * it inline with native controls, so the overlay is honest, not decorative. A photo fills the tile.
+ * it inline with native controls, so the overlay is honest, not decorative. Media is CONTAINED (CF-HF4).
  * The media URL is the existing presigned read (no new player dependency).
  */
 export default function CreativePreviewTile({
@@ -43,10 +43,11 @@ export default function CreativePreviewTile({
   if (creativeType === 'photo') {
     return (
       <div className={shellClass}>
+        {/* CF-HF4 — contained, never cropped/stretched: the 16:9 shell letterboxes any ratio. */}
         <img
           src={url}
           alt={title ?? 'Création'}
-          className="absolute inset-0 h-full w-full object-cover"
+          className="absolute inset-0 h-full w-full object-contain"
         />
       </div>
     );
@@ -69,7 +70,7 @@ export default function CreativePreviewTile({
         controls={playing}
         onPause={() => setPlaying(false)}
         onEnded={() => setPlaying(false)}
-        className="absolute inset-0 h-full w-full object-cover"
+        className="absolute inset-0 h-full w-full object-contain"
       />
       {!playing && (
         <button

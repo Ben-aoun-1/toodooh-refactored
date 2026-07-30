@@ -1,4 +1,4 @@
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
@@ -45,10 +45,26 @@ export const adminCreativesRoutes: FastifyPluginAsync = async (app) => {
       });
     }
     const { status } = parsedQuery.data;
+    // CF-HF4 — validation happens at PANIER-ADD, not upload: a pending creative enters the queue
+    // only once SOME campaign linking it has reached the cart (or gone beyond draft — a submitted
+    // campaign's spot stays reviewable even after the cart clears). The stored state machine is
+    // untouched (uploads still write 'pending'; the enum can't grow without a migration) — the
+    // "unsubmitted" phase is DERIVED from the campaign linkage, so no backfill is needed and the
+    // CF-SK1 hash-inherit path (instant 'approved', never queued) is unaffected. Approved and
+    // rejected rows list unconditionally (they were decided — history stays visible).
+    const submittedGate = sql`(
+      ${creatives.validationStatus} <> 'pending'
+      OR EXISTS (
+        SELECT 1 FROM campaigns c
+        LEFT JOIN cart_items ci ON ci.campaign_id = c.id
+        WHERE c.creative_id = ${creatives.id}
+          AND (ci.id IS NOT NULL OR c.status <> 'draft')
+      )
+    )`;
     const rows = await db
       .select()
       .from(creatives)
-      .where(status ? eq(creatives.validationStatus, status) : undefined)
+      .where(status ? and(eq(creatives.validationStatus, status), submittedGate) : submittedGate)
       .orderBy(desc(creatives.createdAt));
     return reply.status(200).send(rows.map(adminCreativeView));
   });

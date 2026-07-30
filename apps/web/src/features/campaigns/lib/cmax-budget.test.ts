@@ -4,7 +4,9 @@ import {
   BUDGET_FLOOR_ERROR,
   CAMPAIGN_BUDGET_FLOOR_TND,
   CMAX_PULLBACK_NOTICE,
+  CMAX_SATURATED_STATE,
   CMAX_ZERO_STATE,
+  cmaxZeroStateMessage,
   clampBudgetToCmax,
   cmaxHelperLine,
   isBudgetBelowMinimum,
@@ -85,6 +87,17 @@ describe('the French copy (pinned)', () => {
     expect(CMAX_PULLBACK_NOTICE).toBe('Le budget a été ajusté à l’inventaire disponible.');
     expect(CMAX_ZERO_STATE).toBe(
       'Aucun inventaire disponible pour ce ciblage — élargissez vos catégories ou zones.',
+    );
+  });
+});
+
+describe('cmaxZeroStateMessage — the CF-HF4 saturated/empty split', () => {
+  it('matching-but-saturated venues speak the saturated line; nothing-matches keeps the old line', () => {
+    expect(cmaxZeroStateMessage(3)).toBe(CMAX_SATURATED_STATE);
+    expect(cmaxZeroStateMessage(0)).toBe(CMAX_ZERO_STATE);
+    expect(cmaxZeroStateMessage(undefined)).toBe(CMAX_ZERO_STATE);
+    expect(CMAX_SATURATED_STATE).toBe(
+      'Inventaire momentanément saturé sur ce ciblage — réessayez avec une autre période.',
     );
   });
 });

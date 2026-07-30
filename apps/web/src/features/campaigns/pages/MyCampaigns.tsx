@@ -692,11 +692,6 @@ export default function MyCampaigns() {
                           <p className="text-base font-bold text-gray-900 tabular-nums mt-0.5">
                             {formatImpressions(imp.prevues)}
                           </p>
-                          {imp.showValidees && (
-                            <p className="text-xs text-gray-500 tabular-nums">
-                              validées : {formatImpressions(imp.validees)}
-                            </p>
-                          )}
                         </div>
                       </div>
                     );
@@ -883,11 +878,6 @@ export default function MyCampaigns() {
                         </td>
                         <td className="px-5 py-3.5 text-sm text-gray-900 tabular-nums">
                           <div>Prévues : {formatImpressions(imp.prevues)}</div>
-                          {imp.showValidees && (
-                            <div className="text-xs text-gray-500">
-                              Validées : {formatImpressions(imp.validees)}
-                            </div>
-                          )}
                         </td>
                         <td className="px-5 py-3.5 text-right">
                           <div className="relative flex justify-end">

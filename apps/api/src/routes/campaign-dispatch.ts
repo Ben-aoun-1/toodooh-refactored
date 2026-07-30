@@ -132,11 +132,13 @@ export const campaignDispatchRoutes: FastifyPluginAsync = async (app) => {
       });
     }
     if (result.status === 'NO_ELIGIBLE') {
+      // CF-HF4 — saturated ≠ empty targeting on this surface too.
       return reply.status(422).send({
         error: 'NOT_DELIVERABLE',
-        reason: 'no_eligible',
-        message:
-          'No eligible screenhost could be allocated. Adjust targeting/window, then re-dispatch.',
+        reason: result.saturated ? 'saturated' : 'no_eligible',
+        message: result.saturated
+          ? 'Inventaire momentanément saturé sur ce ciblage — réessayez avec une autre période.'
+          : 'No eligible screenhost could be allocated. Adjust targeting/window, then re-dispatch.',
       });
     }
 

@@ -34,7 +34,7 @@ export type DispatchResult =
   | { status: 'NO_WINDOW' }
   | { status: 'ALREADY_DISPATCHED' }
   | { status: 'TOO_THIN'; nMin: number; nMax: number }
-  | { status: 'NO_ELIGIBLE' }
+  | { status: 'NO_ELIGIBLE'; saturated: boolean }
   | { status: 'OK'; plan: CampaignDispatchPlan; allocationCount: number };
 
 // Assemble the eligible pool from the DB, run the pure pipeline, and persist the frozen plan
@@ -76,7 +76,7 @@ export const runDispatch = async (
     .transaction(async (tx): Promise<DispatchResult> => {
       // E3 — the pool assembly + occupancy netting live in assemblePool (shared with the refusal
       // cascade and later redispatch); dispatch runs it with no exclusions.
-      const { windowDays, pool } = await assemblePool(
+      const { windowDays, pool, candidateCount } = await assemblePool(
         tx,
         { id: campaign.id, startDate, endDate },
         { s: inputs.s, t, fMaxSeconds: config.fMaxSeconds },
@@ -101,8 +101,13 @@ export const runDispatch = async (
       // plan — do NOT freeze it. Freezing an empty plan + the unique index would lock the campaign
       // forever; instead return the clôture alert so the advertiser can adjust the cursor / targeting
       // and re-dispatch (renvoi curseur). A genuine PARTIAL (nRetenus>0, not too-thin) IS delivered → frozen.
+      // CF-HF4 — an EMPTY pool is an INVENTORY refusal, not a materiality one: candidates
+      // existed but every one fell to capacity/days (saturated — « réessayez avec une autre
+      // période ») vs the targeting matching nothing at all. TOO_THIN keeps meaning what its
+      // message says (N_min > N_max on a real pool).
+      if (pool.length === 0) return { status: 'NO_ELIGIBLE', saturated: candidateCount > 0 };
       if (built.isTooThin) return { status: 'TOO_THIN', nMin: built.nMin, nMax: built.nMax };
-      if (built.nRetenus === 0) return { status: 'NO_ELIGIBLE' };
+      if (built.nRetenus === 0) return { status: 'NO_ELIGIBLE', saturated: candidateCount > 0 };
 
       // LOG1 — the SÉLECTION outcome, read post-hoc from the built plan (selection/plan stay pure
       // and untouched): each placement with its venue/impressions/value, the stored reliquat, and

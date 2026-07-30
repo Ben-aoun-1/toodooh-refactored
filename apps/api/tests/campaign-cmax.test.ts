@@ -234,21 +234,36 @@ describe('E5 — GET /api/campaigns/:id/cmax + the submit C_max gate (real Postg
     mockSession(f.advertiser);
     const res = await getCmax(f.campaignId);
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ c_max_tnd: 540, i_max_facturable: 36_000, eligible_count: 1 });
+    expect(res.json()).toEqual({
+      c_max_tnd: 540,
+      i_max_facturable: 36_000,
+      eligible_count: 1,
+      targeted_count: 1,
+    });
   });
 
   it('two venues sum: I_max = 72 000 → C_max = 1 080, eligible_count 2', async () => {
     const f = await fullFixture({ venues: 2 });
     mockSession(f.advertiser);
     const res = await getCmax(f.campaignId);
-    expect(res.json()).toEqual({ c_max_tnd: 1080, i_max_facturable: 72_000, eligible_count: 2 });
+    expect(res.json()).toEqual({
+      c_max_tnd: 1080,
+      i_max_facturable: 72_000,
+      eligible_count: 2,
+      targeted_count: 2,
+    });
   });
 
   it('FLOORS to whole TND: affluence 77 → I_max ⌊46 200×0.6⌋ = 27 720 → C_max ⌊415,8⌋ = 415', async () => {
     const f = await fullFixture({ affluence: 77 });
     mockSession(f.advertiser);
     const res = await getCmax(f.campaignId);
-    expect(res.json()).toEqual({ c_max_tnd: 415, i_max_facturable: 27_720, eligible_count: 1 });
+    expect(res.json()).toEqual({
+      c_max_tnd: 415,
+      i_max_facturable: 27_720,
+      eligible_count: 1,
+      targeted_count: 1,
+    });
   });
 
   // ── engagement netting (the dispatch-truth requirement) ────────────────────
@@ -259,7 +274,12 @@ describe('E5 — GET /api/campaigns/:id/cmax + the submit C_max gate (real Postg
     await seedEngagement(f.advertiser, f.venueIds[0] ?? '', 15);
     mockSession(f.advertiser);
     const res = await getCmax(f.campaignId);
-    expect(res.json()).toEqual({ c_max_tnd: 270, i_max_facturable: 18_000, eligible_count: 1 });
+    expect(res.json()).toEqual({
+      c_max_tnd: 270,
+      i_max_facturable: 18_000,
+      eligible_count: 1,
+      targeted_count: 1,
+    });
   });
 
   // ── scoping ────────────────────────────────────────────────────────────────
@@ -270,7 +290,12 @@ describe('E5 — GET /api/campaigns/:id/cmax + the submit C_max gate (real Postg
     await seedVenue(f.owner, otherSector); // eligible venue, wrong sector
     mockSession(f.advertiser);
     const res = await getCmax(f.campaignId);
-    expect(res.json()).toEqual({ c_max_tnd: 540, i_max_facturable: 36_000, eligible_count: 1 });
+    expect(res.json()).toEqual({
+      c_max_tnd: 540,
+      i_max_facturable: 36_000,
+      eligible_count: 1,
+      targeted_count: 1,
+    });
   });
 
   it('zones scope the pool: with a targeted zone, only venues IN it count', async () => {
@@ -286,7 +311,12 @@ describe('E5 — GET /api/campaigns/:id/cmax + the submit C_max gate (real Postg
     mockSession(f.advertiser);
     const res = await getCmax(f.campaignId);
     // Only the in-zone venue: the zone-less venue is filtered out.
-    expect(res.json()).toEqual({ c_max_tnd: 540, i_max_facturable: 36_000, eligible_count: 1 });
+    expect(res.json()).toEqual({
+      c_max_tnd: 540,
+      i_max_facturable: 36_000,
+      eligible_count: 1,
+      targeted_count: 1,
+    });
   });
 
   it('E5.1 — a ZERO-LINE campaign prices the FULL network (VF US-2.1: empty = whole network)', async () => {
@@ -299,7 +329,12 @@ describe('E5 — GET /api/campaigns/:id/cmax + the submit C_max gate (real Postg
     const campaignId = await seedCampaign(advertiser, { creativeId }); // NO targeting rows
     mockSession(advertiser);
     const res = await getCmax(campaignId);
-    expect(res.json()).toEqual({ c_max_tnd: 1080, i_max_facturable: 72_000, eligible_count: 2 });
+    expect(res.json()).toEqual({
+      c_max_tnd: 1080,
+      i_max_facturable: 72_000,
+      eligible_count: 2,
+      targeted_count: 2,
+    });
   });
 
   it('impossible targeting still yields the zero ceiling (the FE zero-state premise holds)', async () => {
@@ -312,7 +347,12 @@ describe('E5 — GET /api/campaigns/:id/cmax + the submit C_max gate (real Postg
     await targetSector(campaignId, sectorB); // targeted sector has NO venues
     mockSession(advertiser);
     const res = await getCmax(campaignId);
-    expect(res.json()).toEqual({ c_max_tnd: 0, i_max_facturable: 0, eligible_count: 0 });
+    expect(res.json()).toEqual({
+      c_max_tnd: 0,
+      i_max_facturable: 0,
+      eligible_count: 0,
+      targeted_count: 0,
+    });
   });
 
   // ── the 409 CMAX_REQUIRES matrix ───────────────────────────────────────────

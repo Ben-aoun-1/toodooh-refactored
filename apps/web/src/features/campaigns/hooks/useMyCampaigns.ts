@@ -44,7 +44,6 @@ export interface MyCampaignRow {
   /** CF-B1 — the untrimmed wire row (the Booster modal needs targeting category_ids + zones). */
   raw: CampaignView;
   /** CF-HF3 — NULL until the admin reconcile writes delivered (null ≠ 0; renders '—'). */
-  validated_impressions: number | null;
   /** CF-HF3 — the frozen plan's placed facturable (« Impressions prévues »); null pre-plan. */
   planned_impressions: number | null;
 }
@@ -79,7 +78,6 @@ function toRow(c: CampaignView): MyCampaignRow {
     // validated stays NULL-honest — the display rule renders '—', never a fake 0.
     selected_categories: (c.targeting ?? []).map(toChipLabel),
     selected_zones: (c.zones ?? []).map((z) => z.name),
-    validated_impressions: c.delivered_impressions ?? null,
     planned_impressions: c.planned_impressions ?? null,
     raw: c,
   };

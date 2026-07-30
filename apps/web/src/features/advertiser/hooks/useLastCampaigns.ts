@@ -25,7 +25,6 @@ export interface LastCampaign {
   selected_categories: string[];
   selected_zones: string[];
   /** NULL until the admin reconcile writes delivered (null ≠ 0). */
-  validated_impressions: number | null;
   planned_impressions: number | null;
 }
 
@@ -41,7 +40,6 @@ const toLastCampaign = (c: CampaignView): LastCampaign => ({
   category: null,
   selected_categories: (c.targeting ?? []).map(toChipLabel),
   selected_zones: (c.zones ?? []).map((z) => z.name),
-  validated_impressions: c.delivered_impressions ?? null,
   planned_impressions: c.planned_impressions ?? null,
 });
 

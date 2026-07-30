@@ -33,17 +33,17 @@ interface UseDashboardStatsResult {
  * refresh.
  *
  * CF-HF3 (Mejri item 3) — the CAMPAIGN legs are live too: GET /api/campaigns/mine feeds the
- * views/budget/year buckets (views = the RECONCILED delivered impressions — « Impressions
- * générées » counts real deliveries, 0 until a settlement writes one). The old hardcoded empty
- * list (the Supabase-era stub) is retired. A campaigns-fetch error degrades to the empty list,
- * mirroring the balance leg.
+ * views/budget/year buckets. CF-HF4 (Kais) — the advertiser dashboard is PRÉVUES-ONLY like every
+ * cast surface: views = the frozen plan's planned impressions (0 until a plan exists — the
+ * delivered numbers stay host-side). The old hardcoded empty list (the Supabase-era stub) is
+ * retired. A campaigns-fetch error degrades to the empty list, mirroring the balance leg.
  */
 async function fetchDashboardStats(): Promise<DashboardStatsResult> {
   let campaigns: DashboardStatsCampaignRow[] = [];
   try {
     campaigns = (await campaignsApi.mine()).map((c) => ({
       status: c.status,
-      views: c.delivered_impressions ?? 0,
+      views: c.planned_impressions ?? 0,
       budget: c.requested_budget,
       created_at: c.created_at,
     }));

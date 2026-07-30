@@ -2,6 +2,7 @@ import { SlidersHorizontal } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
 import { toast } from 'react-hot-toast';
 
+import ScreenhostLiveness from '@/features/admin/components/ScreenhostLiveness';
 import ScreenhostSpsBreakdown from '@/features/admin/components/ScreenhostSpsBreakdown';
 import { useUpdateScreenhostEligibility } from '@/features/admin/hooks/useAdminScreenhostEligibility';
 import {
@@ -122,6 +123,9 @@ export default function ScreenhostEligibilityCard({
       {/* E4 — the SPS insight beside the readiness badge (read-only; the operator/Mejri read it
           during testing). */}
       <ScreenhostSpsBreakdown screenhostId={screenhost.id} />
+
+      {/* CF-HF4 — the LIVE devices line (« N écran(s) » + state chip, the E6 heartbeat truth). */}
+      <ScreenhostLiveness screenhostId={screenhost.id} />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>

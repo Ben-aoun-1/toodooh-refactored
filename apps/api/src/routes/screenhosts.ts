@@ -30,6 +30,7 @@ import { getDispatchConfig } from '../lib/dispatch/config.js';
 import { REDISPATCH_HEARTBEAT_TOLERANCE_MS } from '../lib/dispatch/redispatch.js';
 import { buildEligibilityPatch } from '../lib/eligibility-patch.js';
 import { createEngineTrace, type EngineTrace } from '../lib/engine-journal/trace.js';
+import { pushPlaylistToVenue } from '../lib/playout/push.js';
 import { assembleReportData } from '../lib/report/assemble.js';
 import { pistesForReportCached } from '../lib/report/recommendations.js';
 import { renderPdf } from '../lib/report/render.js';
@@ -1130,6 +1131,43 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
+  // GET /api/admin/screenhosts/:id/devices — CF-HF4: the venue's screens with REAL liveness for
+  // the admin surface (the SAME truth as the owner read: last_seen_at within E6's heartbeat
+  // tolerance → connected). The legacy ScreenManagement "En ligne" indicator reads the Supabase-era
+  // hub tables — this is the live wire the eligibility card renders instead.
+  app.get('/api/admin/screenhosts/:id/devices', adminGuard, async (request, reply) => {
+    const parsedParams = idParamSchema.safeParse(request.params);
+    if (!parsedParams.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: [{ field: 'id', reason: 'must be a uuid' }],
+      });
+    }
+    const rows = await db
+      .select({
+        id: screens.id,
+        name: screens.name,
+        lastSeenAt: screens.lastSeenAt,
+        pairedAt: screens.pairedAt,
+      })
+      .from(screens)
+      .where(eq(screens.screenhostId, parsedParams.data.id))
+      .orderBy(asc(screens.name));
+    const now = Date.now();
+    return reply.status(200).send(
+      rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        last_seen_at: row.lastSeenAt,
+        connected:
+          row.lastSeenAt !== null &&
+          now - row.lastSeenAt.getTime() <= REDISPATCH_HEARTBEAT_TOLERANCE_MS,
+        paired_at: row.pairedAt,
+      })),
+    );
+  });
+
   // PATCH /api/admin/screenhosts/:id/eligibility — admin sets category/class/horaires/capacity
   // (null clears a field). A non-null category must be a real OWNER business sector (the same source
   // L-target matches against). SPS is not settable (defaulted; computation deferred).
@@ -1498,6 +1536,18 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         request.log.warn(
           { err, screenhostId: outcome.screenhostId },
           'SPS on-decision recompute failed',
+        );
+      }
+    }
+    // CF-HF4 — an ACCEPTE flip makes content airable NOW: re-push the venue's playlist to its
+    // connected screens (no reconnect wait). Failure-warn: a dead socket never breaks the flip.
+    if (outcome.changed && statut === 'ACCEPTE') {
+      try {
+        await pushPlaylistToVenue(outcome.screenhostId, request.log);
+      } catch (err) {
+        request.log.warn(
+          { err, screenhostId: outcome.screenhostId },
+          'playlist re-push on accept failed',
         );
       }
     }

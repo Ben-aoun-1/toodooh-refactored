@@ -5,7 +5,6 @@ import Drawer from '@/components/Drawer';
 import { rejectReasonToShow } from '@/features/campaigns/lib/campaign-actions';
 import {
   PREVUES_LABEL,
-  VALIDEES_LABEL,
   formatImpressions,
   type ImpressionsDisplay,
 } from '@/features/campaigns/lib/campaign-impressions';
@@ -26,7 +25,6 @@ export interface CampaignDrawerCampaign {
   selected_categories?: string[];
   category?: string;
   selected_zones?: string[];
-  validated_impressions?: number | null;
   /** CF-Q1 — the admin's mandatory rejection reason (advertiser, « Non validé » campaigns). */
   reject_reason?: string | null;
   // owner-only
@@ -218,20 +216,13 @@ export default function CampaignDrawer({
             </div>
           </Section>
 
-          {/* CF-HF3 (Mejri item 3) — the display rule: prévues always; validées only once the
-              campaign is Active/Passée; '—' for a not-yet value, never a fake 0. */}
+          {/* CF-HF4 (Kais) — the advertiser side is PRÉVUES-ONLY ('—' for a not-yet value,
+              never a fake 0); the delivered numbers stay a host-side read. */}
           <Section label={PREVUES_LABEL}>
             <div className="text-sm font-semibold text-[#171717]">
               {formatImpressions(impressions?.prevues ?? null)}
             </div>
           </Section>
-          {impressions?.showValidees && (
-            <Section label={VALIDEES_LABEL}>
-              <div className="text-sm font-semibold text-[#171717]">
-                {formatImpressions(impressions.validees)}
-              </div>
-            </Section>
-          )}
 
           <Section label="Zones géographiques">
             <div
