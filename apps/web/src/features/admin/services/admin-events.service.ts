@@ -36,6 +36,16 @@ export interface EventTarificationView {
   }[];
 }
 
+/** EV5 — one venue's respect verdict for an event; `respecte: null` = not attested = RESPECTÉ. */
+export interface EventAttestationRow {
+  screenhost_id: string;
+  screenhost_name: string;
+  statut: string;
+  respecte: boolean | null;
+  note: string | null;
+  attested_at: string | null;
+}
+
 export const adminEventsService = {
   list(): Promise<{ events: AdminEventView[] }> {
     return apiClient.get('/admin/events');
@@ -49,8 +59,38 @@ export const adminEventsService = {
   update(id: string, patch: UpsertEventInput): Promise<EventItemView> {
     return apiClient.patch(`/admin/events/${id}`, patch);
   },
-  annuler(id: string): Promise<EventItemView & { annule: boolean }> {
+  /**
+   * EV5 (R4) — annuler now also closes the money: the response reports how many positionings were
+   * voided and the TOTAL refunded (« remboursement intégral »).
+   */
+  annuler(id: string): Promise<
+    EventItemView & {
+      annule: boolean;
+      positionnements_annules: number;
+      remboursement_tnd: number;
+    }
+  > {
     return apiClient.post(`/admin/events/${id}/annuler`);
+  },
+  /** EV5 (R4) — reporter: move the match; positionings, blocs and reservations are recalculated. */
+  reporter(
+    id: string,
+    input: { kickoff_at: string; ends_at?: string },
+  ): Promise<
+    EventItemView & { positionnements_recalcules: number; allocations_recalculees: number }
+  > {
+    return apiClient.post(`/admin/events/${id}/reporter`, input);
+  },
+  /** EV5 — the respect verdicts per allocated venue (null respecte = not attested = respecté). */
+  attestations(id: string): Promise<EventAttestationRow[]> {
+    return apiClient.get(`/admin/events/${id}/attestations`);
+  },
+  attest(
+    id: string,
+    screenhostId: string,
+    body: { respecte: boolean; note?: string | null },
+  ): Promise<EventAttestationRow> {
+    return apiClient.put(`/admin/events/${id}/attestations/${screenhostId}`, body);
   },
   uploadImage(id: string, file: File): Promise<EventItemView> {
     const form = new FormData();

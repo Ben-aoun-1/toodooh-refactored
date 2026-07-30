@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { db } from '../db/client.js';
 import {
   type Campaign,
+  campaignReconciliation,
   campaigns,
   creatives,
   eventAllocations,
@@ -12,6 +13,7 @@ import {
 } from '../db/schema.js';
 import { activateCampaign } from '../lib/activation-service.js';
 import { cpmForCampaign, getDispatchConfig } from '../lib/dispatch/config.js';
+import { measureEventDelivery } from '../lib/event-playout/settlement.js';
 import { pushPlaylistToCampaignVenues } from '../lib/playout/push.js';
 import { walletBalance } from '../lib/recharges.js';
 import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
@@ -38,8 +40,11 @@ import { planView } from './campaign-dispatch.js';
 // budget (the funding gate) = requested_budget, the advertiser's stated ask.
 
 const idParamSchema = z.object({ id: z.uuid() });
+// EV5 RIDER (chartered at EV4 ratification) — the queue filter reached only four statuses, so a
+// DISPATCHED positioning (À venir until its window day, then Terminée once settled) was
+// unreachable in the examen. Both stored statuses join the allowlist; the web adds their options.
 const listQuerySchema = z.object({
-  status: z.enum(['draft', 'pending', 'active', 'rejected']).optional(),
+  status: z.enum(['draft', 'pending', 'upcoming', 'active', 'completed', 'rejected']).optional(),
 });
 const rejectBodySchema = z.object({ reason: z.string().trim().min(1).max(2000) });
 
@@ -110,7 +115,11 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
   app.get('/api/admin/campaigns', adminGuard, async (request, reply) => {
     const parsedQuery = listQuerySchema.safeParse(request.query);
     if (!parsedQuery.success) {
-      return invalidField(reply, 'status', 'must be draft, pending, active or rejected');
+      return invalidField(
+        reply,
+        'status',
+        'must be draft, pending, upcoming, active, completed or rejected',
+      );
     }
     const { status } = parsedQuery.data;
     const config = await getDispatchConfig();
@@ -309,6 +318,7 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
     const rows = await db
       .select({
         id: eventAllocations.id,
+        screenhostId: eventAllocations.screenhostId,
         screenhostName: screenhosts.name,
         blocs: eventAllocations.blocs,
         impressionsTotal: eventAllocations.impressionsTotal,
@@ -320,17 +330,53 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
       .innerJoin(screenhosts, eq(eventAllocations.screenhostId, screenhosts.id))
       .where(eq(eventAllocations.campaignId, parsedParams.data.id))
       .orderBy(desc(eventAllocations.createdAt));
-    return reply.status(200).send(
-      rows.map((r) => ({
-        id: r.id,
-        screenhost_name: r.screenhostName,
-        blocs_count: Array.isArray(r.blocs) ? r.blocs.length : 0,
-        impressions_total: r.impressionsTotal,
-        montant_tnd: Number(r.montantTnd),
-        statut: r.statut,
-        decided_at: r.decidedAt,
-      })),
-    );
+
+    // EV5 — the settlement summary rides the same read (derived per venue, nothing stored).
+    const [positioning] = await db
+      .select({ id: campaigns.id, eventId: campaigns.eventId })
+      .from(campaigns)
+      .where(eq(campaigns.id, parsedParams.data.id))
+      .limit(1);
+    const [settled] = await db
+      .select({
+        refundTnd: campaignReconciliation.refundTnd,
+        spendTnd: campaignReconciliation.spendTnd,
+        settledAt: campaignReconciliation.reconciledAt,
+      })
+      .from(campaignReconciliation)
+      .where(eq(campaignReconciliation.campaignId, parsedParams.data.id))
+      .limit(1);
+    const measured =
+      settled && positioning?.eventId
+        ? await measureEventDelivery(positioning.id, positioning.eventId)
+        : null;
+
+    return reply.status(200).send({
+      allocations: rows.map((r) => {
+        const line = measured?.venues.find((v) => v.screenhostId === r.screenhostId) ?? null;
+        return {
+          id: r.id,
+          screenhost_name: r.screenhostName,
+          blocs_count: Array.isArray(r.blocs) ? r.blocs.length : 0,
+          impressions_total: r.impressionsTotal,
+          montant_tnd: Number(r.montantTnd),
+          statut: r.statut,
+          decided_at: r.decidedAt,
+          blocs_delivered: line?.blocsDelivered ?? null,
+          delivered_tnd: line?.deliveredTnd ?? null,
+          refund_tnd: line?.refundTnd ?? null,
+          attestation_negated: line?.attestationNegated ?? null,
+        };
+      }),
+      settlement:
+        settled === undefined
+          ? null
+          : {
+              settled_at: settled.settledAt,
+              delivered_tnd: Number(settled.spendTnd),
+              refund_tnd: Number(settled.refundTnd),
+            },
+    });
   });
 
   // POST /api/admin/campaigns/:id/reject { reason } — pending → rejected; a reason is REQUIRED and is

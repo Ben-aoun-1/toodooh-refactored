@@ -9,6 +9,8 @@ import { env } from './env.js';
 import { buildErrorHandler, buildNotFoundHandler } from './error-handler.js';
 import { startCampaignLifecycleJob } from './lib/campaign-lifecycle.js';
 import { startCampaignRedispatchJob } from './lib/campaign-redispatch.js';
+import { startBlocPushJob } from './lib/event-playout/bloc-pusher.js';
+import { startEventSettlementJob } from './lib/event-playout/settlement.js';
 import { isMediaProbeEnabled } from './lib/media-probe.js';
 import { startMonthlyBillingJob } from './lib/monthly-billing.js';
 import { startMonthlyReportJob } from './lib/report/monthly-job.js';
@@ -108,6 +110,13 @@ const start = async (): Promise<void> => {
     // from the four ruled variables and written to screenhosts.sps (the value dispatch ordering
     // reads). The flat-50 era ends on the first boot after this deploys.
     startSpsRecomputeJob(app.log);
+    // EV5 — the event bloc pusher (per-minute): an event spot must appear on the venue's playlist
+    // AT its bloc start and disappear at its bloc end, without waiting for a reconnect.
+    startBlocPushJob(app.log);
+    // EV5 — the event settlement sweep (boot + hourly): once a diffusion window closes, measure
+    // every (venue, bloc) on the dual proof and refund the undelivered chargeable value. AFTER
+    // the pusher so a window that closed during downtime settles in the same boot sequence.
+    startEventSettlementJob(app.log);
 
     // R2 — AI report recommendations: ONE boot warning when the key is unprovisioned (the
     // wedooh-sync degradation pattern); every report gracefully keeps the generic pistes.

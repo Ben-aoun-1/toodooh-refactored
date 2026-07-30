@@ -259,8 +259,13 @@ describe('E4 — the SPS score engine (real Postgres)', () => {
     });
   });
 
-  describe('respect des événements — the constant default', () => {
-    it('is 100 BY RULE until EV5 ships attestation data (pinned AS the default rule)', async () => {
+  describe('respect des événements — the DEFAULT RULE (EV5 made the variable real)', () => {
+    // THE SANCTIONED EDIT (EV5): the variable now reads event_attestations (attested-true ÷
+    // attested, trailing 90 d), so "constant 100" is no longer what it means. What survives — and
+    // what this pin now asserts — is the RULE the constant stood for: a venue with NO attestation
+    // scores 100, because an uninspected venue must never be sanctioned. The graded matrix
+    // (negative → 0, mixed → the average) lives in the EV5 suite.
+    it('a venue with NO attestation scores 100 BY RULE (absent = respected)', async () => {
       const { shId } = await seedVenue();
       expect(EVENT_RESPECT_DEFAULT).toBe(100);
       expect((await computeSps(shId, NOW)).variables.respect_evenements).toBe(100);
