@@ -54,6 +54,7 @@ import {
 import { campaignStatusUi } from '@/features/campaigns/lib/campaign-status';
 import type { CampaignView } from '@/features/campaigns/services/campaigns.api';
 import { useWizardResumeStore } from '@/features/campaigns/stores/wizard-resume.store';
+import EventPlacementSummary from '@/features/events/components/EventPlacementSummary';
 import { logger } from '@/lib/logger';
 import { htTtcOrDash } from '@/lib/money';
 
@@ -1051,6 +1052,11 @@ export default function MyCampaigns() {
                   : null
               }
               impressions={impressionsDisplay(selectedCampaign, pricing.data)}
+              eventPlacementSlot={
+                selectedCampaign?.event_id ? (
+                  <EventPlacementSummary campaignId={selectedCampaign.id} />
+                ) : undefined
+              }
               variant="advertiser"
               statusBadge={
                 <span

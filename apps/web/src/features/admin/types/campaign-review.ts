@@ -14,6 +14,8 @@ export interface AdminCampaignRow {
   description: string | null;
   requested_budget: number | null;
   creative_id: string | null;
+  /** EV4 — the positioning BINDING: the examen shows the allocations table when set. */
+  event_id: string | null;
   content_validation_status: string | null;
   submitted_at: string | null;
   activated_at: string | null;

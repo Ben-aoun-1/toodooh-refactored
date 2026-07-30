@@ -27,6 +27,7 @@ import type {
   CampaignStatusFilter,
 } from '@/features/admin/types/campaign-review';
 import type { AdminCreativeView } from '@/features/admin/types/creative';
+import { apiClient } from '@/lib/api-client';
 import { getErrorMessage } from '@/lib/errors';
 
 // Admin campaign-REVIEW queue — the ACTIVATION keystone's operator surface. Replaces the broken
@@ -107,6 +108,23 @@ export default function CampaignReviewQueue() {
   const creativeById = new Map<string, AdminCreativeView>((creatives ?? []).map((c) => [c.id, c]));
 
   const [selected, setSelected] = useState<AdminCampaignRow | null>(null);
+  // EV4 — the positioning's allocations table (venues, blocs, montants, statuts); idle for
+  // classic rows, empty until the validation dispatches.
+  const { data: eventAllocations } = useQuery({
+    queryKey: [...adminKeys.all, 'eventAllocations', selected?.id ?? ''] as const,
+    queryFn: () =>
+      apiClient.get<
+        {
+          id: string;
+          screenhost_name: string;
+          blocs_count: number;
+          impressions_total: number;
+          montant_tnd: number;
+          statut: string;
+        }[]
+      >(`/admin/campaigns/${selected?.id}/event-allocations`),
+    enabled: Boolean(selected?.id && selected?.event_id),
+  });
   // E7 — the settlement breakdown for the examen modal (empty lines until reconciled).
   const { data: reversements } = useCampaignReversements(selected?.id ?? null);
   // LOG1 — the engine journal + its phase filter.
@@ -357,6 +375,39 @@ export default function CampaignReviewQueue() {
                       <p className="text-sm text-gray-900">{TND(selected.wallet_balance_tnd)}</p>
                     </div>
                   </div>
+
+                  {/* EV4 — the positioning's placement (event_allocations). */}
+                  {selected.event_id && (eventAllocations?.length ?? 0) > 0 && (
+                    <div>
+                      <p className="mb-1 text-sm font-medium text-gray-700">
+                        Allocations événement:
+                      </p>
+                      <table className="w-full text-left text-xs">
+                        <thead>
+                          <tr className="text-gray-500">
+                            <th className="py-1 pr-2 font-medium">Établissement</th>
+                            <th className="py-1 pr-2 font-medium">Blocs</th>
+                            <th className="py-1 pr-2 font-medium">Impressions</th>
+                            <th className="py-1 pr-2 font-medium">Montant</th>
+                            <th className="py-1 font-medium">Statut</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(eventAllocations ?? []).map((a) => (
+                            <tr key={a.id} className="border-t border-gray-100 text-gray-900">
+                              <td className="py-1 pr-2">{a.screenhost_name}</td>
+                              <td className="py-1 pr-2">{a.blocs_count}</td>
+                              <td className="py-1 pr-2">
+                                {a.impressions_total.toLocaleString('fr-FR')}
+                              </td>
+                              <td className="py-1 pr-2">{TND(a.montant_tnd)}</td>
+                              <td className="py-1">{a.statut}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                   <div>
                     <p className="text-sm font-medium text-gray-700">Créative:</p>
                     <div className="mt-1 flex items-center gap-2">
