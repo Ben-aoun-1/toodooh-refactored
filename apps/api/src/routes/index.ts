@@ -21,6 +21,7 @@ import { cartRoutes } from './cart.js';
 import { creativesRoutes } from './creatives.js';
 import { deviceAuthRoutes } from './device-auth.js';
 import { emailAvailabilityRoute } from './email-availability.js';
+import { eventBoostRoutes } from './event-boost.js';
 import { eventsRoutes } from './events.js';
 import { internalRoutes } from './internal.js';
 import { meRoutes } from './me.js';
@@ -80,6 +81,8 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   // campaign's advertiser, replace-set write, draft-only. Dedup + category validation server-side.
   await app.register(campaignTargetingRoutes);
   await app.register(campaignBoostRoutes);
+  // EV6 — the event booster (zones-only) sits beside the campaign one, never inside it.
+  await app.register(eventBoostRoutes);
   // L-disp — admin/internal dispatch entrypoint: builds + freezes the PlanDiffusion (A.7).
   await app.register(campaignDispatchRoutes);
   // L-wallet — advertiser wallet surface: POST recharge (manual bank-transfer top-up → pending +
