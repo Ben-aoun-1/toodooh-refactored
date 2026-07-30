@@ -7,6 +7,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { auth } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
 import {
+  campaignReconciliation,
   type DispatchCreneau,
   type NewUser,
   campaignDispatchAllocation,
@@ -84,7 +85,13 @@ interface Scenario {
 // One campaign + frozen plan + one venue allocation (the e7 harness, single venue).
 const seedScenario = async (
   creneaux: DispatchCreneau[],
-  opts: { cpm?: string; tTierCoef?: string; advertiser?: string; name?: string } = {},
+  opts: {
+    cpm?: string;
+    tTierCoef?: string;
+    advertiser?: string;
+    name?: string;
+    budget?: string;
+  } = {},
 ): Promise<Scenario> => {
   const advertiser = opts.advertiser ?? (await seedUser());
   const ownerId = await seedUser({ role: 'individual_owner' });
@@ -109,6 +116,7 @@ const seedScenario = async (
       status: 'active',
       startDate: creneaux[0]?.date ?? '2026-07-01',
       endDate: creneaux[creneaux.length - 1]?.date ?? '2026-07-31',
+      requestedBudget: opts.budget ?? null,
       creativeId: creative?.id,
     })
     .returning();
@@ -253,21 +261,9 @@ describe('month-end billing sweep (real Postgres + MinIO)', () => {
     await sql.end();
   });
 
-  it('bills the previous CLOSED month on proof-verified consumption only — July créneaux, delivered, × CPM/1000, TVA 19 %', async () => {
-    const s = await seedScenario(
-      [
-        { date: '2026-06-30', hour: 8, reps: 100, impressions: 9999 },
-        ...JULY_CRENEAUX,
-        { date: '2026-08-01', hour: 8, reps: 100, impressions: 7777 },
-      ],
-      { cpm: '10' },
-    );
-    // Everything delivered — June and August slots included: only JULY may bill.
-    await deliverSlot(s, '2026-06-30', 8);
-    await deliverSlot(s, '2026-07-10', 9);
-    await deliverSlot(s, '2026-07-11', 10);
-    await deliverSlot(s, '2026-08-01', 8);
-
+  it("bills the month's ENGAGED value (FCT-R1, Kais 29/07): a July-started campaign invoices its budget with ZERO proofs", async () => {
+    const s = await seedScenario(JULY_CRENEAUX, { cpm: '10', budget: '100' });
+    // NOT ONE deliverSlot — the pre-paid predicted base needs no proof (US-FCT-12 superseded).
     const result = await runMonthlyBillingSweep(silentLog, NOW);
     expect(result.month).toBe('2026-07');
     expect(result.invoicesGenerated).toBe(1);
@@ -276,7 +272,7 @@ describe('month-end billing sweep (real Postgres + MinIO)', () => {
       .select()
       .from(monthlyInvoices)
       .where(eq(monthlyInvoices.advertiserId, s.advertiser));
-    // 10 000 July impressions × 10/1000 = 100 HT → 19 TVA → 119 TTC.
+    // 100 HT engaged → 19 TVA → 119 TTC.
     expect(row).toMatchObject({ month: '2026-07' });
     expect(Number(row?.totalHt)).toBe(100);
     expect(Number(row?.tvaTnd)).toBe(19);
@@ -291,10 +287,8 @@ describe('month-end billing sweep (real Postgres + MinIO)', () => {
     expect(notifs.find((n) => n.type === 'monthly_invoice_ready')?.body).toContain('juillet 2026');
   });
 
-  it('the invoice PDF is the ONE consolidated « FACTURE » — no per-campaign detail (pinned)', async () => {
-    const s = await seedScenario(JULY_CRENEAUX, { name: 'Campagne Secrète' });
-    await deliverSlot(s, '2026-07-10', 9);
-    await deliverSlot(s, '2026-07-11', 10);
+  it('the invoice PDF is the ONE consolidated « FACTURE » — engagement-honest wording, no per-campaign detail', async () => {
+    const s = await seedScenario(JULY_CRENEAUX, { name: 'Campagne Secrète', budget: '100' });
     await runMonthlyBillingSweep(silentLog, NOW);
 
     const [row] = await db
@@ -310,41 +304,61 @@ describe('month-end billing sweep (real Postgres + MinIO)', () => {
     const text = pdfText(res.rawPayload);
     expect(text).toContain('FACTURE');
     expect(text).toContain('juillet 2026');
+    // FCT-R1 — the engagement-honest line; the « consommation réelle » era is over.
+    expect(text).toContain('montant engagé (impressions prévues)');
+    expect(text).not.toContain('consommation réelle');
     expect(text).toContain('100.00 TND');
     expect(text).toContain('119.00 TND');
     // The chartered pin: ONE amount, never a campaign line.
     expect(text).not.toContain('Campagne Secrète');
   });
 
-  it('engaged-but-undelivered ≠ consumption: zero proofs → NO invoice at all', async () => {
-    await seedScenario(JULY_CRENEAUX);
+  it('the FCT2 pin FLIPS: zero July-STARTED campaigns → no invoice, even with July deliveries of a June campaign', async () => {
+    // A JUNE-started campaign (its window reaches into July) fully delivered in July: under the
+    // old consumption base this WAS the invoice; under the ledger base its debit belongs to JUNE
+    // (dated at start_date) — July emits nothing.
+    const s = await seedScenario(
+      [{ date: '2026-06-28', hour: 8, reps: 100, impressions: 4000 }, ...JULY_CRENEAUX],
+      { budget: '100' },
+    );
+    await deliverSlot(s, '2026-07-10', 9);
+    await deliverSlot(s, '2026-07-11', 10);
     const result = await runMonthlyBillingSweep(silentLog, NOW);
     expect(result.invoicesGenerated).toBe(0);
     expect(await db.$count(monthlyInvoices)).toBe(0);
   });
 
-  it('partial delivery bills the delivered slots only; T scales facturable; same-advertiser campaigns sum', async () => {
+  it('one source of truth: the invoice ≡ Σ ledger debits — NET once settled, engaged otherwise', async () => {
     const advertiser = await seedUser();
-    const a = await seedScenario(JULY_CRENEAUX, { advertiser, cpm: '10', tTierCoef: '0.6' });
-    await deliverSlot(a, '2026-07-10', 9); // 6000 × 0.6 = 3600 fact → 36 TND
-    const b = await seedScenario([{ date: '2026-07-20', hour: 12, reps: 50, impressions: 5000 }], {
-      advertiser,
-      cpm: '20',
-      tTierCoef: '1.0',
+    // Campaign A: settled — the reconciliation's NET (spend 80 of the 100 engaged) bills.
+    const a = await seedScenario(JULY_CRENEAUX, { advertiser, budget: '100' });
+    await db.insert(campaignReconciliation).values({
+      campaignId: a.campaignId,
+      expectedImp: 10000,
+      deliveredImp: 8000,
+      manquementImp: 2000,
+      pPerteTnd: '20.0000',
+      refundTnd: '20.0000',
+      spendTnd: '80.0000',
+      status: 'partial',
     });
-    await deliverSlot(b, '2026-07-20', 12); // 5000 × 20/1000 = 100 TND
+    // Campaign B: unsettled — the engaged budget bills.
+    await seedScenario([{ date: '2026-07-20', hour: 12, reps: 50, impressions: 5000 }], {
+      advertiser,
+      budget: '50',
+    });
 
     await runMonthlyBillingSweep(silentLog, NOW);
     const [row] = await db
       .select()
       .from(monthlyInvoices)
       .where(eq(monthlyInvoices.advertiserId, advertiser));
-    expect(Number(row?.totalHt)).toBe(136);
+    // Exactly what Mes finances shows for July: 80 (NET) + 50 (engaged) = 130.
+    expect(Number(row?.totalHt)).toBe(130);
   });
 
   it('idempotent: a re-run skips (UNIQUE) and never duplicates the notification', async () => {
-    const s = await seedScenario(JULY_CRENEAUX);
-    await deliverSlot(s, '2026-07-10', 9);
+    const s = await seedScenario(JULY_CRENEAUX, { budget: '60' });
     await runMonthlyBillingSweep(silentLog, NOW);
     const second = await runMonthlyBillingSweep(silentLog, NOW);
     expect(second.invoicesGenerated).toBe(0);
@@ -379,8 +393,7 @@ describe('month-end billing sweep (real Postgres + MinIO)', () => {
   });
 
   it('the advertiser lists + downloads own invoices; a foreign invoice is a plain 404', async () => {
-    const s = await seedScenario(JULY_CRENEAUX);
-    await deliverSlot(s, '2026-07-10', 9);
+    const s = await seedScenario(JULY_CRENEAUX, { budget: '60' });
     await runMonthlyBillingSweep(silentLog, NOW);
 
     mockSession(s.advertiser);

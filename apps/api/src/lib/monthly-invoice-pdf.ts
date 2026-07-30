@@ -24,10 +24,11 @@ const formatTnd = (amount: number): string => `${amount.toFixed(2)} TND`;
 
 const formatIssuedAt = (d: Date): string => d.toISOString().slice(0, 10);
 
-export const INVOICE_DESCRIPTION_LINE =
-  'Diffusion de campagnes publicitaires — consommation réelle du mois';
+// FCT-R1 (Kais 29/07) — engagement-honest wording: the cast bills PREDICTED impressions
+// pre-paid; the « consommation réelle » era (US-FCT-12) is superseded.
+export const INVOICE_DESCRIPTION_LINE = 'Campagnes du mois — montant engagé (impressions prévues)';
 export const INVOICE_SETTLEMENT_NOTE =
-  'Facture établie sur la consommation réelle constatée (impressions facturables vérifiées), réglée par prélèvement sur votre solde publicitaire.';
+  'Facture établie sur le montant engagé des campagnes du mois (impressions prévues), réglée par prélèvement sur votre solde publicitaire.';
 
 export const renderMonthlyInvoicePdf = (data: MonthlyInvoiceData): Promise<Buffer> =>
   new Promise<Buffer>((resolve, reject) => {
