@@ -5,8 +5,7 @@ import type { FastifyBaseLogger } from 'fastify';
 
 import { db } from '../db/client.js';
 import {
-  campaignDispatchAllocation,
-  campaignDispatchPlan,
+  campaignReconciliation,
   campaigns,
   monthlyInvoices,
   notifications,
@@ -19,8 +18,6 @@ import { storage } from '../storage/s3-storage.js';
 
 import { tvaFromHt, ttcFromHt } from './facture.js';
 import { renderMonthlyInvoicePdf } from './monthly-invoice-pdf.js';
-import { loadDeliveredSlots } from './reconcile/delivered-slots.js';
-import { type AllocationInput, deliveredFacturableInRange } from './reconcile/valuation.js';
 import { renderRelevePdf } from './releve-pdf.js';
 import { monthLabelFr, previousClosedMonth } from './report/monthly-job.js';
 
@@ -29,13 +26,18 @@ import { monthLabelFr, previousClosedMonth } from './report/monthly-job.js';
 // « the 1st for the previous month »), UNIQUE + onConflictDoNothing idempotency, per-item failure
 // isolation, NO backfill (only the previous CLOSED month is ever considered).
 //
-// INVOICES — one consolidated row+PDF per screencaster with consumption that month:
-//   consumption(C, M) = deliveredFacturableInRange(allocations(C), plan.t, M.from, M.to)
-//                       — PROOF-VERIFIED facturable only (an unproven créneau never bills;
-//                         engaged-but-undelivered is not consumption; a campaign ending mid-month
-//                         stops contributing by construction — its créneaux stop).
-//   amount(C, M)      = round4(consumption × plan.cpm / 1000)   (HT; the valuation convention)
-//   total_ht(A, M)    = round4(Σ_C amount) ; TVA 19 % via the facture trio. Zero → NO invoice.
+// INVOICES — FCT-R1 (Kais 29/07, SUPERSEDING US-FCT-12's « consommation réelle », which had
+// carried Mejri's deferral): cast = impressions PRÉDITES with pre-paid billing; host = real
+// impressions post-paid. The advertiser's consolidated invoice therefore bills the month's
+// ENGAGED value — Σ of the month's LEDGER DEBIT rows, ONE source of truth with the
+// advertiser's own transaction history (web wallet-ledger composeLedger):
+//   debit(C, M)    = campaigns LAUNCHED (status active/completed) with start_date in M,
+//                    valued exactly as the ledger values them at sweep time — the reconciled
+//                    NET (spend_tnd) once settled, the engaged budget (requested_budget)
+//                    otherwise. (HT both ways — the house convention.)
+//   total_ht(A, M) = round4(Σ_C debit) ; TVA 19 % via the facture trio. No started campaign
+//                    → NO invoice. deliveredFacturableInRange STAYS in its valuation home for
+//                    the consumption readers — only THIS caller changed.
 // RELEVÉS — one row+PDF per venue with reversement lines SETTLED that Tunis month:
 //   total_sh(V, M)    = round4(Σ sh_amount_tnd over lines with settled_at in M) — SUM, never
 //                       one-row-per-pair assumptions (source='event' may add lines later).
@@ -62,42 +64,32 @@ export interface BillingSweepResult {
   failed: number;
 }
 
-/** Per-advertiser consolidated HT for the month — proof-verified consumption only. */
-const consumptionByAdvertiser = async (from: string, to: string): Promise<Map<string, number>> => {
-  // Campaigns that COULD have créneaux in the window: started on/before its end. No end-date upper
-  // bound (boosts/redispatch extend campaigns); no status filter (reconcile leaves 'active', and
-  // status can't gate money). The créneau dates are the truth — this filter is efficiency only.
+/** Per-advertiser consolidated HT for the month — the ledger's DEBIT rows (FCT-R1). */
+const engagedDebitsByAdvertiser = async (
+  from: string,
+  to: string,
+): Promise<Map<string, number>> => {
+  // The web ledger's isLaunched mirror: active/completed with a start day inside the month.
+  // LEFT JOIN the (UNIQUE per campaign) reconciliation: NET once settled, engaged otherwise.
   const rows = await db
     .select({
-      campaignId: campaigns.id,
       advertiserId: campaigns.advertiserId,
-      planId: campaignDispatchPlan.id,
-      cpm: campaignDispatchPlan.cpm,
-      tTierCoef: campaignDispatchPlan.tTierCoef,
+      requestedBudget: campaigns.requestedBudget,
+      spendTnd: campaignReconciliation.spendTnd,
     })
-    .from(campaignDispatchPlan)
-    .innerJoin(campaigns, eq(campaigns.id, campaignDispatchPlan.campaignId))
-    .where(lte(campaigns.startDate, to));
-
+    .from(campaigns)
+    .leftJoin(campaignReconciliation, eq(campaignReconciliation.campaignId, campaigns.id))
+    .where(
+      and(
+        gte(campaigns.startDate, from),
+        lte(campaigns.startDate, to),
+        inArray(campaigns.status, ['active', 'completed']),
+      ),
+    );
   const totals = new Map<string, number>();
   for (const row of rows) {
-    const allocations = await db
-      .select({
-        screenhostId: campaignDispatchAllocation.screenhostId,
-        creneaux: campaignDispatchAllocation.creneaux,
-      })
-      .from(campaignDispatchAllocation)
-      .where(eq(campaignDispatchAllocation.planId, row.planId));
-    if (allocations.length === 0) continue;
-    const deliveredBySh = await loadDeliveredSlots(row.campaignId);
-    const inputs: AllocationInput[] = allocations.map((a) => ({
-      screenhostId: a.screenhostId,
-      creneaux: a.creneaux,
-      deliveredSlots: deliveredBySh.get(a.screenhostId) ?? new Set<string>(),
-    }));
-    const fact = deliveredFacturableInRange(inputs, Number(row.tTierCoef), from, to);
-    if (fact <= 0) continue;
-    const amount = round4((fact * Number(row.cpm)) / 1000);
+    const amount = Number(row.spendTnd ?? row.requestedBudget ?? 0);
+    if (amount <= 0) continue;
     totals.set(row.advertiserId, round4((totals.get(row.advertiserId) ?? 0) + amount));
   }
   return totals;
@@ -118,7 +110,7 @@ export async function runMonthlyBillingSweep(
   };
 
   // ── advertiser invoices ─────────────────────────────────────────────────────
-  const totals = await consumptionByAdvertiser(from, to);
+  const totals = await engagedDebitsByAdvertiser(from, to);
   for (const [advertiserId, totalHt] of totals) {
     try {
       const [existing] = await db
