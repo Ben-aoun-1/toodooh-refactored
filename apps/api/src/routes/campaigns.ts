@@ -25,6 +25,7 @@ import {
   startDateViolation,
 } from '../lib/campaign-dates.js';
 import { getDispatchConfig } from '../lib/dispatch/config.js';
+import { measureEventDelivery } from '../lib/event-playout/settlement.js';
 import { computeEventCmax } from '../lib/event-pricing/pricing.js';
 import { validateEventSpot } from '../lib/event-pricing/spot.js';
 import { requireAdvertiser } from '../middleware/require-advertiser.js';
@@ -627,7 +628,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         .send({ error: 'UNAUTHENTICATED', message: 'Authentification requise.' });
     }
     const [own] = await db
-      .select({ id: campaigns.id })
+      .select({ id: campaigns.id, eventId: campaigns.eventId })
       .from(campaigns)
       .where(and(eq(campaigns.id, parsedParams.data.id), eq(campaigns.advertiserId, userId)))
       .limit(1);
@@ -637,6 +638,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     const rows = await db
       .select({
         id: eventAllocations.id,
+        screenhostId: eventAllocations.screenhostId,
         screenhostName: screenhosts.name,
         blocs: eventAllocations.blocs,
         impressionsTotal: eventAllocations.impressionsTotal,
@@ -647,19 +649,51 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
       .innerJoin(screenhosts, eq(eventAllocations.screenhostId, screenhosts.id))
       .where(eq(eventAllocations.campaignId, parsedParams.data.id))
       .orderBy(desc(eventAllocations.createdAt));
+
+    // EV5 — once the positioning has SETTLED, the same read carries the summary: per-venue
+    // livré/manqué + the refund. The per-venue lines are DERIVED (measureEventDelivery — the
+    // settlement's own function), never stored: this lane writes no venue money rows (EV6).
+    const [settled] = await db
+      .select({
+        refundTnd: campaignReconciliation.refundTnd,
+        spendTnd: campaignReconciliation.spendTnd,
+        settledAt: campaignReconciliation.reconciledAt,
+      })
+      .from(campaignReconciliation)
+      .where(eq(campaignReconciliation.campaignId, parsedParams.data.id))
+      .limit(1);
+    const eventId = own.eventId;
+    const measured = settled && eventId ? await measureEventDelivery(own.id, eventId) : null;
+
     return reply.status(200).send({
       count: rows.length,
       impressions_total: rows.reduce((sum, r) => sum + r.impressionsTotal, 0),
       montant_total_tnd:
         Math.round(rows.reduce((sum, r) => sum + Number(r.montantTnd) * 1000, 0)) / 1000,
-      allocations: rows.map((r) => ({
-        id: r.id,
-        screenhost_name: r.screenhostName,
-        blocs_count: Array.isArray(r.blocs) ? r.blocs.length : 0,
-        impressions_total: r.impressionsTotal,
-        montant_tnd: Number(r.montantTnd),
-        statut: r.statut,
-      })),
+      allocations: rows.map((r) => {
+        const line = measured?.venues.find((v) => v.screenhostId === r.screenhostId) ?? null;
+        return {
+          id: r.id,
+          screenhost_name: r.screenhostName,
+          blocs_count: Array.isArray(r.blocs) ? r.blocs.length : 0,
+          impressions_total: r.impressionsTotal,
+          montant_tnd: Number(r.montantTnd),
+          statut: r.statut,
+          // Null until the settlement runs (a live positioning shows no verdict).
+          blocs_delivered: line?.blocsDelivered ?? null,
+          delivered_tnd: line?.deliveredTnd ?? null,
+          refund_tnd: line?.refundTnd ?? null,
+          attestation_negated: line?.attestationNegated ?? null,
+        };
+      }),
+      settlement:
+        settled === undefined
+          ? null
+          : {
+              settled_at: settled.settledAt,
+              delivered_tnd: Number(settled.spendTnd),
+              refund_tnd: Number(settled.refundTnd),
+            },
     });
   });
 

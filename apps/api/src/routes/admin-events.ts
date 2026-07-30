@@ -4,12 +4,20 @@ import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import { db } from '../db/client.js';
-import { events } from '../db/schema.js';
+import {
+  campaigns,
+  eventAllocations,
+  eventAttestations,
+  events,
+  screenhosts,
+} from '../db/schema.js';
 import { MIN_CAMPAIGN_BUDGET_TND } from '../lib/campaign-budget.js';
 import { getDispatchConfig } from '../lib/dispatch/config.js';
+import { remapEventPositionings, voidEventPositionings } from '../lib/event-playout/reschedule.js';
 import { computeEventCmax } from '../lib/event-pricing/pricing.js';
 import { declaredMatchesSniffed, sniffContainer } from '../lib/media-probe.js';
-import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
+import { recomputeVenueSps } from '../lib/sps-score.js';
+import { requireAdmin, requireAuth, requireRole } from '../middleware/require-auth.js';
 import { storage } from '../storage/s3-storage.js';
 
 import { eventView } from './events.js';
@@ -24,6 +32,19 @@ import { eventView } from './events.js';
 // no window column exists to recompute (pinned in tests).
 
 const idParamSchema = z.object({ id: z.uuid() });
+const venueParamsSchema = z.object({ id: z.uuid(), screenhost_id: z.uuid() });
+
+// EV5 — the attestation body: the verdict + an optional note (the agent's field observation).
+const attestationBodySchema = z.object({
+  respecte: z.boolean(),
+  note: z.string().max(2000).nullable().optional(),
+});
+
+// EV5 (R4) — reporter: BOTH instants move; the window, the blocs and the reservations follow.
+const reporterBodySchema = z.object({
+  kickoff_at: z.string(),
+  ends_at: z.string().optional(),
+});
 
 const MAX_EVENT_IMAGE_BYTES = 10 * 1024 * 1024; // affiche: JPEG/PNG ≤ 10 MB (the CF-M2 posture)
 const IMAGE_MIMES = new Set(['image/jpeg', 'image/png']);
@@ -184,14 +205,206 @@ export const adminEventsRoutes: FastifyPluginAsync = async (app) => {
         requestId: request.id,
       });
     }
-    const [updated] = await db
-      .update(events)
-      .set({ annule: true })
-      .where(eq(events.id, params.data.id))
-      .returning();
-    if (!updated) return sendNotFound(reply);
-    return reply.status(200).send({ ...eventView(updated, new Date()), annule: updated.annule });
+    // EV5 (R4) — annuler now also CLOSES the money: every live positioning is voided (holds
+    // released, FULL refund settled through E6's movement, closed), and both sides are notified.
+    // ONE transaction with the flag itself: an annulé event can never keep live positionings.
+    const outcome = await db.transaction(async (tx) => {
+      const [flagged] = await tx
+        .update(events)
+        .set({ annule: true })
+        .where(eq(events.id, params.data.id))
+        .returning();
+      if (!flagged) return null;
+      const voided = await voidEventPositionings(tx, { id: flagged.id, name: flagged.name });
+      return { flagged, voided };
+    });
+    if (!outcome) return sendNotFound(reply);
+    return reply.status(200).send({
+      ...eventView(outcome.flagged, new Date()),
+      annule: outcome.flagged.annule,
+      positionnements_annules: outcome.voided.positionings,
+      remboursement_tnd: outcome.voided.refundedTnd,
+    });
   });
+
+  // POST /api/admin/events/:id/reporter { kickoff_at, ends_at? } — EV5 (R4): move the match. The
+  // window is re-derived (never stored), every live positioning is re-snapshotted, each
+  // allocation's blocs are remapped BY RELATIVE INDEX (the venue keeps the slots it accepted) and
+  // its reservations are rewritten; advertisers + owners are notified. An ends_at-only
+  // prolongation goes through the SAME path (the pre-match blocs simply do not move).
+  app.post('/api/admin/events/:id/reporter', adminGuard, async (request, reply) => {
+    const params = idParamSchema.safeParse(request.params);
+    if (!params.success) return invalidField(reply, 'id', 'must be a uuid');
+    const body = reporterBodySchema.safeParse(request.body ?? {});
+    if (!body.success) return invalidField(reply, 'kickoff_at', 'must be an ISO instant');
+    const [row] = await db.select().from(events).where(eq(events.id, params.data.id)).limit(1);
+    if (!row) return sendNotFound(reply);
+    if (row.annule) {
+      return reply.status(409).send({
+        error: 'CONFLICT',
+        message: 'Événement annulé — il ne peut plus être reporté.',
+        statusCode: 409,
+        requestId: request.id,
+      });
+    }
+    const kickoffAt = parseInstant(body.data.kickoff_at);
+    if (!kickoffAt) return invalidField(reply, 'kickoff_at', 'must be an ISO instant');
+    const endsAt =
+      body.data.ends_at === undefined
+        ? // Keep the declared duration when only the kickoff moves.
+          new Date(kickoffAt.getTime() + (row.endsAt.getTime() - row.kickoffAt.getTime()))
+        : parseInstant(body.data.ends_at);
+    if (!endsAt) return invalidField(reply, 'ends_at', 'must be an ISO instant');
+    if (endsAt.getTime() <= kickoffAt.getTime()) {
+      return invalidField(reply, 'ends_at', 'must be after kickoff_at');
+    }
+
+    const outcome = await db.transaction(async (tx) => {
+      const [moved] = await tx
+        .update(events)
+        .set({ kickoffAt, endsAt })
+        .where(eq(events.id, params.data.id))
+        .returning();
+      if (!moved) return null;
+      const remapped = await remapEventPositionings(
+        tx,
+        { id: moved.id, name: moved.name, kickoffAt: moved.kickoffAt, endsAt: moved.endsAt },
+        { kickoffAt: row.kickoffAt, endsAt: row.endsAt },
+      );
+      return { moved, remapped };
+    });
+    if (!outcome) return sendNotFound(reply);
+    return reply.status(200).send({
+      ...eventView(outcome.moved, new Date()),
+      positionnements_recalcules: outcome.remapped.positionings,
+      allocations_recalculees: outcome.remapped.allocations,
+    });
+  });
+
+  // ── EV5: the respect attestation (admin OR screenhost_agent — the as-found role guard) ───────
+  // The agent inspects a venue during an event and records whether it RESPECTED the diffusion
+  // (screens on, spot airing). ABSENT IS RESPECTED: no attestation is never a sanction. A
+  // respecte=false verdict both lowers the venue's SPS respect variable and negates that venue's
+  // per-bloc delivery at settlement (the dual proof).
+  const attestationGuard = {
+    preHandler: [requireAuth, requireRole('admin', 'superadmin', 'screenhost_agent')],
+  };
+
+  // GET /api/admin/events/:id/attestations — the recorded verdicts per allocated venue.
+  app.get('/api/admin/events/:id/attestations', attestationGuard, async (request, reply) => {
+    const params = idParamSchema.safeParse(request.params);
+    if (!params.success) return invalidField(reply, 'id', 'must be a uuid');
+    const rows = await db
+      .selectDistinct({
+        screenhostId: screenhosts.id,
+        screenhostName: screenhosts.name,
+        statut: eventAllocations.statut,
+        respecte: eventAttestations.respecte,
+        note: eventAttestations.note,
+        attestedAt: eventAttestations.updatedAt,
+      })
+      .from(eventAllocations)
+      .innerJoin(screenhosts, eq(eventAllocations.screenhostId, screenhosts.id))
+      .innerJoin(campaigns, eq(eventAllocations.campaignId, campaigns.id))
+      .leftJoin(
+        eventAttestations,
+        and(
+          eq(eventAttestations.screenhostId, eventAllocations.screenhostId),
+          eq(eventAttestations.eventId, params.data.id),
+        ),
+      )
+      .where(eq(campaigns.eventId, params.data.id));
+    return reply.status(200).send(
+      rows.map((r) => ({
+        screenhost_id: r.screenhostId,
+        screenhost_name: r.screenhostName,
+        statut: r.statut,
+        // null = not attested = RESPECTED by rule (the UI says so explicitly).
+        respecte: r.respecte,
+        note: r.note,
+        attested_at: r.attestedAt,
+      })),
+    );
+  });
+
+  // PUT /api/admin/events/:id/attestations/:screenhost_id { respecte, note? } — upsert the verdict.
+  app.put(
+    '/api/admin/events/:id/attestations/:screenhost_id',
+    attestationGuard,
+    async (request, reply) => {
+      const params = venueParamsSchema.safeParse(request.params);
+      if (!params.success) return invalidField(reply, 'id', 'must be a uuid');
+      const body = attestationBodySchema.safeParse(request.body ?? {});
+      if (!body.success) return invalidField(reply, 'respecte', 'must be a boolean');
+      const authorId = request.user?.id;
+      if (!authorId) {
+        return reply
+          .status(401)
+          .send({ error: 'UNAUTHENTICATED', message: 'Authentification requise.' });
+      }
+      const [event] = await db.select().from(events).where(eq(events.id, params.data.id)).limit(1);
+      if (!event) return sendNotFound(reply);
+      // The venue must actually hold an allocation for this event — an attestation on an
+      // unrelated venue is meaningless (and would silently dent its SPS).
+      const [allocated] = await db
+        .select({ id: eventAllocations.id })
+        .from(eventAllocations)
+        .innerJoin(campaigns, eq(eventAllocations.campaignId, campaigns.id))
+        .where(
+          and(
+            eq(campaigns.eventId, params.data.id),
+            eq(eventAllocations.screenhostId, params.data.screenhost_id),
+          ),
+        )
+        .limit(1);
+      if (!allocated) {
+        return reply.status(404).send({
+          error: 'NOT_FOUND',
+          message: 'Cet établissement ne diffuse pas cet événement.',
+        });
+      }
+      const [saved] = await db
+        .insert(eventAttestations)
+        .values({
+          eventId: params.data.id,
+          screenhostId: params.data.screenhost_id,
+          authorId,
+          respecte: body.data.respecte,
+          note: body.data.note ?? null,
+        })
+        .onConflictDoUpdate({
+          target: [eventAttestations.eventId, eventAttestations.screenhostId],
+          set: {
+            authorId,
+            respecte: body.data.respecte,
+            note: body.data.note ?? null,
+            updatedAt: new Date(),
+          },
+        })
+        .returning();
+      if (!saved) {
+        return reply
+          .status(500)
+          .send({ error: 'INTERNAL', message: "L'attestation n'a pas pu être enregistrée." });
+      }
+      // The respect variable moves with the verdict — recompute this venue's SPS now.
+      try {
+        await recomputeVenueSps(params.data.screenhost_id);
+      } catch (err) {
+        request.log.warn(
+          { err, screenhostId: params.data.screenhost_id },
+          'SPS recompute after attestation failed',
+        );
+      }
+      return reply.status(200).send({
+        event_id: saved.eventId,
+        screenhost_id: saved.screenhostId,
+        respecte: saved.respecte,
+        note: saved.note,
+        attested_at: saved.updatedAt,
+      });
+    },
+  );
 
   // POST /api/admin/events/:id/image — attach/replace the affiche (single-file multipart,
   // JPEG/PNG byte-sniffed, ≤ 10 MB — the CF-M2 attach idiom). storage-first / no-orphan.

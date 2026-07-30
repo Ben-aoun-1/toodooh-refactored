@@ -1732,3 +1732,40 @@ export const eventAllocations = pgTable(
 
 export type EventAllocation = typeof eventAllocations.$inferSelect;
 export type NewEventAllocation = typeof eventAllocations.$inferInsert;
+
+// ── event_attestations (EV5 — the agent/admin respect attestation) ───────────
+// One verdict per (event, venue): did the venue RESPECT the event (screens on, spot airing)?
+// The SPS « respect des événements » variable reads these — and ABSENT IS RESPECTED (the product
+// owner's default rule: no inspection is never a sanction). A respecte=false attestation also
+// NEGATES that venue's per-bloc delivery at settlement, whatever the proofs said (the DUAL proof:
+// a screen can report VIDEO_ENDED to a wall nobody sees).
+export const eventAttestations = pgTable(
+  'event_attestations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    eventId: uuid('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    screenhostId: uuid('screenhost_id')
+      .notNull()
+      .references(() => screenhosts.id, { onDelete: 'cascade' }),
+    /** The admin or screenhost_agent who attested (evidence: never deleted with the author). */
+    authorId: uuid('author_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    respecte: boolean('respecte').notNull(),
+    note: text('note'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    index('event_attestations_event_id_idx').on(table.eventId),
+    index('event_attestations_screenhost_id_idx').on(table.screenhostId),
+    unique('event_attestations_event_screenhost_uq').on(table.eventId, table.screenhostId),
+  ],
+);
+
+export type EventAttestation = typeof eventAttestations.$inferSelect;

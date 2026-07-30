@@ -6,6 +6,7 @@ import {
   campaignDispatchAllocation,
   campaignDispatchPlan,
   eventAllocations,
+  eventAttestations,
   proofOfPlay,
   screenhosts,
   screenhostUnavailability,
@@ -27,8 +28,9 @@ import { slotKey } from './reconcile/valuation.js';
 //  - acceptation:     ACCEPTE ÷ decided allocations, trailing 90 d. The allocation carries no
 //                     decided_at — the window anchors on the allocation's created_at (decisions
 //                     follow dispatch closely; as-found, reported at CF-9). No decisions → 100.
-//  - respect:         the CONSTANT 100 default — no agent-inspection data exists yet (EV5 builds
-//                     the attestation surface); the variable computes as its default BY RULE.
+//  - respect:         attested-true ÷ attested event_attestations, trailing 90 d (EV5). NO
+//                     attestation in the window → 100 BY RULE (absent = respected: an
+//                     uninspected venue is never sanctioned).
 //  - activité:        proven ÷ scheduled elapsed créneaux (FIX A delivery semantics: ≥1
 //                     VIDEO_ENDED proof received in the créneau's Tunis hour), trailing 30 d,
 //                     ACCEPTE allocations only. Nothing scheduled → 100.
@@ -39,8 +41,15 @@ import { slotKey } from './reconcile/valuation.js';
 
 export const ACCEPTATION_WINDOW_DAYS = 90;
 export const ACTIVITE_WINDOW_DAYS = 30;
-/** EV5 will replace this constant with attestation-derived data; until then 100 IS the rule. */
+/**
+ * The respect variable's EMPTY-SET value: a venue with NO attestation in the window scores 100.
+ * EV5 turned the variable real (attested-true ÷ attested); this stayed the ruled default because
+ * "no inspection" must never read as a sanction.
+ */
 export const EVENT_RESPECT_DEFAULT = 100;
+
+/** The attestation window — the acceptation variable's 90 d, mirrored. */
+export const RESPECT_WINDOW_DAYS = 90;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -217,9 +226,27 @@ export const computeSps = async (screenhostId: string, now = new Date()): Promis
       ? 0
       : round2(Math.min(100, (engagedSeconds / availableSeconds) * 100));
 
+  // ── respect des événements: attested-true ÷ attested, trailing 90 d ────────
+  // EV5 — the variable turns REAL. The DEFAULT RULE stands: no attestation at all → 100 (an
+  // uninspected venue is never sanctioned — EVENT_RESPECT_DEFAULT is now the empty-set value
+  // instead of a constant). A respecte=false attestation is the only thing that can lower it.
+  const attestedSince = new Date(now.getTime() - RESPECT_WINDOW_DAYS * DAY_MS);
+  const attested = await db
+    .select({ respecte: eventAttestations.respecte })
+    .from(eventAttestations)
+    .where(
+      and(
+        eq(eventAttestations.screenhostId, screenhostId),
+        gte(eventAttestations.createdAt, attestedSince),
+      ),
+    );
+  const respected = attested.filter((a) => a.respecte).length;
+  const respect_evenements =
+    attested.length === 0 ? EVENT_RESPECT_DEFAULT : round2((respected / attested.length) * 100);
+
   const variables: SpsVariables = {
     acceptation,
-    respect_evenements: EVENT_RESPECT_DEFAULT,
+    respect_evenements,
     activite,
     remplissage,
   };
