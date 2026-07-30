@@ -18,6 +18,7 @@ const UserProfile = lazy(() => import('@/features/advertiser/pages/UserProfile')
 const NewCampaign = lazy(() => import('@/features/campaigns/pages/NewCampaign'));
 const MyCampaigns = lazy(() => import('@/features/campaigns/pages/MyCampaigns'));
 const Events = lazy(() => import('@/features/events/pages/Events'));
+const EventPositioning = lazy(() => import('@/features/events/pages/EventPositioning'));
 const MyRecharges = lazy(() => import('@/features/wallet/pages/MyRecharges'));
 const MyInvoices = lazy(() => import('@/features/wallet/pages/MyInvoices'));
 const MyCart = lazy(() => import('@/features/cart/pages/MyCart'));
@@ -371,6 +372,16 @@ export default function App() {
                 <AdvertiserRoute>
                   <AdvertiserLayout>
                     <Events />
+                  </AdvertiserLayout>
+                </AdvertiserRoute>
+              }
+            />
+            <Route
+              path="/evenements/positionnement/:campaignId"
+              element={
+                <AdvertiserRoute>
+                  <AdvertiserLayout>
+                    <EventPositioning />
                   </AdvertiserLayout>
                 </AdvertiserRoute>
               }

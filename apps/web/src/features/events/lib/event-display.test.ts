@@ -4,7 +4,6 @@ import type { EventItemView } from '../services/events.api';
 
 import {
   POSITIONNE_CTA,
-  POSITIONNE_SOON,
   STATUT_LABELS,
   SUGGESTED_BADGE,
   WINDOW_LINE,
@@ -42,7 +41,6 @@ describe('the status + card literals', () => {
     expect(WINDOW_LINE).toBe('Diffusion : 1 h avant · match · 1 h après');
     expect(SUGGESTED_BADGE).toBe('Suggéré par un annonceur');
     expect(POSITIONNE_CTA).toBe('Je me positionne');
-    expect(POSITIONNE_SOON).toBe('Bientôt disponible');
   });
 });
 

@@ -1,4 +1,5 @@
 import BalanceCard from '@/features/advertiser/components/dashboard/BalanceCard';
+import EventsEntryCard from '@/features/advertiser/components/dashboard/EventsEntryCard';
 import GettingStartedSection from '@/features/advertiser/components/dashboard/GettingStartedSection';
 import InsightsCard from '@/features/advertiser/components/dashboard/InsightsCard';
 import LastCampaignsGrid from '@/features/advertiser/components/dashboard/LastCampaignsGrid';
@@ -43,6 +44,8 @@ export default function AdvertiserDashboard() {
         loading={loadingStats}
       />
       <LastCampaignsGrid campaigns={lastCampaigns} loading={loadingLastCampaigns} />
+      {/* EV3 (voie 2) — the Événements entry tile. */}
+      <EventsEntryCard />
       {!hideGettingStartedBlock && (
         <GettingStartedSection
           hasRegistrationDocument={hasRegistrationDocument}

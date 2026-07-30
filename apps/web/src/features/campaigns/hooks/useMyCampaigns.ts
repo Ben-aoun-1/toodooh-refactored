@@ -37,7 +37,8 @@ export interface MyCampaignRow {
   // Retained-but-empty on the new engine (Supabase-only concepts the new list drops).
   client: string;
   category: string | null;
-  event_id: string | undefined;
+  /** EV3 — set on positionings (the « Event » chip, the type filter, the actions matrix). */
+  event_id: string | null;
   video_id: string | null;
   selected_categories: string[];
   selected_zones: string[];
@@ -70,7 +71,7 @@ function toRow(c: CampaignView): MyCampaignRow {
     created_at: c.created_at,
     client: '',
     category: null,
-    event_id: undefined,
+    event_id: c.event_id ?? null,
     video_id: null,
     // Targeting chips + impressions come from the engine (campaign_targeting +
     // campaign_reconciliation + the frozen plan). CF-HF3: selected_zones carries the REAL wire

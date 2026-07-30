@@ -22,6 +22,11 @@ import {
   readVideoDurationSeconds,
 } from '@/features/campaigns/services/creative-media';
 import type { CreativeType, CreativeView } from '@/features/campaigns/services/creatives.api';
+import {
+  EVENT_SPOT_MAX_SECONDS,
+  EVENT_SPOT_TOO_LONG_MESSAGE,
+  filterEventSpots,
+} from '@/features/events/lib/event-positioning';
 import { getErrorMessage } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 
@@ -54,6 +59,12 @@ interface StepCreativeProps {
   linking: boolean;
   onNext: () => void | Promise<void>;
   onBack: () => void;
+  /**
+   * EV3 — the positioning parcours' Vidéo step: videos cap at 15 s (client probe + for_event
+   * upload flag + the bibliothèque filtered to grid-fitting spots). Absent/false = the classic
+   * wizard, byte-identical behavior.
+   */
+  eventMode?: boolean;
 }
 
 /**
@@ -71,8 +82,12 @@ export default function StepCreative({
   linking,
   onNext,
   onBack,
+  eventMode = false,
 }: StepCreativeProps) {
-  const { data: creatives = [], isLoading } = useMyCreatives(userId);
+  const { data: allCreatives = [], isLoading } = useMyCreatives(userId);
+  // EV3 — the bibliothèque only offers spots that FIT the antenne grid (videos ≤ 15 s; photos
+  // always — their duration is a display cadence). The classic wizard shows everything.
+  const creatives = eventMode ? filterEventSpots(allCreatives) : allCreatives;
   const upload = useCreativeUpload(userId);
 
   const [uploadType, setUploadType] = useState<CreativeType>('video');
@@ -83,6 +98,7 @@ export default function StepCreative({
     event.target.value = '';
     if (!file || !draftCampaignId) return;
 
+    const maxVideoSeconds = eventMode ? EVENT_SPOT_MAX_SECONDS : MAX_VIDEO_DURATION_SECONDS;
     let durationSeconds: number;
     if (uploadType === 'video') {
       const probed = await readVideoDurationSeconds(file);
@@ -90,8 +106,10 @@ export default function StepCreative({
         toast.error('Impossible de lire la durée de la vidéo. Réessayez avec un fichier MP4.');
         return;
       }
-      if (probed > MAX_VIDEO_DURATION_SECONDS) {
-        toast.error('La vidéo ne doit pas dépasser 30 secondes.');
+      if (probed > maxVideoSeconds) {
+        toast.error(
+          eventMode ? EVENT_SPOT_TOO_LONG_MESSAGE : 'La vidéo ne doit pas dépasser 30 secondes.',
+        );
         return;
       }
       durationSeconds = Math.max(1, probed);
@@ -105,6 +123,8 @@ export default function StepCreative({
         type: uploadType,
         duration_seconds: durationSeconds,
         title: file.name,
+        // EV3 — the server re-checks the 15 s cap on its own measured duration.
+        ...(eventMode ? { for_event: true } : {}),
       });
       toast.success('Création téléversée avec succès.');
       await onSelectCreative(created.id);
@@ -213,7 +233,7 @@ export default function StepCreative({
                 <p className="font-bold text-gray-900">Téléverser une nouvelle création</p>
                 <p className="text-sm text-gray-500">
                   {uploadType === 'video'
-                    ? 'MP4 ou MOV (H.264, 16:9) · 30 secondes maximum'
+                    ? `MP4 ou MOV (H.264, 16:9) · ${eventMode ? EVENT_SPOT_MAX_SECONDS : MAX_VIDEO_DURATION_SECONDS} secondes maximum`
                     : 'JPEG ou PNG'}
                 </p>
                 <span className="inline-flex items-center px-4 py-2.5 mt-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50">
@@ -306,7 +326,11 @@ export default function StepCreative({
             <div>
               <p className="text-sm font-bold text-gray-900 mb-2">Spécifications</p>
               <ul className="text-sm text-gray-600 space-y-1">
-                <li>Vidéo : 30 secondes maximum (MP4 / MOV, H.264, 16:9)</li>
+                <li>
+                  {eventMode
+                    ? `Vidéo : ${EVENT_SPOT_MAX_SECONDS} secondes maximum — la grille événementielle diffuse par blocs de 15 s`
+                    : 'Vidéo : 30 secondes maximum (MP4 / MOV, H.264, 16:9)'}
+                </li>
                 <li>Photo : durée de diffusion 10, 20 ou 30 secondes (JPEG / PNG)</li>
                 <li>Votre création sera validée par notre équipe avant diffusion</li>
               </ul>

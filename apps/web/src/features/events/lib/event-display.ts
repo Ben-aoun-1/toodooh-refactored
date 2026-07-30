@@ -22,9 +22,8 @@ export const WINDOW_LINE = 'Diffusion : 1 h avant · match · 1 h après';
 /** The badge on suggested cards. */
 export const SUGGESTED_BADGE = 'Suggéré par un annonceur';
 
-/** The EV3 placeholder CTA (the CF-Q1 « Bientôt disponible » idiom — disabled, never hidden). */
+/** The positioning CTA — LIVE since EV3 (the « Bientôt disponible » placeholder retired). */
 export const POSITIONNE_CTA = 'Je me positionne';
-export const POSITIONNE_SOON = 'Bientôt disponible';
 
 const TUNIS = 'Africa/Tunis';
 

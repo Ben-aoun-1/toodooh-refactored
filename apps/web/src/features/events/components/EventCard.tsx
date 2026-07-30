@@ -1,11 +1,14 @@
-import { Calendar, Radio } from 'lucide-react';
+import { Calendar, Loader2, Radio } from 'lucide-react';
+import { toast } from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 
 import matchImg from '@/assets/match.png';
+import { getErrorMessage } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 
-import { useEventImageUrl } from '../hooks/useEvents';
+import { useEventImageUrl, usePositionner } from '../hooks/useEvents';
 import {
   POSITIONNE_CTA,
-  POSITIONNE_SOON,
   STATUT_CHIP_CLASSES,
   STATUT_LABELS,
   SUGGESTED_BADGE,
@@ -19,14 +22,30 @@ interface EventCardProps {
   event: EventItemView;
 }
 
+const log = logger.child({ module: 'EventCard' });
+
 /**
  * The match card (Figma « Mes événements »): affiche (or the default stadium), name + Sport chip,
  * catégorie chip, date | horaire (Tunis), the derived-status chip, the ± 1 h window line, and the
- * EV3 positioning CTA — rendered DISABLED (« Bientôt disponible », the CF-Q1 idiom) until the
- * 3-step parcours lands. Suggested cards carry their badge instead of a catalogue affiche.
+ * EV3 « Je me positionne » CTA — LIVE now (the disabled « Bientôt disponible » pin retired):
+ * it creates the positioning draft and opens the 3-step parcours. Terminé cards keep a disabled
+ * CTA (a finished match is not positionable — the api would 409 anyway).
  */
 export default function EventCard({ event }: EventCardProps) {
+  const navigate = useNavigate();
   const { data: image } = useEventImageUrl(event.id, event.has_image);
+  const positionner = usePositionner();
+
+  const positionable = event.statut !== 'termine';
+  const handlePositionner = async () => {
+    try {
+      const created = await positionner.mutateAsync(event.id);
+      navigate(`/evenements/positionnement/${created.id}`);
+    } catch (error) {
+      toast.error(getErrorMessage(error) || 'Le positionnement n’a pas pu être créé.');
+      log.error({ err: error }, 'positionner failed');
+    }
+  };
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col">
@@ -73,15 +92,21 @@ export default function EventCard({ event }: EventCardProps) {
           <p className="text-xs text-[#8A8A8A] line-clamp-2">{event.description}</p>
         )}
         <div className="mt-auto pt-2">
-          {/* EV3 seam — the 3-step positioning parcours mounts here; until then the CTA is
-              visible but inert (CF-Q1: grayed + « Bientôt disponible », never hidden). */}
           <button
             type="button"
-            disabled
-            className="w-full rounded-lg bg-gray-200 text-gray-500 text-sm font-medium py-2.5 cursor-not-allowed"
+            disabled={!positionable || positionner.isPending}
+            onClick={() => void handlePositionner()}
+            className={`w-full rounded-lg py-2.5 text-sm font-medium transition-colors ${
+              positionable
+                ? 'bg-brand-primary text-brand-deep hover:bg-brand-primary/90 disabled:opacity-60'
+                : 'cursor-not-allowed bg-gray-200 text-gray-500'
+            }`}
           >
-            {POSITIONNE_CTA}
-            <span className="block text-xs font-normal">{POSITIONNE_SOON}</span>
+            {positionner.isPending ? (
+              <Loader2 className="mx-auto h-4 w-4 animate-spin" />
+            ) : (
+              POSITIONNE_CTA
+            )}
           </button>
         </div>
       </div>

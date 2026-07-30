@@ -203,6 +203,12 @@ export default function MyCampaigns() {
       return;
     }
 
+    // EV3 — a positioning (event-BOUND row) resumes in ITS parcours, never the classic wizard.
+    if (campaign.event_id) {
+      navigate(`/evenements/positionnement/${campaign.id}`, { state: { resumed: true } });
+      return;
+    }
+
     // Rediriger vers la page de nouvelle campagne avec les données de la campagne
     navigate('/new-campaign', { state: { editMode: true, campaign } });
   };
@@ -717,7 +723,7 @@ export default function MyCampaigns() {
                       <RotateCcw className="h-4 w-4" /> Reprendre
                     </button>
                   )}
-                  {canReplayCampaign(campaign.status) && (
+                  {!campaign.event_id && canReplayCampaign(campaign.status) && (
                     <button
                       type="button"
                       onClick={() => void handleReplayCampaign(campaign)}
@@ -735,7 +741,7 @@ export default function MyCampaigns() {
                       <Trash2 className="h-4 w-4" /> Supprimer
                     </button>
                   )}
-                  {canBoostCampaign(campaign.status) && (
+                  {!campaign.event_id && canBoostCampaign(campaign.status) && (
                     <button
                       type="button"
                       onClick={() => setBoostTarget(campaign.raw)}
@@ -922,7 +928,7 @@ export default function MyCampaigns() {
                                     </button>
                                   )}
                                   {/* CF-RJ1 — Rejouer on a Passée campaign (clone → Période). */}
-                                  {canReplayCampaign(campaign.status) && (
+                                  {!campaign.event_id && canReplayCampaign(campaign.status) && (
                                     <button
                                       type="button"
                                       onClick={() => {
@@ -934,7 +940,7 @@ export default function MyCampaigns() {
                                       Rejouer
                                     </button>
                                   )}
-                                  {canBoostCampaign(campaign.status) && (
+                                  {!campaign.event_id && canBoostCampaign(campaign.status) && (
                                     <button
                                       type="button"
                                       onClick={() => {
@@ -1113,7 +1119,7 @@ export default function MyCampaigns() {
                         <RotateCcw className="h-5 w-5" />
                         Reprendre
                       </button>
-                    ) : canBoostCampaign(selectedCampaign.status) ? (
+                    ) : !selectedCampaign.event_id && canBoostCampaign(selectedCampaign.status) ? (
                       <button
                         type="button"
                         onClick={() => {
@@ -1127,7 +1133,7 @@ export default function MyCampaigns() {
                         <Rocket className="h-5 w-5" />
                         Booster
                       </button>
-                    ) : canReplayCampaign(selectedCampaign.status) ? (
+                    ) : !selectedCampaign.event_id && canReplayCampaign(selectedCampaign.status) ? (
                       /* CF-RJ1 — a Passée campaign is replayable from the drawer too. */
                       <button
                         type="button"

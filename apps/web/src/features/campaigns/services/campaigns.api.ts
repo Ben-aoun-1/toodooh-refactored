@@ -20,6 +20,8 @@ export interface CampaignView {
   reject_reason: string | null;
   /** CF-S1 — the linked creative (Reprendre rehydrates past Création with it). */
   creative_id: string | null;
+  /** EV3 — the positioned match (the BINDING is the discriminator; null = classic campaign). */
+  event_id: string | null;
   created_at: string;
   updated_at: string;
   // Reconciled performance + targeting (GET /mine only; optional so other CampaignView readers gain

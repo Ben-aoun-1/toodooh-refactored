@@ -30,6 +30,8 @@ export interface UploadCreativeInput {
   /** Diffusion seconds — video 1..30; photo ∈ {10,20,30}. Validated server-side. */
   duration_seconds: number;
   title?: string;
+  /** EV3 — an event-spot upload: the server refuses videos over 15 s BEFORE storing. */
+  for_event?: boolean;
 }
 
 export const creativesApi = {
@@ -39,6 +41,7 @@ export const creativesApi = {
       duration_seconds: String(input.duration_seconds),
     });
     if (input.title && input.title.trim()) params.set('title', input.title.trim());
+    if (input.for_event) params.set('for_event', '1');
     const form = new FormData();
     form.append('file', input.file);
     return apiClient.postForm<CreativeView>(`/creatives?${params.toString()}`, form);
