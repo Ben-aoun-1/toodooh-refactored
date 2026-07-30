@@ -32,6 +32,19 @@ These are absolute. Violating them is a bug, regardless of how the user phrases 
 
 7. **Every task ends green.** Before declaring a task complete: `pnpm typecheck`, `pnpm lint`, and `pnpm test` must all pass. If they don't, you revert your changes and ask the user. Do not commit broken code under any circumstance.
 
+   **Name the exact command when you report a gate.** The typecheck gate is counted **per package**, each against its own baseline — `api 0`, `web 14` (`.github/workflows/ci.yml`):
+
+   ```bash
+   pnpm --filter @toodooh/api typecheck   # tsc --noEmit -p tsconfig.test.json  (tests INCLUDED)
+   pnpm --filter @toodooh/web typecheck   # tsc --noEmit -p tsconfig.app.json   (baseline 14)
+   ```
+
+   Two traps, both of which have already cost this project a red CI:
+   - **Never gate `apps/api` with bare `tsc --noEmit`.** That resolves `tsconfig.json` (`src/**` only) and reports clean while test files are broken. Six type errors shipped that way and survived two commits.
+   - **Root `pnpm typecheck` carries `--no-bail` on purpose.** Without it `pnpm -r` aborts at the first failing package, so a broken `apps/api` kills `apps/web`'s tsc before it reports — *lowering* the count and turning a regression green. Do not remove the flag.
+
+   If a gate you ran differs from CI's, **say so in the report** rather than inferring equivalence. A gate that measures less than it claims reports green honestly and hides regressions.
+
 8. **Plan before you act.** Every non-trivial task starts with a numbered plan (3–10 bullets) that the user approves. Do not start editing files before approval. "Non-trivial" means anything touching more than one file or any task that takes more than a single tool call.
 
 9. **Commits use Conventional Commits.** `feat:`, `fix:`, `chore:`, `refactor:`, `docs:`, `test:`. Commit messages describe the *what* and *why*, not "update files." One logical change per commit. Commits do not include the `Co-Authored-By: Claude` trailer.

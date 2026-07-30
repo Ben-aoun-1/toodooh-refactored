@@ -1,12 +1,13 @@
 # CI — automated verification of the four gates on every push to main and every PR.
 #
-# Baseline-gated gates (typecheck, lint): the cleanup phase hands off to CI with
-# accepted, deferred debt — 51 typecheck errors and 1 lint error, all blocked on
-# the Phase-1 Supabase typed client (issue #15). CI therefore verifies
-# "no regression past the committed baseline", not "exit 0". The gate fails when
-# the error count EXCEEDS the baseline, and emits a ::notice:: (without failing)
-# when the count drops BELOW it — prompting a manual ratchet-down of the baseline
-# constant here. When #15 lands, both baselines drop to 0.
+# Baseline-gated gates (typecheck, lint): the cleanup phase handed off to CI with
+# accepted, deferred debt blocked on the Phase-1 Supabase typed client (issue #15).
+# CI therefore verifies "no regression past the committed baseline", not "exit 0".
+# A gate fails when the error count EXCEEDS its baseline, and emits a ::notice::
+# (without failing) when the count drops BELOW it — prompting a manual ratchet-down
+# of the constant here. Current baselines: typecheck api 0 / web 14 (per package —
+# see the Typecheck step for why a single combined count is unsafe), lint 0.
+# The web typecheck baseline drops to 0 when #15 lands.
 # See docs/audit.md §5 row 13 and issue #11.
 
 name: CI
@@ -65,24 +66,44 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Typecheck (baseline-gated)
+      - name: Typecheck (baseline-gated, per package)
         run: |
-          # Ratcheted to 15 at E1 (was 26; the stale headroom had silently absorbed two NEW api
-          # test type errors — a COUNT gate can hide regressions under old debt). Current actual:
-          # api 0 + web 15 later-slice errors (react-leaflet in /admin-zones + wizard Step4,
-          # file-saver, the dooh engine, the database.types propagation) that clear at the last
-          # Supabase removal (#15), when this drops to 0. A set-diff CI check is a banked chore.
-          # Ratcheted 15 → 14 at CF-D1: the OwnerScreens rewrite killed its baseline error.
-          TYPECHECK_BASELINE=14
-          pnpm typecheck 2>&1 | tee typecheck.log || true
-          n=$(grep -c 'error TS' typecheck.log || true)
-          echo "typecheck errors: $n (baseline $TYPECHECK_BASELINE)"
-          if [ "$n" -gt "$TYPECHECK_BASELINE" ]; then
-            echo "::error::typecheck regressed — $n errors > baseline $TYPECHECK_BASELINE"
-            exit 1
-          elif [ "$n" -lt "$TYPECHECK_BASELINE" ]; then
-            echo "::notice::typecheck improved — $n < $TYPECHECK_BASELINE; ratchet TYPECHECK_BASELINE down in .github/workflows/ci.yml"
-          fi
+          # GATE1 (2026-07-30) — this gate is PER PACKAGE because a single combined count
+          # does not merely under-report, it INVERTS. The old step ran the root recursive
+          # `pnpm typecheck`, which BAILS at the first failing package
+          # (ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL): apps/api's tsc always finishes first, so
+          # any api failure killed apps/web's tsc before it could report its 14 — LOWERING
+          # the count. Measured on this repo: api broken with 2 errors → root count 2 →
+          # "2 <= 14" → GREEN. Breaking the api made the gate greener. Evidence in the log
+          # trail: 45fdf79 counted 14 (api 0 + web 14), a9378f1 counted 6 (api's 6, web
+          # killed), 93146ad counted 29 (api 6 + 23, web killed — never "15 + web's 14").
+          #
+          # Each package is therefore counted separately against its own baseline, using
+          # the package's own typecheck script — the exact commands a developer runs:
+          #   apps/api → tsc --noEmit -p tsconfig.test.json   (tests INCLUDED; bare
+          #              `tsc --noEmit` resolves the source-only project and reports 0
+          #              while test files are broken — that blind spot is what hid EV5's 6)
+          #   apps/web → tsc --noEmit -p tsconfig.app.json
+          API_TYPECHECK_BASELINE=0    # cleared at GATE1 (EV5's 6 inject-helper errors fixed). Keep it 0.
+          WEB_TYPECHECK_BASELINE=14   # react-leaflet in /admin-zones + wizard Step4, file-saver, the dooh
+                                      # engine, the database.types propagation — all clear at the last
+                                      # Supabase removal (#15), when this drops to 0 too.
+          fail=0
+          gate() {
+            pkg=$1; filter=$2; baseline=$3
+            pnpm --filter "$filter" typecheck 2>&1 | tee "typecheck-$pkg.log" || true
+            n=$(grep -c 'error TS' "typecheck-$pkg.log" || true)
+            echo "$pkg typecheck errors: $n (baseline $baseline)"
+            if [ "$n" -gt "$baseline" ]; then
+              echo "::error::$pkg typecheck regressed — $n errors > baseline $baseline"
+              fail=1
+            elif [ "$n" -lt "$baseline" ]; then
+              echo "::notice::$pkg typecheck improved — $n < $baseline; ratchet the $pkg baseline down in .github/workflows/ci.yml"
+            fi
+          }
+          gate api @toodooh/api "$API_TYPECHECK_BASELINE"
+          gate web @toodooh/web "$WEB_TYPECHECK_BASELINE"
+          [ "$fail" -eq 0 ]
 
       - name: Lint (baseline-gated)
         run: |

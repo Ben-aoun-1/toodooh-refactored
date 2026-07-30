@@ -9,12 +9,23 @@ TypeScript, Node 20 LTS.
 pnpm --filter @toodooh/api dev       # tsx watch on 0.0.0.0:4000
 pnpm --filter @toodooh/api build     # tsc → dist/
 pnpm --filter @toodooh/api start     # node dist/server.js
-pnpm --filter @toodooh/api typecheck
+pnpm --filter @toodooh/api typecheck  # tsc --noEmit -p tsconfig.test.json
 pnpm --filter @toodooh/api lint
 pnpm --filter @toodooh/api test
 pnpm --filter @toodooh/api migrate     # apply migrations (drizzle-orm)
 pnpm --filter @toodooh/api db:generate # generate a migration (drizzle-kit)
 ```
+
+**Typecheck this package with the script above, never bare `tsc --noEmit`.**
+The script uses `tsconfig.test.json`, which includes `tests/`, `scripts/` and
+the config files. Bare `tsc --noEmit` resolves `tsconfig.json` — `src/**` only —
+and reports **clean while test files are broken**. CI counts this package
+separately against a baseline of **0**; keep it there.
+
+A Fastify footgun the blind spot exposed: an `app.inject` test helper typed
+`(body: unknown)` defeats `inject`'s overload resolution, so the call resolves
+to the `Chain` overload and every downstream `.statusCode` / `.json()` fails to
+compile. Type request bodies `Record<string, unknown>` (or a concrete type).
 
 The `dev` and `migrate` scripts use Node's `--env-file-if-exists=.env`,
 so a local `apps/api/.env` is loaded automatically when present (and the

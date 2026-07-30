@@ -25,7 +25,7 @@ Run from the repo root (they fan out across the workspace) or here:
 ```bash
 pnpm dev          # Vite dev server
 pnpm build        # production build
-pnpm typecheck    # tsc --noEmit
+pnpm typecheck    # tsc --noEmit -p tsconfig.app.json
 pnpm lint         # eslint
 pnpm test         # vitest run
 ```
