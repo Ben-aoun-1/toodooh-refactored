@@ -303,6 +303,7 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
         fromStatus: 'draft',
       });
       if (prepared.status !== 'READY') {
+        // EV4 — the event dispatch's refusals ride the same per-item vocabulary.
         const reason =
           prepared.status === 'NOT_DELIVERABLE'
             ? prepared.reason === 'too_thin'

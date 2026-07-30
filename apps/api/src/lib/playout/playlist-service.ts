@@ -22,6 +22,8 @@ export const computeScreenPlaylist = async (
       url: presigned.url,
       durationSeconds: allocation.durationSeconds,
       repsPerHour: allocation.repsPerHour,
+      // EV4 rider — the media kind rides the wire ('photo' maps to 'image' at build).
+      creativeType: allocation.creativeType === 'photo' ? 'photo' : 'video',
     });
   }
   return buildPlaylist(sources);

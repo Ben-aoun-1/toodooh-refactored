@@ -6,12 +6,14 @@ import {
   campaignDispatchAllocation,
   campaignDispatchPlan,
   campaigns,
+  events,
 } from '../db/schema.js';
 
 import { tunisDateOf } from './campaign-dates.js';
 import { cpmForCampaign, getDispatchConfig } from './dispatch/config.js';
 import { runDispatch } from './dispatch/dispatch-service.js';
 import { createEngineTrace } from './engine-journal/trace.js';
+import { runEventDispatch } from './event-dispatch/dispatch.js';
 import { walletBalance } from './recharges.js';
 
 // CF-SK1 — THE ACTIVATION CORE, extracted VERBATIM from the admin activate route
@@ -52,6 +54,10 @@ export type ActivationOutcome =
     }
   | { status: 'NOT_DELIVERABLE'; reason: 'too_thin'; nMin: number; nMax: number }
   | { status: 'NOT_DELIVERABLE'; reason: 'no_eligible' | 'saturated' }
+  // EV4 — the event dispatch's refusals: D7's concentration cap blocks the validation
+  // atomically (nothing persisted); an event annulled between panier and validation refuses.
+  | { status: 'EVENT_NMAX_EXCEEDED'; nMax: number }
+  | { status: 'EVENT_ANNULE' }
   | { status: 'NO_WINDOW' }
   | { status: 'WRONG_STATUS'; currentStatus: string }
   | { status: 'PLAN_MISSING' };
@@ -158,12 +164,34 @@ export const prepareActivation = async (
     };
   }
 
-  // EV3 — THE PHASING BOUNDARY (pinned): a POSITIONING (an event-BOUND row — the binding, not
-  // the type string, discriminates; legacy 'event'-typed rows stay classic) activates WITHOUT
-  // dispatch. No runDispatch, no pool, no plan, no allocation rows, no owner notifications — the
-  // row flips date-routed (finalize) and sits À venir/Active inert until EV4 wires bloc
-  // dispatch. Every gate ABOVE (status, content, budget at CPM_evt, funded balance) applied.
+  // EV3/EV4 — the EVENT fork (a POSITIONING = an event-BOUND row; legacy 'event'-typed rows
+  // stay classic). EV4 fills EV3's seam: validating (or SK1-skipping) a positioning now
+  // DISPATCHES OVER BLOCS via the event engine (its own module — the campaign engine below is
+  // never touched): EN_ATTENTE event_allocations + hour reservations + owner proposals, all in
+  // one tx. D7 excess REFUSES atomically (nothing persisted, no flip); a re-run over an
+  // already-dispatched positioning short-circuits (the SK1 resume idiom). The classic plan
+  // stays NULL — no campaign plan, no campaign allocations; NOTHING AIRS until EV5 (the
+  // playout path never reads event_allocations).
   if (campaign.eventId !== null) {
+    const [ev] = await db.select().from(events).where(eq(events.id, campaign.eventId)).limit(1);
+    if (!ev || ev.annule) return { status: 'EVENT_ANNULE' };
+    const dispatched = await runEventDispatch(
+      {
+        id: campaign.id,
+        name: campaign.name,
+        advertiserId: campaign.advertiserId,
+        requestedBudget,
+      },
+      { id: ev.id, kickoffAt: ev.kickoffAt, endsAt: ev.endsAt },
+      cpm,
+    );
+    if (dispatched.status === 'NMAX_EXCEEDED') {
+      return { status: 'EVENT_NMAX_EXCEEDED', nMax: dispatched.nMax ?? 0 };
+    }
+    if (dispatched.status === 'NO_POOL') {
+      return { status: 'NOT_DELIVERABLE', reason: 'no_eligible' };
+    }
+    // OK (fresh placement, possibly D6-partial — alerted inside) or ALREADY_DISPATCHED (resume).
     return { status: 'READY', plan: null, allocations: [] };
   }
 

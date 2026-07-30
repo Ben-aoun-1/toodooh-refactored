@@ -5,9 +5,10 @@ import { db } from '../db/client.js';
 import {
   campaignDispatchAllocation,
   campaignDispatchPlan,
+  eventAllocations,
   proofOfPlay,
-  screenhostUnavailability,
   screenhosts,
+  screenhostUnavailability,
 } from '../db/schema.js';
 
 import { getDispatchConfig } from './dispatch/config.js';
@@ -95,6 +96,9 @@ export const computeSps = async (screenhostId: string, now = new Date()): Promis
   const cfg = await getDispatchConfig();
 
   // ── acceptation: decided allocations in the trailing 90 d ──────────────────
+  // EV4 — EVENT decisions count too (a decision is a decision, whichever engine proposed it):
+  // the union keeps ONE rule, anchored on created_at both sides (the E4 ruling — decided_at
+  // exists on the event rows and waits for the EV5-era re-anchor).
   const decidedSince = new Date(now.getTime() - ACCEPTATION_WINDOW_DAYS * DAY_MS);
   const decided = await db
     .select({ statut: campaignDispatchAllocation.statutAcceptation })
@@ -106,8 +110,19 @@ export const computeSps = async (screenhostId: string, now = new Date()): Promis
         gte(campaignDispatchAllocation.createdAt, decidedSince),
       ),
     );
-  const accepted = decided.filter((d) => d.statut === 'ACCEPTE').length;
-  const acceptation = decided.length === 0 ? 100 : round2((accepted / decided.length) * 100);
+  const decidedEvent = await db
+    .select({ statut: eventAllocations.statut })
+    .from(eventAllocations)
+    .where(
+      and(
+        eq(eventAllocations.screenhostId, screenhostId),
+        ne(eventAllocations.statut, 'EN_ATTENTE'),
+        gte(eventAllocations.createdAt, decidedSince),
+      ),
+    );
+  const allDecided = [...decided, ...decidedEvent.map((d) => ({ statut: d.statut }))];
+  const accepted = allDecided.filter((d) => d.statut === 'ACCEPTE').length;
+  const acceptation = allDecided.length === 0 ? 100 : round2((accepted / allDecided.length) * 100);
 
   // ── the venue's ACCEPTE allocations + their plans (activité + remplissage) ──
   const allocations = await db

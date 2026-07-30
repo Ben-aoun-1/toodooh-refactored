@@ -3,7 +3,13 @@ import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import { db } from '../db/client.js';
-import { type Campaign, campaigns, creatives } from '../db/schema.js';
+import {
+  type Campaign,
+  campaigns,
+  creatives,
+  eventAllocations,
+  screenhosts,
+} from '../db/schema.js';
 import { activateCampaign } from '../lib/activation-service.js';
 import { cpmForCampaign, getDispatchConfig } from '../lib/dispatch/config.js';
 import { pushPlaylistToCampaignVenues } from '../lib/playout/push.js';
@@ -80,6 +86,8 @@ const adminCampaignView = (row: Campaign, contentValidationStatus: string | null
   description: row.description,
   requested_budget: row.requestedBudget === null ? null : Number(row.requestedBudget),
   creative_id: row.creativeId,
+  // EV4 — the examen forks its detail panel on the BINDING (allocations table for positionings).
+  event_id: row.eventId,
   content_validation_status: contentValidationStatus,
   submitted_at: row.submittedAt,
   activated_at: row.activatedAt,
@@ -230,6 +238,23 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
         fields: [{ field: 'window', reason: 'campaign requires a start_date and end_date' }],
       });
     }
+    // EV4 — the event dispatch's refusals: D7 blocks the validation ATOMICALLY (nothing was
+    // persisted, nothing flips); an event annulled since the panier refuses too.
+    if (outcome.status === 'EVENT_NMAX_EXCEEDED') {
+      return reply.status(409).send({
+        error: 'EVENT_NMAX_EXCEEDED',
+        message: `Le budget dépasse la limite de concentration (N_max = ${outcome.nMax} établissement${outcome.nMax > 1 ? 's' : ''}). Réduisez le budget du positionnement.`,
+        n_max: outcome.nMax,
+        statusCode: 409,
+      });
+    }
+    if (outcome.status === 'EVENT_ANNULE') {
+      return reply.status(409).send({
+        error: 'EVENT_ANNULE',
+        message: 'Cet événement est annulé — le positionnement ne peut pas être validé.',
+        statusCode: 409,
+      });
+    }
     if (outcome.status === 'NOT_DELIVERABLE') {
       if (outcome.reason === 'too_thin') {
         return reply.status(422).send({
@@ -274,6 +299,38 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
         ? { plan: null, allocations: [] }
         : planView(outcome.plan, outcome.allocations)),
     });
+  });
+
+  // GET /api/admin/campaigns/:id/event-allocations — EV4: the examen's allocation table for an
+  // event positioning (venues, blocs, montants, statuts). Empty for classic/undispatched rows.
+  app.get('/api/admin/campaigns/:id/event-allocations', adminGuard, async (request, reply) => {
+    const parsedParams = idParamSchema.safeParse(request.params);
+    if (!parsedParams.success) return invalidField(reply, 'id', 'must be a uuid');
+    const rows = await db
+      .select({
+        id: eventAllocations.id,
+        screenhostName: screenhosts.name,
+        blocs: eventAllocations.blocs,
+        impressionsTotal: eventAllocations.impressionsTotal,
+        montantTnd: eventAllocations.montantTnd,
+        statut: eventAllocations.statut,
+        decidedAt: eventAllocations.decidedAt,
+      })
+      .from(eventAllocations)
+      .innerJoin(screenhosts, eq(eventAllocations.screenhostId, screenhosts.id))
+      .where(eq(eventAllocations.campaignId, parsedParams.data.id))
+      .orderBy(desc(eventAllocations.createdAt));
+    return reply.status(200).send(
+      rows.map((r) => ({
+        id: r.id,
+        screenhost_name: r.screenhostName,
+        blocs_count: Array.isArray(r.blocs) ? r.blocs.length : 0,
+        impressions_total: r.impressionsTotal,
+        montant_tnd: Number(r.montantTnd),
+        statut: r.statut,
+        decided_at: r.decidedAt,
+      })),
+    );
   });
 
   // POST /api/admin/campaigns/:id/reject { reason } — pending → rejected; a reason is REQUIRED and is
