@@ -113,16 +113,19 @@ export default function CampaignReviewQueue() {
   const { data: eventAllocations } = useQuery({
     queryKey: [...adminKeys.all, 'eventAllocations', selected?.id ?? ''] as const,
     queryFn: () =>
-      apiClient.get<
-        {
+      apiClient.get<{
+        allocations: {
           id: string;
           screenhost_name: string;
           blocs_count: number;
           impressions_total: number;
           montant_tnd: number;
           statut: string;
-        }[]
-      >(`/admin/campaigns/${selected?.id}/event-allocations`),
+          blocs_delivered: number | null;
+          refund_tnd: number | null;
+        }[];
+        settlement: { delivered_tnd: number; refund_tnd: number } | null;
+      }>(`/admin/campaigns/${selected?.id}/event-allocations`),
     enabled: Boolean(selected?.id && selected?.event_id),
   });
   // E7 — the settlement breakdown for the examen modal (empty lines until reconciled).
@@ -216,7 +219,9 @@ export default function CampaignReviewQueue() {
               onChange={(e) => setStatusFilter(e.target.value as CampaignStatusFilter)}
             >
               <option value="pending">En attente</option>
+              <option value="upcoming">À venir</option>
               <option value="active">Actives</option>
+              <option value="completed">Terminées</option>
               <option value="rejected">Rejetées</option>
               <option value="draft">Brouillons</option>
             </select>
@@ -377,7 +382,7 @@ export default function CampaignReviewQueue() {
                   </div>
 
                   {/* EV4 — the positioning's placement (event_allocations). */}
-                  {selected.event_id && (eventAllocations?.length ?? 0) > 0 && (
+                  {selected.event_id && (eventAllocations?.allocations.length ?? 0) > 0 && (
                     <div>
                       <p className="mb-1 text-sm font-medium text-gray-700">
                         Allocations événement:
@@ -389,11 +394,12 @@ export default function CampaignReviewQueue() {
                             <th className="py-1 pr-2 font-medium">Blocs</th>
                             <th className="py-1 pr-2 font-medium">Impressions</th>
                             <th className="py-1 pr-2 font-medium">Montant</th>
+                            <th className="py-1 pr-2 font-medium">Diffusé</th>
                             <th className="py-1 font-medium">Statut</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {(eventAllocations ?? []).map((a) => (
+                          {(eventAllocations?.allocations ?? []).map((a) => (
                             <tr key={a.id} className="border-t border-gray-100 text-gray-900">
                               <td className="py-1 pr-2">{a.screenhost_name}</td>
                               <td className="py-1 pr-2">{a.blocs_count}</td>
@@ -401,11 +407,27 @@ export default function CampaignReviewQueue() {
                                 {a.impressions_total.toLocaleString('fr-FR')}
                               </td>
                               <td className="py-1 pr-2">{TND(a.montant_tnd)}</td>
+                              {/* EV5 — livré/manqué once the monitor settled the positioning. */}
+                              <td className="py-1 pr-2">
+                                {a.blocs_delivered === null
+                                  ? '—'
+                                  : `${a.blocs_delivered}/${a.blocs_count}${
+                                      a.refund_tnd && a.refund_tnd > 0
+                                        ? ` · ${TND(a.refund_tnd)} remb.`
+                                        : ''
+                                    }`}
+                              </td>
                               <td className="py-1">{a.statut}</td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
+                      {eventAllocations?.settlement && (
+                        <p className="mt-1 text-xs text-gray-600">
+                          Règlement : {TND(eventAllocations.settlement.delivered_tnd)} diffusés ·{' '}
+                          {TND(eventAllocations.settlement.refund_tnd)} remboursés.
+                        </p>
+                      )}
                     </div>
                   )}
                   <div>

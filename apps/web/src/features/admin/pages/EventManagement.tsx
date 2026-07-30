@@ -1,9 +1,11 @@
-import { Ban, Coins, Pencil, Plus } from 'lucide-react';
+import { Ban, CalendarClock, Coins, Pencil, Plus, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
+import EventAttestationsPanel from '@/features/admin/components/EventAttestationsPanel';
 import EventFormModal from '@/features/admin/components/EventFormModal';
+import EventReporterModal from '@/features/admin/components/EventReporterModal';
 import EventTarificationModal from '@/features/admin/components/EventTarificationModal';
 import { useAdminEvents, useAnnulerEvent } from '@/features/admin/hooks/useAdminEvents';
 import type { AdminEventView } from '@/features/admin/services/admin-events.service';
@@ -31,11 +33,19 @@ export default function EventManagement() {
   });
   const [confirming, setConfirming] = useState<AdminEventView | null>(null);
   const [tarification, setTarification] = useState<AdminEventView | null>(null);
+  // EV5 (R4) — the report modal + the per-event respect panel (the agent/admin attestation).
+  const [reporting, setReporting] = useState<AdminEventView | null>(null);
+  const [inspecting, setInspecting] = useState<AdminEventView | null>(null);
 
   const confirmAnnuler = (event: AdminEventView) => {
     annuler.mutate(event.id, {
-      onSuccess: () => {
-        toast.success(`« ${event.name} » annulé.`);
+      onSuccess: (result) => {
+        // EV5 (R4) — the annulation now closes the money too: say how much came back.
+        toast.success(
+          result.positionnements_annules > 0
+            ? `« ${event.name} » annulé — ${result.positionnements_annules} positionnement(s) remboursé(s) intégralement (${result.remboursement_tnd.toLocaleString('fr-FR')} TND).`
+            : `« ${event.name} » annulé.`,
+        );
         setConfirming(null);
       },
       onError: (err) => {
@@ -128,6 +138,14 @@ export default function EventManagement() {
                         >
                           <Coins className="h-4 w-4" />
                         </button>
+                        <button
+                          type="button"
+                          title="Respect de l’événement"
+                          onClick={() => setInspecting(e)}
+                          className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"
+                        >
+                          <ShieldCheck className="h-4 w-4" />
+                        </button>
                         {e.source === 'official' && !e.annule && (
                           <button
                             type="button"
@@ -136,6 +154,17 @@ export default function EventManagement() {
                             className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"
                           >
                             <Pencil className="h-4 w-4" />
+                          </button>
+                        )}
+                        {/* EV5 (R4) — reporter: the window, the blocs and the holds all move. */}
+                        {!e.annule && (
+                          <button
+                            type="button"
+                            title="Reporter l’événement"
+                            onClick={() => setReporting(e)}
+                            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"
+                          >
+                            <CalendarClock className="h-4 w-4" />
                           </button>
                         )}
                         {!e.annule && (
@@ -173,13 +202,36 @@ export default function EventManagement() {
         />
       )}
 
+      {reporting !== null && (
+        <EventReporterModal event={reporting} onClose={() => setReporting(null)} />
+      )}
+
+      {inspecting !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-2xl space-y-3 rounded-xl bg-white p-5 shadow-xl">
+            <div className="flex items-start justify-between gap-3">
+              <h2 className="text-base font-semibold text-[#171717]">{inspecting.name}</h2>
+              <button
+                type="button"
+                onClick={() => setInspecting(null)}
+                className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+              >
+                Fermer
+              </button>
+            </div>
+            <EventAttestationsPanel eventId={inspecting.id} />
+          </div>
+        </div>
+      )}
+
       {confirming !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-5 space-y-4">
             <h2 className="text-base font-semibold text-[#171717]">Annuler cet événement ?</h2>
             <p className="text-sm text-[#5C5C5C]">
-              « {confirming.name} » n’apparaîtra plus dans le catalogue. Cette action est
-              définitive.
+              « {confirming.name} » n’apparaîtra plus dans le catalogue. Les positionnements en
+              cours seront clos avec un remboursement intégral et les créneaux réservés libérés.
+              Cette action est définitive.
             </p>
             <div className="flex justify-end gap-3">
               <button
