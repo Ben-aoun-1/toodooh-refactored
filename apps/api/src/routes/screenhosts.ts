@@ -14,6 +14,8 @@ import {
   campaignZones,
   creatives,
   type DispatchAcceptation,
+  eventAllocations,
+  events,
   proofOfPlay,
   screenhostAffluence,
   screenhostMonthlyReports,
@@ -30,6 +32,7 @@ import { getDispatchConfig } from '../lib/dispatch/config.js';
 import { REDISPATCH_HEARTBEAT_TOLERANCE_MS } from '../lib/dispatch/redispatch.js';
 import { buildEligibilityPatch } from '../lib/eligibility-patch.js';
 import { createEngineTrace, type EngineTrace } from '../lib/engine-journal/trace.js';
+import { releaseBlocHours, runEventRefusalCascade } from '../lib/event-dispatch/dispatch.js';
 import { pushPlaylistToVenue } from '../lib/playout/push.js';
 import { assembleReportData } from '../lib/report/assemble.js';
 import { pistesForReportCached } from '../lib/report/recommendations.js';
@@ -1671,4 +1674,241 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       })),
     );
   });
+
+  // ── EV4: event-allocation proposals (owner-scoped, SIBLING of the campaign section — the
+  // campaign endpoints above are byte-untouched, their suite pins them) ─────────────────────────
+  // A positioning's placement lands EN_ATTENTE per venue; the owner decides §11.1. NOTHING here
+  // touches the playout path: an ACCEPTE event allocation does NOT re-push any playlist and never
+  // reaches activeAllocationsForScreenhost — airing is EV5's (the phasing pin).
+
+  // GET /api/screenhosts/event-allocations — the owner's EN_ATTENTE event proposals: the match
+  // (name/kickoff/ends — the window derives client-side from the kickoff contract line), the
+  // placed blocs, montant, and the spot meta (photos included — events accept images).
+  app.get('/api/screenhosts/event-allocations', ownerGuard, async (request, reply) => {
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply
+        .status(401)
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+    }
+    const rows = await db
+      .select({
+        id: eventAllocations.id,
+        campaignId: campaigns.id,
+        matchName: campaigns.name,
+        screenhostId: screenhosts.id,
+        screenhostName: screenhosts.name,
+        blocs: eventAllocations.blocs,
+        impressionsTotal: eventAllocations.impressionsTotal,
+        montantTnd: eventAllocations.montantTnd,
+        createdAt: eventAllocations.createdAt,
+        kickoffAt: events.kickoffAt,
+        endsAt: events.endsAt,
+        creativeKind: creatives.creativeType,
+        creativeDuration: creatives.durationSeconds,
+      })
+      .from(eventAllocations)
+      .innerJoin(screenhosts, eq(eventAllocations.screenhostId, screenhosts.id))
+      .innerJoin(campaigns, eq(eventAllocations.campaignId, campaigns.id))
+      .innerJoin(events, eq(campaigns.eventId, events.id))
+      .leftJoin(creatives, eq(campaigns.creativeId, creatives.id))
+      .where(and(eq(screenhosts.ownerId, userId), eq(eventAllocations.statut, 'EN_ATTENTE')))
+      .orderBy(desc(eventAllocations.createdAt));
+    return reply.status(200).send(
+      rows.map((r) => ({
+        id: r.id,
+        campaign_id: r.campaignId,
+        match_name: r.matchName,
+        kickoff_at: r.kickoffAt.toISOString(),
+        ends_at: r.endsAt.toISOString(),
+        screenhost_id: r.screenhostId,
+        screenhost_name: r.screenhostName,
+        blocs: r.blocs,
+        blocs_count: Array.isArray(r.blocs) ? r.blocs.length : 0,
+        impressions_total: r.impressionsTotal,
+        montant_tnd: Number(r.montantTnd),
+        creative: r.creativeKind
+          ? { kind: r.creativeKind, duration_seconds: r.creativeDuration }
+          : null,
+        created_at: r.createdAt,
+      })),
+    );
+  });
+
+  // GET /api/screenhosts/event-allocations/:id/creative-url — the owner previews the actual spot
+  // (video OR image) before deciding; the campaign presign's mechanics, event-side.
+  app.get(
+    '/api/screenhosts/event-allocations/:id/creative-url',
+    ownerGuard,
+    async (request, reply) => {
+      const parsed = idParamSchema.safeParse(request.params);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: 'INVALID_INPUT',
+          message: 'Validation failed',
+          fields: [{ field: 'id', reason: 'must be a uuid' }],
+        });
+      }
+      const userId = request.user?.id;
+      if (!userId) {
+        return reply
+          .status(401)
+          .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+      }
+      const [row] = await db
+        .select({ storageKey: creatives.storageKey })
+        .from(eventAllocations)
+        .innerJoin(screenhosts, eq(eventAllocations.screenhostId, screenhosts.id))
+        .innerJoin(campaigns, eq(eventAllocations.campaignId, campaigns.id))
+        .innerJoin(creatives, eq(campaigns.creativeId, creatives.id))
+        .where(and(eq(eventAllocations.id, parsed.data.id), eq(screenhosts.ownerId, userId)))
+        .limit(1);
+      if (!row) {
+        return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such allocation.' });
+      }
+      const presigned = await storage.getPresignedUrl({
+        key: row.storageKey,
+        expiresInSeconds: 300,
+      });
+      if ('error' in presigned) {
+        return reply
+          .status(502)
+          .send({ error: 'STORAGE_ERROR', message: 'Le média n’a pas pu être présigné.' });
+      }
+      return reply.status(200).send({ url: presigned.url });
+    },
+  );
+
+  // §11.1 — the accept reminder (returned to the UI, spoken on every accept).
+  const EVENT_ACCEPT_REMINDER =
+    'Merci de maintenir vos écrans actifs pendant la fenêtre de diffusion.';
+
+  const decideEventAllocation = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+    statut: 'ACCEPTE' | 'REFUSE',
+  ) => {
+    const parsedParams = idParamSchema.safeParse(request.params);
+    if (!parsedParams.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: [{ field: 'id', reason: 'must be a uuid' }],
+      });
+    }
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply
+        .status(401)
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+    }
+    const outcome = await db.transaction(async (tx) => {
+      const [row] = await tx
+        .select({
+          allocation: eventAllocations,
+          campaignId: campaigns.id,
+          matchName: campaigns.name,
+          eventId: events.id,
+          kickoffAt: events.kickoffAt,
+          endsAt: events.endsAt,
+        })
+        .from(eventAllocations)
+        .innerJoin(campaigns, eq(eventAllocations.campaignId, campaigns.id))
+        .innerJoin(events, eq(campaigns.eventId, events.id))
+        .where(
+          and(
+            eq(eventAllocations.id, parsedParams.data.id),
+            inArray(
+              eventAllocations.screenhostId,
+              tx
+                .select({ id: screenhosts.id })
+                .from(screenhosts)
+                .where(eq(screenhosts.ownerId, userId)),
+            ),
+          ),
+        )
+        .limit(1)
+        .for('update', { of: eventAllocations });
+      if (!row) return { kind: 'not_found' as const };
+      const current = row.allocation.statut;
+      if (current === statut)
+        return {
+          kind: 'ok' as const,
+          id: row.allocation.id,
+          statut,
+          screenhostId: row.allocation.screenhostId,
+          changed: false,
+        };
+      // A refusal is final — its reservations are gone and the cascade may have re-placed.
+      if (current === 'REFUSE') return { kind: 'refused_final' as const };
+
+      await tx
+        .update(eventAllocations)
+        .set({ statut, decidedAt: new Date() })
+        .where(eq(eventAllocations.id, row.allocation.id));
+
+      if (statut === 'REFUSE') {
+        // Release the venue's holds (its blocs will never air), then re-place the refused
+        // impressions over the remaining pool — same tx, all-or-nothing. D6 partial (or an
+        // empty repair) is accepted: the cascade never blocks a refusal.
+        await releaseBlocHours(tx, row.eventId, row.allocation.screenhostId);
+        await runEventRefusalCascade(
+          tx,
+          { id: row.campaignId, name: row.matchName },
+          { id: row.eventId, kickoffAt: row.kickoffAt, endsAt: row.endsAt },
+          {
+            screenhostId: row.allocation.screenhostId,
+            impressionsTotal: row.allocation.impressionsTotal,
+          },
+          (await getDispatchConfig()).eventCpmTnd,
+        );
+      }
+      return {
+        kind: 'ok' as const,
+        id: row.allocation.id,
+        statut,
+        screenhostId: row.allocation.screenhostId,
+        changed: true,
+      };
+    });
+
+    if (outcome.kind === 'not_found') {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such allocation.' });
+    }
+    if (outcome.kind === 'refused_final') {
+      return reply.status(409).send({
+        error: 'CONFLICT',
+        message: 'Allocation déjà refusée — le refus est définitif.',
+        statusCode: 409,
+      });
+    }
+    // E4/EV4 — a genuine decision flip recomputes THIS venue's SPS (the acceptation variable
+    // now reads event decisions too). Failure-tolerated, the decision stands.
+    if (outcome.changed) {
+      try {
+        await recomputeVenueSps(outcome.screenhostId);
+      } catch (err) {
+        request.log.warn(
+          { err, screenhostId: outcome.screenhostId },
+          'SPS on-event-decision recompute failed',
+        );
+      }
+    }
+    // THE PLAYOUT PIN — deliberately NO playlist re-push here: an accepted event allocation
+    // airs nothing until EV5 wires the bloc playout.
+    return reply.status(200).send({
+      id: outcome.id,
+      statut,
+      ...(statut === 'ACCEPTE' ? { reminder: EVENT_ACCEPT_REMINDER } : {}),
+    });
+  };
+
+  // POST /api/screenhosts/event-allocations/:id/accept — ACCEPTE + the antenne reminder.
+  app.post('/api/screenhosts/event-allocations/:id/accept', ownerGuard, (request, reply) =>
+    decideEventAllocation(request, reply, 'ACCEPTE'),
+  );
+  // POST /api/screenhosts/event-allocations/:id/refuse — REFUSE (final) + release + cascade.
+  app.post('/api/screenhosts/event-allocations/:id/refuse', ownerGuard, (request, reply) =>
+    decideEventAllocation(request, reply, 'REFUSE'),
+  );
 };

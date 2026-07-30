@@ -12,7 +12,9 @@ import {
   campaignZones,
   campaigns,
   creatives,
+  eventAllocations,
   events,
+  screenhosts,
   zones,
 } from '../db/schema.js';
 import { MIN_CAMPAIGN_BUDGET_TND } from '../lib/campaign-budget.js';
@@ -609,6 +611,55 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
       eligible_count: cmax.eligibleCount,
       // CF-HF4 — the saturated/empty split for the wizard's zero-state message.
       targeted_count: cmax.targetedCount,
+    });
+  });
+
+  // GET /api/campaigns/:id/event-allocations — EV4: the positioning's placement summary once
+  // dispatched (N établissements, impressions prévues, per-venue lines). Owner-scoped like every
+  // campaign read; an unbound or undispatched row simply returns zero lines.
+  app.get('/api/campaigns/:id/event-allocations', advertiserGuard, async (request, reply) => {
+    const parsedParams = idParamSchema.safeParse(request.params);
+    if (!parsedParams.success) return reply.status(400).send(invalidId);
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply
+        .status(401)
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentification requise.' });
+    }
+    const [own] = await db
+      .select({ id: campaigns.id })
+      .from(campaigns)
+      .where(and(eq(campaigns.id, parsedParams.data.id), eq(campaigns.advertiserId, userId)))
+      .limit(1);
+    if (!own) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'Campagne introuvable.' });
+    }
+    const rows = await db
+      .select({
+        id: eventAllocations.id,
+        screenhostName: screenhosts.name,
+        blocs: eventAllocations.blocs,
+        impressionsTotal: eventAllocations.impressionsTotal,
+        montantTnd: eventAllocations.montantTnd,
+        statut: eventAllocations.statut,
+      })
+      .from(eventAllocations)
+      .innerJoin(screenhosts, eq(eventAllocations.screenhostId, screenhosts.id))
+      .where(eq(eventAllocations.campaignId, parsedParams.data.id))
+      .orderBy(desc(eventAllocations.createdAt));
+    return reply.status(200).send({
+      count: rows.length,
+      impressions_total: rows.reduce((sum, r) => sum + r.impressionsTotal, 0),
+      montant_total_tnd:
+        Math.round(rows.reduce((sum, r) => sum + Number(r.montantTnd) * 1000, 0)) / 1000,
+      allocations: rows.map((r) => ({
+        id: r.id,
+        screenhost_name: r.screenhostName,
+        blocs_count: Array.isArray(r.blocs) ? r.blocs.length : 0,
+        impressions_total: r.impressionsTotal,
+        montant_tnd: Number(r.montantTnd),
+        statut: r.statut,
+      })),
     });
   });
 

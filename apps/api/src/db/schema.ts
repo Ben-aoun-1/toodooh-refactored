@@ -1691,3 +1691,44 @@ export const screenhostAmax = pgTable(
 );
 
 export type ScreenhostAmax = typeof screenhostAmax.$inferSelect;
+
+// ── event_allocations (EV4 — the bloc dispatch) ──────────────────────────────
+// One row per (positioning, venue): the venue's placed BLOCS (jsonb list of {start, end,
+// impressions} — impressions = A_max × 20 per bloc, frozen at placement), their total and TND
+// value at CPM_evt. The owner decides §11.1: EN_ATTENTE at placement (hour_reservations rows
+// are written alongside), ACCEPTE keeps them, REFUSE releases them and cascades a re-fill.
+// SEPARATE from campaign_dispatch_allocation BY DESIGN (D51): the campaign engine never reads
+// this table; the playout path never serves it (airing = EV5).
+export const eventAllocations = pgTable(
+  'event_allocations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** The POSITIONING (an event-bound campaign row — EV3's binding). */
+    campaignId: uuid('campaign_id')
+      .notNull()
+      .references(() => campaigns.id, { onDelete: 'cascade' }),
+    screenhostId: uuid('screenhost_id')
+      .notNull()
+      .references(() => screenhosts.id, { onDelete: 'cascade' }),
+    /** The placed blocs: [{start, end, impressions}] — ISO instants, A_max × 20 each. */
+    blocs: jsonb('blocs').notNull(),
+    impressionsTotal: integer('impressions_total').notNull(),
+    montantTnd: numeric('montant_tnd', { precision: 12, scale: 3 }).notNull(),
+    statut: text('statut').notNull().default('EN_ATTENTE'),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('event_allocations_campaign_id_idx').on(table.campaignId),
+    index('event_allocations_screenhost_id_idx').on(table.screenhostId),
+    index('event_allocations_statut_idx').on(table.statut),
+    unique('event_allocations_campaign_screenhost_uq').on(table.campaignId, table.screenhostId),
+    check(
+      'event_allocations_statut_valid',
+      sql`${table.statut} in ('EN_ATTENTE', 'ACCEPTE', 'REFUSE')`,
+    ),
+  ],
+);
+
+export type EventAllocation = typeof eventAllocations.$inferSelect;
+export type NewEventAllocation = typeof eventAllocations.$inferInsert;

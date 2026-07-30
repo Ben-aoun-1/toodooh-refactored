@@ -12,6 +12,8 @@ export interface PlaylistVideo {
   duration_seconds: number | null;
   priority: number;
   reps_per_hour: number; // R_i — planned plays/hour, so the player can space (cadence) the spot
+  /** EV4 rider — ADDITIVE: 'video' | 'image'; ABSENT = video (the TV-C3 backcompat contract). */
+  creative_type?: 'video' | 'image';
 }
 
 export interface PlaylistMessage {
@@ -26,6 +28,8 @@ export interface PlaylistSource {
   durationSeconds: number | null;
   priority?: number;
   repsPerHour?: number; // R_i for this (campaign, screenhost); a spot with no allocation rI → 0
+  /** EV4 rider — the media kind; omitted = video (legacy senders stay valid). */
+  creativeType?: 'video' | 'photo';
 }
 
 // A frozen plan feeds a screen today iff its campaign window covers `now` (V1 rule), with "today"
@@ -51,6 +55,10 @@ export const buildPlaylist = (sources: readonly PlaylistSource[]): PlaylistMessa
     duration_seconds: source.durationSeconds,
     priority: source.priority ?? 0,
     reps_per_hour: source.repsPerHour ?? 0, // no allocation rI → 0 (player falls back)
+    // EV4 rider — only a declared kind emits the field; absent = video (TV-C3 backcompat).
+    ...(source.creativeType !== undefined
+      ? { creative_type: source.creativeType === 'photo' ? ('image' as const) : ('video' as const) }
+      : {}),
   })),
   loop: true,
 });

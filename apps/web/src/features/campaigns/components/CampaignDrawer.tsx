@@ -49,6 +49,8 @@ interface CampaignDrawerProps {
   creative?: CampaignDrawerCreative | null;
   /** CF-HF3 (advertiser) — the per-status impressions rule, computed by the page. */
   impressions?: ImpressionsDisplay | null;
+  /** EV4 — the positioning's placement block (a consumer slot, like statusBadge). */
+  eventPlacementSlot?: ReactNode;
   /** Named `variant` (not `role`) to avoid the jsx-a11y/aria-role lint on `role=`. */
   variant: 'advertiser' | 'owner';
   /**
@@ -88,6 +90,7 @@ export default function CampaignDrawer({
   variant,
   statusBadge,
   footerSlot,
+  eventPlacementSlot,
 }: CampaignDrawerProps) {
   const isAdvertiser = variant === 'advertiser';
 
@@ -223,6 +226,9 @@ export default function CampaignDrawer({
               {formatImpressions(impressions?.prevues ?? null)}
             </div>
           </Section>
+
+          {/* EV4 — the positioning's placement (N établissements + per-venue lines). */}
+          {eventPlacementSlot && <Section label="Placement">{eventPlacementSlot}</Section>}
 
           <Section label="Zones géographiques">
             <div

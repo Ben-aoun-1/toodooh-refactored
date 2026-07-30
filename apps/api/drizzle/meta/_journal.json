@@ -414,6 +414,13 @@
       "when": 1785409843013,
       "tag": "0058_campaign_event_positioning",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1785416360524,
+      "tag": "0059_event_allocations",
+      "breakpoints": true
     }
   ]
 }

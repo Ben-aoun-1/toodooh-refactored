@@ -5,9 +5,11 @@ import { toast } from 'react-hot-toast';
 import PageHeader from '@/components/PageHeader';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import AllocationSpotViewer from '@/features/screenhost/components/AllocationSpotViewer';
+import EventAllocationCard from '@/features/screenhost/components/EventAllocationCard';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
 import OwnerNotificationsBell from '@/features/screenhost/components/OwnerNotificationsBell';
 import { useScreenhostAllocations } from '@/features/screenhost/hooks/useScreenhostAllocations';
+import { useScreenhostEventAllocations } from '@/features/screenhost/hooks/useScreenhostEventAllocations';
 import {
   ACCEPT_ALLOCATION_REMINDER,
   REFUSED_STATE_DETAIL,
@@ -21,6 +23,7 @@ import {
   revenueLabel,
   zonesLabel,
 } from '@/features/screenhost/services/screenhost-allocations.service';
+import { EVENT_REFUSE_CONFIRM } from '@/features/screenhost/services/screenhost-event-allocations.service';
 
 /**
  * Owner accept/reject surface — the de-Supabased replacement for the legacy per-campaign
@@ -50,6 +53,33 @@ export default function OwnerAllocations() {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [refusedById, setRefusedById] = useState<ReadonlyMap<string, PendingAllocation>>(new Map());
+
+  // EV4 — the EVENT proposals (§11.1), a SIBLING list above the campaigns: the accept reminder
+  // comes from the API's response; a confirmed refusal holds its card in « Refus enregistré »
+  // (the campaign idiom, kept). Nothing here airs before EV5.
+  const eventProposals = useScreenhostEventAllocations(user?.id);
+  const [refusedEventIds, setRefusedEventIds] = useState<ReadonlySet<string>>(new Set());
+  const decideEvent = async (id: string, kind: 'accept' | 'refuse') => {
+    if (kind === 'refuse' && !window.confirm(EVENT_REFUSE_CONFIRM)) return;
+    setPendingId(id);
+    try {
+      if (kind === 'accept') {
+        const reminder = await eventProposals.accept(id);
+        toast.success(reminder ?? 'Événement accepté.');
+      } else {
+        await eventProposals.refuse(id);
+        setRefusedEventIds((prev) => new Set(prev).add(id));
+      }
+    } catch {
+      toast.error(
+        kind === 'accept'
+          ? 'Impossible d’accepter l’événement'
+          : 'Impossible de refuser l’événement',
+      );
+    } finally {
+      setPendingId(null);
+    }
+  };
 
   const decide = async (allocation: PendingAllocation, kind: 'accept' | 'reject') => {
     // CF-Q1 — refusal is consequential and irreversible: confirm first, matching the app's
@@ -98,6 +128,26 @@ export default function OwnerAllocations() {
 
           <div className="flex-1 overflow-y-auto">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+              {/* EV4 — ÉVÉNEMENTS: the owner's pending event proposals, above the campaigns. */}
+              {eventProposals.proposals.length > 0 && (
+                <div className="mb-6">
+                  <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-gray-500">
+                    Événements
+                  </h2>
+                  <ul className="space-y-3">
+                    {eventProposals.proposals.map((proposal) => (
+                      <EventAllocationCard
+                        key={proposal.id}
+                        proposal={proposal}
+                        refused={refusedEventIds.has(proposal.id)}
+                        busy={eventProposals.deciding && pendingId === proposal.id}
+                        onAccept={() => void decideEvent(proposal.id, 'accept')}
+                        onRefuse={() => void decideEvent(proposal.id, 'refuse')}
+                      />
+                    ))}
+                  </ul>
+                </div>
+              )}
               {loading ? (
                 <div className="py-16 text-center text-sm text-gray-500">Chargement...</div>
               ) : isError ? (

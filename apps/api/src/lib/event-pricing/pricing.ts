@@ -9,7 +9,7 @@ import {
   screenhostUnavailability,
   screenhosts,
 } from '../../db/schema.js';
-import { fenetreDiffusion } from '../fenetre-diffusion.js';
+import { type BlocDiffusion, fenetreDiffusion } from '../fenetre-diffusion.js';
 
 // EV2 — the EVENT pricing engine (D51: its OWN module). The campaign engine is untouched and
 // UNIMPORTED — no lib/dispatch, no campaign-* libs (boundary-pinned like E7's rail). The event
@@ -111,29 +111,33 @@ interface AvailabilityContext {
  * D1, per bloc: available iff EVERY Tunis (date, hour) cell the bloc touches is inside the
  * venue's opening hours ([opening, closing) — a bloc half-outside is OUT), on a date the owner
  * has not declared unavailable, and on an hour no OTHER event has reserved.
+ * EV4 — the IDENTITY variant: the dispatch engine needs WHICH blocs, not how many. The counter
+ * below derives from this list, so EV2's availability pins hold both byte-for-byte.
  */
-export const blocAvailability = (
+export const availableBlocs = (
   event: EventRef,
   venue: VenueHours,
   ctx: AvailabilityContext,
-): number => {
-  if (venue.openingHour === null || venue.closingHour === null) return 0;
+): BlocDiffusion[] => {
+  if (venue.openingHour === null || venue.closingHour === null) return [];
   const { openingHour, closingHour } = venue;
   const { blocs } = fenetreDiffusion(event.kickoffAt, event.endsAt);
-  let available = 0;
-  for (const bloc of blocs) {
-    const cells = blocCells(bloc.start, bloc.end);
-    const ok = cells.every(
+  return blocs.filter((bloc) =>
+    blocCells(bloc.start, bloc.end).every(
       (c) =>
         c.hour >= openingHour &&
         c.hour < closingHour &&
         !ctx.unavailableDates.has(c.date) &&
         !ctx.foreignReservedCells.has(`${c.date}:${c.hour}`),
-    );
-    if (ok) available += 1;
-  }
-  return available;
+    ),
+  );
 };
+
+export const blocAvailability = (
+  event: EventRef,
+  venue: VenueHours,
+  ctx: AvailabilityContext,
+): number => availableBlocs(event, venue, ctx).length;
 
 export interface EventVenuePricing {
   screenhostId: string;
