@@ -27,7 +27,12 @@ export default function AdminRoute({ children, requiredRoles = [] }: AdminRouteP
   }
 
   const isAdmin = role === 'admin' || role === 'superadmin';
-  if (!user || !isAdmin) {
+  // EV6 RIDER — a route that NAMES a non-admin role admits it (the Événements page lists
+  // screenhost_agent so an inspecting agent reaches the attestation panel, matching EV5's API
+  // guard). Every other route keeps the admin-only default, and the requiredRoles check below is
+  // unchanged — an admin on a superadmin-only route still lands on the admin dashboard.
+  const explicitlyAllowed = requiredRoles.includes(role ?? '');
+  if (!user || (!isAdmin && !explicitlyAllowed)) {
     return <Navigate to="/admin-login" />;
   }
 

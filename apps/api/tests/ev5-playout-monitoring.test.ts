@@ -571,26 +571,24 @@ describe('EV5 — event playout, monitoring + settlement (real Postgres)', () =>
       expect(rows).toHaveLength(1);
     });
 
-    it('NO venue reversement line and NO payout row is ever written (the EV6 pin)', async () => {
+    // EV6 FLIPPED THIS PIN (chartered): the venue side now settles too. What EV5 owns — and what
+    // this asserts — is that the ADVERTISER settlement is unchanged by the venue lines; their own
+    // identity (Σ lines ≡ delivered value, source='event') is pinned in the EV6 suite.
+    it('the advertiser settlement is unchanged by the venue side (EV6 writes the lines)', async () => {
       const venue = await seedVenue();
       const eventId = await seedEvent();
-      const { campaignId } = await seedPositioning(eventId, venue.id);
+      const { campaignId } = await seedPositioning(eventId, venue.id, { montant: '300.000' });
       for (const bloc of GRID.blocs) {
         await seedProof(campaignId, venue.id, new Date(bloc.start.getTime() + 5_000));
       }
-      await settleEventPositioning(campaignId, AFTER_WINDOW);
-      const lines =
-        await sql`select count(*)::int as n from reversement_lines where campaign_id = ${campaignId}`;
-      const payouts =
-        await sql`select count(*)::int as n from campaign_screenhost_payout where campaign_id = ${campaignId}`;
-      expect(lines[0]?.['n']).toBe(0);
-      expect(payouts[0]?.['n']).toBe(0);
-      // And the settlement source never mentions them.
-      const source = readFileSync(
-        fileURLToPath(new URL('../src/lib/event-playout/settlement.ts', import.meta.url)),
-        'utf8',
-      );
-      expect(source).not.toMatch(/reversementLines|campaignScreenhostPayout/);
+      const settled = await settleEventPositioning(campaignId, AFTER_WINDOW);
+      expect(settled.deliveredTnd).toBe(300);
+      expect(settled.refundTnd).toBe(0);
+      const [recon] = await db
+        .select({ spendTnd: campaignReconciliation.spendTnd })
+        .from(campaignReconciliation)
+        .where(eq(campaignReconciliation.campaignId, campaignId));
+      expect(Number(recon?.spendTnd)).toBe(300);
     });
 
     it('the sweep settles closed windows only', async () => {

@@ -3,15 +3,21 @@ import type { FastifyBaseLogger } from 'fastify';
 
 import { db } from '../../db/client.js';
 import {
+  agentReferrals,
   campaignReconciliation,
+  campaignScreenhostPayout,
   campaigns,
   eventAllocations,
   eventAttestations,
   events,
   notifications,
   proofOfPlay,
+  reversementLines,
+  screenhosts,
 } from '../../db/schema.js';
+import { getDispatchConfig } from '../dispatch/config.js';
 import { fenetreDiffusion } from '../fenetre-diffusion.js';
+import { computeReversement, millimesToTnd, tndToMillimes } from '../reversement/split.js';
 
 import { parseBlocs } from './spots.js';
 
@@ -54,6 +60,9 @@ export interface EventSettlementVenueLine {
   attestationNegated: boolean;
   /** The allocation's decision state at window close (REFUSE lines carry no money). */
   statut: string;
+  /** The venue's placed impressions, and the delivered share of them (bloc pro-rata). */
+  impressionsTotal: number;
+  impressionsDelivered: number;
 }
 
 export interface EventSettlementResult {
@@ -153,6 +162,8 @@ export const measureEventDelivery = async (
         refundTnd: 0,
         attestationNegated: isNegated,
         statut: allocation.statut,
+        impressionsTotal: 0,
+        impressionsDelivered: 0,
       });
       continue;
     }
@@ -174,8 +185,9 @@ export const measureEventDelivery = async (
     // no charge, so it can never generate a refund either.
     const share = blocs.length === 0 ? 0 : deliveredBlocs / blocs.length;
     const venueDelivered = round3(montantTnd * share);
+    const venueDeliveredImp = Math.round(allocation.impressionsTotal * share);
     deliveredTnd += venueDelivered;
-    deliveredImp += Math.round(allocation.impressionsTotal * share);
+    deliveredImp += venueDeliveredImp;
     venues.push({
       screenhostId: allocation.screenhostId,
       blocsTotal: blocs.length,
@@ -185,6 +197,8 @@ export const measureEventDelivery = async (
       refundTnd: round3(montantTnd - venueDelivered),
       attestationNegated: isNegated,
       statut: allocation.statut,
+      impressionsTotal: allocation.impressionsTotal,
+      impressionsDelivered: venueDeliveredImp,
     });
   }
 
@@ -231,6 +245,59 @@ export const settleEventPositioning = async (
   if (measured.venues.length === 0) return { status: 'NO_ALLOCATIONS' };
   const { engagedTnd, deliveredTnd, refundTnd, expectedImp, deliveredImp, venues } = measured;
 
+  // EV6 — the VENUE side joins the settlement: each delivering venue's DELIVERED value goes
+  // through E7's rail (computeReversement, 50/44/3/3 from the live config) into reversement_lines
+  // with source='event'. The rail is CALLED, never modified. The refunded/undelivered value NEVER
+  // enters a base — the base IS the delivered value, so the E7 identity (Σ lines ≡ delivered)
+  // holds for events by construction. A fully-refunded positioning writes NO lines at all.
+  const cfg = await getDispatchConfig();
+  const pcts = {
+    sh: cfg.pctSh,
+    toodooh: cfg.pctToodooh,
+    agentSh: cfg.pctAgentSh,
+    agentSc: cfg.pctAgentSc,
+  };
+  const paying = venues.filter((v) => v.deliveredTnd > 0);
+  const splits = paying.map((v) => ({
+    screenhostId: v.screenhostId,
+    deliveredTnd: v.deliveredTnd,
+    // The event unit is bloc VALUE in TND, so the base is the delivered money directly (the
+    // campaign path's proportional form reduces to the same thing when C_cible = target × CPM).
+    split: computeReversement(tndToMillimes(v.deliveredTnd), pcts),
+  }));
+
+  // Agent attribution, resolved exactly as the campaign path resolves it: the venue OWNER's
+  // referring agent takes the SH agent line, the ADVERTISER's takes the SC one.
+  const ownerRows = splits.length
+    ? await db
+        .select({ id: screenhosts.id, ownerId: screenhosts.ownerId })
+        .from(screenhosts)
+        .where(
+          inArray(
+            screenhosts.id,
+            splits.map((sp) => sp.screenhostId),
+          ),
+        )
+    : [];
+  const ownerBySh = new Map(ownerRows.map((r) => [r.id, r.ownerId]));
+  const referredIds = [
+    ...new Set(
+      [...ownerRows.map((r) => r.ownerId), row.campaign.advertiserId].filter(
+        (v): v is string => v !== null,
+      ),
+    ),
+  ];
+  const referralRows = referredIds.length
+    ? await db
+        .select({
+          agentUserId: agentReferrals.agentUserId,
+          referredUserId: agentReferrals.referredUserId,
+        })
+        .from(agentReferrals)
+        .where(inArray(agentReferrals.referredUserId, referredIds))
+    : [];
+  const agentByReferred = new Map(referralRows.map((r) => [r.referredUserId, r.agentUserId]));
+
   const inserted = await db
     .insert(campaignReconciliation)
     .values({
@@ -250,6 +317,42 @@ export const settleEventPositioning = async (
     .onConflictDoNothing()
     .returning({ id: campaignReconciliation.id });
   if (inserted.length === 0) return { status: 'ALREADY_SETTLED' };
+  const reconciliationId = inserted[0]?.id ?? '';
+
+  if (splits.length > 0) {
+    // The venue payable + the four-way split, in the campaign path's own shapes.
+    await db.insert(campaignScreenhostPayout).values(
+      splits.map((sp) => {
+        const line = venues.find((v) => v.screenhostId === sp.screenhostId);
+        return {
+          reconciliationId,
+          campaignId: positioningId,
+          screenhostId: sp.screenhostId,
+          expectedImp: line?.impressionsTotal ?? 0,
+          deliveredImp: line?.impressionsDelivered ?? 0,
+          earningsTnd: String(millimesToTnd(sp.split.shMillimes)),
+        };
+      }),
+    );
+    await db.insert(reversementLines).values(
+      splits.map((sp) => {
+        const ownerId = ownerBySh.get(sp.screenhostId) ?? null;
+        return {
+          source: 'event',
+          campaignId: positioningId,
+          screenhostId: sp.screenhostId,
+          baseValueTnd: String(millimesToTnd(sp.split.baseMillimes)),
+          shAmountTnd: String(millimesToTnd(sp.split.shMillimes)),
+          toodoohAmountTnd: String(millimesToTnd(sp.split.toodoohMillimes)),
+          agentShAmountTnd: String(millimesToTnd(sp.split.agentShMillimes)),
+          agentScAmountTnd: String(millimesToTnd(sp.split.agentScMillimes)),
+          agentShId: ownerId === null ? null : (agentByReferred.get(ownerId) ?? null),
+          agentScId: agentByReferred.get(row.campaign.advertiserId) ?? null,
+          settledAt: new Date(),
+        };
+      }),
+    );
+  }
 
   await db.insert(notifications).values({
     userId: row.campaign.advertiserId,

@@ -128,7 +128,8 @@ export default function CampaignReviewQueue() {
       }>(`/admin/campaigns/${selected?.id}/event-allocations`),
     enabled: Boolean(selected?.id && selected?.event_id),
   });
-  // E7 — the settlement breakdown for the examen modal (empty lines until reconciled).
+  // E7 — the settlement breakdown for the examen modal (empty lines until reconciled). EV6 — a
+  // settled POSITIONING now has lines too (source='event'), served by the SAME endpoint.
   const { data: reversements } = useCampaignReversements(selected?.id ?? null);
   // LOG1 — the engine journal + its phase filter.
   const [journalPhase, setJournalPhase] = useState<EnginePhaseFilter>('all');

@@ -17,7 +17,7 @@ import { remapEventPositionings, voidEventPositionings } from '../lib/event-play
 import { computeEventCmax } from '../lib/event-pricing/pricing.js';
 import { declaredMatchesSniffed, sniffContainer } from '../lib/media-probe.js';
 import { recomputeVenueSps } from '../lib/sps-score.js';
-import { requireAdmin, requireAuth, requireRole } from '../middleware/require-auth.js';
+import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
 import { storage } from '../storage/s3-storage.js';
 
 import { eventView } from './events.js';
@@ -30,6 +30,9 @@ import { eventView } from './events.js';
 // official catalogue, the suggestion list belongs to the advertisers; annuler works on both
 // (the operator's kill switch for junk suggestions). The diffusion window is ALWAYS derived —
 // no window column exists to recompute (pinned in tests).
+
+/** EV6 RIDER — who may READ the event catalogue (writes stay admin-only). */
+const EVENT_CATALOGUE_ROLES = new Set(['admin', 'superadmin', 'screenhost_agent']);
 
 const idParamSchema = z.object({ id: z.uuid() });
 const venueParamsSchema = z.object({ id: z.uuid(), screenhost_id: z.uuid() });
@@ -79,10 +82,34 @@ export const adminEventsRoutes: FastifyPluginAsync = async (app) => {
   });
 
   const adminGuard = { preHandler: [requireAuth, requireAdmin] };
+  // EV6 RIDER — the catalogue READ opens to an inspecting screenhost_agent (they must pick the
+  // event before attesting on it; the ratified reasoning: agents seeing the catalogue is
+  // harmless). Every WRITE below — create, edit, annuler, reporter, image, tarification — keeps
+  // the admin-only guard.
+  //
+  // It is a LOCAL guard rather than requireRole(...) so the refusal keeps requireAdmin's exact
+  // French copy: this route's 403 message is pinned (ev1-events), and an advertiser turned away
+  // here must read the same sentence it always read — widening WHO may enter must not change
+  // what everyone else is told.
+  const requireEventCatalogueAccess = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ): Promise<void> => {
+    const role = request.user?.role;
+    if (role === undefined || !EVENT_CATALOGUE_ROLES.has(role)) {
+      await reply.status(403).send({
+        error: 'FORBIDDEN',
+        message: 'Accès administrateur requis.',
+        statusCode: 403,
+        requestId: request.id,
+      });
+    }
+  };
+  const eventReadGuard = { preHandler: [requireAuth, requireEventCatalogueAccess] };
 
   // GET /api/admin/events — EVERYTHING (official + suggested, annulé included, past included):
   // the management list, kickoff descending (the upcoming slate first).
-  app.get('/api/admin/events', adminGuard, async (_request, reply) => {
+  app.get('/api/admin/events', eventReadGuard, async (_request, reply) => {
     const now = new Date();
     const rows = await db.select().from(events).orderBy(desc(events.kickoffAt));
     return reply.status(200).send({
@@ -286,9 +313,7 @@ export const adminEventsRoutes: FastifyPluginAsync = async (app) => {
   // (screens on, spot airing). ABSENT IS RESPECTED: no attestation is never a sanction. A
   // respecte=false verdict both lowers the venue's SPS respect variable and negates that venue's
   // per-bloc delivery at settlement (the dual proof).
-  const attestationGuard = {
-    preHandler: [requireAuth, requireRole('admin', 'superadmin', 'screenhost_agent')],
-  };
+  const attestationGuard = eventReadGuard;
 
   // GET /api/admin/events/:id/attestations — the recorded verdicts per allocated venue.
   app.get('/api/admin/events/:id/attestations', attestationGuard, async (request, reply) => {

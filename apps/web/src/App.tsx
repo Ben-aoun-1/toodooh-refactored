@@ -551,9 +551,11 @@ export default function App() {
               }
             />
             <Route
+              // EV6 RIDER — matches EV5's API guard: an inspecting screenhost_agent must be
+              // able to reach the attestation panel, and the catalogue itself is harmless.
               path="/admin-events"
               element={
-                <AdminRoute requiredRoles={['superadmin']}>
+                <AdminRoute requiredRoles={['superadmin', 'admin', 'screenhost_agent']}>
                   <EventManagement />
                 </AdminRoute>
               }
