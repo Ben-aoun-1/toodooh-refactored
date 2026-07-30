@@ -218,21 +218,24 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
                 </>
               )}
 
-              {/* Événements, Gestion Admins - Super Admin uniquement */}
+              {/* EV6 RIDER — Événements opens to admin + screenhost_agent too (the attestation
+                  panel lives there); Gestion Admins stays superadmin-only below. */}
+              {(role === 'superadmin' || role === 'admin' || role === 'screenhost_agent') && (
+                <button
+                  onClick={() => navigate('/admin-events')}
+                  className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
+                    location.pathname === '/admin-events'
+                      ? 'bg-brand-primary text-brand-deep shadow-lg shadow-brand-primary/25'
+                      : 'text-gray-700 hover:bg-gray-100 hover:text-brand-primary'
+                  }`}
+                >
+                  <Calendar className="mr-3 h-5 w-5" />
+                  Événements
+                </button>
+              )}
+
               {role === 'superadmin' && (
                 <>
-                  <button
-                    onClick={() => navigate('/admin-events')}
-                    className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
-                      location.pathname === '/admin-events'
-                        ? 'bg-brand-primary text-brand-deep shadow-lg shadow-brand-primary/25'
-                        : 'text-gray-700 hover:bg-gray-100 hover:text-brand-primary'
-                    }`}
-                  >
-                    <Calendar className="mr-3 h-5 w-5" />
-                    Événements
-                  </button>
-
                   <button
                     onClick={() => navigate('/admin-management')}
                     className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${

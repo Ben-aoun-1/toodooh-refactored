@@ -54,6 +54,7 @@ import {
 import { campaignStatusUi } from '@/features/campaigns/lib/campaign-status';
 import type { CampaignView } from '@/features/campaigns/services/campaigns.api';
 import { useWizardResumeStore } from '@/features/campaigns/stores/wizard-resume.store';
+import BoostPositioningModal from '@/features/events/components/BoostPositioningModal';
 import EventPlacementSummary from '@/features/events/components/EventPlacementSummary';
 import { logger } from '@/lib/logger';
 import { htTtcOrDash } from '@/lib/money';
@@ -108,6 +109,8 @@ export default function MyCampaigns() {
   // optimistic `setCampaigns` patches dropped (mutations now
   // invalidate-and-refetch), no local mirror is needed.
   const { campaigns, loading, isError } = useMyCampaigns(user?.id);
+  // EV6 — the POSITIONING booster's target (its own modal: zones-only, frozen axes).
+  const [boostPositioningTarget, setBoostPositioningTarget] = useState<CampaignView | null>(null);
   // CF-B1 — the Booster modal's target (the untrimmed wire row).
   const [boostTarget, setBoostTarget] = useState<CampaignView | null>(null);
   const deleteCampaign = useDeleteCampaign(user?.id);
@@ -742,10 +745,14 @@ export default function MyCampaigns() {
                       <Trash2 className="h-4 w-4" /> Supprimer
                     </button>
                   )}
-                  {!campaign.event_id && canBoostCampaign(campaign.status) && (
+                  {canBoostCampaign(campaign.status) && (
                     <button
                       type="button"
-                      onClick={() => setBoostTarget(campaign.raw)}
+                      onClick={() =>
+                        campaign.event_id
+                          ? setBoostPositioningTarget(campaign.raw)
+                          : setBoostTarget(campaign.raw)
+                      }
                       className="flex-1 py-2 rounded-lg text-sm font-medium inline-flex items-center justify-center gap-1.5 transition-colors bg-[#e3f7ec] text-[#66bc74] hover:bg-[#cceee0]"
                     >
                       <Rocket className="h-4 w-4" /> Booster
@@ -941,12 +948,16 @@ export default function MyCampaigns() {
                                       Rejouer
                                     </button>
                                   )}
-                                  {!campaign.event_id && canBoostCampaign(campaign.status) && (
+                                  {canBoostCampaign(campaign.status) && (
                                     <button
                                       type="button"
                                       onClick={() => {
                                         setOpenActionRowId(null);
-                                        setBoostTarget(campaign.raw);
+                                        if (campaign.event_id) {
+                                          setBoostPositioningTarget(campaign.raw);
+                                        } else {
+                                          setBoostTarget(campaign.raw);
+                                        }
                                       }}
                                       className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
                                     >
@@ -1125,13 +1136,17 @@ export default function MyCampaigns() {
                         <RotateCcw className="h-5 w-5" />
                         Reprendre
                       </button>
-                    ) : !selectedCampaign.event_id && canBoostCampaign(selectedCampaign.status) ? (
+                    ) : canBoostCampaign(selectedCampaign.status) ? (
                       <button
                         type="button"
                         onClick={() => {
                           const c = selectedCampaign;
                           closeDetailsDrawer();
-                          setTimeout(() => setBoostTarget(c.raw), 320);
+                          setTimeout(
+                            () =>
+                              c.event_id ? setBoostPositioningTarget(c.raw) : setBoostTarget(c.raw),
+                            320,
+                          );
                         }}
                         className="flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-[10px] border border-[#1FC16B] text-sm font-medium text-[#1FC16B] bg-[#E3F7EC] hover:opacity-90 transition-opacity"
                         style={{ boxShadow: '0px 1px 2px rgba(10, 13, 20, 0.0313726)' }}
@@ -1166,6 +1181,14 @@ export default function MyCampaigns() {
           campaign={boostTarget}
           userId={user?.id}
           onClose={() => setBoostTarget(null)}
+        />
+      )}
+
+      {/* EV6 — the POSITIONING booster: its own surface, the campaign one untouched beside it. */}
+      {boostPositioningTarget && (
+        <BoostPositioningModal
+          campaign={boostPositioningTarget}
+          onClose={() => setBoostPositioningTarget(null)}
         />
       )}
     </div>
