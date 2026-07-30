@@ -32,7 +32,8 @@ export type ActivationOutcome =
   | {
       status: 'OK';
       campaign: Campaign;
-      plan: typeof campaignDispatchPlan.$inferSelect;
+      /** NULL for event positionings (EV3): no dispatch ran, no plan exists — bloc dispatch is EV4. */
+      plan: typeof campaignDispatchPlan.$inferSelect | null;
       allocations: (typeof campaignDispatchAllocation.$inferSelect)[];
     }
   | {
@@ -92,7 +93,8 @@ const loadPlan = async (campaignId: string) => {
 export type PreparedActivation =
   | {
       status: 'READY';
-      plan: typeof campaignDispatchPlan.$inferSelect;
+      /** NULL for event positionings (EV3) — see the phasing-boundary fork in prepare. */
+      plan: typeof campaignDispatchPlan.$inferSelect | null;
       allocations: (typeof campaignDispatchAllocation.$inferSelect)[];
     }
   | Exclude<ActivationOutcome, { status: 'OK' }>;
@@ -154,6 +156,15 @@ export const prepareActivation = async (
       requiredTnd: requestedBudget,
       availableTnd: balance,
     };
+  }
+
+  // EV3 — THE PHASING BOUNDARY (pinned): a POSITIONING (an event-BOUND row — the binding, not
+  // the type string, discriminates; legacy 'event'-typed rows stay classic) activates WITHOUT
+  // dispatch. No runDispatch, no pool, no plan, no allocation rows, no owner notifications — the
+  // row flips date-routed (finalize) and sits À venir/Active inert until EV4 wires bloc
+  // dispatch. Every gate ABOVE (status, content, budget at CPM_evt, funded balance) applied.
+  if (campaign.eventId !== null) {
+    return { status: 'READY', plan: null, allocations: [] };
   }
 
   // Dispatch (reuse the engine). Every DispatchResult case is handled. LOG1 — the production

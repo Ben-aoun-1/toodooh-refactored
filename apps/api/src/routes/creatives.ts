@@ -19,6 +19,7 @@ import {
   isValidDuration,
   mimeAllowedForKind,
 } from '../lib/creatives.js';
+import { validateEventSpot } from '../lib/event-pricing/spot.js';
 import {
   MediaProbeError,
   REQUIRED_VIDEO_CODEC,
@@ -47,6 +48,9 @@ const uploadQuerySchema = z.object({
   type: z.enum(['video', 'photo']),
   duration_seconds: z.coerce.number().int(),
   title: z.string().min(1).max(200).optional(),
+  // EV3 — the parcours declares an event upload: the 15-second spot cap applies at upload time
+  // (in addition to the attach-time guard — a refused spot never even stores).
+  for_event: z.enum(['1', 'true']).optional(),
 });
 
 const sendUnauthenticated = (reply: FastifyReply) =>
@@ -192,18 +196,30 @@ export const creativesRoutes: FastifyPluginAsync = async (app) => {
       storedDurationSeconds = measuredDuration;
     }
 
+    // EV3 — the event-spot cap (EV2's seam), enforced at upload when the positioning parcours
+    // declares it (?for_event=1): a video longer than 15 s can never air in a bloc, so refuse
+    // BEFORE storing anything. Judged on the stored value (the server-measured duration when the
+    // probe is on). Photos pass — their duration is a display cadence, not a media length.
+    if (parsedQuery.data.for_event !== undefined) {
+      const verdict = validateEventSpot({
+        creativeType: type,
+        durationSeconds: storedDurationSeconds,
+      });
+      if (!verdict.ok) {
+        return reply.status(400).send({ error: 'EVENT_SPOT_TOO_LONG', message: verdict.reason });
+      }
+    }
+
     const creativeId = randomUUID();
     const key = `creatives/${userId}/${creativeId}`;
 
     const result = await storage.upload({ key, body, contentType: data.mimetype });
     if ('error' in result) {
       // Storage failed → do NOT touch the table. Advertiser retries; no orphan key reference.
-      return reply
-        .status(502)
-        .send({
-          error: 'STORAGE_ERROR',
-          message: 'Le stockage de la créative a échoué. Veuillez réessayer.',
-        });
+      return reply.status(502).send({
+        error: 'STORAGE_ERROR',
+        message: 'Le stockage de la créative a échoué. Veuillez réessayer.',
+      });
     }
 
     // CF-SK1 (ruling #9) — the spot's identity: same bytes + same owner + a prior APPROVED

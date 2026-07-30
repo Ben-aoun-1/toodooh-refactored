@@ -35,9 +35,24 @@ export interface CampaignCmax {
 }
 
 export const computeCampaignCmax = async (
-  campaign: { id: string; startDate: string; endDate: string; campaignType: string },
+  campaign: {
+    id: string;
+    startDate: string;
+    endDate: string;
+    campaignType: string;
+    eventId?: string | null;
+  },
   spotSeconds: number,
 ): Promise<CampaignCmax> => {
+  // EV3 — THE ENGINE BOUNDARY (pinned): the classic C_max never prices a POSITIONING (an
+  // event-BOUND row — the binding, not the type string, discriminates; a legacy 'event'-typed
+  // row without a binding still prices here at CPM_evt, exactly as before EV3). EV2's event
+  // pricing owns the positioning ceiling; bloc dispatch is EV4. Reaching here with a bound row
+  // is a routing bug — fail loudly rather than price nonsense. eventId is optional so the
+  // pre-EV3 callers (tests included) stay byte-identical: absent ≡ unbound ≡ classic.
+  if (campaign.eventId != null) {
+    throw new Error('computeCampaignCmax received an event positioning (EV3 engine boundary)');
+  }
   const config = await getDispatchConfig();
   const t = tForDuration(spotSeconds, config);
   const cpm = cpmForCampaign(campaign.campaignType, config);

@@ -84,6 +84,7 @@ export const campaignDispatchRoutes: FastifyPluginAsync = async (app) => {
       .select({
         id: campaigns.id,
         name: campaigns.name,
+        eventId: campaigns.eventId,
         startDate: campaigns.startDate,
         endDate: campaigns.endDate,
       })
@@ -92,6 +93,14 @@ export const campaignDispatchRoutes: FastifyPluginAsync = async (app) => {
       .limit(1);
     if (!campaign) {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such campaign.' });
+    }
+    // EV3 — THE ENGINE BOUNDARY (pinned): a positioning (an event-BOUND row) never reaches
+    // runDispatch — no pool, no plan, no allocations until EV4 wires bloc dispatch.
+    if (campaign.eventId !== null) {
+      return reply.status(409).send({
+        error: 'EVENT_POSITIONING',
+        message: 'Un positionnement événementiel ne passe pas par le dispatch classique.',
+      });
     }
 
     const result = await runDispatch(

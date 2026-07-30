@@ -3,17 +3,19 @@ import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
 import { db } from '../db/client.js';
-import { type Campaign, cartItems, campaigns, creatives } from '../db/schema.js';
+import { type Campaign, cartItems, campaigns, creatives, events } from '../db/schema.js';
 import { finalizeActivation, prepareActivation } from '../lib/activation-service.js';
 import { MIN_CAMPAIGN_BUDGET_TND } from '../lib/campaign-budget.js';
 import { computeCampaignCmax } from '../lib/campaign-cmax.js';
 import { startDateViolation } from '../lib/campaign-dates.js';
 import { getDispatchConfig } from '../lib/dispatch/config.js';
+import { computeEventCmax } from '../lib/event-pricing/pricing.js';
 import { walletBalance } from '../lib/recharges.js';
 import { requireAdvertiser } from '../middleware/require-advertiser.js';
 import { requireAuth } from '../middleware/require-auth.js';
 
 import { type CampaignRow, campaignSelection, campaignView } from './campaigns.js';
+import { eventView } from './events.js';
 
 // CF-C1 (spec §1.10–1.14) — the panier: finished DRAFT campaigns queued for ONE
 // « Confirmer et lancer ». Adding requires a COMPLETE draft (dates + floor, creative, budget in
@@ -44,9 +46,16 @@ interface GateRow {
  */
 const cartGateReason = async (row: GateRow, leadWorkingDays: number): Promise<string | null> => {
   const c = row.campaign;
+  // EV3 — a POSITIONING is an event-BOUND row (event_id set): the binding, not the type string,
+  // is the discriminator (a legacy 'event'-typed row without a binding stays fully classic).
+  const isEvent = c.eventId !== null;
   if (c.status !== 'draft') return 'NOT_DRAFT';
   if (!c.startDate || !c.endDate) return 'MISSING_DATES';
-  if (startDateViolation(c.startDate, new Date(), leadWorkingDays)) return 'INVALID_START_DATE';
+  // EV3 — an event positioning's dates are the SNAPSHOTTED diffusion window (the kickoff is the
+  // truth, not the advertiser's choice): the J+2 working-day floor does not apply. The too-late
+  // guard is the lifecycle's (past-kickoff drafts are auto-deleted).
+  if (!isEvent && startDateViolation(c.startDate, new Date(), leadWorkingDays))
+    return 'INVALID_START_DATE';
   if (
     c.creativeId === null ||
     row.creativeDurationSeconds === null ||
@@ -56,8 +65,26 @@ const cartGateReason = async (row: GateRow, leadWorkingDays: number): Promise<st
   }
   if (c.requestedBudget === null || Number(c.requestedBudget) <= 0) return 'MISSING_BUDGET';
   if (Number(c.requestedBudget) < MIN_CAMPAIGN_BUDGET_TND) return 'BUDGET_BELOW_MINIMUM';
+  if (isEvent && c.eventId !== null) {
+    // EV3 — the event ceiling (EV2 pricing, CPM_evt): the classic C_max never prices a
+    // positioning (the engine boundary — computeCampaignCmax REFUSES bound rows outright).
+    const [ev] = await db.select().from(events).where(eq(events.id, c.eventId)).limit(1);
+    if (!ev || ev.annule) return 'EVENT_ANNULE';
+    const evCmax = await computeEventCmax(
+      { id: ev.id, kickoffAt: ev.kickoffAt, endsAt: ev.endsAt },
+      (await getDispatchConfig()).eventCpmTnd,
+    );
+    if (Number(c.requestedBudget) > evCmax.cMaxEvtTnd) return 'BUDGET_EXCEEDS_CMAX';
+    return null;
+  }
   const cmax = await computeCampaignCmax(
-    { id: c.id, startDate: c.startDate, endDate: c.endDate, campaignType: c.campaignType },
+    {
+      id: c.id,
+      startDate: c.startDate,
+      endDate: c.endDate,
+      campaignType: c.campaignType,
+      eventId: c.eventId,
+    },
     row.creativeDurationSeconds,
   );
   if (Number(c.requestedBudget) > cmax.cMaxTnd) return 'BUDGET_EXCEEDS_CMAX';
@@ -155,15 +182,21 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
         campaign: campaignSelection,
         addedAt: cartItems.addedAt,
         contentValidationStatus: creatives.validationStatus,
+        event: events,
       })
       .from(cartItems)
       .innerJoin(campaigns, eq(cartItems.campaignId, campaigns.id))
       .leftJoin(creatives, eq(campaigns.creativeId, creatives.id))
+      .leftJoin(events, eq(campaigns.eventId, events.id))
       .where(eq(cartItems.userId, userId))
       .orderBy(cartItems.addedAt);
+    const now = new Date();
     const items = rows.map((r) => ({
       ...campaignView(r.campaign as CampaignRow, r.contentValidationStatus),
       added_at: r.addedAt,
+      // EV3 — the panier's ÉVÉNEMENTS section needs the match + its derived window; null for
+      // classic campaigns (the web splits the two sections on this).
+      event: r.event === null ? null : eventView(r.event, now),
     }));
     const totalHt = rows.reduce(
       (sum, r) =>

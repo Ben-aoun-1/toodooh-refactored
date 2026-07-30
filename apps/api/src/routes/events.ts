@@ -3,8 +3,9 @@ import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
 import { db } from '../db/client.js';
-import { type EventRow, events } from '../db/schema.js';
+import { type EventRow, campaigns, events } from '../db/schema.js';
 import { MIN_CAMPAIGN_BUDGET_TND } from '../lib/campaign-budget.js';
+import { tunisDateOf } from '../lib/campaign-dates.js';
 import { getDispatchConfig } from '../lib/dispatch/config.js';
 import { computeEventCmax } from '../lib/event-pricing/pricing.js';
 import {
@@ -19,8 +20,8 @@ import { storage } from '../storage/s3-storage.js';
 // EV1 — the advertiser-facing event catalogue (sport-only V1). Reads are SHARED (no owner
 // scoping — every advertiser sees the same catalogue and the same suggested list; suggestions are
 // a communal surface by design). The diffusion window/blocs are ALWAYS derived per response via
-// lib/fenetre-diffusion — never stored. Positioning (the 3-step parcours) is EV3: nothing here
-// writes hour_reservations or touches campaigns.
+// lib/fenetre-diffusion — never stored. EV3 adds POST /:id/positionner (the parcours entry —
+// creates the campaign_type='event' draft row); hour_reservations is still written by nothing.
 
 const idParamSchema = z.object({ id: z.uuid() });
 
@@ -184,6 +185,64 @@ export const eventsRoutes: FastifyPluginAsync = async (app) => {
         .send({ error: 'INTERNAL', message: "La suggestion n'a pas pu être enregistrée." });
     }
     return reply.status(201).send(eventView(created, new Date()));
+  });
+
+  // POST /api/events/:id/positionner — EV3: create the POSITIONING draft. A positioning IS a
+  // campaign row (campaign_type='event' + event_id): name = the match, start/end = the diffusion
+  // window's Tunis dates SNAPSHOTTED here (the window itself stays derived at read — these dates
+  // exist so the CF-S1/C1/S2 machinery works unmodified). From here the row rides the ENTIRE
+  // classic draft machinery: PATCH steps, zones (CF-Z1), creative link, cart, lifecycle.
+  app.post('/api/events/:id/positionner', advertiserGuard, async (request, reply) => {
+    const parsed = idParamSchema.safeParse(request.params);
+    if (!parsed.success) return invalidField(reply, 'id', 'must be a uuid');
+    const userId = request.user?.id;
+    if (!userId) return sendUnauthenticated(reply);
+    const [row] = await db.select().from(events).where(eq(events.id, parsed.data.id)).limit(1);
+    if (!row)
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'Événement introuvable.' });
+    if (row.annule) {
+      return reply.status(409).send({
+        error: 'EVENT_ANNULE',
+        message: 'Cet événement est annulé.',
+        statusCode: 409,
+        requestId: request.id,
+      });
+    }
+    if (statutEvenement(new Date(), row.kickoffAt, row.endsAt) === 'termine') {
+      return reply.status(409).send({
+        error: 'EVENT_TERMINE',
+        message: 'Cet événement est terminé — le positionnement n’est plus possible.',
+        statusCode: 409,
+        requestId: request.id,
+      });
+    }
+    const fenetre = fenetreDiffusion(row.kickoffAt, row.endsAt);
+    const [created] = await db
+      .insert(campaigns)
+      .values({
+        advertiserId: userId,
+        name: row.name,
+        campaignType: 'event',
+        status: 'draft',
+        startDate: tunisDateOf(fenetre.windowStart),
+        endDate: tunisDateOf(fenetre.windowEnd),
+        eventId: row.id,
+      })
+      .returning();
+    if (!created) {
+      return reply
+        .status(500)
+        .send({ error: 'INTERNAL', message: "Le positionnement n'a pas pu être créé." });
+    }
+    return reply.status(201).send({
+      id: created.id,
+      event_id: row.id,
+      name: created.name,
+      campaign_type: created.campaignType,
+      status: created.status,
+      start_date: created.startDate,
+      end_date: created.endDate,
+    });
   });
 
   // GET /api/events/:id/cmax — EV2: the event budget ceiling (the campaign-cmax response idiom).

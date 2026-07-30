@@ -28,6 +28,12 @@ const sendRefusal = (reply: FastifyReply, refusal: BoostRefusal) => {
   if (refusal.status === 'NOT_FOUND') {
     return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such campaign.' });
   }
+  if (refusal.status === 'EVENT_POSITIONING') {
+    return reply.status(409).send({
+      error: 'EVENT_POSITIONING',
+      message: 'Le boost ne s’applique pas à un positionnement événementiel.',
+    });
+  }
   if (refusal.status === 'NOT_BOOSTABLE') {
     return reply.status(409).send({
       error: 'NOT_BOOSTABLE',
