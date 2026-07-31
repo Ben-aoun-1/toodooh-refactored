@@ -30,6 +30,25 @@ export interface OwnerFactureRow {
   designation: string;
 }
 
+/** One per-source revenue line — REV2 commit 3, derived by the api's single computation home. */
+export interface OwnerFactureLine {
+  /** 'campaign' | 'event' — the reversement_lines.source bucket. */
+  source: string;
+  /** Σ sh_amount_tnd for that source in the month (HT). */
+  amount_ht_tnd: number;
+}
+
+/**
+ * The DETAIL wire: the list row, plus the breakdown.
+ *
+ * The lines live here and not on the list because the detail screen's « Imprimer » renders it as
+ * the printable — it is a signable artifact like the PDF, and the two must show the same lines.
+ * A list row needs a total, not a breakdown. Still no `status`, on either wire.
+ */
+export interface OwnerFactureDetail extends OwnerFactureRow {
+  lines: OwnerFactureLine[];
+}
+
 /** The download filename — mirrors GET /screenhosts/statements/:id/pdf's content-disposition. */
 export const factureFilename = (reference: string): string => `facture-${reference}.pdf`;
 
@@ -40,6 +59,11 @@ export const facturesService = {
   /** Every facture across the caller's venues, newest month first. */
   list(): Promise<OwnerFactureRow[]> {
     return apiClient.get<OwnerFactureRow[]>('/screenhosts/statements');
+  },
+
+  /** One facture with its per-source lines (owner-scoped; a foreign facture is a plain 404). */
+  detail(id: string): Promise<OwnerFactureDetail> {
+    return apiClient.get<OwnerFactureDetail>(`/screenhosts/statements/${id}`);
   },
 
   /** The STORED facture PDF (owner-scoped; a foreign facture is a plain 404). */

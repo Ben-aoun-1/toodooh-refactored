@@ -15,6 +15,7 @@ import {
   factureMoney,
   formatDateFr,
   formatTnd,
+  sourceLabelFr,
 } from './facture-view';
 
 // REV2 — the owner facture view model. apps/web has no render harness (vitest is environment:
@@ -56,15 +57,47 @@ describe('factureMoney (the trio the owner sees = the trio on the PDF)', () => {
   });
 });
 
-describe('factureLines (the detail screen line table)', () => {
-  it('prints one line at the exact facture HT — the total on screen equals the total on the PDF', () => {
-    expect(factureLines(row({ total_sh_tnd: 42.5 }))).toEqual([
-      { label: SOURCE_LABEL_FALLBACK, amountHtTnd: 42.5 },
+describe('factureLines (the detail screen line table = the PDF line table)', () => {
+  it('renders the per-source breakdown with the SAME French labels the PDF prints', () => {
+    expect(
+      factureLines({
+        total_sh_tnd: 42.5,
+        lines: [
+          { source: 'campaign', amount_ht_tnd: 30 },
+          { source: 'event', amount_ht_tnd: 12.5 },
+        ],
+      }),
+    ).toEqual([
+      { label: 'Revenus de diffusion — campagnes', amountHtTnd: 30 },
+      { label: 'Revenus de diffusion — événements', amountHtTnd: 12.5 },
     ]);
   });
 
-  it('uses the neutral wording — the per-source split is not on the owner wire', () => {
-    expect(SOURCE_LABEL_FALLBACK).toBe('Revenus de diffusion');
+  it('the lines sum EXACTLY to the facture HT — « Imprimer » produces a signable document', () => {
+    const detail = {
+      total_sh_tnd: 42.5,
+      lines: [
+        { source: 'campaign', amount_ht_tnd: 30 },
+        { source: 'event', amount_ht_tnd: 12.5 },
+      ],
+    };
+    const sum = factureLines(detail).reduce((s, l) => s + l.amountHtTnd, 0);
+    expect(Math.round(sum * 1e4) / 1e4).toBe(detail.total_sh_tnd);
+    // …and the trio the screen prints is derived from that same total.
+    expect(factureMoney(detail.total_sh_tnd).ttcTnd).toBe(50.58);
+  });
+
+  it('an unknown source degrades to the neutral wording rather than printing a raw bucket name', () => {
+    expect(
+      factureLines({ total_sh_tnd: 5, lines: [{ source: 'mystery', amount_ht_tnd: 5 }] }),
+    ).toEqual([{ label: SOURCE_LABEL_FALLBACK, amountHtTnd: 5 }]);
+    expect(sourceLabelFr('mystery')).toBe('Revenus de diffusion');
+  });
+
+  it('ZERO lines is the ONLY fallback case — the stored HT under neutral wording, never an invented split', () => {
+    expect(factureLines({ total_sh_tnd: 42.5, lines: [] })).toEqual([
+      { label: SOURCE_LABEL_FALLBACK, amountHtTnd: 42.5 },
+    ]);
   });
 });
 

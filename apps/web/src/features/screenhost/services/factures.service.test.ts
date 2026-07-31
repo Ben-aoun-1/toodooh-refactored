@@ -51,6 +51,28 @@ describe('facturesService (REV2 — the owner factures wire)', () => {
     expect(rows[0].reference).toMatch(/^FS-[0-9A-F]{8}$/);
   });
 
+  it('detail → GET /screenhosts/statements/:id, carrying the per-source lines and NO status', async () => {
+    spies.get.mockResolvedValue({
+      id: 'f1',
+      screenhost_id: 'v1',
+      screenhost_name: 'Café Lac 2',
+      month: '2026-07',
+      total_sh_tnd: 42.5,
+      reference: 'FS-AAAA1111',
+      created_at: '2026-08-01T06:00:00.000Z',
+      deposited_at: null,
+      designation: 'Facture juillet 2026',
+      lines: [
+        { source: 'campaign', amount_ht_tnd: 30 },
+        { source: 'event', amount_ht_tnd: 12.5 },
+      ],
+    });
+    const detail = await facturesService.detail('f1');
+    expect(spies.get).toHaveBeenCalledWith('/screenhosts/statements/f1');
+    expect(detail.lines).toHaveLength(2);
+    expect(JSON.stringify(detail)).not.toContain('status');
+  });
+
   it('download → the STORED pdf as a blob from GET /screenhosts/statements/:id/pdf', async () => {
     const pdf = new Blob(['%PDF-1.3'], { type: 'application/pdf' });
     spies.getBlob.mockResolvedValue(pdf);

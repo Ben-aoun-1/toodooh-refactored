@@ -84,16 +84,18 @@ describe('REV2 — §5: statuses live in notifications, never on a line', () => 
     }
   });
 
-  it('the owner wire type declares no status field', () => {
-    const service = readFileSync(
-      join(FEATURES, 'screenhost', 'services', 'factures.service.ts'),
-      'utf8',
+  it('NEITHER owner wire type declares a status field (list or detail)', () => {
+    // Comments stripped first: the headers explain WHY there is no status, and saying so must not
+    // be what trips the pin.
+    const service = stripComments(
+      readFileSync(join(FEATURES, 'screenhost', 'services', 'factures.service.ts'), 'utf8'),
     );
-    const iface = service.slice(
-      service.indexOf('export interface OwnerFactureRow'),
-      service.indexOf('export const factureFilename'),
-    );
-    expect(iface).not.toContain('status');
+    for (const name of ['OwnerFactureRow', 'OwnerFactureLine', 'OwnerFactureDetail']) {
+      const start = service.indexOf(`export interface ${name}`);
+      expect(start).toBeGreaterThan(-1);
+      const body = service.slice(start, service.indexOf('\n}', start));
+      expect(body).not.toContain('status');
+    }
   });
 
   it('all three facture notification types have an action path (the legacy one is KEPT)', () => {

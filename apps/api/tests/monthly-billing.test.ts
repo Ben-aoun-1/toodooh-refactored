@@ -24,9 +24,11 @@ import {
   screens,
   users,
 } from '../src/db/schema.js';
+import { factureLinesFor } from '../src/lib/facture-lines.js';
 import { runMonthlyBillingSweep } from '../src/lib/monthly-billing.js';
 import { makeReference } from '../src/lib/recharges.js';
 import { deliveredFacturableInRange } from '../src/lib/reconcile/valuation.js';
+import { sourceLabelFr } from '../src/lib/screenhost-facture-pdf.js';
 import { ownerStatementsRoutes } from '../src/routes/owner-statements.js';
 import { walletDocumentsRoutes } from '../src/routes/wallet-documents.js';
 import { storage } from '../src/storage/s3-storage.js';
@@ -184,10 +186,13 @@ const seedReversementLine = async (
   screenhostId: string,
   shAmount: string,
   settledAt: Date,
+  // REV2 commit 3 — the bucket the facture's per-source lines are grouped by.
+  source: 'campaign' | 'event' = 'campaign',
 ): Promise<void> => {
   await db.insert(reversementLines).values({
     campaignId,
     screenhostId,
+    source,
     baseValueTnd: String(Number(shAmount) * 2),
     shAmountTnd: shAmount,
     toodoohAmountTnd: '0.0000',
@@ -629,5 +634,148 @@ describe('month-end billing sweep (real Postgres + MinIO)', () => {
     expect(JSON.stringify(list)).not.toContain('en_verification');
     // What it DOES carry: the designation the list renders.
     expect(list[0]?.['designation']).toBe('Facture juillet 2026');
+  });
+
+  // ── REV2 commit 3 — the per-source lines on the DETAIL wire ────────────────
+  //
+  // The detail screen's « Imprimer » renders that screen as the printable, so it is a signable
+  // artifact exactly like the stored PDF. Two print paths for one invoice must not produce two
+  // different documents — which is why lib/facture-lines is the single computation home the PDF
+  // builder and this endpoint both call, and why these tests pin them EQUAL rather than assuming it.
+
+  const seedTwoSourceFacture = async () => {
+    const s = await seedScenario(JULY_CRENEAUX);
+    await seedReversementLine(
+      s.campaignId,
+      s.screenhostId,
+      '30.0000',
+      new Date('2026-07-05T10:00:00Z'),
+      'campaign',
+    );
+    await seedReversementLine(
+      s.campaignId,
+      s.screenhostId,
+      '12.5000',
+      new Date('2026-07-28T10:00:00Z'),
+      'event',
+    );
+    await runMonthlyBillingSweep(silentLog, NOW);
+    mockSession(s.ownerId, 'individual_owner');
+    const [row] = await db
+      .select()
+      .from(screenhostFactures)
+      .where(eq(screenhostFactures.screenhostId, s.screenhostId));
+    return { ...s, facture: row };
+  };
+
+  it('the detail wire carries the per-source lines, and they sum EXACTLY to the facture HT', async () => {
+    const s = await seedTwoSourceFacture();
+    const id = s.facture?.id ?? '';
+
+    const res = await app.inject({ method: 'GET', url: `/api/screenhosts/statements/${id}` });
+    expect(res.statusCode).toBe(200);
+    const detail = res.json() as {
+      total_sh_tnd: number;
+      designation: string;
+      lines: { source: string; amount_ht_tnd: number }[];
+    };
+
+    // Sorted by source — the ordering is part of the contract, so the PDF and the screen cannot
+    // list the same amounts in different orders and read as different documents.
+    expect(detail.lines).toEqual([
+      { source: 'campaign', amount_ht_tnd: 30 },
+      { source: 'event', amount_ht_tnd: 12.5 },
+    ]);
+    // THE INVARIANT: the breakdown accounts for the whole facture, to the millime.
+    const sum = detail.lines.reduce((acc, l) => acc + l.amount_ht_tnd, 0);
+    expect(Math.round(sum * 1e4) / 1e4).toBe(detail.total_sh_tnd);
+    expect(detail.total_sh_tnd).toBe(42.5);
+    expect(detail.designation).toBe('Facture juillet 2026');
+  });
+
+  it('the PDF and the detail wire agree — same shared call site, pinned by fixture equality', async () => {
+    const s = await seedTwoSourceFacture();
+    const id = s.facture?.id ?? '';
+
+    const detail = (
+      await app.inject({ method: 'GET', url: `/api/screenhosts/statements/${id}` })
+    ).json() as { lines: { source: string; amount_ht_tnd: number }[] };
+
+    // (a) the wire's lines ARE what the shared computation home returns…
+    const shared = await factureLinesFor(s.screenhostId, '2026-07');
+    expect(detail.lines).toEqual(
+      shared.map((l) => ({ source: l.source, amount_ht_tnd: l.amountHtTnd })),
+    );
+
+    // (b) …and the sweep rendered the stored PDF from that same function, so every wire line
+    // appears on the document, under the same French label and at the same amount.
+    const text = pdfText(
+      (await app.inject({ method: 'GET', url: `/api/screenhosts/statements/${id}/pdf` }))
+        .rawPayload,
+    );
+    // pdfText does not round-trip the em-dash (it comes back as filler, not as '—'), so both sides
+    // are reduced to their letters and digits. The comparison is still against the RENDERED
+    // document — only the separators are ignored.
+    const flatten = (s: string): string => s.toLowerCase().replace(/[^a-z0-9à-ÿ]/gi, '');
+    for (const line of detail.lines) {
+      expect(flatten(text)).toContain(flatten(sourceLabelFr(line.source)));
+      expect(text).toContain(`${line.amount_ht_tnd.toFixed(2)} TND`);
+    }
+    expect(flatten(text)).toContain(flatten('Revenus de diffusion — campagnes'));
+    expect(flatten(text)).toContain(flatten('Revenus de diffusion — événements'));
+  });
+
+  it('the LIST wire is UNCHANGED — no lines, and still no status anywhere', async () => {
+    const s = await seedTwoSourceFacture();
+    const id = s.facture?.id ?? '';
+    await depositOn(id); // the row is en_verification from here on
+
+    const listRes = await app.inject({ method: 'GET', url: '/api/screenhosts/statements' });
+    const list = listRes.json() as Record<string, unknown>[];
+    expect(Object.keys(list[0] ?? {}).sort()).toEqual([
+      'created_at',
+      'deposited_at',
+      'designation',
+      'id',
+      'month',
+      'reference',
+      'screenhost_id',
+      'screenhost_name',
+      'total_sh_tnd',
+    ]);
+    expect(list[0]).not.toHaveProperty('lines');
+
+    // §5 re-asserted on BOTH wires while the DB row is en_verification.
+    const detailRes = await app.inject({ method: 'GET', url: `/api/screenhosts/statements/${id}` });
+    expect(Object.keys(detailRes.json() as Record<string, unknown>)).not.toContain('status');
+    expect(detailRes.body).not.toContain('en_verification');
+    expect(listRes.body).not.toContain('status');
+  });
+
+  it('a facture with no lines left degrades to an empty array, never a fabricated one', async () => {
+    const s = await seedTwoSourceFacture();
+    const id = s.facture?.id ?? '';
+    // The facture keeps its stored total — it is the emitted document — but the breakdown it can
+    // still derive is empty. The screen falls back to one neutral line rather than inventing a split.
+    await db.delete(reversementLines).where(eq(reversementLines.screenhostId, s.screenhostId));
+    const detail = (
+      await app.inject({ method: 'GET', url: `/api/screenhosts/statements/${id}` })
+    ).json() as { lines: unknown[]; total_sh_tnd: number };
+    expect(detail.lines).toEqual([]);
+    expect(detail.total_sh_tnd).toBe(42.5);
+  });
+
+  it('the detail 404s for a foreign facture and 400s a non-uuid', async () => {
+    const s = await seedTwoSourceFacture();
+    const id = s.facture?.id ?? '';
+    const stranger = await seedUser({ role: 'individual_owner' });
+    mockSession(stranger, 'individual_owner');
+    expect(
+      (await app.inject({ method: 'GET', url: `/api/screenhosts/statements/${id}` })).statusCode,
+    ).toBe(404);
+    expect(
+      (await app.inject({ method: 'GET', url: '/api/screenhosts/statements/not-a-uuid' }))
+        .statusCode,
+    ).toBe(400);
   });
 });

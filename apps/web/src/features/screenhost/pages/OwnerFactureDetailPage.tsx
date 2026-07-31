@@ -24,12 +24,14 @@ import { factureFilename, facturesService } from '@/features/screenhost/services
 // sign. Émetteur = their établissement, Client = Toodooh. That reversal is the whole point of the
 // lane, so it is stated in two labelled blocks rather than implied by layout.
 //
-// THE ROW COMES FROM THE LIST, not a detail endpoint — there is no such endpoint and commit 2 may
-// not add one. React Query serves it from the cache the list already filled, so arriving from
-// « Voir » renders instantly and a deep link simply fetches the list once.
-//
 // « IMPRIMER » is window.print() over this same markup: the chrome carries `print:hidden`, so what
 // reaches the paper is the document and nothing else. No second template to keep in sync.
+//
+// THAT IS WHY THIS READS THE DETAIL ENDPOINT (REV2 commit 3). Printing this screen produces a
+// signable artifact, so it must show the SAME lines as the downloadable PDF — and it does, because
+// the endpoint's breakdown and the PDF's both come from the api's single computation home. Reading
+// the list cache instead would have meant one document with a neutral single line and another with
+// the per-source split: two print paths, two different invoices.
 export default function OwnerFactureDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -38,12 +40,13 @@ export default function OwnerFactureDetailPage() {
   const isDisabled = needsApproval && validationStatus === 'pending';
   const { profile } = useBusinessProfile(user?.id);
 
-  const facturesQuery = useQuery({
-    queryKey: screenhostKeys.factures(user?.id ?? ''),
-    queryFn: () => facturesService.list(),
-    enabled: !!user?.id,
+  const factureQuery = useQuery({
+    queryKey: screenhostKeys.facture(id ?? ''),
+    queryFn: () => facturesService.detail(id ?? ''),
+    enabled: !!user?.id && !!id,
+    retry: false,
   });
-  const facture = facturesQuery.data?.find((r) => r.id === id) ?? null;
+  const facture = factureQuery.data ?? null;
   const [downloading, setDownloading] = useState(false);
 
   // Position preserved: a POP back to the list restores the browser's own scroll offset. A deep
@@ -79,7 +82,7 @@ export default function OwnerFactureDetailPage() {
         <div className="flex min-h-screen">
           <OwnerNavigation isDisabled={isDisabled} />
           <div className="flex-1 flex items-center justify-center p-8">
-            {facturesQuery.isLoading ? (
+            {factureQuery.isLoading ? (
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-primary" />
             ) : (
               <div className="text-center">

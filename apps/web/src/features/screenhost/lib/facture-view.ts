@@ -62,25 +62,38 @@ export interface FactureLine {
   amountHtTnd: number;
 }
 
-/**
- * The revenue lines the detail screen prints.
- *
- * ⚠️ THE SPLIT IS NOT ON THE WIRE. The sweep groups reversement lines BY SOURCE and the PDF prints
- * « Revenus de diffusion — campagnes » and « — événements » separately, but the owner list
- * projection (GET /api/screenhosts/statements) carries only `total_sh_tnd`. Showing the split on
- * this screen requires an api change, which REV2 commit 2 is forbidden from making.
- *
- * So we print ONE line at the exact facture HT, under the api's own neutral wording for a source it
- * cannot name (`sourceLabelFr`'s fallback). The total on screen therefore always equals the total on
- * the PDF. The alternative — deriving a split from GET /screenhosts/earnings — was rejected: that
- * endpoint reports campaign reconciliation payouts, not month-settled reversement lines, so its
- * figures would disagree with the document the owner is being asked to sign.
- */
+/** The neutral wording, for a source the document cannot name. Mirrors the api's own fallback. */
 export const SOURCE_LABEL_FALLBACK = 'Revenus de diffusion';
 
-export const factureLines = (row: Pick<OwnerFactureRow, 'total_sh_tnd'>): FactureLine[] => [
-  { label: SOURCE_LABEL_FALLBACK, amountHtTnd: row.total_sh_tnd },
-];
+/**
+ * French label per reversement source — the same words the PDF prints, because the screen and the
+ * PDF are two renderings of ONE invoice and « Imprimer » turns this screen into the second one.
+ */
+export const sourceLabelFr = (source: string): string => {
+  if (source === 'event') return 'Revenus de diffusion — événements';
+  if (source === 'campaign') return 'Revenus de diffusion — campagnes';
+  return SOURCE_LABEL_FALLBACK;
+};
+
+/**
+ * The revenue lines the detail screen prints, from the detail wire's per-source breakdown.
+ *
+ * REV2 commit 3 put these on the wire. Before it, the owner projection carried only `total_sh_tnd`
+ * while the PDF printed the split — so « Imprimer » and « Télécharger PDF » produced two different
+ * documents for one invoice. Both now originate in the api's single computation home
+ * (lib/facture-lines), so what the owner signs on paper says what the screen said.
+ *
+ * THE FALLBACK IS FOR ZERO LINES ONLY. A facture whose breakdown can no longer be derived still
+ * shows its stored HT under the neutral wording — the total on screen never stops matching the
+ * document. It is a degraded render, never an invented split.
+ */
+export const factureLines = (detail: {
+  total_sh_tnd: number;
+  lines: readonly { source: string; amount_ht_tnd: number }[];
+}): FactureLine[] =>
+  detail.lines.length === 0
+    ? [{ label: SOURCE_LABEL_FALLBACK, amountHtTnd: detail.total_sh_tnd }]
+    : detail.lines.map((l) => ({ label: sourceLabelFr(l.source), amountHtTnd: l.amount_ht_tnd }));
 
 export interface FactureDepositEntry {
   id: string;

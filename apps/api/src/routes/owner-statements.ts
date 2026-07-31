@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { db } from '../db/client.js';
 import { notifications, screenhostFactures, screenhosts } from '../db/schema.js';
 import { MAX_JUSTIFICATIF_BYTES, signedFactureKey } from '../lib/facture-deposit.js';
+import { factureLinesFor } from '../lib/facture-lines.js';
 import { declaredMatchesSniffed, sniffContainer } from '../lib/media-probe.js';
 import { monthLabelFr } from '../lib/report/monthly-job.js';
 import { requireActiveAccount, requireAuth } from '../middleware/require-auth.js';
@@ -70,6 +71,61 @@ export const ownerStatementsRoutes: FastifyPluginAsync = async (app) => {
         deposited_at: r.deposited_at ? r.deposited_at.toISOString() : null,
       })),
     );
+  });
+
+  // GET /api/screenhosts/statements/:id — ONE facture, with its per-source revenue lines.
+  //
+  // WHY THE LINES ARE HERE AND NOT ON THE LIST. The detail screen offers « Imprimer », which
+  // renders that screen as the printable — so it is a signable artifact exactly like the stored
+  // PDF, and the two must show the same lines. They do, structurally: `factureLinesFor` is the
+  // single computation home the sweep's PDF builder also calls. The LIST wire is deliberately
+  // untouched — a list row needs a total, not a breakdown, and re-aggregating per row would be a
+  // query per line for nothing.
+  //
+  // `total_sh_tnd` stays the STORED figure, not the re-derived sum: it is what the emitted document
+  // says, and the facture is the document. A test pins the two equal.
+  //
+  // Still NO status (see the header). The projection is the list's, plus `lines`.
+  app.get('/api/screenhosts/statements/:id', ownerGuard, async (request, reply) => {
+    const parsed = idParamSchema.safeParse(request.params);
+    if (!parsed.success) return invalidField(reply, 'id', 'must be a uuid');
+    const userId = request.user?.id;
+    if (!userId) return sendUnauthenticated(reply);
+
+    const [row] = await db
+      .select({
+        id: screenhostFactures.id,
+        screenhost_id: screenhostFactures.screenhostId,
+        screenhost_name: screenhosts.name,
+        month: screenhostFactures.month,
+        total_sh_tnd: screenhostFactures.totalShTnd,
+        reference: screenhostFactures.reference,
+        created_at: screenhostFactures.createdAt,
+        deposited_at: screenhostFactures.depositedAt,
+        ownerId: screenhosts.ownerId,
+      })
+      .from(screenhostFactures)
+      .innerJoin(screenhosts, eq(screenhosts.id, screenhostFactures.screenhostId))
+      .where(eq(screenhostFactures.id, parsed.data.id))
+      .limit(1);
+    // A foreign facture is indistinguishable from a missing one — one identical 404.
+    if (!row || row.ownerId !== userId) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such facture.' });
+    }
+
+    const lines = await factureLinesFor(row.screenhost_id, row.month);
+    return reply.status(200).send({
+      id: row.id,
+      screenhost_id: row.screenhost_id,
+      screenhost_name: row.screenhost_name,
+      month: row.month,
+      reference: row.reference,
+      created_at: row.created_at,
+      total_sh_tnd: Number(row.total_sh_tnd),
+      designation: factureDesignation(row.month),
+      deposited_at: row.deposited_at ? row.deposited_at.toISOString() : null,
+      lines: lines.map((l) => ({ source: l.source, amount_ht_tnd: l.amountHtTnd })),
+    });
   });
 
   // GET /api/screenhosts/statements/:id/pdf — stream the stored facture. Ownership rides the join:

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { and, eq, gte, inArray, lte, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, lte } from 'drizzle-orm';
 import type { FastifyBaseLogger } from 'fastify';
 
 import { db } from '../db/client.js';
@@ -9,13 +9,13 @@ import {
   campaigns,
   monthlyInvoices,
   notifications,
-  reversementLines,
   screenhostFactures,
   screenhosts,
   users,
 } from '../db/schema.js';
 import { storage } from '../storage/s3-storage.js';
 
+import { factureLinesByVenue, sumLinesHt } from './facture-lines.js';
 import { tvaFromHt, ttcFromHt } from './facture.js';
 import { renderMonthlyInvoicePdf } from './monthly-invoice-pdf.js';
 import { monthLabelFr, previousClosedMonth } from './report/monthly-job.js';
@@ -189,37 +189,13 @@ export async function runMonthlyBillingSweep(
   }
 
   // ── venue FACTURES (REV2 — supersedes the relevés) ──────────────────────────
-  // settled_at bucketed on its Africa/Tunis calendar date — « venues with settlements that month ».
-  // REV2 — grouped by (venue, SOURCE) so the facture can show « campagnes » and « événements » as
-  // separate lines. The per-venue total is the sum of its sources, so one query feeds both.
-  const settledBySource = await db
-    .select({
-      screenhostId: reversementLines.screenhostId,
-      source: reversementLines.source,
-      totalSh: sql<string>`coalesce(sum(${reversementLines.shAmountTnd}), 0)`,
-    })
-    .from(reversementLines)
-    .where(
-      and(
-        gte(sql`(${reversementLines.settledAt} AT TIME ZONE 'Africa/Tunis')::date`, from),
-        lte(sql`(${reversementLines.settledAt} AT TIME ZONE 'Africa/Tunis')::date`, to),
-      ),
-    )
-    .groupBy(reversementLines.screenhostId, reversementLines.source);
-
-  // Collapse to per-venue totals + their source breakdown. A source contributing 0 is dropped: the
-  // spec omits zero lines rather than printing « 0,00 TND » against a revenue stream that was idle.
-  const bySource = new Map<string, { source: string; amountHtTnd: number }[]>();
-  for (const row of settledBySource) {
-    const amount = round4(Number(row.totalSh));
-    if (amount <= 0) continue;
-    const list = bySource.get(row.screenhostId) ?? [];
-    list.push({ source: row.source, amountHtTnd: amount });
-    bySource.set(row.screenhostId, list);
-  }
+  // The per-source aggregation lives in lib/facture-lines (REV2 commit 3): the owner's detail
+  // endpoint calls the SAME function, so the document this sweep renders and the screen the owner
+  // prints cannot show different lines. The per-venue total is the sum of its sources.
+  const bySource = await factureLinesByVenue(month);
   const settled = [...bySource.entries()].map(([screenhostId, lines]) => ({
     screenhostId,
-    totalSh: String(lines.reduce((s, l) => s + l.amountHtTnd, 0)),
+    totalSh: String(sumLinesHt(lines)),
   }));
 
   const venueIds = settled.map((s) => s.screenhostId);
