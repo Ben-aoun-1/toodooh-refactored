@@ -45,9 +45,6 @@ const OwnerCampaignCalendar = lazy(
 const OwnerPerformance = lazy(() => import('@/features/screenhost/pages/OwnerPerformance'));
 const OwnerCalendarDevices = lazy(() => import('@/features/screenhost/pages/OwnerCalendarDevices'));
 const OwnerStatementsPage = lazy(() => import('@/features/screenhost/pages/OwnerStatementsPage'));
-const OwnerStatementDetailPage = lazy(
-  () => import('@/features/screenhost/pages/OwnerStatementDetailPage'),
-);
 const OwnerSettings = lazy(() => import('@/features/screenhost/pages/OwnerSettings'));
 const ContactPage = lazy(() => import('@/features/screenhost/pages/ContactPage'));
 const AgentWorkspace = lazy(() => import('@/features/agent/pages/AgentWorkspace'));
@@ -496,14 +493,6 @@ export default function App() {
               element={
                 <OwnerRoute>
                   <OwnerStatementsPage />
-                </OwnerRoute>
-              }
-            />
-            <Route
-              path="/owner-statements/:statementId"
-              element={
-                <OwnerRoute>
-                  <OwnerStatementDetailPage />
                 </OwnerRoute>
               }
             />
