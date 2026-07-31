@@ -160,6 +160,45 @@ describe('admin dispatch-config — CPM read/edit (real Postgres)', () => {
     expect(cfg.t_10s).toBe(0.55);
   });
 
+  // ── GREEN1 item 4 — the E7 reversement split on the admin surface (Σ = 100) ─────
+  it('GET exposes the four reversement percentages at their canonical 50/44/3/3', async () => {
+    mockSession(await seedUser({ role: 'admin' }));
+    expect((await get()).json()).toMatchObject({
+      pct_sh: 50,
+      pct_toodooh: 44,
+      pct_agent_sh: 3,
+      pct_agent_sc: 3,
+    });
+  });
+
+  it('PATCH edits the split when it still totals 100, and the next GET reflects it', async () => {
+    mockSession(await seedUser({ role: 'admin' }));
+    // 55 + 39 + 3 + 3 = 100
+    expect((await patch({ pct_sh: 55, pct_toodooh: 39 })).statusCode).toBe(200);
+    expect((await get()).json()).toMatchObject({ pct_sh: 55, pct_toodooh: 39 });
+  });
+
+  it('refuses a split that does not total 100 — in FRENCH, judged on the MERGED config', async () => {
+    mockSession(await seedUser({ role: 'admin' }));
+    // Pin a known baseline first: this file's tests share the singleton, so the merged sum must
+    // not depend on what an earlier test left behind.
+    expect(
+      (await patch({ pct_sh: 50, pct_toodooh: 44, pct_agent_sh: 3, pct_agent_sc: 3 })).statusCode,
+    ).toBe(200);
+
+    // A partial patch cannot be judged alone: 60 merged over the stored 44/3/3 sums to 110.
+    const res = await patch({ pct_sh: 60 });
+    expect(res.statusCode).toBe(400);
+    const body = res.json() as { fields: { field: string; reason: string }[] };
+    expect(body.fields[0]?.reason).toContain(
+      'les pourcentages de reversement doivent totaliser 100',
+    );
+    expect(body.fields[0]?.reason).toContain('110');
+
+    // The refusal is not a write: the stored split is untouched.
+    expect((await get()).json()).toMatchObject({ pct_sh: 50, pct_toodooh: 44 });
+  });
+
   // ── CF-D1 — the campaign start-date lead (campaign_lead_working_days) ───────────
   it('GET exposes the lead at its migration default (2); PATCH edits it — 0 included', async () => {
     mockSession(await seedUser({ role: 'admin' }));
