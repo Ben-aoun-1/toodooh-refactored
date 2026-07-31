@@ -97,8 +97,12 @@ export const users = pgTable(
     registrationDocUrl: text('registration_doc_url'), // RNE — frozen legacy slot
     cinDocUrl: text('cin_doc_url'), // CIN — frozen legacy slot
     // ── bank details (QA-fix lane) — owner payout coordinates, migrated off the dead
-    // Supabase business_profiles surface. Free text, nullable: RIB/IBAN format is not
-    // constrained here (product ruling pending — route validates required-only).
+    // Supabase business_profiles surface. Nullable text; the FORMAT is enforced at the route,
+    // not by a CHECK. The ruling LANDED (it is no longer pending): RIB = exactly 20 digits,
+    // IBAN = 'TN' + 22 digits (24 chars, check digits not arithmetically verified in V1) —
+    // ONE home in lib/bank-validation.ts, mirrored client-side by web lib/bank-validation.ts.
+    // This is the PER-OWNER payout account (REV1 ruling): one account per owner, however many
+    // venues they hold. Every change is appended to user_bank_details_audit.
     bankAccountHolder: text('bank_account_holder'),
     bankRib: text('bank_rib'),
     bankIban: text('bank_iban'),
@@ -1332,6 +1336,51 @@ export const walletAdjustments = pgTable(
 );
 
 export type WalletAdjustment = typeof walletAdjustments.$inferSelect;
+
+// ── user bank-details audit (REV1 — US-REV-1a..1e, architect deviation) ──────────────────────────
+// INTERNAL fraud trail for the owner's payout coordinates. Every change to where money is sent is
+// appended here with a BEFORE and an AFTER snapshot, so "who changed the RIB, when, and from what"
+// is answerable — users.bank_details_updated_at only ever answered "when".
+//
+// KEYED ON user_id, deliberately: the payout account is PER OWNER (architect ruling 2026-07-31).
+// screenhosts.owner_id is NOT unique, so a per-venue key would have let a fleet owner hold a
+// different account per venue — a change to WHERE MONEY IS PAID wearing a schema costume. The
+// facture stays per-établissement (FCT2 keying untouched): a three-venue owner receives three
+// factures and is paid to ONE account.
+//
+// Written by BOTH money-routing paths — PATCH /api/profile/bank and the `bank` document upload —
+// because a file-only change (a new RIB scan against unchanged digits) is still a routing change.
+// bank_document_id is the user_documents row (category 'bank', cap 1), nullable on both sides:
+// null BEFORE = nothing on file yet. NEVER exposed on an owner route; admin-only, always.
+// Snapshots are plain columns rather than jsonb so the admin list is a flat SELECT, and a NULL
+// before-row is the unambiguous "first time this owner set a payout account".
+export const userBankDetailsAudit = pgTable(
+  'user_bank_details_audit',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    // The owner whose coordinates moved. restrict: an audit row must never lose its subject.
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    // Who performed the change. Today always the owner themself (the routes are session-scoped);
+    // the column exists so an admin-performed correction is expressible without a migration.
+    changedBy: uuid('changed_by')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    beforeAccountHolder: text('before_account_holder'),
+    beforeRib: text('before_rib'),
+    beforeIban: text('before_iban'),
+    beforeBankDocumentId: uuid('before_bank_document_id'),
+    afterAccountHolder: text('after_account_holder'),
+    afterRib: text('after_rib'),
+    afterIban: text('after_iban'),
+    afterBankDocumentId: uuid('after_bank_document_id'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('user_bank_details_audit_user_id_idx').on(table.userId)],
+);
+
+export type UserBankDetailsAudit = typeof userBankDetailsAudit.$inferSelect;
 
 // ── monthly invoices (FCT2 / US-FCT-11..12 — the ONE real invoice per screencaster per month) ────
 // Consolidated on REAL consumption: proof-verified facturable impressions delivered that month

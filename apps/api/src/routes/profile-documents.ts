@@ -7,6 +7,7 @@ import { z } from 'zod';
 
 import { db } from '../db/client.js';
 import { userDocuments } from '../db/schema.js';
+import { snapshotBankState, writeBankAudit } from '../lib/bank-audit.js';
 import {
   ALLOWED_DOCUMENT_MIME as ALLOWED_MIME,
   CATEGORY_CAPS,
@@ -201,16 +202,35 @@ export const profileDocumentsRoutes: FastifyPluginAsync = async (app) => {
         sizeBytes: body.length,
         uploadedAt: new Date(),
       };
-      const [row] = slotRow
-        ? await db
-            .update(userDocuments)
-            .set(meta)
-            .where(eq(userDocuments.id, slotRow.id))
-            .returning()
-        : await db
-            .insert(userDocuments)
-            .values({ id: rowId, userId, category, position, ...meta })
-            .returning();
+      // REV1 — the `bank` category is a MONEY-ROUTING surface: swapping the identity file while
+      // leaving the digits untouched is exactly the shape a fraudulent swap takes, so it is
+      // audited like a digit change. Snapshot before the write, append after it, one transaction.
+      // Every other category is an ordinary document and takes the plain path.
+      const isBankDocument = category === 'bank';
+      const beforeBank = isBankDocument ? await snapshotBankState(db, userId) : null;
+
+      const [row] = await db.transaction(async (tx) => {
+        const written = slotRow
+          ? await tx
+              .update(userDocuments)
+              .set(meta)
+              .where(eq(userDocuments.id, slotRow.id))
+              .returning()
+          : await tx
+              .insert(userDocuments)
+              .values({ id: rowId, userId, category, position, ...meta })
+              .returning();
+        if (beforeBank) {
+          const after = await snapshotBankState(tx, userId);
+          await writeBankAudit(tx, {
+            userId,
+            changedBy: userId,
+            before: beforeBank,
+            after,
+          });
+        }
+        return written;
+      });
 
       if (!row) {
         return reply
