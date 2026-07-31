@@ -96,6 +96,22 @@ export interface AdminDocumentView {
 
 export type DocumentCategory = 'cin' | 'rne' | 'complementaire' | 'bank';
 
+/** REV1 — one recorded change of an owner's payout coordinates (admin-only, never owner-facing). */
+export interface AdminBankAuditSnapshot {
+  bank_account_holder: string | null;
+  bank_rib: string | null;
+  bank_iban: string | null;
+  bank_document_id: string | null;
+}
+
+export interface AdminBankAuditEntry {
+  id: string;
+  changed_by: string;
+  before: AdminBankAuditSnapshot;
+  after: AdminBankAuditSnapshot;
+  created_at: string;
+}
+
 // The admin review surface's grouped read — mirrors the server `groupedDocuments` shape (every
 // category present, possibly empty). Caps are server-enforced (cin/rne 2, complémentaire 10,
 // bank 1); the UI reads the arrays as-is.
@@ -171,6 +187,14 @@ export const adminUserService = {
       `/admin/users/${id}/documents`,
     );
     return documents;
+  },
+
+  // REV1 — the INTERNAL trail of payout-coordinate changes, newest first. ADMIN-ONLY: there is no
+  // owner-facing counterpart by design (the spec keeps no history on the owner's side, and the
+  // trail exists to be read by someone other than whoever might have moved the money).
+  // Throws ApiError with code USER_NOT_FOUND on a stale link.
+  async getBankAudit(id: string): Promise<AdminBankAuditEntry[]> {
+    return apiClient.get<AdminBankAuditEntry[]>(`/admin/users/${id}/bank-audit`);
   },
 
   // Presign ONE document by its uuid (the :id-scoped route). Deliberately NOT the legacy
