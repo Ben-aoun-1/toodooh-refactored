@@ -19,7 +19,7 @@ import {
   proofOfPlay,
   recharges,
   reversementLines,
-  screenhostMonthlyStatements,
+  screenhostFactures,
   screenhosts,
   screens,
   users,
@@ -247,9 +247,7 @@ describe('month-end billing sweep (real Postgres + MinIO)', () => {
   afterEach(async () => {
     // Sweep the stored PDFs (rows die at the NEXT test's truncate).
     const invoices = await db.select({ key: monthlyInvoices.pdfKey }).from(monthlyInvoices);
-    const statements = await db
-      .select({ key: screenhostMonthlyStatements.pdfKey })
-      .from(screenhostMonthlyStatements);
+    const statements = await db.select({ key: screenhostFactures.pdfKey }).from(screenhostFactures);
     for (const r of [...invoices, ...statements]) {
       await storage.delete({ key: r.key }).catch(() => undefined);
     }
@@ -418,7 +416,7 @@ describe('month-end billing sweep (real Postgres + MinIO)', () => {
     ).toBe(404);
   });
 
-  it('relevés: Σ sh_amount over the lines SETTLED that Tunis month (pinned vs reversement_lines), REL- ref, owner notified', async () => {
+  it('factures: Σ sh_amount over the lines SETTLED that Tunis month (pinned vs reversement_lines), FS- ref, owner notified', async () => {
     const s = await seedScenario(JULY_CRENEAUX);
     // Two July settlements + one June one (excluded by the settled_at bucket).
     await seedReversementLine(
@@ -445,14 +443,14 @@ describe('month-end billing sweep (real Postgres + MinIO)', () => {
 
     const [row] = await db
       .select()
-      .from(screenhostMonthlyStatements)
-      .where(eq(screenhostMonthlyStatements.screenhostId, s.screenhostId));
+      .from(screenhostFactures)
+      .where(eq(screenhostFactures.screenhostId, s.screenhostId));
     expect(row).toMatchObject({ month: '2026-07' });
     expect(Number(row?.totalShTnd)).toBe(42.5);
-    expect(row?.reference).toMatch(/^REL-[0-9A-F]{8}$/);
+    expect(row?.reference).toMatch(/^FS-[0-9A-F]{8}$/);
 
     const notifs = await db.select().from(notifications).where(eq(notifications.userId, s.ownerId));
-    expect(notifs.map((n) => n.type)).toContain('reversement_statement_ready');
+    expect(notifs.map((n) => n.type)).toContain('screenhost_facture_ready');
 
     // Idempotent re-run.
     const second = await runMonthlyBillingSweep(silentLog, NOW);
@@ -460,7 +458,7 @@ describe('month-end billing sweep (real Postgres + MinIO)', () => {
     expect(second.statementsSkipped).toBe(1);
   });
 
-  it('the owner lists + downloads own relevés (the PDF carries the venue + the amount); foreign is 404', async () => {
+  it('the owner lists + downloads own factures (the PDF carries the venue + the amount); foreign is 404', async () => {
     const s = await seedScenario(JULY_CRENEAUX);
     await seedReversementLine(
       s.campaignId,
@@ -483,9 +481,38 @@ describe('month-end billing sweep (real Postgres + MinIO)', () => {
     });
     expect(pdfRes.statusCode).toBe(200);
     const text = pdfText(pdfRes.rawPayload);
-    expect(text).toContain('RELEVÉ DE REVERSEMENT');
+
+    // REV2 — THE DIRECTION. The venue ISSUES this document and Toodooh is the client; it must be
+    // impossible to read it as the screencaster facture (where Toodooh bills the advertiser).
+    expect(text).toContain('FACTURE');
+    expect(text).toContain('Émetteur');
+    expect(text).toContain('Client');
+    expect(text).toContain('TOODOOH');
+    expect(text).not.toContain('RELEVÉ DE REVERSEMENT'); // the superseded title is dead
     expect(text).toContain('juillet 2026');
+
+    // The per-source line + the money trio. 42.50 HT → TVA 8.08 → TTC 50.58 (× 1.19 exactly).
+    expect(text).toContain('Revenus de diffusion');
     expect(text).toContain('42.50 TND');
+    expect(text).toContain('8.08 TND');
+    expect(text).toContain('50.58 TND');
+    expect(text).toContain('Déposer votre facture signée');
+
+    // THE LEAK KILL, pinned on the RENDERED TEXT. The relevé this replaces printed
+    //   « Part établissement (50 %) … conformément au barème de reversement Toodooh. »
+    // on every owner's document — the reversement split, disclosed to the screenhost, shipping
+    // since FCT2. No internal may ever reappear on an owner-facing document.
+    for (const forbidden of [
+      '50 %',
+      '50%',
+      'barème',
+      'Part établissement',
+      'CPM',
+      'SPS',
+      'répartition',
+    ]) {
+      expect(text).not.toContain(forbidden);
+    }
 
     const stranger = await seedUser({ role: 'individual_owner' });
     mockSession(stranger, 'individual_owner');
@@ -500,5 +527,107 @@ describe('month-end billing sweep (real Postgres + MinIO)', () => {
         })
       ).statusCode,
     ).toBe(404);
+  });
+
+  // ── REV2 — the signed-deposit cycle ────────────────────────────────────────
+  const seedFacture = async () => {
+    const s = await seedScenario(JULY_CRENEAUX);
+    await seedReversementLine(
+      s.campaignId,
+      s.screenhostId,
+      '42.5000',
+      new Date('2026-07-05T10:00:00Z'),
+    );
+    await runMonthlyBillingSweep(silentLog, NOW);
+    mockSession(s.ownerId, 'individual_owner');
+    const [row] = await db
+      .select()
+      .from(screenhostFactures)
+      .where(eq(screenhostFactures.screenhostId, s.screenhostId));
+    return { ...s, facture: row };
+  };
+
+  const depositOn = (id: string, body = Buffer.from('%PDF-1.4\n%%EOF\n', 'latin1')) => {
+    const boundary = '----rev2';
+    const payload = Buffer.concat([
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="signee.pdf"\r\nContent-Type: application/pdf\r\n\r\n`,
+      ),
+      body,
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ]);
+    return app.inject({
+      method: 'POST',
+      url: `/api/screenhosts/statements/${id}/signed-deposit`,
+      payload,
+      headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
+    });
+  };
+
+  it('a signed deposit attaches to THE SELECTED facture and moves it to en_verification', async () => {
+    const s = await seedFacture();
+    const id = s.facture?.id ?? '';
+    expect(s.facture?.status).toBe('emise');
+
+    const res = await depositOn(id);
+    expect(res.statusCode).toBe(200);
+
+    const [after] = await db.select().from(screenhostFactures).where(eq(screenhostFactures.id, id));
+    expect(after?.status).toBe('en_verification');
+    expect(after?.signedFileKey).toBe(`signed-factures/${id}.pdf`);
+    expect(after?.signedFileMime).toBe('application/pdf');
+    expect(after?.depositedAt).not.toBeNull();
+
+    // §5 — the screenhost learns about it through a NOTIFICATION, never a status on a line.
+    const notes = await db.select().from(notifications).where(eq(notifications.userId, s.ownerId));
+    expect(notes.some((n) => n.type === 'screenhost_facture_deposited')).toBe(true);
+  });
+
+  it('a RE-DEPOSIT replaces: the key is derived, so exactly one file ever exists', async () => {
+    const s = await seedFacture();
+    const id = s.facture?.id ?? '';
+    await depositOn(id, Buffer.from('%PDF-1.4\nfirst\n%%EOF\n', 'latin1'));
+    const [first] = await db.select().from(screenhostFactures).where(eq(screenhostFactures.id, id));
+
+    await depositOn(id, Buffer.from('%PDF-1.4\nsecond-and-final\n%%EOF\n', 'latin1'));
+    const [second] = await db
+      .select()
+      .from(screenhostFactures)
+      .where(eq(screenhostFactures.id, id));
+
+    // Same key both times — the object was overwritten, not accumulated. « Le dernier fichier
+    // déposé remplace le précédent » is structural here, not a cleanup the route must remember.
+    expect(second?.signedFileKey).toBe(first?.signedFileKey);
+    const stored = await storage.download({ key: second?.signedFileKey ?? '' });
+    expect('error' in stored ? '' : stored.body.toString('latin1')).toContain('second-and-final');
+  });
+
+  it('refuses a deposit on a PAYEE facture (409) and 404s a foreign one', async () => {
+    const s = await seedFacture();
+    const id = s.facture?.id ?? '';
+    await db
+      .update(screenhostFactures)
+      .set({ status: 'payee' })
+      .where(eq(screenhostFactures.id, id));
+    const closed = await depositOn(id);
+    expect(closed.statusCode).toBe(409);
+
+    const stranger = await seedUser({ role: 'individual_owner' });
+    mockSession(stranger, 'individual_owner');
+    expect((await depositOn(id)).statusCode).toBe(404);
+  });
+
+  it('the owner wire carries NO status — statuses reach the screenhost by notification only', async () => {
+    const s = await seedFacture();
+    await depositOn(s.facture?.id ?? '');
+    const list = (
+      await app.inject({ method: 'GET', url: '/api/screenhosts/statements' })
+    ).json() as Record<string, unknown>[];
+    expect(list).toHaveLength(1);
+    // The row is en_verification in the DB, and the owner cannot see that anywhere on the wire.
+    expect(Object.keys(list[0] ?? {})).not.toContain('status');
+    expect(JSON.stringify(list)).not.toContain('en_verification');
+    // What it DOES carry: the designation the list renders.
+    expect(list[0]?.['designation']).toBe('Facture juillet 2026');
   });
 });

@@ -1415,14 +1415,30 @@ export const monthlyInvoices = pgTable(
 
 export type MonthlyInvoice = typeof monthlyInvoices.$inferSelect;
 
-// ── screenhost monthly statements (FCT2 / relevés de reversement) ────────────────────────────────
-// One relevé per (venue, month): Σ reversement_lines.sh_amount_tnd over the lines SETTLED that
-// Tunis month (settled_at bucketing — « venues with settlements that month »; reversement_lines
-// has no month column, so the aggregation SUMs, never assumes one row per pair). Same month-end
-// job, same UNIQUE idempotency, PDF stored at statements/<screenhostId>/<month>.pdf and served
+// ── screenhost factures (REV2 — supersedes FCT2's « relevés de reversement ») ────────────────────
+// One FACTURE per (venue, month): Σ reversement_lines.sh_amount_tnd over the lines SETTLED that
+// Tunis month (settled_at bucketing; reversement_lines has no month column, so the aggregation
+// SUMs, never assumes one row per pair). Same month-end job, same UNIQUE idempotency, PDF served
 // THROUGH the api (owner-scoped) like the monthly report.
-export const screenhostMonthlyStatements = pgTable(
-  'screenhost_monthly_statements',
+//
+// THE DIRECTION REVERSES, and this is the whole point of the entity: on this document the ÉMETTEUR
+// is the screenhost's établissement and the CLIENT is Toodooh — a SUPPLIER invoice. It must never
+// be confused with the screencaster facture (monthly_invoices, FM-), where Toodooh bills the
+// advertiser. Different prefix (FS-), different template, opposite direction.
+//
+// Renamed IN PLACE from screenhost_monthly_statements (migration 0062) so the keying, the
+// (screenhost, month) UNIQUE, the month-format CHECK and the FK all survive untouched — they were
+// already exactly right, and a drop-and-recreate would have re-litigated every one of them.
+export const screenhostFactureStatus = pgEnum('screenhost_facture_status', [
+  'emise',
+  'en_verification',
+  'en_paiement',
+  'refusee',
+  'payee',
+]);
+
+export const screenhostFactures = pgTable(
+  'screenhost_factures',
   {
     id: uuid('id').primaryKey().defaultRandom(),
     screenhostId: uuid('screenhost_id')
@@ -1430,18 +1446,29 @@ export const screenhostMonthlyStatements = pgTable(
       .references(() => screenhosts.id, { onDelete: 'cascade' }),
     month: text('month').notNull(), // 'YYYY-MM' (Africa/Tunis, settled_at bucketing)
     totalShTnd: numeric('total_sh_tnd', { precision: 14, scale: 4 }).notNull(),
-    // REL- + 8 uppercase hex derived from the row id (the makeReference idiom).
+    // FS- + 8 uppercase hex derived from the row id (the makeBillingReference idiom). FM- is the
+    // screencaster side and is untouched; REL- retires with the relevé.
     reference: text('reference').notNull().unique(),
     pdfKey: text('pdf_key').notNull(),
+    // The lifecycle. It exists as DATA only in this lane: the owner wire never carries it and no
+    // owner surface renders it (§5 — statuses reach the screenhost through notifications only).
+    // REV2 performs exactly ONE transition, emise → en_verification on a signed deposit; every
+    // other transition (en_paiement / refusee / payee) belongs to REV3's admin surface.
+    status: screenhostFactureStatus('status').notNull().default('emise'),
+    // The signed-and-stamped document the owner deposits back. A re-deposit REPLACES: the last
+    // file counts, so these hold ONE file, never a history.
+    signedFileKey: text('signed_file_key'),
+    signedFileMime: text('signed_file_mime'),
+    depositedAt: timestamp('deposited_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex('screenhost_monthly_statements_sh_month_uq').on(table.screenhostId, table.month),
-    check('screenhost_monthly_statements_month_fmt', sql`${table.month} ~ '^\\d{4}-\\d{2}$'`),
+    uniqueIndex('screenhost_factures_sh_month_uq').on(table.screenhostId, table.month),
+    check('screenhost_factures_month_fmt', sql`${table.month} ~ '^\\d{4}-\\d{2}$'`),
   ],
 );
 
-export type ScreenhostMonthlyStatement = typeof screenhostMonthlyStatements.$inferSelect;
+export type ScreenhostFacture = typeof screenhostFactures.$inferSelect;
 
 // ── proof_of_play (L-playout — the proof-of-play / billing substrate) ────────
 // The TV player reports VIDEO_STARTED / VIDEO_ENDED over the screen WebSocket; each is resolved to
