@@ -44,7 +44,10 @@ const OwnerCampaignCalendar = lazy(
 );
 const OwnerPerformance = lazy(() => import('@/features/screenhost/pages/OwnerPerformance'));
 const OwnerCalendarDevices = lazy(() => import('@/features/screenhost/pages/OwnerCalendarDevices'));
-const OwnerStatementsPage = lazy(() => import('@/features/screenhost/pages/OwnerStatementsPage'));
+const OwnerFacturesPage = lazy(() => import('@/features/screenhost/pages/OwnerFacturesPage'));
+const OwnerFactureDetailPage = lazy(
+  () => import('@/features/screenhost/pages/OwnerFactureDetailPage'),
+);
 const OwnerSettings = lazy(() => import('@/features/screenhost/pages/OwnerSettings'));
 const ContactPage = lazy(() => import('@/features/screenhost/pages/ContactPage'));
 const AgentWorkspace = lazy(() => import('@/features/agent/pages/AgentWorkspace'));
@@ -489,13 +492,24 @@ export default function App() {
               }
             />
             <Route
-              path="/owner-statements"
+              path="/owner-factures"
               element={
                 <OwnerRoute>
-                  <OwnerStatementsPage />
+                  <OwnerFacturesPage />
                 </OwnerRoute>
               }
             />
+            <Route
+              path="/owner-factures/:id"
+              element={
+                <OwnerRoute>
+                  <OwnerFactureDetailPage />
+                </OwnerRoute>
+              }
+            />
+            {/* REV2 — the pre-rename URL. Bookmarks and any already-sent link keep working; the
+                bell's own legacy mapping routes through actionFor, not through here. */}
+            <Route path="/owner-statements" element={<Navigate to="/owner-factures" replace />} />
             <Route
               path="/owner-settings"
               element={

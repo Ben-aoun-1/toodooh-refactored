@@ -26,8 +26,21 @@ describe('actionFor (bell CTA routing by type)', () => {
     expect(actionFor(notif('dispatch_pending_acceptance')).actionPath).toBe('/owner-allocations');
   });
 
-  it('FCT2 — routes reversement_statement_ready to the relevés page', () => {
-    expect(actionFor(notif('reversement_statement_ready')).actionPath).toBe('/owner-statements');
+  it('REV2 — both facture types land on « Mes factures » (they had NO action path before)', () => {
+    expect(actionFor(notif('screenhost_facture_ready'))).toEqual({
+      actionLabel: 'Consulter',
+      actionPath: '/owner-factures',
+    });
+    expect(actionFor(notif('screenhost_facture_deposited'))).toEqual({
+      actionLabel: 'Consulter',
+      actionPath: '/owner-factures',
+    });
+  });
+
+  it('REV2 — the LEGACY FCT2 type is kept and routed to the same list', () => {
+    // Rows in this shape exist in production and migration 0062 does not rewrite them. Dropping
+    // this arm would strand every one of them on the campaigns fallback.
+    expect(actionFor(notif('reversement_statement_ready')).actionPath).toBe('/owner-factures');
   });
 
   it('keeps every other type on the campaigns fallback', () => {

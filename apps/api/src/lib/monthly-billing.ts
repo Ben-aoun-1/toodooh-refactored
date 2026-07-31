@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { and, eq, gte, inArray, lte, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, lte } from 'drizzle-orm';
 import type { FastifyBaseLogger } from 'fastify';
 
 import { db } from '../db/client.js';
@@ -9,17 +9,17 @@ import {
   campaigns,
   monthlyInvoices,
   notifications,
-  reversementLines,
-  screenhostMonthlyStatements,
+  screenhostFactures,
   screenhosts,
   users,
 } from '../db/schema.js';
 import { storage } from '../storage/s3-storage.js';
 
+import { factureLinesByVenue, sumLinesHt } from './facture-lines.js';
 import { tvaFromHt, ttcFromHt } from './facture.js';
 import { renderMonthlyInvoicePdf } from './monthly-invoice-pdf.js';
-import { renderRelevePdf } from './releve-pdf.js';
 import { monthLabelFr, previousClosedMonth } from './report/monthly-job.js';
+import { renderScreenhostFacturePdf } from './screenhost-facture-pdf.js';
 
 // FCT2 — the month-end billing sweep (US-FCT-11..12 + the SH relevés), the monthly-report job
 // idiom exactly: boot + hourly unref'd interval, previousClosedMonth (Africa/Tunis — effectively
@@ -38,21 +38,26 @@ import { monthLabelFr, previousClosedMonth } from './report/monthly-job.js';
 //   total_ht(A, M) = round4(Σ_C debit) ; TVA 19 % via the facture trio. No started campaign
 //                    → NO invoice. deliveredFacturableInRange STAYS in its valuation home for
 //                    the consumption readers — only THIS caller changed.
-// RELEVÉS — one row+PDF per venue with reversement lines SETTLED that Tunis month:
+// SCREENHOST FACTURES (REV2 — supersedes FCT2's relevés) — one row+PDF per venue with reversement
+// lines SETTLED that Tunis month. The DIRECTION REVERSES: the venue is the ÉMETTEUR and Toodooh is
+// the CLIENT (a supplier invoice), never to be confused with the FM- screencaster side above.
 //   total_sh(V, M)    = round4(Σ sh_amount_tnd over lines with settled_at in M) — SUM, never
-//                       one-row-per-pair assumptions (source='event' may add lines later).
+//                       one-row-per-pair assumptions; grouped BY SOURCE for the facture's lines.
 // Recharges NEVER invoice — this sweep reads campaigns/reversements only, never the recharges
 // table (pinned in tests).
 
 const round4 = (n: number): number => Math.round(n * 1e4) / 1e4;
 
 /** FM-/REL- + 8 uppercase hex DERIVED from the row id — the makeReference idiom, race-free. */
-export const makeBillingReference = (prefix: 'FM' | 'REL', id: string): string =>
+export const makeBillingReference = (prefix: 'FM' | 'FS', id: string): string =>
   `${prefix}-${id.replace(/-/g, '').slice(0, 8).toUpperCase()}`;
 
 export const invoicePdfKey = (advertiserId: string, month: string): string =>
   `invoices/${advertiserId}/${month}.pdf`;
-export const statementPdfKey = (screenhostId: string, month: string): string =>
+// REV2 — the key path stays `statements/...` deliberately: renaming it would orphan every
+// already-stored object for no functional gain. The ENTITY is the facture; the bucket path is
+// just where its bytes live.
+export const facturePdfKey = (screenhostId: string, month: string): string =>
   `statements/${screenhostId}/${month}.pdf`;
 
 export interface BillingSweepResult {
@@ -183,21 +188,15 @@ export async function runMonthlyBillingSweep(
     }
   }
 
-  // ── venue relevés ───────────────────────────────────────────────────────────
-  // settled_at bucketed on its Africa/Tunis calendar date — « venues with settlements that month ».
-  const settled = await db
-    .select({
-      screenhostId: reversementLines.screenhostId,
-      totalSh: sql<string>`coalesce(sum(${reversementLines.shAmountTnd}), 0)`,
-    })
-    .from(reversementLines)
-    .where(
-      and(
-        gte(sql`(${reversementLines.settledAt} AT TIME ZONE 'Africa/Tunis')::date`, from),
-        lte(sql`(${reversementLines.settledAt} AT TIME ZONE 'Africa/Tunis')::date`, to),
-      ),
-    )
-    .groupBy(reversementLines.screenhostId);
+  // ── venue FACTURES (REV2 — supersedes the relevés) ──────────────────────────
+  // The per-source aggregation lives in lib/facture-lines (REV2 commit 3): the owner's detail
+  // endpoint calls the SAME function, so the document this sweep renders and the screen the owner
+  // prints cannot show different lines. The per-venue total is the sum of its sources.
+  const bySource = await factureLinesByVenue(month);
+  const settled = [...bySource.entries()].map(([screenhostId, lines]) => ({
+    screenhostId,
+    totalSh: String(sumLinesHt(lines)),
+  }));
 
   const venueIds = settled.map((s) => s.screenhostId);
   const venues = venueIds.length
@@ -220,12 +219,12 @@ export async function runMonthlyBillingSweep(
     if (totalSh <= 0) continue;
     try {
       const [existing] = await db
-        .select({ id: screenhostMonthlyStatements.id })
-        .from(screenhostMonthlyStatements)
+        .select({ id: screenhostFactures.id })
+        .from(screenhostFactures)
         .where(
           and(
-            eq(screenhostMonthlyStatements.screenhostId, line.screenhostId),
-            eq(screenhostMonthlyStatements.month, month),
+            eq(screenhostFactures.screenhostId, line.screenhostId),
+            eq(screenhostFactures.month, month),
           ),
         )
         .limit(1);
@@ -237,24 +236,31 @@ export async function runMonthlyBillingSweep(
       if (!venue) continue;
 
       const id = randomUUID();
-      const reference = makeBillingReference('REL', id);
-      const pdf = await renderRelevePdf({
+      const reference = makeBillingReference('FS', id);
+      // The owner's earnings are HT; TVA rides on top, exactly as on the screencaster side.
+      const subtotalHt = totalSh;
+      const totalTtc = ttcFromHt(subtotalHt);
+      const tva = round4(totalTtc - subtotalHt);
+      const pdf = await renderScreenhostFacturePdf({
         reference,
         month,
         venueName: venue.name,
         ownerName: venue.ownerBusinessName ?? venue.ownerContactName ?? '—',
-        totalShTnd: totalSh,
+        lines: bySource.get(line.screenhostId) ?? [],
+        subtotalHtTnd: subtotalHt,
+        tvaTnd: tva,
+        totalTtcTnd: totalTtc,
         issuedAt: now,
       });
-      const key = statementPdfKey(line.screenhostId, month);
+      const key = facturePdfKey(line.screenhostId, month);
       const uploaded = await storage.upload({ key, body: pdf, contentType: 'application/pdf' });
       if ('error' in uploaded) {
         result.failed += 1;
-        log.warn({ screenhostId: line.screenhostId, month }, 'relevé upload failed');
+        log.warn({ screenhostId: line.screenhostId, month }, 'screenhost facture upload failed');
         continue;
       }
       const inserted = await db
-        .insert(screenhostMonthlyStatements)
+        .insert(screenhostFactures)
         .values({
           id,
           screenhostId: line.screenhostId,
@@ -264,7 +270,7 @@ export async function runMonthlyBillingSweep(
           pdfKey: key,
         })
         .onConflictDoNothing()
-        .returning({ id: screenhostMonthlyStatements.id });
+        .returning({ id: screenhostFactures.id });
       if (inserted.length === 0) {
         result.statementsSkipped += 1;
         continue;
@@ -272,15 +278,18 @@ export async function runMonthlyBillingSweep(
       if (venue.ownerId !== null) {
         await db.insert(notifications).values({
           userId: venue.ownerId,
-          type: 'reversement_statement_ready',
-          title: 'Votre relevé de reversement est disponible',
-          body: `Le relevé de ${monthLabelFr(month)} pour « ${venue.name} » (${totalSh.toFixed(2)} TND) est disponible.`,
+          type: 'screenhost_facture_ready',
+          title: 'Votre facture est disponible',
+          body: `La facture de ${monthLabelFr(month)} pour « ${venue.name} » (${ttcFromHt(totalSh).toFixed(2)} TND TTC) est disponible. Merci de l'imprimer, la signer et la déposer.`,
         });
       }
       result.statementsGenerated += 1;
     } catch (err) {
       result.failed += 1;
-      log.warn({ err, screenhostId: line.screenhostId, month }, 'relevé generation failed');
+      log.warn(
+        { err, screenhostId: line.screenhostId, month },
+        'screenhost facture generation failed',
+      );
     }
   }
 

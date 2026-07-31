@@ -10,7 +10,11 @@ import {
   screenhosts,
   users,
 } from '../src/db/schema.js';
-import { previousClosedMonth, runMonthlyReportSweep } from '../src/lib/report/monthly-job.js';
+import {
+  monthBounds,
+  previousClosedMonth,
+  runMonthlyReportSweep,
+} from '../src/lib/report/monthly-job.js';
 import { storage } from '../src/storage/s3-storage.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
@@ -100,6 +104,22 @@ describe('previousClosedMonth (Africa/Tunis month close)', () => {
       from: '2025-12-01',
       to: '2025-12-31',
     });
+  });
+
+  // REV2 commit 3 — the extraction of the facture line aggregation rests on exactly one
+  // assumption: the window derived from a stored 'YYYY-MM' key is the SAME window the sweep used
+  // when it emitted that facture. If it were not, the PDF and the detail screen could aggregate
+  // different days and the owner would sign a document the screen contradicts.
+  it('monthBounds(month) reproduces previousClosedMonth’s window from the key alone', () => {
+    for (const now of [
+      new Date('2026-07-08T12:00:00Z'),
+      new Date('2026-01-15T12:00:00Z'),
+      new Date('2024-03-10T12:00:00Z'), // February in a leap year
+      new Date('2026-12-31T22:00:00Z'),
+    ]) {
+      const closed = previousClosedMonth(now);
+      expect(monthBounds(closed.month)).toEqual(closed);
+    }
   });
 
   it("the month closes at TUNIS local midnight, not UTC's", () => {

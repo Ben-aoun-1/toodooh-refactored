@@ -61,6 +61,25 @@ export function previousClosedMonth(now: Date): ClosedMonth {
   };
 }
 
+/**
+ * The calendar bounds of a 'YYYY-MM' key — the same `from`/`to` `previousClosedMonth` returns for
+ * that month, derived from the key alone rather than from a clock.
+ *
+ * REV2 commit 3 needs this: the sweep knows its window because it just computed it, but a facture
+ * READ knows only the month stored on the row, and both must aggregate over exactly the same days
+ * or the document and the screen could disagree.
+ */
+export function monthBounds(month: string): ClosedMonth {
+  const year = Number(month.slice(0, 4));
+  const monthNum = Number(month.slice(5, 7));
+  const lastDay = new Date(Date.UTC(year, monthNum, 0)).getUTCDate();
+  return {
+    month,
+    from: `${month}-01`,
+    to: `${month}-${String(lastDay).padStart(2, '0')}`,
+  };
+}
+
 /** French month label ('2026-06' → 'juin 2026') — exported for the FCT2 billing documents. */
 export const monthLabelFr = (month: string): string => {
   const name = MONTHS_FR[Number(month.slice(5, 7)) - 1] ?? month;

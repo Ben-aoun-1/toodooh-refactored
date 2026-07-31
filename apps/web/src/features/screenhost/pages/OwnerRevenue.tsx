@@ -19,6 +19,7 @@ import PageHeader from '@/components/PageHeader';
 import { useBusinessProfile } from '@/features/auth/hooks/useBusinessProfile';
 import { authService } from '@/features/auth/services/auth.service';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
+import OwnerFactureDepositSlot from '@/features/screenhost/components/OwnerFactureDepositSlot';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
 import OwnerNotificationsBell from '@/features/screenhost/components/OwnerNotificationsBell';
 import { useRevenueByPeriod, useRevenueStats } from '@/features/wallet/hooks/useRevenue';
@@ -346,15 +347,20 @@ export default function OwnerRevenue() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => navigate('/owner-statements')}
+                      onClick={() => navigate('/owner-factures')}
                       className="inline-flex items-center justify-center gap-2 px-1 sm:px-2 py-2.5 rounded-xl text-white/95 hover:text-white hover:bg-white/10 text-sm font-semibold transition-colors whitespace-nowrap"
                     >
                       <FileText className="w-5 h-5 shrink-0 text-emerald-200" />
-                      Mes relevés de versement
+                      Mes factures
                     </button>
                   </div>
                 </div>
               </div>
+
+              {/* REV2 — the signed-facture deposit, deliberately BETWEEN the revenue block and the
+                  transactions history: the owner reads what they earned, returns the document that
+                  claims it, then sees the movements. Its own file — this page is long enough. */}
+              <OwnerFactureDepositSlot />
 
               {/* Dernières transactions */}
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
