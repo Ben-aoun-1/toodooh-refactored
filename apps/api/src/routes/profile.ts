@@ -4,6 +4,8 @@ import { z } from 'zod';
 
 import { db } from '../db/client.js';
 import { businessSectors, governorates, users } from '../db/schema.js';
+import { snapshotBankState, writeBankAudit } from '../lib/bank-audit.js';
+import { IBAN_ERROR, RIB_ERROR, validateIbanTn, validateRib } from '../lib/bank-validation.js';
 import { requireAuth } from '../middleware/require-auth.js';
 import { validatePhone } from '../validation/phone.js';
 import { validateTaxNumber } from '../validation/tax-number.js';
@@ -64,14 +66,10 @@ const addressPatchSchema = z
 const bankPatchSchema = z
   .object({
     bank_account_holder: z.string().min(1).max(200).optional(),
-    bank_rib: z
-      .string()
-      .regex(/^\d{20}$/, 'RIB must be exactly 20 digits')
-      .optional(),
-    bank_iban: z
-      .string()
-      .regex(/^TN\d{22}$/, 'IBAN must be TN followed by 22 digits')
-      .optional(),
+    // REV1 — the regexes moved to lib/bank-validation.ts (ONE home, shared with the unit matrix);
+    // the French message is what the owner actually reads on « Mes Revenus ».
+    bank_rib: z.string().refine(validateRib, RIB_ERROR).optional(),
+    bank_iban: z.string().refine(validateIbanTn, IBAN_ERROR).optional(),
   })
   .refine((b) => Object.keys(b).length > 0, { message: 'At least one field is required' });
 
@@ -273,13 +271,24 @@ export const profileRoutes: FastifyPluginAsync = async (app) => {
     const data = parsed.data;
     const patch: Partial<typeof users.$inferInsert> = {
       // Server-stamped audit marker (money-adjacent) — never a client-supplied timestamp.
+      // It answers WHEN; user_bank_details_audit (REV1) answers WHAT and BY WHOM.
       bankDetailsUpdatedAt: new Date(),
     };
     if (data.bank_account_holder !== undefined) patch.bankAccountHolder = data.bank_account_holder;
     if (data.bank_rib !== undefined) patch.bankRib = data.bank_rib;
     if (data.bank_iban !== undefined) patch.bankIban = data.bank_iban;
 
-    const [updated] = await db.update(users).set(patch).where(eq(users.id, userId)).returning();
+    // REV1 — snapshot, write, snapshot, audit, in ONE transaction: an audit row that could be lost
+    // while the coordinates moved would be worse than no trail at all, because it would read as
+    // "never changed". The document id is untouched here; it rides the upload route's own audit.
+    const updated = await db.transaction(async (tx) => {
+      const before = await snapshotBankState(tx, userId);
+      const [row] = await tx.update(users).set(patch).where(eq(users.id, userId)).returning();
+      const after = await snapshotBankState(tx, userId);
+      await writeBankAudit(tx, { userId, changedBy: userId, before, after });
+      return row;
+    });
+
     return reply.status(200).send({
       bankAccountHolder: updated?.bankAccountHolder ?? null,
       bankRib: updated?.bankRib ?? null,

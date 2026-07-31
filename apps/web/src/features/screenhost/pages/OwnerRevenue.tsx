@@ -17,6 +17,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 import PageHeader from '@/components/PageHeader';
 import { useBusinessProfile } from '@/features/auth/hooks/useBusinessProfile';
+import { authService } from '@/features/auth/services/auth.service';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
 import OwnerNotificationsBell from '@/features/screenhost/components/OwnerNotificationsBell';
@@ -29,6 +30,10 @@ import {
   isValidRib,
   normalizeBankInput,
 } from '@/features/wallet/lib/bank-validation';
+import {
+  PAYOUT_DOC_PREVIEW_CLASS,
+  payoutMethodIsRecorded,
+} from '@/features/wallet/lib/payout-method';
 import { getErrorMessage } from '@/lib/errors';
 
 type TxFilter = 'all' | 'recharges' | 'depenses';
@@ -52,7 +57,11 @@ export default function OwnerRevenue() {
 
   const [showPaymentMethodModal, setShowPaymentMethodModal] = useState(false);
   const [showBankDetailsModal, setShowBankDetailsModal] = useState(false);
-  const [registeredPaymentLabel, setRegisteredPaymentLabel] = useState('RIB Mohamed Ben Mohamed');
+  // REV1 — empty by default. This used to seed a hardcoded 'RIB Mohamed Ben Mohamed', so an owner
+  // with no payout account on file was shown a stranger's name as their registered mode.
+  const [registeredPaymentLabel, setRegisteredPaymentLabel] = useState('');
+  // The presigned URL for the bank identity document, fetched when the consultation popup opens.
+  const [bankDocUrl, setBankDocUrl] = useState<string | null>(null);
 
   const [bankFullName, setBankFullName] = useState('');
   const [bankRib, setBankRib] = useState('');
@@ -98,12 +107,15 @@ export default function OwnerRevenue() {
     const bankIbanValue = profile.bank_iban?.trim() || '';
     const bankDocPath = profile.bank_doc_path?.trim() || null;
     const effectiveName = bankName || name || '';
+    // REV1 — the COORDINATES seed unconditionally. They used to be gated on a non-empty name, so
+    // an owner with a RIB but no holder recorded read as having no payout method at all, and the
+    // consultation popup would have shown the empty state over real coordinates.
+    setBankRib(bankRibValue);
+    setBankIban(bankIbanValue);
+    setExistingBankDocPath(bankDocPath);
     if (effectiveName) {
-      setRegisteredPaymentLabel(`RIB ${effectiveName}`);
+      setRegisteredPaymentLabel(effectiveName);
       setBankFullName((prev) => prev || effectiveName);
-      setBankRib(bankRibValue);
-      setBankIban(bankIbanValue);
-      setExistingBankDocPath(bankDocPath);
     }
   }, [profile]);
 
@@ -113,6 +125,32 @@ export default function OwnerRevenue() {
       setShowBankDetailsModal(true);
     }
   }, [location.search]);
+
+  // REV1 — a payout account is "recorded" only when BOTH coordinates are on file; a half-filled
+  // profile must show the empty state rather than a partial mode that cannot receive money.
+  const hasRecordedPayoutMethod = payoutMethodIsRecorded(bankRib, bankIban);
+
+  // Resolve the identity document's presigned URL when the consultation popup opens. Presigns are
+  // short-lived, so this is fetched per-open rather than cached with the profile.
+  useEffect(() => {
+    if (!showPaymentMethodModal || !existingBankDocPath) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const url = await authService.getProfileDocumentUrlByCategory('bank');
+        if (!cancelled) setBankDocUrl(url);
+      } catch {
+        // A missing/expired presign must not break the consultation — the coordinates still show
+        // and the preview degrades to its "document indisponible" note.
+        if (!cancelled) setBankDocUrl(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showPaymentMethodModal, existingBankDocPath]);
 
   const handleSaveBankDetails = async () => {
     const name = bankFullName.trim();
@@ -497,13 +535,80 @@ export default function OwnerRevenue() {
               </div>
             </div>
 
-            <div className="px-6 py-5">
-              <span className="block text-sm font-medium text-gray-700 mb-2">
-                Mode de paiement enregistré
-              </span>
-              <div className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3.5 text-gray-900 text-sm font-medium">
-                {registeredPaymentLabel}
-              </div>
+            <div className="px-6 py-5 space-y-4">
+              {!hasRecordedPayoutMethod ? (
+                <p
+                  data-testid="payout-method-empty"
+                  className="w-full rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-sm text-gray-600"
+                >
+                  Aucun mode de versement enregistré
+                </p>
+              ) : (
+                <>
+                  <div>
+                    <span className="block text-sm font-medium text-gray-700 mb-2">
+                      Nom du titulaire
+                    </span>
+                    <p
+                      data-testid="payout-holder"
+                      className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3.5 text-gray-900 text-sm font-medium"
+                    >
+                      {registeredPaymentLabel}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="block text-sm font-medium text-gray-700 mb-2">RIB</span>
+                    <p
+                      data-testid="payout-rib"
+                      className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3.5 text-gray-900 text-sm font-mono tracking-wide break-all"
+                    >
+                      {bankRib}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="block text-sm font-medium text-gray-700 mb-2">IBAN</span>
+                    <p
+                      data-testid="payout-iban"
+                      className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3.5 text-gray-900 text-sm font-mono tracking-wide break-all"
+                    >
+                      {bankIban}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="block text-sm font-medium text-gray-700 mb-2">
+                      Relevé d&apos;identité bancaire
+                    </span>
+                    {/* Displayed LARGE and inline: the spec requires it be readable without
+                        downloading — « pas une simple vignette miniscule ». <object> renders both
+                        an image and a PDF from the Content-Type the storage serves, so one element
+                        covers both without sniffing a key that carries no file extension. */}
+                    {bankDocUrl ? (
+                      <object
+                        data-testid="payout-doc-preview"
+                        data={bankDocUrl}
+                        aria-label="Aperçu du relevé d'identité bancaire"
+                        className={PAYOUT_DOC_PREVIEW_CLASS}
+                      >
+                        <a
+                          href={bankDocUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block px-4 py-3.5 text-sm text-brand-primary underline"
+                        >
+                          Ouvrir le document
+                        </a>
+                      </object>
+                    ) : (
+                      <p
+                        data-testid="payout-doc-missing"
+                        className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3.5 text-sm text-gray-600"
+                      >
+                        Document indisponible pour le moment.
+                      </p>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="px-6 pb-6 pt-1 flex flex-row flex-wrap justify-end gap-3">

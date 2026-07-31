@@ -25,6 +25,7 @@ import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { useLocation } from 'react-router-dom';
 
+import AdminBankAuditSlot from '@/features/admin/components/AdminBankAuditSlot';
 import AdminLayout from '@/features/admin/components/AdminLayout';
 import AdminUserEligibilitySlot from '@/features/admin/components/AdminUserEligibilitySlot';
 import AdminUserWifiSlot from '@/features/admin/components/AdminUserWifiSlot';
@@ -800,6 +801,12 @@ export default function UserManagement() {
                                   dans la section Documents ci-dessus (pour tout profil), pas ici. */}
                             </div>
                           </div>
+                        )}
+
+                        {/* REV1 — le journal interne des changements de coordonnées bancaires.
+                            Admin uniquement : aucune route propriétaire ne l'expose. */}
+                        {isOwnerProfile(selectedUser.profile_type) && (
+                          <AdminBankAuditSlot userId={selectedUser.id} />
                         )}
 
                         {/* WiFi du lieu (propriétaires) — éditable, write-only (PATCH admin) */}

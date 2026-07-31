@@ -4,7 +4,14 @@ import { z } from 'zod';
 
 import { emailSender } from '../auth/auth.js';
 import { db } from '../db/client.js';
-import { type User, screenhosts, sessions, userDocuments, users } from '../db/schema.js';
+import {
+  type User,
+  screenhosts,
+  sessions,
+  userBankDetailsAudit,
+  userDocuments,
+  users,
+} from '../db/schema.js';
 import {
   rejectionEmailPlainText,
   rejectionEmailSubject,
@@ -476,6 +483,60 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
     return reply
       .status(200)
       .send({ user: toAdminUserView(updated as User, presence.get(id) ?? NO_DOCUMENTS) });
+  });
+
+  // GET /api/admin/users/:id/bank-audit — REV1's INTERNAL fraud trail: every change to where this
+  // owner's money is sent, newest first, each row carrying a BEFORE and an AFTER snapshot.
+  //
+  // ADMIN-ONLY BY DESIGN. There is deliberately NO owner-facing counterpart: the spec says the
+  // previous coordinates are "not kept in HIS history", and an owner who could read the trail could
+  // also see what a compromised account changed and when — the trail exists to be read by someone
+  // OTHER than whoever might have moved the money. Do not mirror this onto an owner route.
+  app.get('/api/admin/users/:id/bank-audit', adminGuard, async (request, reply) => {
+    const parsed = idParamSchema.safeParse(request.params);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        statusCode: 400,
+        requestId: request.id,
+        fields: parsed.error.issues.map((i) => ({ field: i.path.join('.'), reason: i.message })),
+      });
+    }
+    const { id } = parsed.data;
+    const [target] = await db.select({ id: users.id }).from(users).where(eq(users.id, id)).limit(1);
+    if (!target) {
+      return reply.status(404).send({
+        error: 'USER_NOT_FOUND',
+        message: 'No such user.',
+        statusCode: 404,
+        requestId: request.id,
+      });
+    }
+    const rows = await db
+      .select()
+      .from(userBankDetailsAudit)
+      .where(eq(userBankDetailsAudit.userId, id))
+      .orderBy(desc(userBankDetailsAudit.createdAt));
+    return reply.status(200).send(
+      rows.map((r) => ({
+        id: r.id,
+        changed_by: r.changedBy,
+        before: {
+          bank_account_holder: r.beforeAccountHolder,
+          bank_rib: r.beforeRib,
+          bank_iban: r.beforeIban,
+          bank_document_id: r.beforeBankDocumentId,
+        },
+        after: {
+          bank_account_holder: r.afterAccountHolder,
+          bank_rib: r.afterRib,
+          bank_iban: r.afterIban,
+          bank_document_id: r.afterBankDocumentId,
+        },
+        created_at: r.createdAt.toISOString(),
+      })),
+    );
   });
 
   // GET /api/admin/users/:id/documents — ALL of a user's documents grouped by category (the
