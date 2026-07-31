@@ -227,6 +227,17 @@ export const adminDispatchConfigRoutes: FastifyPluginAsync = async (app) => {
         pctToodooh: patch.pctToodooh ?? String(DISPATCH_CONFIG_DEFAULTS.pctToodooh),
         pctAgentSh: patch.pctAgentSh ?? String(DISPATCH_CONFIG_DEFAULTS.pctAgentSh),
         pctAgentSc: patch.pctAgentSc ?? String(DISPATCH_CONFIG_DEFAULTS.pctAgentSc),
+        // E4 — same for the SPS weights, which this INSERT had been omitting entirely: a weights
+        // patch against a config-less DB self-healed to the column defaults and silently lost it.
+        spsWeightAcceptation:
+          patch.spsWeightAcceptation ?? String(DISPATCH_CONFIG_DEFAULTS.spsWeightAcceptation),
+        spsWeightRespectEvenements:
+          patch.spsWeightRespectEvenements ??
+          String(DISPATCH_CONFIG_DEFAULTS.spsWeightRespectEvenements),
+        spsWeightActivite:
+          patch.spsWeightActivite ?? String(DISPATCH_CONFIG_DEFAULTS.spsWeightActivite),
+        spsWeightRemplissage:
+          patch.spsWeightRemplissage ?? String(DISPATCH_CONFIG_DEFAULTS.spsWeightRemplissage),
       });
     }
     return reply.status(200).send(configView(await getDispatchConfig()));
