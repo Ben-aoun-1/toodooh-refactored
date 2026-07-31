@@ -9,8 +9,8 @@
   },
   "scripts": {
     "typecheck": "pnpm -r --if-present --no-bail typecheck",
-    "test": "pnpm -r --if-present test",
-    "build": "pnpm -r --if-present build",
+    "test": "pnpm -r --if-present --no-bail test",
+    "build": "pnpm -r --if-present --no-bail build",
     "dev": "pnpm -r --if-present --parallel dev",
     "lint": "eslint . --no-error-on-unmatched-pattern",
     "lint:fix": "eslint . --no-error-on-unmatched-pattern --fix",

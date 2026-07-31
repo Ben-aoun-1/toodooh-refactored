@@ -3,7 +3,6 @@ import { fileURLToPath } from 'node:url';
 
 import PDFDocument from 'pdfkit';
 
-import type { Env } from '../env.js';
 import { logger } from '../logger.js';
 
 import type { ResolvedDispatchConfig } from './dispatch/config.js';
@@ -53,45 +52,25 @@ export interface FactureData {
   bank: FactureBankDetails;
 }
 
-// Build the bank block from env (placeholder '—' defaults until the operator provisions real values).
-export const factureBankDetailsFromEnv = (e: Env): FactureBankDetails => ({
-  beneficiary: e.FACTURE_BANK_BENEFICIARY,
-  bankName: e.FACTURE_BANK_NAME,
-  rib: e.FACTURE_BANK_RIB,
-  iban: e.FACTURE_BANK_IBAN,
-});
+// « Bénéficiaire » — the company's own name. It has no dispatch_config column and is not a secret
+// or a per-environment value, so it is a constant rather than the env var it used to read.
+const FACTURE_BENEFICIARY = 'TOODOOH';
 
-// FCT2 — bank-coords CONVERGENCE: dispatch_config.bank_* is the ONE forward home (FCT1's « Pour
-// info » block already reads it); the FACTURE_BANK_* env block survives only as a TRANSITION
-// fallback (config '—' → env → '—'), logged once and flagged for removal once the operator copies
-// the prod env values into config (one SQL at deploy). Field mapping: rib/iban are 1:1;
-// « Banque » ↔ bank_domiciliation (the bank + agency IS the domiciliation); « Bénéficiaire » has
-// no config home and stays env-only ('TOODOOH' default — not a secret).
-let envFallbackLogged = false;
+// GREEN1 — bank-coords CONVERGENCE COMPLETE: dispatch_config.bank_* is the ONE home (FCT1's
+// « Pour info » block already read it). The FACTURE_BANK_* env block that used to sit behind this
+// as a "transition fallback" was removed: prod never carried those vars, so they always resolved
+// to their '—' defaults, which is exactly what an unprovisioned config already returns — the
+// fallback could not change a single field, and its "serving from env" warning was unreachable.
+// Field mapping: rib/iban are 1:1; « Banque » ↔ bank_domiciliation (bank + agency IS the
+// domiciliation). '—' means not yet provisioned; the operator sets real values by SQL, never code.
 export const resolveFactureBankDetails = (
-  e: Env,
   cfg: Pick<ResolvedDispatchConfig, 'bankRib' | 'bankIban' | 'bankDomiciliation'>,
-): FactureBankDetails => {
-  const pick = (configValue: string, envValue: string): string =>
-    configValue !== '—' ? configValue : envValue;
-  const details: FactureBankDetails = {
-    beneficiary: e.FACTURE_BANK_BENEFICIARY,
-    bankName: pick(cfg.bankDomiciliation, e.FACTURE_BANK_NAME),
-    rib: pick(cfg.bankRib, e.FACTURE_BANK_RIB),
-    iban: pick(cfg.bankIban, e.FACTURE_BANK_IBAN),
-  };
-  const envSupplied =
-    (cfg.bankRib === '—' && e.FACTURE_BANK_RIB !== '—') ||
-    (cfg.bankIban === '—' && e.FACTURE_BANK_IBAN !== '—') ||
-    (cfg.bankDomiciliation === '—' && e.FACTURE_BANK_NAME !== '—');
-  if (envSupplied && !envFallbackLogged) {
-    envFallbackLogged = true;
-    log.warn(
-      'facture bank coordinates served from the FACTURE_BANK_* env fallback — provision dispatch_config.bank_* and remove the env block (FCT2 transition)',
-    );
-  }
-  return details;
-};
+): FactureBankDetails => ({
+  beneficiary: FACTURE_BENEFICIARY,
+  bankName: cfg.bankDomiciliation,
+  rib: cfg.bankRib,
+  iban: cfg.bankIban,
+});
 
 // Logo: a committed package asset resolved relative to THIS module via import.meta.url, so it works
 // from both src/ (tsx/vitest) and dist/ (compiled) — assets/ is a sibling of both. Read once + cached;

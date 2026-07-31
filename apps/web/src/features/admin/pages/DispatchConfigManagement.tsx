@@ -1,4 +1,4 @@
-import { CalendarClock, Coins, Eye, Loader2, Save } from 'lucide-react';
+import { CalendarClock, Coins, Eye, Loader2, Percent, Save } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 
@@ -9,6 +9,7 @@ import {
   attentionOrderingValid,
   parseAttention,
   parseCampaignLead,
+  reversementSumIsValid,
 } from '@/features/admin/services/admin-dispatch-config.service';
 import { getErrorMessage } from '@/lib/errors';
 
@@ -30,6 +31,11 @@ export default function DispatchConfigManagement() {
   const [t30, setT30] = useState('');
   // CF-D1 — the campaign start-date lead (jours ouvrés).
   const [lead, setLead] = useState('');
+  // E7 — the reversement split (Σ = 100).
+  const [pctSh, setPctSh] = useState('');
+  const [pctToodooh, setPctToodooh] = useState('');
+  const [pctAgentSh, setPctAgentSh] = useState('');
+  const [pctAgentSc, setPctAgentSc] = useState('');
 
   // Seed the editable inputs from the loaded config (guarded on `loading` so the undefined
   // placeholder does not churn the effect before the first read settles).
@@ -41,6 +47,10 @@ export default function DispatchConfigManagement() {
     setT20(String(config.t_20s));
     setT30(String(config.t_30s));
     setLead(String(config.campaign_lead_working_days));
+    setPctSh(String(config.pct_sh));
+    setPctToodooh(String(config.pct_toodooh));
+    setPctAgentSh(String(config.pct_agent_sh));
+    setPctAgentSc(String(config.pct_agent_sc));
   }, [loading, config]);
 
   useEffect(() => {
@@ -74,6 +84,36 @@ export default function DispatchConfigManagement() {
       return;
     }
 
+    // E7 — the reversement split: four shares in [0, 100] totalling exactly 100. The server
+    // refuses a drifted split (and the money rail would throw at settlement); this mirror keeps
+    // the operator from spending a round trip on it.
+    const pcts = [pctSh, pctToodooh, pctAgentSh, pctAgentSc].map((raw) => {
+      const n = Number(raw);
+      return Number.isFinite(n) && n >= 0 && n <= 100 ? n : null;
+    });
+    const [shNum, toodoohNum, agentShNum, agentScNum] = pcts;
+    if (
+      shNum === null ||
+      toodoohNum === null ||
+      agentShNum === null ||
+      agentScNum === null ||
+      shNum === undefined ||
+      toodoohNum === undefined ||
+      agentShNum === undefined ||
+      agentScNum === undefined
+    ) {
+      toast.error('Chaque pourcentage de reversement doit être un nombre entre 0 et 100');
+      return;
+    }
+    if (!reversementSumIsValid(shNum, toodoohNum, agentShNum, agentScNum)) {
+      toast.error(
+        `Les pourcentages de reversement doivent totaliser 100 (obtenu : ${
+          shNum + toodoohNum + agentShNum + agentScNum
+        })`,
+      );
+      return;
+    }
+
     // Send only the changed knobs (PATCH is partial). Nothing changed → no-op.
     const patch: CpmPatch = {};
     if (stdNum !== config.standard_cpm_tnd) patch.standard_cpm_tnd = stdNum;
@@ -82,6 +122,10 @@ export default function DispatchConfigManagement() {
     if (t20Num !== config.t_20s) patch.t_20s = t20Num;
     if (t30Num !== config.t_30s) patch.t_30s = t30Num;
     if (leadNum !== config.campaign_lead_working_days) patch.campaign_lead_working_days = leadNum;
+    if (shNum !== config.pct_sh) patch.pct_sh = shNum;
+    if (toodoohNum !== config.pct_toodooh) patch.pct_toodooh = toodoohNum;
+    if (agentShNum !== config.pct_agent_sh) patch.pct_agent_sh = agentShNum;
+    if (agentScNum !== config.pct_agent_sc) patch.pct_agent_sc = agentScNum;
     if (Object.keys(patch).length === 0) {
       toast('Aucune modification à enregistrer');
       return;
@@ -94,6 +138,12 @@ export default function DispatchConfigManagement() {
       toast.error(getErrorMessage(e) || 'Enregistrement impossible');
     }
   };
+
+  // Live total for the reversement block — the operator sees the Σ drift before pressing save.
+  const totalPct = [pctSh, pctToodooh, pctAgentSh, pctAgentSc].reduce((sum, raw) => {
+    const n = Number(raw);
+    return sum + (Number.isFinite(n) ? n : 0);
+  }, 0);
 
   const readonlyRows = config
     ? [
@@ -238,6 +288,48 @@ export default function DispatchConfigManagement() {
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* E7 — the reversement split (Σ = 100), saved by the same Enregistrer. */}
+          <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+            <div className="flex items-center gap-2 mb-1">
+              <Percent className="h-5 w-5 text-brand-primary" />
+              <h3 className="text-lg font-semibold text-gray-900">Répartition des reversements</h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-4">
+              Part de chaque bénéficiaire sur la valeur diffusée. Le total doit être exactement 100
+              — une répartition différente est refusée à l'enregistrement.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              {(
+                [
+                  ['pct-sh', 'Établissement (%)', pctSh, setPctSh],
+                  ['pct-toodooh', 'TOODOOH (%)', pctToodooh, setPctToodooh],
+                  ['pct-agent-sh', 'Agent établissement (%)', pctAgentSh, setPctAgentSh],
+                  ['pct-agent-sc', 'Agent annonceur (%)', pctAgentSc, setPctAgentSc],
+                ] as const
+              ).map(([id, label, value, setter]) => (
+                <div key={id}>
+                  <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor={id}>
+                    {label}
+                  </label>
+                  <input
+                    id={id}
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    value={value}
+                    onChange={(e) => setter(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
+                  />
+                </div>
+              ))}
+            </div>
+            <p className="mt-4 text-sm font-medium text-gray-700">
+              Total : {totalPct}
+              {totalPct === 100 ? '' : ' — doit être 100'}
+            </p>
           </div>
 
           <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">

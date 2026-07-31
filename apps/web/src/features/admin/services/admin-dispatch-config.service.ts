@@ -22,6 +22,11 @@ export interface DispatchConfigView {
   t_30s: number;
   /** CF-D1 — the campaign start-date lead in jours ouvrés (0–30; 0 = floor is today, tests only). */
   campaign_lead_working_days: number;
+  /** E7 — the reversement split, each ∈ [0,100] and Σ = 100 (server-validated at the edit path). */
+  pct_sh: number;
+  pct_toodooh: number;
+  pct_agent_sh: number;
+  pct_agent_sc: number;
 }
 
 // A partial edit — any subset of the editable knobs. The server refines that at least one is
@@ -34,7 +39,23 @@ export interface CpmPatch {
   t_20s?: number;
   t_30s?: number;
   campaign_lead_working_days?: number;
+  pct_sh?: number;
+  pct_toodooh?: number;
+  pct_agent_sh?: number;
+  pct_agent_sc?: number;
 }
+
+/**
+ * E7 — the reversement shares must total exactly 100. The server refuses a drifted split with
+ * « les pourcentages de reversement doivent totaliser 100 » (and the money rail would otherwise
+ * throw at settlement); this mirror lets the screen say so before a pointless round trip.
+ */
+export const reversementSumIsValid = (
+  sh: number,
+  toodooh: number,
+  agentSh: number,
+  agentSc: number,
+): boolean => Math.abs(sh + toodooh + agentSh + agentSc - 100) <= 1e-9;
 
 // ── E1 — the attention-T client checks, mirrors of the server rules (pinned by unit test) ───────
 /** A T value in (0, 1] — an attention index is a discount, never a boost. */

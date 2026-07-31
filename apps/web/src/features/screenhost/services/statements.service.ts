@@ -1,8 +1,9 @@
 import { apiClient } from '@/lib/api-client';
 
 // FCT2 — the owner's monthly « Relevés de reversement » over REST: server-generated + STORED PDFs
-// (Σ reversement_lines.sh_amount_tnd per venue per settled month), replacing the mock-fed
-// client-side jsPDF relevé (data/ownerStatementDetails.ts — dead once this is the source).
+// (Σ reversement_lines.sh_amount_tnd per venue per settled month). This is the ONLY source: the
+// mock-fed client-side jsPDF relevé it replaced (data/ownerStatementDetails.ts, its detail page
+// and the recipient helper) was deleted at GREEN1 once this had been live for a release.
 
 export interface OwnerStatementRow {
   id: string;

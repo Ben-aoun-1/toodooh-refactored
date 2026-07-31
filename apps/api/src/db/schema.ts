@@ -657,6 +657,14 @@ export const screens = pgTable(
       .references(() => screenhosts.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     isActive: boolean('is_active').notNull().default(true),
+    // PAIRING STAMP — NOT liveness. Written only by POST /api/screens/:id/pair (and
+    // refreshed there on an idempotent re-pair); nothing else ever touches it. It answers
+    // "when was this screen last bound to a device", which is what the owner's « Appairé
+    // le … » line renders. It does NOT decay and a paired screen that has been dark for a
+    // month still carries an old, non-null paired_at.
+    // LIVENESS IS last_seen_at (+ the live socket): deviceStatusOf() derives
+    // connected/offline/never from last_seen_at alone — never from paired_at. Anything
+    // asking "is this screen alive right now" must read last_seen_at, not this column.
     pairedAt: timestamp('paired_at', { withTimezone: true }),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -998,8 +1006,9 @@ export const dispatchConfig = pgTable(
     pctToodooh: numeric('pct_toodooh', { precision: 5, scale: 2 }).notNull().default('44.00'),
     pctAgentSh: numeric('pct_agent_sh', { precision: 5, scale: 2 }).notNull().default('3.00'),
     pctAgentSc: numeric('pct_agent_sc', { precision: 5, scale: 2 }).notNull().default('3.00'),
-    // FCT1 — Toodooh's OWN bank coordinates shown on the virement « Pour info » block. '—' is the
-    // not-provisioned placeholder (the FACTURE_BANK_* env posture): the web shows « Coordonnées
+    // FCT1 — Toodooh's OWN bank coordinates shown on the virement « Pour info » block, and (since
+    // GREEN1 retired the FACTURE_BANK_* env block) the SOLE source for the recharge document's bank
+    // coordinates too. '—' is the not-provisioned placeholder: the web shows « Coordonnées
     // bancaires communiquées prochainement. » until the operator sets the real values with a plain
     // SQL UPDATE — config, never code, never a secret in source. Widening this singleton is the
     // established pattern (campaign_lead 0045, agent pcts 0051 are not dispatch thresholds either).

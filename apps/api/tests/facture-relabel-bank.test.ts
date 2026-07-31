@@ -4,7 +4,6 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { auth } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
 import { type NewUser, dispatchConfig, recharges, users } from '../src/db/schema.js';
-import { env } from '../src/env.js';
 import { renderFacturePdf, resolveFactureBankDetails } from '../src/lib/facture.js';
 import { rechargesRoutes } from '../src/routes/recharges.js';
 
@@ -13,8 +12,8 @@ import { resetAuthTables } from './helpers/db-test-setup.js';
 // FCT2 — two pins on the per-recharge document:
 //  (1) the RELABEL (US-FCT-12): it is a « RÉCAPITULATIF DE COMMANDE », never a « FACTURE » —
 //      recharges never invoice; the real facture is the monthly consolidated one.
-//  (2) the bank-coords CONVERGENCE: dispatch_config.bank_* wins, FACTURE_BANK_* env is the
-//      transition fallback (config '—' → env → '—'), Banque ↔ bank_domiciliation.
+//  (2) the bank-coords CONVERGENCE: dispatch_config.bank_* is the ONE home (GREEN1 removed the
+//      FACTURE_BANK_* env fallback), Banque ↔ bank_domiciliation, '—' = not provisioned.
 
 type GetSessionResult = Awaited<ReturnType<typeof auth.api.getSession>>;
 
@@ -28,18 +27,10 @@ const pdfText = (pdf: Buffer): string => {
   return out;
 };
 
-describe('resolveFactureBankDetails (config-first, env fallback)', () => {
-  const fakeEnv = {
-    ...env,
-    FACTURE_BANK_BENEFICIARY: 'TOODOOH',
-    FACTURE_BANK_NAME: 'BIAT (env)',
-    FACTURE_BANK_RIB: 'RIB-ENV',
-    FACTURE_BANK_IBAN: 'IBAN-ENV',
-  };
-
-  it('a provisioned config wins field by field', () => {
+describe('resolveFactureBankDetails (dispatch_config is the ONE home)', () => {
+  it('a provisioned config is served field by field', () => {
     expect(
-      resolveFactureBankDetails(fakeEnv, {
+      resolveFactureBankDetails({
         bankRib: 'RIB-CFG',
         bankIban: 'IBAN-CFG',
         bankDomiciliation: 'BIAT — Agence Lac (config)',
@@ -52,30 +43,24 @@ describe('resolveFactureBankDetails (config-first, env fallback)', () => {
     });
   });
 
-  it("an unprovisioned config ('—') falls back to env, per field", () => {
+  it("a PARTIALLY provisioned config: set fields win, unset ones stay '—' (no env can fill them)", () => {
     expect(
-      resolveFactureBankDetails(fakeEnv, {
+      resolveFactureBankDetails({
         bankRib: '—',
         bankIban: 'IBAN-CFG',
         bankDomiciliation: '—',
       }),
     ).toEqual({
       beneficiary: 'TOODOOH',
-      bankName: 'BIAT (env)',
-      rib: 'RIB-ENV',
+      bankName: '—',
+      rib: '—',
       iban: 'IBAN-CFG',
     });
   });
 
-  it("both unprovisioned → the '—' placeholders (the pre-provisioning posture)", () => {
-    const bare = {
-      ...fakeEnv,
-      FACTURE_BANK_NAME: '—',
-      FACTURE_BANK_RIB: '—',
-      FACTURE_BANK_IBAN: '—',
-    };
+  it("fully unprovisioned → the '—' placeholders (the pre-provisioning posture)", () => {
     expect(
-      resolveFactureBankDetails(bare, { bankRib: '—', bankIban: '—', bankDomiciliation: '—' }),
+      resolveFactureBankDetails({ bankRib: '—', bankIban: '—', bankDomiciliation: '—' }),
     ).toEqual({ beneficiary: 'TOODOOH', bankName: '—', rib: '—', iban: '—' });
   });
 });

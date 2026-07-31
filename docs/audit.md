@@ -31,6 +31,16 @@ complementary and orthogonal — none subsumes the others; each should cross-ref
 
 ## 2. Snapshot
 
+> **Superseded by GATE1 (2026-07-30): the gate is now per-package, api 0 / web 14.**
+> The `pnpm typecheck` and CI rows below record the Step-14 state and are kept as
+> history. The single combined baseline they describe (`TYPECHECK_BASELINE=51`) no
+> longer exists: it was counted from the ROOT recursive run, which bails at the first
+> failing package and therefore **inverted** — breaking `apps/api` lowered the count
+> and turned a regression green. CI now counts each package separately against its own
+> baseline (`apps/api` **0** via `tsc --noEmit -p tsconfig.test.json`, `apps/web` **14**
+> via `tsc --noEmit -p tsconfig.app.json`), and the root script carries `--no-bail`.
+> See `.github/workflows/ci.yml` and `CLAUDE.md` rule 7 for the current commands.
+
 _As of commit `3db8aec` (post-Step-14, **cleanup phase complete**; code metrics unchanged since Step-12 `40d65c4` — Steps 13–14 are infrastructure-only). CI **green** on `main`. devDependencies: `apps/web` carries 11 (Step 14 hoisted 6 duplicates to root, removed 1 dead); root carries 14._
 
 | Metric                             | Value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
@@ -1001,6 +1011,15 @@ per commit.
 ---
 
 ## 4. Already resolved
+
+> **Superseded by GATE1 (2026-07-30): the gate is now per-package, api 0 / web 14.**
+> The "Step 13 — Get CI green" entry below describes the baseline-gated CI as built
+> then (`TYPECHECK_BASELINE=51` / `LINT_BASELINE=1`, counted from one combined root
+> run) and is kept as history. That mechanism was later found to **invert**: the root
+> recursive run bails at the first failing package, so an `apps/api` failure killed
+> `apps/web`'s tsc before it reported and _lowered_ the count. GATE1 replaced it with
+> per-package counting (api **0**, web **14**) plus `--no-bail` on the root script.
+> The lint baseline also ratcheted 1 → 0 well before GATE1.
 
 - **`react-hooks/rules-of-hooks`** — 0 (was 20, all in `admin/CampaignMonitoring.tsx`; commit `bc63fb1`).
 - **`itstrategix.tn` redirect** — removed; auth email redirects are now env-driven via `lib/app-url.ts` / `VITE_PUBLIC_APP_URL` (commit `854f112`).

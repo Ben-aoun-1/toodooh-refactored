@@ -33,6 +33,11 @@ const configView = (cfg: ResolvedDispatchConfig) => ({
   sps_weight_respect_evenements: cfg.spsWeightRespectEvenements,
   sps_weight_activite: cfg.spsWeightActivite,
   sps_weight_remplissage: cfg.spsWeightRemplissage,
+  // E7 — the reversement split (admin-editable; Σ = 100 enforced on the MERGED result below).
+  pct_sh: cfg.pctSh,
+  pct_toodooh: cfg.pctToodooh,
+  pct_agent_sh: cfg.pctAgentSh,
+  pct_agent_sc: cfg.pctAgentSc,
 });
 
 // At least one knob must be supplied. CPMs: finite, strictly-positive TND/1000 rates (a
@@ -57,6 +62,11 @@ const patchBodySchema = z
     sps_weight_respect_evenements: z.number().min(0).max(100).optional(),
     sps_weight_activite: z.number().min(0).max(100).optional(),
     sps_weight_remplissage: z.number().min(0).max(100).optional(),
+    // E7 — each reversement share ∈ [0, 100]; Σ = 100 judged on the MERGED result in the handler.
+    pct_sh: z.number().min(0).max(100).optional(),
+    pct_toodooh: z.number().min(0).max(100).optional(),
+    pct_agent_sh: z.number().min(0).max(100).optional(),
+    pct_agent_sc: z.number().min(0).max(100).optional(),
   })
   .refine((b) => Object.values(b).some((v) => v !== undefined), {
     message: 'at least one editable field is required',
@@ -128,6 +138,32 @@ export const adminDispatchConfigRoutes: FastifyPluginAsync = async (app) => {
       });
     }
 
+    // E7 — the four reversement shares must sum to EXACTLY 100 on the effective config, judged the
+    // same way as the SPS weights (partial patch merged over current values, epsilon for FP noise).
+    // This is the EDIT-PATH guard for a rule the money rail already enforces: computeReversement()
+    // throws on Σ ≠ 100 at settlement. Catching it here turns a settlement-time crash into a plain
+    // French 400 the operator can act on, and keeps an unsplittable config from ever being saved.
+    const effectivePcts = {
+      sh: parsed.data.pct_sh ?? current.pctSh,
+      toodooh: parsed.data.pct_toodooh ?? current.pctToodooh,
+      agentSh: parsed.data.pct_agent_sh ?? current.pctAgentSh,
+      agentSc: parsed.data.pct_agent_sc ?? current.pctAgentSc,
+    };
+    const pctSum =
+      effectivePcts.sh + effectivePcts.toodooh + effectivePcts.agentSh + effectivePcts.agentSc;
+    if (Math.abs(pctSum - 100) > 1e-9) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: [
+          {
+            field: 'pct_sh',
+            reason: `les pourcentages de reversement doivent totaliser 100 (obtenu : ${pctSum})`,
+          },
+        ],
+      });
+    }
+
     // numeric columns take strings; only set the keys the admin actually sent.
     const patch: {
       standardCpmTnd?: string;
@@ -140,6 +176,10 @@ export const adminDispatchConfigRoutes: FastifyPluginAsync = async (app) => {
       spsWeightRespectEvenements?: string;
       spsWeightActivite?: string;
       spsWeightRemplissage?: string;
+      pctSh?: string;
+      pctToodooh?: string;
+      pctAgentSh?: string;
+      pctAgentSc?: string;
     } = {};
     if (parsed.data.standard_cpm_tnd !== undefined)
       patch.standardCpmTnd = String(parsed.data.standard_cpm_tnd);
@@ -158,6 +198,10 @@ export const adminDispatchConfigRoutes: FastifyPluginAsync = async (app) => {
       patch.spsWeightActivite = String(parsed.data.sps_weight_activite);
     if (parsed.data.sps_weight_remplissage !== undefined)
       patch.spsWeightRemplissage = String(parsed.data.sps_weight_remplissage);
+    if (parsed.data.pct_sh !== undefined) patch.pctSh = String(parsed.data.pct_sh);
+    if (parsed.data.pct_toodooh !== undefined) patch.pctToodooh = String(parsed.data.pct_toodooh);
+    if (parsed.data.pct_agent_sh !== undefined) patch.pctAgentSh = String(parsed.data.pct_agent_sh);
+    if (parsed.data.pct_agent_sc !== undefined) patch.pctAgentSc = String(parsed.data.pct_agent_sc);
 
     const [existing] = await db.select({ id: dispatchConfig.id }).from(dispatchConfig).limit(1);
     if (existing) {
@@ -177,6 +221,23 @@ export const adminDispatchConfigRoutes: FastifyPluginAsync = async (app) => {
         t30s: patch.t30s ?? String(DISPATCH_CONFIG_DEFAULTS.t30s),
         campaignLeadWorkingDays:
           patch.campaignLeadWorkingDays ?? DISPATCH_CONFIG_DEFAULTS.campaignLeadWorkingDays,
+        // E7 — carry a patched split onto the self-healed row, so an edit made against a
+        // config-less DB is not silently dropped back to the 50/44/3/3 column defaults.
+        pctSh: patch.pctSh ?? String(DISPATCH_CONFIG_DEFAULTS.pctSh),
+        pctToodooh: patch.pctToodooh ?? String(DISPATCH_CONFIG_DEFAULTS.pctToodooh),
+        pctAgentSh: patch.pctAgentSh ?? String(DISPATCH_CONFIG_DEFAULTS.pctAgentSh),
+        pctAgentSc: patch.pctAgentSc ?? String(DISPATCH_CONFIG_DEFAULTS.pctAgentSc),
+        // E4 — same for the SPS weights, which this INSERT had been omitting entirely: a weights
+        // patch against a config-less DB self-healed to the column defaults and silently lost it.
+        spsWeightAcceptation:
+          patch.spsWeightAcceptation ?? String(DISPATCH_CONFIG_DEFAULTS.spsWeightAcceptation),
+        spsWeightRespectEvenements:
+          patch.spsWeightRespectEvenements ??
+          String(DISPATCH_CONFIG_DEFAULTS.spsWeightRespectEvenements),
+        spsWeightActivite:
+          patch.spsWeightActivite ?? String(DISPATCH_CONFIG_DEFAULTS.spsWeightActivite),
+        spsWeightRemplissage:
+          patch.spsWeightRemplissage ?? String(DISPATCH_CONFIG_DEFAULTS.spsWeightRemplissage),
       });
     }
     return reply.status(200).send(configView(await getDispatchConfig()));

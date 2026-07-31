@@ -7,7 +7,6 @@ import { z } from 'zod';
 
 import { db } from '../db/client.js';
 import { type Recharge, notifications, recharges, users } from '../db/schema.js';
-import { env } from '../env.js';
 import { renderBonDeCommandePdf } from '../lib/bon-de-commande.js';
 import { getDispatchConfig } from '../lib/dispatch/config.js';
 import { renderFacturePdf, resolveFactureBankDetails } from '../lib/facture.js';
@@ -342,8 +341,8 @@ export const rechargesRoutes: FastifyPluginAsync = async (app) => {
   // 404 on a foreign/missing id). FCT2 relabeled it from « facture » (recharges never invoice —
   // US-FCT-12; the real invoice is monthly, routes/wallet-documents.ts); the route path stays for
   // wire compat, the filename follows the new name. Deterministic on-the-fly render of the
-  // recharge row + the advertiser's name + the bank coordinates (dispatch_config with the
-  // FACTURE_BANK_* env fallback during the FCT2 transition).
+  // recharge row + the advertiser's name + the bank coordinates (dispatch_config.bank_*, the ONE
+  // home since GREEN1 removed the FACTURE_BANK_* env fallback).
   app.get('/api/recharges/:id/facture', advertiserGuard, async (request, reply) => {
     const parsed = idParamSchema.safeParse(request.params);
     if (!parsed.success) return invalidField(reply, 'id', 'must be a uuid');
@@ -368,7 +367,7 @@ export const rechargesRoutes: FastifyPluginAsync = async (app) => {
       amountTnd: Number(row.amountTnd),
       advertiserName: row.businessName ?? row.contactName,
       issuedAt: row.createdAt,
-      bank: resolveFactureBankDetails(env, await getDispatchConfig()),
+      bank: resolveFactureBankDetails(await getDispatchConfig()),
     });
     return reply
       .status(200)
