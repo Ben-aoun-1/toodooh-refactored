@@ -657,6 +657,14 @@ export const screens = pgTable(
       .references(() => screenhosts.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     isActive: boolean('is_active').notNull().default(true),
+    // PAIRING STAMP — NOT liveness. Written only by POST /api/screens/:id/pair (and
+    // refreshed there on an idempotent re-pair); nothing else ever touches it. It answers
+    // "when was this screen last bound to a device", which is what the owner's « Appairé
+    // le … » line renders. It does NOT decay and a paired screen that has been dark for a
+    // month still carries an old, non-null paired_at.
+    // LIVENESS IS last_seen_at (+ the live socket): deviceStatusOf() derives
+    // connected/offline/never from last_seen_at alone — never from paired_at. Anything
+    // asking "is this screen alive right now" must read last_seen_at, not this column.
     pairedAt: timestamp('paired_at', { withTimezone: true }),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
