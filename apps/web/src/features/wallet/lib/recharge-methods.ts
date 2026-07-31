@@ -112,7 +112,7 @@ export interface BankCoordinates {
   domiciliation: string;
 }
 
-/** The server's not-provisioned placeholder ('—' — the FACTURE_BANK_* posture). */
+/** The server's not-provisioned placeholder ('—' — an unset dispatch_config.bank_* column). */
 export const BANK_COORDS_PLACEHOLDER = '—';
 
 export const BANK_COORDS_PENDING_LINE = 'Coordonnées bancaires communiquées prochainement.';

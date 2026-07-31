@@ -60,16 +60,10 @@ const EnvSchema = z.object({
   WEDOOH_SYNC_KEY: z.string().min(16).optional(),
   TOODOOH_SYNC_KEY: z.string().min(16).optional(),
   WEDOOH_INGEST_URL: z.url().optional(),
-  // FACTURE (invoice) bank-transfer coordinates printed on the recharge facture, so the advertiser
-  // knows where to wire the MANUAL transfer (L-wallet — no online gateway). OPTIONAL with placeholder
-  // defaults for the SAME eager-parse reason as the WEDOOH_* block above: a required bank var would
-  // fail-fast every entrypoint (server, migrate, every vitest file). The operator provisions the real
-  // values in .env at switch-on; account numbers are NEVER hardcoded in source. Until then the facture
-  // prints the '—' placeholders (the wallet mechanics are pricing/coordinate-independent).
-  FACTURE_BANK_BENEFICIARY: z.string().min(1).default('TOODOOH'),
-  FACTURE_BANK_NAME: z.string().min(1).default('—'),
-  FACTURE_BANK_RIB: z.string().min(1).default('—'),
-  FACTURE_BANK_IBAN: z.string().min(1).default('—'),
+  // (The FACTURE_BANK_* block was removed at GREEN1. The facture's bank coordinates now come
+  // from dispatch_config.bank_* alone — the ONE home FCT1's « Pour info » block already read.
+  // Prod never carried these vars, so the env fallback could only ever yield the '—' placeholder
+  // that config already returns; it was ceremony, not a fallback. See lib/facture.ts.)
   // Chromium executable for the report renderer (R1). OPTIONAL for the same eager-parse reason as
   // the WEDOOH_* block: unset, the renderer falls back to PUPPETEER_EXECUTABLE_PATH (the docker
   // image sets it) then common system paths; when none resolves, report rendering fails with a

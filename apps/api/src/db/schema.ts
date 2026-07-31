@@ -1006,8 +1006,9 @@ export const dispatchConfig = pgTable(
     pctToodooh: numeric('pct_toodooh', { precision: 5, scale: 2 }).notNull().default('44.00'),
     pctAgentSh: numeric('pct_agent_sh', { precision: 5, scale: 2 }).notNull().default('3.00'),
     pctAgentSc: numeric('pct_agent_sc', { precision: 5, scale: 2 }).notNull().default('3.00'),
-    // FCT1 — Toodooh's OWN bank coordinates shown on the virement « Pour info » block. '—' is the
-    // not-provisioned placeholder (the FACTURE_BANK_* env posture): the web shows « Coordonnées
+    // FCT1 — Toodooh's OWN bank coordinates shown on the virement « Pour info » block, and (since
+    // GREEN1 retired the FACTURE_BANK_* env block) the SOLE source for the recharge document's bank
+    // coordinates too. '—' is the not-provisioned placeholder: the web shows « Coordonnées
     // bancaires communiquées prochainement. » until the operator sets the real values with a plain
     // SQL UPDATE — config, never code, never a secret in source. Widening this singleton is the
     // established pattern (campaign_lead 0045, agent pcts 0051 are not dispatch thresholds either).
