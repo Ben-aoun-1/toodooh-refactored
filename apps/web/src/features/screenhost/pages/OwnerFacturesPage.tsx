@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Calendar, ChevronRight, Banknote, Download, Wallet } from 'lucide-react';
+import { Calendar, ChevronRight, Banknote, Download, Eye, Wallet } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
@@ -9,59 +9,49 @@ import { useAuthStore } from '@/features/auth/stores/auth.store';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
 import OwnerNotificationsBell from '@/features/screenhost/components/OwnerNotificationsBell';
 import { screenhostKeys } from '@/features/screenhost/hooks/queryKeys';
+import { factureMoney, formatDateFr, formatTnd } from '@/features/screenhost/lib/facture-view';
 import {
-  type OwnerStatementRow,
-  releveFilename,
-  statementDesignation,
-  statementsService,
-} from '@/features/screenhost/services/statements.service';
+  factureFilename,
+  facturesService,
+  type OwnerFactureRow,
+} from '@/features/screenhost/services/factures.service';
 
-// FCT2 — the « Relevés de reversement » page, rewired from the mock module onto the live api:
-// the server generates + stores one relevé per venue per settled month; download streams the
-// STORED PDF (the client-side jsPDF relevé is retired for this surface).
-export default function OwnerStatementsPage() {
+// REV2 — « Mes factures », the finances section formerly titled « Relevés de reversement ». One line
+// per settled month per venue: the designation the server rendered, the FS- reference beneath it,
+// the montant TTC, the date d'émission, and the two actions.
+//
+// NO STATUS ON A LINE (US-REV §5). The lifecycle is real data, but a screenhost hears about it
+// through the bell, never through a badge here. The wire does not even carry `status`, so there is
+// nothing to render by accident — and a source pin keeps it that way.
+//
+// « Télécharger » DOES NOT NAVIGATE. It streams the stored PDF straight from the row, because the
+// common case is an owner who wants the document to print, not a screen to read.
+export default function OwnerFacturesPage() {
   const navigate = useNavigate();
   const { user, needsApproval, validationStatus } = useAuthStore();
   const isDisabled = needsApproval && validationStatus === 'pending';
-  const statementsQuery = useQuery({
-    queryKey: screenhostKeys.statements(user?.id ?? ''),
-    queryFn: () => statementsService.list(),
+  const facturesQuery = useQuery({
+    queryKey: screenhostKeys.factures(user?.id ?? ''),
+    queryFn: () => facturesService.list(),
     enabled: !!user?.id,
   });
-  const sortedStatements = statementsQuery.data ?? [];
+  const factures = facturesQuery.data ?? [];
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
-  const formatAmount = useCallback((value: number) => {
-    return new Intl.NumberFormat('fr-TN', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(value);
-  }, []);
-
-  const formatDateFr = useCallback((iso: string) => {
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return iso;
-    return d.toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
-  }, []);
-
-  const handleDownload = useCallback(async (s: OwnerStatementRow) => {
+  const handleDownload = useCallback(async (row: OwnerFactureRow) => {
     try {
-      setDownloadingId(s.id);
-      const blob = await statementsService.download(s.id);
+      setDownloadingId(row.id);
+      const blob = await facturesService.download(row.id);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = releveFilename(s.reference);
+      a.download = factureFilename(row.reference);
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
     } catch (_e) {
-      toast.error('Impossible de télécharger le relevé. Veuillez réessayer.');
+      toast.error('Impossible de télécharger la facture. Veuillez réessayer.');
     } finally {
       setDownloadingId(null);
     }
@@ -98,7 +88,7 @@ export default function OwnerStatementsPage() {
                   <Wallet className="w-5 h-5 text-[#5C5C5C] flex-shrink-0" />
                   <span className="hidden sm:inline">Mes revenus</span>
                   <ChevronRight className="w-5 h-5 text-[#9CA3AF] flex-shrink-0 hidden sm:inline" />
-                  <span className="truncate">Mes relevés</span>
+                  <span className="truncate">Mes factures</span>
                 </button>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <button
@@ -120,11 +110,11 @@ export default function OwnerStatementsPage() {
           <div className="flex-1 overflow-y-auto">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
               <div className="mb-4">
-                <PageHeader title="Tous les relevés" />
+                <PageHeader title="Toutes les factures" />
               </div>
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[640px]">
+                  <table className="w-full min-w-[720px]">
                     <thead>
                       <tr className="bg-gray-100/90 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">
                         <th className="px-5 py-3 pl-6">Désignation</th>
@@ -137,34 +127,32 @@ export default function OwnerStatementsPage() {
                         <th className="px-5 py-3">
                           <span className="inline-flex items-center gap-1.5">
                             <Calendar className="w-3.5 h-3.5" />
-                            Date
+                            Date d’émission
                           </span>
                         </th>
-                        <th className="px-5 py-3 pr-6 text-right w-[200px]">Actions</th>
+                        <th className="px-5 py-3 pr-6 text-right w-[260px]">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {sortedStatements.length === 0 ? (
+                      {factures.length === 0 ? (
                         <tr>
                           <td colSpan={4} className="px-6 py-12 text-center text-gray-500 text-sm">
-                            {statementsQuery.isLoading
+                            {facturesQuery.isLoading
                               ? 'Chargement...'
-                              : 'Aucun relevé pour le moment.'}
+                              : 'Aucune facture pour le moment.'}
                           </td>
                         </tr>
                       ) : (
-                        sortedStatements.map((row) => (
+                        factures.map((row) => (
                           <tr key={row.id} className="hover:bg-gray-50/80 transition-colors">
                             <td className="px-5 py-4 pl-6">
-                              <p className="text-sm font-medium text-gray-900">
-                                {statementDesignation(row.month)}
-                              </p>
+                              <p className="text-sm font-medium text-gray-900">{row.designation}</p>
                               <p className="text-xs text-gray-500 mt-0.5">
                                 {row.screenhost_name} ({row.reference})
                               </p>
                             </td>
                             <td className="px-5 py-4 text-sm font-medium text-gray-900 tabular-nums">
-                              {formatAmount(row.total_sh_tnd)} TND
+                              {formatTnd(factureMoney(row.total_sh_tnd).ttcTnd)}
                             </td>
                             <td className="px-5 py-4 text-sm text-gray-700 tabular-nums">
                               {formatDateFr(row.created_at)}
@@ -173,10 +161,19 @@ export default function OwnerStatementsPage() {
                               <div className="flex items-center justify-end gap-2">
                                 <button
                                   type="button"
+                                  onClick={() => navigate(`/owner-factures/${row.id}`)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-colors"
+                                  aria-label={`Voir la facture ${row.reference}`}
+                                >
+                                  <Eye className="w-4 h-4" />
+                                  Voir
+                                </button>
+                                <button
+                                  type="button"
                                   onClick={() => void handleDownload(row)}
                                   disabled={downloadingId === row.id}
                                   className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100 transition-colors disabled:opacity-50"
-                                  aria-label={`Télécharger le relevé ${row.reference}`}
+                                  aria-label={`Télécharger la facture ${row.reference}`}
                                 >
                                   <Download className="w-4 h-4" />
                                   Télécharger

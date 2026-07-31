@@ -34,9 +34,20 @@ export const actionFor = (n: ApiNotification): { actionLabel: string; actionPath
     return { actionLabel: 'Consulter', actionPath: '/owner-allocations' };
   if (n.type === 'monthly_report_ready')
     return { actionLabel: 'Consulter', actionPath: '/owner-performance' };
-  // FCT2 — the monthly « Relevé de reversement » lands on the statements page.
-  if (n.type === 'reversement_statement_ready')
-    return { actionLabel: 'Consulter', actionPath: '/owner-statements' };
+  // REV2 — every facture notification lands on « Mes factures ». THREE types, ONE destination:
+  //   screenhost_facture_ready     — the sweep emitted the month's facture (emise)
+  //   screenhost_facture_deposited — the signed document was received (en_verification)
+  //   reversement_statement_ready  — FCT2's LEGACY type. Rows in that shape exist in production
+  //     and are not rewritten by migration 0062, so dropping this arm would strand every one of
+  //     them on the campaigns fallback. It routes to the same list, which is where the document
+  //     it referred to now lives.
+  // Statuses reach the screenhost HERE (§5) and nowhere else — never as a badge on a line.
+  if (
+    n.type === 'screenhost_facture_ready' ||
+    n.type === 'screenhost_facture_deposited' ||
+    n.type === 'reversement_statement_ready'
+  )
+    return { actionLabel: 'Consulter', actionPath: '/owner-factures' };
   return { actionLabel: 'Consulter', actionPath: '/owner-campaigns' };
 };
 
