@@ -22,6 +22,7 @@ import { useAuthStore } from '@/features/auth/stores/auth.store';
 import OwnerFactureDepositSlot from '@/features/screenhost/components/OwnerFactureDepositSlot';
 import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
 import OwnerNotificationsBell from '@/features/screenhost/components/OwnerNotificationsBell';
+import OwnerVersementsSlot from '@/features/screenhost/components/OwnerVersementsSlot';
 import { useRevenueByPeriod, useRevenueStats } from '@/features/wallet/hooks/useRevenue';
 import { useSaveBankDetails } from '@/features/wallet/hooks/useSaveBankDetails';
 import {
@@ -361,6 +362,11 @@ export default function OwnerRevenue() {
                   transactions history: the owner reads what they earned, returns the document that
                   claims it, then sees the movements. Its own file — this page is long enough. */}
               <OwnerFactureDepositSlot />
+
+              {/* REV3 — the versements history, BELOW the deposit slot: the owner returns the
+                  document, then sees what was actually paid for it. Four frozen columns, no
+                  action, no status. */}
+              <OwnerVersementsSlot />
 
               {/* Dernières transactions */}
               <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">

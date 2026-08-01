@@ -115,6 +115,11 @@ export default function OwnerNotificationsBell({ userId }: { userId?: string }) 
                         <p className="text-base leading-tight font-medium text-[#171717]">
                           {item.title}
                         </p>
+                        {/* REV3 — the motif of a refused facture. Present only for types whose
+                            body says something the title cannot (see detailFor). */}
+                        {item.detail ? (
+                          <p className="text-sm leading-snug text-[#5C5C5C] mt-1">{item.detail}</p>
+                        ) : null}
                         <p className="text-sm leading-tight text-[#5C5C5C] mt-0.5">
                           {relativeTime(item.timestamp)}
                         </p>

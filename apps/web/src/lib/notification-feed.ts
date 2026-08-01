@@ -21,6 +21,13 @@ export interface NotificationFeedItem<K extends string = string> {
   timestamp: Date;
   actionLabel: string;
   actionPath: string;
+  /**
+   * A second line the bell renders under the title, when the body carries information the title
+   * cannot (REV3: a refused facture's MOTIF — « refusée » with no reason is a dead end the owner
+   * cannot act on). Optional and opt-in per type rather than "always show the body": turning it on
+   * for every notification would restyle the whole bell, which is a separate decision.
+   */
+  detail?: string;
 }
 
 export interface NotificationFeed<K extends string = string> {

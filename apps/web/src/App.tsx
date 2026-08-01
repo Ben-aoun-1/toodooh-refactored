@@ -60,6 +60,9 @@ const CampaignReviewQueue = lazy(() => import('@/features/admin/pages/CampaignRe
 const CreateAdmin = lazy(() => import('@/features/admin/pages/CreateAdmin'));
 const AdminManagement = lazy(() => import('@/features/admin/pages/AdminManagement'));
 const ScreenManagement = lazy(() => import('@/features/admin/pages/ScreenManagement'));
+const ScreenhostFactureManagement = lazy(
+  () => import('@/features/admin/pages/ScreenhostFactureManagement'),
+);
 const RechargeManagement = lazy(() => import('@/features/admin/pages/RechargeManagement'));
 const GeographicZonesManagement = lazy(
   () => import('@/features/admin/pages/GeographicZonesManagement'),
@@ -600,6 +603,14 @@ export default function App() {
               element={
                 <AdminRoute requiredRoles={['superadmin', 'admin']}>
                   <RechargeManagement />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin-screenhost-factures"
+              element={
+                <AdminRoute requiredRoles={['superadmin', 'admin']}>
+                  <ScreenhostFactureManagement />
                 </AdminRoute>
               }
             />
