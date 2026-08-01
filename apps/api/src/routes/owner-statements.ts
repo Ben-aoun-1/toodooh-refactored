@@ -4,7 +4,12 @@ import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 import { z } from 'zod';
 
 import { db } from '../db/client.js';
-import { notifications, screenhostFactures, screenhosts } from '../db/schema.js';
+import {
+  notifications,
+  screenhostFactures,
+  screenhostVersements,
+  screenhosts,
+} from '../db/schema.js';
 import { MAX_JUSTIFICATIF_BYTES, signedFactureKey } from '../lib/facture-deposit.js';
 import { factureLinesFor } from '../lib/facture-lines.js';
 import { declaredMatchesSniffed, sniffContainer } from '../lib/media-probe.js';
@@ -69,6 +74,44 @@ export const ownerStatementsRoutes: FastifyPluginAsync = async (app) => {
         total_sh_tnd: Number(r.total_sh_tnd),
         designation: factureDesignation(r.month),
         deposited_at: r.deposited_at ? r.deposited_at.toISOString() : null,
+      })),
+    );
+  });
+
+  // GET /api/screenhosts/versements — the owner's « Historique des versements » (REV3).
+  //
+  // EXACTLY FOUR FIELDS, and the projection is the pin. Not a subset of a richer row, not "the row
+  // minus what we remembered to strip": these four are what the section renders, so these four are
+  // what the wire carries.
+  //   designation        what was paid for
+  //   montant_ttc        how much
+  //   created_at         when
+  //   mode_label_masked  to which account, as a LABEL — type + last four digits, never coordinates
+  //
+  // DELIBERATELY ABSENT: `status` (§5 — the versement has no lifecycle the owner reads), the
+  // facture_id (an internal join key; exposing it invites an owner surface to link a document to a
+  // payment and re-introduce status by the back door), `created_by` (which admin acted is internal),
+  // and anything resembling a RIB or IBAN. A test asserts the key set exactly, not merely that
+  // `status` is missing.
+  app.get('/api/screenhosts/versements', ownerGuard, async (request, reply) => {
+    const userId = request.user?.id;
+    if (!userId) return sendUnauthenticated(reply);
+    const rows = await db
+      .select({
+        designation: screenhostVersements.designation,
+        montant_ttc: screenhostVersements.montantTtc,
+        created_at: screenhostVersements.createdAt,
+        mode_label_masked: screenhostVersements.modeLabelMasked,
+      })
+      .from(screenhostVersements)
+      .where(eq(screenhostVersements.userId, userId))
+      .orderBy(desc(screenhostVersements.createdAt));
+    return reply.status(200).send(
+      rows.map((r) => ({
+        designation: r.designation,
+        montant_ttc: Number(r.montant_ttc),
+        created_at: r.created_at.toISOString(),
+        mode_label_masked: r.mode_label_masked,
       })),
     );
   });
@@ -190,12 +233,24 @@ export const ownerStatementsRoutes: FastifyPluginAsync = async (app) => {
     if (!row || row.ownerId !== userId) {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such facture.' });
     }
-    // A facture already paid is closed: re-depositing against it would silently reopen a settled
-    // document. Refusals are 409 (the recharge-moderation idiom), never a silent no-op.
-    if (row.status === 'payee') {
+    // REV3 — THE DEPOSIT GUARD, COMPLETED. REV2 refused only `payee`, which left `en_paiement`
+    // accepting deposits: an owner could re-open a facture the admin had already sent to payment,
+    // silently invalidating the document that validation was based on. Both terminal-ish states are
+    // now closed. Refusals are 409 (the recharge-moderation idiom), never a silent no-op.
+    //
+    //   emise            → the first deposit
+    //   en_verification  → a replacement while it waits (« le dernier fichier remplace »)
+    //   refusee          → RECOVERY: this is the whole point of a motif — the owner fixes the
+    //                      document and re-deposits, which sends it back to en_verification
+    //   en_paiement      → BLOCKED: already validated, the money is moving
+    //   payee            → BLOCKED: settled
+    if (row.status === 'en_paiement' || row.status === 'payee') {
       return reply.status(409).send({
         error: 'FACTURE_CLOSED',
-        message: 'Cette facture est déjà payée et n’accepte plus de dépôt.',
+        message:
+          row.status === 'payee'
+            ? 'Cette facture est déjà payée et n’accepte plus de dépôt.'
+            : 'Cette facture est en cours de paiement et n’accepte plus de dépôt.',
       });
     }
 
@@ -224,8 +279,12 @@ export const ownerStatementsRoutes: FastifyPluginAsync = async (app) => {
         signedFileKey: key,
         signedFileMime: data.mimetype,
         depositedAt: new Date(),
-        // The ONE transition this lane performs. Everything past this belongs to REV3.
         status: 'en_verification',
+        // REV3 — CLEARED on every deposit. The column means STATE, not history: non-null if and
+        // only if the facture is currently refused. Recovering from a refusal must not leave the
+        // old motif sitting on a row that is back in review. Every refusal keeps its motif in
+        // screenhost_facture_actions, and the owner's notification preserves it.
+        refusalMotif: null,
       })
       .where(eq(screenhostFactures.id, row.id));
 

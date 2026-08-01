@@ -1460,6 +1460,13 @@ export const screenhostFactures = pgTable(
     signedFileKey: text('signed_file_key'),
     signedFileMime: text('signed_file_mime'),
     depositedAt: timestamp('deposited_at', { withTimezone: true }),
+    // REV3 — why the admin refused. STATE, not history: it is set on a refusal and CLEARED when the
+    // owner re-deposits, so it is non-null if and only if status = 'refusee'. The alternative
+    // (keeping the last motif forever) would leave a motif sitting on an en_verification row, which
+    // reads as "this is refused" to anyone querying it. Every refusal is preserved with its motif in
+    // screenhost_facture_actions, and the owner's notification carries it — nothing is lost by
+    // clearing. NEVER on an owner wire.
+    refusalMotif: text('refusal_motif'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
@@ -1469,6 +1476,87 @@ export const screenhostFactures = pgTable(
 );
 
 export type ScreenhostFacture = typeof screenhostFactures.$inferSelect;
+
+// ── screenhost versements (REV3 — US-REV-9..11: the PAYMENT EVENT) ──────────────────────────────
+// THREE DISTINCT THINGS, and this is the third:
+//   reversement_lines      — the COMPUTATION (what the venue earned, per settled campaign/event)
+//   screenhost_factures    — the DOCUMENT (what the venue invoices Toodooh for, per month)
+//   screenhost_versements  — the PAYMENT (that Toodooh paid it, once)
+//
+// THE FOUR FIELDS ARE FROZEN AT WRITE, and that is the whole point of the table rather than a view.
+// designation, montant_ttc, created_at and mode_label_masked are computed once — at validation or
+// at the paper action — and never touched again. An owner who changes their RIB next month must
+// still see the account a past versement actually went to; a derived label would silently rewrite
+// history the moment the coordinates moved. A test writes a line, edits the bank details, and
+// asserts the row is byte-identical.
+//
+// MODE_LABEL_MASKED IS A LABEL, NOT COORDINATES. Type plus the last four digits — never a full RIB
+// or IBAN. This table must not become a second home for live bank data: users.bank_* stays the only
+// one, and a leak here would put payout coordinates behind an owner-readable route.
+//
+// UNIQUE on facture_id: one facture is paid once. It is what makes « marquer comme payée » unable
+// to write a second line even if it tried, and what makes the paper path idempotent under a retry.
+export const screenhostVersements = pgTable(
+  'screenhost_versements',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    // restrict: a versement is a payment record — deleting the facture must not erase the proof.
+    factureId: uuid('facture_id')
+      .notNull()
+      .unique()
+      .references(() => screenhostFactures.id, { onDelete: 'restrict' }),
+    // The OWNER paid (payout is per owner — REV1 ruling), not the établissement invoiced.
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    // ── the four frozen fields the owner's history renders, and nothing else ──
+    designation: text('designation').notNull(),
+    montantTtc: numeric('montant_ttc', { precision: 14, scale: 4 }).notNull(),
+    modeLabelMasked: text('mode_label_masked').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    // Internal: which admin caused the payment. Never on the owner wire.
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+  },
+  (table) => [index('screenhost_versements_user_id_idx').on(table.userId)],
+);
+
+export type ScreenhostVersement = typeof screenhostVersements.$inferSelect;
+
+// ── screenhost facture admin trace (REV3) ───────────────────────────────────────────────────────
+// The wallet_adjustments idiom, not user_bank_details_audit's: this records AN ACTION an admin took
+// on one subject row, with a reason — not a before/after snapshot of coordinates that moved. Flat
+// columns, append-only, no update or delete path, indexed on the subject.
+//
+// INTERNAL. It answers "who validated/refused this facture, when, and why" for an admin. It is
+// never selected by an owner route, and no owner projection joins it.
+export const screenhostFactureAction = pgEnum('screenhost_facture_action', [
+  'valider',
+  'refuser',
+  'marquer_payee',
+  'paper_payee',
+]);
+
+export const screenhostFactureActions = pgTable(
+  'screenhost_facture_actions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    factureId: uuid('facture_id')
+      .notNull()
+      .references(() => screenhostFactures.id, { onDelete: 'restrict' }),
+    adminId: uuid('admin_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
+    action: screenhostFactureAction('action').notNull(),
+    // Non-null for 'refuser' (the route requires it); null for the others.
+    motif: text('motif'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('screenhost_facture_actions_facture_id_idx').on(table.factureId)],
+);
+
+export type ScreenhostFactureActionRow = typeof screenhostFactureActions.$inferSelect;
 
 // ── proof_of_play (L-playout — the proof-of-play / billing substrate) ────────
 // The TV player reports VIDEO_STARTED / VIDEO_ENDED over the screen WebSocket; each is resolved to

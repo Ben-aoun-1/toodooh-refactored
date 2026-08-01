@@ -6,6 +6,7 @@ import { adminCreativesRoutes } from './admin-creatives.js';
 import { adminDispatchConfigRoutes } from './admin-dispatch-config.js';
 import { adminEngineJournalRoutes } from './admin-engine-journal.js';
 import { adminEventsRoutes } from './admin-events.js';
+import { adminFacturesRoutes } from './admin-factures.js';
 import { adminPlatformStatsRoutes } from './admin-platform-stats.js';
 import { adminRechargesRoutes } from './admin-recharges.js';
 import { adminReconcileRoutes } from './admin-reconcile.js';
@@ -102,6 +103,7 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   await app.register(adminCreativesRoutes);
   // L-wallet — admin recharge moderation: the manual-payment queue + confirm (credits the balance,
   // idempotent) / reject (with a reason). The money-confirmation step of the offline top-up flow.
+  await app.register(adminFacturesRoutes);
   await app.register(adminRechargesRoutes);
   // FCT2 — the admin wallet adjustment (signed, audited, reason-required) + its audit trail.
   await app.register(adminWalletRoutes);
