@@ -48,8 +48,30 @@ export const actionFor = (n: ApiNotification): { actionLabel: string; actionPath
     n.type === 'reversement_statement_ready'
   )
     return { actionLabel: 'Consulter', actionPath: '/owner-factures' };
+  // REV3 — the three ADMIN-DRIVEN transitions land on « Mes Revenus », not on the factures list.
+  // They are about MONEY, not about the document: a validation and a payment appear as a line in
+  // the versements history there, and a refusal is acted on by re-depositing through the deposit
+  // slot, which is on that same page. Sending them to the factures list would land the owner one
+  // click away from what the notification is telling them to do.
+  if (
+    n.type === 'screenhost_facture_validated' ||
+    n.type === 'screenhost_facture_refused' ||
+    n.type === 'screenhost_facture_paid'
+  )
+    return { actionLabel: 'Consulter', actionPath: '/owner-revenue' };
   return { actionLabel: 'Consulter', actionPath: '/owner-campaigns' };
 };
+
+/**
+ * The second line the bell shows, for types whose BODY carries information the title cannot.
+ *
+ * REV3 — a refused facture. « Facture refusée » alone is a dead end: the owner has to know WHY to
+ * fix and re-deposit, and the motif only exists in the body. Deliberately keyed on type rather than
+ * "always render the body": showing it for everything would restyle every notification in the bell,
+ * which is a separate product decision. Adding a type here is one line.
+ */
+export const detailFor = (n: ApiNotification): string | undefined =>
+  n.type === 'screenhost_facture_refused' ? (n.body ?? undefined) || undefined : undefined;
 
 const toFeed = (rows: ApiNotification[]): NotificationFeed<string> => ({
   items: rows.map((n) => ({
@@ -57,6 +79,7 @@ const toFeed = (rows: ApiNotification[]): NotificationFeed<string> => ({
     kind: n.type,
     title: n.title,
     timestamp: toDate(n.created_at),
+    detail: detailFor(n),
     ...actionFor(n),
   })),
   // read_at non-null ⇒ already read; the bell filters unread by `!readIds.has(id)`.
