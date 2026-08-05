@@ -28,6 +28,7 @@ const line = (over: Partial<PerformanceEarningsLine> = {}): PerformanceEarningsL
   screenhost_name: 'Venue',
   expected_imp: 1000,
   delivered_imp: 800,
+  display_imp: 800, // NET-IMP1 — settled rows: affichées = delivered (reconcile's identity)
   earnings_tnd: 80,
   reconciled_at: '2026-07-01T10:00:00.000Z',
   campaign_start: '2026-06-05',

@@ -1,18 +1,17 @@
 import type { PerformanceEarningsLine } from './performance-derive';
 
 /**
- * PERF-QA1 R10 — THE single owner-side impressions display home. Every impressions figure an
- * owner surface derives from a campaign line routes through here. Today it returns
- * delivered_imp VERBATIM; the planned net-impressions lane swaps THIS function's body and
- * nothing else. Do NOT introduce any formula here in this lane.
+ * THE single owner-side impressions display home (built by PERF-QA1 R10 as this exact swap
+ * point). NET-IMP1 (Mejri, ruled): « Impressions affichées = Impressions prédites − Impressions
+ * perdues » — the api computes it in ITS one home (lib/impressions-display.ts, reconcile's own
+ * identity) and serves it as `display_imp`; this function renders THAT field and nothing else.
+ * Any future change to what owners see as « impressions générées » swaps THIS body only.
  */
-export function lineImpressions(line: Pick<PerformanceEarningsLine, 'delivered_imp'>): number {
-  return line.delivered_imp;
+export function lineImpressions(line: Pick<PerformanceEarningsLine, 'display_imp'>): number {
+  return line.display_imp;
 }
 
 /** Σ over lines, through the single home above. */
-export function sumLineImpressions(
-  lines: Pick<PerformanceEarningsLine, 'delivered_imp'>[],
-): number {
+export function sumLineImpressions(lines: Pick<PerformanceEarningsLine, 'display_imp'>[]): number {
   return lines.reduce((sum, line) => sum + lineImpressions(line), 0);
 }

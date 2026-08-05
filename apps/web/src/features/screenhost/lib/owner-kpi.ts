@@ -14,7 +14,7 @@ export interface OwnerKpi {
 }
 
 export function ownerKpiFrom(
-  lines: Pick<PerformanceEarningsLine, 'campaign_id' | 'delivered_imp'>[],
+  lines: Pick<PerformanceEarningsLine, 'campaign_id' | 'display_imp'>[],
   totalPlayedMs: number,
 ): OwnerKpi {
   return {
