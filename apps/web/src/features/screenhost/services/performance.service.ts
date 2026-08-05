@@ -43,6 +43,46 @@ export interface OwnerEarnings {
   lines: PerformanceEarningsLine[];
 }
 
+/** PERF-QA1 R1 — one stored monthly report row: the month + the REAL generation timestamp. */
+export interface VenueReportRow {
+  month: string; // 'YYYY-MM'
+  generated_at: string; // ISO timestamp
+}
+
+export interface VenueReportsListing {
+  /** Newest first — [0] is the card, the rest is the Historique. */
+  reports: VenueReportRow[];
+}
+
+/** PERF-QA1 R6 — one SPS variable on the wire: its live value + its CONFIG weight. */
+export interface SpsVariableWire {
+  value: number;
+  weight: number;
+}
+
+export interface VenueSps {
+  /** null = no computable score yet (the page keeps its « À venir » wait-state). */
+  sps: number | null;
+  variables: {
+    acceptation: SpsVariableWire;
+    respect_evenements: SpsVariableWire;
+    activite: SpsVariableWire;
+    remplissage: SpsVariableWire;
+  } | null;
+}
+
+/** PERF-QA1 R5 — one S07 piste, byte-identical with what the PDF renders. */
+export interface VenuePiste {
+  num: string;
+  title: string;
+  body: string;
+  pending: boolean;
+}
+
+export interface VenuePistes {
+  pistes: VenuePiste[];
+}
+
 export const performanceService = {
   /** GET /api/screenhosts/:id/profile — venue identity card (sector, class, hours, sps, ratios). */
   getProfile(screenhostId: string): Promise<VenueProfile> {
@@ -72,5 +112,22 @@ export const performanceService = {
   /** GET /api/screenhosts/earnings — session-scoped payout lines (Lane F additive campaign keys). */
   getEarnings(): Promise<OwnerEarnings> {
     return apiClient.get<OwnerEarnings>('/screenhosts/earnings');
+  },
+
+  /** PERF-QA1 R1 — GET /:id/reports: the generated-reports listing, THE month authority. */
+  getReports(screenhostId: string): Promise<VenueReportsListing> {
+    return apiClient.get<VenueReportsListing>(`/screenhosts/${screenhostId}/reports`);
+  },
+
+  /** PERF-QA1 R6 — GET /:id/sps: live score + variables + CONFIG weights (never hardcoded). */
+  getSps(screenhostId: string): Promise<VenueSps> {
+    return apiClient.get<VenueSps>(`/screenhosts/${screenhostId}/sps`);
+  },
+
+  /** PERF-QA1 R5 — GET /:id/pistes?from&to: the PDF's S07 content for the active period. */
+  getPistes(screenhostId: string, from: string, to: string): Promise<VenuePistes> {
+    return apiClient.get<VenuePistes>(
+      `/screenhosts/${screenhostId}/pistes?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+    );
   },
 };

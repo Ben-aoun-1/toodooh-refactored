@@ -34,6 +34,23 @@ const iso = (d: Date): string => format(d, 'yyyy-MM-dd');
 export const isoDate = (d: Date): string => iso(d);
 
 /**
+ * PERF-QA1 R8 — the TUNIS calendar day of `now` ('YYYY-MM-DD'; en-CA yields ISO). The server
+ * buckets impressions on Africa/Tunis days; anchoring the page on the BROWSER-local day shifted
+ * edge-of-day impressions onto the wrong curve point (the confirmed 26/06 case).
+ */
+export function tunisTodayIso(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Tunis' }).format(now);
+}
+
+/**
+ * The Tunis "today" as a local-midnight Date — the ONE anchor every range/window derivation
+ * uses, so all subsequent date-fns maths run on the server's calendar.
+ */
+export function tunisToday(now: Date = new Date()): Date {
+  return parseISO(tunisTodayIso(now));
+}
+
+/**
  * The ONE impressions-daily fetch window per venue: the API bounds the range to 400 days, so the
  * page fetches the maximal [today−399, today] window once and filters client-side. A custom
  * period older than that window simply has no impression data (surfaced in the CF-9).
@@ -109,18 +126,13 @@ export function monthLabelFr(month: string): string {
 }
 
 /**
- * The report-generation date shown on the monthly card: the 1st of the FOLLOWING month as
- * DD/MM/YYYY ('2026-06' → '01/07/2026' — December rolls into January).
+ * PERF-QA1 R1 — « Généré le » comes from the report row's REAL generated_at (ISO timestamp),
+ * never re-derived from the month key (the retired firstOfFollowingMonth lied whenever a report
+ * was generated late, regenerated, or caught up). '—' on malformed input.
  */
-export function firstOfFollowingMonth(month: string): string {
-  const match = /^(\d{4})-(\d{2})$/.exec(month);
-  if (!match) return '—';
-  const year = Number(match[1]);
-  const m = Number(match[2]);
-  if (m < 1 || m > 12) return '—';
-  const nextYear = m === 12 ? year + 1 : year;
-  const nextMonth = m === 12 ? 1 : m + 1;
-  return `01/${String(nextMonth).padStart(2, '0')}/${nextYear}`;
+export function formatGeneratedAtFr(isoTimestamp: string): string {
+  const d = parseISO(isoTimestamp);
+  return Number.isNaN(d.getTime()) ? '—' : format(d, 'dd/MM/yyyy');
 }
 
 /** '05/06 – 18/06'-style compact period for campaign rows (S05); year-less per the mockup. */

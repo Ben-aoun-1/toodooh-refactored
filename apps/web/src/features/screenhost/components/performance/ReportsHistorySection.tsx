@@ -1,12 +1,14 @@
 import { Download, Eye, FileText } from 'lucide-react';
 
 import { formatIntFr } from '../../lib/performance-derive';
-import { firstOfFollowingMonth, monthLabelFr } from '../../lib/performance-period';
+import { monthLabelFr } from '../../lib/performance-period';
 
 interface HistoryRow {
   month: string;
   totalAudience: number;
   impressions: number;
+  /** PERF-QA1 R1 — the report row's REAL generated_at, formatted DD/MM/YYYY. */
+  generatedAtLabel: string;
 }
 
 interface ReportsHistorySectionProps {
@@ -48,7 +50,7 @@ export function ReportsHistorySection({ rows, onConsult, onDownload }: ReportsHi
                   {monthLabelFr(row.month)}
                 </div>
                 <div className="perf-mono mt-0.5 text-[11px] text-perf-mist">
-                  Généré le {firstOfFollowingMonth(row.month)}
+                  Généré le {row.generatedAtLabel}
                 </div>
               </div>
               <div className="order-3 w-full whitespace-nowrap text-left text-[13px] font-medium text-perf-grey sm:order-none sm:ml-auto sm:w-auto sm:text-right">

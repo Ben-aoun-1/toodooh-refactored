@@ -63,4 +63,14 @@ export const screenhostKeys = {
 
   /** Lane F — the owner's payout lines incl. campaign metadata (GET /earnings). */
   earnings: (userId: string) => [...screenhostKeys.all, 'earnings', userId] as const,
+
+  /** PERF-QA1 R1 — a venue's generated-reports listing (GET /:id/reports). */
+  reports: (screenhostId: string) => [...screenhostKeys.all, 'reports', screenhostId] as const,
+
+  /** PERF-QA1 R6 — a venue's live SPS breakdown (GET /:id/sps). */
+  sps: (screenhostId: string) => [...screenhostKeys.all, 'sps', screenhostId] as const,
+
+  /** PERF-QA1 R5 — a venue's S07 pistes over the active period (GET /:id/pistes?from&to). */
+  pistes: (screenhostId: string, from: string, to: string) =>
+    [...screenhostKeys.all, 'pistes', screenhostId, from, to] as const,
 };

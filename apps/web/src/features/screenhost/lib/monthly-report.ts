@@ -11,6 +11,9 @@
  * exercised by build + logic only (no web render harness).
  */
 
+import { filenameFromContentDisposition } from './download-filename';
+import { ReportDownloadError } from './period-report';
+
 const MONTH_RE = /^\d{4}-\d{2}$/;
 
 /**
@@ -58,15 +61,34 @@ export async function downloadMonthlyReport(
   );
 
   if (res.status === 404) return 'no-data';
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) {
+    // PERF-QA1 R4 — surface the api's failure class (e.g. REPORT_STORAGE_UNAVAILABLE) so the
+    // caller can show per-class copy instead of the one generic toast.
+    let code: string | null = null;
+    try {
+      const body: unknown = await res.json();
+      if (body && typeof body === 'object' && 'error' in body) {
+        const raw = (body as { error: unknown }).error;
+        code = typeof raw === 'string' ? raw : null;
+      }
+    } catch {
+      code = null;
+    }
+    throw new ReportDownloadError(code ?? `HTTP_${res.status}`, res.status);
+  }
 
+  // PERF-QA1 R3 — the saved name comes from the api's content-disposition (it carries the venue
+  // slug); the legacy month-only name is the fallback.
+  const filename =
+    filenameFromContentDisposition(res.headers.get('content-disposition')) ??
+    `rapport-${month}.pdf`;
   // Only ever createObjectURL on a 2xx body — never on a 404/error JSON body.
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   try {
     const link = document.createElement('a');
     link.href = url;
-    link.download = `rapport-${month}.pdf`;
+    link.download = filename;
     document.body.appendChild(link);
     link.click();
     link.remove();

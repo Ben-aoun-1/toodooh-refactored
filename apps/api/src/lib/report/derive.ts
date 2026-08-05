@@ -84,9 +84,12 @@ export function audienceKpis(points: DailyAudiencePoint[], hoursPerDay: number):
     global += p.audience;
     if (peak === null || p.audience > peak.value) peak = { value: p.audience, date: p.date };
   }
-  const perDay = Math.round(global / points.length);
+  // PERF-QA1 R9 — divide FIRST, round ONCE at the end (parity with the page's derive: an
+  // intermediate perDay round shifted the /h figure, and the PDF must never disagree).
+  const perDayRaw = global / points.length;
+  const perDay = Math.round(perDayRaw);
   // One decimal (Mejri prod-test #3): 4 pers/day ÷ 14 h must read 0,3 — never a rounded 0.
-  const perHour = hoursPerDay > 0 ? Math.round((perDay / hoursPerDay) * 10) / 10 : null;
+  const perHour = hoursPerDay > 0 ? Math.round((perDayRaw / hoursPerDay) * 10) / 10 : null;
   return { global, perDay, perHour, peak };
 }
 

@@ -1,14 +1,16 @@
 import { Calendar, Download, Eye, Loader2 } from 'lucide-react';
 
 import { formatIntFr } from '../../lib/performance-derive';
-import { firstOfFollowingMonth, monthLabelFr } from '../../lib/performance-period';
+import { monthLabelFr } from '../../lib/performance-period';
 
 import { PENDING_LABEL } from './Pending';
 import { Var } from './Var';
 
 interface MonthlyReportCardProps {
-  /** The latest hub-pushed month for the venue, or null (EMPTY variant). */
+  /** PERF-QA1 R1 — the newest GENERATED report month (the reports listing), or null (EMPTY variant). */
   latestMonth: { month: string; total_audience: number } | null;
+  /** R1 — the row's REAL generated_at, formatted DD/MM/YYYY; null while no report exists. */
+  generatedAtLabel: string | null;
   /** Σ delivered impressions of that month (from the impressions-daily read). */
   monthImpressions: number;
   /** Count of campaigns whose end falls in that month. */
@@ -25,6 +27,7 @@ interface MonthlyReportCardProps {
 /** §3 — "Votre rendez-vous mensuel": the mockups' LIGHT lavender-gradient card + three tiles. */
 export function MonthlyReportCard({
   latestMonth,
+  generatedAtLabel,
   monthImpressions,
   campaignsCount,
   hasHostData,
@@ -69,7 +72,7 @@ export function MonthlyReportCard({
           </span>
           <span className="perf-mono text-[11px] text-perf-mist">
             Généré automatiquement le{' '}
-            {hasMonth ? <Var>{firstOfFollowingMonth(latestMonth.month)}</Var> : <Var>—</Var>}
+            {generatedAtLabel ? <Var>{generatedAtLabel}</Var> : <Var>—</Var>}
           </span>
         </div>
 

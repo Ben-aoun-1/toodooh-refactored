@@ -1,20 +1,39 @@
 import { Info } from 'lucide-react';
 
+import { spsCriteria, spsScoreLabel } from '../../lib/sps-view';
+import type { VenueSps } from '../../services/performance.service';
+
 import { SectionHeading } from './SectionHeading';
 
-/**
- * S08 — "Votre score de priorité". DEVIATION (ruled): PERMANENTLY the empty variant — the SPS
- * engine does not exist yet, so ranking/score/criteria all read 'À venir' with 0% bars. Never
- * show invented numbers.
- */
-const CRITERIA = [
-  { name: 'Acceptation des campagnes', weight: 'poids 25 %' },
-  { name: 'Respect des événements acceptés', weight: 'poids 30 %' },
-  { name: 'Activité de votre écran', weight: 'poids 20 %' },
-  { name: 'Taux de remplissage', weight: 'poids 10 %' },
-];
+/** SVG-attribute bar (the DemographicsSection idiom — no inline styles). */
+function CriterionBar({ pct }: { pct: number }) {
+  const width = Math.max(0, Math.min(100, pct));
+  return (
+    <svg className="h-[5px] w-full" role="presentation" aria-hidden>
+      <rect width="100%" height="100%" rx="3" className="fill-perf-soft" />
+      {width > 0 && <rect width={`${width}%`} height="100%" rx="3" className="fill-perf-green" />}
+    </svg>
+  );
+}
 
-export function SpsSection() {
+interface SpsSectionProps {
+  /** undefined while loading — the card keeps its wait-state until the wire answers. */
+  sps: VenueSps | undefined;
+  isError: boolean;
+}
+
+/**
+ * S08 — "Votre score de priorité". PERF-QA1 R6: LIVE from the owner SPS wire — score + the four
+ * ruled variables, weights ALWAYS from the dispatch config via the wire (the 25/30/20/10 Σ-85 %
+ * hardcode is dead, pinned by test). « À venir » only while the venue has no computable score
+ * (wire nulls, loading, or error) — never invented numbers. The Classement stays « À venir »
+ * (no ranking data yet).
+ */
+export function SpsSection({ sps, isError }: SpsSectionProps) {
+  const live = !isError && sps !== undefined && sps.sps !== null && sps.variables !== null;
+  const criteria = live && sps.variables ? spsCriteria(sps.variables) : null;
+  const scoreLabel = live ? spsScoreLabel(sps.sps) : 'À venir';
+
   return (
     <section className="mb-[76px]">
       <SectionHeading
@@ -36,23 +55,47 @@ export function SpsSection() {
             Score actuel
           </div>
           <div className="mt-3 text-[46px] font-semibold leading-none tracking-[-0.025em] text-perf-ink">
-            À venir
+            {scoreLabel}
+            {live && (
+              <span className="ml-1 text-[17px] font-medium tracking-normal text-perf-grey">
+                / 100
+              </span>
+            )}
           </div>
         </div>
 
         <div className="mb-7 flex flex-col gap-5">
-          {CRITERIA.map((criterion) => (
-            <div key={criterion.name}>
-              <div className="mb-2 flex items-baseline gap-2 text-[13.5px] text-perf-ink">
-                {criterion.name}
-                <span className="perf-mono text-[10px] text-perf-mist">{criterion.weight}</span>
-              </div>
-              <div className="perf-mono mb-2 text-[12.5px] font-medium italic text-perf-mist">
-                À venir
-              </div>
-              <div className="h-[5px] overflow-hidden rounded-[3px] bg-perf-soft" />
-            </div>
-          ))}
+          {criteria
+            ? criteria.map((criterion) => (
+                <div key={criterion.label}>
+                  <div className="mb-2 flex items-baseline gap-2 text-[13.5px] text-perf-ink">
+                    {criterion.label}
+                    <span className="perf-mono text-[10px] text-perf-mist">
+                      {criterion.weightLabel}
+                    </span>
+                  </div>
+                  <div className="perf-mono mb-2 text-[12.5px] font-medium text-perf-grey">
+                    {criterion.valueLabel}
+                  </div>
+                  <CriterionBar pct={criterion.pct} />
+                </div>
+              ))
+            : [
+                "Taux d'acceptation des campagnes",
+                'Respect des événements acceptés',
+                "Activité de l'écran",
+                'Taux de remplissage',
+              ].map((label) => (
+                <div key={label}>
+                  <div className="mb-2 flex items-baseline gap-2 text-[13.5px] text-perf-ink">
+                    {label}
+                  </div>
+                  <div className="perf-mono mb-2 text-[12.5px] font-medium italic text-perf-mist">
+                    À venir
+                  </div>
+                  <div className="h-[5px] overflow-hidden rounded-[3px] bg-perf-soft" />
+                </div>
+              ))}
         </div>
 
         <div className="flex gap-[13px] border-t border-perf-line pt-[22px]">

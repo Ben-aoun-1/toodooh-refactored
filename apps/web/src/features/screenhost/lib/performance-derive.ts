@@ -90,15 +90,22 @@ export function zeroFillDays(
   return filled;
 }
 
+export interface OpenHoursInfo {
+  hours: number;
+  /** PERF-QA1 R9 — true when 14 is the null/degenerate FALLBACK, so the UI marks « estimation 14 h ». */
+  estimated: boolean;
+}
+
 /**
  * Daily open-hours span from the venue profile, `[opening, closing)`. Falls back to 14 (the
- * mockup's 8h–21h span) when either bound is null or the window is degenerate/overnight
- * (overnight semantics are deferred engine-side).
+ * mockup's 8h–21h span) ONLY when either bound is null or the window is degenerate/overnight
+ * (overnight semantics are deferred engine-side) — and says so, instead of passing the guess
+ * off as measured.
  */
-export function openHoursPerDay(opening: number | null, closing: number | null): number {
-  if (opening === null || closing === null) return 14;
+export function openHours(opening: number | null, closing: number | null): OpenHoursInfo {
+  if (opening === null || closing === null) return { hours: 14, estimated: true };
   const span = closing - opening;
-  return span > 0 ? span : 14;
+  return span > 0 ? { hours: span, estimated: false } : { hours: 14, estimated: true };
 }
 
 export interface AudienceKpis {
@@ -106,24 +113,30 @@ export interface AudienceKpis {
   perDay: number | null;
   perHour: number | null;
   peak: { value: number; date: string } | null;
+  /** PERF-QA1 R9 — the divisor basis, surfaced as « sur N jours mesurés ». */
+  measuredDays: number;
 }
 
 /**
  * S01 — audience KPIs over the period's daily audience points. Averages divide by DAYS WITH DATA
  * (not calendar days), mirroring the mockup's "par jour d'ouverture"; null when no data.
+ * PERF-QA1 R9 — divide FIRST, round ONCE at the end: rounding perDay before the /h divide
+ * shifted the hourly figure (her 0,3 pers/h was computed off an already-rounded day average).
  */
 export function audienceKpis(points: DailyAudiencePoint[], hoursPerDay: number): AudienceKpis {
-  if (points.length === 0) return { global: 0, perDay: null, perHour: null, peak: null };
+  if (points.length === 0)
+    return { global: 0, perDay: null, perHour: null, peak: null, measuredDays: 0 };
   let global = 0;
   let peak: { value: number; date: string } | null = null;
   for (const p of points) {
     global += p.audience;
     if (peak === null || p.audience > peak.value) peak = { value: p.audience, date: p.date };
   }
-  const perDay = Math.round(global / points.length);
+  const perDayRaw = global / points.length;
+  const perDay = Math.round(perDayRaw);
   // One decimal (Mejri prod-test #3): 4 pers/day ÷ 14 h must read 0,3 — never a rounded 0.
-  const perHour = hoursPerDay > 0 ? Math.round((perDay / hoursPerDay) * 10) / 10 : null;
-  return { global, perDay, perHour, peak };
+  const perHour = hoursPerDay > 0 ? Math.round((perDayRaw / hoursPerDay) * 10) / 10 : null;
+  return { global, perDay, perHour, peak, measuredDays: points.length };
 }
 
 /** All daily audience points of the given months flattened, filtered to the period. */
