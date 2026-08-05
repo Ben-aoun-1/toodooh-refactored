@@ -13,6 +13,7 @@ import {
   screenhosts,
 } from '../../db/schema.js';
 import { getDispatchConfig } from '../dispatch/config.js';
+import { displayImpressionsSettled } from '../impressions-display.js';
 import { computeSps } from '../sps-score.js';
 
 import {
@@ -242,6 +243,7 @@ export async function assembleReportData(
   const lineRows = await db
     .select({
       campaignName: campaigns.name,
+      expectedImp: campaignScreenhostPayout.expectedImp,
       deliveredImp: campaignScreenhostPayout.deliveredImp,
       earningsTnd: campaignScreenhostPayout.earningsTnd, // numeric → string
       reconciledAt: campaignReconciliation.reconciledAt,
@@ -261,6 +263,12 @@ export async function assembleReportData(
   const lines: ReportEarningsLine[] = lineRows.map((r) => ({
     campaign_name: r.campaignName,
     delivered_imp: r.deliveredImp,
+    // NET-IMP1 — the document's « Impressions générées » figures route through the ONE display
+    // home (settled rows converge to delivered by reconcile's identity).
+    display_imp: displayImpressionsSettled({
+      expectedImp: r.expectedImp,
+      deliveredImp: r.deliveredImp,
+    }),
     earnings_tnd: Number(r.earningsTnd),
     reconciled_at:
       r.reconciledAt instanceof Date ? r.reconciledAt.toISOString() : String(r.reconciledAt),
@@ -280,7 +288,7 @@ export async function assembleReportData(
   const ratios = ratiosOrNull(venue);
   const periodLines = lines.filter((l) => lineInPeriod(l, range));
   const top3 = [...periodLines]
-    .sort((a, b) => b.delivered_imp - a.delivered_imp)
+    .sort((a, b) => b.display_imp - a.display_imp)
     .slice(0, 3)
     .map((l) => l.campaign_name);
 
@@ -343,14 +351,14 @@ export async function assembleReportData(
     sps: spsBlock,
     campaignsBlock: {
       count: periodLines.length,
-      cumulativeImpressions: periodLines.reduce((s, l) => s + l.delivered_imp, 0),
+      cumulativeImpressions: periodLines.reduce((s, l) => s + l.display_imp, 0),
       top3,
       rows: periodLines.map((l) => ({
         name: l.campaign_name,
         period: formatTablePeriod(l.campaign_start, l.campaign_end),
         typeLabel: typeLabelFr(l.campaign_type),
         statut: campaignStatut(l, todayIso),
-        impressionsLabel: formatIntFr(l.delivered_imp),
+        impressionsLabel: formatIntFr(l.display_imp),
         revenueLabel: formatTndCellFr(l.earnings_tnd),
       })),
     },

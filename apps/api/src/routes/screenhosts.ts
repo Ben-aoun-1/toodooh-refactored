@@ -33,6 +33,7 @@ import { REDISPATCH_HEARTBEAT_TOLERANCE_MS } from '../lib/dispatch/redispatch.js
 import { buildEligibilityPatch } from '../lib/eligibility-patch.js';
 import { createEngineTrace, type EngineTrace } from '../lib/engine-journal/trace.js';
 import { releaseBlocHours, runEventRefusalCascade } from '../lib/event-dispatch/dispatch.js';
+import { displayImpressionsSettled } from '../lib/impressions-display.js';
 import { pushPlaylistToVenue } from '../lib/playout/push.js';
 import { assembleReportData } from '../lib/report/assemble.js';
 import { pistesForReportCached } from '../lib/report/recommendations.js';
@@ -311,6 +312,9 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
 
     // Lane F extends the line ADDITIVELY (campaign_start/_end/_type/_status) — OwnerRevenue and
     // OwnerDashboard consume this route, so the pre-existing keys are contract-frozen.
+    // NET-IMP1 — display_imp (additive): « affichées = prédites − perdues », the ONE display
+    // home (lib/impressions-display). Settled rows converge to delivered by reconcile's own
+    // identity; the web renders THIS field, never a raw count.
     return reply.status(200).send({
       total_tnd: rows.reduce((s, r) => s + Number(r.earningsTnd), 0),
       lines: rows.map((r) => ({
@@ -320,6 +324,10 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         screenhost_name: r.screenhostName,
         expected_imp: r.expectedImp,
         delivered_imp: r.deliveredImp,
+        display_imp: displayImpressionsSettled({
+          expectedImp: r.expectedImp,
+          deliveredImp: r.deliveredImp,
+        }),
         earnings_tnd: Number(r.earningsTnd),
         reconciled_at: r.reconciledAt,
         campaign_start: r.campaignStart,

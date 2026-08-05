@@ -32,6 +32,8 @@ export interface DailyImpressionsPoint {
 export interface ReportEarningsLine {
   campaign_name: string;
   delivered_imp: number;
+  /** NET-IMP1 — « affichées = prédites − perdues » (lib/impressions-display, THE display home). */
+  display_imp: number;
   earnings_tnd: number;
   reconciled_at: string;
   campaign_start: string | null;
