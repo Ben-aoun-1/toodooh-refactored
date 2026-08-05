@@ -18,8 +18,14 @@ import { renderReportHtml } from './template.js';
 // banked notifications hook). Idempotent: the UNIQUE (screenhost, month) row is checked up front
 // AND enforced on insert (onConflictDoNothing), so a second tick — or a concurrent one — is a
 // no-op. PERF-QA1 R2 — bounded catch-up: each tick considers the LAST 3 CLOSED MONTHS (same
-// candidate gates, same idempotency per month), so a month the sweep missed (api down over a
-// month boundary, chromium absent…) self-heals within the window instead of being lost forever.
+// idempotency per month), so a month the sweep missed (api down over a month boundary, chromium
+// absent…) self-heals within the window instead of being lost forever.
+// R2 AMENDMENT (ratified 2026-08-05) — catch-up must not burst: only the PREVIOUS CLOSED month
+// notifies; older catch-up months generate SILENTLY (they surface in the reports listing with
+// their real generated_at — nobody gets a « rapport de mai est prêt » in August) and ONLY when
+// the venue has MONTH-SCOPED data for that month (a hub-pushed stats row, or ≥1 proof inside the
+// month's Tunis bounds) — no fabricated near-empty backdated PDFs. The previous-closed-month
+// path keeps the ruled LIFETIME candidate gates + its notification, unchanged.
 
 const MONTHS_FR = [
   'janvier',
@@ -115,6 +121,36 @@ export function lastClosedMonths(now: Date, count: number): ClosedMonth[] {
 }
 
 /**
+ * R2 amendment — the catch-up gate: a NON-current month only generates over REAL month-scoped
+ * data (a hub-pushed monthly_stats row for that month, or at least one proof_of_play received
+ * inside the month's TUNIS bounds — the reconcile calendar). The previous closed month never
+ * goes through this gate.
+ */
+async function hasMonthScopedData(
+  venueId: string,
+  month: string,
+  from: string,
+  to: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: screenhosts.id })
+    .from(screenhosts)
+    .where(
+      and(
+        eq(screenhosts.id, venueId),
+        sql`(EXISTS (SELECT 1 FROM screenhost_monthly_stats s
+              WHERE s.screenhost_id = ${screenhosts.id} AND s.month = ${month})
+          OR EXISTS (SELECT 1 FROM proof_of_play pp
+              WHERE pp.screenhost_id = ${screenhosts.id}
+              AND to_char(pp.received_at at time zone 'Africa/Tunis', 'YYYY-MM-DD')
+                BETWEEN ${from} AND ${to}))`,
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
+}
+
+/**
  * One sweep tick over the last CATCH_UP_MONTHS closed months. Failure isolation: a venue×month's
  * assemble/render/store failure logs + continues — one broken venue never starves the fleet, and
  * a broken month never blocks the next one. When NO chromium exists on the machine, the sweep
@@ -149,6 +185,7 @@ export async function runMonthlyReportSweep(
         OR EXISTS (SELECT 1 FROM proof_of_play pp WHERE pp.screenhost_id = ${screenhosts.id})`,
     );
 
+  const currentMonth = months[0]?.month;
   for (const venue of candidates) {
     for (const { month, from, to } of months) {
       try {
@@ -163,6 +200,13 @@ export async function runMonthlyReportSweep(
           )
           .limit(1);
         if (existing) {
+          result.skipped += 1;
+          continue;
+        }
+
+        // R2 amendment — a catch-up month (anything but the previous closed month) generates
+        // only over REAL month-scoped data; no fabricated backdated PDFs.
+        if (month !== currentMonth && !(await hasMonthScopedData(venue.id, month, from, to))) {
           result.skipped += 1;
           continue;
         }
@@ -190,7 +234,9 @@ export async function runMonthlyReportSweep(
           continue;
         }
 
-        if (venue.ownerId) {
+        // R2 amendment — only the PREVIOUS CLOSED month notifies; a caught-up older month
+        // surfaces in the listing (real generated_at) SILENTLY.
+        if (month === currentMonth && venue.ownerId) {
           await db.insert(notifications).values({
             userId: venue.ownerId,
             type: 'monthly_report_ready',
