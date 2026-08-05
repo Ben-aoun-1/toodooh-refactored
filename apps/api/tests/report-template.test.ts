@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { ReportData } from '../src/lib/report/assemble.js';
 import {
   HIST_MAX_ROWS,
+  PEAK_HOURS_LEAD,
   REV_MAX_ROWS,
   impressionsChartSvg,
   renderReportHtml,
@@ -462,5 +463,23 @@ describe('S03 labeled axes (R3 — Mejri item 4, OVERRIDES the axis-less mockup)
     expect(html).toContain('class="s03-axes"');
     expect(html).not.toContain('class="s03-chart"');
     expect(html).not.toContain('NaN');
+  });
+});
+
+// PERF-QA1 R7 — the S02 lead: HONEST typical-week semantics. The exact-literal pin below is one
+// half of the cross-package byte-equality contract — apps/web pins the SAME literal over its
+// PEAK_HOURS_LEAD twin (lib/peak-hours.ts), so neither side can drift without its own test
+// failing. Do not reword one without the other.
+describe('S02 lead (PERF-QA1 R7 — semaine type, no period claim)', () => {
+  it('pins the exact wording (byte-equality contract with apps/web)', () => {
+    expect(PEAK_HOURS_LEAD).toBe(
+      "Audience moyenne de votre semaine type (moyenne glissante sur les 4 dernières semaines), croisant les jours de la semaine et les heures d'ouverture. Plus la couleur est vive, plus l'audience est élevée. Les zones rayées correspondent à vos heures de fermeture ou aux créneaux sans données mesurées.",
+    );
+  });
+
+  it('the rendered document carries the new lead and DROPS the period claim', () => {
+    const html = renderReportHtml(baseData());
+    expect(html).toContain(PEAK_HOURS_LEAD);
+    expect(html).not.toContain("sur l'ensemble de la période");
   });
 });

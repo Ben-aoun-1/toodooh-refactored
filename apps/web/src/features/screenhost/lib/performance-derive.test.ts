@@ -16,7 +16,7 @@ import {
   intensityLevel,
   lineInPeriod,
   linesEndingInMonth,
-  openHoursPerDay,
+  openHours,
   quantileThresholds,
   zeroFillDays,
 } from './performance-derive';
@@ -37,12 +37,12 @@ const line = (over: Partial<PerformanceEarningsLine> = {}): PerformanceEarningsL
   ...over,
 });
 
-describe('openHoursPerDay', () => {
-  it('is closing − opening, with the 14h mockup fallback on null/degenerate windows', () => {
-    expect(openHoursPerDay(8, 21)).toBe(13);
-    expect(openHoursPerDay(null, 21)).toBe(14);
-    expect(openHoursPerDay(8, null)).toBe(14);
-    expect(openHoursPerDay(21, 8)).toBe(14); // overnight semantics deferred
+describe('openHours (R9)', () => {
+  it('is closing − opening, with the 14h fallback FLAGGED on null/degenerate windows', () => {
+    expect(openHours(8, 21)).toEqual({ hours: 13, estimated: false });
+    expect(openHours(null, 21)).toEqual({ hours: 14, estimated: true });
+    expect(openHours(8, null)).toEqual({ hours: 14, estimated: true });
+    expect(openHours(21, 8)).toEqual({ hours: 14, estimated: true }); // overnight deferred
   });
 });
 
@@ -60,6 +60,7 @@ describe('audienceKpis (S01)', () => {
     expect(kpis.perDay).toBe(700);
     expect(kpis.perHour).toBe(50);
     expect(kpis.peak).toEqual({ value: 900, date: '2026-06-02' });
+    expect(kpis.measuredDays).toBe(3);
   });
 
   it('perHour keeps one decimal instead of rounding to a misleading 0 (Mejri prod-test #3)', () => {
@@ -68,8 +69,28 @@ describe('audienceKpis (S01)', () => {
     expect(kpis.perHour).toBe(0.3); // 4 ÷ 14 = 0,2857… → one decimal, not 0
   });
 
+  it('R9 — divides FIRST, rounds ONCE: perHour never rides an already-rounded perDay', () => {
+    // 5 pers over 2 days = 2.5/day raw; 4 open hours. Honest: 2.5 ÷ 4 = 0.625 → 0,6. The old
+    // round-then-divide read 3 ÷ 4 = 0.75 → 0,8 — a phantom +0,2 pers/h from display rounding.
+    const kpis = audienceKpis(
+      [
+        { date: '2026-06-01', audience: 2 },
+        { date: '2026-06-02', audience: 3 },
+      ],
+      4,
+    );
+    expect(kpis.perDay).toBe(3); // display rounding still applies to the day figure
+    expect(kpis.perHour).toBe(0.6); // 2.5 ÷ 4, NEVER 3 ÷ 4
+  });
+
   it('empty input → the honest empty state', () => {
-    expect(audienceKpis([], 14)).toEqual({ global: 0, perDay: null, perHour: null, peak: null });
+    expect(audienceKpis([], 14)).toEqual({
+      global: 0,
+      perDay: null,
+      perHour: null,
+      peak: null,
+      measuredDays: 0,
+    });
   });
 });
 
@@ -274,5 +295,22 @@ describe('categoryLabel', () => {
     expect(categoryLabel('Café', 'premium')).toBe('Café · Premium');
     expect(categoryLabel('Café', null)).toBe('Café');
     expect(categoryLabel(null, 'premium')).toBe('—');
+  });
+});
+
+describe('zeroFillDays — the R8 pin (her 26/06 case)', () => {
+  it('a lone measured day renders ON the zero-filled curve, zeros around it', () => {
+    expect(
+      zeroFillDays([{ date: '2026-06-26', impressions: 4 }], {
+        from: '2026-06-24',
+        to: '2026-06-28',
+      }),
+    ).toEqual([
+      { date: '2026-06-24', impressions: 0 },
+      { date: '2026-06-25', impressions: 0 },
+      { date: '2026-06-26', impressions: 4 },
+      { date: '2026-06-27', impressions: 0 },
+      { date: '2026-06-28', impressions: 0 },
+    ]);
   });
 });

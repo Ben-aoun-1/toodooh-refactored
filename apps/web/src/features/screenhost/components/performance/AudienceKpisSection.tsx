@@ -54,10 +54,16 @@ interface AudienceKpisSectionProps {
   kpis: AudienceKpis;
   /** HOST first-data flag — once true, KPIs show real values, 0 rendered as 0 (Mejri ruling). */
   hasHostData: boolean;
+  /** PERF-QA1 R9 — true when the 14 h open-hours fallback applied (marked « estimation 14 h »). */
+  hoursEstimated: boolean;
 }
 
 /** S01 — "Votre audience en chiffres": the mockups' ruled KPI row (2px green top border). */
-export function AudienceKpisSection({ kpis, hasHostData }: AudienceKpisSectionProps) {
+export function AudienceKpisSection({
+  kpis,
+  hasHostData,
+  hoursEstimated,
+}: AudienceKpisSectionProps) {
   return (
     <section className="mb-[76px]">
       <SectionHeading
@@ -72,7 +78,15 @@ export function AudienceKpisSection({ kpis, hasHostData }: AudienceKpisSectionPr
             <KpiValue value={hasHostData ? kpis.global : null} />
           </div>
           <p className="mt-2.5 text-[12.5px] leading-[1.45] text-perf-grey">
-            Personnes mesurées dans votre lieu sur la période.
+            Personnes mesurées dans votre lieu sur la période
+            {hasHostData && kpis.measuredDays > 0 ? (
+              <>
+                {' '}
+                — sur {kpis.measuredDays} jour{kpis.measuredDays > 1 ? 's' : ''} mesurés.
+              </>
+            ) : (
+              '.'
+            )}
           </p>
         </div>
 
@@ -88,7 +102,8 @@ export function AudienceKpisSection({ kpis, hasHostData }: AudienceKpisSectionPr
               />
             </div>
             <p className="mt-1 text-[12.5px] leading-[1.45] text-perf-grey">
-              Densité moyenne d'audience pendant les heures d'ouverture.
+              Densité moyenne d'audience pendant les heures d'ouverture
+              {hoursEstimated ? <> (estimation 14 h).</> : '.'}
             </p>
           </div>
           <div>

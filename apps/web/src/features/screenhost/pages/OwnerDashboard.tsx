@@ -26,11 +26,16 @@ import OwnerNavigation from '@/features/screenhost/components/OwnerNavigation';
 import OwnerNotificationsBell from '@/features/screenhost/components/OwnerNotificationsBell';
 import { useOwnerDevices } from '@/features/screenhost/hooks/useOwnerDevices';
 import {
+  useOwnerEarnings,
+  useOwnerPlayoutSummary,
+} from '@/features/screenhost/hooks/usePerformanceReads';
+import {
   DEVICE_STATUS_LABELS,
   type DeviceStatus,
   deviceCounts,
   deviceStatusOf,
 } from '@/features/screenhost/lib/device-liveness';
+import { ownerKpiFrom } from '@/features/screenhost/lib/owner-kpi';
 import type { OwnerDeviceRow } from '@/features/screenhost/services/owner-devices.service';
 import {
   hasOwnerBankDetails,
@@ -96,6 +101,10 @@ export default function OwnerDashboard() {
   // one source, real liveness).
   const { devices, loading: screensLoading, isError: screensError } = useOwnerDevices(user?.id);
   const { stats: revenueStats, isError: revenueError } = useRevenueStats(user?.id);
+  // PERF-QA1 R11 — the KPI tiles read REAL wires: earnings (campagnes + impressions, through
+  // the R10 display home) and the playout summary (durée totale, all-time Σ played_duration_ms).
+  const ownerEarnings = useOwnerEarnings(user?.id);
+  const playoutSummary = useOwnerPlayoutSummary(user?.id);
   // Pending-approval notifications — Commit 7b adopts the campaigns-owned
   // `useOwnerCampaignApprovals` hook (the former inline `getPendingCampaigns`
   // read is the deferred-consumer rewire); the dashboard derives its
@@ -234,12 +243,8 @@ export default function OwnerDashboard() {
   };
 
   const ownerKpi = useMemo(
-    () => ({
-      campaignsDiffused: 0,
-      impressions: 0,
-      totalDurationSeconds: 0,
-    }),
-    [],
+    () => ownerKpiFrom(ownerEarnings.data?.lines ?? [], playoutSummary.data?.total_played_ms ?? 0),
+    [ownerEarnings.data, playoutSummary.data],
   );
 
   // CF-D1 — venues grouped from the LIVE devices wire (real venue names, not location strings);
@@ -587,12 +592,7 @@ export default function OwnerDashboard() {
                           maximumFractionDigits: 2,
                         })}
                   </p>
-                  <p
-                    className={`text-xs mt-1 ${(stats.growthRate ?? 0) >= 0 ? 'text-[#16a34a]' : 'text-red-500'}`}
-                  >
-                    {(stats.growthRate ?? 0) >= 0 ? '+' : ''}
-                    {stats.growthRate ?? 0}% Année précédente
-                  </p>
+                  {/* PERF-QA1 R11 (ruled): NO année-précédente line until real prior-year data exists. */}
                 </div>
                 <div className="rounded-xl p-5 min-h-[120px] flex flex-col bg-[#e8f6ed] border border-[#85cc95]/30">
                   <div className="flex items-center justify-between gap-2 mb-3 min-h-[1.25rem]">
@@ -604,7 +604,6 @@ export default function OwnerDashboard() {
                   <p className="text-3xl font-bold text-[#1a1a1a] tabular-nums font-sans mt-auto">
                     {accountLoading ? '...' : ownerKpi.campaignsDiffused}
                   </p>
-                  <p className="text-xs mt-1 text-[#16a34a]">+12% Année précédente</p>
                 </div>
                 <div className="rounded-xl p-5 min-h-[120px] flex flex-col bg-[#edf1fe] border border-[#6e82f6]/30">
                   <div className="flex items-center justify-between gap-2 mb-3 min-h-[1.25rem]">
@@ -618,7 +617,6 @@ export default function OwnerDashboard() {
                       ? '...'
                       : ownerKpi.impressions.toLocaleString('fr-FR').replace(/\s/g, ' ')}
                   </p>
-                  <p className="text-xs mt-1 text-red-500">-22% Année précédente</p>
                 </div>
                 <div className="rounded-xl p-5 min-h-[120px] flex flex-col bg-[#eeecfd] border border-[#a08cf0]/30">
                   <div className="flex items-center justify-between gap-2 mb-3 min-h-[1.25rem]">
@@ -630,7 +628,6 @@ export default function OwnerDashboard() {
                   <p className="text-3xl font-bold text-[#1a1a1a] tabular-nums font-sans mt-auto font-mono">
                     {accountLoading ? '...' : formatDuration(ownerKpi.totalDurationSeconds)}
                   </p>
-                  <p className="text-xs mt-1 text-red-500">-22% Année précédente</p>
                 </div>
               </div>
 

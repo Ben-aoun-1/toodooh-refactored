@@ -12,12 +12,20 @@ import { resolveChromiumPath, renderPdf } from './render.js';
 import { renderReportHtml } from './template.js';
 
 // Month-end report job (R1) — the house job pattern (mirror of the wedooh sweepUnexported boot +
-// unref'd interval; NO cron dependency): every tick generates the PREVIOUS CLOSED MONTH's report
-// for each venue with any data that does not have one yet, stores it in MinIO
-// (reports/<venueId>/<YYYY-MM>.pdf), inserts the screenhost_monthly_reports row and notifies the
-// owner (type 'monthly_report_ready' — the banked notifications hook). Idempotent: the UNIQUE
-// (screenhost, month) row is checked up front AND enforced on insert (onConflictDoNothing), so a
-// second tick — or a concurrent one — is a no-op. Backfill is the previous closed month ONLY.
+// unref'd interval; NO cron dependency): every tick generates the missing monthly reports
+// for each venue with any data, stores them in MinIO (reports/<venueId>/<YYYY-MM>.pdf), inserts
+// the screenhost_monthly_reports row and notifies the owner (type 'monthly_report_ready' — the
+// banked notifications hook). Idempotent: the UNIQUE (screenhost, month) row is checked up front
+// AND enforced on insert (onConflictDoNothing), so a second tick — or a concurrent one — is a
+// no-op. PERF-QA1 R2 — bounded catch-up: each tick considers the LAST 3 CLOSED MONTHS (same
+// idempotency per month), so a month the sweep missed (api down over a month boundary, chromium
+// absent…) self-heals within the window instead of being lost forever.
+// R2 AMENDMENT (ratified 2026-08-05) — catch-up must not burst: only the PREVIOUS CLOSED month
+// notifies; older catch-up months generate SILENTLY (they surface in the reports listing with
+// their real generated_at — nobody gets a « rapport de mai est prêt » in August) and ONLY when
+// the venue has MONTH-SCOPED data for that month (a hub-pushed stats row, or ≥1 proof inside the
+// month's Tunis bounds) — no fabricated near-empty backdated PDFs. The previous-closed-month
+// path keeps the ruled LIFETIME candidate gates + its notification, unchanged.
 
 const MONTHS_FR = [
   'janvier',
@@ -87,23 +95,78 @@ export const monthLabelFr = (month: string): string => {
 };
 
 export interface SweepResult {
-  month: string;
+  /** The closed months this tick considered, newest first (PERF-QA1 R2 bounded catch-up). */
+  months: string[];
   generated: number;
   skipped: number;
   failed: number;
 }
 
+/** R2 — how far back a tick self-heals: the last 3 closed months. */
+export const CATCH_UP_MONTHS = 3;
+
+/** The last `count` closed months relative to `now`, newest first (Tunis month close). */
+export function lastClosedMonths(now: Date, count: number): ClosedMonth[] {
+  const months: ClosedMonth[] = [previousClosedMonth(now)];
+  while (months.length < count) {
+    const prev = months[months.length - 1];
+    if (!prev) break;
+    const year = Number(prev.month.slice(0, 4));
+    const monthNum = Number(prev.month.slice(5, 7));
+    const backYear = monthNum === 1 ? year - 1 : year;
+    const backMonth = monthNum === 1 ? 12 : monthNum - 1;
+    months.push(monthBounds(`${backYear}-${String(backMonth).padStart(2, '0')}`));
+  }
+  return months;
+}
+
 /**
- * One sweep tick. Failure isolation: a venue's assemble/render/store failure logs + continues —
- * one broken venue never starves the fleet. When NO chromium exists on the machine, the sweep
+ * R2 amendment — the catch-up gate: a NON-current month only generates over REAL month-scoped
+ * data (a hub-pushed monthly_stats row for that month, or at least one proof_of_play received
+ * inside the month's TUNIS bounds — the reconcile calendar). The previous closed month never
+ * goes through this gate.
+ */
+async function hasMonthScopedData(
+  venueId: string,
+  month: string,
+  from: string,
+  to: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: screenhosts.id })
+    .from(screenhosts)
+    .where(
+      and(
+        eq(screenhosts.id, venueId),
+        sql`(EXISTS (SELECT 1 FROM screenhost_monthly_stats s
+              WHERE s.screenhost_id = ${screenhosts.id} AND s.month = ${month})
+          OR EXISTS (SELECT 1 FROM proof_of_play pp
+              WHERE pp.screenhost_id = ${screenhosts.id}
+              AND to_char(pp.received_at at time zone 'Africa/Tunis', 'YYYY-MM-DD')
+                BETWEEN ${from} AND ${to}))`,
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
+}
+
+/**
+ * One sweep tick over the last CATCH_UP_MONTHS closed months. Failure isolation: a venue×month's
+ * assemble/render/store failure logs + continues — one broken venue never starves the fleet, and
+ * a broken month never blocks the next one. When NO chromium exists on the machine, the sweep
  * warns once and bails (nothing would render).
  */
 export async function runMonthlyReportSweep(
   log: FastifyBaseLogger,
   now: Date = new Date(),
 ): Promise<SweepResult> {
-  const { month, from, to } = previousClosedMonth(now);
-  const result: SweepResult = { month, generated: 0, skipped: 0, failed: 0 };
+  const months = lastClosedMonths(now, CATCH_UP_MONTHS);
+  const result: SweepResult = {
+    months: months.map((m) => m.month),
+    generated: 0,
+    skipped: 0,
+    failed: 0,
+  };
 
   if (resolveChromiumPath() === null) {
     log.warn('monthly report sweep skipped: no chromium executable on this machine');
@@ -122,58 +185,70 @@ export async function runMonthlyReportSweep(
         OR EXISTS (SELECT 1 FROM proof_of_play pp WHERE pp.screenhost_id = ${screenhosts.id})`,
     );
 
+  const currentMonth = months[0]?.month;
   for (const venue of candidates) {
-    try {
-      const [existing] = await db
-        .select({ id: screenhostMonthlyReports.id })
-        .from(screenhostMonthlyReports)
-        .where(
-          and(
-            eq(screenhostMonthlyReports.screenhostId, venue.id),
-            eq(screenhostMonthlyReports.month, month),
-          ),
-        )
-        .limit(1);
-      if (existing) {
-        result.skipped += 1;
-        continue;
+    for (const { month, from, to } of months) {
+      try {
+        const [existing] = await db
+          .select({ id: screenhostMonthlyReports.id })
+          .from(screenhostMonthlyReports)
+          .where(
+            and(
+              eq(screenhostMonthlyReports.screenhostId, venue.id),
+              eq(screenhostMonthlyReports.month, month),
+            ),
+          )
+          .limit(1);
+        if (existing) {
+          result.skipped += 1;
+          continue;
+        }
+
+        // R2 amendment — a catch-up month (anything but the previous closed month) generates
+        // only over REAL month-scoped data; no fabricated backdated PDFs.
+        if (month !== currentMonth && !(await hasMonthScopedData(venue.id, month, from, to))) {
+          result.skipped += 1;
+          continue;
+        }
+
+        const data = await assembleReportData(venue.id, { from, to });
+        if (!data) continue; // venue vanished mid-sweep
+        // R2 — generated ONCE here and frozen into the stored PDF (no cache). A generator failure
+        // of ANY kind resolves to null → the generic pistes; it can never fail the report.
+        const aiPistes = await pistesForReport(data).catch(() => null);
+        const pdf = await renderPdf(renderReportHtml(data, { aiPistes }));
+
+        const key = `reports/${venue.id}/${month}.pdf`;
+        const uploaded = await storage.upload({ key, body: pdf, contentType: 'application/pdf' });
+        if ('error' in uploaded) throw new Error(`storage upload failed: ${uploaded.error}`);
+
+        // UNIQUE(screenhost, month) makes a concurrent tick lose here — no row returned → no
+        // duplicate notification either.
+        const inserted = await db
+          .insert(screenhostMonthlyReports)
+          .values({ screenhostId: venue.id, month, storageKey: key })
+          .onConflictDoNothing()
+          .returning({ id: screenhostMonthlyReports.id });
+        if (inserted.length === 0) {
+          result.skipped += 1;
+          continue;
+        }
+
+        // R2 amendment — only the PREVIOUS CLOSED month notifies; a caught-up older month
+        // surfaces in the listing (real generated_at) SILENTLY.
+        if (month === currentMonth && venue.ownerId) {
+          await db.insert(notifications).values({
+            userId: venue.ownerId,
+            type: 'monthly_report_ready',
+            title: 'Votre rapport mensuel est disponible',
+            body: `Le rapport de ${monthLabelFr(month)} pour « ${venue.name} » est prêt à consulter et télécharger.`,
+          });
+        }
+        result.generated += 1;
+      } catch (err) {
+        result.failed += 1;
+        log.warn({ err, screenhostId: venue.id, month }, 'monthly report generation failed');
       }
-
-      const data = await assembleReportData(venue.id, { from, to });
-      if (!data) continue; // venue vanished mid-sweep
-      // R2 — generated ONCE here and frozen into the stored PDF (no cache). A generator failure
-      // of ANY kind resolves to null → the generic pistes; it can never fail the report.
-      const aiPistes = await pistesForReport(data).catch(() => null);
-      const pdf = await renderPdf(renderReportHtml(data, { aiPistes }));
-
-      const key = `reports/${venue.id}/${month}.pdf`;
-      const uploaded = await storage.upload({ key, body: pdf, contentType: 'application/pdf' });
-      if ('error' in uploaded) throw new Error(`storage upload failed: ${uploaded.error}`);
-
-      // UNIQUE(screenhost, month) makes a concurrent tick lose here — no row returned → no
-      // duplicate notification either.
-      const inserted = await db
-        .insert(screenhostMonthlyReports)
-        .values({ screenhostId: venue.id, month, storageKey: key })
-        .onConflictDoNothing()
-        .returning({ id: screenhostMonthlyReports.id });
-      if (inserted.length === 0) {
-        result.skipped += 1;
-        continue;
-      }
-
-      if (venue.ownerId) {
-        await db.insert(notifications).values({
-          userId: venue.ownerId,
-          type: 'monthly_report_ready',
-          title: 'Votre rapport mensuel est disponible',
-          body: `Le rapport de ${monthLabelFr(month)} pour « ${venue.name} » est prêt à consulter et télécharger.`,
-        });
-      }
-      result.generated += 1;
-    } catch (err) {
-      result.failed += 1;
-      log.warn({ err, screenhostId: venue.id, month }, 'monthly report generation failed');
     }
   }
 

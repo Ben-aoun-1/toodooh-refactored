@@ -2,13 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ALL_TIME_FROM,
-  firstOfFollowingMonth,
   formatCompactPeriod,
   formatDateFr,
+  formatGeneratedAtFr,
   formatTablePeriod,
   inRange,
   monthLabelFr,
   resolvePeriodRange,
+  tunisTodayIso,
 } from './performance-period';
 
 const TODAY = new Date(2026, 6, 7); // 2026-07-07 (local)
@@ -66,10 +67,9 @@ describe('formatters', () => {
     expect(monthLabelFr('26-6')).toBe('—');
   });
 
-  it('firstOfFollowingMonth rolls December into January', () => {
-    expect(firstOfFollowingMonth('2026-06')).toBe('01/07/2026');
-    expect(firstOfFollowingMonth('2026-12')).toBe('01/01/2027');
-    expect(firstOfFollowingMonth('junk')).toBe('—');
+  it('formatGeneratedAtFr renders the REAL generation timestamp, never a derived date (R1)', () => {
+    expect(formatGeneratedAtFr('2026-08-01T06:30:00.000Z')).toBe('01/08/2026');
+    expect(formatGeneratedAtFr('junk')).toBe('—');
   });
 
   it('compact + table period formats degrade gracefully on null dates', () => {
@@ -79,5 +79,15 @@ describe('formatters', () => {
     expect(formatTablePeriod('2026-06-05', '2026-06-18')).toBe('05/06 – 18/06/2026');
     expect(formatTablePeriod(null, '2026-06-18')).toBe('18/06/2026');
     expect(formatTablePeriod(null, null)).toBe('—');
+  });
+});
+
+describe('tunisTodayIso / the R8 Tunis anchor', () => {
+  it('anchors on the Africa/Tunis calendar day, whatever the runner timezone', () => {
+    // 23:30Z is ALREADY July 1st in Tunis (UTC+1, no DST since 2008)…
+    expect(tunisTodayIso(new Date('2026-06-30T23:30:00Z'))).toBe('2026-07-01');
+    // …one hour earlier it is still June 30 — the server's impressions bucket and the page's
+    // curve day must flip together (the confirmed 26/06 class of bug).
+    expect(tunisTodayIso(new Date('2026-06-30T22:30:00Z'))).toBe('2026-06-30');
   });
 });

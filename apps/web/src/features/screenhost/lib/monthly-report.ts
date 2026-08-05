@@ -1,5 +1,5 @@
 /**
- * Monthly-report download — pure month logic + the imperative PDF fetch.
+ * Monthly-report download — the imperative PDF fetch.
  *
  * The owner dashboard lets a screenhost owner download the branded monthly-report PDF for one of
  * their venues. The backend (GET /api/screenhosts/:id/monthly-report?month=YYYY-MM) is owner-scoped
@@ -7,28 +7,14 @@
  * must bypass the JSON-only apiClient (which JSON.parses every 2xx body and would corrupt the PDF)
  * and use a RAW credentialed fetch + object-URL, mirroring the invoice-PDF download.
  *
- * `lastCompleteMonth` is pure and unit-tested; `downloadMonthlyReport` does the fetch and is
- * exercised by build + logic only (no web render harness).
+ * PERF-QA1 R1 retired `lastCompleteMonth`: callers now pick a month from the generated-reports
+ * LISTING (GET /:id/reports) instead of guessing the previous calendar month.
  */
+
+import { filenameFromContentDisposition } from './download-filename';
+import { ReportDownloadError } from './period-report';
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
-
-/**
- * The last *complete* calendar month as 'YYYY-MM' — i.e. the previous calendar month relative to
- * `now`. The current (in-progress) month is never complete, so the hub may have pushed no stats row
- * for it yet; defaulting to the previous month maximises the chance a report already exists.
- *
- * PURE. Uses LOCAL calendar fields consistently (matches a native `<input type="month">`, whose
- * value is the user's local YYYY-MM). January rolls back to the previous year's December.
- */
-export function lastCompleteMonth(now: Date = new Date()): string {
-  const year = now.getFullYear();
-  const monthIndex = now.getMonth(); // 0 = January … 11 = December (the *current* month)
-  const prevYear = monthIndex === 0 ? year - 1 : year;
-  const prevMonthIndex = monthIndex === 0 ? 11 : monthIndex - 1; // 0..11
-  const mm = String(prevMonthIndex + 1).padStart(2, '0');
-  return `${prevYear}-${mm}`;
-}
 
 /**
  * Download the monthly-report PDF for `screenhostId` / `month` (a 'YYYY-MM' string).
@@ -58,15 +44,34 @@ export async function downloadMonthlyReport(
   );
 
   if (res.status === 404) return 'no-data';
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) {
+    // PERF-QA1 R4 — surface the api's failure class (e.g. REPORT_STORAGE_UNAVAILABLE) so the
+    // caller can show per-class copy instead of the one generic toast.
+    let code: string | null = null;
+    try {
+      const body: unknown = await res.json();
+      if (body && typeof body === 'object' && 'error' in body) {
+        const raw = (body as { error: unknown }).error;
+        code = typeof raw === 'string' ? raw : null;
+      }
+    } catch {
+      code = null;
+    }
+    throw new ReportDownloadError(code ?? `HTTP_${res.status}`, res.status);
+  }
 
+  // PERF-QA1 R3 — the saved name comes from the api's content-disposition (it carries the venue
+  // slug); the legacy month-only name is the fallback.
+  const filename =
+    filenameFromContentDisposition(res.headers.get('content-disposition')) ??
+    `rapport-${month}.pdf`;
   // Only ever createObjectURL on a 2xx body — never on a 404/error JSON body.
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   try {
     const link = document.createElement('a');
     link.href = url;
-    link.download = `rapport-${month}.pdf`;
+    link.download = filename;
     document.body.appendChild(link);
     link.click();
     link.remove();

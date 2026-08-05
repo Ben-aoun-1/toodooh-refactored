@@ -49,18 +49,27 @@ const PLACEHOLDER_AGE_PCT = [32, 28, 14, 6];
 
 // R3 — the three FIXED S07 themes. Bodies 01/03 are static (01 = mockup copy VERBATIM until an
 // events source ships; 03 = the SPS wait-state); only the Piste 02 body is ever AI-authored.
-const PISTE_01_TITLE = 'Anticipez les temps forts';
-const PISTE_01_BODY =
+// Exported (PERF-QA1 R5): the owner pistes endpoint serves these SAME constants, so the page's
+// Recommandations section mirrors the PDF byte-for-byte from ONE api home.
+export const PISTE_01_TITLE = 'Anticipez les temps forts';
+export const PISTE_01_BODY =
   "Un grand match international est à l'affiche ce mois-ci (Coupe du Monde, CAN…) - profitez-en pour communiquer sa diffusion et inviter vos clients à venir le suivre dès maintenant sur vos réseaux.";
-const PISTE_02_TITLE = 'Repérez vos angles morts';
+export const PISTE_02_TITLE = 'Repérez vos angles morts';
 // R3.1 — REAL generic copy (the mockup's body carried literal « essayez X et Y » placeholders,
 // which reached prod PDFs whenever the AI fell back). Register of the mockup, no invented numbers.
 // RULED asymmetry: this static body is 216 chars — over the 210-char guard that VARIABLE AI
 // bodies must pass — and that is fine: it renders 2 lines / 0px overflow by direct measurement.
-const PISTE_02_GENERIC_BODY =
+export const PISTE_02_GENERIC_BODY =
   'Comparez vos créneaux les plus forts à vos périodes creuses - adaptez vos offres, votre programmation et votre communication aux heures calmes pour attirer davantage de visiteurs et développer vos revenus publicitaires.';
-const PISTE_03_TITLE = 'Résumé du SPS et recommandations';
-const PISTE_03_WAIT_BODY = 'En attente de votre score de priorité.';
+export const PISTE_03_TITLE = 'Résumé du SPS et recommandations';
+export const PISTE_03_WAIT_BODY = 'En attente de votre score de priorité.';
+
+// PERF-QA1 R7 — the S02 lead, HONEST semantics: the heatmap reads the venue's ROLLING typical-week
+// affluence grid, never the report period, so the copy names the semaine type and drops the
+// period claim. BYTE-IDENTICAL twin in apps/web (lib/peak-hours.ts), each side pinned by an
+// exact-literal test — the page and the PDF must never disagree on what this grid means.
+export const PEAK_HOURS_LEAD =
+  "Audience moyenne de votre semaine type (moyenne glissante sur les 4 dernières semaines), croisant les jours de la semaine et les heures d'ouverture. Plus la couleur est vive, plus l'audience est élevée. Les zones rayées correspondent à vos heures de fermeture ou aux créneaux sans données mesurées.";
 
 const esc = (value: string): string =>
   value.replace(
@@ -306,7 +315,7 @@ export function renderReportHtml(
   // ── S02 ──────────────────────────────────────────────────────────────────────────────────────
   const s02 = `
   <div class="section">
-    ${secHead('Section 02', 'Vos peak hours', "Audience moyenne croisant les jours de la semaine et les heures d'ouverture, sur l'ensemble de la période. Plus la couleur est vive, plus l'audience est élevée. Les zones rayées correspondent à vos heures de fermeture.")}
+    ${secHead('Section 02', 'Vos peak hours', PEAK_HOURS_LEAD)}
     <div class="panel heat">${heatmapHtml(data.heatLevels)}
     </div>
   </div>`;

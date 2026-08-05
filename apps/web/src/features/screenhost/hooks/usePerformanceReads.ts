@@ -44,3 +44,39 @@ export function useOwnerEarnings(userId: string | undefined) {
     enabled: Boolean(userId),
   });
 }
+
+/** PERF-QA1 R1 — the generated-reports listing, THE month authority for card + Historique. */
+export function useVenueReports(screenhostId: string | null) {
+  return useQuery({
+    queryKey: screenhostKeys.reports(screenhostId ?? ''),
+    queryFn: () => performanceService.getReports(screenhostId as string),
+    enabled: Boolean(screenhostId),
+  });
+}
+
+/** PERF-QA1 R6 — the venue's live SPS breakdown (weights from config, via the wire). */
+export function useVenueSps(screenhostId: string | null) {
+  return useQuery({
+    queryKey: screenhostKeys.sps(screenhostId ?? ''),
+    queryFn: () => performanceService.getSps(screenhostId as string),
+    enabled: Boolean(screenhostId),
+  });
+}
+
+/** PERF-QA1 R5 — the S07 pistes for the ACTIVE period (re-fetches when the pills change). */
+export function useVenuePistes(screenhostId: string | null, from: string, to: string) {
+  return useQuery({
+    queryKey: screenhostKeys.pistes(screenhostId ?? '', from, to),
+    queryFn: () => performanceService.getPistes(screenhostId as string, from, to),
+    enabled: Boolean(screenhostId),
+  });
+}
+
+/** PERF-QA1 R11 — session-scoped all-time playout summary (`userId` only keys the cache). */
+export function useOwnerPlayoutSummary(userId: string | undefined) {
+  return useQuery({
+    queryKey: screenhostKeys.playoutSummary(userId ?? ''),
+    queryFn: () => performanceService.getPlayoutSummary(),
+    enabled: Boolean(userId),
+  });
+}

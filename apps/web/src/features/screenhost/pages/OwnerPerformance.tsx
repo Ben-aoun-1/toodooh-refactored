@@ -30,10 +30,14 @@ import {
   useOwnerEarnings,
   useVenueImpressionsDaily,
   useVenueMonthlyStats,
+  useVenuePistes,
   useVenueProfile,
+  useVenueReports,
+  useVenueSps,
 } from '../hooks/usePerformanceReads';
 import { useScreenhostAffluence } from '../hooks/useScreenhostAffluence';
 import { useScreenhostsMine } from '../hooks/useScreenhostsMine';
+import { lineImpressions, sumLineImpressions } from '../lib/impressions-display';
 import { downloadMonthlyReport } from '../lib/monthly-report';
 import {
   audienceKpis,
@@ -49,19 +53,28 @@ import {
   impressionsOfMonth,
   lineInPeriod,
   linesEndingInMonth,
-  openHoursPerDay,
+  openHours,
   zeroFillDays,
 } from '../lib/performance-derive';
 import {
   type PeriodKey,
   formatCompactPeriod,
+  formatDateFr,
+  formatGeneratedAtFr,
   formatTablePeriod,
   impressionsFetchWindow,
   inRange,
   isoDate,
   resolvePeriodRange,
+  tunisToday,
 } from '../lib/performance-period';
-import { downloadPeriodReport } from '../lib/period-report';
+import {
+  OUT_OF_WINDOW,
+  ReportDownloadError,
+  clampRangeForReport,
+  downloadPeriodReport,
+  reportErrorMessageFr,
+} from '../lib/period-report';
 
 const log = logger.child({ module: 'OwnerPerformance' });
 
@@ -78,8 +91,9 @@ export default function OwnerPerformance() {
   const { user, needsApproval, validationStatus } = useAuthStore();
   const isDisabled = needsApproval && validationStatus === 'pending';
 
-  // "today" is anchored once per mount; all date maths live in the lib.
-  const today = useMemo(() => new Date(), []);
+  // "today" is anchored ONCE per mount on the TUNIS calendar day (R8 — the server buckets
+  // impressions on Africa/Tunis days; a browser-local anchor shifted edge-of-day points).
+  const today = useMemo(() => tunisToday(), []);
   const todayIso = isoDate(today);
   const fetchWindow = useMemo(() => impressionsFetchWindow(today), [today]);
 
@@ -95,6 +109,10 @@ export default function OwnerPerformance() {
   const impressions = useVenueImpressionsDaily(selectedId, fetchWindow.from, fetchWindow.to);
   const earnings = useOwnerEarnings(user?.id);
   const affluence = useScreenhostAffluence(selectedId);
+  // PERF-QA1 — the three new owner reads: the generated-reports listing (R1, THE month
+  // authority), the live SPS breakdown (R6) and the period pistes (R5).
+  const reports = useVenueReports(selectedId);
+  const sps = useVenueSps(selectedId);
 
   // Period pills — custom only applies on "Actualiser la recherche".
   const [period, setPeriod] = useState<PeriodKey>('28d');
@@ -105,6 +123,15 @@ export default function OwnerPerformance() {
     () => resolvePeriodRange(period, today, appliedCustom),
     [period, today, appliedCustom],
   );
+  // R4 — the active range clamped to the api's 400-day bound (Tunis-anchored); null = the whole
+  // period is older than the window. Feeds BOTH the period-report download and the pistes read
+  // (the pistes endpoint carries the same bound).
+  const reportRange = useMemo(() => clampRangeForReport(range, today), [range, today]);
+  const pistes = useVenuePistes(
+    reportRange ? selectedId : null,
+    reportRange?.range.from ?? '',
+    reportRange?.range.to ?? '',
+  );
 
   // ── Per-venue datasets ──────────────────────────────────────────────────────
   const months = useMemo(() => monthlyStats.data?.months ?? [], [monthlyStats.data]);
@@ -114,7 +141,16 @@ export default function OwnerPerformance() {
     [earnings.data, selectedId],
   );
 
-  const latestMonth = months[0] ?? null;
+  // R1 — the generated-reports listing is THE month authority: card = newest row, Historique =
+  // the rest. monthly_stats only DECORATES a report month with its audience figure (a hub-pushed
+  // stats month with no stored report is no longer surfaced as a report).
+  const reportRows = useMemo(() => reports.data?.reports ?? [], [reports.data]);
+  const latestReport = reportRows[0] ?? null;
+  const latestMonth = useMemo(() => {
+    if (!latestReport) return null;
+    const stat = months.find((m) => m.month === latestReport.month);
+    return { month: latestReport.month, total_audience: stat?.total_audience ?? 0 };
+  }, [latestReport, months]);
 
   // ── HOST/CAST first-data flags (Mejri ruling) — they NEVER gate each other's sections ─────────
   const affluenceGrid = useMemo(() => affluence.data?.grid ?? [], [affluence.data]);
@@ -122,12 +158,13 @@ export default function OwnerPerformance() {
   const castHasData = useMemo(() => hasCastData(venueLines, days), [venueLines, days]);
   const historyRows = useMemo(
     () =>
-      months.slice(1).map((m) => ({
-        month: m.month,
-        totalAudience: m.total_audience,
-        impressions: impressionsOfMonth(days, m.month),
+      reportRows.slice(1).map((r) => ({
+        month: r.month,
+        totalAudience: months.find((m) => m.month === r.month)?.total_audience ?? 0,
+        impressions: impressionsOfMonth(days, r.month),
+        generatedAtLabel: formatGeneratedAtFr(r.generated_at),
       })),
-    [months, days],
+    [reportRows, months, days],
   );
 
   // ── Hero (unfiltered, "depuis le début") ────────────────────────────────────
@@ -160,25 +197,26 @@ export default function OwnerPerformance() {
     [venueLines, range],
   );
   const periodAudience = useMemo(() => dailyAudienceWithin(months, range), [months, range]);
-  const kpis = useMemo(
-    () =>
-      audienceKpis(
-        periodAudience,
-        openHoursPerDay(profile.data?.opening_hour ?? null, profile.data?.closing_hour ?? null),
-      ),
-    [periodAudience, profile.data],
+  // R9 — real venue hours; 14 h is ONLY the null/degenerate fallback and is flagged as such.
+  const hoursInfo = useMemo(
+    () => openHours(profile.data?.opening_hour ?? null, profile.data?.closing_hour ?? null),
+    [profile.data],
   );
-  // S03 days: zero-filled over the period∩fetch-window once CAST data exists (0 = day without
-  // data); before the first CAST data the section shows its pending placeholder instead.
+  const kpis = useMemo(
+    () => audienceKpis(periodAudience, hoursInfo.hours),
+    [periodAudience, hoursInfo],
+  );
+  // S03 days: zero-filled over the period∩fetch-window UNCONDITIONALLY (R8 — 0 = day without
+  // data, on the server's Tunis calendar); the section's pending placeholder still gates on
+  // castHasData, so the pre-first-deal state is unchanged.
   const periodDays = useMemo(() => {
     const inWindow = days.filter((d) => inRange(d.date, range));
-    if (!castHasData) return inWindow;
     const clamped = {
       from: range.from > fetchWindow.from ? range.from : fetchWindow.from,
       to: range.to < fetchWindow.to ? range.to : fetchWindow.to,
     };
     return zeroFillDays(inWindow, clamped);
-  }, [days, range, castHasData, fetchWindow]);
+  }, [days, range, fetchWindow]);
   const category = categoryLabel(
     profile.data?.business_sector ?? null,
     profile.data?.class ?? null,
@@ -205,7 +243,8 @@ export default function OwnerPerformance() {
         period: formatTablePeriod(l.campaign_start, l.campaign_end),
         typeLabel: typeLabelFr(l.campaign_type),
         statut: campaignStatut(l, todayIso),
-        impressions: l.delivered_imp,
+        // R10 — every line-derived impressions figure routes through the ONE display home.
+        impressions: lineImpressions(l),
         revenueLabel: formatTndCellFr(l.earnings_tnd),
       })),
     [periodLines, todayIso],
@@ -213,15 +252,12 @@ export default function OwnerPerformance() {
   const top3 = useMemo(
     () =>
       [...periodLines]
-        .sort((a, b) => b.delivered_imp - a.delivered_imp)
+        .sort((a, b) => lineImpressions(b) - lineImpressions(a))
         .slice(0, 3)
         .map((l) => l.campaign_name),
     [periodLines],
   );
-  const cumulativeImpressions = useMemo(
-    () => periodLines.reduce((sum, l) => sum + l.delivered_imp, 0),
-    [periodLines],
-  );
+  const cumulativeImpressions = useMemo(() => sumLineImpressions(periodLines), [periodLines]);
 
   // ── Monthly report actions ──────────────────────────────────────────────────
   const [downloading, setDownloading] = useState(false);
@@ -241,28 +277,43 @@ export default function OwnerPerformance() {
       if (result === 'no-data') toast('Pas encore de rapport pour ce mois.');
     } catch (err) {
       log.error({ err }, 'monthly report download failed');
-      toast.error('Échec du téléchargement. Veuillez réessayer.');
+      // R4 — per-class copy (storage vs render vs the generic default), never one blind toast.
+      toast.error(reportErrorMessageFr(err instanceof ReportDownloadError ? err.code : null));
     } finally {
       setDownloading(false);
     }
   };
-  // R1 — the bottom CTA: the ON-DEMAND period report over the ACTIVE filter range (live server
-  // render; the monthly card/history buttons above keep their stored-artifact URLs).
+  // R1 — the bottom CTA: the ON-DEMAND period report over the ACTIVE filter range, CLAMPED to
+  // the api's 400-day bound (R4 — « Depuis le début » works instead of round-tripping to a
+  // guaranteed 400; the clamp is announced under the button). The monthly card/history buttons
+  // above keep their stored-artifact URLs.
   const downloadPeriod = async () => {
     if (!selectedId || downloading) return;
+    if (!reportRange) {
+      toast.error(reportErrorMessageFr(OUT_OF_WINDOW));
+      return;
+    }
     setDownloading(true);
     try {
-      await downloadPeriodReport(selectedId, range);
+      await downloadPeriodReport(selectedId, reportRange.range);
     } catch (err) {
       log.error({ err }, 'period report download failed');
-      toast.error('Échec du téléchargement. Veuillez réessayer.');
+      toast.error(reportErrorMessageFr(err instanceof ReportDownloadError ? err.code : null));
     } finally {
       setDownloading(false);
     }
   };
+  // R4 — when the active period exceeds the api window, say EXACTLY what the PDF will cover.
+  const clampNote = reportRange?.clamped
+    ? `Le PDF couvrira la période du ${formatDateFr(reportRange.range.from)} au ${formatDateFr(reportRange.range.to)} (fenêtre de rapport : 400 derniers jours).`
+    : null;
 
   const anyError =
-    profile.isError || monthlyStats.isError || impressions.isError || earnings.isError;
+    profile.isError ||
+    monthlyStats.isError ||
+    impressions.isError ||
+    earnings.isError ||
+    reports.isError;
 
   return (
     <div className="perf-page min-h-screen bg-perf-page">
@@ -331,6 +382,9 @@ export default function OwnerPerformance() {
 
                   <MonthlyReportCard
                     latestMonth={latestMonth}
+                    generatedAtLabel={
+                      latestReport ? formatGeneratedAtFr(latestReport.generated_at) : null
+                    }
                     monthImpressions={latestMonth ? impressionsOfMonth(days, latestMonth.month) : 0}
                     campaignsCount={
                       latestMonth ? linesEndingInMonth(venueLines, latestMonth.month).length : 0
@@ -375,7 +429,11 @@ export default function OwnerPerformance() {
                     hasCastData={castHasData}
                   />
 
-                  <AudienceKpisSection kpis={kpis} hasHostData={hostHasData} />
+                  <AudienceKpisSection
+                    kpis={kpis}
+                    hasHostData={hostHasData}
+                    hoursEstimated={hoursInfo.estimated}
+                  />
 
                   <PeakHoursHeatmap
                     grid={affluenceGrid}
@@ -406,14 +464,15 @@ export default function OwnerPerformance() {
                     hasCastData={castHasData}
                   />
 
-                  <OptimisationSection />
+                  <OptimisationSection pistes={pistes.data?.pistes} isError={pistes.isError} />
 
-                  <SpsSection />
+                  <SpsSection sps={sps.data} isError={sps.isError} />
 
                   <DownloadCta
                     hasData={hostHasData || castHasData}
                     downloading={downloading}
                     onDownload={() => void downloadPeriod()}
+                    clampNote={clampNote}
                   />
                 </>
               )}

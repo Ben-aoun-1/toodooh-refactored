@@ -11,14 +11,15 @@ import {
   screenhosts,
   users,
 } from '../src/db/schema.js';
-import { runMonthlyReportSweep } from '../src/lib/report/monthly-job.js';
 import { storage } from '../src/storage/s3-storage.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
 
 // The R1.5 restyle regeneration — chromium mocked at the render seam, storage.upload spied,
 // real Postgres (the monthly-job harness). The contract under test: same storage_key overwritten,
-// generated_at bumped, and NO new notification for a restyle.
+// generated_at bumped, and NO new notification for a restyle. Stored rows are seeded DIRECTLY
+// (not via the sweep — PERF-QA1 R2 widened it to 3 catch-up months; the regen contract is
+// per-row and must not re-test the sweep's width).
 const renderSpy = vi.hoisted(() =>
   vi.fn(async (html: string) => {
     void html;
@@ -72,18 +73,20 @@ const seedVenueWithData = async (ownerId: string, name: string): Promise<string>
   return id;
 };
 
-// 2026-07-08 UTC noon — the previous closed month is June 2026 (the sweep seeds the stored row).
-const NOW = new Date('2026-07-08T12:00:00Z');
-
-const sweepLog = {
-  ...silentLog,
-  error: () => undefined,
-  debug: () => undefined,
-  fatal: () => undefined,
-  trace: () => undefined,
-  child: () => sweepLog,
-  level: 'silent',
-} as unknown as Parameters<typeof runMonthlyReportSweep>[0];
+/** One stored June-2026 report + the sweep-era notification it would have carried. */
+const seedStoredReport = async (venueId: string, ownerId: string): Promise<void> => {
+  await db.insert(screenhostMonthlyReports).values({
+    screenhostId: venueId,
+    month: '2026-06',
+    storageKey: `reports/${venueId}/2026-06.pdf`,
+  });
+  await db.insert(notifications).values({
+    userId: ownerId,
+    type: 'monthly_report_ready',
+    title: 'Votre rapport mensuel est disponible',
+    body: 'Le rapport de juin 2026 est prêt à consulter et télécharger.',
+  });
+};
 
 const storedRow = async (venueId: string) => {
   const [row] = await db
@@ -121,17 +124,16 @@ describe('regenerateStoredReports (real Postgres, mocked render/storage)', () =>
       .spyOn(storage, 'upload')
       .mockImplementation(async (params) => ({ key: params.key }));
 
-    await runMonthlyReportSweep(sweepLog, NOW);
+    await seedStoredReport(venue, owner);
     const before = await storedRow(venue);
     expect(before?.storageKey).toBe(`reports/${venue}/2026-06.pdf`);
-    expect(upload).toHaveBeenCalledTimes(1);
 
     // generated_at is compared strictly — give the clock room on a fast machine.
     await new Promise((resolve) => setTimeout(resolve, 25));
 
     const result = await regenerateStoredReports(silentLog);
     expect(result).toMatchObject({ scanned: 1, regenerated: 1, failed: 0 });
-    expect(upload).toHaveBeenCalledTimes(2);
+    expect(upload).toHaveBeenCalledTimes(1);
     expect(upload).toHaveBeenLastCalledWith({
       key: `reports/${venue}/2026-06.pdf`,
       body: expect.any(Buffer),
@@ -142,12 +144,12 @@ describe('regenerateStoredReports (real Postgres, mocked render/storage)', () =>
     expect(after?.storageKey).toBe(before?.storageKey); // same object, overwritten in place
     expect(after?.generatedAt.getTime()).toBeGreaterThan(before?.generatedAt.getTime() ?? 0);
 
-    // Restyle ≠ news: the owner keeps exactly the ONE notification the sweep inserted.
+    // Restyle ≠ news: the owner keeps exactly the ONE notification the sweep had inserted.
     const notifs = await db.select().from(notifications).where(eq(notifications.userId, owner));
     expect(notifs).toHaveLength(1);
 
-    // R2 — the regeneration rode the frozen pistes seam once per row (sweep + regen = 2 calls).
-    expect(pistesSpy).toHaveBeenCalledTimes(2);
+    // R2 — the regeneration rode the frozen pistes seam once per row.
+    expect(pistesSpy).toHaveBeenCalledTimes(1);
   });
 
   it('--dry-run lists targets without rendering, uploading or touching rows', async () => {
@@ -156,7 +158,7 @@ describe('regenerateStoredReports (real Postgres, mocked render/storage)', () =>
     const upload = vi
       .spyOn(storage, 'upload')
       .mockImplementation(async (params) => ({ key: params.key }));
-    await runMonthlyReportSweep(sweepLog, NOW);
+    await seedStoredReport(venue, owner);
     const before = await storedRow(venue);
     renderSpy.mockClear();
     upload.mockClear();
@@ -186,7 +188,8 @@ describe('regenerateStoredReports (real Postgres, mocked render/storage)', () =>
     const upload = vi
       .spyOn(storage, 'upload')
       .mockImplementation(async (params) => ({ key: params.key }));
-    await runMonthlyReportSweep(sweepLog, NOW);
+    await seedStoredReport(venueA, ownerA);
+    await seedStoredReport(venueB, ownerB);
     const beforeB = await storedRow(venueB);
     await new Promise((resolve) => setTimeout(resolve, 25));
 

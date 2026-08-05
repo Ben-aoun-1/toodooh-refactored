@@ -37,7 +37,16 @@ import { pushPlaylistToVenue } from '../lib/playout/push.js';
 import { assembleReportData } from '../lib/report/assemble.js';
 import { pistesForReportCached } from '../lib/report/recommendations.js';
 import { renderPdf } from '../lib/report/render.js';
-import { renderReportHtml } from '../lib/report/template.js';
+import {
+  PISTE_01_BODY,
+  PISTE_01_TITLE,
+  PISTE_02_GENERIC_BODY,
+  PISTE_02_TITLE,
+  PISTE_03_TITLE,
+  PISTE_03_WAIT_BODY,
+  renderReportHtml,
+} from '../lib/report/template.js';
+import { venueSlug } from '../lib/slug.js';
 import { computeSps, recomputeVenueSps } from '../lib/sps-score.js';
 import { pushApprovedOwnerLocations } from '../lib/wedooh-sync.js';
 import { decryptWifiPassword, encryptWifiPassword } from '../lib/wifi-crypto.js';
@@ -319,6 +328,28 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         campaign_status: r.campaignStatus,
       })),
     });
+  });
+
+  // GET /api/screenhosts/playout-summary — PERF-QA1 R11: the owner Dashboard's « Durée totale de
+  // diffusion » tile. ALL-TIME cumulative Σ played_duration_ms across the caller's venues (ruled
+  // consistent with the cumulative Revenus tile). Static route like /earnings; owner-scoping in
+  // the JOIN's WHERE. VIDEO_ENDED only — started events carry no duration. sum() over integers
+  // comes back as a STRING (bigint) → Number() before the wire.
+  app.get('/api/screenhosts/playout-summary', ownerGuard, async (request, reply) => {
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply
+        .status(401)
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+    }
+    const [row] = await db
+      .select({
+        totalPlayedMs: sql<string>`coalesce(sum(${proofOfPlay.playedDurationMs}), 0)`,
+      })
+      .from(proofOfPlay)
+      .innerJoin(screenhosts, eq(proofOfPlay.screenhostId, screenhosts.id))
+      .where(and(eq(screenhosts.ownerId, userId), eq(proofOfPlay.eventType, 'VIDEO_ENDED')));
+    return reply.status(200).send({ total_played_ms: Number(row?.totalPlayedMs ?? 0) });
   });
 
   // PATCH /api/screenhosts/:id/wifi — owner-scoped edit + approved-owner re-push.
@@ -853,6 +884,50 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
+  // GET /api/screenhosts/:id/reports — PERF-QA1 R1: the owner-scoped LISTING over
+  // screenhost_monthly_reports. The generated-reports table is the ONLY month authority on owner
+  // surfaces: card = newest row, Historique = the rest, and « Généré le » is the row's REAL
+  // generated_at (the web never re-derives it from the month key again). 'YYYY-MM' sorts
+  // correctly as text.
+  app.get('/api/screenhosts/:id/reports', ownerGuard, async (request, reply) => {
+    const parsedParams = idParamSchema.safeParse(request.params);
+    if (!parsedParams.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: [{ field: 'id', reason: 'must be a uuid' }],
+      });
+    }
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply
+        .status(401)
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+    }
+
+    // Owner scoping in the WHERE: a foreign screenhost id is indistinguishable from a missing one.
+    const [owned] = await db
+      .select({ id: screenhosts.id })
+      .from(screenhosts)
+      .where(and(eq(screenhosts.id, parsedParams.data.id), eq(screenhosts.ownerId, userId)))
+      .limit(1);
+    if (!owned) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
+    }
+
+    const rows = await db
+      .select({
+        month: screenhostMonthlyReports.month,
+        generatedAt: screenhostMonthlyReports.generatedAt,
+      })
+      .from(screenhostMonthlyReports)
+      .where(eq(screenhostMonthlyReports.screenhostId, owned.id))
+      .orderBy(desc(screenhostMonthlyReports.month));
+    return reply.status(200).send({
+      reports: rows.map((r) => ({ month: r.month, generated_at: r.generatedAt })),
+    });
+  });
+
   // GET /api/screenhosts/:id/monthly-report?month=YYYY-MM — owner-scoped download of the STORED
   // monthly report artifact (R1: the month-end job renders + stores one MinIO PDF per venue/month;
   // this route no longer renders anything). Same owner-scoping as the affluence read (foreign/
@@ -887,7 +962,7 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
 
     // Owner scoping in the WHERE: a foreign screenhost id is indistinguishable from a missing one.
     const [owned] = await db
-      .select({ id: screenhosts.id })
+      .select({ id: screenhosts.id, name: screenhosts.name })
       .from(screenhosts)
       .where(and(eq(screenhosts.id, parsedParams.data.id), eq(screenhosts.ownerId, userId)))
       .limit(1);
@@ -922,7 +997,11 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
     return reply
       .status(200)
       .header('content-type', object.contentType ?? 'application/pdf')
-      .header('content-disposition', `inline; filename="rapport-${parsedQuery.data.month}.pdf"`)
+      .header(
+        'content-disposition',
+        // PERF-QA1 R3 — the filename carries the venue so a downloads folder stays legible.
+        `inline; filename="rapport-${venueSlug(owned.name)}-${parsedQuery.data.month}.pdf"`,
+      )
       .send(object.body);
   });
 
@@ -958,11 +1037,21 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
     }
     const { from, to } = parsedQuery.data;
     const spanDays = (Date.parse(to) - Date.parse(from)) / 86_400_000;
-    if (!Number.isFinite(spanDays) || spanDays < 0 || spanDays > 400) {
+    if (!Number.isFinite(spanDays) || spanDays < 0) {
       return reply.status(400).send({
         error: 'INVALID_INPUT',
         message: 'Validation failed',
-        fields: [{ field: 'to', reason: 'from ≤ to and the range must not exceed 400 days' }],
+        fields: [{ field: 'to', reason: 'from must be ≤ to' }],
+      });
+    }
+    // PERF-QA1 R4 — the too-wide class gets its OWN code (vs render 503 / storage 503): the web
+    // maps each failure class to distinct copy instead of one generic « Échec » toast. This is
+    // the confirmed Mejri repro: « Depuis le début » resolved from 2020-01-01 → a guaranteed
+    // 400 the old client rendered as the generic failure.
+    if (spanDays > 400) {
+      return reply.status(400).send({
+        error: 'RANGE_TOO_WIDE',
+        message: 'The range must not exceed 400 days.',
       });
     }
     const userId = request.user?.id;
@@ -974,7 +1063,7 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
 
     // Owner scoping in the WHERE: a foreign screenhost id is indistinguishable from a missing one.
     const [owned] = await db
-      .select({ id: screenhosts.id })
+      .select({ id: screenhosts.id, name: screenhosts.name })
       .from(screenhosts)
       .where(and(eq(screenhosts.id, parsedParams.data.id), eq(screenhosts.ownerId, userId)))
       .limit(1);
@@ -1004,8 +1093,140 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
     return reply
       .status(200)
       .header('content-type', 'application/pdf')
-      .header('content-disposition', `inline; filename="rapport-${from}_${to}.pdf"`)
+      .header(
+        'content-disposition',
+        // PERF-QA1 R3 — the venue rides the period filename too (same rule as the monthly PDF).
+        `inline; filename="rapport-${venueSlug(owned.name)}-${from}_${to}.pdf"`,
+      )
       .send(pdf);
+  });
+
+  // GET /api/screenhosts/:id/pistes?from&to — PERF-QA1 R5: the page MIRRORS the PDF's S07
+  // through the SAME generator + cache the period report uses (per venue × period, 24h), so the
+  // screen and the document can never disagree. Bodies are the template's OWN constants (one api
+  // home); Piste 02 is the cached AI body when available, the generic body otherwise — a pistes
+  // failure NEVER fails the response. NO new AI contract.
+  app.get('/api/screenhosts/:id/pistes', ownerGuard, async (request, reply) => {
+    const parsedParams = idParamSchema.safeParse(request.params);
+    if (!parsedParams.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: [{ field: 'id', reason: 'must be a uuid' }],
+      });
+    }
+    const parsedQuery = z
+      .object({
+        from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      })
+      .safeParse(request.query);
+    if (!parsedQuery.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: parsedQuery.error.issues.map((i) => ({
+          field: i.path.join('.'),
+          reason: i.message,
+        })),
+      });
+    }
+    const { from, to } = parsedQuery.data;
+    const spanDays = (Date.parse(to) - Date.parse(from)) / 86_400_000;
+    if (!Number.isFinite(spanDays) || spanDays < 0) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: [{ field: 'to', reason: 'from must be ≤ to' }],
+      });
+    }
+    if (spanDays > 400) {
+      return reply.status(400).send({
+        error: 'RANGE_TOO_WIDE',
+        message: 'The range must not exceed 400 days.',
+      });
+    }
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply
+        .status(401)
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+    }
+
+    // Owner scoping in the WHERE: a foreign screenhost id is indistinguishable from a missing one.
+    const [owned] = await db
+      .select({ id: screenhosts.id })
+      .from(screenhosts)
+      .where(and(eq(screenhosts.id, parsedParams.data.id), eq(screenhosts.ownerId, userId)))
+      .limit(1);
+    if (!owned) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
+    }
+
+    const data = await assembleReportData(owned.id, { from, to });
+    if (!data) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
+    }
+    const aiBody = await pistesForReportCached(owned.id, data).catch(() => null);
+    return reply.status(200).send({
+      pistes: [
+        { num: '01', title: PISTE_01_TITLE, body: PISTE_01_BODY, pending: false },
+        { num: '02', title: PISTE_02_TITLE, body: aiBody ?? PISTE_02_GENERIC_BODY, pending: false },
+        { num: '03', title: PISTE_03_TITLE, body: PISTE_03_WAIT_BODY, pending: true },
+      ],
+    });
+  });
+
+  // GET /api/screenhosts/:id/sps — PERF-QA1 R6: the OWNER's SPS read, mirroring the admin
+  // breakdown's shape (score + the four variables, each with its CONFIG weight — the web renders
+  // weights from this wire and never hardcodes them again). Computed LIVE like the admin read and
+  // the PDF's S08. A compute hiccup degrades to nulls so the page keeps its « À venir » wait-state
+  // (assemble.ts's null-block semantics) — owners never see invented numbers.
+  app.get('/api/screenhosts/:id/sps', ownerGuard, async (request, reply) => {
+    const parsedParams = idParamSchema.safeParse(request.params);
+    if (!parsedParams.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: [{ field: 'id', reason: 'must be a uuid' }],
+      });
+    }
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply
+        .status(401)
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+    }
+
+    // Owner scoping in the WHERE: a foreign screenhost id is indistinguishable from a missing one.
+    const [owned] = await db
+      .select({ id: screenhosts.id })
+      .from(screenhosts)
+      .where(and(eq(screenhosts.id, parsedParams.data.id), eq(screenhosts.ownerId, userId)))
+      .limit(1);
+    if (!owned) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
+    }
+
+    try {
+      const cfg = await getDispatchConfig();
+      const { sps, variables } = await computeSps(owned.id);
+      return reply.status(200).send({
+        sps,
+        variables: {
+          acceptation: { value: variables.acceptation, weight: cfg.spsWeightAcceptation },
+          respect_evenements: {
+            value: variables.respect_evenements,
+            weight: cfg.spsWeightRespectEvenements,
+          },
+          activite: { value: variables.activite, weight: cfg.spsWeightActivite },
+          remplissage: { value: variables.remplissage, weight: cfg.spsWeightRemplissage },
+        },
+      });
+    } catch (err) {
+      request.log.warn({ err, screenhostId: owned.id }, 'owner sps compute failed');
+      return reply.status(200).send({ sps: null, variables: null });
+    }
   });
 
   // PATCH /api/admin/screenhosts/:id/wifi — admin edit of ANY screenhost + re-push for its

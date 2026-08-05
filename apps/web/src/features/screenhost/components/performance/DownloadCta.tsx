@@ -5,6 +5,11 @@ interface DownloadCtaProps {
   hasData: boolean;
   downloading: boolean;
   onDownload: () => void;
+  /**
+   * PERF-QA1 R4 — shown when the active period exceeds the api's 400-day bound: the request is
+   * clamped client-side and the user is TOLD which range the PDF will cover.
+   */
+  clampNote: string | null;
 }
 
 /**
@@ -12,7 +17,7 @@ interface DownloadCtaProps {
  * button now downloads the ON-DEMAND period report for the page's ACTIVE filter range (the
  * monthly card / history buttons keep their stored-artifact URLs).
  */
-export function DownloadCta({ hasData, downloading, onDownload }: DownloadCtaProps) {
+export function DownloadCta({ hasData, downloading, onDownload, clampNote }: DownloadCtaProps) {
   return (
     <div className="mt-3">
       <div className="mb-12 flex flex-col items-center gap-2">
@@ -32,6 +37,7 @@ export function DownloadCta({ hasData, downloading, onDownload }: DownloadCtaPro
         {!hasData && (
           <p className="text-xs italic text-perf-mist">Disponible dès vos premières données.</p>
         )}
+        {hasData && clampNote && <p className="text-xs text-perf-grey">{clampNote}</p>}
       </div>
       <div className="flex flex-col items-center gap-3 border-t border-perf-soft pt-7">
         <div className="perf-mono text-[10px] uppercase tracking-[0.18em] text-perf-mist">

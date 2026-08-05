@@ -3,14 +3,20 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { db, sql } from '../src/db/client.js';
 import {
+  campaigns,
+  creatives,
   type NewUser,
   notifications,
+  proofOfPlay,
   screenhostAffluence,
   screenhostMonthlyReports,
+  screenhostMonthlyStats,
   screenhosts,
+  screens,
   users,
 } from '../src/db/schema.js';
 import {
+  lastClosedMonths,
   monthBounds,
   previousClosedMonth,
   runMonthlyReportSweep,
@@ -75,15 +81,73 @@ const seedUser = async (values: Partial<NewUser> = {}): Promise<string> => {
 const seedVenueWithData = async (ownerId: string, name: string): Promise<string> => {
   const [s] = await db.insert(screenhosts).values({ name, ownerId }).returning();
   const id = s?.id ?? '';
-  // Any data qualifies a venue — one affluence slot is the cheapest HOST signal.
+  // Any data qualifies a venue — one affluence slot is the cheapest HOST signal. NB: affluence
+  // is LIFETIME data (rolling typical week, not month-scoped), so it qualifies the venue as a
+  // candidate but never a CATCH-UP month (the R2-amendment gate).
   await db
     .insert(screenhostAffluence)
     .values({ screenhostId: id, dayOfWeek: 1, hour: 12, estimatedImpressions: 40 });
   return id;
 };
 
-// 2026-07-08 UTC noon — Tunis July 8th; the previous closed month is June 2026.
+/** MONTH-SCOPED data for the R2-amendment gate: one hub-pushed stats row for `month`. */
+const seedMonthStats = async (venueId: string, month: string): Promise<void> => {
+  await db.insert(screenhostMonthlyStats).values({
+    screenhostId: venueId,
+    month,
+    totalAudience: 900,
+    daily: [{ date: `${month}-15`, audience: 900 }],
+    peakDayOfWeek: 5,
+    peakHour: 18,
+  });
+};
+
+/** MONTH-SCOPED data via the proof leg: one VIDEO_ENDED proof received at `receivedAt`. */
+const seedProofAt = async (venueId: string, receivedAt: Date): Promise<void> => {
+  const advertiserId = await seedUser({ role: 'advertiser' });
+  const [creative] = await db
+    .insert(creatives)
+    .values({
+      advertiserId,
+      creativeType: 'video',
+      storageKey: `creatives/job/${seq}`,
+      durationSeconds: 10,
+      validationStatus: 'approved',
+    })
+    .returning();
+  const [campaign] = await db
+    .insert(campaigns)
+    .values({
+      advertiserId,
+      name: `Job campagne ${seq}`,
+      campaignType: 'standard',
+      status: 'active',
+      startDate: '2026-05-01',
+      endDate: '2026-05-31',
+      requestedBudget: '300',
+      creativeId: creative?.id ?? null,
+    })
+    .returning();
+  const [screen] = await db
+    .insert(screens)
+    .values({ screenhostId: venueId, name: 'Job TV' })
+    .returning();
+  await db.insert(proofOfPlay).values({
+    screenId: screen?.id ?? '',
+    screenhostId: venueId,
+    campaignId: campaign?.id ?? '',
+    creativeId: creative?.id ?? '',
+    videoIdAsSent: creative?.id ?? '',
+    eventType: 'VIDEO_ENDED',
+    playedDurationMs: 10_000,
+    receivedAt,
+  });
+};
+
+// 2026-07-08 UTC noon — Tunis July 8th; the previous closed month is June 2026, and the R2
+// catch-up window covers June, May and April.
 const NOW = new Date('2026-07-08T12:00:00Z');
+const MONTHS = ['2026-06', '2026-05', '2026-04'];
 
 afterAll(async () => {
   await sql.end();
@@ -138,6 +202,28 @@ describe('previousClosedMonth (Africa/Tunis month close)', () => {
   });
 });
 
+describe('lastClosedMonths (PERF-QA1 R2 — the bounded catch-up window)', () => {
+  it('returns the last 3 closed months with exact bounds, newest first', () => {
+    expect(lastClosedMonths(NOW, 3)).toEqual([
+      { month: '2026-06', from: '2026-06-01', to: '2026-06-30' },
+      { month: '2026-05', from: '2026-05-01', to: '2026-05-31' },
+      { month: '2026-04', from: '2026-04-01', to: '2026-04-30' },
+    ]);
+  });
+
+  it('walks across the year boundary', () => {
+    expect(lastClosedMonths(new Date('2026-02-10T12:00:00Z'), 3).map((m) => m.month)).toEqual([
+      '2026-01',
+      '2025-12',
+      '2025-11',
+    ]);
+  });
+
+  it('count 1 degenerates to previousClosedMonth alone', () => {
+    expect(lastClosedMonths(NOW, 1)).toEqual([previousClosedMonth(NOW)]);
+  });
+});
+
 describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
   beforeEach(async () => {
     await resetAuthTables();
@@ -147,15 +233,18 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
     vi.restoreAllMocks();
   });
 
-  it('generates + stores + notifies ONCE for a venue with data; the second tick is a no-op', async () => {
+  // R2-amendment pin (2): the previous closed month generates + notifies over the LIFETIME
+  // gates; data-less catch-up months are SKIPPED — a fresh venue never gets a backdated burst.
+  it('generates + notifies the PREVIOUS CLOSED month only; data-less catch-up months skip', async () => {
     const owner = await seedUser();
     const venue = await seedVenueWithData(owner, 'Café Mensuel');
     const upload = vi
       .spyOn(storage, 'upload')
-      .mockResolvedValue({ key: `reports/${venue}/2026-06.pdf` });
+      .mockImplementation(async (params) => ({ key: params.key }));
 
     const first = await runMonthlyReportSweep(silentLog, NOW);
-    expect(first).toEqual({ month: '2026-06', generated: 1, skipped: 0, failed: 0 });
+    expect(first).toEqual({ months: MONTHS, generated: 1, skipped: 2, failed: 0 });
+    expect(upload).toHaveBeenCalledTimes(1);
     expect(upload).toHaveBeenCalledWith(
       expect.objectContaining({
         key: `reports/${venue}/2026-06.pdf`,
@@ -167,9 +256,7 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
       .select()
       .from(screenhostMonthlyReports)
       .where(eq(screenhostMonthlyReports.screenhostId, venue));
-    expect(rows).toHaveLength(1);
-    expect(rows[0]?.month).toBe('2026-06');
-    expect(rows[0]?.storageKey).toBe(`reports/${venue}/2026-06.pdf`);
+    expect(rows.map((r) => r.month)).toEqual(['2026-06']);
 
     const notifs = await db.select().from(notifications).where(eq(notifications.userId, owner));
     expect(notifs).toHaveLength(1);
@@ -177,9 +264,9 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
     expect(notifs[0]?.body).toContain('juin 2026');
     expect(notifs[0]?.body).toContain('Café Mensuel');
 
-    // Second tick: idempotent — no new render, no new row, no second notification.
+    // Second tick: idempotent — no new render, no new rows, no second notification.
     const second = await runMonthlyReportSweep(silentLog, NOW);
-    expect(second).toEqual({ month: '2026-06', generated: 0, skipped: 1, failed: 0 });
+    expect(second).toEqual({ months: MONTHS, generated: 0, skipped: 3, failed: 0 });
     expect(
       await db
         .select()
@@ -191,6 +278,70 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
     ).toHaveLength(1);
   });
 
+  // R2-amendment pin (1): a missed month with REAL month-scoped data self-heals SILENTLY —
+  // it lands in the listing with its real generated_at, and produces ZERO notifications.
+  it('a missed month with month-scoped data catches up silently (zero notifications)', async () => {
+    const owner = await seedUser();
+    const venue = await seedVenueWithData(owner, 'Café Rattrapage');
+    vi.spyOn(storage, 'upload').mockImplementation(async (params) => ({ key: params.key }));
+    // June already generated (the normal path ran last month); May has REAL hub-pushed stats;
+    // April has nothing month-scoped.
+    await db
+      .insert(screenhostMonthlyReports)
+      .values({
+        screenhostId: venue,
+        month: '2026-06',
+        storageKey: `reports/${venue}/2026-06.pdf`,
+      });
+    await seedMonthStats(venue, '2026-05');
+
+    const result = await runMonthlyReportSweep(silentLog, NOW);
+    expect(result).toEqual({ months: MONTHS, generated: 1, skipped: 2, failed: 0 });
+    const rows = await db
+      .select()
+      .from(screenhostMonthlyReports)
+      .where(eq(screenhostMonthlyReports.screenhostId, venue));
+    expect(rows.map((r) => r.month).sort()).toEqual(['2026-05', '2026-06']);
+
+    // The catch-up is SILENT: no « rapport de mai est prêt » in July.
+    expect(
+      await db.select().from(notifications).where(eq(notifications.userId, owner)),
+    ).toHaveLength(0);
+  });
+
+  // R2 amendment — the proof leg of the month-scoped gate, on the TUNIS calendar: a proof at
+  // 23:30Z on May 31 is ALREADY June 1 in Tunis and must NOT qualify May.
+  it('a proof inside the month’s Tunis bounds qualifies it; a next-Tunis-month edge proof does not', async () => {
+    const ownerA = await seedUser();
+    const ownerB = await seedUser();
+    const venueA = await seedVenueWithData(ownerA, 'Café Preuve Mai');
+    const venueB = await seedVenueWithData(ownerB, 'Café Preuve Frontière');
+    vi.spyOn(storage, 'upload').mockImplementation(async (params) => ({ key: params.key }));
+    for (const venue of [venueA, venueB]) {
+      await db
+        .insert(screenhostMonthlyReports)
+        .values({
+          screenhostId: venue,
+          month: '2026-06',
+          storageKey: `reports/${venue}/2026-06.pdf`,
+        });
+    }
+    await seedProofAt(venueA, new Date('2026-05-15T12:00:00Z')); // May, Tunis and UTC alike
+    await seedProofAt(venueB, new Date('2026-05-31T23:30:00Z')); // June 1st 00:30 in Tunis
+
+    await runMonthlyReportSweep(silentLog, NOW);
+    const rowsA = await db
+      .select()
+      .from(screenhostMonthlyReports)
+      .where(eq(screenhostMonthlyReports.screenhostId, venueA));
+    expect(rowsA.map((r) => r.month).sort()).toEqual(['2026-05', '2026-06']);
+    const rowsB = await db
+      .select()
+      .from(screenhostMonthlyReports)
+      .where(eq(screenhostMonthlyReports.screenhostId, venueB));
+    expect(rowsB.map((r) => r.month)).toEqual(['2026-06']); // May NOT fabricated
+  });
+
   it('calls the AI pistes generator ONCE per generated report and freezes its output (R3)', async () => {
     const owner = await seedUser();
     await seedVenueWithData(owner, 'Café IA');
@@ -199,7 +350,7 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
 
     const result = await runMonthlyReportSweep(silentLog, NOW);
     expect(result.generated).toBe(1);
-    expect(pistesSpy).toHaveBeenCalledTimes(1); // once per report, at generation time
+    expect(pistesSpy).toHaveBeenCalledTimes(1); // once per generated report, at generation time
     const html = renderSpy.mock.calls[0]?.[0] ?? '';
     expect(html).toContain('Corps IA du créneau faible.'); // frozen into the stored PDF
     expect(html).toContain('Repérez vos angles morts'); // under the FIXED Piste 02 title
@@ -217,7 +368,7 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
     pistesSpy.mockRejectedValue(new Error('anthropic exploded'));
 
     const result = await runMonthlyReportSweep(silentLog, NOW);
-    expect(result).toEqual({ month: '2026-06', generated: 1, skipped: 0, failed: 0 });
+    expect(result).toEqual({ months: MONTHS, generated: 1, skipped: 2, failed: 0 });
     const html = renderSpy.mock.calls[0]?.[0] ?? '';
     expect(html).toContain('Comparez vos créneaux les plus forts'); // the generic body carried the report
     expect(
@@ -234,7 +385,7 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
     vi.spyOn(storage, 'upload').mockResolvedValue({ key: 'unused' });
 
     const result = await runMonthlyReportSweep(silentLog, NOW);
-    expect(result).toEqual({ month: '2026-06', generated: 0, skipped: 0, failed: 0 });
+    expect(result).toEqual({ months: MONTHS, generated: 0, skipped: 0, failed: 0 });
     expect(await db.select().from(screenhostMonthlyReports)).toHaveLength(0);
   });
 
@@ -249,9 +400,9 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
     );
 
     const result = await runMonthlyReportSweep(silentLog, NOW);
-    expect(result.month).toBe('2026-06');
-    expect(result.generated).toBe(1);
-    expect(result.failed).toBe(1);
+    expect(result.months).toEqual(MONTHS);
+    expect(result.generated).toBe(1); // venueB — its previous closed month
+    expect(result.failed).toBe(1); // venueA — the June failure never starves venueB
 
     expect(
       await db
