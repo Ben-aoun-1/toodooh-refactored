@@ -130,4 +130,9 @@ export const performanceService = {
       `/screenhosts/${screenhostId}/pistes?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
     );
   },
+
+  /** PERF-QA1 R11 — GET /playout-summary: all-time Σ played_duration_ms, session-scoped. */
+  getPlayoutSummary(): Promise<{ total_played_ms: number }> {
+    return apiClient.get<{ total_played_ms: number }>('/screenhosts/playout-summary');
+  },
 };

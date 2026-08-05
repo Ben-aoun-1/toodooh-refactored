@@ -13,10 +13,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { logger } from '@/lib/logger';
 
+import { useVenueReports } from '../hooks/usePerformanceReads';
 import { useScreenhostAffluence } from '../hooks/useScreenhostAffluence';
 import { useScreenhostsMine } from '../hooks/useScreenhostsMine';
 import { DAY_LABELS, DAY_LABELS_SHORT, formatHour, summarize } from '../lib/affluence-grid';
-import { downloadMonthlyReport, lastCompleteMonth } from '../lib/monthly-report';
+import { downloadMonthlyReport } from '../lib/monthly-report';
+import { monthLabelFr } from '../lib/performance-period';
+import { ReportDownloadError, reportErrorMessageFr } from '../lib/period-report';
 
 const log = logger.child({ module: 'OwnerAffluenceSection' });
 
@@ -51,8 +54,19 @@ export function OwnerAffluenceSection() {
   const summary = useMemo(() => summarize(grid), [grid]);
 
   // Monthly-report download (SEPARATE table from affluence — gated on selectedId only, never on
-  // affluence has_data). Default to the last complete calendar month to maximise the hit rate.
-  const [month, setMonth] = useState(() => lastCompleteMonth());
+  // affluence has_data). PERF-QA1 R1 — the free <input type=month> guess is REPLACED by the
+  // generated-reports LISTING: only months a report actually exists for are offered, defaulting
+  // to the newest.
+  const reports = useVenueReports(selectedId);
+  const reportRows = useMemo(() => reports.data?.reports ?? [], [reports.data]);
+  const [month, setMonth] = useState<string | null>(null);
+  useEffect(() => {
+    // Default to the newest generated report; re-resolve when the venue (hence the listing)
+    // changes or the selected month is no longer offered.
+    if (month === null || !reportRows.some((r) => r.month === month)) {
+      setMonth(reportRows[0]?.month ?? null);
+    }
+  }, [reportRows, month]);
   const [downloading, setDownloading] = useState(false);
   const [reportNotice, setReportNotice] = useState<{ kind: 'info' | 'error'; text: string } | null>(
     null,
@@ -65,7 +79,7 @@ export function OwnerAffluenceSection() {
   }, [selectedId]);
 
   const handleDownloadReport = async () => {
-    if (!selectedId || downloading) return;
+    if (!selectedId || !month || downloading) return;
     setReportNotice(null);
     setDownloading(true);
     try {
@@ -75,7 +89,11 @@ export function OwnerAffluenceSection() {
       }
     } catch (err) {
       log.error({ err }, 'monthly report download failed');
-      setReportNotice({ kind: 'error', text: 'Échec du téléchargement. Veuillez réessayer.' });
+      // PERF-QA1 R4 — per-class copy (storage vs render vs generic), never one blind toast.
+      setReportNotice({
+        kind: 'error',
+        text: reportErrorMessageFr(err instanceof ReportDownloadError ? err.code : null),
+      });
     } finally {
       setDownloading(false);
     }
@@ -104,25 +122,35 @@ export function OwnerAffluenceSection() {
         <div>
           <h2 className="text-xl font-semibold text-brand-deep">Votre audience</h2>
           <p className="text-sm text-gray-500">
-            Le profil d’affluence type de votre établissement, par jour et par heure.
+            Votre semaine type (moyenne glissante sur les 4 dernières semaines), par jour et par
+            heure.
           </p>
         </div>
 
         {selectedId && (
           <div className="flex flex-col gap-1 sm:items-end">
             <div className="flex items-center gap-2">
-              <input
-                type="month"
-                value={month}
-                max={lastCompleteMonth()}
-                onChange={(e) => setMonth(e.target.value)}
+              <select
+                value={month ?? ''}
+                onChange={(e) => setMonth(e.target.value || null)}
+                disabled={reportRows.length === 0}
                 aria-label="Mois du rapport mensuel"
-                className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary"
-              />
+                className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {reportRows.length === 0 ? (
+                  <option value="">Aucun rapport généré</option>
+                ) : (
+                  reportRows.map((r) => (
+                    <option key={r.month} value={r.month}>
+                      {monthLabelFr(r.month)}
+                    </option>
+                  ))
+                )}
+              </select>
               <button
                 type="button"
                 onClick={handleDownloadReport}
-                disabled={downloading}
+                disabled={downloading || !month}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-brand-deep px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-deep/90 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary"
               >
                 {downloading ? (

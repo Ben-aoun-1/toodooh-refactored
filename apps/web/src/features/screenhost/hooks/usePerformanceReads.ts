@@ -71,3 +71,12 @@ export function useVenuePistes(screenhostId: string | null, from: string, to: st
     enabled: Boolean(screenhostId),
   });
 }
+
+/** PERF-QA1 R11 — session-scoped all-time playout summary (`userId` only keys the cache). */
+export function useOwnerPlayoutSummary(userId: string | undefined) {
+  return useQuery({
+    queryKey: screenhostKeys.playoutSummary(userId ?? ''),
+    queryFn: () => performanceService.getPlayoutSummary(),
+    enabled: Boolean(userId),
+  });
+}

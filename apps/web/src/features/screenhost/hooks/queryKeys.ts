@@ -73,4 +73,7 @@ export const screenhostKeys = {
   /** PERF-QA1 R5 — a venue's S07 pistes over the active period (GET /:id/pistes?from&to). */
   pistes: (screenhostId: string, from: string, to: string) =>
     [...screenhostKeys.all, 'pistes', screenhostId, from, to] as const,
+
+  /** PERF-QA1 R11 — the owner's all-time playout summary (GET /playout-summary). */
+  playoutSummary: (userId: string) => [...screenhostKeys.all, 'playoutSummary', userId] as const,
 };
