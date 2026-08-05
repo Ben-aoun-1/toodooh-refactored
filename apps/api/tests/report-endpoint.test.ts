@@ -112,13 +112,28 @@ describe('GET /api/screenhosts/:id/report (period report, real Postgres)', () =>
     expect((await report(foreign, 'from=2026-06-01&to=2026-06-30')).statusCode).toBe(404);
   });
 
-  it('400 on malformed, reversed or over-400-day ranges', async () => {
+  it('400 INVALID_INPUT on malformed or reversed ranges', async () => {
     const me = await seedUser();
     const sh = await seedScreenhost(me);
     mockSession(me);
-    expect((await report(sh, 'from=juin&to=2026-06-30')).statusCode).toBe(400);
-    expect((await report(sh, 'from=2026-06-30&to=2026-06-01')).statusCode).toBe(400);
-    expect((await report(sh, 'from=2025-01-01&to=2026-06-30')).statusCode).toBe(400);
+    const malformed = await report(sh, 'from=juin&to=2026-06-30');
+    expect(malformed.statusCode).toBe(400);
+    expect(malformed.json<{ error: string }>().error).toBe('INVALID_INPUT');
+    const reversed = await report(sh, 'from=2026-06-30&to=2026-06-01');
+    expect(reversed.statusCode).toBe(400);
+    expect(reversed.json<{ error: string }>().error).toBe('INVALID_INPUT');
+  });
+
+  // PERF-QA1 R4 — the CONFIRMED Mejri repro: « Depuis le début » resolves from 2020-01-01, blows
+  // the 400-day bound, and the old client showed the generic « Échec du téléchargement ». The
+  // too-wide class now has its OWN code so the web can say what actually happened.
+  it('an over-400-day range (« Depuis le début » repro) is a DISTINCT 400 RANGE_TOO_WIDE', async () => {
+    const me = await seedUser();
+    const sh = await seedScreenhost(me);
+    mockSession(me);
+    const res = await report(sh, 'from=2020-01-01&to=2026-08-05');
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ error: string }>().error).toBe('RANGE_TOO_WIDE');
   });
 
   it('streams the rendered PDF for the owner (live render, ephemeral)', async () => {
@@ -128,7 +143,10 @@ describe('GET /api/screenhosts/:id/report (period report, real Postgres)', () =>
     const res = await report(sh, 'from=2026-06-01&to=2026-06-30');
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toContain('application/pdf');
-    expect(res.headers['content-disposition']).toContain('rapport-2026-06-01_2026-06-30.pdf');
+    // PERF-QA1 R3 — the filename carries the venue slug ('Café Période' → 'cafe-periode').
+    expect(res.headers['content-disposition']).toContain(
+      'rapport-cafe-periode-2026-06-01_2026-06-30.pdf',
+    );
     expect(res.rawPayload.subarray(0, 5).toString('latin1')).toBe('%PDF-');
     expect(renderSpy).toHaveBeenCalledTimes(1);
     // The rendered HTML is the report template over THIS venue's data.

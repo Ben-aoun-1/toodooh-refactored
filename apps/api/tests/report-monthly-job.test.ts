@@ -11,6 +11,7 @@ import {
   users,
 } from '../src/db/schema.js';
 import {
+  lastClosedMonths,
   monthBounds,
   previousClosedMonth,
   runMonthlyReportSweep,
@@ -82,8 +83,10 @@ const seedVenueWithData = async (ownerId: string, name: string): Promise<string>
   return id;
 };
 
-// 2026-07-08 UTC noon — Tunis July 8th; the previous closed month is June 2026.
+// 2026-07-08 UTC noon — Tunis July 8th; the previous closed month is June 2026, and the R2
+// catch-up window covers June, May and April.
 const NOW = new Date('2026-07-08T12:00:00Z');
+const MONTHS = ['2026-06', '2026-05', '2026-04'];
 
 afterAll(async () => {
   await sql.end();
@@ -138,6 +141,28 @@ describe('previousClosedMonth (Africa/Tunis month close)', () => {
   });
 });
 
+describe('lastClosedMonths (PERF-QA1 R2 — the bounded catch-up window)', () => {
+  it('returns the last 3 closed months with exact bounds, newest first', () => {
+    expect(lastClosedMonths(NOW, 3)).toEqual([
+      { month: '2026-06', from: '2026-06-01', to: '2026-06-30' },
+      { month: '2026-05', from: '2026-05-01', to: '2026-05-31' },
+      { month: '2026-04', from: '2026-04-01', to: '2026-04-30' },
+    ]);
+  });
+
+  it('walks across the year boundary', () => {
+    expect(lastClosedMonths(new Date('2026-02-10T12:00:00Z'), 3).map((m) => m.month)).toEqual([
+      '2026-01',
+      '2025-12',
+      '2025-11',
+    ]);
+  });
+
+  it('count 1 degenerates to previousClosedMonth alone', () => {
+    expect(lastClosedMonths(NOW, 1)).toEqual([previousClosedMonth(NOW)]);
+  });
+});
+
 describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
   beforeEach(async () => {
     await resetAuthTables();
@@ -147,48 +172,79 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
     vi.restoreAllMocks();
   });
 
-  it('generates + stores + notifies ONCE for a venue with data; the second tick is a no-op', async () => {
+  it('generates + stores + notifies ONCE per catch-up month; the second tick is a no-op', async () => {
     const owner = await seedUser();
     const venue = await seedVenueWithData(owner, 'Café Mensuel');
     const upload = vi
       .spyOn(storage, 'upload')
-      .mockResolvedValue({ key: `reports/${venue}/2026-06.pdf` });
+      .mockImplementation(async (params) => ({ key: params.key }));
 
+    // R2 — a venue with data and NO reports gets all 3 catch-up months in one tick.
     const first = await runMonthlyReportSweep(silentLog, NOW);
-    expect(first).toEqual({ month: '2026-06', generated: 1, skipped: 0, failed: 0 });
-    expect(upload).toHaveBeenCalledWith(
-      expect.objectContaining({
-        key: `reports/${venue}/2026-06.pdf`,
-        contentType: 'application/pdf',
-      }),
-    );
+    expect(first).toEqual({ months: MONTHS, generated: 3, skipped: 0, failed: 0 });
+    for (const month of MONTHS) {
+      expect(upload).toHaveBeenCalledWith(
+        expect.objectContaining({
+          key: `reports/${venue}/${month}.pdf`,
+          contentType: 'application/pdf',
+        }),
+      );
+    }
 
     const rows = await db
       .select()
       .from(screenhostMonthlyReports)
       .where(eq(screenhostMonthlyReports.screenhostId, venue));
-    expect(rows).toHaveLength(1);
-    expect(rows[0]?.month).toBe('2026-06');
-    expect(rows[0]?.storageKey).toBe(`reports/${venue}/2026-06.pdf`);
+    expect(rows.map((r) => r.month).sort()).toEqual(['2026-04', '2026-05', '2026-06']);
+    expect(rows.find((r) => r.month === '2026-06')?.storageKey).toBe(
+      `reports/${venue}/2026-06.pdf`,
+    );
 
     const notifs = await db.select().from(notifications).where(eq(notifications.userId, owner));
-    expect(notifs).toHaveLength(1);
-    expect(notifs[0]?.type).toBe('monthly_report_ready');
-    expect(notifs[0]?.body).toContain('juin 2026');
-    expect(notifs[0]?.body).toContain('Café Mensuel');
+    expect(notifs).toHaveLength(3);
+    expect(new Set(notifs.map((n) => n.type))).toEqual(new Set(['monthly_report_ready']));
+    const bodies = notifs.map((n) => n.body ?? '').join('\n');
+    expect(bodies).toContain('juin 2026');
+    expect(bodies).toContain('mai 2026');
+    expect(bodies).toContain('avril 2026');
+    expect(bodies).toContain('Café Mensuel');
 
-    // Second tick: idempotent — no new render, no new row, no second notification.
+    // Second tick: idempotent — no new render, no new rows, no second notification.
     const second = await runMonthlyReportSweep(silentLog, NOW);
-    expect(second).toEqual({ month: '2026-06', generated: 0, skipped: 1, failed: 0 });
+    expect(second).toEqual({ months: MONTHS, generated: 0, skipped: 3, failed: 0 });
     expect(
       await db
         .select()
         .from(screenhostMonthlyReports)
         .where(eq(screenhostMonthlyReports.screenhostId, venue)),
-    ).toHaveLength(1);
+    ).toHaveLength(3);
     expect(
       await db.select().from(notifications).where(eq(notifications.userId, owner)),
-    ).toHaveLength(1);
+    ).toHaveLength(3);
+  });
+
+  // R2 — the catch-up heart: a month the sweep MISSED (api down over a month boundary…) is
+  // generated on the next tick, months that exist are skipped, and only the NEW month notifies.
+  it('a missed middle month self-heals; existing months are skipped and not re-notified', async () => {
+    const owner = await seedUser();
+    const venue = await seedVenueWithData(owner, 'Café Rattrapage');
+    vi.spyOn(storage, 'upload').mockImplementation(async (params) => ({ key: params.key }));
+    await db.insert(screenhostMonthlyReports).values([
+      { screenhostId: venue, month: '2026-06', storageKey: `reports/${venue}/2026-06.pdf` },
+      { screenhostId: venue, month: '2026-04', storageKey: `reports/${venue}/2026-04.pdf` },
+    ]);
+
+    const result = await runMonthlyReportSweep(silentLog, NOW);
+    expect(result).toEqual({ months: MONTHS, generated: 1, skipped: 2, failed: 0 });
+    const rows = await db
+      .select()
+      .from(screenhostMonthlyReports)
+      .where(eq(screenhostMonthlyReports.screenhostId, venue));
+    expect(rows.map((r) => r.month).sort()).toEqual(['2026-04', '2026-05', '2026-06']);
+
+    const notifs = await db.select().from(notifications).where(eq(notifications.userId, owner));
+    expect(notifs).toHaveLength(1);
+    expect(notifs[0]?.body).toContain('mai 2026');
   });
 
   it('calls the AI pistes generator ONCE per generated report and freezes its output (R3)', async () => {
@@ -198,8 +254,8 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
     pistesSpy.mockResolvedValue('Corps IA du créneau faible.');
 
     const result = await runMonthlyReportSweep(silentLog, NOW);
-    expect(result.generated).toBe(1);
-    expect(pistesSpy).toHaveBeenCalledTimes(1); // once per report, at generation time
+    expect(result.generated).toBe(3);
+    expect(pistesSpy).toHaveBeenCalledTimes(3); // once per generated report, at generation time
     const html = renderSpy.mock.calls[0]?.[0] ?? '';
     expect(html).toContain('Corps IA du créneau faible.'); // frozen into the stored PDF
     expect(html).toContain('Repérez vos angles morts'); // under the FIXED Piste 02 title
@@ -207,7 +263,7 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
 
     // idempotent second tick: no new report → no new generation either
     await runMonthlyReportSweep(silentLog, NOW);
-    expect(pistesSpy).toHaveBeenCalledTimes(1);
+    expect(pistesSpy).toHaveBeenCalledTimes(3);
   });
 
   it('a generator failure NEVER fails the report — it still stores, with the generic Piste 02 body (R3)', async () => {
@@ -217,7 +273,7 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
     pistesSpy.mockRejectedValue(new Error('anthropic exploded'));
 
     const result = await runMonthlyReportSweep(silentLog, NOW);
-    expect(result).toEqual({ month: '2026-06', generated: 1, skipped: 0, failed: 0 });
+    expect(result).toEqual({ months: MONTHS, generated: 3, skipped: 0, failed: 0 });
     const html = renderSpy.mock.calls[0]?.[0] ?? '';
     expect(html).toContain('Comparez vos créneaux les plus forts'); // the generic body carried the report
     expect(
@@ -225,7 +281,7 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
         .select()
         .from(screenhostMonthlyReports)
         .where(eq(screenhostMonthlyReports.screenhostId, venue)),
-    ).toHaveLength(1);
+    ).toHaveLength(3);
   });
 
   it('a venue with NO data is not a candidate at all', async () => {
@@ -234,7 +290,7 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
     vi.spyOn(storage, 'upload').mockResolvedValue({ key: 'unused' });
 
     const result = await runMonthlyReportSweep(silentLog, NOW);
-    expect(result).toEqual({ month: '2026-06', generated: 0, skipped: 0, failed: 0 });
+    expect(result).toEqual({ months: MONTHS, generated: 0, skipped: 0, failed: 0 });
     expect(await db.select().from(screenhostMonthlyReports)).toHaveLength(0);
   });
 
@@ -249,9 +305,9 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
     );
 
     const result = await runMonthlyReportSweep(silentLog, NOW);
-    expect(result.month).toBe('2026-06');
-    expect(result.generated).toBe(1);
-    expect(result.failed).toBe(1);
+    expect(result.months).toEqual(MONTHS);
+    expect(result.generated).toBe(3); // venueB — all three catch-up months
+    expect(result.failed).toBe(3); // venueA — fails per month, never starves venueB
 
     expect(
       await db
@@ -264,6 +320,6 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
         .select()
         .from(screenhostMonthlyReports)
         .where(eq(screenhostMonthlyReports.screenhostId, venueB)),
-    ).toHaveLength(1);
+    ).toHaveLength(3);
   });
 });
