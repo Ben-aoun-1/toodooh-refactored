@@ -221,6 +221,9 @@ describe('screenhost earnings read (owner-scoped, real Postgres)', () => {
       delivered_imp: 5000,
       earnings_tnd: 50.25,
     });
+    // NET-IMP1 — display_imp rides every line: affichées = prédites − perdues, which for a
+    // settled row converges to delivered (no manquement here → equals expected too).
+    expect((winter as unknown as Record<string, unknown>)['display_imp']).toBe(5000);
   });
 
   it('Lane F additivity: lines gain campaign_start/_end/_type/_status; the OLD keys are unchanged', async () => {
@@ -266,6 +269,9 @@ describe('screenhost earnings read (owner-scoped, real Postgres)', () => {
       campaign_type: 'standard',
       campaign_status: 'active',
     });
+    // NET-IMP1 additive key — a settled row with manquement: affichées = 10000 − 2000 = 8000,
+    // reconcile's own identity (= delivered, NEVER raw expected).
+    expect(line).toMatchObject({ display_imp: 8000 });
     // The FULL key set is pinned — an accidental rename/removal of an old key fails here.
     expect(Object.keys(line).sort()).toEqual([
       'campaign_end',
@@ -275,6 +281,7 @@ describe('screenhost earnings read (owner-scoped, real Postgres)', () => {
       'campaign_status',
       'campaign_type',
       'delivered_imp',
+      'display_imp',
       'earnings_tnd',
       'expected_imp',
       'reconciled_at',

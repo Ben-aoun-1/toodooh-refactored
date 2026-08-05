@@ -6,9 +6,9 @@ describe('ownerKpiFrom (R11 — Dashboard tiles from real wires)', () => {
   it('counts DISTINCT campaigns, sums impressions through the R10 home, floors ms→s', () => {
     const kpi = ownerKpiFrom(
       [
-        { campaign_id: 'a', delivered_imp: 800 },
-        { campaign_id: 'a', delivered_imp: 150 }, // same campaign on a second venue
-        { campaign_id: 'b', delivered_imp: 50 },
+        { campaign_id: 'a', display_imp: 800 },
+        { campaign_id: 'a', display_imp: 150 }, // same campaign on a second venue
+        { campaign_id: 'b', display_imp: 50 },
       ],
       4500,
     );

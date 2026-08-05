@@ -26,6 +26,8 @@ export interface PerformanceEarningsLine {
   screenhost_name: string;
   expected_imp: number;
   delivered_imp: number;
+  /** NET-IMP1 — « affichées = prédites − perdues », computed api-side (the ONE display home). */
+  display_imp: number;
   earnings_tnd: number;
   reconciled_at: string;
   campaign_start: string | null;
