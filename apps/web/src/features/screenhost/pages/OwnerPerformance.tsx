@@ -54,6 +54,7 @@ import {
   lineInPeriod,
   linesEndingInMonth,
   openHours,
+  venueReadsState,
   zeroFillDays,
 } from '../lib/performance-derive';
 import {
@@ -308,12 +309,19 @@ export default function OwnerPerformance() {
     ? `Le PDF couvrira la période du ${formatDateFr(reportRange.range.from)} au ${formatDateFr(reportRange.range.to)} (fenêtre de rapport : 400 derniers jours).`
     : null;
 
-  const anyError =
-    profile.isError ||
-    monthlyStats.isError ||
-    impressions.isError ||
-    earnings.isError ||
-    reports.isError;
+  // INV-1 — the surface gate: sections (and the first-data flags they read) render only from
+  // SETTLED per-venue reads. A pending or failed read otherwise collapses to `?? []` defaults
+  // and masquerades as « En attente du premier deal » / « Aucun rapport généré ». sps/pistes
+  // stay outside the gate — their sections carry their own inline error states.
+  const perfReads = [profile, monthlyStats, impressions, earnings, affluence, reports];
+  const readsState = venueReadsState(
+    perfReads.map((r) => ({ pending: r.isPending, error: r.isError })),
+  );
+  const retryFailedReads = () => {
+    for (const read of perfReads) {
+      if (read.isError) void read.refetch();
+    }
+  };
 
   return (
     <div className="perf-page min-h-screen bg-perf-page">
@@ -374,106 +382,124 @@ export default function OwnerPerformance() {
                     </div>
                   )}
 
-                  {anyError && (
-                    <p className="mt-4 text-sm font-medium text-rose-500">
-                      Impossible de charger les performances pour le moment.
-                    </p>
+                  {readsState === 'error' ? (
+                    <div className="mt-7 rounded-xl border border-rose-200 bg-rose-50/60 px-6 py-14 text-center">
+                      <p className="text-sm font-medium text-rose-600">
+                        Impossible de charger les performances pour le moment.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={retryFailedReads}
+                        className="mt-4 rounded-full border border-rose-300 bg-white px-5 py-2 text-[13px] font-semibold text-rose-600 transition-colors hover:bg-rose-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+                      >
+                        Réessayer
+                      </button>
+                    </div>
+                  ) : readsState === 'loading' ? (
+                    <div className="flex items-center justify-center gap-2 py-16 text-perf-mist">
+                      <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+                      <span className="text-sm">Chargement…</span>
+                    </div>
+                  ) : (
+                    <>
+                      <MonthlyReportCard
+                        latestMonth={latestMonth}
+                        generatedAtLabel={
+                          latestReport ? formatGeneratedAtFr(latestReport.generated_at) : null
+                        }
+                        monthImpressions={
+                          latestMonth ? impressionsOfMonth(days, latestMonth.month) : 0
+                        }
+                        campaignsCount={
+                          latestMonth ? linesEndingInMonth(venueLines, latestMonth.month).length : 0
+                        }
+                        hasHostData={hostHasData}
+                        hasCastData={castHasData}
+                        onConsult={() => latestMonth && consultMonth(latestMonth.month)}
+                        onDownload={() => latestMonth && void downloadMonth(latestMonth.month)}
+                        downloading={downloading}
+                      />
+
+                      <ReportsHistorySection
+                        rows={historyRows}
+                        onConsult={consultMonth}
+                        onDownload={(month) => void downloadMonth(month)}
+                      />
+
+                      <ProgressHero
+                        revenueTotal={revenueTotal}
+                        revenueSeries={revenueSeries}
+                        audienceTotal={audienceTotal}
+                        audienceSeries={audienceSeries}
+                        hasHostData={hostHasData}
+                        hasCastData={castHasData}
+                      />
+
+                      <PeriodFilters
+                        active={period}
+                        onSelect={setPeriod}
+                        customFrom={customFrom}
+                        customTo={customTo}
+                        onCustomFromChange={setCustomFrom}
+                        onCustomToChange={setCustomTo}
+                        onApplyCustom={() => setAppliedCustom({ from: customFrom, to: customTo })}
+                      />
+
+                      <ReportIntro
+                        venueName={venues.find((v) => v.id === selectedId)?.name ?? '—'}
+                        range={range}
+                        category={category}
+                        campaignsCount={periodLines.length}
+                        hasCastData={castHasData}
+                      />
+
+                      <AudienceKpisSection
+                        kpis={kpis}
+                        hasHostData={hostHasData}
+                        hoursEstimated={hoursInfo.estimated}
+                      />
+
+                      <PeakHoursHeatmap
+                        grid={affluenceGrid}
+                        openingHour={profile.data?.opening_hour ?? null}
+                        closingHour={profile.data?.closing_hour ?? null}
+                      />
+
+                      <ImpressionsChartSection days={periodDays} hasCastData={castHasData} />
+
+                      <DemographicsSection
+                        breakdown={breakdown}
+                        category={category}
+                        hasHostData={hostHasData}
+                      />
+
+                      <RevenueSection
+                        total={periodLines.reduce((sum, l) => sum + l.earnings_tnd, 0)}
+                        count={periodLines.length}
+                        rows={revenueRows}
+                        hasCastData={castHasData}
+                      />
+
+                      <CampaignsSection
+                        count={periodLines.length}
+                        cumulativeImpressions={cumulativeImpressions}
+                        top3={top3}
+                        rows={campaignRows}
+                        hasCastData={castHasData}
+                      />
+
+                      <OptimisationSection pistes={pistes.data?.pistes} isError={pistes.isError} />
+
+                      <SpsSection sps={sps.data} isError={sps.isError} />
+
+                      <DownloadCta
+                        hasData={hostHasData || castHasData}
+                        downloading={downloading}
+                        onDownload={() => void downloadPeriod()}
+                        clampNote={clampNote}
+                      />
+                    </>
                   )}
-
-                  <MonthlyReportCard
-                    latestMonth={latestMonth}
-                    generatedAtLabel={
-                      latestReport ? formatGeneratedAtFr(latestReport.generated_at) : null
-                    }
-                    monthImpressions={latestMonth ? impressionsOfMonth(days, latestMonth.month) : 0}
-                    campaignsCount={
-                      latestMonth ? linesEndingInMonth(venueLines, latestMonth.month).length : 0
-                    }
-                    hasHostData={hostHasData}
-                    hasCastData={castHasData}
-                    onConsult={() => latestMonth && consultMonth(latestMonth.month)}
-                    onDownload={() => latestMonth && void downloadMonth(latestMonth.month)}
-                    downloading={downloading}
-                  />
-
-                  <ReportsHistorySection
-                    rows={historyRows}
-                    onConsult={consultMonth}
-                    onDownload={(month) => void downloadMonth(month)}
-                  />
-
-                  <ProgressHero
-                    revenueTotal={revenueTotal}
-                    revenueSeries={revenueSeries}
-                    audienceTotal={audienceTotal}
-                    audienceSeries={audienceSeries}
-                    hasHostData={hostHasData}
-                    hasCastData={castHasData}
-                  />
-
-                  <PeriodFilters
-                    active={period}
-                    onSelect={setPeriod}
-                    customFrom={customFrom}
-                    customTo={customTo}
-                    onCustomFromChange={setCustomFrom}
-                    onCustomToChange={setCustomTo}
-                    onApplyCustom={() => setAppliedCustom({ from: customFrom, to: customTo })}
-                  />
-
-                  <ReportIntro
-                    venueName={venues.find((v) => v.id === selectedId)?.name ?? '—'}
-                    range={range}
-                    category={category}
-                    campaignsCount={periodLines.length}
-                    hasCastData={castHasData}
-                  />
-
-                  <AudienceKpisSection
-                    kpis={kpis}
-                    hasHostData={hostHasData}
-                    hoursEstimated={hoursInfo.estimated}
-                  />
-
-                  <PeakHoursHeatmap
-                    grid={affluenceGrid}
-                    openingHour={profile.data?.opening_hour ?? null}
-                    closingHour={profile.data?.closing_hour ?? null}
-                  />
-
-                  <ImpressionsChartSection days={periodDays} hasCastData={castHasData} />
-
-                  <DemographicsSection
-                    breakdown={breakdown}
-                    category={category}
-                    hasHostData={hostHasData}
-                  />
-
-                  <RevenueSection
-                    total={periodLines.reduce((sum, l) => sum + l.earnings_tnd, 0)}
-                    count={periodLines.length}
-                    rows={revenueRows}
-                    hasCastData={castHasData}
-                  />
-
-                  <CampaignsSection
-                    count={periodLines.length}
-                    cumulativeImpressions={cumulativeImpressions}
-                    top3={top3}
-                    rows={campaignRows}
-                    hasCastData={castHasData}
-                  />
-
-                  <OptimisationSection pistes={pistes.data?.pistes} isError={pistes.isError} />
-
-                  <SpsSection sps={sps.data} isError={sps.isError} />
-
-                  <DownloadCta
-                    hasData={hostHasData || castHasData}
-                    downloading={downloading}
-                    onDownload={() => void downloadPeriod()}
-                    clampNote={clampNote}
-                  />
                 </>
               )}
             </div>

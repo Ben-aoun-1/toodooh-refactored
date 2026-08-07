@@ -17,7 +17,7 @@ import { useVenueReports } from '../hooks/usePerformanceReads';
 import { useScreenhostAffluence } from '../hooks/useScreenhostAffluence';
 import { useScreenhostsMine } from '../hooks/useScreenhostsMine';
 import { DAY_LABELS, DAY_LABELS_SHORT, formatHour, summarize } from '../lib/affluence-grid';
-import { downloadMonthlyReport } from '../lib/monthly-report';
+import { downloadMonthlyReport, reportSelectState } from '../lib/monthly-report';
 import { monthLabelFr } from '../lib/performance-period';
 import { ReportDownloadError, reportErrorMessageFr } from '../lib/period-report';
 
@@ -59,6 +59,13 @@ export function OwnerAffluenceSection() {
   // to the newest.
   const reports = useVenueReports(selectedId);
   const reportRows = useMemo(() => reports.data?.reports ?? [], [reports.data]);
+  // INV-1 — « Aucun rapport généré » is reserved for a SETTLED empty listing; a pending or
+  // failed listing says so instead of masquerading as pre-first-data.
+  const reportsState = reportSelectState({
+    pending: reports.isPending,
+    error: reports.isError,
+    count: reportRows.length,
+  });
   const [month, setMonth] = useState<string | null>(null);
   useEffect(() => {
     // Default to the newest generated report; re-resolve when the venue (hence the listing)
@@ -133,11 +140,15 @@ export function OwnerAffluenceSection() {
               <select
                 value={month ?? ''}
                 onChange={(e) => setMonth(e.target.value || null)}
-                disabled={reportRows.length === 0}
+                disabled={reportsState !== 'ready'}
                 aria-label="Mois du rapport mensuel"
                 className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {reportRows.length === 0 ? (
+                {reportsState === 'loading' ? (
+                  <option value="">Chargement des rapports…</option>
+                ) : reportsState === 'error' ? (
+                  <option value="">Rapports indisponibles</option>
+                ) : reportsState === 'empty' ? (
                   <option value="">Aucun rapport généré</option>
                 ) : (
                   reportRows.map((r) => (

@@ -18,6 +18,7 @@ import {
   linesEndingInMonth,
   openHours,
   quantileThresholds,
+  venueReadsState,
   zeroFillDays,
 } from './performance-derive';
 
@@ -313,5 +314,31 @@ describe('zeroFillDays — the R8 pin (her 26/06 case)', () => {
       { date: '2026-06-27', impressions: 0 },
       { date: '2026-06-28', impressions: 0 },
     ]);
+  });
+});
+
+describe('venueReadsState — the INV-1 surface gate', () => {
+  const ok = { pending: false, error: false };
+
+  it('ready only when EVERY read settled successfully', () => {
+    expect(venueReadsState([ok, ok, ok])).toBe('ready');
+    expect(venueReadsState([])).toBe('ready');
+  });
+
+  it('any pending read gates the surfaces behind the loader — never pre-first-data copy', () => {
+    expect(venueReadsState([ok, { pending: true, error: false }, ok])).toBe('loading');
+  });
+
+  it('any failed read is an ERROR state — never pre-first-data copy (the 2026-08-07 incident)', () => {
+    expect(venueReadsState([ok, ok, { pending: false, error: true }])).toBe('error');
+  });
+
+  it('error outranks loading so the retry affordance is never hidden behind a spinner', () => {
+    expect(
+      venueReadsState([
+        { pending: true, error: false },
+        { pending: false, error: true },
+      ]),
+    ).toBe('error');
   });
 });

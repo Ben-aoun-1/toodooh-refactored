@@ -299,3 +299,25 @@ export function categoryLabel(
   const classLabel = venueClass.charAt(0).toUpperCase() + venueClass.slice(1);
   return `${sector} · ${classLabel}`;
 }
+
+/** INV-1 — one per-venue read's lifecycle as the page consumes it (React Query v5 vocabulary). */
+export interface VenueReadStatus {
+  pending: boolean;
+  error: boolean;
+}
+
+export type VenueReadsState = 'loading' | 'error' | 'ready';
+
+/**
+ * INV-1 — the gate over the per-venue reads feeding the performance surfaces: the sections and
+ * their first-data flags (`hasHostData`/`hasCastData`) may only render from SETTLED data. A
+ * failed or still-pending read otherwise collapses to `?? []` defaults and masquerades as
+ * « En attente du premier deal » / « Aucun rapport généré » — the 2026-08-07 incident, where a
+ * degraded api held the reads for minutes and both owner surfaces lied pre-first-data. Error
+ * outranks loading so the retry affordance is never hidden behind a spinner.
+ */
+export function venueReadsState(reads: VenueReadStatus[]): VenueReadsState {
+  if (reads.some((r) => r.error)) return 'error';
+  if (reads.some((r) => r.pending)) return 'loading';
+  return 'ready';
+}
