@@ -100,10 +100,24 @@ export interface SweepResult {
   generated: number;
   skipped: number;
   failed: number;
+  /** INV-1 — expensive-path entries this tick (assemble + AI + render), successes AND failures. */
+  attempts: number;
+  /** INV-1 — true when the attempt cap ended the tick early; idempotency resumes next tick. */
+  capped: boolean;
 }
 
 /** R2 — how far back a tick self-heals: the last 3 closed months. */
 export const CATCH_UP_MONTHS = 3;
+
+/**
+ * INV-1 — hard per-tick bound on the EXPENSIVE path (assemble + AI pistes + chromium render +
+ * upload), counted per venue×month the moment it passes the exists/gate checks, success or
+ * failure alike. Unbounded, a first catch-up tick over a fleet of back-months renders for tens
+ * of minutes on the colocated box (the 2026-08-07 degradation window), and a permanently-failing
+ * item would re-burn its 30 s render ceiling EVERY tick. Deferred items are NOT failures — the
+ * exists-check resumes them on the next hourly tick.
+ */
+export const MAX_SWEEP_ATTEMPTS_PER_TICK = 8;
 
 /** The last `count` closed months relative to `now`, newest first (Tunis month close). */
 export function lastClosedMonths(now: Date, count: number): ClosedMonth[] {
@@ -160,16 +174,28 @@ export async function runMonthlyReportSweep(
   log: FastifyBaseLogger,
   now: Date = new Date(),
 ): Promise<SweepResult> {
+  const startedAt = Date.now();
   const months = lastClosedMonths(now, CATCH_UP_MONTHS);
   const result: SweepResult = {
     months: months.map((m) => m.month),
     generated: 0,
     skipped: 0,
     failed: 0,
+    attempts: 0,
+    capped: false,
+  };
+  // INV-1 amendment — the tick summary is UNCONDITIONAL, on every path including early returns:
+  // the 2026-08-07 incident tick left ZERO log lines, so its failure mode was invisible.
+  const summarize = (candidates: number): void => {
+    log.info(
+      { ...result, candidates, durationMs: Date.now() - startedAt },
+      'monthly report sweep done',
+    );
   };
 
   if (resolveChromiumPath() === null) {
     log.warn('monthly report sweep skipped: no chromium executable on this machine');
+    summarize(0);
     return result;
   }
 
@@ -186,7 +212,7 @@ export async function runMonthlyReportSweep(
     );
 
   const currentMonth = months[0]?.month;
-  for (const venue of candidates) {
+  sweep: for (const venue of candidates) {
     for (const { month, from, to } of months) {
       try {
         const [existing] = await db
@@ -210,6 +236,14 @@ export async function runMonthlyReportSweep(
           result.skipped += 1;
           continue;
         }
+
+        // INV-1 — the expensive path is capped per tick; anything past the cap waits for the
+        // next tick rather than extending this one.
+        if (result.attempts >= MAX_SWEEP_ATTEMPTS_PER_TICK) {
+          result.capped = true;
+          break sweep;
+        }
+        result.attempts += 1;
 
         const data = await assembleReportData(venue.id, { from, to });
         if (!data) continue; // venue vanished mid-sweep
@@ -252,20 +286,38 @@ export async function runMonthlyReportSweep(
     }
   }
 
-  if (result.generated > 0 || result.failed > 0) {
-    log.info(result, 'monthly report sweep done');
-  }
+  summarize(candidates.length);
   return result;
+}
+
+let sweepInFlight = false;
+
+/**
+ * INV-1 — reentrancy guard around one tick: a sweep that outlives the hour must not overlap the
+ * next interval firing (overlapping sweeps compound chromium + query load on the shared box —
+ * correctness survives via the UNIQUE row, load does not). Returns null when the tick is skipped.
+ */
+export async function runGuardedSweep(log: FastifyBaseLogger): Promise<SweepResult | null> {
+  if (sweepInFlight) {
+    log.warn('monthly report sweep still running — tick skipped');
+    return null;
+  }
+  sweepInFlight = true;
+  try {
+    return await runMonthlyReportSweep(log);
+  } finally {
+    sweepInFlight = false;
+  }
 }
 
 /** Boot + hourly unref'd interval (the sweepUnexported pattern) — never holds the process open. */
 export function startMonthlyReportJob(log: FastifyBaseLogger): void {
-  void runMonthlyReportSweep(log).catch((err: unknown) =>
+  void runGuardedSweep(log).catch((err: unknown) =>
     log.warn({ err }, 'monthly report boot sweep failed'),
   );
   const timer = setInterval(
     () => {
-      void runMonthlyReportSweep(log).catch((err: unknown) =>
+      void runGuardedSweep(log).catch((err: unknown) =>
         log.warn({ err }, 'monthly report sweep failed'),
       );
     },

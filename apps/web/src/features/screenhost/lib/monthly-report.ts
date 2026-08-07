@@ -80,3 +80,21 @@ export async function downloadMonthlyReport(
   }
   return 'ok';
 }
+
+export type ReportSelectState = 'loading' | 'error' | 'empty' | 'ready';
+
+/**
+ * INV-1 — the dashboard report-month select's state. « Aucun rapport généré » is reserved for a
+ * SETTLED empty listing: a pending or failed listing says so instead of masquerading as
+ * pre-first-data (the 2026-08-07 incident — a degraded api rendered the select empty for a venue
+ * holding two stored reports).
+ */
+export function reportSelectState(args: {
+  pending: boolean;
+  error: boolean;
+  count: number;
+}): ReportSelectState {
+  if (args.error) return 'error';
+  if (args.pending) return 'loading';
+  return args.count === 0 ? 'empty' : 'ready';
+}
