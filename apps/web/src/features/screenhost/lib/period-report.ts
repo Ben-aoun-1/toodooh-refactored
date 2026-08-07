@@ -8,9 +8,10 @@ import type { DateRange } from './performance-period';
  *
  * The bottom "Télécharger le rapport (PDF)" button downloads the ON-DEMAND period report for the
  * page's ACTIVE filter range (GET /api/screenhosts/:id/report?from&to — owner-scoped server-side,
- * live chromium render, ephemeral). Mirrors the downloadMonthlyReport pattern: a RAW credentialed
- * fetch + object-URL (the JSON-only apiClient would corrupt a PDF body). The monthly card /
- * history buttons are UNTOUCHED — they keep hitting /monthly-report (the stored artifact).
+ * live chromium render, ephemeral). RAW credentialed fetch + object-URL (the JSON-only apiClient
+ * would corrupt a PDF body) — but split TWO-PHASE (fetch, then gesture-fresh save; see
+ * PreparedReport below for why). The monthly card / history buttons are UNTOUCHED — they keep
+ * hitting /monthly-report (the stored artifact) and respond inside the activation window.
  *
  * PERF-QA1 R4 — « Depuis le début » must WORK, honestly: the api bounds the range to 400 days,
  * so the request is CLAMPED to the newest 400 days client-side (the UI shows the clamped range)
@@ -96,18 +97,32 @@ async function errorCodeOf(res: Response): Promise<string | null> {
 }
 
 /**
- * Download the period-report PDF for `screenhostId` over the inclusive `range`.
+ * PERF-DL1 — the period download is TWO-PHASE, and must stay so.
  *
- * - Rejects a malformed range client-side (never round-trips to a 400).
- * - Throws ReportDownloadError with the api's error CODE on any non-2xx — the caller maps it to
- *   per-class copy via reportErrorMessageFr.
- * - The saved filename comes from the api's content-disposition (R3 — it carries the venue
- *   slug); the legacy range-only name is the fallback.
- * - Forces a save via an `<a download>` + object-URL (revoked afterwards) on success.
- *
- * Must be called only on an explicit user action (button click) — never on mount or filter change.
+ * The render takes ~30 s (live chromium + AI pistes), so a save executed when the fetch resolves
+ * runs OUTSIDE the browser's transient user activation (~5 s): Chromium then classifies the
+ * anchor-click download as gesture-less and CANCELS it silently — the QA browser's downloads DB
+ * recorded every attempt as INTERRUPTED / USER_CANCELED / 0 bytes, with nothing observable from
+ * JS (no exception, no console line). The stored-artifact monthly path survives only because it
+ * responds within the activation window. Fix: phase 1 (`fetchPeriodReport`) does the long fetch
+ * and HOLDS the blob; phase 2 (`savePreparedReport`) runs inside a FRESH button click, so the
+ * anchor save always carries live activation.
  */
-export async function downloadPeriodReport(screenhostId: string, range: DateRange): Promise<'ok'> {
+export interface PreparedReport {
+  blob: Blob;
+  filename: string;
+}
+
+/**
+ * Phase 1 — fetch + prepare, NO save. Rejects a malformed range client-side (never round-trips
+ * to a 400); throws ReportDownloadError with the api's error CODE on any non-2xx (the caller
+ * maps it to per-class copy via reportErrorMessageFr); the filename comes from the api's
+ * content-disposition (R3 — it carries the venue slug), falling back to the range-only name.
+ */
+export async function fetchPeriodReport(
+  screenhostId: string,
+  range: DateRange,
+): Promise<PreparedReport> {
   if (!DATE_RE.test(range.from) || !DATE_RE.test(range.to)) {
     throw new Error(`invalid range: ${range.from} – ${range.to}`);
   }
@@ -119,17 +134,40 @@ export async function downloadPeriodReport(screenhostId: string, range: DateRang
   const filename =
     filenameFromContentDisposition(res.headers.get('content-disposition')) ??
     periodReportFilename(range);
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  try {
+  return { blob: await res.blob(), filename };
+}
+
+/** The browser mechanics behind savePreparedReport — a seam so node-env tests can pin the flow. */
+export interface SaveDom {
+  createObjectUrl(blob: Blob): string;
+  revokeObjectUrl(url: string): void;
+  clickAnchor(args: { url: string; filename: string }): void;
+}
+
+const browserSaveDom: SaveDom = {
+  createObjectUrl: (blob) => URL.createObjectURL(blob),
+  revokeObjectUrl: (url) => URL.revokeObjectURL(url),
+  clickAnchor: ({ url, filename }) => {
     const link = document.createElement('a');
     link.href = url;
     link.download = filename;
     document.body.appendChild(link);
     link.click();
     link.remove();
+  },
+};
+
+/**
+ * Phase 2 — the anchor save (object-URL, revoked afterwards). MUST be called synchronously
+ * inside a user click ("Enregistrer") so the download carries transient activation — never from
+ * the resolution of a long await (that is the PERF-DL1 silent-cancel). Errors propagate to the
+ * caller (INV-1 rule: every failure surfaces).
+ */
+export function savePreparedReport(prepared: PreparedReport, dom: SaveDom = browserSaveDom): void {
+  const url = dom.createObjectUrl(prepared.blob);
+  try {
+    dom.clickAnchor({ url, filename: prepared.filename });
   } finally {
-    URL.revokeObjectURL(url);
+    dom.revokeObjectUrl(url);
   }
-  return 'ok';
 }

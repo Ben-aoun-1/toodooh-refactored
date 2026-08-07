@@ -1,5 +1,5 @@
 import { Calendar, Loader2 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
@@ -71,10 +71,12 @@ import {
 } from '../lib/performance-period';
 import {
   OUT_OF_WINDOW,
+  type PreparedReport,
   ReportDownloadError,
   clampRangeForReport,
-  downloadPeriodReport,
+  fetchPeriodReport,
   reportErrorMessageFr,
+  savePreparedReport,
 } from '../lib/period-report';
 
 const log = logger.child({ module: 'OwnerPerformance' });
@@ -288,20 +290,51 @@ export default function OwnerPerformance() {
   // the api's 400-day bound (R4 — « Depuis le début » works instead of round-tripping to a
   // guaranteed 400; the clamp is announced under the button). The monthly card/history buttons
   // above keep their stored-artifact URLs.
-  const downloadPeriod = async () => {
-    if (!selectedId || downloading) return;
+  //
+  // PERF-DL1 — TWO-PHASE: « Télécharger » runs the ~30 s render and HOLDS the blob; the save
+  // happens on the SECOND click (« Enregistrer ») so the anchor download carries fresh user
+  // activation — a save fired from the long await gets silently canceled by the browser (the
+  // downloads-DB-verified defect). The prepared blob dies on any venue/range change.
+  const [periodPhase, setPeriodPhase] = useState<'idle' | 'generating' | 'ready'>('idle');
+  const [preparedReport, setPreparedReport] = useState<PreparedReport | null>(null);
+  const periodRequestSeq = useRef(0);
+  useEffect(() => {
+    // Venue or applied range changed: the held blob no longer matches what the CTA describes.
+    periodRequestSeq.current += 1;
+    setPeriodPhase('idle');
+    setPreparedReport(null);
+  }, [selectedId, range.from, range.to]);
+  const generatePeriod = async () => {
+    if (!selectedId || periodPhase === 'generating') return;
     if (!reportRange) {
       toast.error(reportErrorMessageFr(OUT_OF_WINDOW));
       return;
     }
-    setDownloading(true);
+    const seq = (periodRequestSeq.current += 1);
+    setPeriodPhase('generating');
+    setPreparedReport(null);
     try {
-      await downloadPeriodReport(selectedId, reportRange.range);
+      const prepared = await fetchPeriodReport(selectedId, reportRange.range);
+      if (periodRequestSeq.current !== seq) return; // venue/range changed mid-render — stale
+      setPreparedReport(prepared);
+      setPeriodPhase('ready');
+      toast.success('Votre rapport est prêt.');
     } catch (err) {
-      log.error({ err }, 'period report download failed');
+      log.error({ err }, 'period report generation failed');
       toast.error(reportErrorMessageFr(err instanceof ReportDownloadError ? err.code : null));
-    } finally {
-      setDownloading(false);
+      if (periodRequestSeq.current === seq) setPeriodPhase('idle');
+    }
+  };
+  const savePeriod = () => {
+    if (!preparedReport) return;
+    try {
+      savePreparedReport(preparedReport);
+      toast.success('Téléchargement lancé.');
+      setPeriodPhase('idle');
+      setPreparedReport(null);
+    } catch (err) {
+      log.error({ err }, 'period report save failed');
+      toast.error(reportErrorMessageFr(null));
     }
   };
   // R4 — when the active period exceeds the api window, say EXACTLY what the PDF will cover.
@@ -494,8 +527,9 @@ export default function OwnerPerformance() {
 
                       <DownloadCta
                         hasData={hostHasData || castHasData}
-                        downloading={downloading}
-                        onDownload={() => void downloadPeriod()}
+                        phase={periodPhase}
+                        onGenerate={() => void generatePeriod()}
+                        onSave={savePeriod}
                         clampNote={clampNote}
                       />
                     </>
