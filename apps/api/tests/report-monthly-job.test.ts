@@ -35,12 +35,13 @@ const renderSpy = vi.hoisted(() =>
     return Buffer.from('%PDF-job-fake');
   }),
 );
+const chromiumSpy = vi.hoisted(() => vi.fn((): string | null => '/usr/bin/fake-chromium'));
 vi.mock('../src/lib/report/render.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../src/lib/report/render.js')>();
   return {
     ...actual,
     renderPdf: renderSpy,
-    resolveChromiumPath: () => '/usr/bin/fake-chromium',
+    resolveChromiumPath: chromiumSpy,
   };
 });
 
@@ -230,10 +231,35 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
   beforeEach(async () => {
     await resetAuthTables();
     renderSpy.mockClear();
+    chromiumSpy.mockReset();
+    chromiumSpy.mockReturnValue('/usr/bin/fake-chromium');
     pistesSpy.mockReset();
     pistesSpy.mockResolvedValue(null);
     vi.restoreAllMocks();
   });
+
+  // INV-1 amendment — a `log.info` capture: the tick summary must fire on EVERY path.
+  const captureLog = () => {
+    const infos: { obj: Record<string, unknown>; msg: string | undefined }[] = [];
+    const warns: string[] = [];
+    const log = {
+      info: (obj: Record<string, unknown>, msg?: string) => {
+        infos.push({ obj, msg });
+      },
+      warn: (objOrMsg: unknown, msg?: string) => {
+        warns.push(typeof objOrMsg === 'string' ? objOrMsg : (msg ?? ''));
+      },
+      error: () => undefined,
+      debug: () => undefined,
+      fatal: () => undefined,
+      trace: () => undefined,
+      child: () => log,
+      level: 'silent',
+    };
+    return { infos, warns, log: log as unknown as Parameters<typeof runMonthlyReportSweep>[0] };
+  };
+  const summariesOf = (infos: { obj: Record<string, unknown>; msg: string | undefined }[]) =>
+    infos.filter((e) => e.msg === 'monthly report sweep done');
 
   // R2-amendment pin (2): the previous closed month generates + notifies over the LIFETIME
   // gates; data-less catch-up months are SKIPPED — a fresh venue never gets a backdated burst.
@@ -422,6 +448,53 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
     expect(await db.select().from(screenhostMonthlyReports)).toHaveLength(0);
   });
 
+  // INV-1 amendment — the tick can NEVER run silently: the 2026-08-07 incident tick left zero
+  // log lines. One summary line per tick, on every path.
+  it('a zero-candidate tick still emits exactly one summary line with counts + duration', async () => {
+    const { infos, log } = captureLog();
+    await runMonthlyReportSweep(log, NOW);
+    const summaries = summariesOf(infos);
+    expect(summaries).toHaveLength(1);
+    expect(summaries[0]?.obj).toMatchObject({
+      months: MONTHS,
+      candidates: 0,
+      generated: 0,
+      skipped: 0,
+      failed: 0,
+      attempts: 0,
+      capped: false,
+    });
+    expect(typeof summaries[0]?.obj['durationMs']).toBe('number');
+  });
+
+  it('a generating tick emits the summary with its real counts', async () => {
+    const owner = await seedUser();
+    await seedVenueWithData(owner, 'Café Résumé');
+    vi.spyOn(storage, 'upload').mockImplementation(async (params) => ({ key: params.key }));
+    const { infos, log } = captureLog();
+    await runMonthlyReportSweep(log, NOW);
+    const summaries = summariesOf(infos);
+    expect(summaries).toHaveLength(1);
+    expect(summaries[0]?.obj).toMatchObject({
+      candidates: 1,
+      generated: 1,
+      skipped: 2,
+      failed: 0,
+      attempts: 1,
+      capped: false,
+    });
+  });
+
+  it('the no-chromium early return still emits the summary line', async () => {
+    chromiumSpy.mockReturnValue(null);
+    const { infos, warns, log } = captureLog();
+    await runMonthlyReportSweep(log, NOW);
+    expect(warns).toContain('monthly report sweep skipped: no chromium executable on this machine');
+    const summaries = summariesOf(infos);
+    expect(summaries).toHaveLength(1);
+    expect(summaries[0]?.obj).toMatchObject({ candidates: 0, generated: 0, capped: false });
+  });
+
   // INV-1 — the per-tick attempt cap: one tick renders at most MAX_SWEEP_ATTEMPTS_PER_TICK
   // reports; everything past the cap is DEFERRED (capped: true, no failure) and the next tick
   // resumes exactly where the exists-check left off. The 2026-08-07 incident pin: an unbounded
@@ -467,8 +540,11 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
     await vi.waitFor(() => {
       if (release === undefined) throw new Error('render not reached yet');
     });
-    const overlapping = await runGuardedSweep(silentLog); // fires while the render hangs
+    const { warns, log: overlapLog } = captureLog();
+    const overlapping = await runGuardedSweep(overlapLog); // fires while the render hangs
     expect(overlapping).toBeNull();
+    // INV-1 amendment — the skipped tick is VISIBLE too: its one line is the guard warn.
+    expect(warns).toContain('monthly report sweep still running — tick skipped');
 
     release?.();
     const first = await firstTick;

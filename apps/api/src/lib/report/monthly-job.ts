@@ -174,6 +174,7 @@ export async function runMonthlyReportSweep(
   log: FastifyBaseLogger,
   now: Date = new Date(),
 ): Promise<SweepResult> {
+  const startedAt = Date.now();
   const months = lastClosedMonths(now, CATCH_UP_MONTHS);
   const result: SweepResult = {
     months: months.map((m) => m.month),
@@ -183,9 +184,18 @@ export async function runMonthlyReportSweep(
     attempts: 0,
     capped: false,
   };
+  // INV-1 amendment — the tick summary is UNCONDITIONAL, on every path including early returns:
+  // the 2026-08-07 incident tick left ZERO log lines, so its failure mode was invisible.
+  const summarize = (candidates: number): void => {
+    log.info(
+      { ...result, candidates, durationMs: Date.now() - startedAt },
+      'monthly report sweep done',
+    );
+  };
 
   if (resolveChromiumPath() === null) {
     log.warn('monthly report sweep skipped: no chromium executable on this machine');
+    summarize(0);
     return result;
   }
 
@@ -276,9 +286,7 @@ export async function runMonthlyReportSweep(
     }
   }
 
-  if (result.generated > 0 || result.failed > 0 || result.capped) {
-    log.info(result, 'monthly report sweep done');
-  }
+  summarize(candidates.length);
   return result;
 }
 
