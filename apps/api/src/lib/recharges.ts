@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 
-import { type SQL, and, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
+import { type SQL, and, eq, gte, inArray, isNull, ne, sql } from 'drizzle-orm';
 
 import { db } from '../db/client.js';
 import {
@@ -10,6 +10,8 @@ import {
   recharges,
   walletAdjustments,
 } from '../db/schema.js';
+
+import { tunisDateOf } from './campaign-dates.js';
 
 // Recharge/wallet helpers (L-wallet) shared by the advertiser routes (routes/recharges.ts) and the
 // admin moderation surface (routes/admin-recharges.ts) — single source of truth so the two can't drift.
@@ -170,23 +172,32 @@ export const walletBalance = async (advertiserId: string): Promise<WalletBalance
 // ── FIX2 (Option A ruling) — reservation semantics over the SAME derived wallet ─────────────────
 // A confirmed campaign that has not settled yet is ENGAGED: its GROSS requested budget is spoken
 // for (conservative by ruling — refunds come back at settlement, not before). The engaged set is
-// DERIVABLE, no new table: campaigns in a confirmed status with NO reconciliation row. Event
-// positionings ride the same campaigns table (EV3) and boosts fold into requested_budget (CF-B1),
-// so ONE predicate covers all three.
+// DERIVABLE, no new table: campaigns in a confirmed status with NO reconciliation row AND a
+// diffusion window that has NOT ENDED (FIX2b — end_date ≥ Tunis today, the lifecycle tick's own
+// calendar). An ENDED-unreconciled campaign is a SETTLEMENT matter, not a reservation: on a prod
+// where settlements have not run, the unwindowed predicate swept every historical campaign as a
+// zombie engagement (Σ = the whole confirmed history, spendable −14 462 on the test account) and
+// blocked all new spend. A confirmed row with a NULL end date has no live window and is likewise
+// not engaged (same limbo class, settled by the settlement lane). Event positionings ride the
+// same campaigns table (EV3) and boosts fold into requested_budget (CF-B1), so ONE predicate
+// covers all three.
 export const ENGAGED_CAMPAIGN_STATUSES = ['pending', 'upcoming', 'active', 'completed'] as const;
 
 /**
- * The engaged-set predicate — ONE home shared by walletSpendable and the ledger's « Engagé » rows
- * so the gate and the display can never disagree on what is engaged.
+ * The engaged-set predicate — ONE home shared by walletSpendable, the ledger's « Engagé » rows
+ * and the admin queue figure, so the gates and every display move together by construction.
  */
 export const engagedCampaignConditions = (
   advertiserId: string,
   excludeCampaignId?: string,
+  now: Date = new Date(),
 ): SQL[] => {
   const conditions: SQL[] = [
     eq(campaigns.advertiserId, advertiserId),
     inArray(campaigns.status, [...ENGAGED_CAMPAIGN_STATUSES]),
     isNull(campaignReconciliation.id),
+    // FIX2b — the window clause: engaged only while the diffusion window is open.
+    gte(campaigns.endDate, tunisDateOf(now)),
   ];
   if (excludeCampaignId !== undefined) conditions.push(ne(campaigns.id, excludeCampaignId));
   return conditions;
