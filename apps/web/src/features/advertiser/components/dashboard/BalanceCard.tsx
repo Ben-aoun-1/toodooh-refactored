@@ -4,7 +4,10 @@ import { useNavigate } from 'react-router-dom';
 import smart3Icon from '@/assets/smart3.png';
 
 interface BalanceCardProps {
+  /** FIX2 — the SPENDABLE headline (what the funded gates enforce), formatted HT (TTC). */
   balance: string;
+  /** FIX2 — « Solde total » shown beneath, formatted HT (TTC). */
+  balanceTotal: string;
   loading: boolean;
   isDisabled: boolean;
 }
@@ -12,16 +15,24 @@ interface BalanceCardProps {
 const DISABLED_MESSAGE =
   '⚠️ Veuillez compléter vos informations pour accéder à cette fonctionnalité';
 
-export default function BalanceCard({ balance, loading, isDisabled }: BalanceCardProps) {
+export default function BalanceCard({
+  balance,
+  balanceTotal,
+  loading,
+  isDisabled,
+}: BalanceCardProps) {
   const navigate = useNavigate();
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      {/* Carte Solde disponible */}
+      {/* Carte Solde disponible — FIX2: the headline is SPENDABLE; « Solde total » rides beneath. */}
       <div className="rounded-xl bg-gradient-to-tr from-[#3db39a] via-[#1a6b5a] to-[#0a3d32] p-5 shadow-lg">
         <p className="text-base font-medium text-white/95 mb-2">Solde disponible</p>
-        <p className="text-2xl sm:text-3xl font-bold text-white mb-5 tracking-tight tabular-nums font-sans">
+        <p className="text-2xl sm:text-3xl font-bold text-white tracking-tight tabular-nums font-sans">
           {loading ? '...' : balance}
+        </p>
+        <p className="text-sm text-white/80 mb-5 mt-1 tabular-nums">
+          {loading ? '' : `Solde total : ${balanceTotal}`}
         </p>
         <div className="flex flex-wrap items-center gap-3">
           <button

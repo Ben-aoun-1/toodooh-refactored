@@ -11,6 +11,9 @@ export const walletKeys = {
   /** The derived wallet balance (GET /api/wallet/balance) — CF-M1, the live money source. */
   balance: (userId: string) => [...walletKeys.all, 'balance', userId] as const,
 
+  /** FIX2 — the served ledger + solde block (GET /api/wallet/transactions), ONE read. */
+  transactions: (userId: string) => [...walletKeys.all, 'transactions', userId] as const,
+
   /** The user's recharges (GET /api/recharges/mine) — the ledger's credits AND the factures. */
   recharges: (userId: string) => [...walletKeys.all, 'recharges', userId] as const,
 

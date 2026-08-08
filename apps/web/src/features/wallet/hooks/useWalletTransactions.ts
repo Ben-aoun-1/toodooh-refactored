@@ -1,71 +1,53 @@
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
-import { useMyCampaignsList } from '@/features/campaigns/hooks/useCampaignApi';
-import { type LedgerTransaction, composeLedger } from '@/features/wallet/lib/wallet-ledger';
+import { type TransactionView, transactionView } from '@/features/wallet/lib/wallet-ledger';
 import { walletService } from '@/features/wallet/services/wallet.service';
 
 import { walletKeys } from './queryKeys';
 
-export type Transaction = LedgerTransaction;
+export type Transaction = TransactionView;
 
 interface UseWalletTransactionsResult {
-  balance: number;
+  /** FIX2 — the display headline: spendable (what the funded gates enforce). */
+  spendableTnd: number;
+  /** The full balance (credits − net settlements ± adjustments) — « Solde total ». */
+  totalTnd: number;
+  /** Σ GROSS budgets of confirmed-but-unsettled campaigns. */
+  engagedTnd: number;
   transactions: Transaction[];
   loading: boolean;
   isError: boolean;
 }
 
 /**
- * CF-M1 — the MyRecharges composite, now fed by the LIVE api: the derived balance
- * (GET /api/wallet/balance) plus a ledger COMPOSED client-side from GET /api/recharges/mine
- * (confirmed credits) and GET /api/campaigns/mine (reconciled spend debits — the campaigns query
- * is the SAME cache entry MyCampaigns uses). Replaces the disabled Supabase merge.
+ * FIX2 — ONE served read (GET /api/wallet/transactions): the complete ledger AND the solde block
+ * come from the same api call, so the rows and the figures can never disagree. Replaces the
+ * client-side composition over recharges + campaigns + adjustments (the retired composeLedger).
  *
- * The money queries refetch on window focus ('always', overriding the app-wide false): an admin
- * confirms transfers from another session, so returning to this tab must show the credited
- * balance without a manual refresh.
+ * Refetches on window focus ('always', overriding the app-wide false): an admin confirms
+ * transfers from another session, so returning to this tab must show the credit without a
+ * manual refresh.
  */
 export function useWalletTransactions(userId: string | undefined): UseWalletTransactionsResult {
-  const balanceQuery = useQuery({
-    queryKey: walletKeys.balance(userId ?? ''),
-    queryFn: () => walletService.getBalance(),
+  const ledgerQuery = useQuery({
+    queryKey: walletKeys.transactions(userId ?? ''),
+    queryFn: () => walletService.getTransactions(),
     enabled: !!userId,
     refetchOnWindowFocus: 'always',
   });
-  const rechargesQuery = useQuery({
-    queryKey: walletKeys.recharges(userId ?? ''),
-    queryFn: () => walletService.listMyRecharges(),
-    enabled: !!userId,
-    refetchOnWindowFocus: 'always',
-  });
-  // FCT2 — the third row type: admin solde adjustments (signed, reason shown).
-  const adjustmentsQuery = useQuery({
-    queryKey: walletKeys.adjustments(userId ?? ''),
-    queryFn: () => walletService.listAdjustments(),
-    enabled: !!userId,
-    refetchOnWindowFocus: 'always',
-  });
-  const campaignsQuery = useMyCampaignsList(userId);
 
   const transactions = useMemo(
-    () =>
-      composeLedger(
-        rechargesQuery.data ?? [],
-        campaignsQuery.data ?? [],
-        adjustmentsQuery.data ?? [],
-      ),
-    [rechargesQuery.data, campaignsQuery.data, adjustmentsQuery.data],
+    () => (ledgerQuery.data?.transactions ?? []).map(transactionView),
+    [ledgerQuery.data],
   );
 
   return {
-    balance: balanceQuery.data?.balance_tnd ?? 0,
+    spendableTnd: ledgerQuery.data?.solde.spendable_tnd ?? 0,
+    totalTnd: ledgerQuery.data?.solde.total_tnd ?? 0,
+    engagedTnd: ledgerQuery.data?.solde.engaged_tnd ?? 0,
     transactions,
-    loading: balanceQuery.isLoading || rechargesQuery.isLoading || campaignsQuery.isLoading,
-    isError:
-      balanceQuery.isError ||
-      rechargesQuery.isError ||
-      campaignsQuery.isError ||
-      adjustmentsQuery.isError,
+    loading: ledgerQuery.isLoading,
+    isError: ledgerQuery.isError,
   };
 }

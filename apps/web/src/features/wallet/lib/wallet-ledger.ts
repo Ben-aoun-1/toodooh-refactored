@@ -1,78 +1,49 @@
-import type { CampaignView } from '@/features/campaigns/services/campaigns.api';
-import type { AdjustmentRow, RechargeRow } from '@/features/wallet/services/wallet.service';
+import type { RechargeRow, WalletTransactionRow } from '@/features/wallet/services/wallet.service';
 
 /**
- * The Mes finances ledger, pure composition from the LIVE endpoints. FCT2 — THREE row types:
- *   credits     — CONFIRMED recharges, dated at confirmation (when the money entered the balance);
- *   debits      — LAUNCHED campaigns (status active/completed), VISIBLE FROM AND DATED AT the
- *                 campaign's start day (US-FCT-14's visible view). The AMOUNT shows the reconciled
- *                 NET spend once settled, the engaged budget before. NOTE the deliberate
- *                 asymmetry: the BALANCE still moves only at reconciliation (the funded gates'
- *                 read-only posture is untouched) — the history anticipates, the money does not.
- *   adjustments — the admin solde corrections (US-FCT-9), SIGNED, dated at creation, reason shown.
- * Payment method: « Bon de commande » for bon-method credits, « Virement bancaire » otherwise.
+ * FIX2 — the Mes finances ledger is SERVED (GET /api/wallet/transactions) and rendered VERBATIM.
+ * The client-side composition over recharges + campaigns (`composeLedger`) is RETIRED with its
+ * « the history anticipates, the money does not » asymmetry: engagements are now real served
+ * rows (typed 'engagement', appearing at confirm), settlements are the ratified NET, and
+ * Σ(rows) reconciles with the displayed solde by arithmetic alone — api-pinned. What remains
+ * here is the pure VIEW mapping: wire row → badge/tone the table renders.
  */
-export interface LedgerTransaction {
+
+export type TransactionTone = 'credit' | 'debit' | 'engaged';
+
+export interface TransactionView {
   id: string;
-  type: 'recharge' | 'expense' | 'adjustment';
+  type: WalletTransactionRow['type'];
   designation: string;
-  /** SIGNED for adjustments; positive for recharges/expenses (the sign rides `type`). */
-  amount: number;
+  /** French row badge: « Engagé » for unsettled engagements, « Réglé » for settlements. */
+  badge: 'Engagé' | 'Réglé' | null;
+  /** SIGNED TND HT, exactly as served. */
+  amountTnd: number;
   date: Date;
-  paymentMethod?: string;
+  /** The « Modes de paiement » column: recharge method / adjustment reason. */
+  method: string;
+  tone: TransactionTone;
 }
 
-export const RECHARGE_DESIGNATION = 'Rechargement wallet';
-export const RECHARGE_PAYMENT_METHOD = 'Virement bancaire';
-export const ADJUSTMENT_DESIGNATION = 'Ajustement de solde';
+/**
+ * The verbatim view: sign and type come FROM THE WIRE, never re-derived. An engagement renders
+ * with its own tone (informational — the balance has not moved yet); a fully-refunded settlement
+ * renders 0 honestly (a real outcome, not absence).
+ */
+export const transactionView = (row: WalletTransactionRow): TransactionView => ({
+  id: row.id,
+  type: row.type,
+  designation: row.label,
+  badge: row.type === 'engagement' ? 'Engagé' : row.type === 'settlement' ? 'Réglé' : null,
+  amountTnd: row.amount_tnd,
+  date: new Date(row.date),
+  method: row.detail ?? '',
+  tone: row.type === 'engagement' ? 'engaged' : row.amount_tnd >= 0 ? 'credit' : 'debit',
+});
 
-/** A campaign debit is visible once the campaign LAUNCHED (reached its start day). */
-const isLaunched = (c: CampaignView): boolean =>
-  (c.status === 'active' || c.status === 'completed') && c.start_date !== null;
-
-export const composeLedger = (
-  recharges: readonly RechargeRow[],
-  campaigns: readonly CampaignView[],
-  adjustments: readonly AdjustmentRow[] = [],
-): LedgerTransaction[] => {
-  const lines: LedgerTransaction[] = [];
-  for (const r of recharges) {
-    if (r.status !== 'confirmed') continue;
-    lines.push({
-      id: `r-${r.id}`,
-      type: 'recharge',
-      designation: RECHARGE_DESIGNATION,
-      amount: r.amount_tnd,
-      date: new Date(r.confirmed_at ?? r.created_at),
-      paymentMethod: r.method === 'bon_de_commande' ? 'Bon de commande' : RECHARGE_PAYMENT_METHOD,
-    });
-  }
-  for (const c of campaigns) {
-    if (!isLaunched(c)) continue;
-    lines.push({
-      id: `c-${c.id}`,
-      type: 'expense',
-      designation: c.name || 'Campagne',
-      // The reconciled NET once settled; the engaged ask before (0 only for a budget-less draft
-      // that somehow launched — renders honestly as 0, never NaN).
-      amount: c.spend_tnd ?? c.requested_budget ?? 0,
-      // Dated at the LAUNCH DAY (date-only string → UTC midnight, the formatDate convention).
-      date: new Date(c.start_date ?? c.created_at),
-    });
-  }
-  for (const a of adjustments) {
-    lines.push({
-      id: `a-${a.id}`,
-      type: 'adjustment',
-      designation: ADJUSTMENT_DESIGNATION,
-      amount: a.amount_tnd,
-      date: new Date(a.created_at),
-      paymentMethod: a.reason,
-    });
-  }
-  lines.sort((a, b) => b.date.getTime() - a.date.getTime());
-  return lines;
-};
+/** The « Dépenses » tab: everything campaign-money (engagements + settlements). */
+export const isExpenseView = (view: TransactionView): boolean =>
+  view.type === 'engagement' || view.type === 'settlement';
 
 /**
  * The MyInvoices « Récapitulatifs de commande » rows (FCT2 relabel — every recharge HAS a

@@ -26,6 +26,7 @@ import {
   useMyRecharges,
 } from '@/features/wallet/hooks/useRechargeDemandes';
 import { useWalletTransactions } from '@/features/wallet/hooks/useWalletTransactions';
+import { isExpenseView } from '@/features/wallet/lib/wallet-ledger';
 import type { RechargeRow } from '@/features/wallet/services/wallet.service';
 import { htTtcLabel } from '@/lib/money';
 
@@ -41,7 +42,9 @@ type TabFilter = 'all' | 'recharges' | 'expenses';
 export default function MyRecharges() {
   const user = useAuthStore((state) => state.user);
   const navigate = useNavigate();
-  const { balance, transactions, loading, isError } = useWalletTransactions(user?.id);
+  const { spendableTnd, totalTnd, transactions, loading, isError } = useWalletTransactions(
+    user?.id,
+  );
   // FCT1 — the demandes read (same cache as the ledger) + the three v2 mutations.
   const myRecharges = useMyRecharges(user?.id);
   const createVirement = useCreateVirement(user?.id);
@@ -64,7 +67,7 @@ export default function MyRecharges() {
   const filteredTransactions = useMemo(() => {
     return transactions.filter((t) => {
       if (activeTab === 'recharges' && t.type !== 'recharge') return false;
-      if (activeTab === 'expenses' && t.type !== 'expense') return false;
+      if (activeTab === 'expenses' && !isExpenseView(t)) return false;
       if (searchQuery) {
         return t.designation.toLowerCase().includes(searchQuery.toLowerCase());
       }
@@ -153,9 +156,14 @@ export default function MyRecharges() {
             </div>
             <span className="text-sm text-white/70 font-medium">Solde disponible</span>
           </div>
-          {/* CF-U1 (Mejri item 6) — the solde carries its TTC like every advertiser montant. */}
+          {/* CF-U1 (Mejri item 6) — the solde carries its TTC like every advertiser montant.
+              FIX2 — the headline is SPENDABLE (what the funded gates enforce); the full balance
+              rides beneath as « Solde total ». */}
           <p className="text-3xl md:text-4xl font-bold text-white tracking-tight tabular-nums">
-            {loading ? '...' : htTtcLabel(balance)}
+            {loading ? '...' : htTtcLabel(spendableTnd)}
+          </p>
+          <p className="mt-1 text-sm text-white/70 tabular-nums">
+            {loading ? '' : `Solde total : ${htTtcLabel(totalTnd)}`}
           </p>
         </div>
         <div className="flex items-center gap-4 relative z-10">
@@ -287,19 +295,24 @@ export default function MyRecharges() {
                   >
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
-                        {/* FCT2 — three row types: recharge credit (green ↓), campaign debit at
-                            launch day (gray ↑), SIGNED admin adjustment (green ↓ / red ↑). */}
+                        {/* FIX2 — four SERVED row types, sign from the wire: recharge credit
+                            (green ↓), « Engagé » (amber ↑ — informational, balance unmoved),
+                            « Réglé » NET settlement (gray ↑), SIGNED adjustment (green ↓/red ↑). */}
                         <div
                           className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                            tx.type === 'recharge' || (tx.type === 'adjustment' && tx.amount > 0)
+                            tx.tone === 'credit'
                               ? 'bg-green-50'
-                              : tx.type === 'adjustment'
-                                ? 'bg-red-50'
-                                : 'bg-gray-100'
+                              : tx.tone === 'engaged'
+                                ? 'bg-amber-50'
+                                : tx.type === 'adjustment'
+                                  ? 'bg-red-50'
+                                  : 'bg-gray-100'
                           }`}
                         >
-                          {tx.type === 'recharge' || (tx.type === 'adjustment' && tx.amount > 0) ? (
+                          {tx.tone === 'credit' ? (
                             <ArrowDownLeft className="h-4 w-4 text-green-600" />
+                          ) : tx.tone === 'engaged' ? (
+                            <ArrowUpRight className="h-4 w-4 text-amber-600" />
                           ) : tx.type === 'adjustment' ? (
                             <ArrowUpRight className="h-4 w-4 text-red-600" />
                           ) : (
@@ -307,26 +320,37 @@ export default function MyRecharges() {
                           )}
                         </div>
                         <span className="text-sm font-medium text-gray-900">{tx.designation}</span>
+                        {tx.badge && (
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                              tx.badge === 'Engagé'
+                                ? 'bg-amber-50 text-amber-700'
+                                : 'bg-gray-100 text-gray-600'
+                            }`}
+                          >
+                            {tx.badge}
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="px-5 py-4">
                       <span
                         className={`text-sm font-semibold ${
-                          tx.type === 'recharge' || (tx.type === 'adjustment' && tx.amount > 0)
+                          tx.tone === 'credit'
                             ? 'text-green-600'
-                            : tx.type === 'adjustment'
-                              ? 'text-red-600'
-                              : 'text-gray-900'
+                            : tx.tone === 'engaged'
+                              ? 'text-amber-700'
+                              : tx.type === 'adjustment'
+                                ? 'text-red-600'
+                                : 'text-gray-900'
                         }`}
                       >
-                        {tx.type === 'expense' || (tx.type === 'adjustment' && tx.amount < 0)
-                          ? '-'
-                          : '+'}
-                        {htTtcLabel(Math.abs(tx.amount))}
+                        {tx.amountTnd < 0 ? '-' : '+'}
+                        {htTtcLabel(Math.abs(tx.amountTnd))}
                       </span>
                     </td>
                     <td className="px-5 py-4 text-sm text-gray-500">{formatDate(tx.date)}</td>
-                    <td className="px-5 py-4 text-sm text-gray-500">{tx.paymentMethod || ''}</td>
+                    <td className="px-5 py-4 text-sm text-gray-500">{tx.method}</td>
                   </tr>
                 ))}
               </tbody>
