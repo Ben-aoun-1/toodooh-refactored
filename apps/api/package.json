@@ -14,6 +14,7 @@
     "migrate": "tsx --env-file-if-exists=.env scripts/migrate.ts",
     "promote": "tsx --env-file-if-exists=.env scripts/promote-to-admin.ts",
     "reports:regenerate": "tsx --env-file-if-exists=.env scripts/regenerate-monthly-reports.ts",
+    "reconcile:run": "tsx --env-file-if-exists=.env scripts/reconcile-run.ts",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
