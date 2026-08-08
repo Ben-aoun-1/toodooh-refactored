@@ -10,7 +10,7 @@ import { computeCampaignCmax } from '../lib/campaign-cmax.js';
 import { startDateViolation } from '../lib/campaign-dates.js';
 import { getDispatchConfig } from '../lib/dispatch/config.js';
 import { computeEventCmax } from '../lib/event-pricing/pricing.js';
-import { walletBalance } from '../lib/recharges.js';
+import { walletSpendable } from '../lib/recharges.js';
 import { requireAdvertiser } from '../middleware/require-advertiser.js';
 import { requireAuth } from '../middleware/require-auth.js';
 
@@ -248,13 +248,20 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
     }
 
     // The solde gate (HT — the wallet credits HT; TVA lives on the facture, not the balance).
-    const balance = (await walletBalance(userId)).balance_tnd;
-    if (balance < requiredHt) {
+    // FIX2 (Option A ruling) — the gate reads SPENDABLE (balance − engaged unsettled budgets):
+    // a second confirm can no longer commit funds the first one already spoke for. `balance`
+    // stays on the wire (the total) with `spendable` alongside — disponible vs demandé.
+    const wallet = await walletSpendable(userId);
+    if (wallet.spendable_tnd < requiredHt) {
       return reply.status(400).send({
         error: 'CART_CONFIRM_FAILED',
-        message: 'Insufficient balance to launch the cart.',
+        message: 'Insufficient spendable balance to launch the cart.',
         items: [],
-        solde: { balance, required: requiredHt },
+        solde: {
+          balance: wallet.balance_tnd,
+          spendable: wallet.spendable_tnd,
+          required: requiredHt,
+        },
       });
     }
 

@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 
-import { and, eq, sql } from 'drizzle-orm';
+import { type SQL, and, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 
 import { db } from '../db/client.js';
 import {
@@ -165,4 +165,56 @@ export const walletBalance = async (advertiserId: string): Promise<WalletBalance
     adjustments_tnd: adjustments,
     currency: 'TND',
   };
+};
+
+// ── FIX2 (Option A ruling) — reservation semantics over the SAME derived wallet ─────────────────
+// A confirmed campaign that has not settled yet is ENGAGED: its GROSS requested budget is spoken
+// for (conservative by ruling — refunds come back at settlement, not before). The engaged set is
+// DERIVABLE, no new table: campaigns in a confirmed status with NO reconciliation row. Event
+// positionings ride the same campaigns table (EV3) and boosts fold into requested_budget (CF-B1),
+// so ONE predicate covers all three.
+export const ENGAGED_CAMPAIGN_STATUSES = ['pending', 'upcoming', 'active', 'completed'] as const;
+
+/**
+ * The engaged-set predicate — ONE home shared by walletSpendable and the ledger's « Engagé » rows
+ * so the gate and the display can never disagree on what is engaged.
+ */
+export const engagedCampaignConditions = (
+  advertiserId: string,
+  excludeCampaignId?: string,
+): SQL[] => {
+  const conditions: SQL[] = [
+    eq(campaigns.advertiserId, advertiserId),
+    inArray(campaigns.status, [...ENGAGED_CAMPAIGN_STATUSES]),
+    isNull(campaignReconciliation.id),
+  ];
+  if (excludeCampaignId !== undefined) conditions.push(ne(campaigns.id, excludeCampaignId));
+  return conditions;
+};
+
+export interface WalletSpendable extends WalletBalance {
+  /** Σ GROSS requested budgets of confirmed-but-unsettled campaigns (event positionings included). */
+  engaged_tnd: number;
+  /** What the advertiser can still commit: balance − engaged. THE funded-gate figure. */
+  spendable_tnd: number;
+}
+
+/**
+ * FIX2 — THE money seam every funded gate reads (cart confirm, activation, boost, event boost)
+ * and the « Solde disponible » display renders. `excludeCampaignId` exists for the ACTIVATION
+ * gate only: the campaign being activated is already in the engaged set, and counting its own
+ * budget against itself would double-charge it.
+ */
+export const walletSpendable = async (
+  advertiserId: string,
+  opts: { excludeCampaignId?: string } = {},
+): Promise<WalletSpendable> => {
+  const base = await walletBalance(advertiserId);
+  const [row] = await db
+    .select({ engaged: sql<string>`coalesce(sum(${campaigns.requestedBudget}), 0)` })
+    .from(campaigns)
+    .leftJoin(campaignReconciliation, eq(campaignReconciliation.campaignId, campaigns.id))
+    .where(and(...engagedCampaignConditions(advertiserId, opts.excludeCampaignId)));
+  const engaged = Number(row?.engaged ?? 0);
+  return { ...base, engaged_tnd: engaged, spendable_tnd: base.balance_tnd - engaged };
 };

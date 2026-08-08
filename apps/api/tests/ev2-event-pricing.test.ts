@@ -441,8 +441,15 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
         `UPDATE "dispatch_config" SET "event_cpm_tnd" = '15.000' WHERE "event_cpm_tnd" = '30.000'`,
       );
       // Live replay of the move against a deliberate 22: it stays 22; a stale 30 moves to 15.
+      // FIX2 hygiene — the singleton row may be ABSENT when an earlier suite's cleanup ran last
+      // (a bare UPDATE is then a no-op and the read-back sees nothing): seed the row if missing,
+      // and drop it again only if THIS test created it.
       const before = await sql`select event_cpm_tnd from dispatch_config`;
       try {
+        if (before[0] === undefined) {
+          await sql`insert into dispatch_config (seuil_diffusable, g_mois, jours_actifs, r_min_efficace)
+            values (1000, '100', 30, 2)`;
+        }
         await sql`update dispatch_config set event_cpm_tnd = '22.000'`;
         await sql`UPDATE "dispatch_config" SET "event_cpm_tnd" = '15.000' WHERE "event_cpm_tnd" = '30.000'`;
         const kept = await sql`select event_cpm_tnd from dispatch_config`;
@@ -454,6 +461,7 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
       } finally {
         const restore = before[0]?.['event_cpm_tnd'] as string | undefined;
         if (restore !== undefined) await sql`update dispatch_config set event_cpm_tnd = ${restore}`;
+        else await sql`delete from dispatch_config`;
       }
     });
   });

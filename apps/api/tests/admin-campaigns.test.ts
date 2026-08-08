@@ -265,8 +265,16 @@ describe('admin campaign moderation — activation keystone (real Postgres)', ()
     // EV2 (architect override): the 30 is THIS test's explicit fixture, self-seeded on the live
     // dispatch_config singleton and restored after — migration 0056 moved the column's default
     // to 15, so inheriting the row's value would couple the pin to migration/test order.
+    // FIX2 hygiene — the previous bare UPDATE was a NO-OP whenever an earlier suite's cleanup
+    // left dispatch_config EMPTY (order-luck: the read then fell back to the 15 default and this
+    // pin failed). Insert-or-update, and drop the row again only if THIS test created it.
     const [cfgBefore] = await sql`select event_cpm_tnd from dispatch_config`;
-    await sql`update dispatch_config set event_cpm_tnd = '30.000'`;
+    if (cfgBefore === undefined) {
+      await sql`insert into dispatch_config (seuil_diffusable, g_mois, jours_actifs, r_min_efficace, event_cpm_tnd)
+        values (1000, '100', 30, 2, '30.000')`;
+    } else {
+      await sql`update dispatch_config set event_cpm_tnd = '30.000'`;
+    }
     try {
       const { admin, campaignId } = await seedActivatable({
         fundTnd: 700,
@@ -286,6 +294,7 @@ describe('admin campaign moderation — activation keystone (real Postgres)', ()
     } finally {
       const restore = cfgBefore?.['event_cpm_tnd'] as string | undefined;
       if (restore !== undefined) await sql`update dispatch_config set event_cpm_tnd = ${restore}`;
+      else await sql`delete from dispatch_config`;
     }
   });
 

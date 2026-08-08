@@ -28,8 +28,9 @@ import {
   makeMethodReference,
   rechargeView,
   signedBonKey,
-  walletBalance,
+  walletSpendable,
 } from '../lib/recharges.js';
+import { walletLedger } from '../lib/wallet-ledger.js';
 import { requireAdvertiser } from '../middleware/require-advertiser.js';
 import { requireAuth } from '../middleware/require-auth.js';
 import { storage } from '../storage/s3-storage.js';
@@ -330,11 +331,22 @@ export const rechargesRoutes: FastifyPluginAsync = async (app) => {
     return reply.status(200).send(rows.map(rechargeView));
   });
 
-  // GET /api/wallet/balance — the DERIVED confirmed balance (credited − debited; debited deferred).
+  // GET /api/wallet/balance — the DERIVED confirmed balance. FIX2: the response now also carries
+  // engaged_tnd + spendable_tnd (additive) — « Solde disponible » renders spendable, the SAME
+  // figure every funded gate enforces.
   app.get('/api/wallet/balance', advertiserGuard, async (request, reply) => {
     const userId = request.user?.id;
     if (!userId) return sendUnauthenticated(reply);
-    return reply.status(200).send(await walletBalance(userId));
+    return reply.status(200).send(await walletSpendable(userId));
+  });
+
+  // GET /api/wallet/transactions — FIX2: THE complete served ledger (recharges + engagements +
+  // net settlements + adjustments, signed, newest first) with the solde block. The web renders
+  // it verbatim; its composeLedger derivation retires with this endpoint.
+  app.get('/api/wallet/transactions', advertiserGuard, async (request, reply) => {
+    const userId = request.user?.id;
+    if (!userId) return sendUnauthenticated(reply);
+    return reply.status(200).send(await walletLedger(userId));
   });
 
   // GET /api/recharges/:id/facture — stream the « Récapitulatif de commande » PDF (owner-scoped;

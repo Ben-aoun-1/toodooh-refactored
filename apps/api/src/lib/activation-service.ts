@@ -14,7 +14,7 @@ import { cpmForCampaign, getDispatchConfig } from './dispatch/config.js';
 import { runDispatch } from './dispatch/dispatch-service.js';
 import { createEngineTrace } from './engine-journal/trace.js';
 import { runEventDispatch } from './event-dispatch/dispatch.js';
-import { walletBalance } from './recharges.js';
+import { walletSpendable } from './recharges.js';
 
 // CF-SK1 — THE ACTIVATION CORE, extracted VERBATIM from the admin activate route
 // (routes/admin-campaigns.ts) so admin activation and the cart's approved-spot skip run the
@@ -150,17 +150,20 @@ export const prepareActivation = async (
   }
   const s = creativeDurationSeconds;
 
-  // Funded gate: balance ≥ the advertiser's indicative budget (the ask). NO debit (L-redisp bills
-  // actual aired impressions at reconciliation). The cart's confirm checks the SAME derived
-  // balance for the whole basket first; running it here too keeps ONE gate chain with no
-  // divergence between the two entry points.
-  const balance = (await walletBalance(campaign.advertiserId)).balance_tnd;
-  if (balance < requestedBudget) {
+  // Funded gate: SPENDABLE ≥ the advertiser's indicative budget (FIX2 Option A — balance minus
+  // engaged unsettled budgets; still NO debit, L-redisp bills at reconciliation). The campaign
+  // being activated is ALREADY in the engaged set (confirmed at cart time), so its own budget is
+  // excluded — counting it against itself would double-charge the ask. The cart's confirm reads
+  // the SAME seam for the whole basket first; one gate chain, no divergence.
+  const spendable = (
+    await walletSpendable(campaign.advertiserId, { excludeCampaignId: campaign.id })
+  ).spendable_tnd;
+  if (spendable < requestedBudget) {
     return {
       status: 'NOT_ACTIVATABLE',
       reason: 'insufficient_balance',
       requiredTnd: requestedBudget,
-      availableTnd: balance,
+      availableTnd: spendable,
     };
   }
 
