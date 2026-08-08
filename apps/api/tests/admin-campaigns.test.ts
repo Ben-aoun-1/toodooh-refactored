@@ -439,6 +439,22 @@ describe('admin campaign moderation — activation keystone (real Postgres)', ()
     expect(mine?.derived_i_cible).toBe(30000);
   });
 
+  // FIX2 amendment pin — the queue serves THE FIGURE THE ACTIVATION GATE ENFORCES: spendable
+  // excluding the row's own campaign. Funds engaged by ANOTHER unsettled campaign drop the
+  // figure; the row's own ask never double-charges it (the 300-funded case above stays 300).
+  it("the queue figure is spendable EXCLUDING the row's own ask — other engagements drop it (FIX2)", async () => {
+    const { admin, advertiser, campaignId } = await seedActivatable({
+      fundTnd: 300,
+      requestedBudgetTnd: 450,
+    });
+    await seedCampaign(advertiser, { status: 'active', requestedBudgetTnd: 120 });
+    mockSession(admin);
+    const res = await app.inject({ method: 'GET', url: '/api/admin/campaigns?status=pending' });
+    const rows = res.json() as { id: string; wallet_balance_tnd: number }[];
+    // 300 funded − 120 engaged elsewhere = 180; the row's own 450 ask is EXCLUDED.
+    expect(rows.find((r) => r.id === campaignId)?.wallet_balance_tnd).toBe(180);
+  });
+
   it('the review queue surfaces a null derived_i_cible for a budget-less campaign', async () => {
     const { admin, campaignId } = await seedActivatable({ requestedBudgetTnd: null });
     mockSession(admin);
