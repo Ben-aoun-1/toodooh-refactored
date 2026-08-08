@@ -15,7 +15,7 @@ import { activateCampaign } from '../lib/activation-service.js';
 import { cpmForCampaign, getDispatchConfig } from '../lib/dispatch/config.js';
 import { measureEventDelivery } from '../lib/event-playout/settlement.js';
 import { pushPlaylistToCampaignVenues } from '../lib/playout/push.js';
-import { walletBalance } from '../lib/recharges.js';
+import { walletSpendable } from '../lib/recharges.js';
 import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
 
 import { planView } from './campaign-dispatch.js';
@@ -136,7 +136,12 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
           r.campaign.requestedBudget === null ? null : Number(r.campaign.requestedBudget);
         return {
           ...adminCampaignView(r.campaign, r.contentValidationStatus),
-          wallet_balance_tnd: (await walletBalance(r.campaign.advertiserId)).balance_tnd,
+          // FIX2 amendment — the queue shows THE FIGURE THE ACTIVATION GATE ENFORCES: spendable
+          // excluding this campaign's own engagement. Total balance invited approving campaigns
+          // the gate then rejects.
+          wallet_balance_tnd: (
+            await walletSpendable(r.campaign.advertiserId, { excludeCampaignId: r.campaign.id })
+          ).spendable_tnd,
           cpm_tnd: cpm,
           derived_i_cible: deriveICible(requestedBudget, cpm),
         };

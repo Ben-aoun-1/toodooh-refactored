@@ -486,14 +486,16 @@ describe('CF-B1 — Booster (real Postgres)', () => {
         }>().error,
       ).toBe('BUDGET_EXCEEDS_CMAX');
 
-      // A barely-funded advertiser: ceiling admits the ask, the solde does not.
+      // A barely-funded advertiser: ceiling admits the ask, the solde does not. FIX2 — available
+      // is now SPENDABLE: the 150 funded is entirely engaged by the active (unsettled) campaign
+      // being boosted, so disponible reads 0 — the boost is NEW money on top of the engagement.
       const poor = await seedUser();
       await fund(poor, '150.00');
       const poorCampaign = await seedActivated(poor, f.sectorA, { budget: '150.00' });
       mockSession(poor);
       const res = await apply(poorCampaign, { added_category_ids: [f.sectorB], amount_tnd: 200 });
       expect(res.json<{ error: string }>().error).toBe('INSUFFICIENT_BALANCE');
-      expect(res.json<{ available_tnd: number }>().available_tnd).toBe(150);
+      expect(res.json<{ available_tnd: number }>().available_tnd).toBe(0);
     });
 
     it('SETTLEMENT COMPATIBILITY: a boosted plan reads like any other (added allocation carries revenu/creneaux for reconcile)', async () => {

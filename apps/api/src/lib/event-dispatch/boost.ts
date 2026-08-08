@@ -14,7 +14,7 @@ import {
 import { MIN_CAMPAIGN_BUDGET_TND } from '../campaign-budget.js';
 import { getDispatchConfig } from '../dispatch/config.js';
 import { computeEventCmax } from '../event-pricing/pricing.js';
-import { walletBalance } from '../recharges.js';
+import { walletSpendable } from '../recharges.js';
 
 import {
   EVENT_PROPOSAL_TITLE,
@@ -241,7 +241,8 @@ export const applyEventBoost = async (
   if (input.amountTnd > ceiling.cMaxEvtTnd) {
     return { status: 'BUDGET_EXCEEDS_CMAX', cMaxEvtTnd: ceiling.cMaxEvtTnd };
   }
-  const balance = (await walletBalance(advertiserId)).balance_tnd;
+  // FIX2 — SPENDABLE (no exclusion: the positioning's own budget stays engaged; the boost is on top).
+  const balance = (await walletSpendable(advertiserId)).spendable_tnd;
   if (balance < input.amountTnd) {
     return { status: 'INSUFFICIENT_BALANCE', requiredTnd: input.amountTnd, availableTnd: balance };
   }

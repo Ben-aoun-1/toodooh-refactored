@@ -1,16 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import type { CampaignView } from '@/features/campaigns/services/campaigns.api';
-import type { RechargeRow } from '@/features/wallet/services/wallet.service';
+import type { RechargeRow, WalletTransactionRow } from '@/features/wallet/services/wallet.service';
 
 import {
-  ADJUSTMENT_DESIGNATION,
-  RECHARGE_DESIGNATION,
-  RECHARGE_PAYMENT_METHOD,
-  composeLedger,
   invoiceRows,
+  isExpenseView,
   monthlyInvoiceDesignation,
   recapitulatifDesignation,
+  transactionView,
 } from './wallet-ledger';
 
 const recharge = (over: Partial<RechargeRow> = {}): RechargeRow => ({
@@ -32,137 +29,97 @@ const recharge = (over: Partial<RechargeRow> = {}): RechargeRow => ({
   ...over,
 });
 
-const campaign = (over: Partial<CampaignView> = {}): CampaignView => ({
-  id: 'c1',
-  name: 'Campagne Été',
-  campaign_type: 'standard',
-  event_id: null,
-  status: 'completed',
-  start_date: '2026-06-01',
-  end_date: '2026-06-07',
-  description: null,
-  requested_budget: 300,
-  content_validation_status: 'approved',
-  submitted_at: null,
-  rejected_at: null,
-  reject_reason: null,
-  creative_id: null,
-  created_at: '2026-05-20T09:00:00.000Z',
-  updated_at: '2026-06-08T09:00:00.000Z',
-  spend_tnd: 240,
-  reconciled_at: '2026-06-08T09:00:00.000Z',
+const wireRow = (over: Partial<WalletTransactionRow> = {}): WalletTransactionRow => ({
+  id: 'recharge-r1',
+  type: 'recharge',
+  label: 'Rechargement wallet',
+  amount_tnd: 1000,
+  date: '2026-07-10T10:00:00.000Z',
+  campaign_id: null,
+  detail: 'Virement bancaire',
   ...over,
 });
 
-describe('composeLedger (CF-M1 — live credits/debits, reconciling with /api/wallet/balance)', () => {
-  it('credits = CONFIRMED recharges only (pending/rejected rows never enter the ledger)', () => {
-    const lines = composeLedger(
-      [
-        recharge({ id: 'r1', status: 'confirmed' }),
-        recharge({ id: 'r2', status: 'pending' }),
-        recharge({ id: 'r3', status: 'rejected', reject_reason: 'introuvable' }),
-      ],
-      [],
-    );
-    expect(lines).toHaveLength(1);
-    expect(lines[0]).toMatchObject({
-      id: 'r-r1',
+// FIX2 — composeLedger (the client-side derivation over recharges + campaigns) is RETIRED: the
+// ledger is SERVED (GET /api/wallet/transactions) and rendered VERBATIM. What remains pinned
+// here is the pure VIEW mapping: sign and type come FROM THE WIRE, never re-derived.
+describe('transactionView (FIX2 — the verbatim view over the served ledger)', () => {
+  it('a recharge renders as a credit with its payment method', () => {
+    const view = transactionView(wireRow());
+    expect(view).toMatchObject({
       type: 'recharge',
-      designation: RECHARGE_DESIGNATION,
-      amount: 1000,
-      paymentMethod: RECHARGE_PAYMENT_METHOD, // bank transfer is the only recharge channel
+      designation: 'Rechargement wallet',
+      badge: null,
+      amountTnd: 1000,
+      method: 'Virement bancaire',
+      tone: 'credit',
+    });
+    expect(view.date.toISOString()).toBe('2026-07-10T10:00:00.000Z');
+  });
+
+  it('an engagement renders with the « Engagé » badge and its OWN tone — informational, the balance has not moved', () => {
+    const view = transactionView(
+      wireRow({
+        id: 'engagement-c1',
+        type: 'engagement',
+        label: 'FT1',
+        amount_tnd: -300,
+        campaign_id: 'c1',
+        detail: null,
+      }),
+    );
+    expect(view).toMatchObject({
+      designation: 'FT1',
+      badge: 'Engagé',
+      amountTnd: -300,
+      tone: 'engaged',
+      method: '',
     });
   });
 
-  it('credits are dated at CONFIRMATION (when the money entered the balance), not creation', () => {
-    const [line] = composeLedger([recharge()], []);
-    expect(line?.date.toISOString()).toBe('2026-07-10T10:00:00.000Z');
-  });
-
-  it('FCT1 — a bon-method credit carries « Bon de commande »; virement/legacy stay « Virement bancaire »', () => {
-    const lines = composeLedger(
-      [
-        recharge({ id: 'r1', method: 'bon_de_commande' }),
-        recharge({ id: 'r2', method: 'virement' }),
-        recharge({ id: 'r3', method: null }),
-      ],
-      [],
+  it('a settlement renders « Réglé » as a debit; a FULLY REFUNDED one renders 0 honestly', () => {
+    const settled = transactionView(
+      wireRow({ id: 'settlement-s1', type: 'settlement', label: 'ky', amount_tnd: -180 }),
     );
-    expect(lines.map((l) => l.paymentMethod)).toEqual([
-      'Bon de commande',
-      RECHARGE_PAYMENT_METHOD,
-      RECHARGE_PAYMENT_METHOD,
-    ]);
-  });
-
-  // ── FCT2 (US-FCT-14) — debits AT LAUNCH DAY, the VISIBLE view ────────────────
-  it('debits = LAUNCHED campaigns (active/completed), VISIBLE from and DATED at the start day', () => {
-    const lines = composeLedger(
-      [],
-      [
-        campaign({ id: 'c1', status: 'active', spend_tnd: null, reconciled_at: null }),
-        // Before the start day: not launched yet → ABSENT (upcoming/pending/draft).
-        campaign({ id: 'c2', status: 'upcoming', spend_tnd: null, reconciled_at: null }),
-        campaign({ id: 'c3', status: 'pending', spend_tnd: null, reconciled_at: null }),
-        campaign({ id: 'c4', status: 'draft', start_date: null }),
-      ],
+    expect(settled).toMatchObject({ badge: 'Réglé', amountTnd: -180, tone: 'debit' });
+    const refunded = transactionView(
+      wireRow({ id: 'settlement-s2', type: 'settlement', label: 'khvutfyu', amount_tnd: 0 }),
     );
-    expect(lines).toHaveLength(1);
-    expect(lines[0]).toMatchObject({ id: 'c-c1', type: 'expense', designation: 'Campagne Été' });
-    // Dated at the LAUNCH day — never the reconciliation instant.
-    expect(lines[0]?.date.toISOString()).toBe('2026-06-01T00:00:00.000Z');
+    expect(refunded).toMatchObject({ badge: 'Réglé', amountTnd: 0, tone: 'credit' });
   });
 
-  it('the debit amount: the engaged ask while running, the reconciled NET once settled — the DATE never moves', () => {
-    const [running] = composeLedger(
-      [],
-      [campaign({ status: 'active', spend_tnd: null, reconciled_at: null })],
+  it('adjustments keep their SIGN and surface the reason as the method column', () => {
+    const negative = transactionView(
+      wireRow({
+        id: 'adjustment-a1',
+        type: 'adjustment',
+        amount_tnd: -25.25,
+        detail: 'Trop-perçu',
+      }),
     );
-    expect(running?.amount).toBe(300); // requested_budget — the engaged ask
-    const [settled] = composeLedger([], [campaign({ status: 'completed', spend_tnd: 240 })]);
-    expect(settled?.amount).toBe(240); // the reconciled NET
-    expect(settled?.date.toISOString()).toBe('2026-06-01T00:00:00.000Z'); // still launch day
-  });
-
-  it('a zero-spend reconciliation still shows (0 TND settled is a real outcome, not absence)', () => {
-    const lines = composeLedger([], [campaign({ spend_tnd: 0 })]);
-    expect(lines).toHaveLength(1);
-    expect(lines[0]?.amount).toBe(0);
-  });
-
-  // ── FCT2 (US-FCT-9) — the THIRD row type: signed admin adjustments ───────────
-  it('adjustments: SIGNED rows with the reason surfaced, merged into the ledger', () => {
-    const lines = composeLedger(
-      [],
-      [],
-      [
-        {
-          id: 'a1',
-          amount_tnd: 150.5,
-          reason: 'Geste commercial',
-          created_at: '2026-07-15T10:00:00.000Z',
-        },
-        { id: 'a2', amount_tnd: -30, reason: 'Trop-perçu', created_at: '2026-07-16T10:00:00.000Z' },
-      ],
+    expect(negative).toMatchObject({ amountTnd: -25.25, tone: 'debit', method: 'Trop-perçu' });
+    const positive = transactionView(
+      wireRow({
+        id: 'adjustment-a2',
+        type: 'adjustment',
+        amount_tnd: 40,
+        detail: 'Geste commercial',
+      }),
     );
-    expect(lines).toHaveLength(2);
-    expect(lines[0]).toMatchObject({
-      id: 'a-a2',
-      type: 'adjustment',
-      designation: ADJUSTMENT_DESIGNATION,
-      amount: -30,
-      paymentMethod: 'Trop-perçu',
-    });
-    expect(lines[1]).toMatchObject({ id: 'a-a1', amount: 150.5 });
+    expect(positive).toMatchObject({ amountTnd: 40, tone: 'credit' });
   });
 
-  it('merges and sorts newest-first across the THREE kinds', () => {
-    const lines = composeLedger(
-      [recharge({ id: 'r1', confirmed_at: '2026-07-10T10:00:00.000Z' })],
-      [campaign({ id: 'c1', status: 'active', start_date: '2026-07-12' })],
-      [{ id: 'a1', amount_tnd: 10, reason: 'x', created_at: '2026-07-11T10:00:00.000Z' }],
+  it('the « Dépenses » tab matches engagements AND settlements, nothing else', () => {
+    expect(isExpenseView(transactionView(wireRow({ type: 'engagement', amount_tnd: -1 })))).toBe(
+      true,
     );
-    expect(lines.map((l) => l.id)).toEqual(['c-c1', 'a-a1', 'r-r1']);
+    expect(isExpenseView(transactionView(wireRow({ type: 'settlement', amount_tnd: -1 })))).toBe(
+      true,
+    );
+    expect(isExpenseView(transactionView(wireRow()))).toBe(false);
+    expect(isExpenseView(transactionView(wireRow({ type: 'adjustment', amount_tnd: -1 })))).toBe(
+      false,
+    );
   });
 });
 

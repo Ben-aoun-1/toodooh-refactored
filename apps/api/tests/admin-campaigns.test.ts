@@ -265,8 +265,16 @@ describe('admin campaign moderation — activation keystone (real Postgres)', ()
     // EV2 (architect override): the 30 is THIS test's explicit fixture, self-seeded on the live
     // dispatch_config singleton and restored after — migration 0056 moved the column's default
     // to 15, so inheriting the row's value would couple the pin to migration/test order.
+    // FIX2 hygiene — the previous bare UPDATE was a NO-OP whenever an earlier suite's cleanup
+    // left dispatch_config EMPTY (order-luck: the read then fell back to the 15 default and this
+    // pin failed). Insert-or-update, and drop the row again only if THIS test created it.
     const [cfgBefore] = await sql`select event_cpm_tnd from dispatch_config`;
-    await sql`update dispatch_config set event_cpm_tnd = '30.000'`;
+    if (cfgBefore === undefined) {
+      await sql`insert into dispatch_config (seuil_diffusable, g_mois, jours_actifs, r_min_efficace, event_cpm_tnd)
+        values (1000, '100', 30, 2, '30.000')`;
+    } else {
+      await sql`update dispatch_config set event_cpm_tnd = '30.000'`;
+    }
     try {
       const { admin, campaignId } = await seedActivatable({
         fundTnd: 700,
@@ -286,6 +294,7 @@ describe('admin campaign moderation — activation keystone (real Postgres)', ()
     } finally {
       const restore = cfgBefore?.['event_cpm_tnd'] as string | undefined;
       if (restore !== undefined) await sql`update dispatch_config set event_cpm_tnd = ${restore}`;
+      else await sql`delete from dispatch_config`;
     }
   });
 
@@ -428,6 +437,22 @@ describe('admin campaign moderation — activation keystone (real Postgres)', ()
     // Derived for the operator: standard CPM 15 → i_cible ⌊450·1000/15⌋ = 30000.
     expect(mine?.cpm_tnd).toBe(15);
     expect(mine?.derived_i_cible).toBe(30000);
+  });
+
+  // FIX2 amendment pin — the queue serves THE FIGURE THE ACTIVATION GATE ENFORCES: spendable
+  // excluding the row's own campaign. Funds engaged by ANOTHER unsettled campaign drop the
+  // figure; the row's own ask never double-charges it (the 300-funded case above stays 300).
+  it("the queue figure is spendable EXCLUDING the row's own ask — other engagements drop it (FIX2)", async () => {
+    const { admin, advertiser, campaignId } = await seedActivatable({
+      fundTnd: 300,
+      requestedBudgetTnd: 450,
+    });
+    await seedCampaign(advertiser, { status: 'active', requestedBudgetTnd: 120 });
+    mockSession(admin);
+    const res = await app.inject({ method: 'GET', url: '/api/admin/campaigns?status=pending' });
+    const rows = res.json() as { id: string; wallet_balance_tnd: number }[];
+    // 300 funded − 120 engaged elsewhere = 180; the row's own 450 ask is EXCLUDED.
+    expect(rows.find((r) => r.id === campaignId)?.wallet_balance_tnd).toBe(180);
   });
 
   it('the review queue surfaces a null derived_i_cible for a budget-less campaign', async () => {

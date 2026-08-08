@@ -20,7 +20,10 @@ export interface DashboardStats {
   campaignsDiffused: number;
   totalViews: number;
   conversionRate: number;
+  /** FIX2 — the « Solde disponible » headline: SPENDABLE (what the funded gates enforce). */
   balance: string;
+  /** FIX2 — « Solde total » (credits − net settlements ± adjustments), shown alongside. */
+  balanceTotal: string;
   totalBudget: number;
   totalDurationSeconds: number;
   prevYearCampaigns: number;
@@ -35,6 +38,7 @@ export const INITIAL_STATS: DashboardStats = {
   totalViews: 0,
   conversionRate: 0,
   balance: '0 TND HT (0 TND TTC)',
+  balanceTotal: '0 TND HT (0 TND TTC)',
   totalBudget: 0,
   totalDurationSeconds: 0,
   prevYearCampaigns: 0,
@@ -42,6 +46,11 @@ export const INITIAL_STATS: DashboardStats = {
   prevYearDurationSeconds: 0,
   prevYearBudget: 0,
 };
+
+/** FIX2 rider — « Campagnes diffusées » counts campaigns that actually AIRED (or are airing). */
+const DIFFUSED_STATUSES = new Set(['active', 'completed']);
+/** FIX2 rider — « Budget total alloué » sums CONFIRMED budgets (drafts/rejected move nothing). */
+const CONFIRMED_STATUSES = new Set(['pending', 'upcoming', 'active', 'completed']);
 
 /** A campaign row as selected by `useDashboardStats` — only the fields the math reads. */
 export interface DashboardStatsCampaignRow {
@@ -60,10 +69,13 @@ export interface DashboardStatsResult {
 /**
  * Compute the advertiser dashboard stats. `now` is injectable so the
  * year-bucketing is deterministic under test; production callers omit it.
+ * FIX2 — takes BOTH solde figures: spendable headlines « Solde disponible »
+ * (the funded-gate figure), total rides beneath as « Solde total ».
  */
 export function computeDashboardStats(
   campaigns: DashboardStatsCampaignRow[],
-  balance: number,
+  spendableTnd: number,
+  totalTnd: number,
   now: Date = new Date(),
 ): DashboardStatsResult {
   const currentYearStart = new Date(now.getFullYear(), 0, 1);
@@ -84,19 +96,28 @@ export function computeDashboardStats(
   const currentCampaigns = allCampaigns.filter(isCurrentYear);
   const prevYearCampaignsList = allCampaigns.filter(isPrevYear);
 
-  const campaignsDiffused = currentCampaigns.length;
+  // FIX2 riders — the tiles count REAL activity, never intent: « Campagnes diffusées » = aired
+  // (active/completed) only; « Budget total alloué » = CONFIRMED budgets only. A cart add (a
+  // draft) moves NEITHER tile. Same rules on the previous-year comparison set.
+  const campaignsDiffused = currentCampaigns.filter((c) =>
+    DIFFUSED_STATUSES.has(c.status ?? ''),
+  ).length;
   const activeCampaigns = currentCampaigns.filter((c) => c.status === 'active').length;
   const totalViews = currentCampaigns.reduce((sum, c) => sum + (c.views || 0), 0);
   const totalBudget = currentCampaigns.reduce(
-    (sum, c) => sum + (parseFloat(String(c.budget)) || 0),
+    (sum, c) =>
+      CONFIRMED_STATUSES.has(c.status ?? '') ? sum + (parseFloat(String(c.budget)) || 0) : sum,
     0,
   );
   const totalDurationSeconds = totalViews * 30;
 
-  const prevYearCampaigns = prevYearCampaignsList.length;
+  const prevYearCampaigns = prevYearCampaignsList.filter((c) =>
+    DIFFUSED_STATUSES.has(c.status ?? ''),
+  ).length;
   const prevYearViews = prevYearCampaignsList.reduce((sum, c) => sum + (c.views || 0), 0);
   const prevYearBudget = prevYearCampaignsList.reduce(
-    (sum, c) => sum + (parseFloat(String(c.budget)) || 0),
+    (sum, c) =>
+      CONFIRMED_STATUSES.has(c.status ?? '') ? sum + (parseFloat(String(c.budget)) || 0) : sum,
     0,
   );
   const prevYearDurationSeconds = prevYearViews * 30;
@@ -109,7 +130,8 @@ export function computeDashboardStats(
       campaignsDiffused,
       totalViews,
       conversionRate: Math.round(conversionRate * 10) / 10,
-      balance: htTtcLabel(balance),
+      balance: htTtcLabel(spendableTnd),
+      balanceTotal: htTtcLabel(totalTnd),
       totalBudget,
       totalDurationSeconds,
       prevYearCampaigns,
@@ -117,7 +139,7 @@ export function computeDashboardStats(
       prevYearDurationSeconds,
       prevYearBudget,
     },
-    availableBalanceTnd: balance,
+    availableBalanceTnd: spendableTnd,
     totalCreatedCampaignsCount: allCampaigns.length,
   };
 }

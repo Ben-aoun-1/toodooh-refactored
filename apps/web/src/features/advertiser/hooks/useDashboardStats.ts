@@ -51,15 +51,18 @@ async function fetchDashboardStats(): Promise<DashboardStatsResult> {
     log.error({ error: e }, 'Erreur récupération campagnes (stats)');
   }
 
-  let balance = 0;
+  // FIX2 — both solde figures come from the ONE api seam (spendable = the funded-gate figure).
+  let spendableTnd = 0;
+  let totalTnd = 0;
   try {
-    balance = (await walletService.getBalance()).balance_tnd;
+    const wallet = await walletService.getBalance();
+    spendableTnd = wallet.spendable_tnd;
+    totalTnd = wallet.balance_tnd;
   } catch (e) {
     log.error({ error: e }, 'Erreur récupération solde');
-    balance = 0;
   }
 
-  return computeDashboardStats(campaigns, balance);
+  return computeDashboardStats(campaigns, spendableTnd, totalTnd);
 }
 
 export function useDashboardStats(userId: string | undefined): UseDashboardStatsResult {

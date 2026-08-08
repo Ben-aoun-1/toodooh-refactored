@@ -150,13 +150,16 @@ describe('wallet adjustments (admin + balance seam, real Postgres)', () => {
 
     mockSession(advertiser, 'advertiser');
     const balance = (await app.inject({ method: 'GET', url: '/api/wallet/balance' })).json();
-    // The reservation-untouched pin: credited is STILL the recharge SUM, debited STILL the
-    // reconciliation SUM (0 here) — adjustments are their own separate term.
+    // credited is STILL the recharge SUM, debited STILL the reconciliation SUM (0 here) —
+    // adjustments are their own separate term. FIX2: the response now ALSO carries the
+    // reservation pair (engaged 0 here — no confirmed-unsettled campaigns; spendable = balance).
     expect(balance).toEqual({
       balance_tnd: 74.75,
       credited_tnd: 100,
       debited_tnd: 0,
       adjustments_tnd: -25.25,
+      engaged_tnd: 0,
+      spendable_tnd: 74.75,
       currency: 'TND',
     });
   });

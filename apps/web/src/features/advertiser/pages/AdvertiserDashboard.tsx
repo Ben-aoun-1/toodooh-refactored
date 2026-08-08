@@ -35,7 +35,12 @@ export default function AdvertiserDashboard() {
 
   return (
     <div className="w-full space-y-8">
-      <BalanceCard balance={stats.balance} loading={loadingStats} isDisabled={isDisabled} />
+      <BalanceCard
+        balance={stats.balance}
+        balanceTotal={stats.balanceTotal}
+        loading={loadingStats}
+        isDisabled={isDisabled}
+      />
       <StatsGrid
         campaignsDiffused={stats.campaignsDiffused}
         totalViews={stats.totalViews}

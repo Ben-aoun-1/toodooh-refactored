@@ -48,7 +48,36 @@ export interface WalletBalance {
   debited_tnd: number;
   /** FCT2 — the SIGNED sum of admin wallet adjustments (US-FCT-9). */
   adjustments_tnd: number;
+  /** FIX2 — Σ GROSS budgets of confirmed-but-unsettled campaigns (event positionings included). */
+  engaged_tnd: number;
+  /** FIX2 — balance − engaged: THE figure every funded gate enforces and the display headlines. */
+  spendable_tnd: number;
   currency: 'TND';
+}
+
+/** FIX2 — one served ledger row (GET /wallet/transactions), rendered VERBATIM. */
+export interface WalletTransactionRow {
+  id: string;
+  type: 'recharge' | 'engagement' | 'settlement' | 'adjustment';
+  /** Campaign name for engagement/settlement rows; fixed labels otherwise. */
+  label: string;
+  /** SIGNED TND HT: recharges +, engagements −, settlements − (0 when fully refunded). */
+  amount_tnd: number;
+  date: string;
+  /** Links an engagement to its later settlement (same campaign). */
+  campaign_id: string | null;
+  /** Recharge payment method / adjustment reason. */
+  detail: string | null;
+}
+
+export interface WalletLedgerWire {
+  transactions: WalletTransactionRow[];
+  solde: {
+    total_tnd: number;
+    engaged_tnd: number;
+    spendable_tnd: number;
+    currency: 'TND';
+  };
 }
 
 export interface BankCoordinatesWire {
@@ -91,6 +120,11 @@ export const walletService = {
   /** The caller's derived wallet balance (confirmed credits − reconciled campaign spend). */
   getBalance(): Promise<WalletBalance> {
     return apiClient.get<WalletBalance>('/wallet/balance');
+  },
+
+  /** FIX2 — THE complete served ledger + solde block (the web renders it verbatim). */
+  getTransactions(): Promise<WalletLedgerWire> {
+    return apiClient.get<WalletLedgerWire>('/wallet/transactions');
   },
 
   /** The caller's recharges, newest first (every row carries its reference). */

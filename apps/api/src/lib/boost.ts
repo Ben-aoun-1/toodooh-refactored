@@ -24,7 +24,7 @@ import { isFuture, tunisNowSlot } from './dispatch/redispatch.js';
 import { type EligibleScreenhost, selection } from './dispatch/selection.js';
 import { seuilImpressions } from './dispatch/thresholds.js';
 import { NOOP_TRACE, type EngineTrace } from './engine-journal/trace.js';
-import { walletBalance } from './recharges.js';
+import { walletSpendable } from './recharges.js';
 
 // CF-B1 (spec §3.3) — « Booster »: STRICTLY ADDITIVE on an Active/À venir campaign. The end date
 // can only grow (the start is frozen), zones/categories only APPEND, and the complementary budget
@@ -315,7 +315,9 @@ export const runBoost = async (
         throw new BoostRefused({ status: 'BUDGET_EXCEEDS_CMAX', cMaxBoostTnd });
       }
       // Solde HT ≥ amount (the cart-confirm idiom: a READ — no money moves; settlement debits).
-      const balance = (await walletBalance(advertiserId)).balance_tnd;
+      // FIX2 — SPENDABLE, no exclusion: the campaign's existing budget stays engaged; the boost
+      // is NEW money on top and is checked against what remains.
+      const balance = (await walletSpendable(advertiserId)).spendable_tnd;
       if (balance < amountTnd) {
         throw new BoostRefused({
           status: 'INSUFFICIENT_BALANCE',
