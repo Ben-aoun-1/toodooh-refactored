@@ -447,7 +447,14 @@ describe('admin campaign moderation — activation keystone (real Postgres)', ()
       fundTnd: 300,
       requestedBudgetTnd: 450,
     });
-    await seedCampaign(advertiser, { status: 'active', requestedBudgetTnd: 120 });
+    // FIX2b — engagement requires a LIVE window (end ≥ Tunis today); the helper's default
+    // 2024 dates would make this a zombie and the figure would not drop.
+    await seedCampaign(advertiser, {
+      status: 'active',
+      requestedBudgetTnd: 120,
+      startDate: '2026-01-01',
+      endDate: '2030-01-01',
+    });
     mockSession(admin);
     const res = await app.inject({ method: 'GET', url: '/api/admin/campaigns?status=pending' });
     const rows = res.json() as { id: string; wallet_balance_tnd: number }[];

@@ -17,7 +17,11 @@ import {
   users,
   walletAdjustments,
 } from '../src/db/schema.js';
-import { plusCalendarDays, premiereDateDisponible } from '../src/lib/campaign-dates.js';
+import {
+  plusCalendarDays,
+  premiereDateDisponible,
+  tunisDateOf,
+} from '../src/lib/campaign-dates.js';
 import { getDispatchConfig } from '../src/lib/dispatch/config.js';
 import { walletSpendable } from '../src/lib/recharges.js';
 import { walletLedger } from '../src/lib/wallet-ledger.js';
@@ -116,6 +120,9 @@ const seedCampaign = async (
   over: Partial<typeof campaigns.$inferInsert> = {},
 ): Promise<string> => {
   seq += 1;
+  // FIX2b — default a LIVE diffusion window (today → +7): engagement now requires end_date ≥
+  // Tunis today, so status fixtures must carry an open window unless a test overrides it.
+  const today = tunisDateOf(new Date());
   const [c] = await db
     .insert(campaigns)
     .values({
@@ -124,6 +131,8 @@ const seedCampaign = async (
       campaignType: 'standard',
       status: 'draft',
       requestedBudget: '400.00',
+      startDate: today,
+      endDate: plusCalendarDays(today, 7),
       ...over,
     })
     .returning();
@@ -229,6 +238,51 @@ describe('FIX2 — reservation semantics + the served ledger (real Postgres)', (
     expect(wallet.engaged_tnd).toBe(180); // 50 + 60 + 70 — the settled one left the set
     expect(wallet.balance_tnd).toBe(820); // 1000 − 180 net
     expect(wallet.spendable_tnd).toBe(640);
+  });
+
+  // ── FIX2b — the WINDOW clause (the prod zombie sweep: −14 462 spendable) ───
+  it('an ENDED-unreconciled campaign is NOT engaged — the zombie case, the exact prod shape', async () => {
+    const advertiser = await seedUser();
+    await fund(advertiser, '5500.00');
+    const today = tunisDateOf(new Date());
+    // The prod shapes: completed long ago, never reconciled (settlements never ran) — and an
+    // active row whose window closed (the tick not yet flipped). NEITHER may reserve funds.
+    await seedCampaign(advertiser, {
+      status: 'completed',
+      requestedBudget: '14000.00',
+      startDate: '2026-07-01',
+      endDate: '2026-07-15',
+    });
+    await seedCampaign(advertiser, {
+      status: 'active',
+      requestedBudget: '500.00',
+      startDate: '2026-07-20',
+      endDate: plusCalendarDays(today, -1),
+    });
+    // A still-open window IS engaged — the boundary day (end = today) included (gte).
+    await seedCampaign(advertiser, {
+      status: 'active',
+      requestedBudget: '300.00',
+      endDate: today,
+    });
+
+    const wallet = await walletSpendable(advertiser);
+    expect(wallet.engaged_tnd).toBe(300); // only the live window
+    expect(wallet.spendable_tnd).toBe(5200); // never −14 462-shaped again
+
+    // The ledger mirrors the SAME predicate: the zombies show NEITHER an « Engagé » row NOR a
+    // settlement row (limbo pending settlement — the settlement lane's territory, not a display).
+    mockSession(advertiser);
+    const res = await app.inject({ method: 'GET', url: '/api/wallet/transactions' });
+    const body = res.json<Awaited<ReturnType<typeof walletLedger>>>();
+    expect(body.transactions.filter((r) => r.type === 'engagement')).toHaveLength(1);
+    expect(body.transactions.filter((r) => r.type === 'settlement')).toHaveLength(0);
+    expect(body.solde).toEqual({
+      total_tnd: 5500,
+      engaged_tnd: 300,
+      spendable_tnd: 5200,
+      currency: 'TND',
+    });
   });
 
   it('excludeCampaignId (the ACTIVATION gate) removes exactly the campaign’s own engagement', async () => {
