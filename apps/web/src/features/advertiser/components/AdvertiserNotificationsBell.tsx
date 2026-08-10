@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useAdvertiserNotifications } from '@/features/advertiser/hooks/useAdvertiserNotifications';
+import { shouldAutoOpen } from '@/lib/popover-auto-open';
 
 const relativeTime = (date: Date) => {
   const diff = Math.max(0, Date.now() - date.getTime());
@@ -20,10 +21,12 @@ type Props = {
   emphasized?: boolean;
 };
 
+// GREEN2 item 9 — one auto-open per SPA session, across remounts (reload = a new session).
+let autoOpenedThisSession = false;
+
 export default function AdvertiserNotificationsBell({ userId, emphasized = false }: Props) {
   const navigate = useNavigate();
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const autoOpenedRef = useRef(false);
   const [open, setOpen] = useState(false);
 
   // Feed + mark-read via React Query (Commit 8 — D5). The mutation is
@@ -51,11 +54,12 @@ export default function AdvertiserNotificationsBell({ userId, emphasized = false
   }, []);
 
   useEffect(() => {
-    if (unreadCount > 0 && !open && !autoOpenedRef.current) {
+    // GREEN2 item 9 — auto-open at most ONCE PER SESSION (module flag survives remounts); the
+    // old per-mount ref re-armed on zero and re-opened the popover on every navigation.
+    if (shouldAutoOpen(unreadCount > 0, autoOpenedThisSession) && !open) {
       setOpen(true);
-      autoOpenedRef.current = true;
+      autoOpenedThisSession = true;
     }
-    if (unreadCount === 0) autoOpenedRef.current = false;
   }, [unreadCount, open]);
 
   const toggleOpen = () => {
