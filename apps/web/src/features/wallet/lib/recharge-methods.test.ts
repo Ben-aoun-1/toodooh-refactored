@@ -38,7 +38,7 @@ describe('the per-method status label matrix (chips)', () => {
   it('legacy rows (method null) keep the as-found labels', () => {
     expect(statusLabel(null, 'pending')).toBe('En attente');
     expect(statusLabel(null, 'confirmed')).toBe('Validée');
-    expect(statusLabel(null, 'rejected')).toBe('Rejetée');
+    expect(statusLabel(null, 'rejected')).toBe('Annulée'); // GREEN2 — one refusal word, modal-aligned
   });
 
   it('every status has a chip class (total switch)', () => {
@@ -53,15 +53,15 @@ describe('the per-method status label matrix (chips)', () => {
     }
   });
 
-  it('the admin filter offers every display label, legacy included', () => {
+  it('the admin filter offers every display label — « Bon émis » visible (GREEN2 item 2), ONE refusal word (item 6)', () => {
     expect(ADMIN_STATUS_FILTER_LABELS).toEqual([
       'En attente',
       'En attente de réception',
+      'Bon émis',
       'Bon retourné signé',
       'Validée',
       'Créditée',
       'Fonds reçus',
-      'Rejetée',
       'Annulée',
     ]);
   });

@@ -39,7 +39,10 @@ export const methodLabel = (method: RechargeMethod | null): string =>
 const LEGACY_STATUS_LABELS: Record<RechargeStatus, string> = {
   pending: 'En attente',
   confirmed: 'Validée',
-  rejected: 'Rejetée',
+  // GREEN2 item 6 — ONE refusal word for recharges, aligned with the modal verb « Annuler la
+  // demande »: legacy rows join virement/bon on « Annulée ». (Factures keep « Refuser » — a
+  // different spec family, untouched.)
+  rejected: 'Annulée',
   // Unreachable for legacy rows (the bon states require method='bon_de_commande') — mapped anyway
   // so the record is total and a drifted row still renders something sensible.
   bon_issued: 'Bon émis',
@@ -91,14 +94,14 @@ export const ADMIN_STATUS_FILTER_LABELS: readonly string[] = [
   'Validée',
   'Créditée',
   'Fonds reçus',
-  'Rejetée',
   'Annulée',
 ];
 
 /**
  * The admin-decidable mirror (lib/recharges.ts isAdminDecidable): Valider/Annuler show on a
  * virement (or legacy) row while pending, on a bon row only once the signed bon is back.
- * A « Bon émis » row never reaches the admin at all (server-excluded) — pinned server-side.
+ * GREEN2 — « Bon émis » rows now APPEAR in the queue (read-only); this predicate is what keeps
+ * their action buttons off until the signed bon is deposited.
  */
 export const isAdminDecidable = (row: {
   method: RechargeMethod | null;
