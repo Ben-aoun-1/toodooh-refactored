@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, ne, or } from 'drizzle-orm';
+import { and, desc, eq, isNull, or } from 'drizzle-orm';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
@@ -16,13 +16,13 @@ import { storage } from '../storage/s3-storage.js';
 // gets 403, a missing recharge 404. Decidable states are per-method (lib/recharges.ts
 // isAdminDecidable): virement + legacy while 'pending', bon only once 'bon_returned' — and the
 // UPDATE's WHERE re-encodes the SAME predicate so the transition stays ATOMIC (a re-confirm can
-// never double-credit). FCT1 pins: 'bon_issued' rows NEVER appear in the queue (screencaster-only
-// until the signed bon is deposited), and every decision notifies the screencaster in French.
+// never double-credit). GREEN2 (ruled) supersedes the FCT1 invisibility pin: 'bon_issued' rows
+// now APPEAR in the queue as READ-ONLY « Bon émis » rows (the admin must see outstanding paper);
+// they stay NON-decidable until the signed bon is deposited. Every decision notifies in French.
 
 const idParamSchema = z.object({ id: z.uuid() });
-// 'bon_issued' is deliberately NOT requestable — those rows are invisible to the admin queue.
 const listQuerySchema = z.object({
-  status: z.enum(['pending', 'confirmed', 'rejected', 'bon_returned']).optional(),
+  status: z.enum(['pending', 'confirmed', 'rejected', 'bon_issued', 'bon_returned']).optional(),
 });
 const rejectBodySchema = z.object({ reason: z.string().trim().min(1).max(2000) });
 
@@ -55,20 +55,22 @@ export const adminRechargesRoutes: FastifyPluginAsync = async (app) => {
   const adminGuard = { preHandler: [requireAuth, requireAdmin] };
 
   // GET /api/admin/recharges[?status=] — the moderation queue (newest first); optional status
-  // filter. FCT1 PIN: 'bon_issued' rows are ALWAYS excluded — a bon is invisible to the admin
-  // until the screencaster deposits the signed copy.
+  // filter. GREEN2 (ruled): 'bon_issued' rows are INCLUDED — outstanding awaiting-signature
+  // paper is visible, read-only (isAdminDecidable keeps confirm/reject off until deposit).
   app.get('/api/admin/recharges', adminGuard, async (request, reply) => {
     const parsedQuery = listQuerySchema.safeParse(request.query);
     if (!parsedQuery.success) {
-      return invalidField(reply, 'status', 'must be pending, confirmed, rejected or bon_returned');
+      return invalidField(
+        reply,
+        'status',
+        'must be pending, confirmed, rejected, bon_issued or bon_returned',
+      );
     }
     const { status } = parsedQuery.data;
     const rows = await db
       .select()
       .from(recharges)
-      .where(
-        and(ne(recharges.status, 'bon_issued'), status ? eq(recharges.status, status) : undefined),
-      )
+      .where(status ? eq(recharges.status, status) : undefined)
       .orderBy(desc(recharges.createdAt));
     return reply.status(200).send(rows.map(adminRechargeView));
   });

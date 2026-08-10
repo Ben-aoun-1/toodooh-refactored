@@ -85,6 +85,8 @@ export const statusChipClass = (status: RechargeStatus): string => {
 export const ADMIN_STATUS_FILTER_LABELS: readonly string[] = [
   'En attente',
   'En attente de réception',
+  // GREEN2 (ruled) — outstanding awaiting-signature bons are VISIBLE (read-only) in the queue.
+  'Bon émis',
   'Bon retourné signé',
   'Validée',
   'Créditée',

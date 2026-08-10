@@ -306,20 +306,23 @@ describe('recharge parcours v2 (real Postgres + MinIO)', () => {
     expect(text).toContain(BON_RETURN_INSTRUCTION);
   });
 
-  // ── the Bon émis admin-invisibility pin ────────────────────────────────────
-  it('« Bon émis » rows NEVER appear to the admin: list excludes them, the status filter cannot request them, no admin notification exists', async () => {
+  // ── GREEN2 (ruled, supersedes the FCT1 invisibility pin): outstanding paper is VISIBLE ─────
+  it('« Bon émis » rows APPEAR to the admin — read-only, filterable, still no admin notification', async () => {
     const me = await seedUser();
     const admin = await seedUser({ role: 'admin' });
     mockSession(me);
-    await createBon(600);
+    const bon = (await createBon(600)).json() as { id: string };
     const virement = (await createVirement(500)).json() as { id: string };
 
     mockSession(admin, 'admin');
     const list = (await adminList()).json() as { id: string; status: string }[];
-    expect(list).toHaveLength(1);
-    expect(list[0]?.id).toBe(virement.id);
-    expect((await adminList('?status=bon_issued')).statusCode).toBe(400);
+    expect(list).toHaveLength(2); // the outstanding bon is in the queue now
+    expect(list.map((r) => r.id).sort()).toEqual([bon.id, virement.id].sort());
+    const filtered = (await adminList('?status=bon_issued')).json() as { id: string }[];
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0]?.id).toBe(bon.id);
     expect((await adminList('?status=bon_returned')).json()).toHaveLength(0);
+    // READ-ONLY: the bon stays non-decidable until the signed copy is deposited (409 direct).
     // The only admin notification is the VIREMENT one — bon issuance fans out nothing.
     const adminRows = await notificationsFor(admin);
     expect(adminRows).toHaveLength(1);
@@ -469,14 +472,12 @@ describe('recharge parcours v2 (real Postgres + MinIO)', () => {
     expect(before.json()).toEqual({ rib: '—', iban: '—', bic: '—', domiciliation: '—' });
 
     // The operator's one-liner (config, never code) — restored right after.
-    await db
-      .update(dispatchConfig)
-      .set({
-        bankRib: 'TN59 123',
-        bankIban: 'TN5901234567890123456789',
-        bankBic: 'BIATTNTT',
-        bankDomiciliation: 'BIAT — Agence Tunis Lac',
-      });
+    await db.update(dispatchConfig).set({
+      bankRib: 'TN59 123',
+      bankIban: 'TN5901234567890123456789',
+      bankBic: 'BIATTNTT',
+      bankDomiciliation: 'BIAT — Agence Tunis Lac',
+    });
     try {
       const after = await app.inject({ method: 'GET', url: '/api/recharges/bank-coordinates' });
       expect(after.json()).toEqual({
