@@ -8,6 +8,7 @@ import {
   formatTablePeriod,
   inRange,
   monthLabelFr,
+  peakObservedLabel,
   resolvePeriodRange,
   tunisTodayIso,
 } from './performance-period';
@@ -89,5 +90,13 @@ describe('tunisTodayIso / the R8 Tunis anchor', () => {
     // …one hour earlier it is still June 30 — the server's impressions bucket and the page's
     // curve day must flip together (the confirmed 26/06 class of bug).
     expect(tunisTodayIso(new Date('2026-06-30T22:30:00Z'))).toBe('2026-06-30');
+  });
+});
+
+describe('peakObservedLabel (GREEN2 item 8a — no mockup token on screen)', () => {
+  it('renders the real peak date, and an honest « — » when no peak exists', () => {
+    expect(peakObservedLabel({ date: '2026-07-26' })).toBe('26/07/2026');
+    expect(peakObservedLabel(null)).toBe('—');
+    expect(peakObservedLabel(undefined)).toBe('—');
   });
 });

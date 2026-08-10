@@ -159,3 +159,10 @@ export function formatTablePeriod(startIso: string | null, endIso: string | null
   if (startOk) return format(startOk, 'dd/MM/yyyy');
   return '—';
 }
+
+/**
+ * GREEN2 item 8a — the « Maximum observé » rider: the REAL peak date, or an honest « — » when no
+ * peak exists yet (the mockup's literal « JJ/MM/AAAA » token must never reach the screen).
+ */
+export const peakObservedLabel = (peak: { date: string } | null | undefined): string =>
+  peak ? formatDateFr(peak.date) : '—';
