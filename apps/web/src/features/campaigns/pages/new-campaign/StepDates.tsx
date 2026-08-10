@@ -1,7 +1,12 @@
+import { fr } from 'date-fns/locale';
 import { AlertCircle, ArrowRight, Calendar, Clock } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import DatePicker from 'react-datepicker';
+import DatePicker, { registerLocale } from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
+
+// GREEN2 item 7a — the calendar renders in FRENCH (month names, lu/ma/me… weekday heads);
+// stored values stay Date objects / ISO strings, presentation only.
+registerLocale('fr', fr);
 
 import PillButton from '@/components/PillButton';
 import { startFloorHelperText } from '@/features/campaigns/lib/wizard-dates';
@@ -122,6 +127,7 @@ export default function StepDates({
                 Date de début <span className="text-red-500">*</span>
               </label>
               <DatePicker
+                locale="fr"
                 id="dates-start-date"
                 selected={startDate}
                 onChange={(date: Date | null) => handleDateChange('start', date)}
@@ -159,6 +165,7 @@ export default function StepDates({
                 Date de fin <span className="text-red-500">*</span>
               </label>
               <DatePicker
+                locale="fr"
                 id="dates-end-date"
                 selected={endDate}
                 onChange={(date: Date | null) => handleDateChange('end', date)}

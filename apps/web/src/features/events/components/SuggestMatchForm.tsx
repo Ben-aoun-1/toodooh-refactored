@@ -1,5 +1,9 @@
+import { format, parse } from 'date-fns';
+import { fr } from 'date-fns/locale';
 import { useState } from 'react';
+import DatePicker, { registerLocale } from 'react-datepicker';
 import { toast } from 'react-hot-toast';
+import 'react-datepicker/dist/react-datepicker.css';
 
 import { ApiError } from '@/lib/api-client';
 import { getErrorMessage } from '@/lib/errors';
@@ -9,6 +13,11 @@ import { type SuggestFormErrors, validateSuggestForm } from '../lib/event-displa
 
 const INPUT_CLASSES =
   'w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/40 focus:border-brand-primary';
+
+// GREEN2 item 7b — French/24h PRESENTATION over the native mm/dd/yyyy + 12-hour controls; the
+// stored state stays exactly the wire strings ('yyyy-MM-dd' / 'HH:mm').
+registerLocale('fr', fr);
+const TIME_CARRIER = new Date(2000, 0, 1);
 
 /**
  * « Suggérer un match » — Équipe A/B + date + horaire, ALL required (the client mirrors the
@@ -89,23 +98,34 @@ export default function SuggestMatchForm() {
         {field(
           'Date du match',
           'date',
-          <input
+          <DatePicker
             id="suggest-date"
-            type="date"
+            locale="fr"
+            dateFormat="dd/MM/yyyy"
+            placeholderText="JJ/MM/AAAA"
             className={INPUT_CLASSES}
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
+            wrapperClassName="w-full"
+            selected={date === '' ? null : parse(date, 'yyyy-MM-dd', new Date())}
+            onChange={(d) => setDate(d === null ? '' : format(d, 'yyyy-MM-dd'))}
           />,
         )}
         {field(
           'Horaire (coup d’envoi)',
           'kickoff_time',
-          <input
+          <DatePicker
             id="suggest-kickoff_time"
-            type="time"
+            locale="fr"
+            showTimeSelect
+            showTimeSelectOnly
+            timeIntervals={15}
+            timeCaption="Heure"
+            dateFormat="HH:mm"
+            timeFormat="HH:mm"
+            placeholderText="HH:MM"
             className={INPUT_CLASSES}
-            value={time}
-            onChange={(e) => setTime(e.target.value)}
+            wrapperClassName="w-full"
+            selected={time === '' ? null : parse(time, 'HH:mm', TIME_CARRIER)}
+            onChange={(d) => setTime(d === null ? '' : format(d, 'HH:mm'))}
           />,
         )}
       </div>

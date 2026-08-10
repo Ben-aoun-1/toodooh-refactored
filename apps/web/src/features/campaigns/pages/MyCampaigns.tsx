@@ -1,3 +1,4 @@
+import { fr } from 'date-fns/locale';
 import {
   Search,
   Filter,
@@ -15,11 +16,15 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import DatePicker from 'react-datepicker';
+import DatePicker, { registerLocale } from 'react-datepicker';
 import { toast } from 'react-hot-toast';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 import 'react-datepicker/dist/react-datepicker.css';
+
+// GREEN2 item 7a — the calendar renders in FRENCH (month names, lu/ma/me… weekday heads);
+// stored values stay Date objects / ISO strings, presentation only.
+registerLocale('fr', fr);
 import campagneIcon from '@/assets/sidebar/campagnes.png';
 import PageHeader from '@/components/PageHeader';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
@@ -543,6 +548,7 @@ export default function MyCampaigns() {
                   Date de début
                 </label>
                 <DatePicker
+                  locale="fr"
                   selected={filters.startDate}
                   onChange={(date: Date | null) => setFilters({ ...filters, startDate: date })}
                   className="w-full h-10 px-3 text-sm border border-[#EBEBEB] rounded-md bg-white text-[#171717] focus:outline-none focus:ring-2 focus:ring-brand-primary/30 focus:border-brand-primary"
@@ -559,6 +565,7 @@ export default function MyCampaigns() {
                   Date de fin
                 </label>
                 <DatePicker
+                  locale="fr"
                   selected={filters.endDate}
                   onChange={(date: Date | null) => setFilters({ ...filters, endDate: date })}
                   className="w-full h-10 px-3 text-sm border border-[#EBEBEB] rounded-md bg-white text-[#171717] focus:outline-none focus:ring-2 focus:ring-brand-primary/30 focus:border-brand-primary"

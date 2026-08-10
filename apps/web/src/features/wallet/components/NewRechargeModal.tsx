@@ -211,20 +211,26 @@ export default function NewRechargeModal({
                   >
                     Justificatif de virement (PDF ou image) *
                   </label>
+                  {/* GREEN2 item 7c — the native control (« Choose File / No file chosen »)
+                      hides behind a French label; the input stays the real picker. */}
                   <input
                     ref={fileInputRef}
                     type="file"
                     accept={JUSTIFICATIF_ACCEPT}
                     onChange={handleFileChange}
-                    className="w-full text-sm text-gray-600 file:mr-3 file:px-4 file:py-2 file:rounded-lg file:border-0 file:bg-gray-100 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200 file:transition-colors file:cursor-pointer"
+                    className="hidden"
                     id="justificatif"
                   />
-                  {file && (
-                    <p className="text-xs text-gray-500 mt-1 inline-flex items-center gap-1">
-                      <Paperclip className="h-3 w-3" />
-                      {file.name}
-                    </p>
-                  )}
+                  <label
+                    htmlFor="justificatif"
+                    className="inline-block cursor-pointer rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200"
+                  >
+                    Parcourir les fichiers
+                  </label>
+                  <p className="text-xs text-gray-500 mt-1 inline-flex items-center gap-1">
+                    <Paperclip className="h-3 w-3" />
+                    {file ? file.name : 'Aucun fichier sélectionné'}
+                  </p>
                   <p className="text-xs text-gray-400 mt-1">
                     PDF, JPEG ou PNG — 10 Mo max. Obligatoire : sans justificatif, la demande ne
                     peut pas être envoyée.
