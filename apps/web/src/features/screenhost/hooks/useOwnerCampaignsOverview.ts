@@ -68,10 +68,7 @@ async function fetchOwnerCampaignsOverview(userId: string): Promise<OwnerCampaig
       .select('id, location_id')
       .eq('owner_id', userId)
       .eq('status', 'active'),
-    supabase
-      .from('campaign_owner_approvals')
-      .select('campaign_id, status')
-      .eq('owner_id', userId),
+    supabase.from('campaign_owner_approvals').select('campaign_id, status').eq('owner_id', userId),
   ]);
 
   if (ownerLocationsError) throw ownerLocationsError;
@@ -106,8 +103,7 @@ async function fetchOwnerCampaignsOverview(userId: string): Promise<OwnerCampaig
 
   const [ownerCampaignLocRes, ownerCampaignScreenRes] = await Promise.all(queryTasks);
   const { data: ownerCampaignLocRows, error: ownerCampaignLocError } = ownerCampaignLocRes;
-  const { data: ownerCampaignScreenRows, error: ownerCampaignScreenError } =
-    ownerCampaignScreenRes;
+  const { data: ownerCampaignScreenRows, error: ownerCampaignScreenError } = ownerCampaignScreenRes;
 
   if (ownerCampaignLocError) throw ownerCampaignLocError;
   if (ownerCampaignScreenError) throw ownerCampaignScreenError;

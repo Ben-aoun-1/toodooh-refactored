@@ -20,6 +20,7 @@ import { DAY_LABELS, DAY_LABELS_SHORT, formatHour, summarize } from '../lib/affl
 import { downloadMonthlyReport, reportSelectState } from '../lib/monthly-report';
 import { monthLabelFr } from '../lib/performance-period';
 import { ReportDownloadError, reportErrorMessageFr } from '../lib/period-report';
+import { venuePickerVisible } from '../lib/venue-picker';
 
 const log = logger.child({ module: 'OwnerAffluenceSection' });
 
@@ -36,10 +37,11 @@ function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string
 }
 
 // Owner-dashboard "Votre audience" section: the venue's typical-week affluence (weekday × hour
-// heatmap + summary). fleet_owner gets a venue selector; individual_owner has one venue. Self-
-// contained — reads the session + fetches its own data. Hidden entirely when the owner has no venue.
+// heatmap + summary). GREEN2 (ruled): ANY owner with 2+ venues gets the selector — fleet status
+// no longer gates it. Self-contained — reads the session + fetches its own data. Hidden entirely
+// when the owner has no venue.
 export function OwnerAffluenceSection() {
-  const { user, profileType } = useAuthStore();
+  const { user } = useAuthStore();
   const screenhosts = useScreenhostsMine(user?.id);
   const venues = useMemo(() => screenhosts.data ?? [], [screenhosts.data]);
 
@@ -119,7 +121,6 @@ export function OwnerAffluenceSection() {
   }
   if (venues.length === 0) return null;
 
-  const isFleet = profileType === 'fleet_owner';
   const peakDay = summary.peakDayIndex !== null ? (DAY_LABELS[summary.peakDayIndex] ?? '—') : '—';
   const peakHour = summary.peakHourIndex !== null ? formatHour(summary.peakHourIndex) : '—';
 
@@ -186,7 +187,9 @@ export function OwnerAffluenceSection() {
         )}
       </header>
 
-      {isFleet && venues.length > 1 && (
+      {/* GREEN2 item 5 (ruled) — the picker shows for ANY owner with 2+ venues; fleet status
+          no longer gates it (an individual owner with a second venue was silently defaulted). */}
+      {venuePickerVisible(venues.length) && (
         <div className="mt-4 flex flex-wrap gap-2">
           {venues.map((v) => {
             const active = v.id === selectedId;
