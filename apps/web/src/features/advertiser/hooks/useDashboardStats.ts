@@ -2,7 +2,6 @@ import { useQuery } from '@tanstack/react-query';
 
 import { campaignsApi } from '@/features/campaigns/services/campaigns.api';
 import { walletService } from '@/features/wallet/services/wallet.service';
-import { logger } from '@/lib/logger';
 
 import {
   computeDashboardStats,
@@ -13,8 +12,6 @@ import {
 } from './dashboard-stats.transform';
 import { advertiserKeys } from './queryKeys';
 
-const log = logger.child({ module: 'useDashboardStats' });
-
 export type { DashboardStats };
 
 interface UseDashboardStatsResult {
@@ -22,7 +19,9 @@ interface UseDashboardStatsResult {
   availableBalanceTnd: number;
   totalCreatedCampaignsCount: number;
   loading: boolean;
+  isError: boolean;
   error: Error | null;
+  refetch: () => void;
 }
 
 /**
@@ -36,33 +35,23 @@ interface UseDashboardStatsResult {
  * views/budget/year buckets. CF-HF4 (Kais) — the advertiser dashboard is PRÉVUES-ONLY like every
  * cast surface: views = the frozen plan's planned impressions (0 until a plan exists — the
  * delivered numbers stay host-side). The old hardcoded empty list (the Supabase-era stub) is
- * retired. A campaigns-fetch error degrades to the empty list, mirroring the balance leg.
+ * retired.
+ *
+ * GREEN2 (the INV-1 rule) — a FAILING leg now REJECTS the query instead of degrading to 0/[]:
+ * zeros rendered as truth on infra failure were the same masquerade as the owner surfaces'
+ * pre-first-data copy. The page renders the error state; React Query retries.
  */
-async function fetchDashboardStats(): Promise<DashboardStatsResult> {
-  let campaigns: DashboardStatsCampaignRow[] = [];
-  try {
-    campaigns = (await campaignsApi.mine()).map((c) => ({
-      status: c.status,
-      views: c.planned_impressions ?? 0,
-      budget: c.requested_budget,
-      created_at: c.created_at,
-    }));
-  } catch (e) {
-    log.error({ error: e }, 'Erreur récupération campagnes (stats)');
-  }
+export async function fetchDashboardStats(): Promise<DashboardStatsResult> {
+  const campaigns: DashboardStatsCampaignRow[] = (await campaignsApi.mine()).map((c) => ({
+    status: c.status,
+    views: c.planned_impressions ?? 0,
+    budget: c.requested_budget,
+    created_at: c.created_at,
+  }));
 
   // FIX2 — both solde figures come from the ONE api seam (spendable = the funded-gate figure).
-  let spendableTnd = 0;
-  let totalTnd = 0;
-  try {
-    const wallet = await walletService.getBalance();
-    spendableTnd = wallet.spendable_tnd;
-    totalTnd = wallet.balance_tnd;
-  } catch (e) {
-    log.error({ error: e }, 'Erreur récupération solde');
-  }
-
-  return computeDashboardStats(campaigns, spendableTnd, totalTnd);
+  const wallet = await walletService.getBalance();
+  return computeDashboardStats(campaigns, wallet.spendable_tnd, wallet.balance_tnd);
 }
 
 export function useDashboardStats(userId: string | undefined): UseDashboardStatsResult {
@@ -78,6 +67,8 @@ export function useDashboardStats(userId: string | undefined): UseDashboardStats
     availableBalanceTnd: query.data?.availableBalanceTnd ?? 0,
     totalCreatedCampaignsCount: query.data?.totalCreatedCampaignsCount ?? 0,
     loading: query.isLoading,
+    isError: query.isError,
     error: query.error,
+    refetch: () => void query.refetch(),
   };
 }
