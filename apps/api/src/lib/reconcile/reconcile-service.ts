@@ -45,7 +45,9 @@ export type ReconcileResult =
 // and is reported ALREADY_RECONCILED rather than double-settling. snapshot cpm + s_min from the plan.
 export const reconcileCampaignById = async (
   campaignId: string,
-  reconciledBy: string,
+  // SETTLE2 — NULL = the SYSTEM actor (the activated_by-NULL idiom): the auto-trigger settles
+  // with no admin in the loop. The column was always nullable; this widening is type-only.
+  reconciledBy: string | null,
 ): Promise<ReconcileResult> => {
   const [existing] = await db
     .select({ id: campaignReconciliation.id })

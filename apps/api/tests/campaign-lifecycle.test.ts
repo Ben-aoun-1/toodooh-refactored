@@ -156,14 +156,16 @@ describe('campaign lifecycle tick (real Postgres)', () => {
     ]);
   });
 
-  it('calls the onCampaignCompleted SEAM once per completed campaign (no-op today — BANKED)', async () => {
-    const seam = vi.fn();
+  it('calls the onCampaignCompleted SEAM once per completed campaign (SETTLE2: armed — id + log)', async () => {
+    const seam = vi.fn(async (campaignId: string) => {
+      void campaignId;
+    });
     const adv = await seedUser();
     const a = await seedCampaign(adv, 'active', { start: '2026-07-01', end: '2026-07-10' });
     const b = await seedCampaign(adv, 'active', { start: '2026-07-01', end: '2026-07-12' });
     await runCampaignLifecycleTick(silentLog, NOW, seam);
     expect(seam).toHaveBeenCalledTimes(2);
-    expect(new Set(seam.mock.calls.flat())).toEqual(new Set([a, b]));
+    expect(new Set(seam.mock.calls.map((c) => c[0]))).toEqual(new Set([a, b]));
   });
 });
 
