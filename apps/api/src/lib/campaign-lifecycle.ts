@@ -5,6 +5,7 @@ import { db } from '../db/client.js';
 import { campaigns, cartItems, events, notifications } from '../db/schema.js';
 
 import { plusCalendarDays, tunisDateOf } from './campaign-dates.js';
+import { reconcileCampaignById } from './reconcile/reconcile-service.js';
 
 // CF-S1 (spec §3.1/3.2) — the stored-status lifecycle: admin approval routes a future-dated
 // campaign to 'upcoming'; this job flips upcoming→active when the window opens and
@@ -12,12 +13,38 @@ import { plusCalendarDays, tunisDateOf } from './campaign-dates.js';
 // re-run matches zero rows), Tunis calendar dates like the rest of the campaign date rules.
 
 /**
- * Settlement seam — deliberately a NO-OP: the reconcile/payout auto-trigger at completion is
- * BANKED pending an operator ruling (money-adjacent). The lifecycle job calls it per completed
- * campaign so the wiring point exists and is tested; nothing happens here yet.
+ * SETTLE2 (operator ruling 2026-08-10) — the settlement seam, ARMED: each newly-completed
+ * campaign settles through the UNTOUCHED reconcile service on the same tick. Failure isolation:
+ * a settlement failure logs loudly and never breaks the tick or its siblings — the failed
+ * campaign stays unreconciled and retries naturally next tick (the service's unique(campaign_id)
+ * guard keeps every path idempotent). Actor: NULL = system (the activated_by-NULL idiom).
+ * Every attempt logs ONE line (the INV-1 visibility rule — a silent settlement is as bad as a
+ * silent sweep): campaign, outcome, amounts or the error.
  */
-export function onCampaignCompleted(campaignId: string): void {
-  void campaignId; // intentionally unused — see the seam note above
+export async function onCampaignCompleted(
+  campaignId: string,
+  log: FastifyBaseLogger,
+): Promise<void> {
+  try {
+    const result = await reconcileCampaignById(campaignId, null);
+    if (result.status === 'OK') {
+      log.info(
+        {
+          campaignId,
+          outcome: 'settled',
+          status: result.reconciliation.status,
+          spendTnd: Number(result.reconciliation.spendTnd),
+          refundTnd: Number(result.reconciliation.refundTnd),
+        },
+        'auto-settlement attempt',
+      );
+    } else {
+      // NO_PLAN (never dispatched — nothing to settle) | ALREADY_RECONCILED (idempotent skip).
+      log.info({ campaignId, outcome: result.status }, 'auto-settlement attempt');
+    }
+  } catch (err) {
+    log.error({ err, campaignId, outcome: 'ERROR' }, 'auto-settlement attempt failed');
+  }
 }
 
 // CF-S1 Commit 2 — the J-3 draft reminder (spec §3.2), folded into this tick (one clock, one
@@ -49,7 +76,7 @@ export async function runCampaignLifecycleTick(
   log: FastifyBaseLogger,
   now: Date = new Date(),
   // Injectable so tests can observe the seam (ESM local bindings defeat namespace spies).
-  onCompleted: (campaignId: string) => void = onCampaignCompleted,
+  onCompleted: (campaignId: string, log: FastifyBaseLogger) => Promise<void> = onCampaignCompleted,
 ): Promise<LifecycleTickResult> {
   const today = tunisDateOf(now);
 
@@ -71,7 +98,15 @@ export async function runCampaignLifecycleTick(
     )
     .returning({ id: campaigns.id });
 
-  for (const c of completed) onCompleted(c.id);
+  // SETTLE2 — sequential, and the TICK survives whatever the seam does (the default impl
+  // isolates internally; this belt covers injected seams too — the tick must never die).
+  for (const c of completed) {
+    try {
+      await onCompleted(c.id, log);
+    } catch (err) {
+      log.error({ err, campaignId: c.id }, 'campaign completion hook failed');
+    }
+  }
 
   // J-3 reminder: drafts starting in exactly 3 Tunis calendar days, not yet reminded. The stamp
   // makes the pass idempotent; date-less drafts never match (a NULL start never equals a date).
