@@ -88,21 +88,29 @@ export function CampaignsSection({
         </div>
         <div className="py-[22px] md:py-[26px] md:pl-6">
           <KpiLabel>Top 3 campagnes</KpiLabel>
+          {/* GREEN2 item 8b — rows map over the DATA: no more three literal « Nom de la
+              campagne » filler rows at zero campaigns. */}
           <div className="mt-4 flex flex-col gap-3.5">
-            {[0, 1, 2].map((idx) => (
-              <div key={idx} className="flex items-baseline gap-[11px]">
-                <span
-                  className={`w-4 flex-shrink-0 text-base font-semibold ${
-                    idx === 0 ? 'text-perf-green' : 'text-perf-mist'
-                  }`}
-                >
-                  {idx + 1}
-                </span>
-                <span className="truncate text-[13.5px] text-perf-ink">
-                  <Var>{top3[idx] ?? 'Nom de la campagne'}</Var>
-                </span>
-              </div>
-            ))}
+            {top3.length === 0 ? (
+              <p className="text-[12.5px] leading-[1.45] text-perf-mist">
+                Aucune campagne sur la période.
+              </p>
+            ) : (
+              top3.map((name, idx) => (
+                <div key={`${idx}-${name}`} className="flex items-baseline gap-[11px]">
+                  <span
+                    className={`w-4 flex-shrink-0 text-base font-semibold ${
+                      idx === 0 ? 'text-perf-green' : 'text-perf-mist'
+                    }`}
+                  >
+                    {idx + 1}
+                  </span>
+                  <span className="truncate text-[13.5px] text-perf-ink">
+                    <Var>{name}</Var>
+                  </span>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>

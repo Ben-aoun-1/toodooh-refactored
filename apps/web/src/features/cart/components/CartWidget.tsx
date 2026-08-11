@@ -1,9 +1,10 @@
 import { ChevronDown, ShoppingCart } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { CART_WIDGET_Z_CLASS } from '@/features/cart/lib/cart-confirm';
 import { htTtcLabel, htTtcOrDash } from '@/lib/money';
+import { shouldAutoOpen } from '@/lib/popover-auto-open';
 
 import { useCartRead } from '../hooks/useCart';
 
@@ -15,16 +16,29 @@ import { useCartRead } from '../hooks/useCart';
  * header collapses the panel to a bubble without ever unmounting it. Sits at z-40 — BELOW
  * modals/drawers (z-50) and the bell (z-[90]). Shares the cart cache entry with the page.
  */
+// GREEN2 item 9 — the panel auto-EXPANDS at most once per SPA session; it starts as the bubble
+// (the CF-HF4 permanence stands: always MOUNTED, never unmounted — collapsed is a rendering
+// state, and the bubble keeps the live count badge).
+let autoExpandedThisSession = false;
+
 export default function CartWidget() {
   const navigate = useNavigate();
   const location = useLocation();
   const cart = useCartRead();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
 
   const count = cart.data?.count ?? 0;
   const totalHt = cart.data?.total_ht ?? 0;
   const preview = (cart.data?.items ?? []).slice(0, 3);
   const onCartPage = location.pathname === '/my-cart';
+
+  useEffect(() => {
+    // First non-empty cart of the session expands the panel once; manual after that.
+    if (shouldAutoOpen(count > 0, autoExpandedThisSession)) {
+      setCollapsed(false);
+      autoExpandedThisSession = true;
+    }
+  }, [count]);
 
   if (collapsed) {
     return (

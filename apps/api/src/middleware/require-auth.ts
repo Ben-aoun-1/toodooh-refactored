@@ -43,17 +43,16 @@ export const requireAuth = async (request: FastifyRequest, reply: FastifyReply):
   let role = sessionUser.role;
   let status = sessionUser.status;
   if (role === undefined || status === undefined) {
-    try {
-      const [row] = await db
-        .select({ role: users.role, status: users.status })
-        .from(users)
-        .where(eq(users.id, sessionUser.id))
-        .limit(1);
-      role ??= row?.role;
-      status ??= row?.status;
-    } catch {
-      // Unresolvable (e.g. a malformed id) — fall through to the conservative defaults below.
-    }
+    // AUTH1 — a MISSING users row keeps the conservative defaults below (a data state); a
+    // FAILING query propagates to a 500. The old catch{} silently resolved an owner/admin to
+    // 'advertiser'/'pending' whenever the DB hiccuped — silent authz drift on infra failure.
+    const [row] = await db
+      .select({ role: users.role, status: users.status })
+      .from(users)
+      .where(eq(users.id, sessionUser.id))
+      .limit(1);
+    role ??= row?.role;
+    status ??= row?.status;
   }
   request.user = {
     id: sessionUser.id,

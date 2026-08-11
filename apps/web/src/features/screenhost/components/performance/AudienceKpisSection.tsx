@@ -1,5 +1,5 @@
 import { type AudienceKpis, formatDecimalFr, formatIntFr } from '../../lib/performance-derive';
-import { formatDateFr } from '../../lib/performance-period';
+import { peakObservedLabel } from '../../lib/performance-period';
 
 import { PENDING_LABEL, PendingValue } from './Pending';
 import { SectionHeading } from './SectionHeading';
@@ -123,7 +123,7 @@ export function AudienceKpisSection({
             <KpiValue value={hasHostData ? (kpis.peak?.value ?? 0) : null} />
           </div>
           <p className="mt-2.5 text-[12.5px] leading-[1.45] text-perf-grey">
-            Maximum observé — <Var>{kpis.peak ? formatDateFr(kpis.peak.date) : 'JJ/MM/AAAA'}</Var>
+            Maximum observé — <Var>{peakObservedLabel(kpis.peak)}</Var>
           </p>
         </div>
       </div>

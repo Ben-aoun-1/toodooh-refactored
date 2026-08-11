@@ -181,13 +181,23 @@ export default function EventFormModal({ event, onClose }: EventFormModalProps) 
             <label htmlFor="event-image" className="block text-sm font-medium text-[#171717] mb-1">
               Image (affiche)
             </label>
+            {/* GREEN2 item 7c — French file control (the native « Choose File » hides). */}
             <input
               id="event-image"
               type="file"
               accept="image/jpeg,image/png"
               onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
-              className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-2 file:text-sm hover:file:bg-gray-200"
+              className="hidden"
             />
+            <label
+              htmlFor="event-image"
+              className="inline-block cursor-pointer rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-200"
+            >
+              Parcourir les fichiers
+            </label>
+            <p className="mt-1 text-xs text-gray-500">
+              {imageFile ? imageFile.name : 'Aucun fichier sélectionné'}
+            </p>
           </div>
           {error !== null && <p className="text-sm text-red-600">{error}</p>}
           <div className="flex justify-end gap-3 pt-2">

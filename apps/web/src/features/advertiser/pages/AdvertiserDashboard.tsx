@@ -19,6 +19,8 @@ export default function AdvertiserDashboard() {
     availableBalanceTnd,
     totalCreatedCampaignsCount,
     loading: loadingStats,
+    isError: statsError,
+    refetch: refetchStats,
   } = useDashboardStats(user?.id);
   const { campaigns: lastCampaigns, loading: loadingLastCampaigns } = useLastCampaigns(user?.id, 5);
   const { profile } = useUserProfile(user?.id);
@@ -35,19 +37,37 @@ export default function AdvertiserDashboard() {
 
   return (
     <div className="w-full space-y-8">
-      <BalanceCard
-        balance={stats.balance}
-        balanceTotal={stats.balanceTotal}
-        loading={loadingStats}
-        isDisabled={isDisabled}
-      />
-      <StatsGrid
-        campaignsDiffused={stats.campaignsDiffused}
-        totalViews={stats.totalViews}
-        totalDurationSeconds={stats.totalDurationSeconds}
-        totalBudget={stats.totalBudget}
-        loading={loadingStats}
-      />
+      {/* GREEN2 (the INV-1 rule) — a failed stats read renders as an ERROR, never zeros-as-truth. */}
+      {statsError ? (
+        <div className="rounded-xl border border-rose-200 bg-rose-50/60 px-6 py-10 text-center">
+          <p className="text-sm font-medium text-rose-600">
+            Impossible de charger votre solde et vos statistiques pour le moment.
+          </p>
+          <button
+            type="button"
+            onClick={refetchStats}
+            className="mt-4 rounded-full border border-rose-300 bg-white px-5 py-2 text-sm font-semibold text-rose-600 transition-colors hover:bg-rose-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+          >
+            Réessayer
+          </button>
+        </div>
+      ) : (
+        <>
+          <BalanceCard
+            balance={stats.balance}
+            balanceTotal={stats.balanceTotal}
+            loading={loadingStats}
+            isDisabled={isDisabled}
+          />
+          <StatsGrid
+            campaignsDiffused={stats.campaignsDiffused}
+            totalViews={stats.totalViews}
+            totalDurationSeconds={stats.totalDurationSeconds}
+            totalBudget={stats.totalBudget}
+            loading={loadingStats}
+          />
+        </>
+      )}
       <LastCampaignsGrid campaigns={lastCampaigns} loading={loadingLastCampaigns} />
       {/* EV3 (voie 2) — the Événements entry tile. */}
       <EventsEntryCard />
