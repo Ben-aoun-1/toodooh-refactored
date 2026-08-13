@@ -36,11 +36,11 @@ describe('the money-format sweep', () => {
     expect(statsGrid).toContain('htTtcOrDash(totalBudget)');
     expect(statsGrid).not.toContain('en-US');
 
-    const cartWidget = readFileSync(
-      join(WEB_SRC, 'features', 'cart', 'components', 'CartWidget.tsx'),
-      'utf8',
-    );
-    expect(cartWidget).toContain('htTtcOrDash(item.requested_budget)');
-    expect(cartWidget).not.toMatch(/\$\{item\.requested_budget\} TND/);
+    // CART-V1 — the cart montants moved into the two docked forms; both stay on the formatter.
+    for (const file of ['CartDockBar.tsx', 'CartEdgeTab.tsx']) {
+      const source = readFileSync(join(WEB_SRC, 'features', 'cart', 'components', file), 'utf8');
+      expect(source).toContain('htTtcOrDash(item.requested_budget)');
+      expect(source).not.toMatch(/\$\{item\.requested_budget\} TND/);
+    }
   });
 });
