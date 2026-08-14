@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ShoppingCart, X } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -129,6 +129,16 @@ function AdvertiserLayoutChrome({ children, userName }: AdvertiserLayoutProps) {
             disabled={isDisabled}
             onNavigate={() => setIsMenuOpen(false)}
           />
+          {/* CART-V1 amendment — the PERMANENT « Mon panier » entry: with the empty cart
+              rendering nothing docked, this keeps /my-cart reachable at zero items, always. */}
+          <SidebarNavItem
+            path="/my-cart"
+            label="Mon panier"
+            icon={<ShoppingCart className="h-5 w-5 flex-shrink-0" strokeWidth={1.7} />}
+            expanded={sidebarExpanded}
+            disabled={isDisabled}
+            onNavigate={() => setIsMenuOpen(false)}
+          />
           <SidebarNavItem
             path="/evenements"
             label="Événements"
@@ -246,8 +256,9 @@ function AdvertiserLayoutChrome({ children, userName }: AdvertiserLayoutProps) {
           <ContentErrorBoundary>{children}</ContentErrorBoundary>
         </main>
       </div>
-      {/* CF-C1 — the floating panier widget: once here = every advertiser route; hides itself
-          when the cart is empty or on /my-cart. z-40 (below modals/drawers). */}
+      {/* CART-V1 — the docked panier: once here = every advertiser route. At ≥ lg the bar is
+          the row's LAST FLEX CHILD (in-flow — content yields width by construction, never an
+          overlay); below lg it is the fixed edge tab. Empty cart renders nothing (ruled). */}
       <CartWidget />
     </div>
   );

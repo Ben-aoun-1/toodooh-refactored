@@ -6,10 +6,12 @@ import { consultNavigationGuard } from '@/features/campaigns/lib/navigation-guar
 interface SidebarNavItemProps {
   path: string;
   label: string;
-  /** Active-state icon (asset image) */
-  activeIcon: string;
-  /** Inactive-state icon (asset image) */
-  inactiveIcon: string;
+  /** Active-state icon (asset image) — omit when `icon` is given. */
+  activeIcon?: string;
+  /** Inactive-state icon (asset image) — omit when `icon` is given. */
+  inactiveIcon?: string;
+  /** CART-V1 — a component icon (lucide) as an alternative to the image pair. */
+  icon?: React.ReactNode;
   expanded: boolean;
   /** If true, click shows toast instead of navigating */
   disabled?: boolean;
@@ -23,6 +25,7 @@ export default function SidebarNavItem({
   label,
   activeIcon,
   inactiveIcon,
+  icon,
   expanded,
   disabled = false,
   disabledMessage = '⚠️ Veuillez compléter vos informations pour accéder à cette fonctionnalité',
@@ -58,11 +61,13 @@ export default function SidebarNavItem({
             : 'text-[#5C5C5C] hover:bg-gray-100/80'
       }`}
     >
-      <img
-        src={isActive ? activeIcon : inactiveIcon}
-        alt=""
-        className="h-5 w-5 flex-shrink-0 object-contain"
-      />
+      {icon ?? (
+        <img
+          src={isActive ? activeIcon : inactiveIcon}
+          alt=""
+          className="h-5 w-5 flex-shrink-0 object-contain"
+        />
+      )}
       {expanded && <span className="leading-5 truncate">{label}</span>}
     </button>
   );

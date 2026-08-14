@@ -9,17 +9,42 @@ import { describe, expect, it } from 'vitest';
 const read = (rel: string): string =>
   readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
 
-describe('the permanent cart sidebar', () => {
-  const source = read('./components/CartWidget.tsx');
+// CART-V1 (operator ruling 2026-08-13) — the docked bar SUPERSEDES the CF-HF4 empty-state and
+// GREEN2 collapse behaviours: ≥ 1 item → permanent right-edge bar, 0 → nothing docked. The
+// CF-HF4 always-mounted permanence continues in the new form (CartWidget stays the one mount).
+describe('the docked cart bar (CART-V1)', () => {
+  const dispatcher = read('./components/CartWidget.tsx');
+  const dockBar = read('./components/CartDockBar.tsx');
+  const edgeTab = read('./components/CartEdgeTab.tsx');
 
-  it('is ALWAYS rendered — no count-0 or route bailout remains; the empty state speaks', () => {
-    expect(source).not.toContain('return null');
-    expect(source).toContain('Votre panier est vide.');
+  it('the ONE mount dispatches both forms — desktop docked bar + below-lg edge tab', () => {
+    expect(dispatcher).toContain('<CartDockBar />');
+    expect(dispatcher).toContain('<CartEdgeTab />');
   });
 
-  it('collapses without unmounting and stays consistent on the cart page itself', () => {
-    expect(source).toContain('setCollapsed');
-    expect(source).toContain("location.pathname === '/my-cart'"); // only the CTA adapts, not the mount
+  it('both forms apply the SAME pure visibility rule (≥ 1 item docked, 0 → nothing)', () => {
+    expect(dockBar).toContain('if (!cartBarVisible(count)) return null;');
+    expect(edgeTab).toContain('if (!cartBarVisible(count)) return null;');
+  });
+
+  it('the desktop bar is IN-FLOW — no fixed/absolute positioning class in its markup (layout yields width by construction)', () => {
+    expect(dockBar).not.toMatch(/className="[^"]*\b(fixed|absolute)\b/);
+    expect(dockBar).toContain('hidden lg:flex'); // the lg gate — below it the edge tab takes over
+    expect(edgeTab).toContain('lg:hidden'); // and the tab never doubles the bar at ≥ lg
+  });
+
+  it('the sidebar nav carries the PERMANENT « Mon panier » entry — reachable at zero items (CART-V1 amendment)', () => {
+    const layout = read('../advertiser/components/AdvertiserLayout.tsx');
+    expect(layout).toContain('path="/my-cart"');
+    expect(layout).toContain('label="Mon panier"');
+    // Unconditional: the entry sits in the static nav, never gated on the cart count.
+    expect(layout).not.toContain('cartBarVisible');
+  });
+
+  it('the cart-page consistency survives — only the CTA adapts, never the mount', () => {
+    expect(dockBar).toContain("location.pathname === '/my-cart'");
+    expect(edgeTab).toContain("location.pathname === '/my-cart'");
+    expect(dockBar).toContain('Voir mon panier');
   });
 });
 
