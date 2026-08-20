@@ -199,6 +199,32 @@ describe('admin dispatch-config — CPM read/edit (real Postgres)', () => {
     expect((await get()).json()).toMatchObject({ pct_sh: 50, pct_toodooh: 44 });
   });
 
+  // CPM-ADMIN (Mejri 05/08) — the Σ = 100 rule pinned at BOTH neighbours of the boundary: a full
+  // four-field split at 99 and at 101 is refused; exactly 100 is accepted. No merged-config subtlety
+  // here — the whole split rides the PATCH, so the sum is judged on exactly what was sent.
+  it('full split: 99 and 101 refused, exactly 100 accepted', async () => {
+    mockSession(await seedUser({ role: 'admin' }));
+    const full = (sh: number) => ({
+      pct_sh: sh,
+      pct_toodooh: 44,
+      pct_agent_sh: 3,
+      pct_agent_sc: 3,
+    });
+
+    const at99 = await patch(full(49)); // Σ = 99
+    expect(at99.statusCode).toBe(400);
+    const body99 = at99.json() as { fields: { reason: string }[] };
+    expect(body99.fields[0]?.reason).toContain('totaliser 100 (obtenu : 99)');
+
+    const at101 = await patch(full(51)); // Σ = 101
+    expect(at101.statusCode).toBe(400);
+    const body101 = at101.json() as { fields: { reason: string }[] };
+    expect(body101.fields[0]?.reason).toContain('totaliser 100 (obtenu : 101)');
+
+    expect((await patch(full(50))).statusCode).toBe(200); // Σ = 100
+    expect((await get()).json()).toMatchObject({ pct_sh: 50, pct_toodooh: 44 });
+  });
+
   // ── CF-D1 — the campaign start-date lead (campaign_lead_working_days) ───────────
   it('GET exposes the lead at its migration default (2); PATCH edits it — 0 included', async () => {
     mockSession(await seedUser({ role: 'admin' }));
