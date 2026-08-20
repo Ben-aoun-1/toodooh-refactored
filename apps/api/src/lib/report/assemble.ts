@@ -40,6 +40,7 @@ import {
   intensityLevel,
   lineInPeriod,
   openHoursPerDay,
+  periodWeekGrid,
   quantileThresholds,
   zeroFillDays,
 } from './derive.js';
@@ -381,7 +382,14 @@ export async function assembleReportData(
     hostHasData: hostFlag,
     castHasData: castFlag,
     kpis,
-    heatLevels: heatmapLevels(grid, venue.openingHour, venue.closingHour),
+    // PERF-QA2 — S02 is PERIOD-scoped: the typical-week grid supplies the hourly shape, the
+    // period's own days supply the amplitude (see periodWeekGrid). A window with no audience day
+    // yields an all-zero grid → the document's empty S02, exactly like the page's empty state.
+    heatLevels: heatmapLevels(
+      periodWeekGrid(grid, periodAudience, range),
+      venue.openingHour,
+      venue.closingHour,
+    ),
     days: castFlag ? zeroFillDays(rangeDays, range) : [],
     breakdown: ratios ? demographicBreakdown(ratios, kpis.global) : null,
     revenue: {

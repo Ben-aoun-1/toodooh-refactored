@@ -18,6 +18,7 @@ import {
   intensityLevel,
   lineInPeriod,
   openHoursPerDay,
+  periodWeekGrid,
   quantileThresholds,
   zeroFillDays,
 } from '../src/lib/report/derive.js';
@@ -252,5 +253,95 @@ describe('fr-FR formats (deterministic, U+202F grouping — what the page render
     expect(formatCompactPeriod('2026-06-05', '2026-06-18')).toBe('05/06 – 18/06');
     expect(formatTablePeriod('2026-06-05', '2026-06-18')).toBe('05/06 – 18/06/2026');
     expect(formatTablePeriod(null, null)).toBe('—');
+  });
+});
+
+// ── PERF-QA2 — periodWeekGrid: S02 derives from the SELECTED PERIOD ───────────────────────────
+// R7 ("rolling semaine type, never the period") superseded 2026-08-20. TWIN of the web's
+// implementation (apps/web/src/features/screenhost/lib/peak-hours.ts) — the page and the PDF
+// must apply the SAME rule to their own windows.
+describe('periodWeekGrid', () => {
+  /** A typical week where every day has the same 3-hour shape: 10h→10, 11h→20, 12h→30 (Σ 60). */
+  const typical = (): number[][] =>
+    Array.from({ length: 7 }, () =>
+      Array.from({ length: 24 }, (_, h) => (h === 10 ? 10 : h === 11 ? 20 : h === 12 ? 30 : 0)),
+    );
+  const JUNE = { from: '2026-06-01', to: '2026-06-30' };
+
+  it('an ESTIMATE-derived day reproduces the typical grid EXACTLY (the identity property)', () => {
+    // 2026-06-01 is a Monday; its estimated audience is Σ of its own weekday row.
+    const grid = periodWeekGrid(typical(), [{ date: '2026-06-01', audience: 60 }], JUNE);
+    expect(grid[0]?.[10]).toBe(10);
+    expect(grid[0]?.[11]).toBe(20);
+    expect(grid[0]?.[12]).toBe(30);
+    expect(grid[0]?.[9]).toBe(0);
+  });
+
+  it('a MEASURED day rescales the shape by its own total (amplitude, never profile)', () => {
+    // Double the day's audience → every cell of that weekday doubles, the profile is unchanged.
+    const grid = periodWeekGrid(typical(), [{ date: '2026-06-01', audience: 120 }], JUNE);
+    expect(grid[0]?.[10]).toBe(20);
+    expect(grid[0]?.[11]).toBe(40);
+    expect(grid[0]?.[12]).toBe(60);
+  });
+
+  it('averages a weekday over ITS OCCURRENCES in the period, not over the period length', () => {
+    // Two Mondays: 60 and 120 → the Monday row is the mean shape (90/60 of the profile).
+    const grid = periodWeekGrid(
+      typical(),
+      [
+        { date: '2026-06-01', audience: 60 },
+        { date: '2026-06-08', audience: 120 },
+      ],
+      JUNE,
+    );
+    expect(grid[0]?.[10]).toBe(15);
+    expect(grid[0]?.[12]).toBe(45);
+    // Tuesday never occurred in the data → its row stays empty.
+    expect(grid[1]?.[12]).toBe(0);
+  });
+
+  it('days OUTSIDE the period contribute nothing', () => {
+    const grid = periodWeekGrid(typical(), [{ date: '2026-05-25', audience: 600 }], JUNE);
+    expect(grid.flat().every((v) => v === 0)).toBe(true);
+  });
+
+  it('an EMPTY period yields an all-zero grid — the empty state fires by construction', () => {
+    expect(
+      periodWeekGrid(typical(), [], JUNE)
+        .flat()
+        .every((v) => v === 0),
+    ).toBe(true);
+    expect(
+      periodWeekGrid(typical(), [{ date: '2026-06-03', audience: 0 }], JUNE)
+        .flat()
+        .every((v) => v === 0),
+    ).toBe(true);
+  });
+
+  it('a weekday with NO hourly shape is dropped, never smeared flat', () => {
+    const noShape = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
+    const grid = periodWeekGrid(noShape, [{ date: '2026-06-01', audience: 500 }], JUNE);
+    expect(grid.flat().every((v) => v === 0)).toBe(true);
+  });
+
+  it('keeps one decimal so a sub-1 measured cell is not hachured away', () => {
+    // Monday audience 1 over a Σ-60 profile → 10/60 ≈ 0.17 → 0.2, still > 0 (coloured, not hachuré).
+    const grid = periodWeekGrid(typical(), [{ date: '2026-06-01', audience: 1 }], JUNE);
+    expect(grid[0]?.[10]).toBe(0.2);
+    expect(grid[0]?.[12]).toBe(0.5);
+  });
+
+  it('maps Sunday to the LAST row (Monday-first), like the affluence grid', () => {
+    // 2026-06-07 is a Sunday.
+    const grid = periodWeekGrid(typical(), [{ date: '2026-06-07', audience: 60 }], JUNE);
+    expect(grid[6]?.[12]).toBe(30);
+    expect(grid[0]?.[12]).toBe(0);
+  });
+
+  it('ignores malformed dates instead of throwing', () => {
+    expect(() =>
+      periodWeekGrid(typical(), [{ date: 'pas-une-date', audience: 9 }], JUNE),
+    ).not.toThrow();
   });
 });

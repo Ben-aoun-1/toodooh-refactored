@@ -57,12 +57,13 @@ const PLACEHOLDER_AGE_PCT = [32, 28, 14, 6];
 // generic Piste 02 body is over the 210-char guard that VARIABLE AI bodies must pass, and that
 // is fine — it renders 2 lines / 0px overflow by direct measurement.
 
-// PERF-QA1 R7 — the S02 lead, HONEST semantics: the heatmap reads the venue's ROLLING typical-week
-// affluence grid, never the report period, so the copy names the semaine type and drops the
-// period claim. BYTE-IDENTICAL twin in apps/web (lib/peak-hours.ts), each side pinned by an
-// exact-literal test — the page and the PDF must never disagree on what this grid means.
+// PERF-QA2 — the S02 lead. R7's « semaine type glissante, jamais la période » is SUPERSEDED
+// (ruling 2026-08-20): the grid is now built FROM the window's own days, so the copy names the
+// period again — honestly this time, because the data really is period-scoped. BYTE-IDENTICAL
+// twin in apps/web (lib/peak-hours.ts), each side pinned by an exact-literal test. Page and PDF
+// are RULE-identical; byte-identical GRIDS across different windows are no longer expected.
 export const PEAK_HOURS_LEAD =
-  "Audience moyenne de votre semaine type (moyenne glissante sur les 4 dernières semaines), croisant les jours de la semaine et les heures d'ouverture. Plus la couleur est vive, plus l'audience est élevée. Les zones rayées correspondent à vos heures de fermeture ou aux créneaux sans données mesurées.";
+  "Audience moyenne par jour et par heure sur la période analysée, croisant les jours de la semaine et les heures d'ouverture. Plus la couleur est vive, plus l'audience est élevée. Les zones rayées correspondent à vos heures de fermeture ou aux créneaux sans données sur la période.";
 
 const esc = (value: string): string =>
   value.replace(

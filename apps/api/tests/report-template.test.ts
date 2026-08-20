@@ -519,16 +519,16 @@ describe('S03 labeled axes (R3 — Mejri item 4, OVERRIDES the axis-less mockup)
 // half of the cross-package byte-equality contract — apps/web pins the SAME literal over its
 // PEAK_HOURS_LEAD twin (lib/peak-hours.ts), so neither side can drift without its own test
 // failing. Do not reword one without the other.
-describe('S02 lead (PERF-QA1 R7 — semaine type, no period claim)', () => {
+describe('S02 lead (PERF-QA2 — the period, honestly)', () => {
   it('pins the exact wording (byte-equality contract with apps/web)', () => {
     expect(PEAK_HOURS_LEAD).toBe(
-      "Audience moyenne de votre semaine type (moyenne glissante sur les 4 dernières semaines), croisant les jours de la semaine et les heures d'ouverture. Plus la couleur est vive, plus l'audience est élevée. Les zones rayées correspondent à vos heures de fermeture ou aux créneaux sans données mesurées.",
+      "Audience moyenne par jour et par heure sur la période analysée, croisant les jours de la semaine et les heures d'ouverture. Plus la couleur est vive, plus l'audience est élevée. Les zones rayées correspondent à vos heures de fermeture ou aux créneaux sans données sur la période.",
     );
   });
 
-  it('the rendered document carries the new lead and DROPS the period claim', () => {
+  it('the rendered document carries the period lead and drops the semaine-type claim', () => {
     const html = renderReportHtml(baseData());
     expect(html).toContain(PEAK_HOURS_LEAD);
-    expect(html).not.toContain("sur l'ensemble de la période");
+    expect(html).not.toContain('semaine type');
   });
 });

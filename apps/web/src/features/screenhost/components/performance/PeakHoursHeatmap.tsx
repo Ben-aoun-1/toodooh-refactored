@@ -18,20 +18,22 @@ const closedHour = (
 };
 
 interface PeakHoursHeatmapProps {
-  /** 7×24 typical-week grid (grid[0]=Monday), from the existing affluence read. */
+  /** 7×24 PERIOD grid (grid[0]=Monday) — periodWeekGrid over the active filter window. */
   grid: number[][];
   openingHour: number | null;
   closingHour: number | null;
 }
 
 /**
- * S02 — "Vos peak hours": weekday × hour heatmap over the venue's ROLLING typical week (never
- * the period — PERF-QA1 R7 relabelled the lead honestly, byte-identical with the PDF's S02).
+ * S02 — "Vos peak hours": weekday × hour heatmap over THE SELECTED PERIOD (PERF-QA2, ruling
+ * 2026-08-20 — R7's rolling typical week is superseded; the grid arrives already period-scoped
+ * from periodWeekGrid, and this component stays a pure renderer).
  * Hour columns come from the venue's REAL hours (8h–21h only as the unknown-hours fallback). A
  * cell is HACHURÉE when the hour is closed OR when it has no data (level 0 — the grid
  * zero-fills, so 0 reads as no-data; accepted approximation per the Mejri ruling). The quantile
  * ramp applies only to cells with data. An all-empty grid gets the explanatory state instead of
- * a mute full-hachure grid (her Aug-4 re-open of the Jul-8 item 1).
+ * a mute full-hachure grid (her Aug-4 re-open of the Jul-8 item 1) — a period with no audience
+ * day now lands there BY CONSTRUCTION.
  */
 export function PeakHoursHeatmap({ grid, openingHour, closingHour }: PeakHoursHeatmapProps) {
   const hours = useMemo(() => heatmapHours(openingHour, closingHour), [openingHour, closingHour]);
@@ -56,11 +58,11 @@ export function PeakHoursHeatmap({ grid, openingHour, closingHour }: PeakHoursHe
         <div className="mt-8 rounded-xl border-2 border-dashed border-perf-line bg-white px-6 py-12 text-center">
           <CalendarClock className="mx-auto h-8 w-8 text-perf-mist" aria-hidden />
           <p className="mt-3 font-medium text-perf-ink">
-            Pas encore de données pour votre semaine type
+            Pas encore de données d'affluence sur cette période
           </p>
           <p className="mt-1 text-sm text-perf-grey">
-            La carte des peak hours apparaîtra ici dès que votre établissement commence à collecter
-            des mesures d'affluence.
+            La carte des peak hours apparaîtra ici dès que votre établissement aura des mesures
+            d'affluence sur la période sélectionnée.
           </p>
         </div>
       ) : (
@@ -90,7 +92,9 @@ export function PeakHoursHeatmap({ grid, openingHour, closingHour }: PeakHoursHe
                   return (
                     <div
                       key={`${label}-${hour}`}
-                      title={closed ? 'Fermé' : `${label} ${hour}h — ${value}`}
+                      title={
+                        closed ? 'Fermé' : `${label} ${hour}h — ${value.toLocaleString('fr-FR')}`
+                      }
                       className={`h-[26px] min-w-0 flex-1 rounded ${hachure ? HEATMAP_CLOSED_CLASS : HEATMAP_LEVEL_CLASSES[level - 1]}`}
                     />
                   );

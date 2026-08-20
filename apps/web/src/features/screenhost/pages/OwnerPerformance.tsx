@@ -39,6 +39,7 @@ import { useScreenhostAffluence } from '../hooks/useScreenhostAffluence';
 import { useScreenhostsMine } from '../hooks/useScreenhostsMine';
 import { lineImpressions, sumLineImpressions } from '../lib/impressions-display';
 import { downloadMonthlyReport } from '../lib/monthly-report';
+import { periodWeekGrid } from '../lib/peak-hours';
 import {
   audienceKpis,
   campaignStatut,
@@ -200,6 +201,14 @@ export default function OwnerPerformance() {
     [venueLines, range],
   );
   const periodAudience = useMemo(() => dailyAudienceWithin(months, range), [months, range]);
+  // PERF-QA2 — S02 derives from the SELECTED PERIOD (R7 superseded 2026-08-20): the typical-week
+  // grid gives the hourly shape, the period's own days give the amplitude. An empty window yields
+  // an all-zero grid, so the heatmap's explanatory empty state fires instead of colouring a
+  // period that has no data.
+  const periodGrid = useMemo(
+    () => periodWeekGrid(affluenceGrid, periodAudience, range),
+    [affluenceGrid, periodAudience, range],
+  );
   // R9 — real venue hours; 14 h is ONLY the null/degenerate fallback and is flagged as such.
   const hoursInfo = useMemo(
     () => openHours(profile.data?.opening_hour ?? null, profile.data?.closing_hour ?? null),
@@ -493,7 +502,7 @@ export default function OwnerPerformance() {
                       />
 
                       <PeakHoursHeatmap
-                        grid={affluenceGrid}
+                        grid={periodGrid}
                         openingHour={profile.data?.opening_hour ?? null}
                         closingHour={profile.data?.closing_hour ?? null}
                       />
