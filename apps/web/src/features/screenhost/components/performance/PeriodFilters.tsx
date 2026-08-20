@@ -13,7 +13,12 @@ interface PeriodFiltersProps {
 /**
  * §6 — the period pills + the "Personnalisé" panel. DEVIATION (ruled): the mockup's Campagne
  * select is dropped — V1 filters by period only. Filtering is client-side; the pills drive every
- * section below them.
+ * section below them — S02 included since PERF-QA2 (R7 superseded).
+ *
+ * PERF-QA2 — this is the page's PINNED filter bar: WHITE, edge to edge (negative margins undo the
+ * content column's padding), and sticky to the top of the scroller so the filters stay reachable
+ * while reading the sections they drive. It keeps its place in the flow — the ruling was to make
+ * the chrome white and the bar pinned, not to move content.
  */
 export function PeriodFilters({
   active,
@@ -25,7 +30,7 @@ export function PeriodFilters({
   onApplyCustom,
 }: PeriodFiltersProps) {
   return (
-    <section className="mb-14">
+    <section className="sticky top-0 z-20 -mx-5 mb-14 border-y border-perf-line bg-white px-5 py-4 sm:-mx-10 sm:px-10">
       <div className="flex flex-wrap gap-2">
         {PERIOD_PILLS.map((pill) => {
           const isActive = pill.key === active;

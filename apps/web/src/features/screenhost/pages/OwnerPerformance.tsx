@@ -371,8 +371,11 @@ export default function OwnerPerformance() {
         <OwnerNavigation isDisabled={isDisabled} />
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <div className="flex-1 overflow-y-auto">
-            <div className="mx-auto w-full max-w-[1180px] px-5 pb-16 pt-[26px] sm:px-10 sm:pb-24">
-              <header className="mb-7 flex flex-col justify-between gap-4 border-b border-perf-line py-[22px] sm:flex-row sm:items-center sm:gap-6">
+            {/* PERF-QA2 — the page's top chrome is WHITE, edge to edge, over the grey page
+                (Mes Performances design reference). The bar spans the scroller; its contents stay
+                on the 1180px content column so nothing shifts sideways. */}
+            <header className="border-b border-perf-line bg-white">
+              <div className="mx-auto flex w-full max-w-[1180px] flex-col justify-between gap-4 px-5 py-[22px] sm:flex-row sm:items-center sm:gap-6 sm:px-10">
                 <PageHeader
                   title="Mes performances"
                   subtitle="Analysez l'activité de votre établissement et développez vos revenus"
@@ -388,8 +391,9 @@ export default function OwnerPerformance() {
                   </button>
                   <OwnerNotificationsBell userId={user?.id} />
                 </div>
-              </header>
-
+              </div>
+            </header>
+            <div className="mx-auto w-full max-w-[1180px] px-5 pb-16 pt-7 sm:px-10 sm:pb-24">
               {screenhosts.isLoading ? (
                 <div className="flex items-center justify-center gap-2 py-16 text-perf-mist">
                   <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
