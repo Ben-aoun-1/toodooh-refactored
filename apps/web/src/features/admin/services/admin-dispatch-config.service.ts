@@ -57,6 +57,103 @@ export const reversementSumIsValid = (
   agentSc: number,
 ): boolean => Math.abs(sh + toodooh + agentSh + agentSc - 100) <= 1e-9;
 
+/** A finite, strictly-positive TND/1000 rate (mirrors the server refine — a non-positive CPM
+ * makes I_cible = ⌊budget·1000/cpm⌋ blow up / go negative at activation). */
+export function parseCpm(raw: string): number | null {
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+// ── CPM-ADMIN — per-block patch composition (each block saves alone; Mejri 05/08) ───────────────
+// One pure function per Tarification block: raw input strings + the loaded config in, either a
+// French refusal or the minimal PATCH body (only the keys that actually changed) out. The rules
+// mirror the server's; keeping them here (not in the page) is what makes them pinnable — apps/web
+// has no render harness, so a rule living in JSX is untestable.
+export type BlockPatchResult = { ok: true; patch: CpmPatch } | { ok: false; error: string };
+
+export function composeCpmPatch(
+  raw: { standard: string; event: string },
+  config: Pick<DispatchConfigView, 'standard_cpm_tnd' | 'event_cpm_tnd'>,
+): BlockPatchResult {
+  const standard = parseCpm(raw.standard);
+  const event = parseCpm(raw.event);
+  if (standard === null || event === null) {
+    return { ok: false, error: 'Le CPM doit être un nombre strictement positif' };
+  }
+  const patch: CpmPatch = {};
+  if (standard !== config.standard_cpm_tnd) patch.standard_cpm_tnd = standard;
+  if (event !== config.event_cpm_tnd) patch.event_cpm_tnd = event;
+  return { ok: true, patch };
+}
+
+export function composeLeadPatch(
+  raw: { lead: string },
+  config: Pick<DispatchConfigView, 'campaign_lead_working_days'>,
+): BlockPatchResult {
+  const lead = parseCampaignLead(raw.lead);
+  if (lead === null) {
+    return { ok: false, error: 'Le délai de lancement doit être un entier entre 0 et 30' };
+  }
+  const patch: CpmPatch = {};
+  if (lead !== config.campaign_lead_working_days) patch.campaign_lead_working_days = lead;
+  return { ok: true, patch };
+}
+
+export function composeAttentionPatch(
+  raw: { t10: string; t20: string; t30: string },
+  config: Pick<DispatchConfigView, 't_10s' | 't_20s' | 't_30s'>,
+): BlockPatchResult {
+  const t10 = parseAttention(raw.t10);
+  const t20 = parseAttention(raw.t20);
+  const t30 = parseAttention(raw.t30);
+  if (t10 === null || t20 === null || t30 === null) {
+    return { ok: false, error: "L'indice d'attention doit être compris entre 0 (exclu) et 1" };
+  }
+  if (!attentionOrderingValid(t10, t20, t30)) {
+    return { ok: false, error: "L'ordre requis est T ≤ 10 s ≤ T ≤ 20 s ≤ T ≤ 30 s" };
+  }
+  const patch: CpmPatch = {};
+  if (t10 !== config.t_10s) patch.t_10s = t10;
+  if (t20 !== config.t_20s) patch.t_20s = t20;
+  if (t30 !== config.t_30s) patch.t_30s = t30;
+  return { ok: true, patch };
+}
+
+export function composeReversementPatch(
+  raw: { sh: string; toodooh: string; agentSh: string; agentSc: string },
+  config: Pick<DispatchConfigView, 'pct_sh' | 'pct_toodooh' | 'pct_agent_sh' | 'pct_agent_sc'>,
+): BlockPatchResult {
+  const parsePct = (s: string): number | null => {
+    if (s.trim() === '') return null; // Number('') is 0 — an empty field is NOT a zero share
+    const n = Number(s);
+    return Number.isFinite(n) && n >= 0 && n <= 100 ? n : null;
+  };
+  const sh = parsePct(raw.sh);
+  const toodooh = parsePct(raw.toodooh);
+  const agentSh = parsePct(raw.agentSh);
+  const agentSc = parsePct(raw.agentSc);
+  if (sh === null || toodooh === null || agentSh === null || agentSc === null) {
+    return {
+      ok: false,
+      error: 'Chaque pourcentage de reversement doit être un nombre entre 0 et 100',
+    };
+  }
+  if (!reversementSumIsValid(sh, toodooh, agentSh, agentSc)) {
+    return {
+      ok: false,
+      error: `Les pourcentages de reversement doivent totaliser 100 (obtenu : ${
+        sh + toodooh + agentSh + agentSc
+      })`,
+    };
+  }
+  const patch: CpmPatch = {};
+  if (sh !== config.pct_sh) patch.pct_sh = sh;
+  if (toodooh !== config.pct_toodooh) patch.pct_toodooh = toodooh;
+  if (agentSh !== config.pct_agent_sh) patch.pct_agent_sh = agentSh;
+  if (agentSc !== config.pct_agent_sc) patch.pct_agent_sc = agentSc;
+  return { ok: true, patch };
+}
+
 // ── E1 — the attention-T client checks, mirrors of the server rules (pinned by unit test) ───────
 /** A T value in (0, 1] — an attention index is a discount, never a boost. */
 export function parseAttention(raw: string): number | null {
