@@ -276,6 +276,72 @@ describe('C2: POST /api/internal/monthly-stats', () => {
     expect(rows[0]!.peakHour).toBe(19);
   });
 
+  // PERF-QA2 — the merged audience source. « Personnes touchées » (Σ these rows) read 0 because
+  // the hub's measured pipeline pushes zeros while the fleet is offline; a day with no
+  // measurement now takes the venue's affluence estimate instead.
+  it('fills UNMEASURED days from the venue affluence grid and recomputes the total', async () => {
+    const [host] = await db
+      .insert(screenhosts)
+      .values({ name: 'Place Grille' })
+      .returning({ id: screenhosts.id });
+    // Mondays 10h → 100 (nothing else): every Monday of May 2026 estimates at 100.
+    await db.insert(screenhostAffluence).values({
+      screenhostId: host!.id,
+      dayOfWeek: 1,
+      hour: 10,
+      estimatedImpressions: 100,
+    });
+
+    const res = await app!.inject({
+      method: 'POST',
+      url: '/api/internal/monthly-stats',
+      headers: auth(),
+      payload: {
+        stats: [
+          {
+            location_id: host!.id,
+            month: '2026-05',
+            total_audience: 0, // the hub measured nothing, as always today
+            daily: [{ date: '2026-05-04', audience: 250 }], // …except that one Monday
+            peak_day_of_week: 1,
+            peak_hour: 10,
+          },
+        ],
+      },
+    });
+    expect(res.statusCode).toBe(200);
+
+    const [row] = await db.select().from(screenhostMonthlyStats);
+    // May 2026 has 4 Mondays; 04/05 is measured at 250, the other three estimate at 100 each.
+    expect(row!.totalAudience).toBe(250 + 300);
+    expect(row!.daily).toHaveLength(31);
+    const measured = row!.daily.find((d) => d.date === '2026-05-04');
+    expect(measured).toEqual({ date: '2026-05-04', audience: 250, source: 'measured' });
+    expect(row!.daily.find((d) => d.date === '2026-05-11')).toEqual({
+      date: '2026-05-11',
+      audience: 100,
+      source: 'estimated',
+    });
+  });
+
+  it('stores a gridless venue EXACTLY as sent — nothing to estimate from', async () => {
+    const [host] = await db
+      .insert(screenhosts)
+      .values({ name: 'Place Sans Grille' })
+      .returning({ id: screenhosts.id });
+    const res = await app!.inject({
+      method: 'POST',
+      url: '/api/internal/monthly-stats',
+      headers: auth(),
+      payload: { stats: [stat(host!.id, 1000)] },
+    });
+    expect(res.statusCode).toBe(200);
+    const [row] = await db.select().from(screenhostMonthlyStats);
+    expect(row!.totalAudience).toBe(1000); // the hub's own total, untouched
+    expect(row!.daily).toHaveLength(2); // its own two days, unmarked
+    expect(row!.daily[0]?.source).toBeUndefined();
+  });
+
   it('400 on a malformed month', async () => {
     const res = await app!.inject({
       method: 'POST',

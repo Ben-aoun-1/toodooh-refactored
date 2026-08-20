@@ -489,6 +489,13 @@ export type ScreenhostUnavailability = typeof screenhostUnavailability.$inferSel
 export interface MonthlyStatsDaily {
   date: string; // YYYY-MM-DD
   audience: number;
+  /**
+   * PERF-QA2 — provenance of the day's figure, stamped by lib/monthly-audience.ts when the
+   * ingest (or the backfill) merges the hub payload with the venue's affluence grid. OPTIONAL by
+   * design: rows written before the marker existed carry no source, and are read as measured only
+   * when their audience is non-zero. jsonb — no migration needed to add it.
+   */
+  source?: 'measured' | 'estimated';
 }
 
 export const screenhostMonthlyStats = pgTable(
