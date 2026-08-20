@@ -18,6 +18,7 @@ import {
   users,
 } from '../src/db/schema.js';
 import { adminCampaignsRoutes } from '../src/routes/admin-campaigns.js';
+import { adminDispatchConfigRoutes } from '../src/routes/admin-dispatch-config.js';
 import { campaignDispatchRoutes } from '../src/routes/campaign-dispatch.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
@@ -197,6 +198,7 @@ describe('admin campaign moderation — activation keystone (real Postgres)', ()
     await resetAuthTables();
     app = buildApp();
     await app.register(adminCampaignsRoutes);
+    await app.register(adminDispatchConfigRoutes);
     await app.register(campaignDispatchRoutes);
     await app.ready();
   });
@@ -294,6 +296,43 @@ describe('admin campaign moderation — activation keystone (real Postgres)', ()
     } finally {
       const restore = cfgBefore?.['event_cpm_tnd'] as string | undefined;
       if (restore !== undefined) await sql`update dispatch_config set event_cpm_tnd = ${restore}`;
+      else await sql`delete from dispatch_config`;
+    }
+  });
+
+  // CPM-ADMIN SEAM (Mejri 05/08) — the engine consumes the ADMIN-SAVED CPM: a standard CPM edited
+  // through PATCH /api/admin/dispatch-config (not SQL — the exact write the Tarification page
+  // performs) reprices the NEXT activation. budget 300 @ CPM 20 → i_cible = ⌊300·1000/20⌋ = 15000
+  // (the pre-edit 15 would derive 20000; capacité 30000 still covers). Snapshot/restore mirrors the
+  // event-CPM pin above: the route self-heals an EMPTY singleton, so drop the row again only if
+  // this test's PATCH created it.
+  it('a CPM saved via the admin route reprices the next activation (i_cible = ⌊budget·1000/new_CPM⌋)', async () => {
+    const [cfgBefore] = await sql`select standard_cpm_tnd from dispatch_config`;
+    try {
+      const { admin, campaignId } = await seedActivatable({ fundTnd: 500 });
+      mockSession(admin);
+
+      const saved = await app.inject({
+        method: 'PATCH',
+        url: '/api/admin/dispatch-config',
+        payload: { standard_cpm_tnd: 20 },
+      });
+      expect(saved.statusCode).toBe(200);
+      expect((saved.json() as { standard_cpm_tnd: number }).standard_cpm_tnd).toBe(20);
+
+      const res = await activate(campaignId);
+      expect(res.statusCode).toBe(200);
+      const [plan] = await db
+        .select()
+        .from(campaignDispatchPlan)
+        .where(eq(campaignDispatchPlan.campaignId, campaignId))
+        .limit(1);
+      expect(Number(plan?.cpm)).toBe(20);
+      expect(plan?.iCible).toBe(15000);
+    } finally {
+      const restore = cfgBefore?.['standard_cpm_tnd'] as string | undefined;
+      if (restore !== undefined)
+        await sql`update dispatch_config set standard_cpm_tnd = ${restore}`;
       else await sql`delete from dispatch_config`;
     }
   });

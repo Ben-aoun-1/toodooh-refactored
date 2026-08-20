@@ -13,12 +13,20 @@ export function useDispatchConfig(): {
   config: DispatchConfigView | undefined;
   loading: boolean;
   isError: boolean;
+  refetch: () => void;
 } {
   const query = useQuery({
     queryKey: adminKeys.dispatchConfig(),
     queryFn: () => adminDispatchConfigService.get(),
   });
-  return { config: query.data, loading: query.isLoading, isError: query.isError };
+  return {
+    config: query.data,
+    loading: query.isLoading,
+    isError: query.isError,
+    refetch: () => {
+      void query.refetch();
+    },
+  };
 }
 
 /**

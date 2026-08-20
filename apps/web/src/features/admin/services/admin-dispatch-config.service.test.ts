@@ -6,6 +6,10 @@ vi.mock('@/lib/api-client', () => ({ apiClient: { get: getMock, patch: patchMock
 import {
   adminDispatchConfigService,
   attentionOrderingValid,
+  composeAttentionPatch,
+  composeCpmPatch,
+  composeLeadPatch,
+  composeReversementPatch,
   parseAttention,
   parseCampaignLead,
 } from './admin-dispatch-config.service';
@@ -88,5 +92,107 @@ describe('parseCampaignLead (integer jours ouvrés in [0, 30])', () => {
     expect(parseCampaignLead('2.5')).toBeNull();
     expect(parseCampaignLead('abc')).toBeNull();
     expect(parseCampaignLead('')).toBeNull();
+  });
+});
+
+// ── CPM-ADMIN (Mejri 05/08) — per-block patch composition: refusal or MINIMAL diff, never silence ─
+describe('composeCpmPatch (per-block save — CPM)', () => {
+  const cfg = { standard_cpm_tnd: 15, event_cpm_tnd: 30 };
+
+  it('refuses a non-positive or non-numeric CPM (both fields must parse)', () => {
+    expect(composeCpmPatch({ standard: '0', event: '30' }, cfg).ok).toBe(false);
+    expect(composeCpmPatch({ standard: '15', event: '-1' }, cfg).ok).toBe(false);
+    expect(composeCpmPatch({ standard: '', event: '30' }, cfg).ok).toBe(false);
+    expect(composeCpmPatch({ standard: 'abc', event: '30' }, cfg).ok).toBe(false);
+  });
+
+  it('diffs only the changed knob — an untouched field never rides the PATCH', () => {
+    const r = composeCpmPatch({ standard: '18.5', event: '30' }, cfg);
+    expect(r).toEqual({ ok: true, patch: { standard_cpm_tnd: 18.5 } });
+  });
+
+  it('nothing changed → an EMPTY patch (the page toasts « Aucune modification »)', () => {
+    expect(composeCpmPatch({ standard: '15', event: '30' }, cfg)).toEqual({ ok: true, patch: {} });
+  });
+});
+
+describe('composeLeadPatch (per-block save — délai de lancement)', () => {
+  const cfg = { campaign_lead_working_days: 2 };
+
+  it('refuses out-of-bounds and non-integer leads', () => {
+    expect(composeLeadPatch({ lead: '-1' }, cfg).ok).toBe(false);
+    expect(composeLeadPatch({ lead: '31' }, cfg).ok).toBe(false);
+    expect(composeLeadPatch({ lead: '2.5' }, cfg).ok).toBe(false);
+    expect(composeLeadPatch({ lead: '' }, cfg).ok).toBe(false);
+  });
+
+  it('0 is a LEGAL edit (floor = today, field tests); unchanged → empty patch', () => {
+    expect(composeLeadPatch({ lead: '0' }, cfg)).toEqual({
+      ok: true,
+      patch: { campaign_lead_working_days: 0 },
+    });
+    expect(composeLeadPatch({ lead: '2' }, cfg)).toEqual({ ok: true, patch: {} });
+  });
+});
+
+describe('composeAttentionPatch (per-block save — indice T)', () => {
+  const cfg = { t_10s: 0.6, t_20s: 0.7, t_30s: 0.8 };
+
+  it('refuses values out of (0, 1] and nonsense orderings', () => {
+    expect(composeAttentionPatch({ t10: '0', t20: '0.7', t30: '0.8' }, cfg).ok).toBe(false);
+    expect(composeAttentionPatch({ t10: '0.6', t20: '1.01', t30: '0.8' }, cfg).ok).toBe(false);
+    const inverted = composeAttentionPatch({ t10: '0.9', t20: '0.7', t30: '0.8' }, cfg);
+    expect(inverted.ok).toBe(false);
+    if (!inverted.ok) expect(inverted.error).toContain("L'ordre requis");
+  });
+
+  it('diffs only the changed buckets; unchanged → empty patch', () => {
+    expect(composeAttentionPatch({ t10: '0.5', t20: '0.7', t30: '0.8' }, cfg)).toEqual({
+      ok: true,
+      patch: { t_10s: 0.5 },
+    });
+    expect(composeAttentionPatch({ t10: '0.6', t20: '0.7', t30: '0.8' }, cfg)).toEqual({
+      ok: true,
+      patch: {},
+    });
+  });
+});
+
+describe('composeReversementPatch (per-block save — Σ = 100 refused client-side)', () => {
+  const cfg = { pct_sh: 50, pct_toodooh: 44, pct_agent_sh: 3, pct_agent_sc: 3 };
+
+  it('accepts a split totalling exactly 100 and diffs only the changed shares', () => {
+    const r = composeReversementPatch({ sh: '55', toodooh: '39', agentSh: '3', agentSc: '3' }, cfg);
+    expect(r).toEqual({ ok: true, patch: { pct_sh: 55, pct_toodooh: 39 } });
+  });
+
+  it('refuses 99 and 101 — « une répartition différente est refusée » is now TRUE', () => {
+    const at99 = composeReversementPatch(
+      { sh: '49', toodooh: '44', agentSh: '3', agentSc: '3' },
+      cfg,
+    );
+    expect(at99.ok).toBe(false);
+    if (!at99.ok) expect(at99.error).toContain('totaliser 100 (obtenu : 99)');
+    const at101 = composeReversementPatch(
+      { sh: '51', toodooh: '44', agentSh: '3', agentSc: '3' },
+      cfg,
+    );
+    expect(at101.ok).toBe(false);
+    if (!at101.ok) expect(at101.error).toContain('totaliser 100 (obtenu : 101)');
+  });
+
+  it('refuses an empty or out-of-range share (empty ≠ zero) and never silently drops it', () => {
+    expect(
+      composeReversementPatch({ sh: '', toodooh: '44', agentSh: '3', agentSc: '3' }, cfg).ok,
+    ).toBe(false);
+    expect(
+      composeReversementPatch({ sh: '101', toodooh: '-1', agentSh: '0', agentSc: '0' }, cfg).ok,
+    ).toBe(false);
+  });
+
+  it('unchanged split → empty patch (the page toasts « Aucune modification »)', () => {
+    expect(
+      composeReversementPatch({ sh: '50', toodooh: '44', agentSh: '3', agentSc: '3' }, cfg),
+    ).toEqual({ ok: true, patch: {} });
   });
 });

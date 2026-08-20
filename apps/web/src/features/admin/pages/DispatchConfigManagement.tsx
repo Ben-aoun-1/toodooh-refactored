@@ -1,143 +1,96 @@
 import { CalendarClock, Coins, Eye, Loader2, Percent, Save } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
 import { useDispatchConfig, useUpdateCpmConfig } from '@/features/admin/hooks/useDispatchConfig';
 import {
-  type CpmPatch,
-  attentionOrderingValid,
-  parseAttention,
-  parseCampaignLead,
-  reversementSumIsValid,
+  type BlockPatchResult,
+  type DispatchConfigView,
+  composeAttentionPatch,
+  composeCpmPatch,
+  composeLeadPatch,
+  composeReversementPatch,
 } from '@/features/admin/services/admin-dispatch-config.service';
 import { getErrorMessage } from '@/lib/errors';
 
-// A finite, strictly-positive TND/1000 rate (mirrors the server refine — a non-positive CPM makes
-// I_cible = ⌊budget·1000/cpm⌋ blow up / go negative at activation).
-function parseCpm(raw: string): number | null {
-  const n = Number(raw);
-  return Number.isFinite(n) && n > 0 ? n : null;
+// CPM-ADMIN (Mejri 05/08) — one save per block, and NO silent path: a refused compose toasts the
+// French reason, an empty diff toasts « Aucune modification », a failed PATCH toasts the server
+// error. The old single-button page could swallow a click whole (config never loaded → bare
+// `return`; a background refetch re-seeding the inputs → edits wiped, then an empty diff).
+async function runBlockSave(
+  mutation: ReturnType<typeof useUpdateCpmConfig>,
+  result: BlockPatchResult,
+): Promise<void> {
+  if (!result.ok) {
+    toast.error(result.error);
+    return;
+  }
+  if (Object.keys(result.patch).length === 0) {
+    toast('Aucune modification à enregistrer');
+    return;
+  }
+  try {
+    await mutation.mutateAsync(result.patch);
+    toast.success('Configuration enregistrée');
+  } catch (e: unknown) {
+    toast.error(getErrorMessage(e) || 'Enregistrement impossible');
+  }
 }
 
-export default function DispatchConfigManagement() {
-  const { config, loading, isError } = useDispatchConfig();
-  const updateCpm = useUpdateCpmConfig();
-  const [standard, setStandard] = useState('');
-  const [event, setEvent] = useState('');
+function SaveButton({ pending, onClick }: { pending: boolean; onClick: () => void }) {
+  return (
+    <div className="mt-6 flex justify-end">
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={pending}
+        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-primary text-brand-deep text-sm font-medium hover:opacity-90 disabled:opacity-50"
+      >
+        {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+        Enregistrer
+      </button>
+    </div>
+  );
+}
+
+const inputClass =
+  'w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent';
+
+// Mounted only once the config EXISTS, so the inputs seed through useState initializers: a later
+// refetch (new object identity) can never re-seed them and silently wipe an in-progress edit.
+function ConfigForm({ config }: { config: DispatchConfigView }) {
+  const cpmMutation = useUpdateCpmConfig();
+  const leadMutation = useUpdateCpmConfig();
+  const attentionMutation = useUpdateCpmConfig();
+  const reversementMutation = useUpdateCpmConfig();
+  const [standard, setStandard] = useState(String(config.standard_cpm_tnd));
+  const [event, setEvent] = useState(String(config.event_cpm_tnd));
   // E1 — the attention T buckets (indice d'attention par durée de spot).
-  const [t10, setT10] = useState('');
-  const [t20, setT20] = useState('');
-  const [t30, setT30] = useState('');
+  const [t10, setT10] = useState(String(config.t_10s));
+  const [t20, setT20] = useState(String(config.t_20s));
+  const [t30, setT30] = useState(String(config.t_30s));
   // CF-D1 — the campaign start-date lead (jours ouvrés).
-  const [lead, setLead] = useState('');
+  const [lead, setLead] = useState(String(config.campaign_lead_working_days));
   // E7 — the reversement split (Σ = 100).
-  const [pctSh, setPctSh] = useState('');
-  const [pctToodooh, setPctToodooh] = useState('');
-  const [pctAgentSh, setPctAgentSh] = useState('');
-  const [pctAgentSc, setPctAgentSc] = useState('');
+  const [pctSh, setPctSh] = useState(String(config.pct_sh));
+  const [pctToodooh, setPctToodooh] = useState(String(config.pct_toodooh));
+  const [pctAgentSh, setPctAgentSh] = useState(String(config.pct_agent_sh));
+  const [pctAgentSc, setPctAgentSc] = useState(String(config.pct_agent_sc));
 
-  // Seed the editable inputs from the loaded config (guarded on `loading` so the undefined
-  // placeholder does not churn the effect before the first read settles).
-  useEffect(() => {
-    if (loading || !config) return;
-    setStandard(String(config.standard_cpm_tnd));
-    setEvent(String(config.event_cpm_tnd));
-    setT10(String(config.t_10s));
-    setT20(String(config.t_20s));
-    setT30(String(config.t_30s));
-    setLead(String(config.campaign_lead_working_days));
-    setPctSh(String(config.pct_sh));
-    setPctToodooh(String(config.pct_toodooh));
-    setPctAgentSh(String(config.pct_agent_sh));
-    setPctAgentSc(String(config.pct_agent_sc));
-  }, [loading, config]);
-
-  useEffect(() => {
-    if (isError) toast.error('Chargement de la configuration impossible');
-  }, [isError]);
-
-  const handleSave = async () => {
-    if (!config) return;
-    const stdNum = parseCpm(standard);
-    const evtNum = parseCpm(event);
-    if (stdNum === null || evtNum === null) {
-      toast.error('Le CPM doit être un nombre strictement positif');
-      return;
-    }
-    // E1 — the T buckets: each in (0, 1], ordered t₁₀ ≤ t₂₀ ≤ t₃₀ (mirrors the server rules).
-    const t10Num = parseAttention(t10);
-    const t20Num = parseAttention(t20);
-    const t30Num = parseAttention(t30);
-    if (t10Num === null || t20Num === null || t30Num === null) {
-      toast.error("L'indice d'attention doit être compris entre 0 (exclu) et 1");
-      return;
-    }
-    if (!attentionOrderingValid(t10Num, t20Num, t30Num)) {
-      toast.error("L'ordre requis est T ≤ 10 s ≤ T ≤ 20 s ≤ T ≤ 30 s");
-      return;
-    }
-    // CF-D1 — the lead: an integer count of jours ouvrés in [0, 30] (mirrors the server bounds).
-    const leadNum = parseCampaignLead(lead);
-    if (leadNum === null) {
-      toast.error('Le délai de lancement doit être un entier entre 0 et 30');
-      return;
-    }
-
-    // E7 — the reversement split: four shares in [0, 100] totalling exactly 100. The server
-    // refuses a drifted split (and the money rail would throw at settlement); this mirror keeps
-    // the operator from spending a round trip on it.
-    const pcts = [pctSh, pctToodooh, pctAgentSh, pctAgentSc].map((raw) => {
-      const n = Number(raw);
-      return Number.isFinite(n) && n >= 0 && n <= 100 ? n : null;
-    });
-    const [shNum, toodoohNum, agentShNum, agentScNum] = pcts;
-    if (
-      shNum === null ||
-      toodoohNum === null ||
-      agentShNum === null ||
-      agentScNum === null ||
-      shNum === undefined ||
-      toodoohNum === undefined ||
-      agentShNum === undefined ||
-      agentScNum === undefined
-    ) {
-      toast.error('Chaque pourcentage de reversement doit être un nombre entre 0 et 100');
-      return;
-    }
-    if (!reversementSumIsValid(shNum, toodoohNum, agentShNum, agentScNum)) {
-      toast.error(
-        `Les pourcentages de reversement doivent totaliser 100 (obtenu : ${
-          shNum + toodoohNum + agentShNum + agentScNum
-        })`,
-      );
-      return;
-    }
-
-    // Send only the changed knobs (PATCH is partial). Nothing changed → no-op.
-    const patch: CpmPatch = {};
-    if (stdNum !== config.standard_cpm_tnd) patch.standard_cpm_tnd = stdNum;
-    if (evtNum !== config.event_cpm_tnd) patch.event_cpm_tnd = evtNum;
-    if (t10Num !== config.t_10s) patch.t_10s = t10Num;
-    if (t20Num !== config.t_20s) patch.t_20s = t20Num;
-    if (t30Num !== config.t_30s) patch.t_30s = t30Num;
-    if (leadNum !== config.campaign_lead_working_days) patch.campaign_lead_working_days = leadNum;
-    if (shNum !== config.pct_sh) patch.pct_sh = shNum;
-    if (toodoohNum !== config.pct_toodooh) patch.pct_toodooh = toodoohNum;
-    if (agentShNum !== config.pct_agent_sh) patch.pct_agent_sh = agentShNum;
-    if (agentScNum !== config.pct_agent_sc) patch.pct_agent_sc = agentScNum;
-    if (Object.keys(patch).length === 0) {
-      toast('Aucune modification à enregistrer');
-      return;
-    }
-
-    try {
-      await updateCpm.mutateAsync(patch);
-      toast.success('Configuration enregistrée');
-    } catch (e: unknown) {
-      toast.error(getErrorMessage(e) || 'Enregistrement impossible');
-    }
-  };
+  const handleSaveCpm = () =>
+    runBlockSave(cpmMutation, composeCpmPatch({ standard, event }, config));
+  const handleSaveLead = () => runBlockSave(leadMutation, composeLeadPatch({ lead }, config));
+  const handleSaveAttention = () =>
+    runBlockSave(attentionMutation, composeAttentionPatch({ t10, t20, t30 }, config));
+  const handleSaveReversement = () =>
+    runBlockSave(
+      reversementMutation,
+      composeReversementPatch(
+        { sh: pctSh, toodooh: pctToodooh, agentSh: pctAgentSh, agentSc: pctAgentSc },
+        config,
+      ),
+    );
 
   // Live total for the reversement block — the operator sees the Σ drift before pressing save.
   const totalPct = [pctSh, pctToodooh, pctAgentSh, pctAgentSc].reduce((sum, raw) => {
@@ -145,208 +98,212 @@ export default function DispatchConfigManagement() {
     return sum + (Number.isFinite(n) ? n : 0);
   }, 0);
 
-  const readonlyRows = config
-    ? [
-        { label: 'Seuil diffusable', value: config.seuil_diffusable },
-        { label: 'G (jours/mois)', value: config.g_mois },
-        { label: 'Jours actifs', value: config.jours_actifs },
-        { label: 'R min efficace', value: config.r_min_efficace },
-        { label: 'F max (secondes)', value: config.f_max_seconds },
-      ]
-    : [];
+  const readonlyRows = [
+    { label: 'Seuil diffusable', value: config.seuil_diffusable },
+    { label: 'G (jours/mois)', value: config.g_mois },
+    { label: 'Jours actifs', value: config.jours_actifs },
+    { label: 'R min efficace', value: config.r_min_efficace },
+    { label: 'F max (secondes)', value: config.f_max_seconds },
+  ];
+
+  return (
+    <div className="space-y-6 max-w-3xl">
+      <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Coins className="h-5 w-5 text-brand-primary" />
+          <h3 className="text-lg font-semibold text-gray-900">CPM éditable</h3>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="standard-cpm">
+              CPM standard (TND / 1000)
+            </label>
+            <input
+              id="standard-cpm"
+              type="number"
+              step="0.01"
+              min="0"
+              value={standard}
+              onChange={(e) => setStandard(e.target.value)}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="event-cpm">
+              CPM événement (TND / 1000)
+            </label>
+            <input
+              id="event-cpm"
+              type="number"
+              step="0.01"
+              min="0"
+              value={event}
+              onChange={(e) => setEvent(e.target.value)}
+              className={inputClass}
+            />
+          </div>
+        </div>
+        <SaveButton pending={cpmMutation.isPending} onClick={handleSaveCpm} />
+      </div>
+
+      {/* CF-D1 — the campaign start-date lead; its own Enregistrer. */}
+      <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+        <div className="flex items-center gap-2 mb-1">
+          <CalendarClock className="h-5 w-5 text-brand-primary" />
+          <h3 className="text-lg font-semibold text-gray-900">Délai de lancement</h3>
+        </div>
+        <p className="text-sm text-gray-600 mb-4">
+          Nombre de jours ouvrés minimum entre aujourd'hui et le début d'une campagne. Attention : 0
+          autorise un démarrage le jour même — réservé aux tests terrain.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="campaign-lead">
+              Délai de lancement (jours ouvrés)
+            </label>
+            <input
+              id="campaign-lead"
+              type="number"
+              step="1"
+              min="0"
+              max="30"
+              value={lead}
+              onChange={(e) => setLead(e.target.value)}
+              className={inputClass}
+            />
+          </div>
+        </div>
+        <SaveButton pending={leadMutation.isPending} onClick={handleSaveLead} />
+      </div>
+
+      {/* E1 — the attention index T by spot duration; its own Enregistrer. */}
+      <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+        <div className="flex items-center gap-2 mb-1">
+          <Eye className="h-5 w-5 text-brand-primary" />
+          <h3 className="text-lg font-semibold text-gray-900">Indice d'attention (T)</h3>
+        </div>
+        <p className="text-sm text-gray-600 mb-4">
+          Capacité facturable = capacité physique × T, selon la durée du spot. Valeurs entre 0
+          (exclu) et 1, avec T ≤ 10 s ≤ T ≤ 20 s ≤ T ≤ 30 s.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {(
+            [
+              ['t-10s', 'Spot ≤ 10 s', t10, setT10],
+              ['t-20s', 'Spot ≤ 20 s', t20, setT20],
+              ['t-30s', 'Spot ≤ 30 s', t30, setT30],
+            ] as const
+          ).map(([id, label, value, setter]) => (
+            <div key={id}>
+              <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor={id}>
+                {label}
+              </label>
+              <input
+                id={id}
+                type="number"
+                step="0.05"
+                min="0"
+                max="1"
+                value={value}
+                onChange={(e) => setter(e.target.value)}
+                className={inputClass}
+              />
+            </div>
+          ))}
+        </div>
+        <SaveButton pending={attentionMutation.isPending} onClick={handleSaveAttention} />
+      </div>
+
+      {/* E7 — the reversement split (Σ = 100); its own Enregistrer. */}
+      <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+        <div className="flex items-center gap-2 mb-1">
+          <Percent className="h-5 w-5 text-brand-primary" />
+          <h3 className="text-lg font-semibold text-gray-900">Répartition des reversements</h3>
+        </div>
+        <p className="text-sm text-gray-600 mb-4">
+          Part de chaque bénéficiaire sur la valeur diffusée. Le total doit être exactement 100 —
+          une répartition différente est refusée à l'enregistrement.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {(
+            [
+              ['pct-sh', 'Établissement (%)', pctSh, setPctSh],
+              ['pct-toodooh', 'TOODOOH (%)', pctToodooh, setPctToodooh],
+              ['pct-agent-sh', 'Agent établissement (%)', pctAgentSh, setPctAgentSh],
+              ['pct-agent-sc', 'Agent annonceur (%)', pctAgentSc, setPctAgentSc],
+            ] as const
+          ).map(([id, label, value, setter]) => (
+            <div key={id}>
+              <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor={id}>
+                {label}
+              </label>
+              <input
+                id={id}
+                type="number"
+                step="0.01"
+                min="0"
+                max="100"
+                value={value}
+                onChange={(e) => setter(e.target.value)}
+                className={inputClass}
+              />
+            </div>
+          ))}
+        </div>
+        <p className="mt-4 text-sm font-medium text-gray-700">
+          Total : {totalPct}
+          {totalPct === 100 ? '' : ' — doit être 100'}
+        </p>
+        <SaveButton pending={reversementMutation.isPending} onClick={handleSaveReversement} />
+      </div>
+
+      <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+          Paramètres moteur (lecture seule)
+        </h3>
+        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 text-sm">
+          {readonlyRows.map((row) => (
+            <div key={row.label} className="flex justify-between border-b border-gray-100 pb-2">
+              <dt className="text-gray-600">{row.label}</dt>
+              <dd className="font-medium text-gray-900">{row.value}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </div>
+  );
+}
+
+export default function DispatchConfigManagement() {
+  const { config, loading, isError, refetch } = useDispatchConfig();
 
   return (
     <AdminLayout
       title="Tarification (CPM) et attention (T)"
-      subtitle="CPM standard / événement (TND / 1000 impressions) et indice d'attention par durée de spot — le bouton Enregistrer sauvegarde les deux blocs"
+      subtitle="CPM, délai de lancement, indice d'attention et répartition des reversements — chaque bloc a son propre bouton Enregistrer"
     >
       {loading ? (
         <div className="flex justify-center py-16">
           <Loader2 className="h-10 w-10 animate-spin text-brand-primary" />
         </div>
-      ) : (
-        <div className="space-y-6 max-w-3xl">
-          <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Coins className="h-5 w-5 text-brand-primary" />
-              <h3 className="text-lg font-semibold text-gray-900">CPM éditable</h3>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label
-                  className="block text-sm font-medium text-gray-700 mb-2"
-                  htmlFor="standard-cpm"
-                >
-                  CPM standard (TND / 1000)
-                </label>
-                <input
-                  id="standard-cpm"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={standard}
-                  onChange={(e) => setStandard(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="event-cpm">
-                  CPM événement (TND / 1000)
-                </label>
-                <input
-                  id="event-cpm"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={event}
-                  onChange={(e) => setEvent(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
-                />
-              </div>
-            </div>
-            <div className="mt-6 flex justify-end">
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={updateCpm.isPending}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-primary text-brand-deep text-sm font-medium hover:opacity-90 disabled:opacity-50"
-              >
-                {updateCpm.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4" />
-                )}
-                Enregistrer
-              </button>
-            </div>
-          </div>
-
-          {/* CF-D1 — the campaign start-date lead, saved by the same Enregistrer. */}
-          <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
-            <div className="flex items-center gap-2 mb-1">
-              <CalendarClock className="h-5 w-5 text-brand-primary" />
-              <h3 className="text-lg font-semibold text-gray-900">Délai de lancement</h3>
-            </div>
-            <p className="text-sm text-gray-600 mb-4">
-              Nombre de jours ouvrés minimum entre aujourd'hui et le début d'une campagne. Attention
-              : 0 autorise un démarrage le jour même — réservé aux tests terrain.
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label
-                  className="block text-sm font-medium text-gray-700 mb-2"
-                  htmlFor="campaign-lead"
-                >
-                  Délai de lancement (jours ouvrés)
-                </label>
-                <input
-                  id="campaign-lead"
-                  type="number"
-                  step="1"
-                  min="0"
-                  max="30"
-                  value={lead}
-                  onChange={(e) => setLead(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* E1 — the attention index T by spot duration, saved by the same Enregistrer. */}
-          <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
-            <div className="flex items-center gap-2 mb-1">
-              <Eye className="h-5 w-5 text-brand-primary" />
-              <h3 className="text-lg font-semibold text-gray-900">Indice d'attention (T)</h3>
-            </div>
-            <p className="text-sm text-gray-600 mb-4">
-              Capacité facturable = capacité physique × T, selon la durée du spot. Valeurs entre 0
-              (exclu) et 1, avec T ≤ 10 s ≤ T ≤ 20 s ≤ T ≤ 30 s.
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {(
-                [
-                  ['t-10s', 'Spot ≤ 10 s', t10, setT10],
-                  ['t-20s', 'Spot ≤ 20 s', t20, setT20],
-                  ['t-30s', 'Spot ≤ 30 s', t30, setT30],
-                ] as const
-              ).map(([id, label, value, setter]) => (
-                <div key={id}>
-                  <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor={id}>
-                    {label}
-                  </label>
-                  <input
-                    id={id}
-                    type="number"
-                    step="0.05"
-                    min="0"
-                    max="1"
-                    value={value}
-                    onChange={(e) => setter(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* E7 — the reversement split (Σ = 100), saved by the same Enregistrer. */}
-          <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
-            <div className="flex items-center gap-2 mb-1">
-              <Percent className="h-5 w-5 text-brand-primary" />
-              <h3 className="text-lg font-semibold text-gray-900">Répartition des reversements</h3>
-            </div>
-            <p className="text-sm text-gray-600 mb-4">
-              Part de chaque bénéficiaire sur la valeur diffusée. Le total doit être exactement 100
-              — une répartition différente est refusée à l'enregistrement.
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              {(
-                [
-                  ['pct-sh', 'Établissement (%)', pctSh, setPctSh],
-                  ['pct-toodooh', 'TOODOOH (%)', pctToodooh, setPctToodooh],
-                  ['pct-agent-sh', 'Agent établissement (%)', pctAgentSh, setPctAgentSh],
-                  ['pct-agent-sc', 'Agent annonceur (%)', pctAgentSc, setPctAgentSc],
-                ] as const
-              ).map(([id, label, value, setter]) => (
-                <div key={id}>
-                  <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor={id}>
-                    {label}
-                  </label>
-                  <input
-                    id={id}
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    max="100"
-                    value={value}
-                    onChange={(e) => setter(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-primary focus:border-transparent"
-                  />
-                </div>
-              ))}
-            </div>
-            <p className="mt-4 text-sm font-medium text-gray-700">
-              Total : {totalPct}
-              {totalPct === 100 ? '' : ' — doit être 100'}
-            </p>
-          </div>
-
-          <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Paramètres moteur (lecture seule)
-            </h3>
-            <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3 text-sm">
-              {readonlyRows.map((row) => (
-                <div key={row.label} className="flex justify-between border-b border-gray-100 pb-2">
-                  <dt className="text-gray-600">{row.label}</dt>
-                  <dd className="font-medium text-gray-900">{row.value}</dd>
-                </div>
-              ))}
-            </dl>
-          </div>
+      ) : config ? (
+        <ConfigForm config={config} />
+      ) : isError ? (
+        // CPM-ADMIN (the INV-1 rule) — a failed config read renders as an ERROR, never as an
+        // empty-but-editable form whose Enregistrer would have nothing to diff against.
+        <div className="max-w-3xl rounded-xl border border-rose-200 bg-rose-50/60 px-6 py-10 text-center">
+          <p className="text-sm font-medium text-rose-600">
+            Impossible de charger la configuration de tarification pour le moment.
+          </p>
+          <button
+            type="button"
+            onClick={refetch}
+            className="mt-4 rounded-full border border-rose-300 bg-white px-5 py-2 text-sm font-semibold text-rose-600 transition-colors hover:bg-rose-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+          >
+            Réessayer
+          </button>
         </div>
-      )}
+      ) : null}
     </AdminLayout>
   );
 }
