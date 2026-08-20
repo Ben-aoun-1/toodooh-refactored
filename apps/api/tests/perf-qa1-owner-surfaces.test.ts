@@ -8,6 +8,7 @@ import {
   campaigns,
   creatives,
   dispatchConfig,
+  events,
   type NewUser,
   proofOfPlay,
   screenhostMonthlyReports,
@@ -16,13 +17,12 @@ import {
   users,
 } from '../src/db/schema.js';
 import {
-  PISTE_01_BODY,
+  PISTE_01_NO_EVENTS_BODY,
   PISTE_01_TITLE,
   PISTE_02_GENERIC_BODY,
   PISTE_02_TITLE,
   PISTE_03_TITLE,
-  PISTE_03_WAIT_BODY,
-} from '../src/lib/report/template.js';
+} from '../src/lib/report/pistes.js';
 import { venueSlug } from '../src/lib/slug.js';
 import { screenhostsRoutes } from '../src/routes/screenhosts.js';
 
@@ -131,7 +131,18 @@ const seedProof = async (
 };
 
 afterAll(async () => {
+  // Same fixture repair as e7-reversement-settlement.test.ts: this suite runs config-less on
+  // purpose (the SPS read must degrade to the code defaults), but LEAVING the singleton deleted
+  // makes every later file read the fallback instead of the migration-seeded row — an invisible
+  // coupling that campaigns.test.ts's lead-0 flip exposes the moment file order shifts. Put the
+  // seeded row back before handing the DB on.
   await db.delete(dispatchConfig);
+  await db.insert(dispatchConfig).values({
+    seuilDiffusable: 1000,
+    gMois: '100',
+    joursActifs: 30,
+    rMinEfficace: 2,
+  });
   await sql.end();
 });
 
@@ -153,6 +164,9 @@ describe('PERF-QA1 owner surfaces (real Postgres)', () => {
   beforeEach(async () => {
     await resetAuthTables();
     await db.delete(dispatchConfig);
+    // PERF-QA2 — Piste 01 reads the NETWORK-wide event catalogue, which the auth truncate does
+    // not touch: a leftover event from another suite would flip the teaser branch here.
+    await db.delete(events);
     pistesCachedSpy.mockReset();
     pistesCachedSpy.mockResolvedValue(null);
     app = buildApp();
@@ -322,19 +336,27 @@ describe('PERF-QA1 owner surfaces (real Postgres)', () => {
       expect(res.json<{ error: string }>().error).toBe('RANGE_TOO_WIDE');
     });
 
-    it('serves the template constants BYTE-EQUAL when the AI seam yields nothing (single home)', async () => {
+    it('serves the generator BYTE-EQUAL when the AI seam yields nothing (single home)', async () => {
       const me = await seedUser();
       const sh = await seedScreenhost(me);
       mockSession(me);
       const res = await get(`/api/screenhosts/${sh}/pistes?${range}`);
       expect(res.statusCode).toBe(200);
-      expect(res.json<PistesBody>()).toEqual({
-        pistes: [
-          { num: '01', title: PISTE_01_TITLE, body: PISTE_01_BODY, pending: false },
-          { num: '02', title: PISTE_02_TITLE, body: PISTE_02_GENERIC_BODY, pending: false },
-          { num: '03', title: PISTE_03_TITLE, body: PISTE_03_WAIT_BODY, pending: true },
-        ],
-      });
+      // A bare venue: nothing in the event catalogue → the honest no-events teaser; no AI body →
+      // the generic angles-morts copy; a computable SPS (default weights, nothing engaged →
+      // 40+30+20+0 = 90) → the real analysis, naming remplissage as the weighted weak point.
+      const body = res.json<PistesBody>();
+      expect(body.pistes.map((p) => [p.num, p.title, p.pending])).toEqual([
+        ['01', PISTE_01_TITLE, false],
+        ['02', PISTE_02_TITLE, false],
+        ['03', PISTE_03_TITLE, false],
+      ]);
+      expect(body.pistes[0]?.body).toBe(PISTE_01_NO_EVENTS_BODY);
+      expect(body.pistes[1]?.body).toBe(PISTE_02_GENERIC_BODY);
+      expect(body.pistes[2]?.body).toContain('Votre score de priorité est de 90/100.');
+      expect(body.pistes[2]?.body).toContain(
+        'Point faible : Taux de remplissage (0/100, poids 10 %).',
+      );
     });
 
     it('goes through the SAME cache-wrapped seam as the period report, keyed venue × period', async () => {
@@ -353,6 +375,9 @@ describe('PERF-QA1 owner surfaces (real Postgres)', () => {
         from: '2026-06-01',
         to: '2026-06-30',
       });
+      // …and the ai body only ever displaces Piste 02 — 01/03 stay generator-authored.
+      expect(body.pistes[0]?.body).toBe(PISTE_01_NO_EVENTS_BODY);
+      expect(body.pistes[2]?.body).toContain('Votre score de priorité est de');
     });
 
     it('a pistes-seam failure never fails the response — 200 with the generic body', async () => {

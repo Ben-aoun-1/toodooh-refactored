@@ -5,6 +5,7 @@ import {
   formatDecimalFr,
   formatIntFr,
 } from './derive.js';
+import { buildPistes } from './pistes.js';
 
 // ONE self-contained HTML document for the report — R1.6: the DEDICATED DARK-THEME design,
 // reproduced from the operator-approved mockup (planner: Toodooh_Rapport_Performances.html) —
@@ -25,11 +26,13 @@ import {
 //   gridlines — overriding the axis-less mockup; the frame renders (unlabeled) in the empty
 //   state too.
 //
-// S07 — R3: a FIXED 3-theme structure (titles pinned; the mockup's card language unchanged).
-// Piste 01 is the mockup's static copy (goes data-driven when les événements ships), Piste 03 is
-// the static SPS wait-state, and ONLY the Piste 02 body is AI-authored: opts.aiPistes (a single
-// non-blank string — the historic name keeps the job/endpoint/script call sites untouched)
-// fills it; anything else keeps the generic angles-morts body verbatim.
+// S07 — PERF-QA2: the three cards come from lib/report/pistes.ts, the ONE generator the owner
+// page's /pistes read also calls. R3's « FIXED 3-theme structure, corps 01/03 statiques, langage
+// du mockup » was SUPERSEDED on 2026-08-20 (opérateur + architecte) by Mejri's « Retour rapport »
+// spec of 13-juil: Piste 01 is an event teaser, Piste 03 is a real SPS analysis. The ruling trail
+// and every body live in pistes.ts. opts.aiPistes (a single non-blank string — the historic name
+// keeps the job/endpoint/script call sites untouched) still fills Piste 02, and anything else
+// keeps the generic angles-morts body verbatim.
 
 const PENDING = 'En attente du premier deal';
 const CHART_PENDING = 'Évolution en attente du premier deal';
@@ -47,22 +50,12 @@ export const REV_MAX_ROWS = 4;
 const PLACEHOLDER_SEXE_PCT = [50, 50];
 const PLACEHOLDER_AGE_PCT = [32, 28, 14, 6];
 
-// R3 — the three FIXED S07 themes. Bodies 01/03 are static (01 = mockup copy VERBATIM until an
-// events source ships; 03 = the SPS wait-state); only the Piste 02 body is ever AI-authored.
-// Exported (PERF-QA1 R5): the owner pistes endpoint serves these SAME constants, so the page's
-// Recommandations section mirrors the PDF byte-for-byte from ONE api home.
-export const PISTE_01_TITLE = 'Anticipez les temps forts';
-export const PISTE_01_BODY =
-  "Un grand match international est à l'affiche ce mois-ci (Coupe du Monde, CAN…) - profitez-en pour communiquer sa diffusion et inviter vos clients à venir le suivre dès maintenant sur vos réseaux.";
-export const PISTE_02_TITLE = 'Repérez vos angles morts';
-// R3.1 — REAL generic copy (the mockup's body carried literal « essayez X et Y » placeholders,
-// which reached prod PDFs whenever the AI fell back). Register of the mockup, no invented numbers.
-// RULED asymmetry: this static body is 216 chars — over the 210-char guard that VARIABLE AI
-// bodies must pass — and that is fine: it renders 2 lines / 0px overflow by direct measurement.
-export const PISTE_02_GENERIC_BODY =
-  'Comparez vos créneaux les plus forts à vos périodes creuses - adaptez vos offres, votre programmation et votre communication aux heures calmes pour attirer davantage de visiteurs et développer vos revenus publicitaires.';
-export const PISTE_03_TITLE = 'Résumé du SPS et recommandations';
-export const PISTE_03_WAIT_BODY = 'En attente de votre score de priorité.';
+// The S07 titles + bodies USED to live here (R3, « 3 thèmes FIXES »). They moved to
+// lib/report/pistes.ts on 2026-08-20 when R3 was superseded by Mejri's 13-juil « Retour
+// rapport » spec (PERF-QA2): the bodies became data-driven (événements, SPS), so a constant
+// could no longer express them. The RULED asymmetry recorded here survives the move: the static
+// generic Piste 02 body is over the 210-char guard that VARIABLE AI bodies must pass, and that
+// is fine — it renders 2 lines / 0px overflow by direct measurement.
 
 // PERF-QA1 R7 — the S02 lead, HONEST semantics: the heatmap reads the venue's ROLLING typical-week
 // affluence grid, never the report period, so the copy names the semaine type and drops the
@@ -492,23 +485,27 @@ export function renderReportHtml(
     </div>
   </div>`;
 
-  // ── S07 — R3 FIXED 3-theme structure; only the Piste 02 body is AI-authored ──────────────────
-  const aiBody =
-    typeof opts.aiPistes === 'string' && opts.aiPistes.trim() !== '' ? opts.aiPistes : null;
-  const pisteCard = (num: string, title: string, bodyHtml: string): string => `
+  // ── S07 — the SAME generator the owner page reads (PERF-QA2) ─────────────────────────────────
+  // EVERY body is esc()-aped, not just the AI one: the generator now composes bodies from data
+  // (SPS labels/values), so the document escapes uniformly instead of trusting a constant.
+  const pisteCard = (piste: {
+    num: string;
+    title: string;
+    body: string;
+    pending: boolean;
+  }): string => `
     <div class="piste">
-      <div class="piste-k"><span class="b"></span>Piste ${num}</div>
-      <div class="piste-t">${title}</div>
-      ${bodyHtml}
+      <div class="piste-k"><span class="b"></span>Piste ${piste.num}</div>
+      <div class="piste-t">${esc(piste.title)}</div>
+      <div class="piste-body${piste.pending ? ' wait' : ''}">${esc(piste.body)}</div>
     </div>`;
-  const pisteCards =
-    pisteCard('01', PISTE_01_TITLE, `<div class="piste-body">${PISTE_01_BODY}</div>`) +
-    pisteCard(
-      '02',
-      PISTE_02_TITLE,
-      `<div class="piste-body">${aiBody ? esc(aiBody) : PISTE_02_GENERIC_BODY}</div>`,
-    ) +
-    pisteCard('03', PISTE_03_TITLE, `<div class="piste-body wait">${PISTE_03_WAIT_BODY}</div>`);
+  const pisteCards = buildPistes({
+    events: data.upcomingEvents,
+    sps: data.sps,
+    aiBody: opts.aiPistes ?? null,
+  })
+    .map(pisteCard)
+    .join('');
   const s07 = `
   <div class="section">
     ${secHead('Section 07', "Vos pistes d'optimisation futures", "Quelques observations issues de l'activité de votre lieu sur la période, transformées en pistes concrètes pour développer vos revenus.")}

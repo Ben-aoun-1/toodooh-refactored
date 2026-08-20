@@ -1,4 +1,4 @@
-import { format } from 'date-fns';
+import { addDays, differenceInCalendarDays, format, parseISO } from 'date-fns';
 import { and, desc, eq, gte, lte, count as sqlCount, sql } from 'drizzle-orm';
 
 import { db } from '../../db/client.js';
@@ -7,6 +7,7 @@ import {
   campaignReconciliation,
   campaignScreenhostPayout,
   campaigns,
+  events,
   proofOfPlay,
   screenhostAffluence,
   screenhostMonthlyStats,
@@ -42,6 +43,7 @@ import {
   quantileThresholds,
   zeroFillDays,
 } from './derive.js';
+import type { SpsBlock, UpcomingEvents } from './pistes.js';
 
 // One data truth: this module runs the SAME queries the owner reads use (screenhosts.ts —
 // profile / monthly-stats / affluence / impressions-daily / earnings) and derives the template's
@@ -50,6 +52,14 @@ import {
 
 /** The mockups' visible hour columns — 8h through 21h (mirror of the page heatmap). */
 export const HEATMAP_HOURS = Array.from({ length: 14 }, (_, i) => i + 8);
+
+/**
+ * PERF-QA2 — the Piste 01 teaser window: events kicking off within this many days of the render
+ * day (Tunis calendar, inclusive of today). RULED 14 days on 2026-08-20: long enough that a venue
+ * with one match a fortnight still sees a teaser, short enough that « cette semaine / ces
+ * prochains jours » stays true. The number never reaches the copy — only the words do.
+ */
+export const EVENT_TEASER_DAYS = 14;
 
 export interface ReportRevenueRow {
   name: string;
@@ -88,10 +98,13 @@ export interface ReportData {
     rows: ReportCampaignRow[];
   };
   /** E4 — the venue's SPS breakdown (computed live at assembly; null only on a compute failure). */
-  sps: {
-    score: number;
-    criteria: { label: string; weight: number; value: number }[];
-  } | null;
+  sps: SpsBlock | null;
+  /**
+   * PERF-QA2 — the S07 Piste 01 teaser input: OFFICIAL, non-cancelled events whose kickoff falls
+   * in the EVENT_TEASER_DAYS window after the render day. null = nothing upcoming (the honest
+   * no-events variant). Suggested and past events never reach here.
+   */
+  upcomingEvents: UpcomingEvents | null;
 }
 
 const typeLabelFr = (raw: string): string =>
@@ -299,25 +312,32 @@ export async function assembleReportData(
   try {
     const cfg = await getDispatchConfig();
     const { sps, variables } = await computeSps(venueId);
+    // PERF-QA2 — each criterion carries its KEY: Piste 03 names the weakest weighted variable and
+    // proposes the lever that moves THAT variable, and a lever must never be matched on a label
+    // string (a reworded label would silently swap the advice).
     spsBlock = {
       score: sps,
       criteria: [
         {
+          key: 'acceptation',
           label: "Taux d'acceptation des campagnes",
           weight: cfg.spsWeightAcceptation,
           value: variables.acceptation,
         },
         {
+          key: 'respect_evenements',
           label: 'Respect des événements acceptés',
           weight: cfg.spsWeightRespectEvenements,
           value: variables.respect_evenements,
         },
         {
+          key: 'activite',
           label: "Activité de l'écran",
           weight: cfg.spsWeightActivite,
           value: variables.activite,
         },
         {
+          key: 'remplissage',
           label: 'Taux de remplissage',
           weight: cfg.spsWeightRemplissage,
           value: variables.remplissage,
@@ -327,6 +347,31 @@ export async function assembleReportData(
   } catch {
     spsBlock = null;
   }
+
+  // PERF-QA2 — Piste 01's teaser input: OFFICIAL, non-cancelled events whose kickoff falls in the
+  // EVENT_TEASER_DAYS window after the render day, bucketed on the TUNIS calendar (the reconcile
+  // convention). Suggested events (source = 'suggested') and cancelled ones can never reach an
+  // owner's report — the teaser must only ever promise what the catalogue actually holds.
+  const eventDay = sql<string>`to_char(${events.kickoffAt} at time zone 'Africa/Tunis', 'YYYY-MM-DD')`;
+  const windowEnd = format(addDays(parseISO(todayIso), EVENT_TEASER_DAYS), 'yyyy-MM-dd');
+  const [eventAgg] = await db
+    .select({ n: sqlCount(), soonest: sql<string | null>`min(${eventDay})` })
+    .from(events)
+    .where(
+      and(
+        eq(events.source, 'official'),
+        eq(events.annule, false),
+        gte(eventDay, todayIso),
+        lte(eventDay, windowEnd),
+      ),
+    );
+  const upcomingEvents =
+    eventAgg && eventAgg.n > 0 && eventAgg.soonest
+      ? {
+          count: eventAgg.n,
+          soonestInDays: differenceInCalendarDays(parseISO(eventAgg.soonest), parseISO(todayIso)),
+        }
+      : null;
 
   return {
     venueName: venue.name,
@@ -349,6 +394,7 @@ export async function assembleReportData(
       })),
     },
     sps: spsBlock,
+    upcomingEvents,
     campaignsBlock: {
       count: periodLines.length,
       cumulativeImpressions: periodLines.reduce((s, l) => s + l.display_imp, 0),

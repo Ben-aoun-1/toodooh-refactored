@@ -90,7 +90,7 @@ export async function regenerateStoredReports(
       const data = await assembleReportData(row.screenhostId, monthBounds(row.month));
       if (!data) throw new Error('venue vanished mid-run');
       // R2 — same frozen seam as the month-end job (uncached; consistent with restyle-in-place).
-      const aiPistes = await pistesForReport(data).catch(() => null);
+      const aiPistes = await pistesForReport(row.screenhostId, data).catch(() => null);
       const pdf = await renderPdf(renderReportHtml(data, { aiPistes }));
 
       // SAME key on purpose — S3/MinIO PUT overwrites in place; nothing else moves.

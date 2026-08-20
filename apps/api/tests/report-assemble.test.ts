@@ -7,6 +7,7 @@ import {
   campaignScreenhostPayout,
   campaigns,
   creatives,
+  events,
   proofOfPlay,
   screenhostAffluence,
   screenhostMonthlyStats,
@@ -58,6 +59,9 @@ afterAll(async () => {
 describe('assembleReportData (real Postgres)', () => {
   beforeEach(async () => {
     await resetAuthTables();
+    // events survive the auth truncate (their only user FK is ON DELETE SET NULL) and the
+    // teaser read is NETWORK-wide, not venue-scoped — so this file clears them explicitly.
+    await db.delete(events);
   });
 
   it('returns null for a missing venue', async () => {
@@ -221,5 +225,56 @@ describe('heatmapLevels', () => {
     expect(withHours[0]?.[12]).toBe(0); // 20h ≥ closing → closed
     const noHours = heatmapLevels(grid, null, null);
     expect(noHours.flat().every((lvl) => lvl > 0)).toBe(true);
+  });
+});
+
+// ── PERF-QA2 — Piste 01's teaser input ────────────────────────────────────────────────────────
+describe('assembleReportData — upcomingEvents (the Piste 01 window)', () => {
+  const kickoff = (dayIso: string): Date => new Date(`${dayIso}T18:00:00+01:00`); // Tunis
+
+  beforeEach(async () => {
+    await resetAuthTables();
+    await db.delete(events);
+  });
+
+  const seedEvent = async (
+    dayIso: string,
+    over: Partial<typeof events.$inferInsert> = {},
+  ): Promise<void> => {
+    await db.insert(events).values({
+      name: `Match ${dayIso}`,
+      kickoffAt: kickoff(dayIso),
+      endsAt: new Date(kickoff(dayIso).getTime() + 2 * 60 * 60 * 1000),
+      ...over,
+    });
+  };
+
+  it('counts OFFICIAL, non-cancelled events inside the 14-day window and dates the soonest', async () => {
+    const venue = await seedScreenhost(await seedUser());
+    await seedEvent('2026-07-09'); // J+1
+    await seedEvent('2026-07-22'); // J+14 — the last day of the window
+    const data = await assembleReportData(venue, RANGE, TODAY);
+    expect(data?.upcomingEvents).toEqual({ count: 2, soonestInDays: 1 });
+  });
+
+  it('a kickoff TODAY counts (soonestInDays 0); J+15 falls outside', async () => {
+    const venue = await seedScreenhost(await seedUser());
+    await seedEvent(TODAY);
+    await seedEvent('2026-07-23'); // J+15
+    const data = await assembleReportData(venue, RANGE, TODAY);
+    expect(data?.upcomingEvents).toEqual({ count: 1, soonestInDays: 0 });
+  });
+
+  it('suggested, cancelled and PAST events never reach the report', async () => {
+    const venue = await seedScreenhost(await seedUser());
+    await seedEvent('2026-07-10', { source: 'suggested' });
+    await seedEvent('2026-07-11', { annule: true });
+    await seedEvent('2026-07-07'); // yesterday
+    expect((await assembleReportData(venue, RANGE, TODAY))?.upcomingEvents).toBeNull();
+  });
+
+  it('an empty catalogue is null, not a zero count', async () => {
+    const venue = await seedScreenhost(await seedUser());
+    expect((await assembleReportData(venue, RANGE, TODAY))?.upcomingEvents).toBeNull();
   });
 });
