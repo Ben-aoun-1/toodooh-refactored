@@ -177,17 +177,28 @@ export function linesEndingInMonth(
   return lines.filter((l) => (l.campaign_end ?? reconciledDate(l)).startsWith(`${month}-`));
 }
 
+export type CampaignStatut = 'À venir' | 'En cours' | 'Passée';
+
 /**
- * S06 Statut pill — DATE-derived per the CF-9 #1 ruling: campaign_end strictly before today →
- * 'Passée', else 'Active'. campaign_status is only the secondary signal for the no-end-date case
- * (the enum has no closed state yet; the engine's future `completed` status re-binds this).
+ * US-P.9 (amendment 2026-08-20) — the statut is DATE-derived over the campaign's own window, in
+ * THREE states: « À venir » before it starts, « En cours » inside it, « Passée » once it ends.
+ * « Active » is retired — it said nothing about a campaign that had not started yet.
+ * Null dates fall back to the reconciliation date, the same anchor lineInPeriod uses, so a line
+ * can never land in an undefined state. campaign_status stays out of it: the enum has no terminal
+ * value, and the dates are the truth the owner reads on the same row.
  */
-export function campaignStatut(
-  line: PerformanceEarningsLine,
-  todayIso: string,
-): 'Active' | 'Passée' {
-  if (line.campaign_end) return line.campaign_end < todayIso ? 'Passée' : 'Active';
-  return line.campaign_status === 'active' ? 'Active' : 'Passée';
+export function campaignStatut(line: PerformanceEarningsLine, todayIso: string): CampaignStatut {
+  const start = line.campaign_start ?? reconciledDate(line);
+  const end = line.campaign_end ?? start;
+  if (start > todayIso) return 'À venir';
+  if (end < todayIso) return 'Passée';
+  return 'En cours';
+}
+
+/** US-P.9 — the type column: event positionings read « Événement », everything else « Standard ». */
+export function campaignTypeLabel(campaignType: string): string {
+  if (campaignType === 'event') return 'Événement';
+  return campaignType ? campaignType.charAt(0).toUpperCase() + campaignType.slice(1) : '—';
 }
 
 export interface CumulativePoint {

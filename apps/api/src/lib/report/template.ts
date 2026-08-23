@@ -458,7 +458,7 @@ export function renderReportHtml(
           .slice(0, HIST_MAX_ROWS)
           .map(
             (row) =>
-              `<tr><td class="td-name">${esc(row.name)}</td><td class="td-mono">${esc(row.period)}</td><td>${esc(row.typeLabel)}</td><td><span class="pill${row.statut === 'Active' ? ' pill--active' : ''}"><span class="pd"></span>${row.statut}</span></td><td class="td-mono">${row.impressionsLabel}</td><td class="td-amt">${row.revenueLabel}</td></tr>`,
+              `<tr><td class="td-name">${esc(row.name)}</td><td class="td-mono">${esc(row.period)}</td><td>${esc(row.typeLabel)}</td><td><span class="pill${row.statut === 'En cours' ? ' pill--active' : ''}"><span class="pd"></span>${esc(row.statut)}</span></td><td class="td-mono">${row.impressionsLabel}</td><td class="td-amt">${row.revenueLabel}</td></tr>`,
           )
           .join(
             '',

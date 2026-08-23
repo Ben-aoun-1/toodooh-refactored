@@ -20,6 +20,7 @@ import { computeSps } from '../sps-score.js';
 
 import {
   type AudienceKpis,
+  type CampaignStatut,
   type DailyImpressionsPoint,
   type DateRange,
   type DemographicBreakdown,
@@ -28,6 +29,7 @@ import {
   type VenueRatios,
   audienceKpis,
   campaignStatut,
+  campaignTypeLabel,
   categoryLabel,
   dailyAudienceWithin,
   demographicBreakdown,
@@ -74,7 +76,7 @@ export interface ReportCampaignRow {
   name: string;
   period: string;
   typeLabel: string;
-  statut: 'Active' | 'Passée';
+  statut: CampaignStatut;
   impressionsLabel: string;
   revenueLabel: string;
 }
@@ -109,9 +111,6 @@ export interface ReportData {
    */
   upcomingEvents: UpcomingEvents | null;
 }
-
-const typeLabelFr = (raw: string): string =>
-  raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : '—';
 
 const numOrNull = (value: string | null): number | null => {
   if (value === null) return null;
@@ -428,7 +427,7 @@ export async function assembleReportData(
       rows: periodLines.map((l) => ({
         name: l.campaign_name,
         period: formatTablePeriod(l.campaign_start, l.campaign_end),
-        typeLabel: typeLabelFr(l.campaign_type),
+        typeLabel: campaignTypeLabel(l.campaign_type),
         statut: campaignStatut(l, todayIso),
         impressionsLabel: formatIntFr(l.display_imp),
         revenueLabel: formatTndCellFr(l.earnings_tnd),

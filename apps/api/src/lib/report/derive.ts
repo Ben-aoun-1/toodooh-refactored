@@ -110,10 +110,26 @@ export function lineInPeriod(line: ReportEarningsLine, range: DateRange): boolea
   return start <= range.to && end >= range.from;
 }
 
-/** S06 Statut pill — DATE-derived (web CF-9 #1 ruling): end strictly before today → 'Passée'. */
-export function campaignStatut(line: ReportEarningsLine, todayIso: string): 'Active' | 'Passée' {
-  if (line.campaign_end) return line.campaign_end < todayIso ? 'Passée' : 'Active';
-  return line.campaign_status === 'active' ? 'Active' : 'Passée';
+export type CampaignStatut = 'À venir' | 'En cours' | 'Passée';
+
+/**
+ * S06 Statut — US-P.9's THREE date-derived states (amendment 2026-08-20), mirroring the page:
+ * « À venir » before the window, « En cours » inside it, « Passée » after. « Active » is retired.
+ * The document follows the page by rule — the same campaign must never read differently on the
+ * screen and in the PDF.
+ */
+export function campaignStatut(line: ReportEarningsLine, todayIso: string): CampaignStatut {
+  const start = line.campaign_start ?? reconciledDate(line);
+  const end = line.campaign_end ?? start;
+  if (start > todayIso) return 'À venir';
+  if (end < todayIso) return 'Passée';
+  return 'En cours';
+}
+
+/** US-P.9 — the type column: event positionings read « Événement », everything else « Standard ». */
+export function campaignTypeLabel(campaignType: string): string {
+  if (campaignType === 'event') return 'Événement';
+  return campaignType ? campaignType.charAt(0).toUpperCase() + campaignType.slice(1) : '—';
 }
 
 /** S03 once hasCastData: every day of the range renders, 0 on days without data. */

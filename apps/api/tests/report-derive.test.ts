@@ -4,6 +4,7 @@ import {
   type ReportEarningsLine,
   audienceKpis,
   campaignStatut,
+  campaignTypeLabel,
   categoryLabel,
   dailyAudienceWithin,
   demographicBreakdown,
@@ -114,20 +115,43 @@ describe('period filtering (web parity)', () => {
   });
 });
 
-describe('campaignStatut (web parity, date-derived)', () => {
+describe('campaignStatut (web parity, US-P.9 three states)', () => {
   const today = '2026-07-07';
-  it('campaign_end before today → Passée; today or later → Active', () => {
-    expect(campaignStatut(line({ campaign_end: '2026-06-18' }), today)).toBe('Passée');
-    expect(campaignStatut(line({ campaign_end: '2026-07-07' }), today)).toBe('Active');
-    expect(campaignStatut(line({ campaign_end: '2026-08-01' }), today)).toBe('Active');
+  it('before its start → À venir; inside its window → En cours; after its end → Passée', () => {
+    expect(
+      campaignStatut(line({ campaign_start: '2026-07-20', campaign_end: '2026-07-30' }), today),
+    ).toBe('À venir');
+    expect(
+      campaignStatut(line({ campaign_start: '2026-07-01', campaign_end: '2026-07-07' }), today),
+    ).toBe('En cours');
+    expect(
+      campaignStatut(line({ campaign_start: '2026-06-01', campaign_end: '2026-06-18' }), today),
+    ).toBe('Passée');
   });
-  it('no end date → campaign_status is the secondary signal', () => {
-    expect(campaignStatut(line({ campaign_end: null, campaign_status: 'active' }), today)).toBe(
-      'Active',
+  it('the day of the start and the day of the end are both INSIDE the window', () => {
+    expect(campaignStatut(line({ campaign_start: today, campaign_end: '2026-08-01' }), today)).toBe(
+      'En cours',
     );
-    expect(campaignStatut(line({ campaign_end: null, campaign_status: 'rejected' }), today)).toBe(
+    expect(campaignStatut(line({ campaign_start: '2026-06-01', campaign_end: today }), today)).toBe(
+      'En cours',
+    );
+  });
+  it('null dates fall back to the reconciliation date — never an undefined state', () => {
+    // reconciled_at is 2026-07-01 in the fixture: start and end both collapse onto it.
+    expect(campaignStatut(line({ campaign_start: null, campaign_end: null }), today)).toBe(
       'Passée',
     );
+    expect(campaignStatut(line({ campaign_start: null, campaign_end: '2026-08-01' }), today)).toBe(
+      'En cours',
+    );
+  });
+  it('« Active » is retired — it said nothing about a campaign that had not started', () => {
+    for (const statut of [
+      campaignStatut(line({ campaign_start: '2026-07-20', campaign_end: '2026-07-30' }), today),
+      campaignStatut(line({ campaign_start: '2026-06-01', campaign_end: '2026-06-18' }), today),
+    ]) {
+      expect(statut).not.toBe('Active');
+    }
   });
 });
 
@@ -345,5 +369,13 @@ describe('measuredScale / measuredLevel', () => {
 
   it('a period whose measures are all equal reads at the neutral middle, not a peak', () => {
     expect(measuredLevel(7, { min: 7, max: 7 })).toBe(3);
+  });
+});
+
+describe('campaignTypeLabel (US-P.9)', () => {
+  it('event positionings read « Événement », everything else is capitalised', () => {
+    expect(campaignTypeLabel('event')).toBe('Événement');
+    expect(campaignTypeLabel('standard')).toBe('Standard');
+    expect(campaignTypeLabel('')).toBe('—');
   });
 });

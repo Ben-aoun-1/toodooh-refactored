@@ -24,7 +24,7 @@ import { PeriodFilters } from '../components/performance/PeriodFilters';
 import { ProgressHero } from '../components/performance/ProgressHero';
 import { ReportIntro } from '../components/performance/ReportIntro';
 import { ReportsHistorySection } from '../components/performance/ReportsHistorySection';
-import { RevenueSection, type RevenueRow } from '../components/performance/RevenueSection';
+import { RevenueSection } from '../components/performance/RevenueSection';
 import { SpsSection } from '../components/performance/SpsSection';
 import {
   useOwnerEarnings,
@@ -43,12 +43,12 @@ import { type MeasuredHourlyPoint, periodWeekGrid } from '../lib/peak-hours';
 import {
   audienceKpis,
   campaignStatut,
+  campaignTypeLabel,
   categoryLabel,
   cumulativeSeries,
   dailyAudienceWithin,
   demographicBreakdown,
   formatTndCellFr,
-  formatTndFr,
   hasCastData,
   hasHostData,
   impressionsOfMonth,
@@ -60,7 +60,6 @@ import {
 } from '../lib/performance-derive';
 import {
   type PeriodKey,
-  formatCompactPeriod,
   formatDateFr,
   formatGeneratedAtFr,
   formatTablePeriod,
@@ -84,9 +83,6 @@ const log = logger.child({ module: 'OwnerPerformance' });
 
 /** See periodWeekGrid's call site: no measured day×hour audience source exists yet. */
 const MEASURED_HOURLY: MeasuredHourlyPoint[] = [];
-
-const typeLabelFr = (raw: string): string =>
-  raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : '—';
 
 /**
  * "Mes performances" (Lane F) — rebuilt per the two design mockups, entirely on the engine's
@@ -239,23 +235,13 @@ export default function OwnerPerformance() {
     () => (profile.data?.ratios ? demographicBreakdown(profile.data.ratios, kpis.global) : null),
     [profile.data, kpis.global],
   );
-  const revenueRows: RevenueRow[] = useMemo(
-    () =>
-      periodLines.map((l) => ({
-        id: `${l.campaign_id}-${l.screenhost_id}`,
-        name: l.campaign_name,
-        period: formatCompactPeriod(l.campaign_start, l.campaign_end),
-        amountLabel: `${formatTndFr(l.earnings_tnd)} TND`,
-      })),
-    [periodLines],
-  );
   const campaignRows: CampaignTableRow[] = useMemo(
     () =>
       periodLines.map((l) => ({
         id: `${l.campaign_id}-${l.screenhost_id}`,
         name: l.campaign_name,
         period: formatTablePeriod(l.campaign_start, l.campaign_end),
-        typeLabel: typeLabelFr(l.campaign_type),
+        typeLabel: campaignTypeLabel(l.campaign_type),
         statut: campaignStatut(l, todayIso),
         // R10 — every line-derived impressions figure routes through the ONE display home.
         impressions: lineImpressions(l),
@@ -524,7 +510,6 @@ export default function OwnerPerformance() {
                       <RevenueSection
                         total={periodLines.reduce((sum, l) => sum + l.earnings_tnd, 0)}
                         count={periodLines.length}
-                        rows={revenueRows}
                         hasCastData={castHasData}
                       />
 

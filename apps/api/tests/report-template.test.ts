@@ -59,7 +59,7 @@ const campaignRow = (i: number) => ({
   name: `Campagne ${String(i + 1).padStart(2, '0')} · Marque`,
   period: '05/06 – 18/06/2026',
   typeLabel: i % 3 === 0 ? 'Événementielle' : 'Standard',
-  statut: (i % 2 === 0 ? 'Active' : 'Passée') as 'Active' | 'Passée',
+  statut: (i % 2 === 0 ? 'En cours' : 'Passée') as 'En cours' | 'Passée',
   impressionsLabel: `${38 - i} 400`,
   revenueLabel: `${412 - 20 * i},00 TND`,
 });
@@ -254,7 +254,9 @@ describe('renderReportHtml — FULL variants (both flags true)', () => {
     expect(html).toContain('diffusées');
     expect(html).toContain('412,00 TND');
     expect(html).toContain('Passée');
-    expect(html).toContain('Active');
+    // US-P.9 — the document carries the SAME three states as the page; « Active » is retired.
+    expect(html).toContain('En cours');
+    expect(html).not.toContain('>Active<');
     expect(html).toContain('s03-chart');
     expect(html).not.toContain('Évolution en attente du premier deal');
     expect(html).not.toContain('JJ/MM/AAAA');
