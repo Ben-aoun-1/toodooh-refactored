@@ -9,6 +9,7 @@ import {
   isRecommendationsEnabled,
   pistesForReport,
   pistesForReportCached,
+  recommendationCacheKey,
   resetRecommendationsForTests,
 } from '../src/lib/report/recommendations.js';
 
@@ -285,48 +286,62 @@ describe('generateRecommendations — compress-retry', () => {
   });
 });
 
-describe('generateRecommendationsCached (on-demand path)', () => {
-  const range = { from: '2026-06-01', to: '2026-06-30' };
-
+describe('generateRecommendationsCached (venue × input digest — PERF-QA2)', () => {
   it('a second identical call does NOT hit the SDK', async () => {
     parseSpy.mockResolvedValue(okMessage);
-    const first = await generateRecommendationsCached('venue-1', range, input());
-    const second = await generateRecommendationsCached('venue-1', range, input());
+    const first = await generateRecommendationsCached('venue-1', input());
+    const second = await generateRecommendationsCached('venue-1', input());
     expect(first).toBe(validBody);
     expect(second).toBe(validBody);
     expect(parseSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('a different venue or period is a different cache key', async () => {
+  it('IDENTICAL inputs yield an IDENTICAL body even across DIFFERENT periods (the QA2 fix)', async () => {
     parseSpy.mockResolvedValue(okMessage);
-    await generateRecommendationsCached('venue-1', range, input());
-    await generateRecommendationsCached('venue-2', range, input());
-    await generateRecommendationsCached(
-      'venue-1',
-      { from: '2026-05-01', to: '2026-05-31' },
-      input(),
-    );
-    expect(parseSpy).toHaveBeenCalledTimes(3);
+    const june = input();
+    const may = { ...input(), periode: { du: '2026-05-01', au: '2026-05-31' } };
+    // Same payload → one generation, shared by both callers.
+    expect(await generateRecommendationsCached('venue-1', june)).toBe(validBody);
+    expect(await generateRecommendationsCached('venue-1', { ...june })).toBe(validBody);
+    expect(parseSpy).toHaveBeenCalledTimes(1);
+    // A payload that genuinely differs (its période) is a different digest → a new generation.
+    expect(await generateRecommendationsCached('venue-1', may)).toBe(validBody);
+    expect(parseSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('a different venue is a different cache key (no cross-venue body sharing)', async () => {
+    parseSpy.mockResolvedValue(okMessage);
+    await generateRecommendationsCached('venue-1', input());
+    await generateRecommendationsCached('venue-2', input());
+    expect(parseSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('the key is venue + a sha256 of the payload', () => {
+    const key = recommendationCacheKey('venue-1', input());
+    expect(key.startsWith('venue-1|')).toBe(true);
+    expect(key.slice('venue-1|'.length)).toMatch(/^[0-9a-f]{64}$/);
+    expect(recommendationCacheKey('venue-1', input())).toBe(key); // stable
+    expect(recommendationCacheKey('venue-1', { ...input(), commerce: 'Autre lieu' })).not.toBe(key);
   });
 
   it('failures are not cached — the next call retries', async () => {
     parseSpy.mockRejectedValueOnce(new Error('boom'));
-    await expect(generateRecommendationsCached('venue-1', range, input())).resolves.toBeNull();
+    await expect(generateRecommendationsCached('venue-1', input())).resolves.toBeNull();
     parseSpy.mockResolvedValueOnce(okMessage);
-    await expect(generateRecommendationsCached('venue-1', range, input())).resolves.toBe(validBody);
+    await expect(generateRecommendationsCached('venue-1', input())).resolves.toBe(validBody);
     expect(parseSpy).toHaveBeenCalledTimes(2);
   });
 
   it('evicts the oldest entry past the ~500 cap', async () => {
     parseSpy.mockResolvedValue(okMessage);
     for (let i = 0; i < 501; i += 1) {
-      await generateRecommendationsCached(`venue-${i}`, range, input());
+      await generateRecommendationsCached(`venue-${i}`, input());
     }
     expect(parseSpy).toHaveBeenCalledTimes(501);
     // venue-0 was evicted → a repeat call re-fetches; venue-1 is still cached.
-    await generateRecommendationsCached('venue-0', range, input());
+    await generateRecommendationsCached('venue-0', input());
     expect(parseSpy).toHaveBeenCalledTimes(502);
-    await generateRecommendationsCached('venue-500', range, input());
+    await generateRecommendationsCached('venue-500', input());
     expect(parseSpy).toHaveBeenCalledTimes(502);
   });
 });
@@ -364,6 +379,7 @@ const reportData = (over: Partial<ReportData> = {}): ReportData => ({
   },
   revenue: { totalLabel: '1 065', count: 3, rows: [] },
   campaignsBlock: { count: 3, cumulativeImpressions: 140300, top3: [], rows: [] },
+  upcomingEvents: null,
   ...over,
 });
 
@@ -482,17 +498,19 @@ describe('buildRecommendationInput (ReportData → minimized payload)', () => {
 describe('pistesForReport / pistesForReportCached (the report seam)', () => {
   it('a venue with NEITHER host nor cast data keeps the generic body without an API call', async () => {
     const empty = reportData({ hostHasData: false, castHasData: false });
-    await expect(pistesForReport(empty)).resolves.toBeNull();
+    await expect(pistesForReport('venue-x', empty)).resolves.toBeNull();
     await expect(pistesForReportCached('venue-x', empty)).resolves.toBeNull();
     expect(parseSpy).not.toHaveBeenCalled();
   });
 
-  it('with data, the frozen path generates and the cached path caches per venue × period', async () => {
+  it('the FROZEN path and the PAGE path share ONE generation for the same venue × inputs', async () => {
     parseSpy.mockResolvedValue(okMessage);
-    await expect(pistesForReport(reportData())).resolves.toBe(validBody);
-    expect(parseSpy).toHaveBeenCalledTimes(1); // uncached — every call hits the API
+    // The month-end job freezes a body into the stored PDF…
+    await expect(pistesForReport('venue-1', reportData())).resolves.toBe(validBody);
+    // …and the page, later, reads THAT body instead of resampling the model (the QA2 fix: the
+    // two used to diverge because the frozen path was uncached).
     await expect(pistesForReportCached('venue-1', reportData())).resolves.toBe(validBody);
     await expect(pistesForReportCached('venue-1', reportData())).resolves.toBe(validBody);
-    expect(parseSpy).toHaveBeenCalledTimes(2); // one more for the first cached call only
+    expect(parseSpy).toHaveBeenCalledTimes(1);
   });
 });

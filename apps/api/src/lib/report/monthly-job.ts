@@ -249,7 +249,7 @@ export async function runMonthlyReportSweep(
         if (!data) continue; // venue vanished mid-sweep
         // R2 — generated ONCE here and frozen into the stored PDF (no cache). A generator failure
         // of ANY kind resolves to null → the generic pistes; it can never fail the report.
-        const aiPistes = await pistesForReport(data).catch(() => null);
+        const aiPistes = await pistesForReport(venue.id, data).catch(() => null);
         const pdf = await renderPdf(renderReportHtml(data, { aiPistes }));
 
         const key = `reports/${venue.id}/${month}.pdf`;

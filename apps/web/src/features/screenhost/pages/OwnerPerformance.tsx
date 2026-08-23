@@ -24,7 +24,7 @@ import { PeriodFilters } from '../components/performance/PeriodFilters';
 import { ProgressHero } from '../components/performance/ProgressHero';
 import { ReportIntro } from '../components/performance/ReportIntro';
 import { ReportsHistorySection } from '../components/performance/ReportsHistorySection';
-import { RevenueSection, type RevenueRow } from '../components/performance/RevenueSection';
+import { RevenueSection } from '../components/performance/RevenueSection';
 import { SpsSection } from '../components/performance/SpsSection';
 import {
   useOwnerEarnings,
@@ -39,15 +39,16 @@ import { useScreenhostAffluence } from '../hooks/useScreenhostAffluence';
 import { useScreenhostsMine } from '../hooks/useScreenhostsMine';
 import { lineImpressions, sumLineImpressions } from '../lib/impressions-display';
 import { downloadMonthlyReport } from '../lib/monthly-report';
+import { type MeasuredHourlyPoint, periodWeekGrid } from '../lib/peak-hours';
 import {
   audienceKpis,
   campaignStatut,
+  campaignTypeLabel,
   categoryLabel,
   cumulativeSeries,
   dailyAudienceWithin,
   demographicBreakdown,
   formatTndCellFr,
-  formatTndFr,
   hasCastData,
   hasHostData,
   impressionsOfMonth,
@@ -59,7 +60,6 @@ import {
 } from '../lib/performance-derive';
 import {
   type PeriodKey,
-  formatCompactPeriod,
   formatDateFr,
   formatGeneratedAtFr,
   formatTablePeriod,
@@ -81,8 +81,8 @@ import {
 
 const log = logger.child({ module: 'OwnerPerformance' });
 
-const typeLabelFr = (raw: string): string =>
-  raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : '—';
+/** See periodWeekGrid's call site: no measured day×hour audience source exists yet. */
+const MEASURED_HOURLY: MeasuredHourlyPoint[] = [];
 
 /**
  * "Mes performances" (Lane F) — rebuilt per the two design mockups, entirely on the engine's
@@ -200,6 +200,13 @@ export default function OwnerPerformance() {
     [venueLines, range],
   );
   const periodAudience = useMemo(() => dailyAudienceWithin(months, range), [months, range]);
+  // PERF-QA2 amendment (US-P.5) — S02 colours from MEASURED Ai_jh over the selected period, and
+  // ONLY from measures: « toute case sans aucune mesure sur la période est affichée hachurée ».
+  // NOTHING SERVES MEASURED HOURLY AUDIENCE TODAY — the api has an ESTIMATE grid (weekday × hour)
+  // and MEASURED per-DAY totals, neither of which is a measured day×hour series — and an estimate
+  // may never colour a cell, so the source stays empty and the section shows its explanatory
+  // state until a sensor ingest ships. THE one seam to wire when it does.
+  const periodGrid = useMemo(() => periodWeekGrid(MEASURED_HOURLY, range), [range]);
   // R9 — real venue hours; 14 h is ONLY the null/degenerate fallback and is flagged as such.
   const hoursInfo = useMemo(
     () => openHours(profile.data?.opening_hour ?? null, profile.data?.closing_hour ?? null),
@@ -228,23 +235,13 @@ export default function OwnerPerformance() {
     () => (profile.data?.ratios ? demographicBreakdown(profile.data.ratios, kpis.global) : null),
     [profile.data, kpis.global],
   );
-  const revenueRows: RevenueRow[] = useMemo(
-    () =>
-      periodLines.map((l) => ({
-        id: `${l.campaign_id}-${l.screenhost_id}`,
-        name: l.campaign_name,
-        period: formatCompactPeriod(l.campaign_start, l.campaign_end),
-        amountLabel: `${formatTndFr(l.earnings_tnd)} TND`,
-      })),
-    [periodLines],
-  );
   const campaignRows: CampaignTableRow[] = useMemo(
     () =>
       periodLines.map((l) => ({
         id: `${l.campaign_id}-${l.screenhost_id}`,
         name: l.campaign_name,
         period: formatTablePeriod(l.campaign_start, l.campaign_end),
-        typeLabel: typeLabelFr(l.campaign_type),
+        typeLabel: campaignTypeLabel(l.campaign_type),
         statut: campaignStatut(l, todayIso),
         // R10 — every line-derived impressions figure routes through the ONE display home.
         impressions: lineImpressions(l),
@@ -362,8 +359,11 @@ export default function OwnerPerformance() {
         <OwnerNavigation isDisabled={isDisabled} />
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <div className="flex-1 overflow-y-auto">
-            <div className="mx-auto w-full max-w-[1180px] px-5 pb-16 pt-[26px] sm:px-10 sm:pb-24">
-              <header className="mb-7 flex flex-col justify-between gap-4 border-b border-perf-line py-[22px] sm:flex-row sm:items-center sm:gap-6">
+            {/* PERF-QA2 — the page's top chrome is WHITE, edge to edge, over the grey page
+                (Mes Performances design reference). The bar spans the scroller; its contents stay
+                on the 1180px content column so nothing shifts sideways. */}
+            <header className="border-b border-perf-line bg-white">
+              <div className="mx-auto flex w-full max-w-[1180px] flex-col justify-between gap-4 px-5 py-[22px] sm:flex-row sm:items-center sm:gap-6 sm:px-10">
                 <PageHeader
                   title="Mes performances"
                   subtitle="Analysez l'activité de votre établissement et développez vos revenus"
@@ -379,8 +379,9 @@ export default function OwnerPerformance() {
                   </button>
                   <OwnerNotificationsBell userId={user?.id} />
                 </div>
-              </header>
-
+              </div>
+            </header>
+            <div className="mx-auto w-full max-w-[1180px] px-5 pb-16 pt-7 sm:px-10 sm:pb-24">
               {screenhosts.isLoading ? (
                 <div className="flex items-center justify-center gap-2 py-16 text-perf-mist">
                   <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
@@ -493,7 +494,7 @@ export default function OwnerPerformance() {
                       />
 
                       <PeakHoursHeatmap
-                        grid={affluenceGrid}
+                        grid={periodGrid}
                         openingHour={profile.data?.opening_hour ?? null}
                         closingHour={profile.data?.closing_hour ?? null}
                       />
@@ -509,7 +510,6 @@ export default function OwnerPerformance() {
                       <RevenueSection
                         total={periodLines.reduce((sum, l) => sum + l.earnings_tnd, 0)}
                         count={periodLines.length}
-                        rows={revenueRows}
                         hasCastData={castHasData}
                       />
 

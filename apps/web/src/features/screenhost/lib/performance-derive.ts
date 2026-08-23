@@ -177,17 +177,28 @@ export function linesEndingInMonth(
   return lines.filter((l) => (l.campaign_end ?? reconciledDate(l)).startsWith(`${month}-`));
 }
 
+export type CampaignStatut = 'À venir' | 'En cours' | 'Passée';
+
 /**
- * S06 Statut pill — DATE-derived per the CF-9 #1 ruling: campaign_end strictly before today →
- * 'Passée', else 'Active'. campaign_status is only the secondary signal for the no-end-date case
- * (the enum has no closed state yet; the engine's future `completed` status re-binds this).
+ * US-P.9 (amendment 2026-08-20) — the statut is DATE-derived over the campaign's own window, in
+ * THREE states: « À venir » before it starts, « En cours » inside it, « Passée » once it ends.
+ * « Active » is retired — it said nothing about a campaign that had not started yet.
+ * Null dates fall back to the reconciliation date, the same anchor lineInPeriod uses, so a line
+ * can never land in an undefined state. campaign_status stays out of it: the enum has no terminal
+ * value, and the dates are the truth the owner reads on the same row.
  */
-export function campaignStatut(
-  line: PerformanceEarningsLine,
-  todayIso: string,
-): 'Active' | 'Passée' {
-  if (line.campaign_end) return line.campaign_end < todayIso ? 'Passée' : 'Active';
-  return line.campaign_status === 'active' ? 'Active' : 'Passée';
+export function campaignStatut(line: PerformanceEarningsLine, todayIso: string): CampaignStatut {
+  const start = line.campaign_start ?? reconciledDate(line);
+  const end = line.campaign_end ?? start;
+  if (start > todayIso) return 'À venir';
+  if (end < todayIso) return 'Passée';
+  return 'En cours';
+}
+
+/** US-P.9 — the type column: event positionings read « Événement », everything else « Standard ». */
+export function campaignTypeLabel(campaignType: string): string {
+  if (campaignType === 'event') return 'Événement';
+  return campaignType ? campaignType.charAt(0).toUpperCase() + campaignType.slice(1) : '—';
 }
 
 export interface CumulativePoint {
@@ -239,35 +250,6 @@ export function demographicBreakdown(ratios: VenueRatios, audience: number): Dem
       { key: 'age_60_plus_pct', label: '60 ans et plus', count: persons(ratios.age_60_plus_pct) },
     ],
   };
-}
-
-/**
- * S02 heatmap — 5-step intensity levels bucketed by QUANTILES over the visible (open-hour) cell
- * values. The ramp only applies to cells WITH data.
- */
-export function quantileThresholds(values: number[]): [number, number, number, number] {
-  const positive = values.filter((v) => v > 0).sort((a, b) => a - b);
-  if (positive.length === 0) return [Infinity, Infinity, Infinity, Infinity];
-  const at = (q: number): number =>
-    positive[Math.min(positive.length - 1, Math.floor(q * positive.length))] ?? Infinity;
-  return [at(0.2), at(0.4), at(0.6), at(0.8)];
-}
-
-/**
- * Level 0 = NO DATA → the hachure treatment, not the ramp floor (Mejri ruling #1). The affluence
- * grid zero-fills, so a measured-true-zero cell is indistinguishable from an unmeasured one —
- * accepted approximation: 0 reads as no-data.
- */
-export function intensityLevel(
-  value: number,
-  thresholds: [number, number, number, number],
-): 0 | 1 | 2 | 3 | 4 | 5 {
-  if (value <= 0) return 0;
-  if (value < thresholds[0]) return 1;
-  if (value < thresholds[1]) return 2;
-  if (value < thresholds[2]) return 3;
-  if (value < thresholds[3]) return 4;
-  return 5;
 }
 
 /** fr-FR integer formatting ('191 400'), the mockups' number style. */

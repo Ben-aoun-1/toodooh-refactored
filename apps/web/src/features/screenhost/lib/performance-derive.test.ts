@@ -4,6 +4,7 @@ import {
   type PerformanceEarningsLine,
   audienceKpis,
   campaignStatut,
+  campaignTypeLabel,
   categoryLabel,
   cumulativeSeries,
   dailyAudienceWithin,
@@ -13,11 +14,9 @@ import {
   hasHostData,
   impressionsOfMonth,
   impressionsWithin,
-  intensityLevel,
   lineInPeriod,
   linesEndingInMonth,
   openHours,
-  quantileThresholds,
   venueReadsState,
   zeroFillDays,
 } from './performance-derive';
@@ -164,20 +163,43 @@ describe('period filters', () => {
   });
 });
 
-describe('campaignStatut (date-derived per the CF-9 #1 ruling)', () => {
+describe('campaignStatut (US-P.9 — three date-derived states)', () => {
   const today = '2026-07-07';
-  it('campaign_end before today → Passée; today or later → Active', () => {
-    expect(campaignStatut(line({ campaign_end: '2026-06-18' }), today)).toBe('Passée');
-    expect(campaignStatut(line({ campaign_end: '2026-07-07' }), today)).toBe('Active');
-    expect(campaignStatut(line({ campaign_end: '2026-08-01' }), today)).toBe('Active');
+  it('before its start → À venir; inside its window → En cours; after its end → Passée', () => {
+    expect(
+      campaignStatut(line({ campaign_start: '2026-07-20', campaign_end: '2026-07-30' }), today),
+    ).toBe('À venir');
+    expect(
+      campaignStatut(line({ campaign_start: '2026-07-01', campaign_end: '2026-07-07' }), today),
+    ).toBe('En cours');
+    expect(
+      campaignStatut(line({ campaign_start: '2026-06-01', campaign_end: '2026-06-18' }), today),
+    ).toBe('Passée');
   });
-  it('no end date → campaign_status is the secondary signal', () => {
-    expect(campaignStatut(line({ campaign_end: null, campaign_status: 'active' }), today)).toBe(
-      'Active',
+  it('the day of the start and the day of the end are both INSIDE the window', () => {
+    expect(campaignStatut(line({ campaign_start: today, campaign_end: '2026-08-01' }), today)).toBe(
+      'En cours',
     );
-    expect(campaignStatut(line({ campaign_end: null, campaign_status: 'rejected' }), today)).toBe(
+    expect(campaignStatut(line({ campaign_start: '2026-06-01', campaign_end: today }), today)).toBe(
+      'En cours',
+    );
+  });
+  it('null dates fall back to the reconciliation date — never an undefined state', () => {
+    // reconciled_at is 2026-07-01 in the fixture: start and end both collapse onto it.
+    expect(campaignStatut(line({ campaign_start: null, campaign_end: null }), today)).toBe(
       'Passée',
     );
+    expect(campaignStatut(line({ campaign_start: null, campaign_end: '2026-08-01' }), today)).toBe(
+      'En cours',
+    );
+  });
+  it('« Active » is retired — it said nothing about a campaign that had not started', () => {
+    for (const statut of [
+      campaignStatut(line({ campaign_start: '2026-07-20', campaign_end: '2026-07-30' }), today),
+      campaignStatut(line({ campaign_start: '2026-06-01', campaign_end: '2026-06-18' }), today),
+    ]) {
+      expect(statut).not.toBe('Active');
+    }
   });
 });
 
@@ -222,27 +244,6 @@ describe('demographicBreakdown (S04 — four real bands only)', () => {
       '60 ans et plus',
     ]);
     expect(breakdown.ages[0]?.count).toBe(7276);
-  });
-});
-
-describe('heatmap quantile bucketing (S02)', () => {
-  it('buckets values into 5 levels over the positive values; 0 = NO DATA (level 0, hachure)', () => {
-    const values = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
-    const thresholds = quantileThresholds(values);
-    expect(intensityLevel(0, thresholds)).toBe(0);
-    expect(intensityLevel(10, thresholds)).toBe(1);
-    expect(intensityLevel(35, thresholds)).toBe(2);
-    expect(intensityLevel(55, thresholds)).toBe(3);
-    expect(intensityLevel(75, thresholds)).toBe(4);
-    expect(intensityLevel(100, thresholds)).toBe(5);
-  });
-  it('all-zero grid → every cell is no-data (hachure), never the ramp floor', () => {
-    const thresholds = quantileThresholds([0, 0, 0]);
-    expect(intensityLevel(0, thresholds)).toBe(0);
-  });
-  it('a positive cell with a degenerate distribution still ramps at the floor', () => {
-    const thresholds = quantileThresholds([0, 0, 0]);
-    expect(intensityLevel(5, thresholds)).toBe(1);
   });
 });
 
@@ -340,5 +341,13 @@ describe('venueReadsState — the INV-1 surface gate', () => {
         { pending: false, error: true },
       ]),
     ).toBe('error');
+  });
+});
+
+describe('campaignTypeLabel (US-P.9)', () => {
+  it('event positionings read « Événement », everything else is capitalised', () => {
+    expect(campaignTypeLabel('event')).toBe('Événement');
+    expect(campaignTypeLabel('standard')).toBe('Standard');
+    expect(campaignTypeLabel('')).toBe('—');
   });
 });

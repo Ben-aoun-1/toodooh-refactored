@@ -4,6 +4,7 @@ import {
   type ReportEarningsLine,
   audienceKpis,
   campaignStatut,
+  campaignTypeLabel,
   categoryLabel,
   dailyAudienceWithin,
   demographicBreakdown,
@@ -15,10 +16,11 @@ import {
   formatTndCellFr,
   hasCastData,
   hasHostData,
-  intensityLevel,
   lineInPeriod,
+  measuredLevel,
+  measuredScale,
   openHoursPerDay,
-  quantileThresholds,
+  periodWeekGrid,
   zeroFillDays,
 } from '../src/lib/report/derive.js';
 
@@ -113,20 +115,43 @@ describe('period filtering (web parity)', () => {
   });
 });
 
-describe('campaignStatut (web parity, date-derived)', () => {
+describe('campaignStatut (web parity, US-P.9 three states)', () => {
   const today = '2026-07-07';
-  it('campaign_end before today → Passée; today or later → Active', () => {
-    expect(campaignStatut(line({ campaign_end: '2026-06-18' }), today)).toBe('Passée');
-    expect(campaignStatut(line({ campaign_end: '2026-07-07' }), today)).toBe('Active');
-    expect(campaignStatut(line({ campaign_end: '2026-08-01' }), today)).toBe('Active');
+  it('before its start → À venir; inside its window → En cours; after its end → Passée', () => {
+    expect(
+      campaignStatut(line({ campaign_start: '2026-07-20', campaign_end: '2026-07-30' }), today),
+    ).toBe('À venir');
+    expect(
+      campaignStatut(line({ campaign_start: '2026-07-01', campaign_end: '2026-07-07' }), today),
+    ).toBe('En cours');
+    expect(
+      campaignStatut(line({ campaign_start: '2026-06-01', campaign_end: '2026-06-18' }), today),
+    ).toBe('Passée');
   });
-  it('no end date → campaign_status is the secondary signal', () => {
-    expect(campaignStatut(line({ campaign_end: null, campaign_status: 'active' }), today)).toBe(
-      'Active',
+  it('the day of the start and the day of the end are both INSIDE the window', () => {
+    expect(campaignStatut(line({ campaign_start: today, campaign_end: '2026-08-01' }), today)).toBe(
+      'En cours',
     );
-    expect(campaignStatut(line({ campaign_end: null, campaign_status: 'rejected' }), today)).toBe(
+    expect(campaignStatut(line({ campaign_start: '2026-06-01', campaign_end: today }), today)).toBe(
+      'En cours',
+    );
+  });
+  it('null dates fall back to the reconciliation date — never an undefined state', () => {
+    // reconciled_at is 2026-07-01 in the fixture: start and end both collapse onto it.
+    expect(campaignStatut(line({ campaign_start: null, campaign_end: null }), today)).toBe(
       'Passée',
     );
+    expect(campaignStatut(line({ campaign_start: null, campaign_end: '2026-08-01' }), today)).toBe(
+      'En cours',
+    );
+  });
+  it('« Active » is retired — it said nothing about a campaign that had not started', () => {
+    for (const statut of [
+      campaignStatut(line({ campaign_start: '2026-07-20', campaign_end: '2026-07-30' }), today),
+      campaignStatut(line({ campaign_start: '2026-06-01', campaign_end: '2026-06-18' }), today),
+    ]) {
+      expect(statut).not.toBe('Active');
+    }
   });
 });
 
@@ -152,27 +177,6 @@ describe('demographicBreakdown (web parity, S04 — four real bands only)', () =
       '60 ans et plus',
     ]);
     expect(breakdown.ages[0]?.count).toBe(7276);
-  });
-});
-
-describe('heatmap quantile bucketing (web parity, S02)', () => {
-  it('buckets values into 5 levels over the positive values; 0 = NO DATA (level 0, hachure)', () => {
-    const values = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
-    const thresholds = quantileThresholds(values);
-    expect(intensityLevel(0, thresholds)).toBe(0);
-    expect(intensityLevel(10, thresholds)).toBe(1);
-    expect(intensityLevel(35, thresholds)).toBe(2);
-    expect(intensityLevel(55, thresholds)).toBe(3);
-    expect(intensityLevel(75, thresholds)).toBe(4);
-    expect(intensityLevel(100, thresholds)).toBe(5);
-  });
-  it('all-zero grid → every cell is no-data (hachure), never the ramp floor', () => {
-    const thresholds = quantileThresholds([0, 0, 0]);
-    expect(intensityLevel(0, thresholds)).toBe(0);
-  });
-  it('a positive cell with a degenerate distribution still ramps at the floor', () => {
-    const thresholds = quantileThresholds([0, 0, 0]);
-    expect(intensityLevel(5, thresholds)).toBe(1);
   });
 });
 
@@ -252,5 +256,126 @@ describe('fr-FR formats (deterministic, U+202F grouping — what the page render
     expect(formatCompactPeriod('2026-06-05', '2026-06-18')).toBe('05/06 – 18/06');
     expect(formatTablePeriod('2026-06-05', '2026-06-18')).toBe('05/06 – 18/06/2026');
     expect(formatTablePeriod(null, null)).toBe('—');
+  });
+});
+
+// ── PERF-QA2 amendment (US-P.5) — periodWeekGrid over MEASURED Ai_jh ONLY ─────────────────────
+// The estimate-fed version of this grid is WITHDRAWN (ruling 2026-08-20): Pers_atteintes is a
+// sensor measure, and « toute case sans aucune mesure sur la période est affichée hachurée ».
+// TWIN of the other package's implementation — page and PDF apply the SAME rule to their windows.
+describe('periodWeekGrid (measured)', () => {
+  const JUNE = { from: '2026-06-01', to: '2026-06-30' };
+  const ONE_WEEK = { from: '2026-06-01', to: '2026-06-07' }; // Monday → Sunday
+
+  it('a ≤ 1-week filter shows the RAW Ai_jh of that week (exact, for the tooltip)', () => {
+    const grid = periodWeekGrid(
+      [
+        { date: '2026-06-01', hour: 10, audience: 7 }, // Monday
+        { date: '2026-06-07', hour: 18, audience: 43 }, // Sunday
+      ],
+      ONE_WEEK,
+    );
+    expect(grid[0]?.[10]).toBe(7);
+    expect(grid[6]?.[18]).toBe(43);
+  });
+
+  it('a > 1-week filter averages each (weekday, hour) over the weeks that HAVE a measure', () => {
+    const grid = periodWeekGrid(
+      [
+        { date: '2026-06-01', hour: 10, audience: 10 }, // Monday, week 1
+        { date: '2026-06-08', hour: 10, audience: 20 }, // Monday, week 2
+        { date: '2026-06-15', hour: 10, audience: 30 }, // Monday, week 3
+      ],
+      JUNE,
+    );
+    // Mean over the THREE measured occurrences — the two unmeasured Mondays of June contribute
+    // nothing (counting them as 0 would invent a measurement).
+    expect(grid[0]?.[10]).toBe(20);
+  });
+
+  it('a cell with NO measure is null — hachure, never a coloured 0', () => {
+    const grid = periodWeekGrid([{ date: '2026-06-01', hour: 10, audience: 5 }], JUNE);
+    expect(grid[0]?.[11]).toBeNull();
+    expect(grid[3]?.[10]).toBeNull();
+  });
+
+  it('a MEASURED zero is a measure — it colours at the bottom of the ramp, never hachured', () => {
+    const grid = periodWeekGrid(
+      [
+        { date: '2026-06-01', hour: 10, audience: 0 },
+        { date: '2026-06-01', hour: 11, audience: 40 },
+      ],
+      ONE_WEEK,
+    );
+    expect(grid[0]?.[10]).toBe(0);
+    const scale = measuredScale([grid[0]?.[10] ?? null, grid[0]?.[11] ?? null]);
+    expect(measuredLevel(grid[0]?.[10] ?? null, scale)).toBe(1);
+    expect(measuredLevel(null, scale)).toBe(0);
+  });
+
+  it('measures OUTSIDE the period contribute nothing', () => {
+    const grid = periodWeekGrid([{ date: '2026-05-25', hour: 10, audience: 900 }], JUNE);
+    expect(grid.every((row) => row.every((v) => v === null))).toBe(true);
+  });
+
+  it('an empty measured source yields an all-null grid (the estimate never fills in)', () => {
+    const grid = periodWeekGrid([], JUNE);
+    expect(grid).toHaveLength(7);
+    expect(grid.every((row) => row.length === 24 && row.every((v) => v === null))).toBe(true);
+  });
+
+  it('maps Sunday to the LAST row (Monday-first), like the affluence grid', () => {
+    const grid = periodWeekGrid([{ date: '2026-06-07', hour: 12, audience: 3 }], ONE_WEEK);
+    expect(grid[6]?.[12]).toBe(3);
+    expect(grid[0]?.[12]).toBeNull();
+  });
+
+  it('drops malformed dates and out-of-range hours instead of throwing', () => {
+    expect(() =>
+      periodWeekGrid(
+        [
+          { date: 'pas-une-date', hour: 10, audience: 9 },
+          { date: '2026-06-01', hour: 24, audience: 9 },
+          { date: '2026-06-01', hour: -1, audience: 9 },
+        ],
+        JUNE,
+      ),
+    ).not.toThrow();
+    expect(
+      periodWeekGrid([{ date: '2026-06-01', hour: 24, audience: 9 }], JUNE)[0]?.[0],
+    ).toBeNull();
+  });
+});
+
+describe('measuredScale / measuredLevel', () => {
+  it('the scale is the PERIOD’s own observed min/max, ignoring unmeasured cells', () => {
+    expect(measuredScale([null, 4, null, 12])).toEqual({ min: 4, max: 12 });
+    expect(measuredScale([null, null])).toBeNull();
+  });
+
+  it('ramps 1→5 linearly between min and max', () => {
+    const scale = { min: 0, max: 100 };
+    expect(measuredLevel(0, scale)).toBe(1);
+    expect(measuredLevel(20, scale)).toBe(1);
+    expect(measuredLevel(21, scale)).toBe(2);
+    expect(measuredLevel(60, scale)).toBe(3);
+    expect(measuredLevel(100, scale)).toBe(5);
+  });
+
+  it('level 0 is reserved for NO MEASURE (null value, or no scale at all)', () => {
+    expect(measuredLevel(null, { min: 0, max: 10 })).toBe(0);
+    expect(measuredLevel(5, null)).toBe(0);
+  });
+
+  it('a period whose measures are all equal reads at the neutral middle, not a peak', () => {
+    expect(measuredLevel(7, { min: 7, max: 7 })).toBe(3);
+  });
+});
+
+describe('campaignTypeLabel (US-P.9)', () => {
+  it('event positionings read « Événement », everything else is capitalised', () => {
+    expect(campaignTypeLabel('event')).toBe('Événement');
+    expect(campaignTypeLabel('standard')).toBe('Standard');
+    expect(campaignTypeLabel('')).toBe('—');
   });
 });

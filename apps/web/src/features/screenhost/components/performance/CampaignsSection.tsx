@@ -1,4 +1,4 @@
-import { formatIntFr } from '../../lib/performance-derive';
+import { type CampaignStatut, formatIntFr } from '../../lib/performance-derive';
 
 import { PendingValue } from './Pending';
 import { SectionHeading } from './SectionHeading';
@@ -9,7 +9,8 @@ export interface CampaignTableRow {
   name: string;
   period: string;
   typeLabel: string;
-  statut: 'Active' | 'Passée';
+  statut: CampaignStatut;
+  /** US-P.9 — Impressions_affichées (prédites − perdues), via the ONE display home. */
   impressions: number;
   revenueLabel: string;
 }
@@ -22,6 +23,13 @@ interface CampaignsSectionProps {
   /** CAST first-data flag — until true, the 'En attente' variants; after, values with 0s. */
   hasCastData: boolean;
 }
+
+/** US-P.9 — one presentation home per statut, so the pill can't drift from the rule. */
+const STATUT_STYLES: Record<CampaignStatut, { text: string; dot: string }> = {
+  'À venir': { text: 'text-brand-deep', dot: 'bg-brand-deep' },
+  'En cours': { text: 'text-perf-green', dot: 'bg-perf-green' },
+  Passée: { text: 'text-perf-grey', dot: 'bg-perf-mist' },
+};
 
 function KpiLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -135,7 +143,7 @@ export function CampaignsSection({
           <table className="w-full min-w-[640px] border-collapse text-left text-[13px]">
             <thead>
               <tr>
-                {['Campagne', 'Période', 'Type', 'Statut', 'Impressions', 'Revenu'].map(
+                {['Campagne', 'Période', 'Type', 'Statut', 'Impressions affichées', 'Revenu'].map(
                   (th, idx, arr) => (
                     <th
                       key={th}
@@ -162,15 +170,13 @@ export function CampaignsSection({
                     {row.typeLabel}
                   </td>
                   <td className="border-b border-perf-soft py-[13px] pr-3 align-middle">
+                    {/* US-P.9 — three states: « En cours » is the live one (green), « À venir »
+                        is scheduled (deep brand), « Passée » is done (grey). */}
                     <span
-                      className={`perf-mono inline-flex items-center gap-1.5 text-[11px] ${
-                        row.statut === 'Active' ? 'text-perf-green' : 'text-perf-grey'
-                      }`}
+                      className={`perf-mono inline-flex items-center gap-1.5 text-[11px] ${STATUT_STYLES[row.statut].text}`}
                     >
                       <span
-                        className={`h-1.5 w-1.5 rounded-full ${
-                          row.statut === 'Active' ? 'bg-perf-green' : 'bg-perf-mist'
-                        }`}
+                        className={`h-1.5 w-1.5 rounded-full ${STATUT_STYLES[row.statut].dot}`}
                         aria-hidden
                       />
                       {row.statut}

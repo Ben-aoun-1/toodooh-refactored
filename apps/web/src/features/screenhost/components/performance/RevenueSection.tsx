@@ -6,30 +6,27 @@ import { BrandMark } from './BrandMark';
 import { SectionHeading } from './SectionHeading';
 import { Var } from './Var';
 
-export interface RevenueRow {
-  id: string;
-  name: string;
-  period: string;
-  amountLabel: string;
-}
-
 interface RevenueSectionProps {
   total: number;
   count: number;
-  rows: RevenueRow[];
   /** CAST first-data flag — until true, the 'À venir' variant; after, values with 0s. */
   hasCastData: boolean;
 }
 
-/** S05 — "Vos revenus de la période": total + per-campaign detail, or the 'À venir' empty state. */
-export function RevenueSection({ total, count, rows, hasCastData }: RevenueSectionProps) {
+/**
+ * S05 — "Vos revenus de la période": US-P.8 (amendment 2026-08-20) reduces this section to
+ * Revenu_période + « N campagne(s) diffusée(s) ». The per-campaign breakdown MOVED OUT — it is
+ * US-P.9's « Vos campagnes » table, and showing it twice made the two lists drift apart in the
+ * reader's head. The 'À venir' empty state is unchanged.
+ */
+export function RevenueSection({ total, count, hasCastData }: RevenueSectionProps) {
   const empty = !hasCastData;
   return (
     <section className="mb-[76px]">
       <SectionHeading
         num="Section 05"
         title="Vos revenus de la période"
-        lead="Voici le total de vos revenus pour la période analysée, avec le détail des campagnes qui les ont générés."
+        lead="Voici le total de vos revenus pour la période analysée."
       />
 
       <div className="mt-8 rounded-xl border border-perf-line bg-white p-[30px]">
@@ -69,13 +66,14 @@ export function RevenueSection({ total, count, rows, hasCastData }: RevenueSecti
               </div>
             ) : (
               <div className="mt-1.5 text-lg font-semibold text-perf-ink">
-                <Var>{count}</Var> diffusées
+                <Var>{count}</Var> campagne{count > 1 ? 's' : ''} diffusée
+                {count > 1 ? 's' : ''}
               </div>
             )}
           </div>
         </div>
 
-        {empty ? (
+        {empty && (
           <div className="flex items-start gap-3 rounded-md border border-perf-line border-l-[3px] border-l-perf-green bg-[#E8F6ED] p-4 px-5 text-[13px] leading-[1.6] text-perf-ink">
             <CheckCircle2
               className="mt-0.5 h-[17px] w-[17px] flex-shrink-0 text-perf-green"
@@ -87,36 +85,6 @@ export function RevenueSection({ total, count, rows, hasCastData }: RevenueSecti
               </strong>{' '}
               Conservez un score de priorité élevé pour capter les premiers budgets dès leur
               déploiement.
-            </div>
-          </div>
-        ) : (
-          <div>
-            <div className="perf-mono mb-2.5 flex items-baseline justify-between text-[10px] uppercase tracking-[0.08em] text-perf-mist">
-              <span>Détail par campagne</span>
-              <span>Votre revenu</span>
-            </div>
-            {rows.length === 0 && (
-              <div className="px-1 py-[26px] text-center text-[13.5px] italic text-perf-mist">
-                Aucune campagne sur la période analysée.
-              </div>
-            )}
-            <div>
-              {rows.map((row) => (
-                <div
-                  key={row.id}
-                  className="grid grid-cols-[1fr_auto] items-center gap-x-[18px] gap-y-0.5 border-b border-perf-soft py-[13px] last:border-b-0 sm:grid-cols-[1fr_auto_auto]"
-                >
-                  <div className="min-w-0 truncate text-[13.5px] font-medium text-perf-ink">
-                    {row.name}
-                  </div>
-                  <div className="perf-mono order-3 col-span-2 whitespace-nowrap text-[11px] text-perf-mist sm:order-none sm:col-span-1">
-                    {row.period}
-                  </div>
-                  <div className="perf-mono whitespace-nowrap text-[13.5px] font-semibold text-brand-accent">
-                    {row.amountLabel}
-                  </div>
-                </div>
-              ))}
             </div>
           </div>
         )}

@@ -34,19 +34,13 @@ import { buildEligibilityPatch } from '../lib/eligibility-patch.js';
 import { createEngineTrace, type EngineTrace } from '../lib/engine-journal/trace.js';
 import { releaseBlocHours, runEventRefusalCascade } from '../lib/event-dispatch/dispatch.js';
 import { displayImpressionsSettled } from '../lib/impressions-display.js';
+import { measuredDays, measuredTotal } from '../lib/monthly-audience.js';
 import { pushPlaylistToVenue } from '../lib/playout/push.js';
 import { assembleReportData } from '../lib/report/assemble.js';
+import { buildPistes } from '../lib/report/pistes.js';
 import { pistesForReportCached } from '../lib/report/recommendations.js';
 import { renderPdf } from '../lib/report/render.js';
-import {
-  PISTE_01_BODY,
-  PISTE_01_TITLE,
-  PISTE_02_GENERIC_BODY,
-  PISTE_02_TITLE,
-  PISTE_03_TITLE,
-  PISTE_03_WAIT_BODY,
-  renderReportHtml,
-} from '../lib/report/template.js';
+import { renderReportHtml } from '../lib/report/template.js';
 import { venueSlug } from '../lib/slug.js';
 import { computeSps, recomputeVenueSps } from '../lib/sps-score.js';
 import { pushApprovedOwnerLocations } from '../lib/wedooh-sync.js';
@@ -803,11 +797,17 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       .where(eq(screenhostMonthlyStats.screenhostId, owned.id))
       .orderBy(desc(screenhostMonthlyStats.month)); // 'YYYY-MM' sorts correctly as text
 
+    // AMENDMENT 2026-08-20 (US-P.0, « Donnée mesurée (capteur) ») — the owner reads MEASURED days
+    // only: an estimated day never feeds « Personnes touchées », Ai, la moyenne ou le Pic. The
+    // stored row keeps both kinds (provenance-stamped enrichment); the WIRE carries the measure.
+    // A fully unmeasured month therefore serves 0 days and a 0 total — which the spec rules is
+    // NOT an incoherence beside non-zero impressions: two independent sensors, each stating its
+    // source on the page.
     return reply.status(200).send({
       months: rows.map((r) => ({
         month: r.month,
-        total_audience: r.totalAudience,
-        daily: r.daily,
+        total_audience: measuredTotal(r.daily),
+        daily: measuredDays(r.daily),
         peak_day_of_week: r.peakDayOfWeek,
         peak_hour: r.peakHour,
       })),
@@ -1110,10 +1110,11 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // GET /api/screenhosts/:id/pistes?from&to — PERF-QA1 R5: the page MIRRORS the PDF's S07
-  // through the SAME generator + cache the period report uses (per venue × period, 24h), so the
-  // screen and the document can never disagree. Bodies are the template's OWN constants (one api
-  // home); Piste 02 is the cached AI body when available, the generic body otherwise — a pistes
-  // failure NEVER fails the response. NO new AI contract.
+  // through the SAME generator + cache the period report uses, so the screen and the document can
+  // never disagree. PERF-QA2: the three bodies come from lib/report/pistes.ts over the SAME
+  // assembled data the PDF renders (événements + SPS), so « same engine » is now structural
+  // rather than a pair of shared constants. Piste 02 is the cached AI body when available, the
+  // generic body otherwise — a pistes failure NEVER fails the response. NO new AI contract.
   app.get('/api/screenhosts/:id/pistes', ownerGuard, async (request, reply) => {
     const parsedParams = idParamSchema.safeParse(request.params);
     if (!parsedParams.success) {
@@ -1177,11 +1178,7 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
     }
     const aiBody = await pistesForReportCached(owned.id, data).catch(() => null);
     return reply.status(200).send({
-      pistes: [
-        { num: '01', title: PISTE_01_TITLE, body: PISTE_01_BODY, pending: false },
-        { num: '02', title: PISTE_02_TITLE, body: aiBody ?? PISTE_02_GENERIC_BODY, pending: false },
-        { num: '03', title: PISTE_03_TITLE, body: PISTE_03_WAIT_BODY, pending: true },
-      ],
+      pistes: buildPistes({ events: data.upcomingEvents, sps: data.sps, aiBody }),
     });
   });
 

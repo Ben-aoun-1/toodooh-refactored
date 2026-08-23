@@ -399,14 +399,14 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
     const html = renderSpy.mock.calls[0]?.[0] ?? '';
     expect(html).toContain('Corps IA du créneau faible.'); // frozen into the stored PDF
     expect(html).toContain('Repérez vos angles morts'); // under the FIXED Piste 02 title
-    expect(html).not.toContain('Comparez vos créneaux les plus forts'); // the generic body is displaced
+    expect(html).not.toContain('<div class="piste-body wait">À venir</div>'); // the wait state is displaced
 
     // idempotent second tick: no new report → no new generation either
     await runMonthlyReportSweep(silentLog, NOW);
     expect(pistesSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('a generator failure NEVER fails the report — it still stores, with the generic Piste 02 body (R3)', async () => {
+  it('a generator failure NEVER fails the report — it still stores, Piste 02 « À venir » (US-P.10)', async () => {
     const owner = await seedUser();
     const venue = await seedVenueWithData(owner, 'Café Sans IA');
     vi.spyOn(storage, 'upload').mockImplementation(async (params) => ({ key: params.key }));
@@ -422,7 +422,8 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
       capped: false,
     });
     const html = renderSpy.mock.calls[0]?.[0] ?? '';
-    expect(html).toContain('Comparez vos créneaux les plus forts'); // the generic body carried the report
+    // US-P.10 — a generator failure leaves Piste 02 in its « À venir » wait state, never prose.
+    expect(html).toContain('<div class="piste-body wait">À venir</div>');
     expect(
       await db
         .select()

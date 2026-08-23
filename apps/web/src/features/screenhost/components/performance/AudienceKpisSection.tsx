@@ -5,6 +5,13 @@ import { PENDING_LABEL, PendingValue } from './Pending';
 import { SectionHeading } from './SectionHeading';
 import { Var } from './Var';
 
+/**
+ * US-P.0 — the ruled explanation shown when the period carries no audience measure at all.
+ * Exported so the copy is pinnable (apps/web has no render harness).
+ */
+export const NO_MEASURE_NOTE =
+  "Aucune mesure du capteur d'audience sur la période — les impressions proviennent de la preuve de diffusion, une source indépendante.";
+
 function KpiLabel({ children }: { children: React.ReactNode }) {
   return (
     <div className="perf-mono flex items-center gap-2 text-[10px] uppercase tracking-[0.1em] text-perf-mist">
@@ -120,13 +127,35 @@ export function AudienceKpisSection({
         <div className="py-[22px] md:py-[26px] md:pl-6">
           <KpiLabel>Pic d'audience</KpiLabel>
           <div className="mt-4">
-            <KpiValue value={hasHostData ? (kpis.peak?.value ?? 0) : null} />
+            {/* US-P.4 — no measure on the period reads « — », never a 0 (which would claim the
+                sensor counted nobody) and never a placeholder date. */}
+            {hasHostData && !kpis.peak ? (
+              <span className="text-[46px] font-semibold leading-none tracking-[-0.03em] text-perf-mist">
+                —
+              </span>
+            ) : (
+              <KpiValue value={hasHostData ? (kpis.peak?.value ?? 0) : null} />
+            )}
           </div>
           <p className="mt-2.5 text-[12.5px] leading-[1.45] text-perf-grey">
-            Maximum observé — <Var>{peakObservedLabel(kpis.peak)}</Var>
+            {kpis.peak ? (
+              <>
+                Maximum observé le <Var>{peakObservedLabel(kpis.peak)}</Var>
+              </>
+            ) : (
+              'Aucun maximum observé sur la période.'
+            )}
           </p>
         </div>
       </div>
+
+      {/* US-P.0 — the audience sensor and the proof of play are TWO INDEPENDENT sensors, so
+          « 0 personne touchée » beside non-zero impressions is not an incoherence. The spec's
+          requirement is that each counter states its source; this is that statement, shown only
+          when the period really holds no measure. */}
+      {hasHostData && kpis.measuredDays === 0 && (
+        <p className="mt-4 text-[12.5px] leading-[1.5] text-perf-grey">{NO_MEASURE_NOTE}</p>
+      )}
     </section>
   );
 }

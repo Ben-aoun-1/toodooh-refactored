@@ -1,4 +1,4 @@
-import { format } from 'date-fns';
+import { addDays, differenceInCalendarDays, format, parseISO } from 'date-fns';
 import { and, desc, eq, gte, lte, count as sqlCount, sql } from 'drizzle-orm';
 
 import { db } from '../../db/client.js';
@@ -7,6 +7,7 @@ import {
   campaignReconciliation,
   campaignScreenhostPayout,
   campaigns,
+  events,
   proofOfPlay,
   screenhostAffluence,
   screenhostMonthlyStats,
@@ -14,17 +15,21 @@ import {
 } from '../../db/schema.js';
 import { getDispatchConfig } from '../dispatch/config.js';
 import { displayImpressionsSettled } from '../impressions-display.js';
+import { measuredDays, measuredTotal } from '../monthly-audience.js';
 import { computeSps } from '../sps-score.js';
 
 import {
   type AudienceKpis,
+  type CampaignStatut,
   type DailyImpressionsPoint,
   type DateRange,
   type DemographicBreakdown,
+  type MeasuredHourlyPoint,
   type ReportEarningsLine,
   type VenueRatios,
   audienceKpis,
   campaignStatut,
+  campaignTypeLabel,
   categoryLabel,
   dailyAudienceWithin,
   demographicBreakdown,
@@ -36,12 +41,14 @@ import {
   formatTndFr,
   hasCastData,
   hasHostData,
-  intensityLevel,
   lineInPeriod,
+  measuredLevel,
+  measuredScale,
   openHoursPerDay,
-  quantileThresholds,
+  periodWeekGrid,
   zeroFillDays,
 } from './derive.js';
+import type { SpsBlock, UpcomingEvents } from './pistes.js';
 
 // One data truth: this module runs the SAME queries the owner reads use (screenhosts.ts —
 // profile / monthly-stats / affluence / impressions-daily / earnings) and derives the template's
@@ -50,6 +57,14 @@ import {
 
 /** The mockups' visible hour columns — 8h through 21h (mirror of the page heatmap). */
 export const HEATMAP_HOURS = Array.from({ length: 14 }, (_, i) => i + 8);
+
+/**
+ * PERF-QA2 — the Piste 01 teaser window: events kicking off within this many days of the render
+ * day (Tunis calendar, inclusive of today). RULED 14 days on 2026-08-20: long enough that a venue
+ * with one match a fortnight still sees a teaser, short enough that « cette semaine / ces
+ * prochains jours » stays true. The number never reaches the copy — only the words do.
+ */
+export const EVENT_TEASER_DAYS = 14;
 
 export interface ReportRevenueRow {
   name: string;
@@ -61,7 +76,7 @@ export interface ReportCampaignRow {
   name: string;
   period: string;
   typeLabel: string;
-  statut: 'Active' | 'Passée';
+  statut: CampaignStatut;
   impressionsLabel: string;
   revenueLabel: string;
 }
@@ -88,14 +103,14 @@ export interface ReportData {
     rows: ReportCampaignRow[];
   };
   /** E4 — the venue's SPS breakdown (computed live at assembly; null only on a compute failure). */
-  sps: {
-    score: number;
-    criteria: { label: string; weight: number; value: number }[];
-  } | null;
+  sps: SpsBlock | null;
+  /**
+   * PERF-QA2 — the S07 Piste 01 teaser input: OFFICIAL, non-cancelled events whose kickoff falls
+   * in the EVENT_TEASER_DAYS window after the render day. null = nothing upcoming (the honest
+   * no-events variant). Suggested and past events never reach here.
+   */
+  upcomingEvents: UpcomingEvents | null;
 }
-
-const typeLabelFr = (raw: string): string =>
-  raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : '—';
 
 const numOrNull = (value: string | null): number | null => {
   if (value === null) return null;
@@ -103,9 +118,12 @@ const numOrNull = (value: string | null): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-/** 7×14 hachure/ramp levels — quantiles over the OPEN visible cells, exactly like the page. */
+/**
+ * 7×14 hachure/ramp levels over the MEASURED period grid, exactly like the page (US-P.5): level 0
+ * is a closed hour OR a cell with no measure; 1–5 ramp linearly over the period's own min/max.
+ */
 export function heatmapLevels(
-  grid: number[][],
+  grid: (number | null)[][],
   openingHour: number | null,
   closingHour: number | null,
 ): number[][] {
@@ -113,16 +131,16 @@ export function heatmapLevels(
     if (openingHour === null || closingHour === null) return false;
     return hour < openingHour || hour >= closingHour;
   };
-  const visible: number[] = [];
+  const visible: (number | null)[] = [];
   for (let day = 0; day < 7; day += 1) {
     for (const hour of HEATMAP_HOURS) {
-      if (!closed(hour)) visible.push(grid[day]?.[hour] ?? 0);
+      if (!closed(hour)) visible.push(grid[day]?.[hour] ?? null);
     }
   }
-  const thresholds = quantileThresholds(visible);
+  const scale = measuredScale(visible);
   return Array.from({ length: 7 }, (_, day) =>
     HEATMAP_HOURS.map((hour) =>
-      closed(hour) ? 0 : intensityLevel(grid[day]?.[hour] ?? 0, thresholds),
+      closed(hour) ? 0 : measuredLevel(grid[day]?.[hour] ?? null, scale),
     ),
   );
 }
@@ -193,8 +211,11 @@ export async function assembleReportData(
     .limit(1);
   if (!venue) return null;
 
-  // 2) monthly stats (month desc) — mirror of GET /:id/monthly-stats.
-  const months = await db
+  // 2) monthly stats (month desc) — mirror of GET /:id/monthly-stats, MEASURED DAYS ONLY.
+  // AMENDMENT 2026-08-20 (US-P.0): Pers_atteintes is a sensor measure — an estimated day never
+  // feeds an audience figure. The stored row keeps both kinds; this read drops the estimates so
+  // every KPI below (Ai, moyennes, Pic) is measured by construction.
+  const monthRows = await db
     .select({
       month: screenhostMonthlyStats.month,
       totalAudience: screenhostMonthlyStats.totalAudience,
@@ -203,6 +224,11 @@ export async function assembleReportData(
     .from(screenhostMonthlyStats)
     .where(eq(screenhostMonthlyStats.screenhostId, venueId))
     .orderBy(desc(screenhostMonthlyStats.month));
+  const months = monthRows.map((row) => ({
+    month: row.month,
+    totalAudience: measuredTotal(row.daily),
+    daily: measuredDays(row.daily),
+  }));
 
   // 3) affluence slots → zero-filled 7×24 grid — mirror of GET /:id/affluence.
   const slots = await db
@@ -283,6 +309,14 @@ export async function assembleReportData(
   const castFlag = hasCastData(lines, rangeDays);
 
   const periodAudience = dailyAudienceWithin(months, range);
+
+  // S02's ONLY legitimate source (US-P.5): MEASURED Ai_jh — persons the audience sensor counted in
+  // a given (calendar day, hour). NOTHING WRITES SUCH ROWS TODAY: the hub pushes an ESTIMATE grid
+  // (screenhost_affluence, weekday × hour) and MEASURED per-DAY totals (screenhost_monthly_stats),
+  // neither of which is a measured day×hour series. Per the amendment an estimate may never colour
+  // a cell, so the list stays empty and every cell is hachured until a sensor ingest exists —
+  // THE one seam to wire when it does.
+  const measuredHourly: MeasuredHourlyPoint[] = [];
   const kpis = audienceKpis(periodAudience, openHoursPerDay(venue.openingHour, venue.closingHour));
 
   const ratios = ratiosOrNull(venue);
@@ -299,25 +333,32 @@ export async function assembleReportData(
   try {
     const cfg = await getDispatchConfig();
     const { sps, variables } = await computeSps(venueId);
+    // PERF-QA2 — each criterion carries its KEY: Piste 03 names the weakest weighted variable and
+    // proposes the lever that moves THAT variable, and a lever must never be matched on a label
+    // string (a reworded label would silently swap the advice).
     spsBlock = {
       score: sps,
       criteria: [
         {
+          key: 'acceptation',
           label: "Taux d'acceptation des campagnes",
           weight: cfg.spsWeightAcceptation,
           value: variables.acceptation,
         },
         {
+          key: 'respect_evenements',
           label: 'Respect des événements acceptés',
           weight: cfg.spsWeightRespectEvenements,
           value: variables.respect_evenements,
         },
         {
+          key: 'activite',
           label: "Activité de l'écran",
           weight: cfg.spsWeightActivite,
           value: variables.activite,
         },
         {
+          key: 'remplissage',
           label: 'Taux de remplissage',
           weight: cfg.spsWeightRemplissage,
           value: variables.remplissage,
@@ -328,6 +369,31 @@ export async function assembleReportData(
     spsBlock = null;
   }
 
+  // PERF-QA2 — Piste 01's teaser input: OFFICIAL, non-cancelled events whose kickoff falls in the
+  // EVENT_TEASER_DAYS window after the render day, bucketed on the TUNIS calendar (the reconcile
+  // convention). Suggested events (source = 'suggested') and cancelled ones can never reach an
+  // owner's report — the teaser must only ever promise what the catalogue actually holds.
+  const eventDay = sql<string>`to_char(${events.kickoffAt} at time zone 'Africa/Tunis', 'YYYY-MM-DD')`;
+  const windowEnd = format(addDays(parseISO(todayIso), EVENT_TEASER_DAYS), 'yyyy-MM-dd');
+  const [eventAgg] = await db
+    .select({ n: sqlCount(), soonest: sql<string | null>`min(${eventDay})` })
+    .from(events)
+    .where(
+      and(
+        eq(events.source, 'official'),
+        eq(events.annule, false),
+        gte(eventDay, todayIso),
+        lte(eventDay, windowEnd),
+      ),
+    );
+  const upcomingEvents =
+    eventAgg && eventAgg.n > 0 && eventAgg.soonest
+      ? {
+          count: eventAgg.n,
+          soonestInDays: differenceInCalendarDays(parseISO(eventAgg.soonest), parseISO(todayIso)),
+        }
+      : null;
+
   return {
     venueName: venue.name,
     category: categoryLabel(venue.sectorName, venue.class),
@@ -336,7 +402,11 @@ export async function assembleReportData(
     hostHasData: hostFlag,
     castHasData: castFlag,
     kpis,
-    heatLevels: heatmapLevels(grid, venue.openingHour, venue.closingHour),
+    heatLevels: heatmapLevels(
+      periodWeekGrid(measuredHourly, range),
+      venue.openingHour,
+      venue.closingHour,
+    ),
     days: castFlag ? zeroFillDays(rangeDays, range) : [],
     breakdown: ratios ? demographicBreakdown(ratios, kpis.global) : null,
     revenue: {
@@ -349,6 +419,7 @@ export async function assembleReportData(
       })),
     },
     sps: spsBlock,
+    upcomingEvents,
     campaignsBlock: {
       count: periodLines.length,
       cumulativeImpressions: periodLines.reduce((s, l) => s + l.display_imp, 0),
@@ -356,7 +427,7 @@ export async function assembleReportData(
       rows: periodLines.map((l) => ({
         name: l.campaign_name,
         period: formatTablePeriod(l.campaign_start, l.campaign_end),
-        typeLabel: typeLabelFr(l.campaign_type),
+        typeLabel: campaignTypeLabel(l.campaign_type),
         statut: campaignStatut(l, todayIso),
         impressionsLabel: formatIntFr(l.display_imp),
         revenueLabel: formatTndCellFr(l.earnings_tnd),

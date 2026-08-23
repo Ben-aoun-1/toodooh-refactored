@@ -1,4 +1,4 @@
-import { addDays, format, parseISO } from 'date-fns';
+import { addDays, format, getDay, parseISO } from 'date-fns';
 
 /**
  * Pure derivations for the R1 report — a deliberate API-SIDE MIRROR of the web lib
@@ -110,10 +110,26 @@ export function lineInPeriod(line: ReportEarningsLine, range: DateRange): boolea
   return start <= range.to && end >= range.from;
 }
 
-/** S06 Statut pill — DATE-derived (web CF-9 #1 ruling): end strictly before today → 'Passée'. */
-export function campaignStatut(line: ReportEarningsLine, todayIso: string): 'Active' | 'Passée' {
-  if (line.campaign_end) return line.campaign_end < todayIso ? 'Passée' : 'Active';
-  return line.campaign_status === 'active' ? 'Active' : 'Passée';
+export type CampaignStatut = 'À venir' | 'En cours' | 'Passée';
+
+/**
+ * S06 Statut — US-P.9's THREE date-derived states (amendment 2026-08-20), mirroring the page:
+ * « À venir » before the window, « En cours » inside it, « Passée » after. « Active » is retired.
+ * The document follows the page by rule — the same campaign must never read differently on the
+ * screen and in the PDF.
+ */
+export function campaignStatut(line: ReportEarningsLine, todayIso: string): CampaignStatut {
+  const start = line.campaign_start ?? reconciledDate(line);
+  const end = line.campaign_end ?? start;
+  if (start > todayIso) return 'À venir';
+  if (end < todayIso) return 'Passée';
+  return 'En cours';
+}
+
+/** US-P.9 — the type column: event positionings read « Événement », everything else « Standard ». */
+export function campaignTypeLabel(campaignType: string): string {
+  if (campaignType === 'event') return 'Événement';
+  return campaignType ? campaignType.charAt(0).toUpperCase() + campaignType.slice(1) : '—';
 }
 
 /** S03 once hasCastData: every day of the range renders, 0 on days without data. */
@@ -133,28 +149,6 @@ export function zeroFillDays(
     filled.push({ date, impressions: byDate.get(date) ?? 0 });
   }
   return filled;
-}
-
-/** S02 — 5-step quantile thresholds over the visible open-hour cell values. */
-export function quantileThresholds(values: number[]): [number, number, number, number] {
-  const positive = values.filter((v) => v > 0).sort((a, b) => a - b);
-  if (positive.length === 0) return [Infinity, Infinity, Infinity, Infinity];
-  const at = (q: number): number =>
-    positive[Math.min(positive.length - 1, Math.floor(q * positive.length))] ?? Infinity;
-  return [at(0.2), at(0.4), at(0.6), at(0.8)];
-}
-
-/** Level 0 = NO DATA → hachure (Mejri ruling #1); the ramp applies only to cells with data. */
-export function intensityLevel(
-  value: number,
-  thresholds: [number, number, number, number],
-): 0 | 1 | 2 | 3 | 4 | 5 {
-  if (value <= 0) return 0;
-  if (value < thresholds[0]) return 1;
-  if (value < thresholds[1]) return 2;
-  if (value < thresholds[2]) return 3;
-  if (value < thresholds[3]) return 4;
-  return 5;
 }
 
 export interface DemographicBand {
@@ -261,4 +255,88 @@ export function formatTablePeriod(startIso: string | null, endIso: string | null
   if (endOk) return format(endOk, 'dd/MM/yyyy');
   if (startOk) return format(startOk, 'dd/MM/yyyy');
   return '—';
+}
+
+/**
+ * PERF-QA2 (amendment 2026-08-20, US-P.5) — the S02 grid, built from MEASURED audience ONLY.
+ *
+ * WITHDRAWN RULE: the first cut of this lane spread each day's audience over the venue's
+ * typical-week ESTIMATE profile. Mejri's « User Stories — Mes performances ScreenHost » makes
+ * Pers_atteintes a sensor measure and US-P.5 explicit — « toute case sans aucune mesure sur la
+ * période est affichée hachurée ». An estimate never colours a cell, so the estimate no longer
+ * enters here AT ALL, and a cell with no measurement is `null` (hachure) rather than a 0 that
+ * would read as « personne ».
+ *
+ * THE FORMULA (US-P.5): a filter of one week or less shows the RAW Ai_jh of that week; a longer
+ * filter shows the MEAN over the covered weeks. Both collapse into ONE rule — the mean over the
+ * occurrences of that (weekday, hour) which actually carry a measure — because a ≤ 1-week window
+ * holds exactly one occurrence of each weekday. A week without a measurement contributes NOTHING:
+ * counting it as 0 would invent a measurement of zero.
+ *
+ * The period scoping itself is unchanged from the first cut (ruling 2026-08-20: the page's
+ * filters drive every section, S02 included); only the data source changed.
+ */
+export interface MeasuredHourlyPoint {
+  /** YYYY-MM-DD — the Tunis calendar day of the measurement. */
+  date: string;
+  /** 0–23. */
+  hour: number;
+  /** Ai_jh — persons measured by the audience sensor during that hour. */
+  audience: number;
+}
+
+/** 7×24, Monday-first. `null` = NO measure on the period → hachure, never a coloured 0. */
+export function periodWeekGrid(
+  points: MeasuredHourlyPoint[],
+  range: DateRange,
+): (number | null)[][] {
+  const sums = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
+  const counts = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
+  for (const point of points) {
+    if (!inRange(point.date, range)) continue;
+    if (!Number.isInteger(point.hour) || point.hour < 0 || point.hour > 23) continue;
+    const parsed = parseISO(point.date);
+    if (Number.isNaN(parsed.getTime())) continue;
+    const day = (getDay(parsed) + 6) % 7; // date-fns: 0 = Sunday → Monday-first rows
+    const sumRow = sums[day];
+    const countRow = counts[day];
+    if (!sumRow || !countRow) continue;
+    sumRow[point.hour] = (sumRow[point.hour] ?? 0) + point.audience;
+    countRow[point.hour] = (countRow[point.hour] ?? 0) + 1;
+  }
+  return sums.map((row, day) =>
+    row.map((sum, hour) => {
+      const n = counts[day]?.[hour] ?? 0;
+      if (n === 0) return null; // no measure → hachure
+      if (n === 1) return sum; // ≤ 1 week: the RAW Ai_jh (the tooltip shows it exactly)
+      return Math.round((sum / n) * 10) / 10; // > 1 week: the mean over the measured weeks
+    }),
+  );
+}
+
+/** The period's own observed min/max over MEASURED cells — the colour scale's bounds. */
+export function measuredScale(cells: (number | null)[]): { min: number; max: number } | null {
+  let min = Infinity;
+  let max = -Infinity;
+  for (const value of cells) {
+    if (value === null) continue;
+    if (value < min) min = value;
+    if (value > max) max = value;
+  }
+  return min === Infinity ? null : { min, max };
+}
+
+/**
+ * Level 0 = NO MEASURE → hachure. 1–5 = a linear ramp over the PERIOD's own min/max, so the
+ * colour is relative to what this period observed and never to an absolute audience. A period
+ * whose measures are all equal reads at the neutral middle instead of pretending to a peak.
+ */
+export function measuredLevel(
+  value: number | null,
+  scale: { min: number; max: number } | null,
+): 0 | 1 | 2 | 3 | 4 | 5 {
+  if (value === null || scale === null) return 0;
+  if (scale.max <= scale.min) return 3;
+  const level = Math.ceil(((value - scale.min) / (scale.max - scale.min)) * 5);
+  return (level < 1 ? 1 : level > 5 ? 5 : level) as 1 | 2 | 3 | 4 | 5;
 }

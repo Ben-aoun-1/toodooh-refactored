@@ -18,6 +18,7 @@ import {
 import { env } from '../env.js';
 import { generateUniqueAgentCode } from '../lib/agent-code.js';
 import { buildEligibilityPatch, type EligibilityPatchInput } from '../lib/eligibility-patch.js';
+import { mergeMonthlyAudience } from '../lib/monthly-audience.js';
 import { decryptWifiPassword } from '../lib/wifi-crypto.js';
 import { requireSyncKey } from '../middleware/require-sync-key.js';
 
@@ -62,6 +63,35 @@ const affluenceBodySchema = z.object({
 
 // C2: monthly-stats batch — the ACTUAL monthly audience the hub pushes (operator ruling), upserted
 // latest-value-wins on (screenhost, month). Mirrors the affluence batch shape + tolerance.
+/** A zero-filled 7×24 Monday-first grid — the shape lib/monthly-audience.ts reads. */
+const emptyGrid = (): number[][] =>
+  Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
+
+/** The venues' typical-week grids, one query for the whole batch (day_of_week 1=Mon → row 0). */
+const loadAffluenceGrids = async (venueIds: string[]): Promise<Map<string, number[][]>> => {
+  const grids = new Map<string, number[][]>();
+  if (venueIds.length === 0) return grids;
+  const slots = await db
+    .select({
+      screenhostId: screenhostAffluence.screenhostId,
+      dayOfWeek: screenhostAffluence.dayOfWeek,
+      hour: screenhostAffluence.hour,
+      estimatedImpressions: screenhostAffluence.estimatedImpressions,
+    })
+    .from(screenhostAffluence)
+    .where(inArray(screenhostAffluence.screenhostId, venueIds));
+  for (const slot of slots) {
+    let grid = grids.get(slot.screenhostId);
+    if (!grid) {
+      grid = emptyGrid();
+      grids.set(slot.screenhostId, grid);
+    }
+    const row = grid[slot.dayOfWeek - 1];
+    if (row && slot.hour >= 0 && slot.hour <= 23) row[slot.hour] = slot.estimatedImpressions;
+  }
+  return grids;
+};
+
 const monthlyStatsBodySchema = z.object({
   stats: z
     .array(
@@ -278,6 +308,18 @@ export const internalRoutes: FastifyPluginAsync<{ syncKey?: string }> = async (a
   // Flat batch of {location_id, month, total_audience, daily[], peak_day_of_week, peak_hour}. Latest-
   // value-wins upsert on (screenhost, month). Unknown location_ids are SKIPPED and reported (never
   // fail the batch) — same tolerance as the affluence ingest.
+  //
+  // PERF-QA2 — the audience aggregates consume the MERGED source (lib/monthly-audience.ts): a day
+  // the hub measured is kept, a day it did not is estimated from that venue's affluence grid.
+  // ONE occupancy source for the whole owner page family — « Personnes touchées » (Σ these
+  // months) can no longer read 0 while « Votre audience » (the same grid) reads thousands, and a
+  // real measurement automatically displaces the estimate on the NEXT push, because the merge
+  // always runs against the hub's fresh payload and never against what we stored.
+  //
+  // SURGICAL: the row is stored EXACTLY as sent — the hub's own total included — unless an
+  // estimate actually CONTRIBUTES (a venue with no grid, or a fully measured month, is verbatim).
+  // This path fills measurement holes; it does not re-derive the hub's arithmetic (the banked
+  // DATA1 summarize-mismatch is a separate lane).
   app.post('/api/internal/monthly-stats', guard, async (request, reply) => {
     const parsed = monthlyStatsBodySchema.safeParse(request.body);
     if (!parsed.success) {
@@ -305,23 +347,40 @@ export const internalRoutes: FastifyPluginAsync<{ syncKey?: string }> = async (a
     const toUpsert = stats.filter((s) => knownIds.has(s.location_id));
     let upserted = 0;
     if (toUpsert.length > 0) {
+      const grids = await loadAffluenceGrids([...new Set(toUpsert.map((s) => s.location_id))]);
+      const todayIso = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Tunis' }).format(
+        new Date(),
+      );
       await db.transaction(async (tx) => {
         for (const stat of toUpsert) {
+          const merged = mergeMonthlyAudience({
+            month: stat.month,
+            measured: stat.daily,
+            grid: grids.get(stat.location_id) ?? emptyGrid(),
+            todayIso,
+          });
+          // Substitute ONLY when an estimate actually CONTRIBUTES something. A fully measured
+          // month, and a venue with no grid at all, are stored EXACTLY as the hub sent them —
+          // total included. This path fills measurement holes; it never re-derives the hub's own
+          // arithmetic (the banked DATA1 summarize-mismatch stays observable, out of scope here).
+          const substituted = merged.daily.some((d) => d.source === 'estimated' && d.audience > 0);
+          const daily = substituted ? merged.daily : stat.daily;
+          const totalAudience = substituted ? merged.totalAudience : stat.total_audience;
           await tx
             .insert(screenhostMonthlyStats)
             .values({
               screenhostId: stat.location_id,
               month: stat.month,
-              totalAudience: stat.total_audience,
-              daily: stat.daily,
+              totalAudience,
+              daily,
               peakDayOfWeek: stat.peak_day_of_week,
               peakHour: stat.peak_hour,
             })
             .onConflictDoUpdate({
               target: [screenhostMonthlyStats.screenhostId, screenhostMonthlyStats.month],
               set: {
-                totalAudience: stat.total_audience,
-                daily: stat.daily,
+                totalAudience,
+                daily,
                 peakDayOfWeek: stat.peak_day_of_week,
                 peakHour: stat.peak_hour,
                 updatedAt: new Date(),
