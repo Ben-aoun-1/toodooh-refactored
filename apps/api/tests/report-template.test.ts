@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { ReportData } from '../src/lib/report/assemble.js';
 import {
   PISTE_01_NO_EVENTS_BODY,
-  PISTE_02_GENERIC_BODY,
+  PISTE_02_WAIT_BODY,
   buildPistes,
 } from '../src/lib/report/pistes.js';
 import {
@@ -401,33 +401,37 @@ describe('renderReportHtml — S07 renders the pistes generator (PERF-QA2)', () 
   });
 
   it('Piste 03 is the SPS ANALYSIS when scored, and EXACTLY the wait copy when not', () => {
-    const scored = renderReportHtml(fullData());
+    // The AI body is present here, so Piste 02 leaves the wait state too — a scored venue with
+    // an analysis renders ZERO wait cards.
+    const scored = renderReportHtml(fullData(), { aiPistes: aiBody });
     expect(count(scored, /class="piste-body wait"/g)).toBe(0);
     expect(scored).toContain('Votre score de priorité est de 70/100.');
     // baseData's SPS: remplissage 0/100 × poids 10 loses 10 pts, acceptation 50/100 × poids 40
     // loses 20 → the WEIGHTED weakest is acceptation, not the lowest raw value.
     expect(scored).toContain(esc("Point faible : Taux d'acceptation des campagnes"));
 
+    // No SPS and no AI body → BOTH Piste 02 (« À venir », US-P.10) and Piste 03 wait.
     const scoreless = renderReportHtml(fullData({ sps: null }));
-    expect(count(scoreless, /class="piste-body wait"/g)).toBe(1);
+    expect(count(scoreless, /class="piste-body wait"/g)).toBe(2);
     expect(scoreless).toContain(
       '<div class="piste-body wait">En attente de votre score de priorité.</div>',
     );
   });
 
-  it('an AI body fills Piste 02 and displaces ONLY the generic angles-morts body', () => {
+  it('an AI body fills Piste 02 and displaces ONLY its wait state', () => {
     const html = renderReportHtml(fullData(), { aiPistes: aiBody });
     expect(html).toContain(aiBody);
-    expect(html).not.toContain('Comparez vos créneaux les plus forts');
+    expect(html).not.toContain(`<div class="piste-body wait">${PISTE_02_WAIT_BODY}</div>`);
   });
 
-  it('null/absent/blank aiPistes keeps the generic Piste 02 body verbatim (R3.1 real copy)', () => {
+  it('null/absent/blank aiPistes → Piste 02 is the « À venir » wait state (US-P.10)', () => {
     for (const html of [
       renderReportHtml(baseData()),
       renderReportHtml(baseData(), { aiPistes: null }),
       renderReportHtml(baseData(), { aiPistes: '   ' }),
     ]) {
-      expect(html).toContain(esc(PISTE_02_GENERIC_BODY));
+      expect(html).toContain(`<div class="piste-body wait">${PISTE_02_WAIT_BODY}</div>`);
+      expect(html).not.toContain('Comparez vos créneaux'); // the retired R3.1 generic prose
       expect(html).not.toContain('essayez X et Y'); // the mockup placeholder never renders again
       expect(html).not.toContain('Vous avez 2 périodes creuses');
     }

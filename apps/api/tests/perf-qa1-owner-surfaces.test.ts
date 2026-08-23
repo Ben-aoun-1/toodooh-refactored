@@ -19,7 +19,7 @@ import {
 import {
   PISTE_01_NO_EVENTS_BODY,
   PISTE_01_TITLE,
-  PISTE_02_GENERIC_BODY,
+  PISTE_02_WAIT_BODY,
   PISTE_02_TITLE,
   PISTE_03_TITLE,
 } from '../src/lib/report/pistes.js';
@@ -348,11 +348,11 @@ describe('PERF-QA1 owner surfaces (real Postgres)', () => {
       const body = res.json<PistesBody>();
       expect(body.pistes.map((p) => [p.num, p.title, p.pending])).toEqual([
         ['01', PISTE_01_TITLE, false],
-        ['02', PISTE_02_TITLE, false],
+        ['02', PISTE_02_TITLE, true], // US-P.10 — no analysis yet → the « À venir » wait state
         ['03', PISTE_03_TITLE, false],
       ]);
       expect(body.pistes[0]?.body).toBe(PISTE_01_NO_EVENTS_BODY);
-      expect(body.pistes[1]?.body).toBe(PISTE_02_GENERIC_BODY);
+      expect(body.pistes[1]?.body).toBe(PISTE_02_WAIT_BODY);
       expect(body.pistes[2]?.body).toContain('Votre score de priorité est de 90/100.');
       expect(body.pistes[2]?.body).toContain(
         'Point faible : Taux de remplissage (0/100, poids 10 %).',
@@ -387,7 +387,7 @@ describe('PERF-QA1 owner surfaces (real Postgres)', () => {
       pistesCachedSpy.mockRejectedValue(new Error('anthropic exploded'));
       const res = await get(`/api/screenhosts/${sh}/pistes?${range}`);
       expect(res.statusCode).toBe(200);
-      expect(res.json<PistesBody>().pistes[1]?.body).toBe(PISTE_02_GENERIC_BODY);
+      expect(res.json<PistesBody>().pistes[1]?.body).toBe(PISTE_02_WAIT_BODY);
     });
   });
 

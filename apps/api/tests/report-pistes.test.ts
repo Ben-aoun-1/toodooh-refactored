@@ -4,7 +4,7 @@ import {
   BODY_MAX_CHARS,
   PISTE_01_NO_EVENTS_BODY,
   PISTE_01_TITLE,
-  PISTE_02_GENERIC_BODY,
+  PISTE_02_WAIT_BODY,
   PISTE_02_TITLE,
   PISTE_03_TITLE,
   PISTE_03_WAIT_BODY,
@@ -145,12 +145,26 @@ describe('Piste 03 — the SPS analysis', () => {
   });
 });
 
-describe('Piste 02 — the AI body (contract unchanged)', () => {
-  it('a non-blank ai body fills it; null/blank keeps the generic copy verbatim', () => {
-    expect(buildPistes({ events: null, sps: null, aiBody: 'Corps IA.' })[1].body).toBe('Corps IA.');
+describe('Piste 02 — the AI body, or an honest wait (US-P.10)', () => {
+  it('a non-blank ai body fills it, out of the wait state', () => {
+    const p2 = buildPistes({ events: null, sps: null, aiBody: 'Corps IA.' })[1];
+    expect(p2.body).toBe('Corps IA.');
+    expect(p2.pending).toBe(false);
+  });
+
+  it('null/blank → EXACTLY « À venir », in the pending style — never generic prose', () => {
     for (const aiBody of [null, '', '   ']) {
-      expect(buildPistes({ events: null, sps: null, aiBody })[1].body).toBe(PISTE_02_GENERIC_BODY);
+      const p2 = buildPistes({ events: null, sps: null, aiBody })[1];
+      expect(p2.body).toBe(PISTE_02_WAIT_BODY);
+      expect(p2.body).toBe('À venir');
+      expect(p2.pending).toBe(true);
     }
+  });
+
+  it('the retired R3.1 generic paragraph never renders again', () => {
+    const body = buildPistes({ events: null, sps: null, aiBody: null })[1].body;
+    expect(body).not.toContain('Comparez vos créneaux');
+    expect(body).not.toContain('essayez X et Y');
   });
 });
 

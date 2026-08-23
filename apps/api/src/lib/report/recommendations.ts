@@ -15,7 +15,7 @@ const log = logger.child({ module: 'report-recommendations' });
 // « Repérez vos angles morts » paragraph (Pistes 01/03 are generated from data in pistes.ts).
 // HARD FALLBACK CONTRACT unchanged from R2: this module
 // NEVER throws into a report path — missing key, timeout, API error, refusal, schema-parse
-// failure or cap violation ALL resolve to null, and the template keeps the generic Piste 02 body.
+// failure or cap violation ALL resolve to null, and Piste 02 keeps its « À venir » wait state.
 // R3.1: an over-cap first draft earns ONE compress-retry turn before falling back, and every
 // fallback path warns with a machine-greppable reason (refusal | parse_failure | over_cap).
 // Logging carries the error message ONLY: never the key, never the prompt or response bodies.
@@ -126,10 +126,10 @@ async function parseBody(
 
 // R3.1 observability — every fallback logs ONE warn with a machine-greppable reason. NEVER the
 // body text, NEVER the input payload (data minimization holds in the logs too).
-const FELL_BACK = 'AI recommendations fell back — reports keep the generic Piste 02 body';
+const FELL_BACK = 'AI recommendations fell back — Piste 02 keeps its « À venir » wait state';
 
 /**
- * Generate the Piste 02 body for one report, or null for "keep the generic body". Uncached — the
+ * Generate the Piste 02 body for one report, or null for "keep the wait state". Uncached — the
  * month-end job and the regeneration script freeze the result into the stored PDF. An over-cap
  * first draft gets ONE compress-retry turn; anything else falls back immediately.
  */
@@ -168,7 +168,7 @@ export async function generateRecommendations(input: RecommendationInput): Promi
         : err instanceof Error
           ? err.message
           : String(err);
-    log.warn({ reason }, 'AI recommendations failed — reports keep the generic Piste 02 body');
+    log.warn({ reason }, 'AI recommendations failed — Piste 02 keeps its « À venir » wait state');
     return null;
   }
 }
