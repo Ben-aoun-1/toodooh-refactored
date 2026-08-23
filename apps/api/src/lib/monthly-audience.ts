@@ -61,9 +61,33 @@ export function estimatedDayAudience(grid: number[][], dateIso: string): number 
  * marker existed) when it carries a non-zero audience. An unmarked 0 is "the sensor said
  * nothing", which is what the whole defect was about.
  */
-const isMeasured = (entry: MonthlyStatsDaily | undefined): entry is MonthlyStatsDaily =>
+export const isMeasuredDay = (entry: MonthlyStatsDaily | undefined): entry is MonthlyStatsDaily =>
   entry !== undefined &&
   (entry.source === 'measured' || (entry.source === undefined && entry.audience > 0));
+
+/**
+ * AMENDMENT 2026-08-20 (US-P.0 + the variable legend « Donnée mesurée (capteur) ») — the
+ * "merged source for DISPLAY" ruling is WITHDRAWN. Pers_atteintes is a SENSOR measure: an
+ * estimate never feeds « Personnes touchées », Ai, Audience_moy_jour or Pic_audience. So every
+ * owner-facing read filters the stored month down to its MEASURED days, and a fully unmeasured
+ * month serves 0 with a « — » peak.
+ *
+ * The stored row keeps BOTH kinds (the merge + the backfill stay, as DATA ENRICHMENT with
+ * provenance): the estimate remains available to anything that legitimately wants it. Only what
+ * the owner reads as « mesuré » is filtered here.
+ *
+ * The spec settles the apparent incoherence explicitly: « 0 personne touchée » beside non-zero
+ * impressions is NOT a contradiction — audience and proof-of-play are two independent sensors.
+ * What is required is that each counter states its source, which the page copy now does.
+ */
+export function measuredDays(daily: MonthlyStatsDaily[]): MonthlyStatsDaily[] {
+  return daily.filter((entry) => isMeasuredDay(entry));
+}
+
+/** Σ of the MEASURED days — the only audience total an owner surface may show. */
+export function measuredTotal(daily: MonthlyStatsDaily[]): number {
+  return measuredDays(daily).reduce((sum, entry) => sum + entry.audience, 0);
+}
 
 /** The last day the month may claim: its own end, or Tunis today for the CURRENT month. */
 export function lastClaimableDay(month: string, todayIso: string): string | null {
@@ -101,7 +125,7 @@ export function mergeMonthlyAudience(input: MergeMonthlyAudienceInput): MergedMo
   ) {
     const date = format(cursor, 'yyyy-MM-dd');
     const entry = byDate.get(date);
-    if (isMeasured(entry)) {
+    if (isMeasuredDay(entry)) {
       daily.push({ date, audience: entry.audience, source: 'measured' });
       continue;
     }

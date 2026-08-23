@@ -57,13 +57,13 @@ const PLACEHOLDER_AGE_PCT = [32, 28, 14, 6];
 // generic Piste 02 body is over the 210-char guard that VARIABLE AI bodies must pass, and that
 // is fine — it renders 2 lines / 0px overflow by direct measurement.
 
-// PERF-QA2 — the S02 lead. R7's « semaine type glissante, jamais la période » is SUPERSEDED
-// (ruling 2026-08-20): the grid is now built FROM the window's own days, so the copy names the
-// period again — honestly this time, because the data really is period-scoped. BYTE-IDENTICAL
-// twin in apps/web (lib/peak-hours.ts), each side pinned by an exact-literal test. Page and PDF
-// are RULE-identical; byte-identical GRIDS across different windows are no longer expected.
+// PERF-QA2 — the S02 lead. R7's « semaine type glissante, jamais la période » is SUPERSEDED, and
+// the amendment (US-P.5) settles the source: the grid is built from the window's own MEASURED
+// hours, so the copy names both the measure and the period. BYTE-IDENTICAL twin in apps/web
+// (lib/peak-hours.ts), each side pinned by an exact-literal test. Page and PDF are
+// RULE-identical; byte-identical GRIDS across different windows are not expected.
 export const PEAK_HOURS_LEAD =
-  "Audience moyenne par jour et par heure sur la période analysée, croisant les jours de la semaine et les heures d'ouverture. Plus la couleur est vive, plus l'audience est élevée. Les zones rayées correspondent à vos heures de fermeture ou aux créneaux sans données sur la période.";
+  "Audience mesurée par votre capteur, croisant les jours de la semaine et les heures d'ouverture sur la période analysée. Plus la couleur est vive, plus l'audience mesurée est élevée. Les zones rayées correspondent à vos heures de fermeture ou aux créneaux sans aucune mesure sur la période.";
 
 const esc = (value: string): string =>
   value.replace(
@@ -300,8 +300,18 @@ export function renderReportHtml(
       </div>
       <div class="col">
         <div class="stat-lbl">Pic d'audience</div>
-        ${statNum(hostHasData ? (kpis.peak?.value ?? 0) : null)}
-        <div class="stat-desc">Maximum observé <span class="stat-hi">- ${kpis.peak ? formatDateFr(kpis.peak.date) : 'JJ/MM/AAAA'}</span></div>
+        ${
+          // US-P.4 — « — » when the sensor measured nothing on the period; the mockup's
+          // JJ/MM/AAAA placeholder never renders (it read as a real date at a glance).
+          hostHasData && !kpis.peak
+            ? '<div class="stat-num">—</div>'
+            : statNum(hostHasData ? (kpis.peak?.value ?? 0) : null)
+        }
+        <div class="stat-desc">${
+          kpis.peak
+            ? `Maximum observé le <span class="stat-hi">${formatDateFr(kpis.peak.date)}</span>`
+            : 'Aucun maximum observé sur la période.'
+        }</div>
       </div>
     </div>
   </div>`;

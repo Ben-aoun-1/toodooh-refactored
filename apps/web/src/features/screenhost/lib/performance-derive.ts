@@ -241,35 +241,6 @@ export function demographicBreakdown(ratios: VenueRatios, audience: number): Dem
   };
 }
 
-/**
- * S02 heatmap — 5-step intensity levels bucketed by QUANTILES over the visible (open-hour) cell
- * values. The ramp only applies to cells WITH data.
- */
-export function quantileThresholds(values: number[]): [number, number, number, number] {
-  const positive = values.filter((v) => v > 0).sort((a, b) => a - b);
-  if (positive.length === 0) return [Infinity, Infinity, Infinity, Infinity];
-  const at = (q: number): number =>
-    positive[Math.min(positive.length - 1, Math.floor(q * positive.length))] ?? Infinity;
-  return [at(0.2), at(0.4), at(0.6), at(0.8)];
-}
-
-/**
- * Level 0 = NO DATA → the hachure treatment, not the ramp floor (Mejri ruling #1). The affluence
- * grid zero-fills, so a measured-true-zero cell is indistinguishable from an unmeasured one —
- * accepted approximation: 0 reads as no-data.
- */
-export function intensityLevel(
-  value: number,
-  thresholds: [number, number, number, number],
-): 0 | 1 | 2 | 3 | 4 | 5 {
-  if (value <= 0) return 0;
-  if (value < thresholds[0]) return 1;
-  if (value < thresholds[1]) return 2;
-  if (value < thresholds[2]) return 3;
-  if (value < thresholds[3]) return 4;
-  return 5;
-}
-
 /** fr-FR integer formatting ('191 400'), the mockups' number style. */
 export function formatIntFr(value: number): string {
   return Math.round(value).toLocaleString('fr-FR');

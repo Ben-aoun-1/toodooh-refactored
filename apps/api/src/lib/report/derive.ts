@@ -135,28 +135,6 @@ export function zeroFillDays(
   return filled;
 }
 
-/** S02 — 5-step quantile thresholds over the visible open-hour cell values. */
-export function quantileThresholds(values: number[]): [number, number, number, number] {
-  const positive = values.filter((v) => v > 0).sort((a, b) => a - b);
-  if (positive.length === 0) return [Infinity, Infinity, Infinity, Infinity];
-  const at = (q: number): number =>
-    positive[Math.min(positive.length - 1, Math.floor(q * positive.length))] ?? Infinity;
-  return [at(0.2), at(0.4), at(0.6), at(0.8)];
-}
-
-/** Level 0 = NO DATA → hachure (Mejri ruling #1); the ramp applies only to cells with data. */
-export function intensityLevel(
-  value: number,
-  thresholds: [number, number, number, number],
-): 0 | 1 | 2 | 3 | 4 | 5 {
-  if (value <= 0) return 0;
-  if (value < thresholds[0]) return 1;
-  if (value < thresholds[1]) return 2;
-  if (value < thresholds[2]) return 3;
-  if (value < thresholds[3]) return 4;
-  return 5;
-}
-
 export interface DemographicBand {
   key: keyof VenueRatios;
   label: string;
@@ -264,53 +242,85 @@ export function formatTablePeriod(startIso: string | null, endIso: string | null
 }
 
 /**
- * PERF-QA2 — the S02 grid, SCOPED TO THE SELECTED PERIOD (PERF-QA1 R7's « rolling semaine type,
- * never the period » is SUPERSEDED, ruling 2026-08-20: the page's period filters drive EVERY
- * section, S02 included).
+ * PERF-QA2 (amendment 2026-08-20, US-P.5) — the S02 grid, built from MEASURED audience ONLY.
  *
- * Each in-period day's audience is spread over its weekday's hourly SHAPE (the typical-week
- * grid), then averaged over that weekday's occurrences in the period.
+ * WITHDRAWN RULE: the first cut of this lane spread each day's audience over the venue's
+ * typical-week ESTIMATE profile. Mejri's « User Stories — Mes performances ScreenHost » makes
+ * Pers_atteintes a sensor measure and US-P.5 explicit — « toute case sans aucune mesure sur la
+ * période est affichée hachurée ». An estimate never colours a cell, so the estimate no longer
+ * enters here AT ALL, and a cell with no measurement is `null` (hachure) rather than a 0 that
+ * would read as « personne ».
  *
- * SHAPE-BORROWING, stated plainly (accepted design note, 2026-08-20): measured audience exists
- * at DAY granularity only, so the hour-by-hour shape can only come from the typical week. This is
- * the best derivable answer until per-slot measurement exists — the period modulates the shape's
- * AMPLITUDE, never its profile.
+ * THE FORMULA (US-P.5): a filter of one week or less shows the RAW Ai_jh of that week; a longer
+ * filter shows the MEAN over the covered weeks. Both collapse into ONE rule — the mean over the
+ * occurrences of that (weekday, hour) which actually carry a measure — because a ≤ 1-week window
+ * holds exactly one occurrence of each weekday. A week without a measurement contributes NOTHING:
+ * counting it as 0 would invent a measurement of zero.
  *
- * The identity property that makes this safe: for an estimate-derived day, audience(date) equals
- * Σ_h grid[weekday][h], so the cell reproduces the typical grid EXACTLY — a venue on estimates
- * sees no visual change. And a period with no daily audience at all yields an all-zero grid, so
- * gridIsAllEmpty fires and the explanatory empty state replaces the old coloured-heatmap-on-an-
- * empty-period defect. That defect is now structurally impossible, not merely fixed.
+ * The period scoping itself is unchanged from the first cut (ruling 2026-08-20: the page's
+ * filters drive every section, S02 included); only the data source changed.
  */
+export interface MeasuredHourlyPoint {
+  /** YYYY-MM-DD — the Tunis calendar day of the measurement. */
+  date: string;
+  /** 0–23. */
+  hour: number;
+  /** Ai_jh — persons measured by the audience sensor during that hour. */
+  audience: number;
+}
+
+/** 7×24, Monday-first. `null` = NO measure on the period → hachure, never a coloured 0. */
 export function periodWeekGrid(
-  typicalGrid: number[][],
-  daily: DailyAudiencePoint[],
+  points: MeasuredHourlyPoint[],
   range: DateRange,
-): number[][] {
+): (number | null)[][] {
   const sums = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
-  const counts = Array.from({ length: 7 }, () => 0);
-  for (const point of daily) {
+  const counts = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
+  for (const point of points) {
     if (!inRange(point.date, range)) continue;
+    if (!Number.isInteger(point.hour) || point.hour < 0 || point.hour > 23) continue;
     const parsed = parseISO(point.date);
     if (Number.isNaN(parsed.getTime())) continue;
     const day = (getDay(parsed) + 6) % 7; // date-fns: 0 = Sunday → Monday-first rows
-    const profile = typicalGrid[day];
-    if (!profile) continue;
-    const dayTotal = profile.reduce((sum, value) => sum + value, 0);
-    // No hourly shape for that weekday → the day's audience cannot be placed in any hour. It is
-    // DROPPED rather than smeared flat: an invented shape would read as measured.
-    if (dayTotal <= 0) continue;
-    counts[day] = (counts[day] ?? 0) + 1;
-    const row = sums[day];
-    if (!row) continue;
-    for (let hour = 0; hour < 24; hour += 1) {
-      row[hour] = (row[hour] ?? 0) + (point.audience * (profile[hour] ?? 0)) / dayTotal;
-    }
+    const sumRow = sums[day];
+    const countRow = counts[day];
+    if (!sumRow || !countRow) continue;
+    sumRow[point.hour] = (sumRow[point.hour] ?? 0) + point.audience;
+    countRow[point.hour] = (countRow[point.hour] ?? 0) + 1;
   }
-  // One decimal: a low-traffic measured day can land under 1 person/hour, and rounding that to 0
-  // would hachure a cell that genuinely has data.
-  return sums.map((row, day) => {
-    const n = counts[day] ?? 0;
-    return row.map((value) => (n > 0 ? Math.round((value / n) * 10) / 10 : 0));
-  });
+  return sums.map((row, day) =>
+    row.map((sum, hour) => {
+      const n = counts[day]?.[hour] ?? 0;
+      if (n === 0) return null; // no measure → hachure
+      if (n === 1) return sum; // ≤ 1 week: the RAW Ai_jh (the tooltip shows it exactly)
+      return Math.round((sum / n) * 10) / 10; // > 1 week: the mean over the measured weeks
+    }),
+  );
+}
+
+/** The period's own observed min/max over MEASURED cells — the colour scale's bounds. */
+export function measuredScale(cells: (number | null)[]): { min: number; max: number } | null {
+  let min = Infinity;
+  let max = -Infinity;
+  for (const value of cells) {
+    if (value === null) continue;
+    if (value < min) min = value;
+    if (value > max) max = value;
+  }
+  return min === Infinity ? null : { min, max };
+}
+
+/**
+ * Level 0 = NO MEASURE → hachure. 1–5 = a linear ramp over the PERIOD's own min/max, so the
+ * colour is relative to what this period observed and never to an absolute audience. A period
+ * whose measures are all equal reads at the neutral middle instead of pretending to a peak.
+ */
+export function measuredLevel(
+  value: number | null,
+  scale: { min: number; max: number } | null,
+): 0 | 1 | 2 | 3 | 4 | 5 {
+  if (value === null || scale === null) return 0;
+  if (scale.max <= scale.min) return 3;
+  const level = Math.ceil(((value - scale.min) / (scale.max - scale.min)) * 5);
+  return (level < 1 ? 1 : level > 5 ? 5 : level) as 1 | 2 | 3 | 4 | 5;
 }

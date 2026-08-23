@@ -4,7 +4,10 @@ import type { MonthlyStatsDaily } from '../src/db/schema.js';
 import {
   estimatedDayAudience,
   gridPeaks,
+  isMeasuredDay,
   lastClaimableDay,
+  measuredDays,
+  measuredTotal,
   mergeMonthlyAudience,
 } from '../src/lib/monthly-audience.js';
 
@@ -189,5 +192,50 @@ describe('gridPeaks', () => {
     const row = g[2];
     if (row) row[12] = 100; // make Wednesday the busiest day
     expect(gridPeaks(g)).toEqual({ peakDayOfWeek: 3, peakHour: 12 });
+  });
+});
+
+// ── AMENDMENT 2026-08-20 (US-P.0) — the DISPLAY reads MEASURED days only ──────────────────────
+// The « merged source for display » ruling is WITHDRAWN: Pers_atteintes is a sensor measure, so
+// an estimate never feeds « Personnes touchées », Ai, la moyenne ou le Pic. The merge and the
+// backfill stay as DATA ENRICHMENT with provenance — these two helpers are the filter every
+// owner-facing read applies on top.
+describe('measuredDays / measuredTotal (the owner-facing filter)', () => {
+  it('keeps stamped measures and drops stamped estimates', () => {
+    const daily = [
+      { date: '2026-06-01', audience: 40, source: 'measured' as const },
+      { date: '2026-06-02', audience: 300, source: 'estimated' as const },
+      { date: '2026-06-03', audience: 0, source: 'measured' as const },
+    ];
+    expect(measuredDays(daily).map((d) => d.date)).toEqual(['2026-06-01', '2026-06-03']);
+    expect(measuredTotal(daily)).toBe(40); // a measured ZERO counts as a day, adds nothing
+  });
+
+  it('legacy unmarked rows count as measured only when non-zero', () => {
+    const daily = [
+      { date: '2026-06-01', audience: 40 },
+      { date: '2026-06-02', audience: 0 },
+    ];
+    expect(isMeasuredDay(daily[0])).toBe(true);
+    expect(isMeasuredDay(daily[1])).toBe(false);
+    expect(measuredTotal(daily)).toBe(40);
+  });
+
+  it('an estimate-only month totals 0 — honestly, with no days', () => {
+    const daily = [{ date: '2026-06-01', audience: 900, source: 'estimated' as const }];
+    expect(measuredDays(daily)).toEqual([]);
+    expect(measuredTotal(daily)).toBe(0);
+  });
+
+  it('a merged month serves ONLY its measured part', () => {
+    const grid = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 5)); // Σ 120/day
+    const merged = mergeMonthlyAudience({
+      month: '2026-06',
+      measured: [{ date: '2026-06-01', audience: 250, source: 'measured' }],
+      grid,
+      todayIso: '2026-07-08',
+    });
+    expect(merged.totalAudience).toBe(250 + 29 * 120); // the ENRICHED row
+    expect(measuredTotal(merged.daily)).toBe(250); // what the owner reads
   });
 });

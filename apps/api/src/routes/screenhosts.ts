@@ -34,6 +34,7 @@ import { buildEligibilityPatch } from '../lib/eligibility-patch.js';
 import { createEngineTrace, type EngineTrace } from '../lib/engine-journal/trace.js';
 import { releaseBlocHours, runEventRefusalCascade } from '../lib/event-dispatch/dispatch.js';
 import { displayImpressionsSettled } from '../lib/impressions-display.js';
+import { measuredDays, measuredTotal } from '../lib/monthly-audience.js';
 import { pushPlaylistToVenue } from '../lib/playout/push.js';
 import { assembleReportData } from '../lib/report/assemble.js';
 import { buildPistes } from '../lib/report/pistes.js';
@@ -796,11 +797,17 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       .where(eq(screenhostMonthlyStats.screenhostId, owned.id))
       .orderBy(desc(screenhostMonthlyStats.month)); // 'YYYY-MM' sorts correctly as text
 
+    // AMENDMENT 2026-08-20 (US-P.0, « Donnée mesurée (capteur) ») — the owner reads MEASURED days
+    // only: an estimated day never feeds « Personnes touchées », Ai, la moyenne ou le Pic. The
+    // stored row keeps both kinds (provenance-stamped enrichment); the WIRE carries the measure.
+    // A fully unmeasured month therefore serves 0 days and a 0 total — which the spec rules is
+    // NOT an incoherence beside non-zero impressions: two independent sensors, each stating its
+    // source on the page.
     return reply.status(200).send({
       months: rows.map((r) => ({
         month: r.month,
-        total_audience: r.totalAudience,
-        daily: r.daily,
+        total_audience: measuredTotal(r.daily),
+        daily: measuredDays(r.daily),
         peak_day_of_week: r.peakDayOfWeek,
         peak_hour: r.peakHour,
       })),

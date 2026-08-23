@@ -214,9 +214,12 @@ describe('owner performance reads (owner-scoped, real Postgres)', () => {
       expect(res.statusCode).toBe(200);
       const body = res.json<{ months: { month: string; total_audience: number }[] }>();
       expect(body.months.map((m) => m.month)).toEqual(['2026-06', '2026-04']);
+      // AMENDMENT (US-P.0): the served total is Σ of the MEASURED days, not the stored column —
+      // the owner reads what the sensor counted. (The stored column is untouched, so the banked
+      // DATA1 summarize-mismatch stays observable in the row itself.)
       expect(body.months[0]).toEqual({
         month: '2026-06',
-        total_audience: 1200,
+        total_audience: 84,
         daily: [
           { date: '2026-06-01', audience: 40 },
           { date: '2026-06-02', audience: 44 },
@@ -226,10 +229,54 @@ describe('owner performance reads (owner-scoped, real Postgres)', () => {
       });
 
       // A venue with no stats → empty list, not an error.
+
       const bare = await seedScreenhost(me, { name: 'Sans Stats' });
       const empty = await get(`/api/screenhosts/${bare}/monthly-stats`);
       expect(empty.statusCode).toBe(200);
       expect(empty.json<{ months: unknown[] }>().months).toEqual([]);
+    });
+
+    // AMENDMENT 2026-08-20 (US-P.0 + « Donnée mesurée (capteur) ») — an ESTIMATED day never
+    // reaches an owner audience figure. The stored row keeps both kinds; the wire carries only
+    // what the sensor measured, so a fully unmeasured month serves 0 and no days.
+    it('serves MEASURED days only — estimates are enrichment, never audience', async () => {
+      const me = await seedUser();
+      const mine = await seedScreenhost(me);
+      await db.insert(screenhostMonthlyStats).values([
+        {
+          screenhostId: mine,
+          month: '2026-06',
+          totalAudience: 1000, // as written by the merge: measured + estimated
+          daily: [
+            { date: '2026-06-01', audience: 40, source: 'measured' },
+            { date: '2026-06-02', audience: 300, source: 'estimated' },
+            { date: '2026-06-03', audience: 0, source: 'estimated' },
+          ],
+          peakDayOfWeek: 6,
+          peakHour: 20,
+        },
+        {
+          screenhostId: mine,
+          month: '2026-05',
+          totalAudience: 900, // estimate-only month
+          daily: [{ date: '2026-05-01', audience: 300, source: 'estimated' }],
+          peakDayOfWeek: 1,
+          peakHour: 12,
+        },
+      ]);
+      mockSession(me);
+
+      const body = (await get(`/api/screenhosts/${mine}/monthly-stats`)).json<{
+        months: { month: string; total_audience: number; daily: unknown[] }[];
+      }>();
+      expect(body.months[0]).toMatchObject({
+        month: '2026-06',
+        total_audience: 40,
+        daily: [{ date: '2026-06-01', audience: 40, source: 'measured' }],
+      });
+      // A month the sensor never measured is an honest 0 with no days — the spec rules this is
+      // NOT an incoherence beside non-zero impressions (two independent sensors).
+      expect(body.months[1]).toMatchObject({ month: '2026-05', total_audience: 0, daily: [] });
     });
   });
 

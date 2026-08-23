@@ -2,8 +2,14 @@ import { CalendarClock } from 'lucide-react';
 import { useMemo } from 'react';
 
 import { DAY_LABELS_SHORT } from '../../lib/affluence-grid';
-import { PEAK_HOURS_LEAD, gridIsAllEmpty, heatmapHours } from '../../lib/peak-hours';
-import { intensityLevel, quantileThresholds } from '../../lib/performance-derive';
+import {
+  PEAK_HOURS_LEAD,
+  gridHasNoMeasure,
+  heatmapHours,
+  measuredLevel,
+  measuredScale,
+} from '../../lib/peak-hours';
+import { formatDecimalFr } from '../../lib/performance-derive';
 
 import { HEATMAP_CLOSED_CLASS, HEATMAP_LEVEL_CLASSES } from './chart-colors';
 import { SectionHeading } from './SectionHeading';
@@ -18,51 +24,50 @@ const closedHour = (
 };
 
 interface PeakHoursHeatmapProps {
-  /** 7×24 PERIOD grid (grid[0]=Monday) — periodWeekGrid over the active filter window. */
-  grid: number[][];
+  /** 7×24 MEASURED period grid (grid[0]=Monday); null = no measure on the period → hachure. */
+  grid: (number | null)[][];
   openingHour: number | null;
   closingHour: number | null;
 }
 
 /**
- * S02 — "Vos peak hours": weekday × hour heatmap over THE SELECTED PERIOD (PERF-QA2, ruling
- * 2026-08-20 — R7's rolling typical week is superseded; the grid arrives already period-scoped
- * from periodWeekGrid, and this component stays a pure renderer).
+ * S02 — "Vos peak hours": weekday × hour heatmap of the audience MEASURED over the selected
+ * period (PERF-QA2 amendment, US-P.5). The grid arrives already period-scoped and measure-only
+ * from periodWeekGrid; this component stays a pure renderer.
  * Hour columns come from the venue's REAL hours (8h–21h only as the unknown-hours fallback). A
- * cell is HACHURÉE when the hour is closed OR when it has no data (level 0 — the grid
- * zero-fills, so 0 reads as no-data; accepted approximation per the Mejri ruling). The quantile
- * ramp applies only to cells with data. An all-empty grid gets the explanatory state instead of
- * a mute full-hachure grid (her Aug-4 re-open of the Jul-8 item 1) — a period with no audience
- * day now lands there BY CONSTRUCTION.
+ * cell is HACHURÉE when the hour is closed OR when the period holds no measure for it — never a
+ * coloured 0, and never a colour derived from an estimate. The ramp is relative to the PERIOD's
+ * own min/max, and the tooltip shows the exact Ai_jh. A period with no measure at all gets the
+ * explanatory state instead of a mute wall of hachures.
  */
 export function PeakHoursHeatmap({ grid, openingHour, closingHour }: PeakHoursHeatmapProps) {
   const hours = useMemo(() => heatmapHours(openingHour, closingHour), [openingHour, closingHour]);
-  const allEmpty = useMemo(() => gridIsAllEmpty(grid), [grid]);
-  const thresholds = useMemo(() => {
-    const visible: number[] = [];
+  const noMeasure = useMemo(() => gridHasNoMeasure(grid), [grid]);
+  const scale = useMemo(() => {
+    const visible: (number | null)[] = [];
     for (let day = 0; day < 7; day += 1) {
       for (const hour of hours) {
         if (!closedHour(hour, openingHour, closingHour)) {
-          visible.push(grid[day]?.[hour] ?? 0);
+          visible.push(grid[day]?.[hour] ?? null);
         }
       }
     }
-    return quantileThresholds(visible);
+    return measuredScale(visible);
   }, [grid, hours, openingHour, closingHour]);
 
   return (
     <section className="mb-[76px]">
       <SectionHeading num="Section 02" title="Vos peak hours" lead={PEAK_HOURS_LEAD} />
 
-      {allEmpty ? (
+      {noMeasure ? (
         <div className="mt-8 rounded-xl border-2 border-dashed border-perf-line bg-white px-6 py-12 text-center">
           <CalendarClock className="mx-auto h-8 w-8 text-perf-mist" aria-hidden />
           <p className="mt-3 font-medium text-perf-ink">
-            Pas encore de données d'affluence sur cette période
+            Pas encore de mesure d'audience sur cette période
           </p>
           <p className="mt-1 text-sm text-perf-grey">
-            La carte des peak hours apparaîtra ici dès que votre établissement aura des mesures
-            d'affluence sur la période sélectionnée.
+            La carte des peak hours apparaîtra ici dès que votre capteur d'audience aura mesuré des
+            passages sur la période sélectionnée.
           </p>
         </div>
       ) : (
@@ -86,14 +91,18 @@ export function PeakHoursHeatmap({ grid, openingHour, closingHour }: PeakHoursHe
                 </div>
                 {hours.map((hour) => {
                   const closed = closedHour(hour, openingHour, closingHour);
-                  const value = grid[day]?.[hour] ?? 0;
-                  const level = intensityLevel(value, thresholds);
+                  const value = grid[day]?.[hour] ?? null;
+                  const level = measuredLevel(value, scale);
                   const hachure = closed || level === 0;
                   return (
                     <div
                       key={`${label}-${hour}`}
                       title={
-                        closed ? 'Fermé' : `${label} ${hour}h — ${value.toLocaleString('fr-FR')}`
+                        closed
+                          ? 'Fermé'
+                          : value === null
+                            ? `${label} ${hour}h — aucune mesure`
+                            : `${label} ${hour}h — ${formatDecimalFr(value)} pers.`
                       }
                       className={`h-[26px] min-w-0 flex-1 rounded ${hachure ? HEATMAP_CLOSED_CLASS : HEATMAP_LEVEL_CLASSES[level - 1]}`}
                     />

@@ -13,11 +13,9 @@ import {
   hasHostData,
   impressionsOfMonth,
   impressionsWithin,
-  intensityLevel,
   lineInPeriod,
   linesEndingInMonth,
   openHours,
-  quantileThresholds,
   venueReadsState,
   zeroFillDays,
 } from './performance-derive';
@@ -222,27 +220,6 @@ describe('demographicBreakdown (S04 — four real bands only)', () => {
       '60 ans et plus',
     ]);
     expect(breakdown.ages[0]?.count).toBe(7276);
-  });
-});
-
-describe('heatmap quantile bucketing (S02)', () => {
-  it('buckets values into 5 levels over the positive values; 0 = NO DATA (level 0, hachure)', () => {
-    const values = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
-    const thresholds = quantileThresholds(values);
-    expect(intensityLevel(0, thresholds)).toBe(0);
-    expect(intensityLevel(10, thresholds)).toBe(1);
-    expect(intensityLevel(35, thresholds)).toBe(2);
-    expect(intensityLevel(55, thresholds)).toBe(3);
-    expect(intensityLevel(75, thresholds)).toBe(4);
-    expect(intensityLevel(100, thresholds)).toBe(5);
-  });
-  it('all-zero grid → every cell is no-data (hachure), never the ramp floor', () => {
-    const thresholds = quantileThresholds([0, 0, 0]);
-    expect(intensityLevel(0, thresholds)).toBe(0);
-  });
-  it('a positive cell with a degenerate distribution still ramps at the floor', () => {
-    const thresholds = quantileThresholds([0, 0, 0]);
-    expect(intensityLevel(5, thresholds)).toBe(1);
   });
 });
 

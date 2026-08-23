@@ -15,6 +15,7 @@ import {
 } from '../../db/schema.js';
 import { getDispatchConfig } from '../dispatch/config.js';
 import { displayImpressionsSettled } from '../impressions-display.js';
+import { measuredDays, measuredTotal } from '../monthly-audience.js';
 import { computeSps } from '../sps-score.js';
 
 import {
@@ -22,6 +23,7 @@ import {
   type DailyImpressionsPoint,
   type DateRange,
   type DemographicBreakdown,
+  type MeasuredHourlyPoint,
   type ReportEarningsLine,
   type VenueRatios,
   audienceKpis,
@@ -37,11 +39,11 @@ import {
   formatTndFr,
   hasCastData,
   hasHostData,
-  intensityLevel,
   lineInPeriod,
+  measuredLevel,
+  measuredScale,
   openHoursPerDay,
   periodWeekGrid,
-  quantileThresholds,
   zeroFillDays,
 } from './derive.js';
 import type { SpsBlock, UpcomingEvents } from './pistes.js';
@@ -117,9 +119,12 @@ const numOrNull = (value: string | null): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-/** 7×14 hachure/ramp levels — quantiles over the OPEN visible cells, exactly like the page. */
+/**
+ * 7×14 hachure/ramp levels over the MEASURED period grid, exactly like the page (US-P.5): level 0
+ * is a closed hour OR a cell with no measure; 1–5 ramp linearly over the period's own min/max.
+ */
 export function heatmapLevels(
-  grid: number[][],
+  grid: (number | null)[][],
   openingHour: number | null,
   closingHour: number | null,
 ): number[][] {
@@ -127,16 +132,16 @@ export function heatmapLevels(
     if (openingHour === null || closingHour === null) return false;
     return hour < openingHour || hour >= closingHour;
   };
-  const visible: number[] = [];
+  const visible: (number | null)[] = [];
   for (let day = 0; day < 7; day += 1) {
     for (const hour of HEATMAP_HOURS) {
-      if (!closed(hour)) visible.push(grid[day]?.[hour] ?? 0);
+      if (!closed(hour)) visible.push(grid[day]?.[hour] ?? null);
     }
   }
-  const thresholds = quantileThresholds(visible);
+  const scale = measuredScale(visible);
   return Array.from({ length: 7 }, (_, day) =>
     HEATMAP_HOURS.map((hour) =>
-      closed(hour) ? 0 : intensityLevel(grid[day]?.[hour] ?? 0, thresholds),
+      closed(hour) ? 0 : measuredLevel(grid[day]?.[hour] ?? null, scale),
     ),
   );
 }
@@ -207,8 +212,11 @@ export async function assembleReportData(
     .limit(1);
   if (!venue) return null;
 
-  // 2) monthly stats (month desc) — mirror of GET /:id/monthly-stats.
-  const months = await db
+  // 2) monthly stats (month desc) — mirror of GET /:id/monthly-stats, MEASURED DAYS ONLY.
+  // AMENDMENT 2026-08-20 (US-P.0): Pers_atteintes is a sensor measure — an estimated day never
+  // feeds an audience figure. The stored row keeps both kinds; this read drops the estimates so
+  // every KPI below (Ai, moyennes, Pic) is measured by construction.
+  const monthRows = await db
     .select({
       month: screenhostMonthlyStats.month,
       totalAudience: screenhostMonthlyStats.totalAudience,
@@ -217,6 +225,11 @@ export async function assembleReportData(
     .from(screenhostMonthlyStats)
     .where(eq(screenhostMonthlyStats.screenhostId, venueId))
     .orderBy(desc(screenhostMonthlyStats.month));
+  const months = monthRows.map((row) => ({
+    month: row.month,
+    totalAudience: measuredTotal(row.daily),
+    daily: measuredDays(row.daily),
+  }));
 
   // 3) affluence slots → zero-filled 7×24 grid — mirror of GET /:id/affluence.
   const slots = await db
@@ -297,6 +310,14 @@ export async function assembleReportData(
   const castFlag = hasCastData(lines, rangeDays);
 
   const periodAudience = dailyAudienceWithin(months, range);
+
+  // S02's ONLY legitimate source (US-P.5): MEASURED Ai_jh — persons the audience sensor counted in
+  // a given (calendar day, hour). NOTHING WRITES SUCH ROWS TODAY: the hub pushes an ESTIMATE grid
+  // (screenhost_affluence, weekday × hour) and MEASURED per-DAY totals (screenhost_monthly_stats),
+  // neither of which is a measured day×hour series. Per the amendment an estimate may never colour
+  // a cell, so the list stays empty and every cell is hachured until a sensor ingest exists —
+  // THE one seam to wire when it does.
+  const measuredHourly: MeasuredHourlyPoint[] = [];
   const kpis = audienceKpis(periodAudience, openHoursPerDay(venue.openingHour, venue.closingHour));
 
   const ratios = ratiosOrNull(venue);
@@ -382,11 +403,8 @@ export async function assembleReportData(
     hostHasData: hostFlag,
     castHasData: castFlag,
     kpis,
-    // PERF-QA2 — S02 is PERIOD-scoped: the typical-week grid supplies the hourly shape, the
-    // period's own days supply the amplitude (see periodWeekGrid). A window with no audience day
-    // yields an all-zero grid → the document's empty S02, exactly like the page's empty state.
     heatLevels: heatmapLevels(
-      periodWeekGrid(grid, periodAudience, range),
+      periodWeekGrid(measuredHourly, range),
       venue.openingHour,
       venue.closingHour,
     ),

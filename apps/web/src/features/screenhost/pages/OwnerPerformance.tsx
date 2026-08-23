@@ -39,7 +39,7 @@ import { useScreenhostAffluence } from '../hooks/useScreenhostAffluence';
 import { useScreenhostsMine } from '../hooks/useScreenhostsMine';
 import { lineImpressions, sumLineImpressions } from '../lib/impressions-display';
 import { downloadMonthlyReport } from '../lib/monthly-report';
-import { periodWeekGrid } from '../lib/peak-hours';
+import { type MeasuredHourlyPoint, periodWeekGrid } from '../lib/peak-hours';
 import {
   audienceKpis,
   campaignStatut,
@@ -81,6 +81,9 @@ import {
 } from '../lib/period-report';
 
 const log = logger.child({ module: 'OwnerPerformance' });
+
+/** See periodWeekGrid's call site: no measured day×hour audience source exists yet. */
+const MEASURED_HOURLY: MeasuredHourlyPoint[] = [];
 
 const typeLabelFr = (raw: string): string =>
   raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : '—';
@@ -201,14 +204,13 @@ export default function OwnerPerformance() {
     [venueLines, range],
   );
   const periodAudience = useMemo(() => dailyAudienceWithin(months, range), [months, range]);
-  // PERF-QA2 — S02 derives from the SELECTED PERIOD (R7 superseded 2026-08-20): the typical-week
-  // grid gives the hourly shape, the period's own days give the amplitude. An empty window yields
-  // an all-zero grid, so the heatmap's explanatory empty state fires instead of colouring a
-  // period that has no data.
-  const periodGrid = useMemo(
-    () => periodWeekGrid(affluenceGrid, periodAudience, range),
-    [affluenceGrid, periodAudience, range],
-  );
+  // PERF-QA2 amendment (US-P.5) — S02 colours from MEASURED Ai_jh over the selected period, and
+  // ONLY from measures: « toute case sans aucune mesure sur la période est affichée hachurée ».
+  // NOTHING SERVES MEASURED HOURLY AUDIENCE TODAY — the api has an ESTIMATE grid (weekday × hour)
+  // and MEASURED per-DAY totals, neither of which is a measured day×hour series — and an estimate
+  // may never colour a cell, so the source stays empty and the section shows its explanatory
+  // state until a sensor ingest ships. THE one seam to wire when it does.
+  const periodGrid = useMemo(() => periodWeekGrid(MEASURED_HOURLY, range), [range]);
   // R9 — real venue hours; 14 h is ONLY the null/degenerate fallback and is flagged as such.
   const hoursInfo = useMemo(
     () => openHours(profile.data?.opening_hour ?? null, profile.data?.closing_hour ?? null),

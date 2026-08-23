@@ -209,10 +209,13 @@ describe('assembleReportData (real Postgres)', () => {
     expect(data?.campaignsBlock.cumulativeImpressions).toBe(800);
     expect(data?.campaignsBlock.top3).toEqual(['Ooredoo · Forfait Data']);
 
-    // S02 — open-hour cells with data ramp; closed hours (before 8h) stay 0 (hachure).
+    // S02 — PERF-QA2 amendment (US-P.5): the grid colours from MEASURED Ai_jh only, and no
+    // measured day×hour source exists yet (the affluence grid is an ESTIMATE, monthly_stats is
+    // per-DAY). So EVERY cell is hachured — the ruled behaviour, pinned so that wiring a sensor
+    // ingest later is a visible change rather than a silent one.
     const levels = data?.heatLevels ?? [];
-    expect(levels[0]?.[12 - 8]).toBeGreaterThan(0); // Monday 12h has data
-    expect(levels[2]?.[12 - 8]).toBe(0); // Wednesday 12h has none → hachure
+    expect(levels).toHaveLength(7);
+    expect(levels.every((row) => row.every((level) => level === 0))).toBe(true);
   });
 });
 
