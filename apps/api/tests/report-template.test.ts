@@ -47,6 +47,8 @@ const baseData = (over: Partial<ReportData> = {}): ReportData => ({
   castHasData: false,
   kpis: { global: 0, perDay: null, perHour: null, peak: null },
   heatLevels: Array.from({ length: 7 }, () => Array.from({ length: 14 }, () => 0)),
+  heatKinds: Array.from({ length: 7 }, () => Array.from({ length: 14 }, () => 'none' as const)),
+  heatEmpty: false,
   days: [],
   breakdown: null,
   revenue: { totalLabel: '0', count: 0, rows: [] },
@@ -71,6 +73,16 @@ const fullData = (over: Partial<ReportData> = {}): ReportData =>
     kpis: { global: 21400, perDay: 764, perHour: 76, peak: { value: 1180, date: '2026-06-14' } },
     heatLevels: Array.from({ length: 7 }, (_, day) =>
       Array.from({ length: 14 }, (_, h) => (day === 6 ? 0 : ((day + h) % 5) + 1)),
+    ),
+    // AFF1 — Monday 8h–10h are the admin's backup (estimation); every other open cell measured.
+    heatKinds: Array.from({ length: 7 }, (_, day) =>
+      Array.from({ length: 14 }, (_, h) =>
+        day === 6
+          ? ('none' as const)
+          : day === 0 && h < 3
+            ? ('backup' as const)
+            : ('measured' as const),
+      ),
     ),
     days: [
       { date: '2026-06-01', impressions: 4200 },
@@ -523,20 +535,52 @@ describe('S03 labeled axes (R3 — Mejri item 4, OVERRIDES the axis-less mockup)
   });
 });
 
-// PERF-QA1 R7 — the S02 lead: HONEST typical-week semantics. The exact-literal pin below is one
-// half of the cross-package byte-equality contract — apps/web pins the SAME literal over its
-// PEAK_HOURS_LEAD twin (lib/peak-hours.ts), so neither side can drift without its own test
-// failing. Do not reword one without the other.
-describe('S02 lead (PERF-QA2 amendment — the MEASURE, over the period)', () => {
+// PERF-QA1 R7 / AFF1 — the S02 lead: HONEST typical-week semantics WITH provenance. The
+// exact-literal pin below is one half of the cross-package byte-equality contract — apps/web pins
+// the SAME literal over its PEAK_HOURS_LEAD twin (lib/peak-hours.ts), so neither side can drift
+// without its own test failing. Do not reword one without the other.
+describe('S02 lead (AFF1 — the semaine type, with provenance)', () => {
   it('pins the exact wording (byte-equality contract with apps/web)', () => {
     expect(PEAK_HOURS_LEAD).toBe(
-      "Audience mesurée par votre capteur, croisant les jours de la semaine et les heures d'ouverture sur la période analysée. Plus la couleur est vive, plus l'audience mesurée est élevée. Les zones rayées correspondent à vos heures de fermeture ou aux créneaux sans aucune mesure sur la période.",
+      "Audience moyenne de votre semaine type (moyenne glissante sur les 4 dernières semaines), croisant les jours de la semaine et les heures d'ouverture. Plus la couleur est vive, plus l'audience est élevée. Les cases pleines sont mesurées par votre capteur, les cases en pointillé sont des estimations. Les zones rayées correspondent à vos heures de fermeture ou aux créneaux sans aucune donnée.",
     );
   });
 
-  it('the rendered document names the measure and drops the semaine-type claim', () => {
+  it('the rendered document names the semaine type and BOTH provenances, never the period', () => {
     const html = renderReportHtml(baseData());
     expect(html).toContain(PEAK_HOURS_LEAD);
-    expect(html).not.toContain('semaine type');
+    expect(html).toContain('semaine type');
+    // The withdrawn PERF-QA2 sentence is gone (« période analysée » itself survives in S01's copy).
+    expect(html).not.toContain('sans aucune mesure sur la période');
+  });
+});
+
+// AFF1 — the PDF S02 mirrors the page: backup cells keep their ramp level and carry the
+// estimation treatment (`hest`), the legend names the three states, and the explanatory empty
+// state replaces the grid ONLY when heatEmpty (no measured, no backup, no data).
+describe('S02 provenance (AFF1 — same helper, same provenance as the page)', () => {
+  it('backup cells carry hest ON TOP of their level class; measured cells do not', () => {
+    const html = renderReportHtml(fullData());
+    expect(count(html, /class="heat-cell h[0-4] hest"/g)).toBe(3); // Monday 8h, 9h, 10h
+    expect(count(html, /class="heat-cell h[0-4]"/g)).toBe(6 * 14 - 3);
+    expect(count(html, /class="heat-cell hclosed"/g)).toBe(14);
+  });
+
+  it('the legend names Mesuré (capteur) / Estimation / Fermé / aucune donnée', () => {
+    const html = renderReportHtml(fullData());
+    expect(html).toContain('Mesuré (capteur)');
+    expect(html).toContain('Estimation');
+    expect(html).toContain('Fermé / aucune donnée');
+    expect(html).toContain('class="swatch h3 hest"');
+  });
+
+  it('heatEmpty renders the explanatory state INSTEAD of the grid', () => {
+    const html = renderReportHtml(baseData({ heatEmpty: true }));
+    expect(html).toContain("Pas encore de mesure d'audience");
+    expect(html).not.toContain('class="heat-grid"');
+    // The base (not-empty) document keeps its hachured grid and no empty copy.
+    const notEmpty = renderReportHtml(baseData());
+    expect(notEmpty).toContain('class="heat-grid"');
+    expect(notEmpty).not.toContain("Pas encore de mesure d'audience");
   });
 });
