@@ -199,6 +199,73 @@ describe('C1: POST /api/internal/affluence', () => {
     expect(rows[0]!.estimatedImpressions).toBe(250);
   });
 
+  // AFF1 — provenance. The hub sends source: 'measured' | 'backup' on every slot (HUB-AFF1); it is
+  // stored beside the value and overwritten latest-wins like the value itself. Display-only: no
+  // pricing path reads it (grep-proof in the lane notes).
+  const pushOne = (locationId: string, slot: { estimated_impressions: number; source?: string }) =>
+    app!.inject({
+      method: 'POST',
+      url: '/api/internal/affluence',
+      headers: auth(),
+      payload: { slots: [{ location_id: locationId, day_of_week: 2, hour: 10, ...slot }] },
+    });
+
+  it('AFF1: stores the slot provenance and overwrites it latest-wins on re-push', async () => {
+    const [host] = await db
+      .insert(screenhosts)
+      .values({ name: 'Place A' })
+      .returning({ id: screenhosts.id });
+
+    expect(
+      (await pushOne(host!.id, { estimated_impressions: 0, source: 'measured' })).statusCode,
+    ).toBe(200);
+    let rows = await db.select().from(screenhostAffluence);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.source).toBe('measured');
+
+    // The hub's merge flipped this slot to the manual backup → the stored provenance follows.
+    expect(
+      (await pushOne(host!.id, { estimated_impressions: 40, source: 'backup' })).statusCode,
+    ).toBe(200);
+    rows = await db.select().from(screenhostAffluence);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.source).toBe('backup');
+    expect(rows[0]!.estimatedImpressions).toBe(40);
+  });
+
+  it('AFF1: an absent source stores NULL (older hub stays compatible) — on first push and on re-push', async () => {
+    const [host] = await db
+      .insert(screenhosts)
+      .values({ name: 'Place A' })
+      .returning({ id: screenhosts.id });
+
+    expect((await pushOne(host!.id, { estimated_impressions: 12 })).statusCode).toBe(200);
+    let rows = await db.select().from(screenhostAffluence);
+    expect(rows[0]!.source).toBeNull();
+
+    // A provenance-less re-push clears a previously known provenance: NULL = unknown, never stale.
+    expect(
+      (await pushOne(host!.id, { estimated_impressions: 12, source: 'measured' })).statusCode,
+    ).toBe(200);
+    expect((await pushOne(host!.id, { estimated_impressions: 12 })).statusCode).toBe(200);
+    rows = await db.select().from(screenhostAffluence);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.source).toBeNull();
+  });
+
+  it('AFF1: 400 on an invalid source (like any other field)', async () => {
+    const [host] = await db
+      .insert(screenhosts)
+      .values({ name: 'Place A' })
+      .returning({ id: screenhosts.id });
+    const res = await pushOne(host!.id, { estimated_impressions: 5, source: 'sensor' });
+    expect(res.statusCode).toBe(400);
+    expect(
+      res.json<{ fields: { field: string }[] }>().fields.some((f) => f.field === 'slots.0.source'),
+    ).toBe(true);
+    expect(await db.select().from(screenhostAffluence)).toHaveLength(0);
+  });
+
   it('400 on a bad slot (hour out of range)', async () => {
     const res = await app!.inject({
       method: 'POST',

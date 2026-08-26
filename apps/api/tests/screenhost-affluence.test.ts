@@ -19,7 +19,13 @@ import { resetAuthTables } from './helpers/db-test-setup.js';
 // the venue audience pattern (weekday × hour); this exercises the first READER of the write-only
 // screenhost_affluence table, owner-scoped like the WiFi routes.
 type GetSessionResult = Awaited<ReturnType<typeof auth.api.getSession>>;
-type AffluenceResponse = { grid: number[][]; has_data: boolean };
+type AffluenceSource = 'measured' | 'backup' | null;
+type AffluenceResponse = {
+  grid: number[][];
+  has_data: boolean;
+  sources: AffluenceSource[][];
+  counts: { measured: number; backup: number };
+};
 
 const buildApp = () => Fastify({ logger: false });
 
@@ -57,7 +63,7 @@ const seedScreenhost = async (ownerId: string, name = 'Café Test'): Promise<str
 
 const seedAffluence = async (
   screenhostId: string,
-  slots: { day: number; hour: number; value: number }[],
+  slots: { day: number; hour: number; value: number; source?: AffluenceSource }[],
 ): Promise<void> => {
   if (slots.length === 0) return;
   await db.insert(screenhostAffluence).values(
@@ -66,6 +72,7 @@ const seedAffluence = async (
       dayOfWeek: s.day,
       hour: s.hour,
       estimatedImpressions: s.value,
+      source: s.source ?? null,
     })),
   );
 };
@@ -126,6 +133,45 @@ describe('screenhost affluence read (owner-scoped, real Postgres)', () => {
     expect(body.has_data).toBe(false);
     expect(body.grid).toHaveLength(7);
     expect(body.grid.flat().every((v) => v === 0)).toBe(true);
+  });
+
+  // AFF1 — provenance rides beside the grid: sources[day][hour] mirrors grid's Monday-first shape,
+  // counts are PURE provenance tallies (a measured 0 is still a measurement; a NULL-source row —
+  // pushed by a pre-AFF1 hub — is neither).
+  it('AFF1: returns sources (7×24, Monday-first) + counts, a measured 0 counting as measured', async () => {
+    const me = await seedUser();
+    const sh = await seedScreenhost(me);
+    await seedAffluence(sh, [
+      { day: 1, hour: 9, value: 100, source: 'measured' },
+      { day: 1, hour: 10, value: 0, source: 'measured' }, // measured zero
+      { day: 3, hour: 18, value: 250, source: 'backup' },
+      { day: 5, hour: 8, value: 12 }, // pre-AFF1 row: unknown provenance
+    ]);
+    mockSession(me);
+
+    const res = await get(sh);
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as AffluenceResponse;
+    expect(body.sources).toHaveLength(7);
+    expect(body.sources.every((row) => row.length === 24)).toBe(true);
+    expect(body.sources[0]?.[9]).toBe('measured');
+    expect(body.sources[0]?.[10]).toBe('measured');
+    expect(body.sources[2]?.[18]).toBe('backup');
+    expect(body.sources[4]?.[8]).toBeNull(); // value present, provenance unknown
+    expect(body.sources[1]?.[0]).toBeNull(); // no row at all
+    expect(body.grid[4]?.[8]).toBe(12); // the value itself is unaffected by unknown provenance
+    expect(body.counts).toEqual({ measured: 2, backup: 1 });
+  });
+
+  it('AFF1: an empty venue returns all-null sources + zero counts', async () => {
+    const me = await seedUser();
+    const sh = await seedScreenhost(me);
+    mockSession(me);
+
+    const body = (await get(sh)).json() as AffluenceResponse;
+    expect(body.sources).toHaveLength(7);
+    expect(body.sources.flat().every((v) => v === null)).toBe(true);
+    expect(body.counts).toEqual({ measured: 0, backup: 0 });
   });
 
   it('returns 404 for another owner’s screenhost (owner-scope)', async () => {

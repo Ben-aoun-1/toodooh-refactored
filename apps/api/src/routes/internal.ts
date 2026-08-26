@@ -56,6 +56,9 @@ const affluenceBodySchema = z.object({
         day_of_week: z.number().int().min(1).max(7),
         hour: z.number().int().min(0).max(23),
         estimated_impressions: z.number().int().min(0),
+        // AFF1 provenance (HUB-AFF1 sends it on every slot). Optional so a pre-AFF1 hub stays
+        // compatible: absent → NULL (unknown), never a default guess. Invalid → 400 like any field.
+        source: z.enum(['measured', 'backup']).optional(),
       }),
     )
     .max(168 * 64), // generous batch ceiling (a full week is 168 slots/location)
@@ -249,8 +252,10 @@ export const internalRoutes: FastifyPluginAsync<{ syncKey?: string }> = async (a
   });
 
   // ── C1: POST /api/internal/affluence ────────────────────────────────────────
-  // Flat batch of {location_id, day_of_week, hour, estimated_impressions}. Latest-value-wins upsert
-  // on (screenhost, day, hour). Unknown location_ids are SKIPPED and reported (never fail the batch).
+  // Flat batch of {location_id, day_of_week, hour, estimated_impressions, source?}. Latest-value-wins
+  // upsert on (screenhost, day, hour) — the value AND its provenance (a provenance-less re-push
+  // resets source to NULL: unknown, never stale). Unknown location_ids are SKIPPED and reported
+  // (never fail the batch).
   app.post('/api/internal/affluence', guard, async (request, reply) => {
     const parsed = affluenceBodySchema.safeParse(request.body);
     if (!parsed.success) {
@@ -287,6 +292,7 @@ export const internalRoutes: FastifyPluginAsync<{ syncKey?: string }> = async (a
               dayOfWeek: slot.day_of_week,
               hour: slot.hour,
               estimatedImpressions: slot.estimated_impressions,
+              source: slot.source ?? null,
             })
             .onConflictDoUpdate({
               target: [
@@ -294,7 +300,11 @@ export const internalRoutes: FastifyPluginAsync<{ syncKey?: string }> = async (a
                 screenhostAffluence.dayOfWeek,
                 screenhostAffluence.hour,
               ],
-              set: { estimatedImpressions: slot.estimated_impressions, updatedAt: new Date() },
+              set: {
+                estimatedImpressions: slot.estimated_impressions,
+                source: slot.source ?? null,
+                updatedAt: new Date(),
+              },
             });
           upserted += 1;
         }

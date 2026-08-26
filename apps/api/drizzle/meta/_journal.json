@@ -449,6 +449,13 @@
       "when": 1785580868195,
       "tag": "0063_screenhost_versements",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1787754568716,
+      "tag": "0064_affluence_source",
+      "breakpoints": true
     }
   ]
 }

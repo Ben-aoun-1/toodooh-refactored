@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { db } from '../db/client.js';
 import {
+  affluenceSource,
   businessSectors,
   campaignDispatchAllocation,
   campaignDispatchPlan,
@@ -47,6 +48,9 @@ import { pushApprovedOwnerLocations } from '../lib/wedooh-sync.js';
 import { decryptWifiPassword, encryptWifiPassword } from '../lib/wifi-crypto.js';
 import { requireActiveAccount, requireAdmin, requireAuth } from '../middleware/require-auth.js';
 import { storage } from '../storage/s3-storage.js';
+
+/** AFF1 — a slot's provenance as the hub reports it (see schema affluenceSource). */
+type AffluenceSource = (typeof affluenceSource.enumValues)[number];
 
 // Owner- and admin-facing WiFi maintenance for screenhosts. A venue's WiFi can change after
 // signup (Kais 2026-06), so SSID + password are editable here by the owner (their own
@@ -643,6 +647,9 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
   // zero-filled 7×24 grid (grid[0]=Monday … grid[6]=Sunday; hour index 0–23, matching wedooh's
   // 1=Mon…7=Sun / 0–23 slots) + has_data, so the dashboard can show an empty state. Summaries
   // (peak day/hour, daily average, weekly total) are derived client-side from the grid.
+  // AFF1: `sources` mirrors the grid's shape with each slot's provenance ('measured' | 'backup' |
+  // null = no row or unknown provenance) and `counts` tallies provenance ONLY — a measured 0 is a
+  // measurement, a NULL-source row is neither. The client labels; this route never interprets.
   app.get('/api/screenhosts/:id/affluence', ownerGuard, async (request, reply) => {
     const parsedParams = idParamSchema.safeParse(request.params);
     if (!parsedParams.success) {
@@ -674,18 +681,29 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         dayOfWeek: screenhostAffluence.dayOfWeek,
         hour: screenhostAffluence.hour,
         estimatedImpressions: screenhostAffluence.estimatedImpressions,
+        source: screenhostAffluence.source,
       })
       .from(screenhostAffluence)
       .where(eq(screenhostAffluence.screenhostId, owned.id));
 
-    // Zero-filled 7×24 grid (Monday-first); day_of_week 1=Mon…7=Sun → row 0…6.
+    // Zero-filled 7×24 grid (Monday-first); day_of_week 1=Mon…7=Sun → row 0…6. `sources` is the
+    // same shape, null-filled.
     const grid: number[][] = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
+    const sources: (AffluenceSource | null)[][] = Array.from({ length: 7 }, () =>
+      Array.from({ length: 24 }, () => null),
+    );
+    const counts = { measured: 0, backup: 0 };
     for (const slot of slots) {
       const row = grid[slot.dayOfWeek - 1];
-      if (row && slot.hour >= 0 && slot.hour <= 23) row[slot.hour] = slot.estimatedImpressions;
+      const sourceRow = sources[slot.dayOfWeek - 1];
+      if (row && sourceRow && slot.hour >= 0 && slot.hour <= 23) {
+        row[slot.hour] = slot.estimatedImpressions;
+        sourceRow[slot.hour] = slot.source;
+        if (slot.source) counts[slot.source] += 1;
+      }
     }
 
-    return reply.status(200).send({ grid, has_data: slots.length > 0 });
+    return reply.status(200).send({ grid, has_data: slots.length > 0, sources, counts });
   });
 
   // GET /api/screenhosts/:id/profile — owner-scoped venue identity card (Lane F, the performances
