@@ -31,3 +31,11 @@ export const HEATMAP_LEVEL_CLASSES = [
 /** The mockups' exact striped ("hachuré") treatment of closed-hour cells. */
 export const HEATMAP_CLOSED_CLASS =
   'bg-[repeating-linear-gradient(-45deg,#F1F5F3,#F1F5F3_3px,#E4ECE7_3px,#E4ECE7_6px)]';
+
+/**
+ * AFF1 — the estimation treatment layered over a ramp level: lighter + a dashed outline, so an
+ * estimated cell keeps its intensity but never passes for a sensor reading. Paired with the
+ * « Estimation » legend swatch; the hachure stays reserved for closed / no-data cells.
+ */
+export const HEATMAP_ESTIMATION_CLASS =
+  'opacity-60 outline outline-1 outline-dashed -outline-offset-1 outline-perf-mist';

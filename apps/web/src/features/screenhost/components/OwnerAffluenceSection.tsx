@@ -17,6 +17,13 @@ import { useVenueReports } from '../hooks/usePerformanceReads';
 import { useScreenhostAffluence } from '../hooks/useScreenhostAffluence';
 import { useScreenhostsMine } from '../hooks/useScreenhostsMine';
 import { DAY_LABELS, DAY_LABELS_SHORT, formatHour, summarize } from '../lib/affluence-grid';
+import {
+  ESTIMATED_ONLY_NOTE,
+  PROVENANCE_LABELS,
+  affluenceAllEstimated,
+  dayProvenance,
+  provenanceGrid,
+} from '../lib/affluence-provenance';
 import { downloadMonthlyReport, reportSelectState } from '../lib/monthly-report';
 import { monthLabelFr } from '../lib/performance-period';
 import { ReportDownloadError, reportErrorMessageFr } from '../lib/period-report';
@@ -36,8 +43,8 @@ function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string
   );
 }
 
-// Owner-dashboard "Votre audience" section: the venue's typical-week affluence (weekday × hour
-// heatmap + summary). GREEN2 (ruled): ANY owner with 2+ venues gets the selector — fleet status
+// Owner-dashboard "Votre audience" section: the venue's typical-week affluence (summary + the 7
+// per-day totals, with AFF1 provenance). GREEN2 (ruled): ANY owner with 2+ venues gets the selector — fleet status
 // no longer gates it. Self-contained — reads the session + fetches its own data. Hidden entirely
 // when the owner has no venue.
 export function OwnerAffluenceSection() {
@@ -53,7 +60,18 @@ export function OwnerAffluenceSection() {
   const affluence = useScreenhostAffluence(selectedId);
   const grid = useMemo(() => affluence.data?.grid ?? [], [affluence.data]);
   const hasData = affluence.data?.has_data ?? false;
+  // AFF1 — summaries run over the MERGED values (that IS the ruling); provenance rides beside
+  // them: each day tile is « mesuré » only when all its data is, the note fires when not one slot
+  // is measured. The (value, source) rule lives in lib/affluence-provenance, never here.
   const summary = useMemo(() => summarize(grid), [grid]);
+  const dayKinds = useMemo(
+    () => provenanceGrid(grid, affluence.data?.sources ?? []).map(dayProvenance),
+    [grid, affluence.data],
+  );
+  const allEstimated = affluenceAllEstimated(
+    affluence.data?.counts ?? { measured: 0, backup: 0 },
+    hasData,
+  );
 
   // Monthly-report download (SEPARATE table from affluence — gated on selectedId only, never on
   // affluence has_data). PERF-QA1 R1 — the free <input type=month> guess is REPLACED by the
@@ -265,28 +283,63 @@ export function OwnerAffluenceSection() {
                     value={summary.weeklyTotal.toLocaleString('fr-FR')}
                   />
                 </div>
+                {allEstimated && (
+                  <p className="text-xs text-gray-500" role="note">
+                    {ESTIMATED_ONLY_NOTE}
+                  </p>
+                )}
                 <div>
                   <h3 className="mb-3 text-sm font-semibold text-gray-500">Affluence par jour</h3>
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
                     {DAY_LABELS_SHORT.map((label, day) => {
                       const total = summary.dayTotals[day] ?? 0;
                       const isPeak = day === summary.peakDayIndex && total > 0;
+                      const estimated = dayKinds[day] === 'backup';
                       return (
                         <div
                           key={label}
+                          data-provenance={dayKinds[day] ?? 'none'}
+                          title={
+                            estimated
+                              ? `${label} — ${PROVENANCE_LABELS.backup}`
+                              : dayKinds[day] === 'measured'
+                                ? `${label} — ${PROVENANCE_LABELS.measured}`
+                                : undefined
+                          }
                           className={`rounded-xl border p-3 text-center ${
+                            estimated ? 'border-dashed' : ''
+                          } ${
                             isPeak
                               ? 'border-brand-primary bg-brand-primary/10'
                               : 'border-gray-100 bg-gray-50/60'
                           }`}
                         >
                           <p className="text-xs font-medium text-gray-500">{label}</p>
-                          <p className="mt-1 text-lg font-bold tabular-nums text-brand-deep">
+                          <p
+                            className={`mt-1 text-lg font-bold tabular-nums text-brand-deep ${
+                              estimated ? 'opacity-70' : ''
+                            }`}
+                          >
                             {total.toLocaleString('fr-FR')}
                           </p>
+                          {estimated && (
+                            <p className="text-[10px] uppercase tracking-wide text-gray-400">
+                              {PROVENANCE_LABELS.backup}
+                            </p>
+                          )}
                         </div>
                       );
                     })}
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="h-3 w-3 rounded-[3px] border border-gray-300 bg-gray-50/60" />
+                      {PROVENANCE_LABELS.measured}
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="h-3 w-3 rounded-[3px] border border-dashed border-gray-400 bg-gray-50/60" />
+                      {PROVENANCE_LABELS.backup}
+                    </span>
                   </div>
                 </div>
               </div>

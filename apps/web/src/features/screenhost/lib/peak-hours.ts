@@ -1,6 +1,4 @@
-import { getDay, parseISO } from 'date-fns';
-
-import { type DateRange, inRange } from './performance-period';
+import { affluenceEmpty } from './affluence-provenance';
 
 /**
  * PERF-QA1 R7 — the peak-hours section's HONEST semantics, in one pure home (apps/web has no
@@ -11,12 +9,20 @@ import { type DateRange, inRange } from './performance-period';
  * BYTE-IDENTICAL twin of the api's PEAK_HOURS_LEAD (apps/api/src/lib/report/template.ts). Each
  * side pins the exact literal in its own test, so neither the page nor the PDF can be reworded
  * without the other — the two surfaces must never disagree on what this grid means. Do not
- * reword one without the other. The PERF-QA2 amendment (US-P.5) reworded it: the grid describes
- * MEASURED audience over THE PERIOD; page and PDF are RULE-identical, byte-identity across
- * different windows is not expected.
+ * reword one without the other.
+ *
+ * AFF1 (ruling 2026-08-26) — back to PERF-QA1 R7's semantics: the grid is the venue's TYPICAL
+ * WEEK (the hub's 4-week rolling merge), NOT period-scoped, shown WITH provenance (solid =
+ * measured by the sensor, dotted = estimation, hachure = closed or no data at all). The PERF-QA2
+ * « measured-only over the period » reading is superseded: no measured day×hour source exists,
+ * and the operator ruled the merged grid IS the truth as long as provenance is marked.
  */
 export const PEAK_HOURS_LEAD =
-  "Audience mesurée par votre capteur, croisant les jours de la semaine et les heures d'ouverture sur la période analysée. Plus la couleur est vive, plus l'audience mesurée est élevée. Les zones rayées correspondent à vos heures de fermeture ou aux créneaux sans aucune mesure sur la période.";
+  "Audience moyenne de votre semaine type (moyenne glissante sur les 4 dernières semaines), croisant les jours de la semaine et les heures d'ouverture. Plus la couleur est vive, plus l'audience est élevée. Les cases pleines sont mesurées par votre capteur, les cases en pointillé sont des estimations. Les zones rayées correspondent à vos heures de fermeture ou aux créneaux sans aucune donnée.";
+
+/** AFF1 amendment — the S02 empty-state title. S02 is the typical week, not a period, so the
+ * copy names no period; pinned here because the component itself is unpinnable. */
+export const PEAK_HOURS_EMPTY_TITLE = "Pas encore de mesure d'audience";
 
 /** The mockups' fallback window (8h–21h, 14 columns) — used ONLY when the hours are unknown. */
 export const FALLBACK_HEATMAP_HOURS: readonly number[] = Array.from(
@@ -37,65 +43,9 @@ export function heatmapHours(openingHour: number | null, closingHour: number | n
   return Array.from({ length: to - from }, (_, i) => from + i);
 }
 
-/**
- * PERF-QA2 (amendment 2026-08-20, US-P.5) — the S02 grid, built from MEASURED audience ONLY.
- *
- * WITHDRAWN RULE: the first cut of this lane spread each day's audience over the venue's
- * typical-week ESTIMATE profile. Mejri's « User Stories — Mes performances ScreenHost » makes
- * Pers_atteintes a sensor measure and US-P.5 explicit — « toute case sans aucune mesure sur la
- * période est affichée hachurée ». An estimate never colours a cell, so the estimate no longer
- * enters here AT ALL, and a cell with no measurement is `null` (hachure) rather than a 0 that
- * would read as « personne ».
- *
- * THE FORMULA (US-P.5): a filter of one week or less shows the RAW Ai_jh of that week; a longer
- * filter shows the MEAN over the covered weeks. Both collapse into ONE rule — the mean over the
- * occurrences of that (weekday, hour) which actually carry a measure — because a ≤ 1-week window
- * holds exactly one occurrence of each weekday. A week without a measurement contributes NOTHING:
- * counting it as 0 would invent a measurement of zero.
- *
- * The period scoping itself is unchanged from the first cut (ruling 2026-08-20: the page's
- * filters drive every section, S02 included); only the data source changed.
- */
-export interface MeasuredHourlyPoint {
-  /** YYYY-MM-DD — the Tunis calendar day of the measurement. */
-  date: string;
-  /** 0–23. */
-  hour: number;
-  /** Ai_jh — persons measured by the audience sensor during that hour. */
-  audience: number;
-}
-
-/** 7×24, Monday-first. `null` = NO measure on the period → hachure, never a coloured 0. */
-export function periodWeekGrid(
-  points: MeasuredHourlyPoint[],
-  range: DateRange,
-): (number | null)[][] {
-  const sums = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
-  const counts = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
-  for (const point of points) {
-    if (!inRange(point.date, range)) continue;
-    if (!Number.isInteger(point.hour) || point.hour < 0 || point.hour > 23) continue;
-    const parsed = parseISO(point.date);
-    if (Number.isNaN(parsed.getTime())) continue;
-    const day = (getDay(parsed) + 6) % 7; // date-fns: 0 = Sunday → Monday-first rows
-    const sumRow = sums[day];
-    const countRow = counts[day];
-    if (!sumRow || !countRow) continue;
-    sumRow[point.hour] = (sumRow[point.hour] ?? 0) + point.audience;
-    countRow[point.hour] = (countRow[point.hour] ?? 0) + 1;
-  }
-  return sums.map((row, day) =>
-    row.map((sum, hour) => {
-      const n = counts[day]?.[hour] ?? 0;
-      if (n === 0) return null; // no measure → hachure
-      if (n === 1) return sum; // ≤ 1 week: the RAW Ai_jh (the tooltip shows it exactly)
-      return Math.round((sum / n) * 10) / 10; // > 1 week: the mean over the measured weeks
-    }),
-  );
-}
-
-/** The period's own observed min/max over MEASURED cells — the colour scale's bounds. */
-export function measuredScale(cells: (number | null)[]): { min: number; max: number } | null {
+/** The grid's own observed min/max over cells that CARRY data (measured or estimated; null =
+ * no data) — the colour scale's bounds. */
+export function heatmapScale(cells: (number | null)[]): { min: number; max: number } | null {
   let min = Infinity;
   let max = -Infinity;
   for (const value of cells) {
@@ -107,11 +57,11 @@ export function measuredScale(cells: (number | null)[]): { min: number; max: num
 }
 
 /**
- * Level 0 = NO MEASURE → hachure. 1–5 = a linear ramp over the PERIOD's own min/max, so the
- * colour is relative to what this period observed and never to an absolute audience. A period
- * whose measures are all equal reads at the neutral middle instead of pretending to a peak.
+ * Level 0 = NO DATA → hachure. 1–5 = a linear ramp over the grid's own min/max, so the colour is
+ * relative to what this venue's week holds and never to an absolute audience. A grid whose
+ * values are all equal reads at the neutral middle instead of pretending to a peak.
  */
-export function measuredLevel(
+export function heatmapLevel(
   value: number | null,
   scale: { min: number; max: number } | null,
 ): 0 | 1 | 2 | 3 | 4 | 5 {
@@ -122,10 +72,13 @@ export function measuredLevel(
 }
 
 /**
- * No measured cell AT ALL on the period → the explanatory empty state, never a mute grid of
- * hachures the owner has to decode. (Web-only: the PDF renders its hachured grid under the same
- * lead, a document has no interactive state to fall back to.)
+ * AFF1 — the explanatory empty state ONLY when no measured, no backup AND no data (a
+ * NULL-source-only venue has data: it renders as estimation). Web-only: the PDF renders its
+ * hachured grid under the same lead, a document has no interactive state to fall back to.
  */
-export function gridHasNoMeasure(grid: (number | null)[][]): boolean {
-  return grid.every((row) => row.every((value) => value === null));
+export function peakHoursEmpty(input: {
+  has_data: boolean;
+  counts: { measured: number; backup: number };
+}): boolean {
+  return affluenceEmpty(input);
 }
