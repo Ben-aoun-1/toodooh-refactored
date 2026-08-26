@@ -1,3 +1,4 @@
+import { PROVENANCE_LABELS, type ProvenanceKind } from './affluence-provenance.js';
 import type { ReportData } from './assemble.js';
 import {
   type DailyImpressionsPoint,
@@ -63,7 +64,7 @@ const PLACEHOLDER_AGE_PCT = [32, 28, 14, 6];
 // (lib/peak-hours.ts), each side pinned by an exact-literal test. Page and PDF are
 // RULE-identical; byte-identical GRIDS across different windows are not expected.
 export const PEAK_HOURS_LEAD =
-  "Audience mesurée par votre capteur, croisant les jours de la semaine et les heures d'ouverture sur la période analysée. Plus la couleur est vive, plus l'audience mesurée est élevée. Les zones rayées correspondent à vos heures de fermeture ou aux créneaux sans aucune mesure sur la période.";
+  "Audience moyenne de votre semaine type (moyenne glissante sur les 4 dernières semaines), croisant les jours de la semaine et les heures d'ouverture. Plus la couleur est vive, plus l'audience est élevée. Les cases pleines sont mesurées par votre capteur, les cases en pointillé sont des estimations. Les zones rayées correspondent à vos heures de fermeture ou aux créneaux sans aucune donnée.";
 
 const esc = (value: string): string =>
   value.replace(
@@ -201,17 +202,29 @@ export function impressionsChartBlock(days: DailyImpressionsPoint[]): string {
       </div>`;
 }
 
-/** 7×14 heat cells — level 0 (closed hour OR no data) hachures; levels 1..5 map to h0..h4. */
-const heatmapHtml = (levels: number[][]): string => {
+/** AFF1 — the S02 empty state: byte-twin of the page's PEAK_HOURS_EMPTY_TITLE. */
+export const PEAK_HOURS_EMPTY_TITLE = "Pas encore de mesure d'audience";
+
+/**
+ * 7×14 heat cells — level 0 (closed hour OR no data) hachures; levels 1..5 map to h0..h4. AFF1:
+ * a backup (estimation) cell keeps its level class and gets `hest` on top (lighter + dashed
+ * outline) — same helper, same provenance as the page. `empty` swaps the grid for the
+ * explanatory state (no measured, no backup, no data).
+ */
+const heatmapHtml = (levels: number[][], kinds: ProvenanceKind[][], empty: boolean): string => {
+  if (empty) {
+    return `
+      <div class="heat-empty"><div class="t">${PEAK_HOURS_EMPTY_TITLE}</div><div class="s">La carte des peak hours apparaîtra ici dès que votre capteur d'audience aura mesuré des passages dans votre établissement.</div></div>`;
+  }
   const header =
     `<div class="heat-hlabel"></div>` +
     HOUR_LABELS.map((h) => `<div class="heat-hlabel">${h}</div>`).join('');
   const rows = DAY_LABELS.map((label, day) => {
     const cells = (levels[day] ?? Array.from({ length: 14 }, () => 0))
-      .map((level) =>
+      .map((level, col) =>
         level === 0
           ? `<div class="heat-cell hclosed"></div>`
-          : `<div class="heat-cell h${level - 1}"></div>`,
+          : `<div class="heat-cell h${level - 1}${kinds[day]?.[col] === 'backup' ? ' hest' : ''}"></div>`,
       )
       .join('');
     return `<div class="heat-dlabel">${label}</div>${cells}`;
@@ -222,6 +235,10 @@ const heatmapHtml = (levels: number[][]): string => {
         <span>Faible</span>
         <span class="swatch h1"></span><span class="swatch h2"></span><span class="swatch h3"></span><span class="swatch h4"></span>
         <span>Élevée</span>
+        <span class="sep"></span>
+        <span class="swatch h3"></span><span>${PROVENANCE_LABELS.measured}</span>
+        <span class="swatch h3 hest"></span><span>${PROVENANCE_LABELS.backup}</span>
+        <span class="swatch hclosed"></span><span>Fermé / aucune donnée</span>
       </div>`;
 };
 
@@ -320,7 +337,7 @@ export function renderReportHtml(
   const s02 = `
   <div class="section">
     ${secHead('Section 02', 'Vos peak hours', PEAK_HOURS_LEAD)}
-    <div class="panel heat">${heatmapHtml(data.heatLevels)}
+    <div class="panel heat">${heatmapHtml(data.heatLevels, data.heatKinds, data.heatEmpty)}
     </div>
   </div>`;
 
@@ -752,11 +769,21 @@ body{
     repeating-linear-gradient(45deg, rgba(157,185,168,0.14) 0 3px, transparent 3px 6px),
     rgba(255,255,255,0.015);
 }
+/* AFF1 — estimation treatment layered over a ramp level: lighter + a near-white dashed outline
+   (print-safe; a mist-toned outline vanished on the bright levels — measured on the P2 render). */
+.hest{ opacity:.6; outline:1.5px dashed rgba(242,247,244,0.9); outline-offset:-2px; }
 .heat-legend{
-  margin-top:16px; display:flex; align-items:center; gap:8px;
+  margin-top:16px; display:flex; align-items:center; gap:8px; flex-wrap:nowrap; white-space:nowrap;
   font-family:var(--mono); font-size:6.8pt; letter-spacing:.14em; text-transform:uppercase; color:var(--faint);
 }
-.heat-legend .swatch{ width:14px; height:11px; border-radius:2px; }
+.heat-legend .swatch{ width:14px; height:11px; border-radius:2px; flex:0 0 auto; }
+.heat-legend .sep{ width:1px; height:11px; background:var(--line); margin:0 4px; flex:0 0 auto; }
+.heat-empty{
+  min-height:112px; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  text-align:center; border:1px dashed var(--line); border-radius:8px; padding:12px 24px;
+}
+.heat-empty .t{ font-size:10pt; font-weight:600; color:var(--ink); }
+.heat-empty .s{ margin-top:4px; font-size:8pt; color:var(--faint); max-width:420px; }
 
 /* ============ CHART (Section 03) ============ */
 /* R3 — labeled axes (Mejri item 4, overrides the axis-less mockup). The former 62px chart

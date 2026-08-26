@@ -427,6 +427,15 @@ export type NewScreenhost = typeof screenhosts.$inferInsert;
 // POST /api/internal/affluence. The FK is to screenhosts.id — the SAME UUID wedooh holds (it
 // received it through the B2 transfer), so a 404 on an unknown id is correct integrity, not a
 // lookup gap. Latest-value-wins: the ingest upserts on the (screenhost, day, hour) tuple.
+//
+// AFF1 — provenance. The hub's grid is ONE merged weekday×hour truth (operator ruling
+// 2026-08-26): PAX readings first ('measured'), the admin's manual grid where the measure is 0
+// during opening hours ('backup'). `source` carries that per slot for DISPLAY ONLY — dispatch,
+// C_max, event pricing and settlement keep reading estimated_impressions and never this column.
+// NULL = unknown provenance (a row written before AFF1 or by a pre-AFF1 hub); no backfill — the
+// hub's next push rewrites every slot through the same upsert.
+export const affluenceSource = pgEnum('affluence_source', ['measured', 'backup']);
+
 export const screenhostAffluence = pgTable(
   'screenhost_affluence',
   {
@@ -437,6 +446,7 @@ export const screenhostAffluence = pgTable(
     dayOfWeek: integer('day_of_week').notNull(), // 1=Mon … 7=Sun (wedooh's convention)
     hour: integer('hour').notNull(), // 0–23
     estimatedImpressions: integer('estimated_impressions').notNull(),
+    source: affluenceSource('source'), // nullable: unknown provenance
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()

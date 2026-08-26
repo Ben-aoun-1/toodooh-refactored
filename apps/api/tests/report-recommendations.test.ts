@@ -357,6 +357,8 @@ const reportData = (over: Partial<ReportData> = {}): ReportData => ({
   hostHasData: true,
   castHasData: true,
   kpis: { global: 21400, perDay: 764, perHour: 76.4, peak: { value: 1180, date: '2026-06-14' } },
+  heatKinds: Array.from({ length: 7 }, () => Array.from({ length: 14 }, () => 'measured' as const)),
+  heatEmpty: false,
   // one hot cell (Ven idx4, 18h → hourIdx 10 = level 5), one warm, one weak, rest closed
   heatLevels: Array.from({ length: 7 }, (_, day) =>
     Array.from({ length: 14 }, (_, h) => {

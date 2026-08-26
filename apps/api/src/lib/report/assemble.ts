@@ -19,12 +19,17 @@ import { measuredDays, measuredTotal } from '../monthly-audience.js';
 import { computeSps } from '../sps-score.js';
 
 import {
+  type AffluenceSource,
+  type ProvenanceKind,
+  affluenceEmpty,
+  provenanceGrid,
+} from './affluence-provenance.js';
+import {
   type AudienceKpis,
   type CampaignStatut,
   type DailyImpressionsPoint,
   type DateRange,
   type DemographicBreakdown,
-  type MeasuredHourlyPoint,
   type ReportEarningsLine,
   type VenueRatios,
   audienceKpis,
@@ -42,10 +47,9 @@ import {
   hasCastData,
   hasHostData,
   lineInPeriod,
-  measuredLevel,
-  measuredScale,
+  heatmapLevel,
+  heatmapScale,
   openHoursPerDay,
-  periodWeekGrid,
   zeroFillDays,
 } from './derive.js';
 import type { SpsBlock, UpcomingEvents } from './pistes.js';
@@ -92,6 +96,11 @@ export interface ReportData {
   kpis: AudienceKpis;
   /** 7×14 levels for the 8h–21h grid; 0 = hachure (closed hour OR no data). */
   heatLevels: number[][];
+  /** AFF1 — 7×14 provenance per cell (measured / backup = estimation / none); closed hours read
+   * as none. The template layers the estimation treatment over the level from this. */
+  heatKinds: ProvenanceKind[][];
+  /** AFF1 — the explanatory empty state: no measured, no backup AND no data (the page's rule). */
+  heatEmpty: boolean;
   /** Zero-filled period days once castHasData; [] before the first CAST data. */
   days: DailyImpressionsPoint[];
   breakdown: DemographicBreakdown | null;
@@ -118,30 +127,52 @@ const numOrNull = (value: string | null): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-/**
- * 7×14 hachure/ramp levels over the MEASURED period grid, exactly like the page (US-P.5): level 0
- * is a closed hour OR a cell with no measure; 1–5 ramp linearly over the period's own min/max.
- */
-export function heatmapLevels(
-  grid: (number | null)[][],
-  openingHour: number | null,
-  closingHour: number | null,
-): number[][] {
-  const closed = (hour: number): boolean => {
+const closedAt =
+  (openingHour: number | null, closingHour: number | null) =>
+  (hour: number): boolean => {
     if (openingHour === null || closingHour === null) return false;
     return hour < openingHour || hour >= closingHour;
   };
+
+/**
+ * AFF1 — 7×14 hachure/ramp levels over the MERGED typical-week grid, exactly like the page:
+ * level 0 is a closed hour OR a cell with no data (kind none); 1–5 ramp linearly over the grid's
+ * own min/max across open cells that carry data — measured AND estimated share ONE scale, the
+ * provenance rides separately (heatmapKinds) as the estimation treatment.
+ */
+export function heatmapLevels(
+  grid: number[][],
+  sources: (AffluenceSource | null)[][],
+  openingHour: number | null,
+  closingHour: number | null,
+): number[][] {
+  const closed = closedAt(openingHour, closingHour);
+  const kinds = provenanceGrid(grid, sources);
+  const valueAt = (day: number, hour: number): number | null =>
+    kinds[day]?.[hour] === 'none' ? null : (grid[day]?.[hour] ?? null);
   const visible: (number | null)[] = [];
   for (let day = 0; day < 7; day += 1) {
     for (const hour of HEATMAP_HOURS) {
-      if (!closed(hour)) visible.push(grid[day]?.[hour] ?? null);
+      if (!closed(hour)) visible.push(valueAt(day, hour));
     }
   }
-  const scale = measuredScale(visible);
+  const scale = heatmapScale(visible);
   return Array.from({ length: 7 }, (_, day) =>
-    HEATMAP_HOURS.map((hour) =>
-      closed(hour) ? 0 : measuredLevel(grid[day]?.[hour] ?? null, scale),
-    ),
+    HEATMAP_HOURS.map((hour) => (closed(hour) ? 0 : heatmapLevel(valueAt(day, hour), scale))),
+  );
+}
+
+/** AFF1 — the 7×14 provenance beside heatmapLevels (closed hours read as none). */
+export function heatmapKinds(
+  grid: number[][],
+  sources: (AffluenceSource | null)[][],
+  openingHour: number | null,
+  closingHour: number | null,
+): ProvenanceKind[][] {
+  const closed = closedAt(openingHour, closingHour);
+  const kinds = provenanceGrid(grid, sources);
+  return Array.from({ length: 7 }, (_, day) =>
+    HEATMAP_HOURS.map((hour) => (closed(hour) ? 'none' : (kinds[day]?.[hour] ?? 'none'))),
   );
 }
 
@@ -230,20 +261,32 @@ export async function assembleReportData(
     daily: measuredDays(row.daily),
   }));
 
-  // 3) affluence slots → zero-filled 7×24 grid — mirror of GET /:id/affluence.
+  // 3) affluence slots → zero-filled 7×24 grid + AFF1 provenance — mirror of GET /:id/affluence
+  //    (sources null-filled, counts = pure provenance tallies, has_data = any row).
   const slots = await db
     .select({
       dayOfWeek: screenhostAffluence.dayOfWeek,
       hour: screenhostAffluence.hour,
       estimatedImpressions: screenhostAffluence.estimatedImpressions,
+      source: screenhostAffluence.source,
     })
     .from(screenhostAffluence)
     .where(eq(screenhostAffluence.screenhostId, venueId));
   const grid: number[][] = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
+  const sources: (AffluenceSource | null)[][] = Array.from({ length: 7 }, () =>
+    Array.from({ length: 24 }, () => null),
+  );
+  const counts = { measured: 0, backup: 0 };
   for (const slot of slots) {
     const row = grid[slot.dayOfWeek - 1];
-    if (row && slot.hour >= 0 && slot.hour <= 23) row[slot.hour] = slot.estimatedImpressions;
+    const sourceRow = sources[slot.dayOfWeek - 1];
+    if (row && sourceRow && slot.hour >= 0 && slot.hour <= 23) {
+      row[slot.hour] = slot.estimatedImpressions;
+      sourceRow[slot.hour] = slot.source;
+      if (slot.source) counts[slot.source] += 1;
+    }
   }
+  const affluenceHasData = slots.length > 0;
 
   // 4) delivered impressions per Tunis-local day in range — mirror of GET /:id/impressions-daily.
   const tunisDay = sql<string>`to_char(${proofOfPlay.receivedAt} at time zone 'Africa/Tunis', 'YYYY-MM-DD')`;
@@ -310,13 +353,9 @@ export async function assembleReportData(
 
   const periodAudience = dailyAudienceWithin(months, range);
 
-  // S02's ONLY legitimate source (US-P.5): MEASURED Ai_jh — persons the audience sensor counted in
-  // a given (calendar day, hour). NOTHING WRITES SUCH ROWS TODAY: the hub pushes an ESTIMATE grid
-  // (screenhost_affluence, weekday × hour) and MEASURED per-DAY totals (screenhost_monthly_stats),
-  // neither of which is a measured day×hour series. Per the amendment an estimate may never colour
-  // a cell, so the list stays empty and every cell is hachured until a sensor ingest exists —
-  // THE one seam to wire when it does.
-  const measuredHourly: MeasuredHourlyPoint[] = [];
+  // S02 — AFF1 (ruling 2026-08-26): the MERGED typical-week grid WITH provenance, the page's rule
+  // applied api-side (the PERF-QA2 « measured-only » seam is superseded — no such source exists).
+  // NOT period-scoped: the report's range drives the other sections, S02 is the semaine type.
   const kpis = audienceKpis(periodAudience, openHoursPerDay(venue.openingHour, venue.closingHour));
 
   const ratios = ratiosOrNull(venue);
@@ -402,11 +441,9 @@ export async function assembleReportData(
     hostHasData: hostFlag,
     castHasData: castFlag,
     kpis,
-    heatLevels: heatmapLevels(
-      periodWeekGrid(measuredHourly, range),
-      venue.openingHour,
-      venue.closingHour,
-    ),
+    heatLevels: heatmapLevels(grid, sources, venue.openingHour, venue.closingHour),
+    heatKinds: heatmapKinds(grid, sources, venue.openingHour, venue.closingHour),
+    heatEmpty: affluenceEmpty({ has_data: affluenceHasData, counts }),
     days: castFlag ? zeroFillDays(rangeDays, range) : [],
     breakdown: ratios ? demographicBreakdown(ratios, kpis.global) : null,
     revenue: {

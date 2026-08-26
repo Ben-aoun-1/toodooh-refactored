@@ -15,7 +15,7 @@ import {
   screens,
   users,
 } from '../src/db/schema.js';
-import { assembleReportData, heatmapLevels } from '../src/lib/report/assemble.js';
+import { assembleReportData, heatmapKinds, heatmapLevels } from '../src/lib/report/assemble.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
 
@@ -83,8 +83,10 @@ describe('assembleReportData (real Postgres)', () => {
     expect(data?.breakdown).toBeNull();
     expect(data?.revenue.count).toBe(0);
     expect(data?.campaignsBlock.rows).toEqual([]);
-    // all-hachure heatmap: 7×14 zeros
+    // all-hachure heatmap: 7×14 zeros — and AFF1's explanatory empty state (no data at all).
     expect(data?.heatLevels.flat().every((lvl) => lvl === 0)).toBe(true);
+    expect(data?.heatKinds.flat().every((kind) => kind === 'none')).toBe(true);
+    expect(data?.heatEmpty).toBe(true);
   });
 
   it('FULL venue → flags true, period KPIs, zero-filled days, revenue + campaign rows', async () => {
@@ -116,8 +118,9 @@ describe('assembleReportData (real Postgres)', () => {
       peakHour: 13,
     });
     await db.insert(screenhostAffluence).values([
-      { screenhostId: venue, dayOfWeek: 1, hour: 12, estimatedImpressions: 80 },
-      { screenhostId: venue, dayOfWeek: 6, hour: 18, estimatedImpressions: 120 },
+      { screenhostId: venue, dayOfWeek: 1, hour: 12, estimatedImpressions: 80, source: 'measured' },
+      { screenhostId: venue, dayOfWeek: 6, hour: 18, estimatedImpressions: 120, source: 'backup' },
+      { screenhostId: venue, dayOfWeek: 3, hour: 15, estimatedImpressions: 30, source: null },
     ]);
 
     // CAST side: a proof chain (2 VIDEO_ENDED on June 10) + one reconciled payout line.
@@ -209,25 +212,69 @@ describe('assembleReportData (real Postgres)', () => {
     expect(data?.campaignsBlock.cumulativeImpressions).toBe(800);
     expect(data?.campaignsBlock.top3).toEqual(['Ooredoo · Forfait Data']);
 
-    // S02 — PERF-QA2 amendment (US-P.5): the grid colours from MEASURED Ai_jh only, and no
-    // measured day×hour source exists yet (the affluence grid is an ESTIMATE, monthly_stats is
-    // per-DAY). So EVERY cell is hachured — the ruled behaviour, pinned so that wiring a sensor
-    // ingest later is a visible change rather than a silent one.
+    // S02 — AFF1: the MERGED typical-week grid WITH provenance (the page's rule, api-side).
+    // Mon 12h measured 80 → col 4; Sat 18h backup 120 → col 10; Wed 15h NULL-source 30 → col 7
+    // reads as an estimation. Everything else: no data → level 0 / none.
     const levels = data?.heatLevels ?? [];
+    const kinds = data?.heatKinds ?? [];
     expect(levels).toHaveLength(7);
-    expect(levels.every((row) => row.every((level) => level === 0))).toBe(true);
+    expect(levels[0]?.[4]).toBeGreaterThan(0);
+    expect(kinds[0]?.[4]).toBe('measured');
+    expect(levels[5]?.[10]).toBe(5); // the max of the three
+    expect(kinds[5]?.[10]).toBe('backup');
+    expect(levels[2]?.[7]).toBeGreaterThan(0);
+    expect(kinds[2]?.[7]).toBe('backup'); // NULL source with a value → estimation, never measured
+    expect(levels[1]?.[4]).toBe(0);
+    expect(kinds[1]?.[4]).toBe('none');
+    expect(data?.heatEmpty).toBe(false);
   });
 });
 
-describe('heatmapLevels', () => {
+describe('heatmapLevels / heatmapKinds', () => {
+  const measuredAll = Array.from({ length: 7 }, () =>
+    Array.from({ length: 24 }, () => 'measured' as const),
+  );
   it('closed hours are level 0 regardless of value; null hours mean nothing is closed', () => {
     const grid = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 10));
-    const withHours = heatmapLevels(grid, 9, 20);
+    const withHours = heatmapLevels(grid, measuredAll, 9, 20);
     expect(withHours[0]?.[0]).toBe(0); // 8h < opening 9h → closed
     expect(withHours[0]?.[1]).toBeGreaterThan(0); // 9h open
     expect(withHours[0]?.[12]).toBe(0); // 20h ≥ closing → closed
-    const noHours = heatmapLevels(grid, null, null);
+    const noHours = heatmapLevels(grid, measuredAll, null, null);
     expect(noHours.flat().every((lvl) => lvl > 0)).toBe(true);
+  });
+
+  it('a backup cell keeps its ramp level (same scale) and is flagged by heatmapKinds', () => {
+    const grid = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
+    const sources: ('measured' | 'backup' | null)[][] = Array.from({ length: 7 }, () =>
+      Array.from({ length: 24 }, () => null),
+    );
+    grid[0]![9] = 10;
+    sources[0]![9] = 'measured';
+    grid[0]![10] = 10;
+    sources[0]![10] = 'backup';
+    const levels = heatmapLevels(grid, sources, null, null);
+    const kinds = heatmapKinds(grid, sources, null, null);
+    expect(levels[0]?.[1]).toBe(levels[0]?.[2]); // 9h and 10h: same value → same level
+    expect(kinds[0]?.[1]).toBe('measured');
+    expect(kinds[0]?.[2]).toBe('backup');
+    expect(kinds[0]?.[3]).toBe('none');
+    expect(kinds).toHaveLength(7);
+    expect(kinds[0]).toHaveLength(14);
+  });
+
+  it('a measured ZERO is level 1 (a measurement), a provenance-less zero is level 0 (no data)', () => {
+    const grid = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
+    const sources: ('measured' | 'backup' | null)[][] = Array.from({ length: 7 }, () =>
+      Array.from({ length: 24 }, () => null),
+    );
+    grid[0]![9] = 8;
+    sources[0]![9] = 'measured';
+    sources[0]![10] = 'measured'; // measured 0
+    const levels = heatmapLevels(grid, sources, null, null);
+    expect(levels[0]?.[1]).toBe(5);
+    expect(levels[0]?.[2]).toBe(1);
+    expect(levels[0]?.[3]).toBe(0);
   });
 });
 

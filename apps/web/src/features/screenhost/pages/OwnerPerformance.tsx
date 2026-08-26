@@ -39,7 +39,6 @@ import { useScreenhostAffluence } from '../hooks/useScreenhostAffluence';
 import { useScreenhostsMine } from '../hooks/useScreenhostsMine';
 import { lineImpressions, sumLineImpressions } from '../lib/impressions-display';
 import { downloadMonthlyReport } from '../lib/monthly-report';
-import { type MeasuredHourlyPoint, periodWeekGrid } from '../lib/peak-hours';
 import {
   audienceKpis,
   campaignStatut,
@@ -81,8 +80,8 @@ import {
 
 const log = logger.child({ module: 'OwnerPerformance' });
 
-/** See periodWeekGrid's call site: no measured day×hour audience source exists yet. */
-const MEASURED_HOURLY: MeasuredHourlyPoint[] = [];
+/** Stable idle-query default so the S02 props never churn between renders. */
+const EMPTY_COUNTS = { measured: 0, backup: 0 } as const;
 
 /**
  * "Mes performances" (Lane F) — rebuilt per the two design mockups, entirely on the engine's
@@ -200,13 +199,12 @@ export default function OwnerPerformance() {
     [venueLines, range],
   );
   const periodAudience = useMemo(() => dailyAudienceWithin(months, range), [months, range]);
-  // PERF-QA2 amendment (US-P.5) — S02 colours from MEASURED Ai_jh over the selected period, and
-  // ONLY from measures: « toute case sans aucune mesure sur la période est affichée hachurée ».
-  // NOTHING SERVES MEASURED HOURLY AUDIENCE TODAY — the api has an ESTIMATE grid (weekday × hour)
-  // and MEASURED per-DAY totals, neither of which is a measured day×hour series — and an estimate
-  // may never colour a cell, so the source stays empty and the section shows its explanatory
-  // state until a sensor ingest ships. THE one seam to wire when it does.
-  const periodGrid = useMemo(() => periodWeekGrid(MEASURED_HOURLY, range), [range]);
+  // AFF1 (ruling 2026-08-26) — S02 renders the hub's MERGED typical-week grid WITH provenance
+  // (measured solid / backup estimation / neither hachured). It is NOT period-scoped: the period
+  // pills keep driving the other sections, S02 describes the venue's semaine type (the PERF-QA2
+  // « measured-only over the period » seam is superseded — no such source exists).
+  const affluenceSources = useMemo(() => affluence.data?.sources ?? [], [affluence.data]);
+  const affluenceCounts = affluence.data?.counts ?? EMPTY_COUNTS;
   // R9 — real venue hours; 14 h is ONLY the null/degenerate fallback and is flagged as such.
   const hoursInfo = useMemo(
     () => openHours(profile.data?.opening_hour ?? null, profile.data?.closing_hour ?? null),
@@ -494,7 +492,10 @@ export default function OwnerPerformance() {
                       />
 
                       <PeakHoursHeatmap
-                        grid={periodGrid}
+                        grid={affluenceGrid}
+                        sources={affluenceSources}
+                        hasData={affluence.data?.has_data ?? false}
+                        counts={affluenceCounts}
                         openingHour={profile.data?.opening_hour ?? null}
                         closingHour={profile.data?.closing_hour ?? null}
                       />
