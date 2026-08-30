@@ -26,7 +26,7 @@ describe('the chartered French copy', () => {
     expect(APPTV_TITLE).toBe("L'application TV Toodooh");
     expect(APPTV_PITCH).toBe('Diffusez les campagnes de votre établissement sur votre téléviseur.');
     expect(APPTV_DOWNLOAD_LABEL).toBe("Télécharger l'APK (Android TV)");
-    expect(APPTV_VERSION_LINE).toBe('Version 1.4.0');
+    expect(APPTV_VERSION_LINE).toBe('Version 1.4.1');
   });
 
   it('pins the four install steps in order', () => {
