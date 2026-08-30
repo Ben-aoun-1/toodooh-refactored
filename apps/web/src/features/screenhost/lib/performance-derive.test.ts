@@ -61,7 +61,22 @@ describe('audienceKpis (S01)', () => {
     expect(kpis.perDay).toBe(700);
     expect(kpis.perHour).toBe(50);
     expect(kpis.peak).toEqual({ value: 900, date: '2026-06-02' });
-    expect(kpis.measuredDays).toBe(3);
+    expect(kpis.measuredDays).toBe(3); // unmarked points count as measured (legacy wires)
+    expect(kpis.estimatedPct).toBe(0);
+  });
+
+  it('PERF-R1 — counts provenance: measuredDays from sources, « dont N % estimés » share', () => {
+    const kpis = audienceKpis(
+      [
+        { date: '2026-06-01', audience: 700, source: 'measured' },
+        { date: '2026-06-02', audience: 80, source: 'estimated' },
+        { date: '2026-06-03', audience: 80, source: 'estimated' },
+      ],
+      14,
+    );
+    expect(kpis.global).toBe(860); // estimated days COUNT (supersedes US-P.5 measured-only)
+    expect(kpis.measuredDays).toBe(1);
+    expect(kpis.estimatedPct).toBe(67); // 2/3, rounded
   });
 
   it('perHour keeps one decimal instead of rounding to a misleading 0 (Mejri prod-test #3)', () => {
@@ -91,6 +106,7 @@ describe('audienceKpis (S01)', () => {
       perHour: null,
       peak: null,
       measuredDays: 0,
+      estimatedPct: null,
     });
   });
 });

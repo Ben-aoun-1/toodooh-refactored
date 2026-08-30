@@ -10,6 +10,7 @@ import {
   campaigns,
   creatives,
   proofOfPlay,
+  screenhostAffluence,
   screenhostMonthlyStats,
   screenhosts,
   screens,
@@ -94,6 +95,126 @@ describe('owner performance reads (owner-scoped, real Postgres)', () => {
   });
 
   const get = (url: string) => app.inject({ method: 'GET', url });
+
+  // PERF-R1 (operator 2026-08-30, supersedes US-P.5) — the merged période read: PAX day first,
+  // the venue's affluence grid otherwise. Never a zero because the sensor was silent.
+  describe('GET /api/screenhosts/:id/audience', () => {
+    interface AudienceBody {
+      days: { date: string; audience: number; source: 'measured' | 'estimated' }[];
+      total_audience: number;
+      measured_days: number;
+      estimated_days: number;
+      estimated_pct: number | null;
+    }
+
+    const seedBackupWeek = async (sh: string, value: number): Promise<void> => {
+      await db.insert(screenhostAffluence).values(
+        Array.from({ length: 7 }, (_, i) => ({
+          screenhostId: sh,
+          dayOfWeek: i + 1,
+          hour: 10,
+          estimatedImpressions: value,
+          source: 'backup' as const,
+        })),
+      );
+    };
+
+    it('PAX day wins, backup grid otherwise — with per-day provenance on the wire', async () => {
+      const me = await seedUser();
+      const sh = await seedScreenhost(me);
+      // 2026-08-03 is a Monday. The sensor measured Monday (500); Tuesday it was silent.
+      await db.insert(screenhostMonthlyStats).values({
+        screenhostId: sh,
+        month: '2026-08',
+        totalAudience: 500,
+        daily: [{ date: '2026-08-03', audience: 500, source: 'measured' }],
+        peakDayOfWeek: 1,
+        peakHour: 10,
+      });
+      await seedBackupWeek(sh, 80); // Monday grid estimate 80 must NOT override the 500 measure
+      mockSession(me);
+
+      const res = await get(`/api/screenhosts/${sh}/audience?from=2026-08-03&to=2026-08-04`);
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as AudienceBody;
+      expect(body.days).toEqual([
+        { date: '2026-08-03', audience: 500, source: 'measured' },
+        { date: '2026-08-04', audience: 80, source: 'estimated' },
+      ]);
+      expect(body.total_audience).toBe(580);
+      expect(body.measured_days).toBe(1);
+      expect(body.estimated_days).toBe(1);
+      expect(body.estimated_pct).toBe(50);
+    });
+
+    it('a venue with ZERO readings serves the full backup estimate — never silent-zeros', async () => {
+      const me = await seedUser();
+      const sh = await seedScreenhost(me);
+      await seedBackupWeek(sh, 80); // no monthly-stats row at all
+      mockSession(me);
+
+      const body = (
+        await get(`/api/screenhosts/${sh}/audience?from=2026-08-01&to=2026-08-07`)
+      ).json() as AudienceBody;
+      expect(body.days).toHaveLength(7);
+      expect(body.days.every((d) => d.audience === 80 && d.source === 'estimated')).toBe(true);
+      expect(body.total_audience).toBe(560);
+      expect(body.measured_days).toBe(0);
+      expect(body.estimated_pct).toBe(100);
+    });
+
+    it('respects the période bounds and clamps to Tunis today (no future day)', async () => {
+      const me = await seedUser();
+      const sh = await seedScreenhost(me);
+      await seedBackupWeek(sh, 80);
+      mockSession(me);
+
+      const tunisToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Tunis' }).format(
+        new Date(),
+      );
+      const from = '2026-08-01';
+      const body = (
+        await get(`/api/screenhosts/${sh}/audience?from=${from}&to=2030-01-01`)
+      ).json() as AudienceBody;
+      expect(body.days[0]?.date).toBe(from);
+      expect(body.days.at(-1)?.date).toBe(tunisToday);
+    });
+
+    it('rejects malformed, reversed and too-wide ranges (400)', async () => {
+      const me = await seedUser();
+      const sh = await seedScreenhost(me);
+      mockSession(me);
+
+      expect(
+        (await get(`/api/screenhosts/${sh}/audience?from=03/08/2026&to=2026-08-04`)).statusCode,
+      ).toBe(400);
+      expect(
+        (await get(`/api/screenhosts/${sh}/audience?from=2026-08-04&to=2026-08-03`)).statusCode,
+      ).toBe(400);
+      const tooWide = await get(`/api/screenhosts/${sh}/audience?from=2010-01-01&to=2026-08-04`);
+      expect(tooWide.statusCode).toBe(400);
+      expect((tooWide.json() as { error: string }).error).toBe('RANGE_TOO_WIDE');
+    });
+
+    it('requires authentication (401) and owner scope (404 on a foreign venue)', async () => {
+      mockNoSession();
+      expect(
+        (
+          await get(
+            '/api/screenhosts/11111111-1111-4111-8111-111111111111/audience?from=2026-08-01&to=2026-08-02',
+          )
+        ).statusCode,
+      ).toBe(401);
+      const me = await seedUser();
+      const other = await seedUser();
+      const foreign = await seedScreenhost(other);
+      mockSession(me);
+      expect(
+        (await get(`/api/screenhosts/${foreign}/audience?from=2026-08-01&to=2026-08-02`))
+          .statusCode,
+      ).toBe(404);
+    });
+  });
 
   describe('GET /api/screenhosts/:id/profile', () => {
     it('requires authentication (401)', async () => {

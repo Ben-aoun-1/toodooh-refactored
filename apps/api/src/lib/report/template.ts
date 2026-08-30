@@ -58,13 +58,20 @@ const PLACEHOLDER_AGE_PCT = [32, 28, 14, 6];
 // generic Piste 02 body is over the 210-char guard that VARIABLE AI bodies must pass, and that
 // is fine — it renders 2 lines / 0px overflow by direct measurement.
 
-// PERF-QA2 — the S02 lead. R7's « semaine type glissante, jamais la période » is SUPERSEDED, and
-// the amendment (US-P.5) settles the source: the grid is built from the window's own MEASURED
-// hours, so the copy names both the measure and the period. BYTE-IDENTICAL twin in apps/web
-// (lib/peak-hours.ts), each side pinned by an exact-literal test. Page and PDF are
-// RULE-identical; byte-identical GRIDS across different windows are not expected.
+// PERF-R2 (operator 2026-08-30) — the S02 lead: the semaine type IS période-scoped now (the
+// weekdays the période does not contain are masked), each cell merged PAX-first with provenance.
+// BYTE-IDENTICAL twin in apps/web (lib/peak-hours.ts), each side pinned by an exact-literal
+// test. Page and PDF are RULE-identical.
 export const PEAK_HOURS_LEAD =
-  "Audience moyenne de votre semaine type (moyenne glissante sur les 4 dernières semaines), croisant les jours de la semaine et les heures d'ouverture. Plus la couleur est vive, plus l'audience est élevée. Les cases pleines sont mesurées par votre capteur, les cases en pointillé sont des estimations. Les zones rayées correspondent à vos heures de fermeture ou aux créneaux sans aucune donnée.";
+  "Semaine type de votre audience sur la période analysée, croisant les jours de la semaine et les heures d'ouverture — mesure de votre capteur en priorité, estimation en secours. Plus la couleur est vive, plus l'audience est élevée. Les cases pleines sont mesurées par votre capteur, les cases en pointillé sont des estimations. Les zones rayées correspondent à vos heures de fermeture, aux jours hors période ou aux créneaux sans aucune donnée.";
+
+// PERF-R1 (operator 2026-08-30) — the S01 lead + the no-measure note, BYTE-IDENTICAL twins of
+// apps/web's AudienceKpisSection literals, pinned on both sides. The note renders ONLY when
+// NEITHER a reading NOR a backup cell fed the période (measuredDays 0 AND estimatedPct null).
+export const AUDIENCE_KPIS_LEAD =
+  "Indicateurs de densité d'audience dans votre lieu sur la période analysée — mesure du capteur en priorité, estimation en secours — croisés avec vos heures d'ouverture.";
+export const NO_MEASURE_NOTE =
+  "Aucune mesure du capteur d'audience sur la période — les impressions proviennent de la preuve de diffusion, une source indépendante.";
 
 const esc = (value: string): string =>
   value.replace(
@@ -298,12 +305,19 @@ export function renderReportHtml(
   };
   const s01 = `
   <div class="section" style="margin-top:26px">
-    ${secHead('Section 01', 'Votre audience en chiffres', "Indicateurs de densité d'audience mesurés dans votre lieu sur la période analysée, croisés avec vos heures d'ouverture.")}
+    ${secHead('Section 01', 'Votre audience en chiffres', AUDIENCE_KPIS_LEAD)}
     <div class="statrow">
       <div class="col">
         <div class="stat-lbl">Audience globale</div>
         ${statNum(hostHasData ? kpis.global : null)}
-        <div class="stat-desc">Personnes mesurées dans votre lieu sur la période.</div>
+        <div class="stat-desc">Personnes touchées dans votre lieu sur la période${
+          // PERF-R1 — the provenance share replaces the « jours mesurés » caption.
+          !hostHasData || kpis.estimatedPct === null || kpis.estimatedPct === 0
+            ? '.'
+            : kpis.estimatedPct === 100
+              ? ' — 100 % estimation.'
+              : ` — dont ${kpis.estimatedPct} % estimés.`
+        }</div>
       </div>
       <div class="col">
         <div class="stat-lbl">Audience moyenne / heure</div>
@@ -330,7 +344,12 @@ export function renderReportHtml(
             : 'Aucun maximum observé sur la période.'
         }</div>
       </div>
-    </div>
+    </div>${
+      hostHasData && kpis.measuredDays === 0 && kpis.estimatedPct === null
+        ? `
+    <div class="stat-desc" style="margin-top:14px">${NO_MEASURE_NOTE}</div>`
+        : ''
+    }
   </div>`;
 
   // ── S02 ──────────────────────────────────────────────────────────────────────────────────────

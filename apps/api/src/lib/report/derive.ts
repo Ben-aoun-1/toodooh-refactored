@@ -21,6 +21,8 @@ export function inRange(dateIso: string, range: DateRange): boolean {
 export interface DailyAudiencePoint {
   date: string; // YYYY-MM-DD
   audience: number;
+  /** PERF-R1 — per-day provenance; an unmarked point counts as measured (legacy wires). */
+  source?: 'measured' | 'estimated';
 }
 
 export interface DailyImpressionsPoint {
@@ -75,11 +77,23 @@ export interface AudienceKpis {
   perDay: number | null;
   perHour: number | null;
   peak: { value: number; date: string } | null;
+  /** PERF-R1 — how many of the période's data days carry a real measure. */
+  measuredDays: number;
+  /** PERF-R1 — % of the data days that are estimated (« dont N % estimés »); null = no data day. */
+  estimatedPct: number | null;
 }
 
 /** S01 — averages divide by DAYS WITH DATA (not calendar days); null slots when no data. */
 export function audienceKpis(points: DailyAudiencePoint[], hoursPerDay: number): AudienceKpis {
-  if (points.length === 0) return { global: 0, perDay: null, perHour: null, peak: null };
+  if (points.length === 0)
+    return {
+      global: 0,
+      perDay: null,
+      perHour: null,
+      peak: null,
+      measuredDays: 0,
+      estimatedPct: null,
+    };
   let global = 0;
   let peak: { value: number; date: string } | null = null;
   for (const p of points) {
@@ -92,7 +106,9 @@ export function audienceKpis(points: DailyAudiencePoint[], hoursPerDay: number):
   const perDay = Math.round(perDayRaw);
   // One decimal (Mejri prod-test #3): 4 pers/day ÷ 14 h must read 0,3 — never a rounded 0.
   const perHour = hoursPerDay > 0 ? Math.round((perDayRaw / hoursPerDay) * 10) / 10 : null;
-  return { global, perDay, perHour, peak };
+  const measuredDaysCount = points.filter((p) => p.source !== 'estimated').length;
+  const estimatedPct = Math.round(((points.length - measuredDaysCount) / points.length) * 100);
+  return { global, perDay, perHour, peak, measuredDays: measuredDaysCount, estimatedPct };
 }
 
 /** All daily audience points of the given months flattened, filtered to the period. */

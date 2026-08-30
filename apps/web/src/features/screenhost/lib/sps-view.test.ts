@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { spsCriteria, spsScoreLabel } from './sps-view';
+import { spsAsOfLabel, spsCriteria, spsScoreLabel } from './sps-view';
 
 const variables = {
   acceptation: { value: 72.5, weight: 40 },
@@ -61,5 +61,17 @@ describe('spsScoreLabel', () => {
     expect(spsScoreLabel(70)).toBe('70');
     expect(spsScoreLabel(72.5)).toBe('72,5');
     expect(spsScoreLabel(null)).toBe('À venir');
+  });
+});
+
+// PERF-R1 — a live SPS score is genuinely not période-able: the card labels it « au <date> »
+// (the wire's as_of, Tunis) instead of silently ignoring the période filter.
+describe('spsAsOfLabel', () => {
+  it('renders « au DD/MM/YYYY » from the wire as_of', () => {
+    expect(spsAsOfLabel('2026-08-30')).toBe('au 30/08/2026');
+  });
+
+  it('null when the wire has not answered yet', () => {
+    expect(spsAsOfLabel(undefined)).toBeNull();
   });
 });

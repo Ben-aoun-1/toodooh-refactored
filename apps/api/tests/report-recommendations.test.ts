@@ -356,7 +356,14 @@ const reportData = (over: Partial<ReportData> = {}): ReportData => ({
   generatedLabel: '10/07/2026',
   hostHasData: true,
   castHasData: true,
-  kpis: { global: 21400, perDay: 764, perHour: 76.4, peak: { value: 1180, date: '2026-06-14' } },
+  kpis: {
+    global: 21400,
+    perDay: 764,
+    perHour: 76.4,
+    peak: { value: 1180, date: '2026-06-14' },
+    measuredDays: 28,
+    estimatedPct: 0,
+  },
   heatKinds: Array.from({ length: 7 }, () => Array.from({ length: 14 }, () => 'measured' as const)),
   heatEmpty: false,
   // one hot cell (Ven idx4, 18h → hourIdx 10 = level 5), one warm, one weak, rest closed
@@ -484,7 +491,14 @@ describe('buildRecommendationInput (ReportData → minimized payload)', () => {
       reportData({
         hostHasData: false,
         breakdown: null,
-        kpis: { global: 0, perDay: null, perHour: null, peak: null },
+        kpis: {
+          global: 0,
+          perDay: null,
+          perHour: null,
+          peak: null,
+          measuredDays: 0,
+          estimatedPct: null,
+        },
       }),
     );
     expect(built.audience).toEqual({

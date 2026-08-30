@@ -5,10 +5,11 @@ import { performanceService } from '../services/performance.service';
 import { screenhostKeys } from './queryKeys';
 
 /**
- * Lane F — the four React Query reads behind the "Mes performances" page. One concept: each hook
+ * Lane F — the React Query reads behind the "Mes performances" page. One concept: each hook
  * wraps ONE performanceService endpoint with its screenhostKeys entry, enabled only once its
- * scope (venue id / session user id) is known. Period filtering is client-side, so none of these
- * re-fetch when the pills change.
+ * scope (venue id / session user id) is known. Most reads fetch once per venue and filter
+ * client-side; the pistes and audience reads carry the période on the wire and re-fetch when
+ * the pills change (PERF-R1).
  */
 
 export function useVenueProfile(screenhostId: string | null) {
@@ -50,6 +51,18 @@ export function useVenueReports(screenhostId: string | null) {
   return useQuery({
     queryKey: screenhostKeys.reports(screenhostId ?? ''),
     queryFn: () => performanceService.getReports(screenhostId as string),
+    enabled: Boolean(screenhostId),
+  });
+}
+
+/**
+ * PERF-R1 — the merged période audience (PAX day first, the affluence grid otherwise). Carries
+ * the ACTIVE période on the wire like the pistes read, so S01/S04 re-scope when the pills change.
+ */
+export function useVenueAudience(screenhostId: string | null, from: string, to: string) {
+  return useQuery({
+    queryKey: screenhostKeys.audience(screenhostId ?? '', from, to),
+    queryFn: () => performanceService.getAudience(screenhostId as string, from, to),
     enabled: Boolean(screenhostId),
   });
 }
