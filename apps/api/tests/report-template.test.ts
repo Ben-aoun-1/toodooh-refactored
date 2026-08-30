@@ -8,6 +8,8 @@ import {
 } from '../src/lib/report/pistes.js';
 import {
   HIST_MAX_ROWS,
+  AUDIENCE_KPIS_LEAD,
+  NO_MEASURE_NOTE,
   PEAK_HOURS_LEAD,
   REV_MAX_ROWS,
   impressionsChartSvg,
@@ -45,7 +47,7 @@ const baseData = (over: Partial<ReportData> = {}): ReportData => ({
   generatedLabel: '08/07/2026',
   hostHasData: false,
   castHasData: false,
-  kpis: { global: 0, perDay: null, perHour: null, peak: null },
+  kpis: { global: 0, perDay: null, perHour: null, peak: null, measuredDays: 0, estimatedPct: null },
   heatLevels: Array.from({ length: 7 }, () => Array.from({ length: 14 }, () => 0)),
   heatKinds: Array.from({ length: 7 }, () => Array.from({ length: 14 }, () => 'none' as const)),
   heatEmpty: false,
@@ -70,7 +72,14 @@ const fullData = (over: Partial<ReportData> = {}): ReportData =>
   baseData({
     hostHasData: true,
     castHasData: true,
-    kpis: { global: 21400, perDay: 764, perHour: 76, peak: { value: 1180, date: '2026-06-14' } },
+    kpis: {
+      global: 21400,
+      perDay: 764,
+      perHour: 76,
+      peak: { value: 1180, date: '2026-06-14' },
+      measuredDays: 3,
+      estimatedPct: 79,
+    },
     heatLevels: Array.from({ length: 7 }, (_, day) =>
       Array.from({ length: 14 }, (_, h) => (day === 6 ? 0 : ((day + h) % 5) + 1)),
     ),
@@ -278,7 +287,14 @@ describe('renderReportHtml — FULL variants (both flags true)', () => {
     const fractional = renderReportHtml(
       baseData({
         hostHasData: true,
-        kpis: { global: 4, perDay: 4, perHour: 0.3, peak: { value: 4, date: '2026-06-26' } },
+        kpis: {
+          global: 4,
+          perDay: 4,
+          perHour: 0.3,
+          peak: { value: 4, date: '2026-06-26' },
+          measuredDays: 1,
+          estimatedPct: 0,
+        },
       }),
     );
     expect(fractional).toContain('0,3 <span class="unit">pers/h</span>');
@@ -539,19 +555,80 @@ describe('S03 labeled axes (R3 — Mejri item 4, OVERRIDES the axis-less mockup)
 // exact-literal pin below is one half of the cross-package byte-equality contract — apps/web pins
 // the SAME literal over its PEAK_HOURS_LEAD twin (lib/peak-hours.ts), so neither side can drift
 // without its own test failing. Do not reword one without the other.
-describe('S02 lead (AFF1 — the semaine type, with provenance)', () => {
+describe('S02 lead (PERF-R2 — the période-scoped semaine type, with provenance)', () => {
   it('pins the exact wording (byte-equality contract with apps/web)', () => {
     expect(PEAK_HOURS_LEAD).toBe(
-      "Audience moyenne de votre semaine type (moyenne glissante sur les 4 dernières semaines), croisant les jours de la semaine et les heures d'ouverture. Plus la couleur est vive, plus l'audience est élevée. Les cases pleines sont mesurées par votre capteur, les cases en pointillé sont des estimations. Les zones rayées correspondent à vos heures de fermeture ou aux créneaux sans aucune donnée.",
+      "Semaine type de votre audience sur la période analysée, croisant les jours de la semaine et les heures d'ouverture — mesure de votre capteur en priorité, estimation en secours. Plus la couleur est vive, plus l'audience est élevée. Les cases pleines sont mesurées par votre capteur, les cases en pointillé sont des estimations. Les zones rayées correspondent à vos heures de fermeture, aux jours hors période ou aux créneaux sans aucune donnée.",
     );
   });
 
-  it('the rendered document names the semaine type and BOTH provenances, never the period', () => {
+  it('the rendered document names the période scope and BOTH provenances', () => {
     const html = renderReportHtml(baseData());
     expect(html).toContain(PEAK_HOURS_LEAD);
-    expect(html).toContain('semaine type');
-    // The withdrawn PERF-QA2 sentence is gone (« période analysée » itself survives in S01's copy).
-    expect(html).not.toContain('sans aucune mesure sur la période');
+    expect(html).toContain('Semaine type');
+    expect(html).toContain('période analysée'); // PERF-R2: the période scopes S02 too
+    expect(html).toContain('mesure de votre capteur en priorité');
+    expect(html).toContain('estimation en secours');
+  });
+});
+
+// PERF-R1 — S01 carries the merged période with its provenance share; lead + note byte-pinned
+// against the page (AudienceKpisSection.tsx exports the same literals).
+describe('S01 (PERF-R1 — merged période, provenance in the caption)', () => {
+  it('pins the S01 lead and the no-measure note (byte-equality contract with apps/web)', () => {
+    expect(AUDIENCE_KPIS_LEAD).toBe(
+      "Indicateurs de densité d'audience dans votre lieu sur la période analysée — mesure du capteur en priorité, estimation en secours — croisés avec vos heures d'ouverture.",
+    );
+    expect(NO_MEASURE_NOTE).toBe(
+      "Aucune mesure du capteur d'audience sur la période — les impressions proviennent de la preuve de diffusion, une source indépendante.",
+    );
+  });
+
+  it('renders the estimated share as « dont N % estimés »', () => {
+    const html = renderReportHtml(fullData()); // fixture: measuredDays 3, estimatedPct 79
+    expect(html).toContain('dont 79 % estimés');
+    expect(html).not.toContain(NO_MEASURE_NOTE);
+  });
+
+  it('« 100 % estimation » when nothing was measured but the backup grid carried the période', () => {
+    const html = renderReportHtml(
+      fullData({
+        kpis: {
+          global: 2400,
+          perDay: 80,
+          perHour: 5.7,
+          peak: { value: 80, date: '2026-06-14' },
+          measuredDays: 0,
+          estimatedPct: 100,
+        },
+      }),
+    );
+    expect(html).toContain('100 % estimation');
+    expect(html).not.toContain('dont 100 % estimés');
+    expect(html).not.toContain(NO_MEASURE_NOTE);
+  });
+
+  it('an all-measured période carries NO estimation rider', () => {
+    const html = renderReportHtml(
+      fullData({
+        kpis: {
+          global: 21400,
+          perDay: 764,
+          perHour: 76,
+          peak: { value: 1180, date: '2026-06-14' },
+          measuredDays: 28,
+          estimatedPct: 0,
+        },
+      }),
+    );
+    expect(html).not.toContain('% estimés');
+    expect(html).not.toContain('% estimation');
+  });
+
+  it('the « Aucune mesure » note ONLY when NEITHER a reading NOR a backup fed the période', () => {
+    const html = renderReportHtml(baseData({ hostHasData: true }));
+    // baseData kpis: measuredDays 0, estimatedPct null → no data day at all in the période.
+    expect(html).toContain(NO_MEASURE_NOTE);
   });
 });
 

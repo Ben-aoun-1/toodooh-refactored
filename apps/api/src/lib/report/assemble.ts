@@ -15,7 +15,7 @@ import {
 } from '../../db/schema.js';
 import { getDispatchConfig } from '../dispatch/config.js';
 import { displayImpressionsSettled } from '../impressions-display.js';
-import { measuredDays, measuredTotal } from '../monthly-audience.js';
+import { periodAudience, weekdaysInRange } from '../period-audience.js';
 import { computeSps } from '../sps-score.js';
 
 import {
@@ -36,7 +36,6 @@ import {
   campaignStatut,
   campaignTypeLabel,
   categoryLabel,
-  dailyAudienceWithin,
   demographicBreakdown,
   formatCompactPeriod,
   formatDateFr,
@@ -242,10 +241,10 @@ export async function assembleReportData(
     .limit(1);
   if (!venue) return null;
 
-  // 2) monthly stats (month desc) — mirror of GET /:id/monthly-stats, MEASURED DAYS ONLY.
-  // AMENDMENT 2026-08-20 (US-P.0): Pers_atteintes is a sensor measure — an estimated day never
-  // feeds an audience figure. The stored row keeps both kinds; this read drops the estimates so
-  // every KPI below (Ai, moyennes, Pic) is measured by construction.
+  // 2) monthly stats (month desc) — PERF-R1 (operator 2026-08-30, supersedes US-P.5): the
+  // stored rows are read WHOLE; lib/period-audience.ts merges per day (PAX measure first, the
+  // affluence grid otherwise) so S01 mirrors the page's /audience read — same helper, same
+  // numbers, never a zero because the sensor was silent.
   const monthRows = await db
     .select({
       month: screenhostMonthlyStats.month,
@@ -255,11 +254,7 @@ export async function assembleReportData(
     .from(screenhostMonthlyStats)
     .where(eq(screenhostMonthlyStats.screenhostId, venueId))
     .orderBy(desc(screenhostMonthlyStats.month));
-  const months = monthRows.map((row) => ({
-    month: row.month,
-    totalAudience: measuredTotal(row.daily),
-    daily: measuredDays(row.daily),
-  }));
+  const months = monthRows;
 
   // 3) affluence slots → zero-filled 7×24 grid + AFF1 provenance — mirror of GET /:id/affluence
   //    (sources null-filled, counts = pure provenance tallies, has_data = any row).
@@ -286,7 +281,26 @@ export async function assembleReportData(
       if (slot.source) counts[slot.source] += 1;
     }
   }
-  const affluenceHasData = slots.length > 0;
+  // PERF-R2 — the période scopes S02: weekdays the range does not contain are masked out of the
+  // HEATMAP (values and provenance untouched on kept weekdays). The audience merge above keeps
+  // the FULL grid: a day's stand-in uses its own weekday, which is période-correct by construction.
+  const keptWeekdays = weekdaysInRange(range);
+  const heatSlots = slots.filter((slot) => keptWeekdays.has(slot.dayOfWeek));
+  const heatGrid: number[][] = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
+  const heatSources: (AffluenceSource | null)[][] = Array.from({ length: 7 }, () =>
+    Array.from({ length: 24 }, () => null),
+  );
+  const heatCounts = { measured: 0, backup: 0 };
+  for (const slot of heatSlots) {
+    const row = heatGrid[slot.dayOfWeek - 1];
+    const sourceRow = heatSources[slot.dayOfWeek - 1];
+    if (row && sourceRow && slot.hour >= 0 && slot.hour <= 23) {
+      row[slot.hour] = slot.estimatedImpressions;
+      sourceRow[slot.hour] = slot.source;
+      if (slot.source) heatCounts[slot.source] += 1;
+    }
+  }
+  const heatHasData = heatSlots.length > 0;
 
   // 4) delivered impressions per Tunis-local day in range — mirror of GET /:id/impressions-daily.
   const tunisDay = sql<string>`to_char(${proofOfPlay.receivedAt} at time zone 'Africa/Tunis', 'YYYY-MM-DD')`;
@@ -351,12 +365,10 @@ export async function assembleReportData(
   const hostFlag = hasHostData(months, grid);
   const castFlag = hasCastData(lines, rangeDays);
 
-  const periodAudience = dailyAudienceWithin(months, range);
-
-  // S02 — AFF1 (ruling 2026-08-26): the MERGED typical-week grid WITH provenance, the page's rule
-  // applied api-side (the PERF-QA2 « measured-only » seam is superseded — no such source exists).
-  // NOT period-scoped: the report's range drives the other sections, S02 is the semaine type.
-  const kpis = audienceKpis(periodAudience, openHoursPerDay(venue.openingHour, venue.closingHour));
+  // S01 — PERF-R1: THE api-side merge (lib/period-audience.ts), the same helper the /audience
+  // route serves the page from. S02 — PERF-R2: the semaine type masked to the période's weekdays.
+  const merged = periodAudience({ months: monthRows, grid, range, todayIso });
+  const kpis = audienceKpis(merged.days, openHoursPerDay(venue.openingHour, venue.closingHour));
 
   const ratios = ratiosOrNull(venue);
   const periodLines = lines.filter((l) => lineInPeriod(l, range));
@@ -441,9 +453,9 @@ export async function assembleReportData(
     hostHasData: hostFlag,
     castHasData: castFlag,
     kpis,
-    heatLevels: heatmapLevels(grid, sources, venue.openingHour, venue.closingHour),
-    heatKinds: heatmapKinds(grid, sources, venue.openingHour, venue.closingHour),
-    heatEmpty: affluenceEmpty({ has_data: affluenceHasData, counts }),
+    heatLevels: heatmapLevels(heatGrid, heatSources, venue.openingHour, venue.closingHour),
+    heatKinds: heatmapKinds(heatGrid, heatSources, venue.openingHour, venue.closingHour),
+    heatEmpty: affluenceEmpty({ has_data: heatHasData, counts: heatCounts }),
     days: castFlag ? zeroFillDays(rangeDays, range) : [],
     breakdown: ratios ? demographicBreakdown(ratios, kpis.global) : null,
     revenue: {

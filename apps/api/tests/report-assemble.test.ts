@@ -78,7 +78,14 @@ describe('assembleReportData (real Postgres)', () => {
     expect(data).not.toBeNull();
     expect(data?.hostHasData).toBe(false);
     expect(data?.castHasData).toBe(false);
-    expect(data?.kpis).toEqual({ global: 0, perDay: null, perHour: null, peak: null });
+    expect(data?.kpis).toEqual({
+      global: 0,
+      perDay: null,
+      perHour: null,
+      peak: null,
+      measuredDays: 0,
+      estimatedPct: null,
+    });
     expect(data?.days).toEqual([]);
     expect(data?.breakdown).toBeNull();
     expect(data?.revenue.count).toBe(0);
@@ -189,20 +196,25 @@ describe('assembleReportData (real Postgres)', () => {
     expect(data?.hostHasData).toBe(true);
     expect(data?.castHasData).toBe(true);
 
-    // S01 — the three June daily points; hours span 14 (8→22).
-    expect(data?.kpis.global).toBe(2100);
-    expect(data?.kpis.perDay).toBe(700);
-    expect(data?.kpis.perHour).toBe(50);
+    // S01 — PERF-R1: the MERGED période (supersedes US-P.5 measured-only). 3 measured days
+    // (700 + 900 + 500) + the grid standing in for the silent ones: Mondays 08/15/22/29 → 4×80,
+    // Wednesdays 03/10/17/24 → 4×30, Saturdays 06/13/27 → 3×120 (the 20th is measured). Days
+    // with neither measure nor grid value are NOT data days — 14 data days in June.
+    expect(data?.kpis.global).toBe(2900);
+    expect(data?.kpis.perDay).toBe(207); // 2900 / 14
+    expect(data?.kpis.perHour).toBe(14.8); // 207.14… / 14 h, one decimal
     expect(data?.kpis.peak).toEqual({ value: 900, date: '2026-06-14' });
+    expect(data?.kpis.measuredDays).toBe(3);
+    expect(data?.kpis.estimatedPct).toBe(79); // 11 / 14
 
     // S03 — zero-filled June: 30 days, 2 impressions on the 10th, 0 elsewhere.
     expect(data?.days).toHaveLength(30);
     expect(data?.days.find((d) => d.date === '2026-06-10')?.impressions).toBe(2);
     expect(data?.days.find((d) => d.date === '2026-06-11')?.impressions).toBe(0);
 
-    // S04 — ratios × global audience.
-    expect(data?.breakdown?.femmes).toBe(1092);
-    expect(data?.breakdown?.hommes).toBe(1008);
+    // S04 — ratios × the MERGED global audience (2900).
+    expect(data?.breakdown?.femmes).toBe(1508); // 52 %
+    expect(data?.breakdown?.hommes).toBe(1392); // 48 %
 
     // S05/S06 — the reconciled line, period-overlapping, Passée by 2026-07-08.
     expect(data?.revenue.count).toBe(1);
@@ -227,6 +239,58 @@ describe('assembleReportData (real Postgres)', () => {
     expect(levels[1]?.[4]).toBe(0);
     expect(kinds[1]?.[4]).toBe('none');
     expect(data?.heatEmpty).toBe(false);
+  });
+
+  it('PERF-R1: a venue with ZERO readings gets non-zero S01 numbers from the backup grid', async () => {
+    const owner = await seedUser();
+    const venue = await seedScreenhost(owner, {
+      name: 'Café Sans Capteur',
+      openingHour: 8,
+      closingHour: 22,
+    });
+    // No monthly-stats at all — only the admin's backup grid, every weekday at 10h.
+    await db.insert(screenhostAffluence).values(
+      Array.from({ length: 7 }, (_, i) => ({
+        screenhostId: venue,
+        dayOfWeek: i + 1,
+        hour: 10,
+        estimatedImpressions: 80,
+        source: 'backup' as const,
+      })),
+    );
+
+    const data = await assembleReportData(venue, RANGE, TODAY);
+    expect(data?.hostHasData).toBe(true);
+    expect(data?.kpis.global).toBe(2400); // 30 June days × 80 — never zero because silent
+    expect(data?.kpis.perDay).toBe(80);
+    expect(data?.kpis.measuredDays).toBe(0);
+    expect(data?.kpis.estimatedPct).toBe(100);
+    expect(data?.heatEmpty).toBe(false);
+  });
+
+  it('PERF-R2: the S02 grid is période-scoped — weekdays outside the range are masked', async () => {
+    const owner = await seedUser();
+    const venue = await seedScreenhost(owner, { openingHour: 8, closingHour: 22 });
+    await db.insert(screenhostAffluence).values([
+      { screenhostId: venue, dayOfWeek: 1, hour: 12, estimatedImpressions: 80, source: 'measured' },
+      { screenhostId: venue, dayOfWeek: 6, hour: 18, estimatedImpressions: 120, source: 'backup' },
+    ]);
+
+    // 2026-06-01 (Mon) .. 2026-06-02 (Tue): Monday kept, Saturday masked.
+    const data = await assembleReportData(venue, { from: '2026-06-01', to: '2026-06-02' }, TODAY);
+    expect(data?.heatKinds[0]?.[4]).toBe('measured'); // Mon 12h → col 4, kept
+    expect(data?.heatLevels[0]?.[4]).toBeGreaterThan(0);
+    expect(data?.heatKinds[5]?.[10]).toBe('none'); // Sat 18h masked by the période
+    expect(data?.heatLevels[5]?.[10]).toBe(0);
+
+    // A période with none of the data weekdays → the explanatory empty state.
+    const weekend = await assembleReportData(
+      venue,
+      { from: '2026-06-06', to: '2026-06-07' }, // Sat–Sun
+      TODAY,
+    );
+    expect(weekend?.heatKinds[5]?.[10]).toBe('backup'); // Saturday IS in this période
+    expect(weekend?.heatKinds[0]?.[4]).toBe('none'); // Monday masked
   });
 });
 
