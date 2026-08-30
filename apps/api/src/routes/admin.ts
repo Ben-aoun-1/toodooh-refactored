@@ -415,6 +415,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
   // 2026-06-20 — NO hard delete). 409 if already banned. Re-registration with this identity is blocked
   // by RETAIN + the existing email/tax uniqueness (no separate check — a banned-specific error would
   // leak banned status). Bannable from ANY non-banned state (fraud can surface post-approval).
+  // ADM-2 — a STAFF target (role admin/superadmin) additionally requires a SUPERADMIN actor.
   app.post('/api/admin/users/:id/ban', adminGuard, async (request, reply) => {
     const parsedParams = idParamSchema.safeParse(request.params);
     if (!parsedParams.success) {
@@ -454,6 +455,21 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
         error: 'USER_NOT_FOUND',
         message: 'No user with that id.',
         statusCode: 404,
+        requestId: request.id,
+      });
+    }
+    // ADM-2 — banning a STAFF account is superadmin-only. The UI always hid the button on
+    // admin rows, but the route let any admin ban a peer admin or the superadmin by direct
+    // call (and /admin-management's deactivate rides this same route). Privilege is checked
+    // BEFORE state, mirroring requireRole's 403; end-user bans are unchanged.
+    if (
+      (existing.role === 'admin' || existing.role === 'superadmin') &&
+      request.user?.role !== 'superadmin'
+    ) {
+      return reply.status(403).send({
+        error: 'FORBIDDEN',
+        message: 'Privilèges insuffisants pour cette action.',
+        statusCode: 403,
         requestId: request.id,
       });
     }
