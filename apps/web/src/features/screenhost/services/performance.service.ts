@@ -61,6 +61,8 @@ export interface SpsVariableWire {
 }
 
 export interface VenueSps {
+  /** PERF-R1 — Tunis date of the live computation; the card labels « au <date> ». */
+  as_of: string;
   /** null = no computable score yet (the page keeps its « À venir » wait-state). */
   sps: number | null;
   variables: {
@@ -81,6 +83,22 @@ export interface VenuePiste {
 
 export interface VenuePistes {
   pistes: VenuePiste[];
+}
+
+/** PERF-R1 — one merged période day: the PAX measure, or the affluence grid standing in. */
+export interface VenueAudienceDay {
+  date: string; // YYYY-MM-DD
+  audience: number;
+  source: 'measured' | 'estimated';
+}
+
+/** GET /api/screenhosts/:id/audience?from&to — the merged période read (PERF-R1). */
+export interface VenueAudience {
+  days: VenueAudienceDay[];
+  total_audience: number;
+  measured_days: number;
+  estimated_days: number;
+  estimated_pct: number | null;
 }
 
 export const performanceService = {
@@ -117,6 +135,17 @@ export const performanceService = {
   /** PERF-QA1 R1 — GET /:id/reports: the generated-reports listing, THE month authority. */
   getReports(screenhostId: string): Promise<VenueReportsListing> {
     return apiClient.get<VenueReportsListing>(`/screenhosts/${screenhostId}/reports`);
+  },
+
+  /**
+   * PERF-R1 — GET /:id/audience?from&to: the merged période audience (PAX day first, the
+   * affluence grid otherwise — never a zero because the sensor was silent), per-day provenance
+   * on the wire. Re-fetches when the pills change, like the pistes read.
+   */
+  getAudience(screenhostId: string, from: string, to: string): Promise<VenueAudience> {
+    return apiClient.get<VenueAudience>(
+      `/screenhosts/${screenhostId}/audience?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+    );
   },
 
   /** PERF-QA1 R6 — GET /:id/sps: live score + variables + CONFIG weights (never hardcoded). */

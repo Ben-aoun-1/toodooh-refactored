@@ -11,17 +11,16 @@ import { affluenceEmpty } from './affluence-provenance';
  * without the other — the two surfaces must never disagree on what this grid means. Do not
  * reword one without the other.
  *
- * AFF1 (ruling 2026-08-26) — back to PERF-QA1 R7's semantics: the grid is the venue's TYPICAL
- * WEEK (the hub's 4-week rolling merge), NOT period-scoped, shown WITH provenance (solid =
- * measured by the sensor, dotted = estimation, hachure = closed or no data at all). The PERF-QA2
- * « measured-only over the period » reading is superseded: no measured day×hour source exists,
- * and the operator ruled the merged grid IS the truth as long as provenance is marked.
+ * PERF-R2 (operator 2026-08-30, supersedes AFF1's « never the période ») — the semaine type IS
+ * période-scoped now: the /affluence read masks the weekdays the période does not contain (a
+ * 7+-day période keeps the whole week). Values stay the hub's rolling PAX-first merge WITH
+ * provenance (solid = measured by the sensor, dotted = estimation, hachure = closed, out of the
+ * période, or no data at all).
  */
 export const PEAK_HOURS_LEAD =
-  "Audience moyenne de votre semaine type (moyenne glissante sur les 4 dernières semaines), croisant les jours de la semaine et les heures d'ouverture. Plus la couleur est vive, plus l'audience est élevée. Les cases pleines sont mesurées par votre capteur, les cases en pointillé sont des estimations. Les zones rayées correspondent à vos heures de fermeture ou aux créneaux sans aucune donnée.";
+  "Semaine type de votre audience sur la période analysée, croisant les jours de la semaine et les heures d'ouverture — mesure de votre capteur en priorité, estimation en secours. Plus la couleur est vive, plus l'audience est élevée. Les cases pleines sont mesurées par votre capteur, les cases en pointillé sont des estimations. Les zones rayées correspondent à vos heures de fermeture, aux jours hors période ou aux créneaux sans aucune donnée.";
 
-/** AFF1 amendment — the S02 empty-state title. S02 is the typical week, not a period, so the
- * copy names no period; pinned here because the component itself is unpinnable. */
+/** The S02 empty-state title — pinned here because the component itself is unpinnable. */
 export const PEAK_HOURS_EMPTY_TITLE = "Pas encore de mesure d'audience";
 
 /** The mockups' fallback window (8h–21h, 14 columns) — used ONLY when the hours are unknown. */

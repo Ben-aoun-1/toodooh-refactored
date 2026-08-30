@@ -33,8 +33,14 @@ export const screenhostKeys = {
   /** The owner's screenhosts WiFi list (GET /api/screenhosts/mine). */
   screenhostsMine: (userId: string) => [...screenhostKeys.all, 'screenhostsMine', userId] as const,
 
-  /** A screenhost's weekday×hour audience grid (L-aff-view — GET /:id/affluence). */
-  affluence: (screenhostId: string) => [...screenhostKeys.all, 'affluence', screenhostId] as const,
+  /** A screenhost's weekday×hour audience grid (L-aff-view — GET /:id/affluence). PERF-R2 —
+   * the optional période slots key the masked read; null = the unscoped typical week. */
+  affluence: (screenhostId: string, from?: string, to?: string) =>
+    [...screenhostKeys.all, 'affluence', screenhostId, from ?? null, to ?? null] as const,
+
+  /** PERF-R1 — a venue's merged période audience (GET /:id/audience?from&to). */
+  audience: (screenhostId: string, from: string, to: string) =>
+    [...screenhostKeys.all, 'audience', screenhostId, from, to] as const,
 
   /** The owner's EN_ATTENTE dispatch allocations awaiting accept/reject (GET /allocations). */
   pendingAllocations: (userId: string) =>

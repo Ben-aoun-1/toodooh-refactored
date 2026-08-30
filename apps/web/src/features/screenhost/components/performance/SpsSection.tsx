@@ -1,6 +1,6 @@
 import { Info } from 'lucide-react';
 
-import { spsCriteria, spsScoreLabel } from '../../lib/sps-view';
+import { spsAsOfLabel, spsCriteria, spsScoreLabel } from '../../lib/sps-view';
 import type { VenueSps } from '../../services/performance.service';
 
 import { SectionHeading } from './SectionHeading';
@@ -33,6 +33,9 @@ export function SpsSection({ sps, isError }: SpsSectionProps) {
   const live = !isError && sps !== undefined && sps.sps !== null && sps.variables !== null;
   const criteria = live && sps.variables ? spsCriteria(sps.variables) : null;
   const scoreLabel = live ? spsScoreLabel(sps.sps) : 'À venir';
+  // PERF-R1 — a live score is not période-able: label it « au <date> » instead of silently
+  // ignoring the période filter.
+  const asOf = !isError && sps !== undefined ? spsAsOfLabel(sps.as_of) : null;
 
   return (
     <section className="mb-[76px]">
@@ -52,7 +55,7 @@ export function SpsSection({ sps, isError }: SpsSectionProps) {
 
         <div className="mb-8 border-b border-perf-line pb-[26px] sm:pr-[130px]">
           <div className="perf-mono text-[10px] uppercase tracking-[0.1em] text-perf-mist">
-            Score actuel
+            Score actuel{asOf ? ` — ${asOf}` : ''}
           </div>
           <div className="mt-3 text-[46px] font-semibold leading-none tracking-[-0.025em] text-perf-ink">
             {scoreLabel}

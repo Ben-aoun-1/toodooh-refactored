@@ -1,5 +1,7 @@
 import type { VenueSps } from '../services/performance.service';
 
+import { formatDateFr } from './performance-period';
+
 /**
  * PERF-QA1 R6 — pure view maths for the live SPS card (S08). Labels mirror the PDF's S08
  * VERBATIM; weights and values come EXCLUSIVELY from the wire (the 25/30/20/10 Σ-85 hardcode
@@ -37,4 +39,13 @@ export function spsCriteria(variables: NonNullable<VenueSps['variables']>): SpsC
 /** The big score figure — 'À venir' while the venue has no computable score. */
 export function spsScoreLabel(sps: number | null): string {
   return sps === null ? 'À venir' : fmtScore(sps);
+}
+
+/**
+ * PERF-R1 — a live score is genuinely not période-able: the card labels it « au <date> » (the
+ * wire's as_of, Tunis) instead of silently ignoring the période filter; null until the wire
+ * answers.
+ */
+export function spsAsOfLabel(asOf: string | undefined): string | null {
+  return asOf === undefined ? null : `au ${formatDateFr(asOf)}`;
 }

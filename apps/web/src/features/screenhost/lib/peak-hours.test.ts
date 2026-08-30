@@ -15,16 +15,16 @@ describe('PEAK_HOURS_LEAD (the byte-equality contract with the PDF)', () => {
   // side can be reworded without its own pin failing — do not change one without the other.
   it('pins the exact wording', () => {
     expect(PEAK_HOURS_LEAD).toBe(
-      "Audience moyenne de votre semaine type (moyenne glissante sur les 4 dernières semaines), croisant les jours de la semaine et les heures d'ouverture. Plus la couleur est vive, plus l'audience est élevée. Les cases pleines sont mesurées par votre capteur, les cases en pointillé sont des estimations. Les zones rayées correspondent à vos heures de fermeture ou aux créneaux sans aucune donnée.",
+      "Semaine type de votre audience sur la période analysée, croisant les jours de la semaine et les heures d'ouverture — mesure de votre capteur en priorité, estimation en secours. Plus la couleur est vive, plus l'audience est élevée. Les cases pleines sont mesurées par votre capteur, les cases en pointillé sont des estimations. Les zones rayées correspondent à vos heures de fermeture, aux jours hors période ou aux créneaux sans aucune donnée.",
     );
   });
 
-  it('names the semaine type (AFF1 ruling: NOT period-scoped) and BOTH provenances', () => {
-    expect(PEAK_HOURS_LEAD).toContain('semaine type');
-    expect(PEAK_HOURS_LEAD).toContain('moyenne glissante sur les 4 dernières semaines');
-    expect(PEAK_HOURS_LEAD).toContain('mesurées par votre capteur');
-    expect(PEAK_HOURS_LEAD).toContain('estimations');
-    expect(PEAK_HOURS_LEAD).not.toContain('période analysée');
+  it('PERF-R2 — names the période scope AND both provenances', () => {
+    expect(PEAK_HOURS_LEAD).toContain('Semaine type');
+    expect(PEAK_HOURS_LEAD).toContain('période analysée'); // the période scopes S02 now
+    expect(PEAK_HOURS_LEAD).toContain('mesure de votre capteur en priorité');
+    expect(PEAK_HOURS_LEAD).toContain('estimation en secours');
+    expect(PEAK_HOURS_LEAD).toContain('jours hors période'); // the weekday mask is explained
   });
 });
 

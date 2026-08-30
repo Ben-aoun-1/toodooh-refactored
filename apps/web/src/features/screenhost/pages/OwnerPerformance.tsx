@@ -30,6 +30,7 @@ import {
   useOwnerEarnings,
   useVenueImpressionsDaily,
   useVenueMonthlyStats,
+  useVenueAudience,
   useVenuePistes,
   useVenueProfile,
   useVenueReports,
@@ -45,7 +46,6 @@ import {
   campaignTypeLabel,
   categoryLabel,
   cumulativeSeries,
-  dailyAudienceWithin,
   demographicBreakdown,
   formatTndCellFr,
   hasCastData,
@@ -110,7 +110,6 @@ export default function OwnerPerformance() {
   const monthlyStats = useVenueMonthlyStats(selectedId);
   const impressions = useVenueImpressionsDaily(selectedId, fetchWindow.from, fetchWindow.to);
   const earnings = useOwnerEarnings(user?.id);
-  const affluence = useScreenhostAffluence(selectedId);
   // PERF-QA1 — the three new owner reads: the generated-reports listing (R1, THE month
   // authority), the live SPS breakdown (R6) and the period pistes (R5).
   const reports = useVenueReports(selectedId);
@@ -134,6 +133,13 @@ export default function OwnerPerformance() {
     reportRange?.range.from ?? '',
     reportRange?.range.to ?? '',
   );
+  // PERF-R1 — S01/S04 read the MERGED période audience from the api (PAX day first, the
+  // affluence grid otherwise — one server-side rule, shared with the PDF twin). Carries the
+  // ACTIVE période on the wire and re-fetches when the pills change, like the pistes read.
+  const audience = useVenueAudience(selectedId, range.from, range.to);
+  // PERF-R2 — the heatmap read carries the période too: the api masks the weekdays the période
+  // does not contain (a 7+-day période keeps the whole week).
+  const affluence = useScreenhostAffluence(selectedId, range);
 
   // ── Per-venue datasets ──────────────────────────────────────────────────────
   const months = useMemo(() => monthlyStats.data?.months ?? [], [monthlyStats.data]);
@@ -198,11 +204,10 @@ export default function OwnerPerformance() {
     () => venueLines.filter((l) => lineInPeriod(l, range)),
     [venueLines, range],
   );
-  const periodAudience = useMemo(() => dailyAudienceWithin(months, range), [months, range]);
-  // AFF1 (ruling 2026-08-26) — S02 renders the hub's MERGED typical-week grid WITH provenance
-  // (measured solid / backup estimation / neither hachured). It is NOT period-scoped: the period
-  // pills keep driving the other sections, S02 describes the venue's semaine type (the PERF-QA2
-  // « measured-only over the period » seam is superseded — no such source exists).
+  const periodAudience = useMemo(() => audience.data?.days ?? [], [audience.data]);
+  // PERF-R2 (supersedes AFF1's « never the période ») — S02 renders the hub's MERGED PAX-first
+  // grid WITH provenance, MASKED api-side to the weekdays the période contains (colour = level,
+  // outline = source, unchanged).
   const affluenceSources = useMemo(() => affluence.data?.sources ?? [], [affluence.data]);
   const affluenceCounts = affluence.data?.counts ?? EMPTY_COUNTS;
   // R9 — real venue hours; 14 h is ONLY the null/degenerate fallback and is flagged as such.

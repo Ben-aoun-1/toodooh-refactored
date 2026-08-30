@@ -91,8 +91,16 @@ export const screenhostService = {
     return apiClient.get<ScreenhostWifiReveal>(`/screenhosts/${id}/wifi/reveal`);
   },
 
-  /** GET /api/screenhosts/:id/affluence — owner-scoped weekday×hour audience grid (L-aff-view). */
-  getAffluence(id: string): Promise<ScreenhostAffluence> {
-    return apiClient.get<ScreenhostAffluence>(`/screenhosts/${id}/affluence`);
+  /**
+   * GET /api/screenhosts/:id/affluence — owner-scoped weekday×hour audience grid (L-aff-view).
+   * PERF-R2 — optional from/to scope the read to the période's weekdays (the api masks the
+   * others); without them the read stays the unscoped typical week (the owner dashboard).
+   */
+  getAffluence(id: string, from?: string, to?: string): Promise<ScreenhostAffluence> {
+    const range =
+      from !== undefined && to !== undefined
+        ? `?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+        : '';
+    return apiClient.get<ScreenhostAffluence>(`/screenhosts/${id}/affluence${range}`);
   },
 };
