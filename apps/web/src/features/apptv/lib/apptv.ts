@@ -7,7 +7,7 @@ export const APPTV_APK_HREF = '/downloads/toodooh-tv.apk';
 export const APPTV_TITLE = "L'application TV Toodooh";
 export const APPTV_PITCH = 'Diffusez les campagnes de votre établissement sur votre téléviseur.';
 export const APPTV_DOWNLOAD_LABEL = "Télécharger l'APK (Android TV)";
-export const APPTV_VERSION_LINE = 'Version 1.3.0';
+export const APPTV_VERSION_LINE = 'Version 1.4.0';
 
 export const APPTV_INSTALL_STEPS: readonly string[] = [
   'Autoriser les sources inconnues dans les paramètres de la TV.',
