@@ -103,7 +103,7 @@ export const DEFAULT_LOCATION_ENGINE_CONFIG: DoohLocationEngineConfig = {
   dooh_occupation_reference_rph: 10,
 };
 
-/** Extrait les paramètres moteur depuis la config globale (`getDoohConfigNumbers`). */
+/** Extrait les paramètres moteur depuis la config DOOH (`DEFAULT_DOOH_CONFIG_NUMBERS` — ADM-CFG1). */
 export function doohNumbersToLocationEngineConfig(c: DoohConfigNumbers): DoohLocationEngineConfig {
   return {
     max_billable_spot_rate_per_hour: c.max_billable_spot_rate_per_hour,
@@ -350,7 +350,6 @@ export function computeDoohLocationAffluenceCampaign(
       mappedDay,
     );
     if (slotsPositifsCeJour > 0) daysWithPositiveRawSlots += 1;
-
 
     const dow = mappedDay;
 

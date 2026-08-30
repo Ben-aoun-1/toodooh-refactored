@@ -14,7 +14,8 @@ describe('adminKeys', () => {
       adminKeys.monitoringCampaigns(),
       adminKeys.monitoringStats(),
       adminKeys.monitoringCategories(),
-      adminKeys.globalConfiguration(),
+      adminKeys.adminLocations('all', 'all', '', 1, 20),
+      adminKeys.screenOwners(),
       adminKeys.users(),
       adminKeys.admins(),
     ]) {
@@ -84,8 +85,6 @@ describe('adminKeys', () => {
   it('keys the 6c catalog reads — events, platform stats, per-location affluence', () => {
     expect(adminKeys.events()).toEqual(['admin', 'events']);
     expect(adminKeys.platformStats()).toEqual(['admin', 'platformStats']);
-    expect(adminKeys.affluenceSchedule('loc1')).toEqual(['admin', 'affluenceSchedule', 'loc1']);
-    expect(adminKeys.affluenceSchedule('loc1')).not.toEqual(adminKeys.affluenceSchedule('loc2'));
     expect(adminKeys.adminLocations('all', 'all', '', 1, 20)).not.toEqual(
       adminKeys.adminLocations('all', 'all', '', 2, 20),
     );

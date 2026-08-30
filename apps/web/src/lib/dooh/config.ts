@@ -2,9 +2,9 @@
  * DOOH calculation config (legacy model). Numbers are TND for amounts, seconds for durations.
  *
  * Pure: no imports, no side effects. Lives in `lib/dooh/` (Supabase-free) so calculation
- * code can be reached without constructing the Supabase client. `services/global-configuration.service.ts`
- * loads these values from the `global_configuration` table; the defaults below are the single
- * source of truth otherwise.
+ * code can be reached without constructing the Supabase client. The admin-editable
+ * `global_configuration` table and its service are GONE (ADM-CFG1 — the live CPM knob is
+ * dispatch_config, server-side); the defaults below are the single source of truth.
  *
  * NOTE: the v3.0 pricing model (`./v3-model.ts`) has its own config type, `DoohConfigV3`.
  * This type is the *current* (pre-v3.0) engine's config — see `docs/handoff/pricing-model-v3.md`
