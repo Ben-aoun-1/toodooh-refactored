@@ -36,6 +36,7 @@ import { createEngineTrace, type EngineTrace } from '../lib/engine-journal/trace
 import { releaseBlocHours, runEventRefusalCascade } from '../lib/event-dispatch/dispatch.js';
 import { displayImpressionsSettled } from '../lib/impressions-display.js';
 import { measuredDays, measuredTotal } from '../lib/monthly-audience.js';
+import { periodAudience, weekdaysInRange } from '../lib/period-audience.js';
 import { pushPlaylistToVenue } from '../lib/playout/push.js';
 import { assembleReportData } from '../lib/report/assemble.js';
 import { buildPistes } from '../lib/report/pistes.js';
@@ -676,6 +677,42 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
     }
 
+    // PERF-R2 (operator 2026-08-30) — optional ?from&to: the période scopes this read by masking
+    // the WEEKDAYS it does not contain (a 7+-day période keeps the whole week — the grid stays
+    // the hub's rolling PAX-first merge; only weekday membership is scoped). Both params or
+    // neither: a one-sided range is a validation error, not a guess.
+    const parsedQuery = z
+      .object({
+        from: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional(),
+        to: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional(),
+      })
+      .refine((q) => (q.from === undefined) === (q.to === undefined), {
+        message: 'from and to come together',
+        path: ['to'],
+      })
+      .safeParse(request.query);
+    if (!parsedQuery.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: parsedQuery.error.issues.map((i) => ({
+          field: i.path.join('.'),
+          reason: i.message,
+        })),
+      });
+    }
+    const maskRange =
+      parsedQuery.data.from !== undefined && parsedQuery.data.to !== undefined
+        ? { from: parsedQuery.data.from, to: parsedQuery.data.to }
+        : null;
+    const keptWeekdays = maskRange ? weekdaysInRange(maskRange) : null;
+
     const slots = await db
       .select({
         dayOfWeek: screenhostAffluence.dayOfWeek,
@@ -685,6 +722,8 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       })
       .from(screenhostAffluence)
       .where(eq(screenhostAffluence.screenhostId, owned.id));
+    const keptSlots =
+      keptWeekdays === null ? slots : slots.filter((slot) => keptWeekdays.has(slot.dayOfWeek));
 
     // Zero-filled 7×24 grid (Monday-first); day_of_week 1=Mon…7=Sun → row 0…6. `sources` is the
     // same shape, null-filled.
@@ -693,7 +732,7 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       Array.from({ length: 24 }, () => null),
     );
     const counts = { measured: 0, backup: 0 };
-    for (const slot of slots) {
+    for (const slot of keptSlots) {
       const row = grid[slot.dayOfWeek - 1];
       const sourceRow = sources[slot.dayOfWeek - 1];
       if (row && sourceRow && slot.hour >= 0 && slot.hour <= 23) {
@@ -703,7 +742,111 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       }
     }
 
-    return reply.status(200).send({ grid, has_data: slots.length > 0, sources, counts });
+    return reply.status(200).send({ grid, has_data: keptSlots.length > 0, sources, counts });
+  });
+
+  // GET /api/screenhosts/:id/audience?from&to — PERF-R1 (operator 2026-08-30, supersedes
+  // US-P.5 « measured-only »): the merged période audience, ONE api-side rule
+  // (lib/period-audience.ts) reused by the page AND the PDF twin. Per day: the PAX measure when
+  // one exists, else the venue's affluence grid stands in — never a zero because the sensor was
+  // silent; per-day provenance rides on the wire. The span guard is generous (the scan is
+  // monthly-stats rows, not proof_of_play) so « Depuis le début » (2020-01-01) fits.
+  app.get('/api/screenhosts/:id/audience', ownerGuard, async (request, reply) => {
+    const parsedParams = idParamSchema.safeParse(request.params);
+    if (!parsedParams.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: [{ field: 'id', reason: 'must be a uuid' }],
+      });
+    }
+    const parsedQuery = z
+      .object({
+        from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      })
+      .safeParse(request.query);
+    if (!parsedQuery.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: parsedQuery.error.issues.map((i) => ({
+          field: i.path.join('.'),
+          reason: i.message,
+        })),
+      });
+    }
+    const { from, to } = parsedQuery.data;
+    const spanDays = (Date.parse(to) - Date.parse(from)) / 86_400_000;
+    if (!Number.isFinite(spanDays) || spanDays < 0) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        fields: [{ field: 'to', reason: 'from must be ≤ to' }],
+      });
+    }
+    if (spanDays > 3700) {
+      return reply.status(400).send({
+        error: 'RANGE_TOO_WIDE',
+        message: 'The range must not exceed 3700 days.',
+      });
+    }
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply
+        .status(401)
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+    }
+
+    // Owner scoping in the WHERE: a foreign screenhost id is indistinguishable from a missing one.
+    const [owned] = await db
+      .select({ id: screenhosts.id })
+      .from(screenhosts)
+      .where(and(eq(screenhosts.id, parsedParams.data.id), eq(screenhosts.ownerId, userId)))
+      .limit(1);
+    if (!owned) {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
+    }
+
+    const monthRows = await db
+      .select({ month: screenhostMonthlyStats.month, daily: screenhostMonthlyStats.daily })
+      .from(screenhostMonthlyStats)
+      .where(
+        and(
+          eq(screenhostMonthlyStats.screenhostId, owned.id),
+          gte(screenhostMonthlyStats.month, from.slice(0, 7)),
+          lte(screenhostMonthlyStats.month, to.slice(0, 7)),
+        ),
+      );
+    const slotRows = await db
+      .select({
+        dayOfWeek: screenhostAffluence.dayOfWeek,
+        hour: screenhostAffluence.hour,
+        estimatedImpressions: screenhostAffluence.estimatedImpressions,
+      })
+      .from(screenhostAffluence)
+      .where(eq(screenhostAffluence.screenhostId, owned.id));
+    const affluenceGrid: number[][] = Array.from({ length: 7 }, () =>
+      Array.from({ length: 24 }, () => 0),
+    );
+    for (const slot of slotRows) {
+      const row = affluenceGrid[slot.dayOfWeek - 1];
+      if (row && slot.hour >= 0 && slot.hour <= 23) row[slot.hour] = slot.estimatedImpressions;
+    }
+
+    const merged = periodAudience({
+      months: monthRows,
+      grid: affluenceGrid,
+      range: { from, to },
+      todayIso: tunisDateOf(new Date()),
+    });
+    return reply.status(200).send({
+      days: merged.days,
+      total_audience: merged.total,
+      measured_days: merged.measuredDays,
+      estimated_days: merged.estimatedDays,
+      estimated_pct: merged.estimatedPct,
+    });
   });
 
   // GET /api/screenhosts/:id/profile — owner-scoped venue identity card (Lane F, the performances
@@ -1234,7 +1377,10 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
     try {
       const cfg = await getDispatchConfig();
       const { sps, variables } = await computeSps(owned.id);
+      // PERF-R1 — a live score is genuinely not période-able: the page labels it « au <date> »
+      // instead of silently ignoring the filter, and this is that date (Tunis).
       return reply.status(200).send({
+        as_of: tunisDateOf(new Date()),
         sps,
         variables: {
           acceptation: { value: variables.acceptation, weight: cfg.spsWeightAcceptation },
@@ -1248,7 +1394,7 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       });
     } catch (err) {
       request.log.warn({ err, screenhostId: owned.id }, 'owner sps compute failed');
-      return reply.status(200).send({ sps: null, variables: null });
+      return reply.status(200).send({ as_of: tunisDateOf(new Date()), sps: null, variables: null });
     }
   });
 

@@ -268,6 +268,17 @@ describe('PERF-QA1 owner surfaces (real Postgres)', () => {
       expect((await get(`/api/screenhosts/${foreign}/sps`)).statusCode).toBe(404);
     });
 
+    it('PERF-R1: carries as_of (Tunis today) so the page can label the live score « au <date> »', async () => {
+      const me = await seedUser();
+      const sh = await seedScreenhost(me);
+      mockSession(me);
+      const body = (await get(`/api/screenhosts/${sh}/sps`)).json<SpsBody & { as_of?: string }>();
+      const tunisToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Tunis' }).format(
+        new Date(),
+      );
+      expect(body.as_of).toBe(tunisToday);
+    });
+
     it('serves the live score with the DEFAULT config weights 40/30/20/10 when no config row exists', async () => {
       const me = await seedUser();
       const sh = await seedScreenhost(me);
