@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 
+import { DEFAULT_DOOH_CONFIG_NUMBERS } from '@/lib/dooh/config';
 import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase';
-import { getDoohConfigNumbers } from '@/services/global-configuration.service';
 
 import { screenhostKeys } from './queryKeys';
 
@@ -56,7 +56,7 @@ const toDate = (value?: string | null) => {
  * validation, and folds it all into per-campaign owner-share cards.
  */
 async function fetchOwnerCampaignsOverview(userId: string): Promise<OwnerCampaignCard[]> {
-  const doohConfig = await getDoohConfigNumbers();
+  const doohConfig = DEFAULT_DOOH_CONFIG_NUMBERS; // ADM-CFG1 — seed CPM; live knob = dispatch_config (api)
   const [
     { data: ownerLocations, error: ownerLocationsError },
     { data: ownerScreens, error: ownerScreensError },

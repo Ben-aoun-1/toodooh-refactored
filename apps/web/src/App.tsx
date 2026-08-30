@@ -67,9 +67,6 @@ const RechargeManagement = lazy(() => import('@/features/admin/pages/RechargeMan
 const GeographicZonesManagement = lazy(
   () => import('@/features/admin/pages/GeographicZonesManagement'),
 );
-const AdminGlobalConfiguration = lazy(
-  () => import('@/features/admin/pages/AdminGlobalConfiguration'),
-);
 const DispatchConfigManagement = lazy(
   () => import('@/features/admin/pages/DispatchConfigManagement'),
 );
@@ -619,14 +616,6 @@ export default function App() {
               element={
                 <AdminRoute requiredRoles={['superadmin', 'admin']}>
                   <GeographicZonesManagement />
-                </AdminRoute>
-              }
-            />
-            <Route
-              path="/admin-global-config"
-              element={
-                <AdminRoute requiredRoles={['superadmin', 'admin']}>
-                  <AdminGlobalConfiguration />
                 </AdminRoute>
               }
             />

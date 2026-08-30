@@ -1,3 +1,4 @@
+import { DEFAULT_DOOH_CONFIG_NUMBERS } from '@/lib/dooh/config';
 import { buildHybridAdjustedHourlyPlan, type HourlyPlanSlotInput } from '@/lib/dooh/hourly-plan';
 import {
   computeRepetitionsPerHourVideo,
@@ -20,7 +21,6 @@ import {
 } from '@/lib/dooh/legacy/dooh-hourly-grid';
 import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase';
-import { getDoohConfigNumbers } from '@/services/global-configuration.service';
 
 import {
   getOccupiedRepetitionsByLocationFromHourlyPlan,
@@ -436,7 +436,9 @@ export const campaignService = {
       throw new Error('Aucun écran exploitable avec localité pour la campagne.');
     }
 
-    const doohConfig = await getDoohConfigNumbers();
+    // ADM-CFG1 — the admin-editable global_configuration table is gone with its page; the legacy
+    // engine runs on the seed defaults (the live CPM knob is dispatch_config, read server-side).
+    const doohConfig = DEFAULT_DOOH_CONFIG_NUMBERS;
     const isEventCampaign = Boolean((campaign as { event_id?: string | null }).event_id);
     const ownEventId = (campaign as { event_id?: string | null }).event_id ?? null;
     const cpmTnd = isEventCampaign

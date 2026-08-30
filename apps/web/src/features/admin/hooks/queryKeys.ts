@@ -54,8 +54,6 @@ export const adminKeys = {
   monitoringStats: () => [...adminKeys.all, 'monitoringStats'] as const,
   monitoringCategories: () => [...adminKeys.all, 'monitoringCategories'] as const,
 
-  globalConfiguration: () => [...adminKeys.all, 'globalConfiguration'] as const,
-
   /** Resolved dispatch CPM config (admin-editable, new engine: `adminDispatchConfigService.get`). */
   dispatchConfig: () => [...adminKeys.all, 'dispatchConfig'] as const,
 
@@ -79,7 +77,7 @@ export const adminKeys = {
   /** EV2 — one event's tarification detail (`adminEventsService.tarification`). */
   eventTarification: (id: string) => [...adminKeys.all, 'events', 'tarification', id] as const,
 
-  /** Paginated, filtered location list for ScreenManagement. */
+  /** ADM-SCR1 — paginated, filtered venue list for ScreenManagement (GET /api/admin/screenhosts). */
   adminLocations: (
     status: string,
     ownerId: string,
@@ -87,12 +85,9 @@ export const adminKeys = {
     page: number,
     perPage: number,
   ) => [...adminKeys.all, 'adminLocations', status, ownerId, search, page, perPage] as const,
+  /** ADM-SCR1 — the owner picker (GET /api/admin/screenhosts/owners). */
   screenOwners: () => [...adminKeys.all, 'screenOwners'] as const,
 
   /** AdminDashboard's platform-stats composite. */
   platformStats: () => [...adminKeys.all, 'platformStats'] as const,
-
-  /** Per-location hourly affluence schedule (AffluenceModal). */
-  affluenceSchedule: (locationId: string) =>
-    [...adminKeys.all, 'affluenceSchedule', locationId] as const,
 };

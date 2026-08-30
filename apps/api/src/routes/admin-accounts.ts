@@ -1,5 +1,5 @@
 import { hashPassword } from 'better-auth/crypto';
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, inArray } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
@@ -77,6 +77,44 @@ const toAccountView = (row: {
   contact_name: row.contactName,
   email_verified: row.emailVerified,
 });
+
+// ADM-ADM1 — the staff-admin roles the /admin-management page lists and (re)activates. `moderator`
+// is not a user_role value (slice-2 A ruling 2) and there is no permissions concept in this model.
+const ADMIN_ROLES = ['admin', 'superadmin'] as const;
+const idParamSchema = z.object({ id: z.uuid() });
+
+// users carries ONE contact_name (no first/last split). The admin list exposes both: the full name
+// verbatim, plus a first/last split on the first space for the page's initials/badges. Lossy by
+// nature (a mononym has an empty last_name) — display sugar only, never written back.
+export const splitContactName = (contactName: string): { first: string; last: string } => {
+  const trimmed = contactName.trim();
+  const space = trimmed.indexOf(' ');
+  if (space === -1) return { first: trimmed, last: '' };
+  return { first: trimmed.slice(0, space), last: trimmed.slice(space + 1).trim() };
+};
+
+// The admin-account view of a users row: is_active = "not banned" (deactivating an admin IS the
+// existing POST /api/admin/users/:id/ban — sessions revoked, sign-in blocked; unban restores).
+const toAdminAccountView = (row: {
+  id: string;
+  email: string;
+  contactName: string;
+  role: string;
+  status: string;
+  createdAt: Date;
+}) => {
+  const { first, last } = splitContactName(row.contactName);
+  return {
+    id: row.id,
+    email: row.email,
+    contact_name: row.contactName,
+    first_name: first,
+    last_name: last,
+    role: row.role,
+    is_active: row.status !== 'banned',
+    created_at: row.createdAt,
+  };
+};
 
 // Non-blocking welcome email for a newly-created AGENT (Kais GTM). Mirrors auth.ts's never-throw
 // pattern (Decision 8): emailSender.send returns a result union and never throws, and we ALWAYS
@@ -282,5 +320,99 @@ export const adminAccountsRoutes: FastifyPluginAsync = async (app) => {
       .innerJoin(users, eq(users.id, agents.userId))
       .orderBy(desc(agents.createdAt));
     return reply.status(200).send({ agents: rows });
+  });
+
+  // GET /api/admin/admins — ADM-ADM1: every staff account (admin + superadmin), newest first, for
+  // the superadmin-only /admin-management page. Replaces the dead Supabase `admin_profiles` read.
+  app.get('/api/admin/admins', superadminGuard, async (_request, reply) => {
+    const rows = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        contactName: users.contactName,
+        role: users.role,
+        status: users.status,
+        createdAt: users.createdAt,
+      })
+      .from(users)
+      .where(inArray(users.role, [...ADMIN_ROLES]))
+      .orderBy(desc(users.createdAt));
+    return reply.status(200).send({ admins: rows.map(toAdminAccountView) });
+  });
+
+  // POST /api/admin/users/:id/unban — ADM-ADM1: reactivate a deactivated STAFF account. Deactivation
+  // reuses the existing ban route (status→'banned' + sessions revoked); this is its inverse for
+  // admin-role targets ONLY. End-user bans stay TERMINAL (N3 Scenario 2 ruling — fraud evidence,
+  // no recovery path): a non-admin target is refused, whatever its status. Superadmin-only, like
+  // account creation. Restores 'approved' (staff accounts are created approved — there is no
+  // moderation state to return to) and stamps the actor on the validation trio; the ban reason is
+  // cleared with it. 409 if the target is not banned.
+  app.post('/api/admin/users/:id/unban', superadminGuard, async (request, reply) => {
+    const parsedParams = idParamSchema.safeParse(request.params);
+    if (!parsedParams.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        statusCode: 400,
+        requestId: request.id,
+        fields: [{ field: 'id', reason: 'must be a valid uuid' }],
+      });
+    }
+    const adminId = request.user?.id;
+    if (!adminId) {
+      return reply
+        .status(401)
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+    }
+    const { id } = parsedParams.data;
+    const [existing] = await db
+      .select({ id: users.id, role: users.role, status: users.status })
+      .from(users)
+      .where(eq(users.id, id))
+      .limit(1);
+    if (!existing) {
+      return reply.status(404).send({
+        error: 'USER_NOT_FOUND',
+        message: 'No user with that id.',
+        statusCode: 404,
+        requestId: request.id,
+      });
+    }
+    if (!(ADMIN_ROLES as readonly string[]).includes(existing.role)) {
+      return reply.status(409).send({
+        error: 'NOT_ADMIN_ACCOUNT',
+        message: 'Only staff (admin) accounts can be reactivated; end-user bans are terminal.',
+        statusCode: 409,
+        requestId: request.id,
+      });
+    }
+    if (existing.status !== 'banned') {
+      return reply.status(409).send({
+        error: 'CONFLICT',
+        message: `User already ${existing.status}.`,
+        statusCode: 409,
+        requestId: request.id,
+        currentStatus: existing.status,
+      });
+    }
+    const [updated] = await db
+      .update(users)
+      .set({
+        status: 'approved',
+        validatedBy: adminId,
+        validatedAt: new Date(),
+        validationNotes: null,
+      })
+      .where(eq(users.id, id))
+      .returning({
+        id: users.id,
+        email: users.email,
+        contactName: users.contactName,
+        role: users.role,
+        status: users.status,
+        createdAt: users.createdAt,
+      });
+    if (!updated) throw new Error('unban update returned no row');
+    return reply.status(200).send({ account: toAdminAccountView(updated) });
   });
 };

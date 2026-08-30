@@ -1,23 +1,20 @@
 import {
-  AdminProfile,
+  AdminAccount,
   CreateInternalAccountInput,
   InternalAccount,
 } from '@/features/admin/types/admin';
 import { apiClient } from '@/lib/api-client';
-import { supabase } from '@/lib/supabase';
 
-// Lane-4 de-Supabase: the dashboard-stats read (getDashboardStats), the admin-activity log
-// (logActivity — its `admin_activities` insert tripped the legacy target_type CHECK and is now
-// dropped, not repointed) and getActivities have been REMOVED — none had a new-engine source and
-// the stats surface now reads GET /api/admin/platform-stats. createAdmin is on apps/api
-// (POST /api/admin/accounts). The admin-account LIST + lifecycle (getAdmins/updateAdmin/
-// deleteAdmin/reactivateAdmin) STILL read the legacy Supabase `admin_profiles` table: internal
-// accounts now land in the `users` table, so this list is stale until the 2.7 admin repoint
-// (FLAGGED — it needs new endpoints: list internal accounts + deactivate/reactivate, which carry a
-// product decision on what "deactivate an admin" means in the users model). Left on Supabase here.
+// ADM-ADM1 — the staff-account surface is entirely on apps/api now. The legacy Supabase
+// `admin_profiles` list/update/deactivate/reactivate (dead in prod — the client throws where
+// VITE_SUPABASE_* is unset) is gone:
+//   list       → GET  /api/admin/admins            (superadmin) — users where role ∈ admin/superadmin
+//   deactivate → POST /api/admin/users/:id/ban     (the EXISTING route: status→banned, sessions revoked;
+//                                                   a non-empty motif is required by the server)
+//   reactivate → POST /api/admin/users/:id/unban   (superadmin; admin-role targets only)
+//   create     → POST /api/admin/accounts          (unchanged)
+// Errors propagate as ApiError → the pages surface the server message.
 export const adminService = {
-  // createAdmin → apps/api POST /api/admin/accounts (no verification email; email_verified +
-  // approved). Errors propagate as ApiError → the page's getErrorMessage surfaces the server message.
   async createAdmin(input: CreateInternalAccountInput): Promise<InternalAccount> {
     const { account } = await apiClient.post<{ account: InternalAccount }>(
       '/admin/accounts',
@@ -26,59 +23,18 @@ export const adminService = {
     return account;
   },
 
-  async getAdmins(): Promise<AdminProfile[]> {
-    try {
-      const { data, error } = await supabase
-        .from('admin_profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      return data || [];
-    } catch (_error) {
-      throw new Error('Erreur lors de la récupération des administrateurs');
-    }
+  async getAdmins(): Promise<AdminAccount[]> {
+    const { admins } = await apiClient.get<{ admins: AdminAccount[] }>('/admin/admins');
+    return admins;
   },
 
-  async updateAdmin(id: string, updates: Partial<AdminProfile>): Promise<AdminProfile> {
-    try {
-      const { data, error } = await supabase
-        .from('admin_profiles')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    } catch (_error) {
-      throw new Error("Erreur lors de la mise à jour de l'administrateur");
-    }
+  /** Deactivate = ban: the server requires a reason (kept as the validation note). */
+  async deactivateAdmin(id: string, notes: string): Promise<void> {
+    await apiClient.post(`/admin/users/${id}/ban`, { notes });
   },
 
-  async deleteAdmin(id: string): Promise<void> {
-    try {
-      const { error } = await supabase
-        .from('admin_profiles')
-        .update({ is_active: false })
-        .eq('id', id);
-
-      if (error) throw error;
-    } catch (_error) {
-      throw new Error("Erreur lors de la suppression de l'administrateur");
-    }
-  },
-
-  async reactivateAdmin(id: string): Promise<void> {
-    try {
-      const { error } = await supabase
-        .from('admin_profiles')
-        .update({ is_active: true })
-        .eq('id', id);
-
-      if (error) throw error;
-    } catch (_error) {
-      throw new Error("Erreur lors de la réactivation de l'administrateur");
-    }
+  async reactivateAdmin(id: string): Promise<AdminAccount> {
+    const { account } = await apiClient.post<{ account: AdminAccount }>(`/admin/users/${id}/unban`);
+    return account;
   },
 };

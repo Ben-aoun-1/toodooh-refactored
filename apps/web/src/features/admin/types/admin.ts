@@ -1,55 +1,22 @@
-export interface AdminProfile {
+// ADM-ADM1 — one staff account as GET /api/admin/admins serves it (users where role ∈
+// admin/superadmin). `moderator`, permissions and last_login are GONE: none exists in the users
+// model (moderator is not a user_role value — slice-2 A ruling 2). users carries ONE contact_name;
+// first_name/last_name are a server-side split on the first space (display sugar for initials).
+// is_active = status !== 'banned' (deactivation IS the ban route; unban restores).
+export interface AdminAccount {
   id: string;
-  user_id: string;
   email: string;
+  contact_name: string;
   first_name: string;
   last_name: string;
-  role: 'superadmin' | 'admin' | 'moderator';
-  permissions: string[];
+  role: 'superadmin' | 'admin';
   is_active: boolean;
-  last_login?: string;
   created_at: string;
-  updated_at: string;
-  created_by?: string;
-}
-
-export interface AdminRole {
-  id: string;
-  name: string;
-  description: string;
-  permissions: string[];
-  is_system_role: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface AdminPermission {
-  id: string;
-  name: string;
-  description: string;
-  type: string;
-  resource: string;
-  created_at: string;
-  updated_at?: string;
-}
-
-export interface AdminLoginData {
-  email: string;
-  password: string;
-}
-
-export interface AdminSignUpData {
-  email: string;
-  password: string;
-  first_name: string;
-  last_name: string;
-  role: 'admin' | 'moderator';
-  permissions?: string[];
 }
 
 // Slice-2 A — internal-account creation via the apps/api endpoint POST /api/admin/accounts
 // (superadmin-only). `moderator` is intentionally absent (not a user_role value); the agent roles
-// are the new admin-creatable types. Distinct from the legacy admin_profiles shape above.
+// are the new admin-creatable types.
 export type InternalAccountRole = 'admin' | 'screenhost_agent' | 'screencast_agent';
 
 export interface CreateInternalAccountInput {

@@ -9,7 +9,6 @@ describe('advertiserKeys', () => {
     expect(advertiserKeys.lastCampaigns('u1', 5)[0]).toBe('advertiser');
     expect(advertiserKeys.featuredEvents(3)[0]).toBe('advertiser');
     expect(advertiserKeys.profile('u1')[0]).toBe('advertiser');
-    expect(advertiserKeys.globalConfig()[0]).toBe('advertiser');
     expect(advertiserKeys.notifications('u1')[0]).toBe('advertiser');
   });
 
@@ -23,7 +22,6 @@ describe('advertiserKeys', () => {
     expect(advertiserKeys.lastCampaigns('u1', 5)).toEqual(['advertiser', 'lastCampaigns', 'u1', 5]);
     expect(advertiserKeys.featuredEvents(3)).toEqual(['advertiser', 'featuredEvents', 3]);
     expect(advertiserKeys.profile('u1')).toEqual(['advertiser', 'profile', 'u1']);
-    expect(advertiserKeys.globalConfig()).toEqual(['advertiser', 'globalConfig']);
   });
 
   it('distinguishes keys by their args so caches stay isolated', () => {
@@ -41,7 +39,6 @@ describe('advertiserKeys', () => {
       advertiserKeys.lastCampaigns('u1', 5),
       advertiserKeys.featuredEvents(3),
       advertiserKeys.profile('u1'),
-      advertiserKeys.globalConfig(),
     ];
     for (const key of views) {
       expect(key.slice(0, advertiserKeys.all.length)).toEqual(advertiserKeys.all);
