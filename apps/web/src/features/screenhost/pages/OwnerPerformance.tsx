@@ -1,7 +1,7 @@
 import { Calendar, Loader2 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import PageHeader from '@/components/PageHeader';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
@@ -58,15 +58,17 @@ import {
   zeroFillDays,
 } from '../lib/performance-derive';
 import {
-  type PeriodKey,
+  type PeriodSelection,
   formatDateFr,
   formatGeneratedAtFr,
   formatTablePeriod,
   impressionsFetchWindow,
   inRange,
   isoDate,
+  parsePeriodSelection,
   resolvePeriodRange,
   tunisToday,
+  writePeriodSelection,
 } from '../lib/performance-period';
 import {
   OUT_OF_WINDOW,
@@ -115,11 +117,26 @@ export default function OwnerPerformance() {
   const reports = useVenueReports(selectedId);
   const sps = useVenueSps(selectedId);
 
-  // Period pills — custom only applies on "Actualiser la recherche".
-  const [period, setPeriod] = useState<PeriodKey>('28d');
-  const [customFrom, setCustomFrom] = useState('');
-  const [customTo, setCustomTo] = useState('');
-  const [appliedCustom, setAppliedCustom] = useState<{ from: string; to: string } | undefined>();
+  // MEJ-4 — the période lives in the URL (?periode=&du=&au=), so a refresh keeps the view the
+  // owner chose and a link carries it. It used to be component state alone: every reload snapped
+  // silently back to « 28 derniers jours », which is how a coherent « aujourd'hui » reading
+  // turned into an estimated 28-day one nobody had asked for. `replace` keeps the back button
+  // pointing at the previous PAGE rather than at every pill the owner tried.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { period, custom: appliedCustom } = useMemo(
+    () => parsePeriodSelection(searchParams),
+    [searchParams],
+  );
+  const applySelection = useCallback(
+    (selection: PeriodSelection) => {
+      setSearchParams((prev) => writePeriodSelection(prev, selection), { replace: true });
+    },
+    [setSearchParams],
+  );
+  // The custom pickers stay LOCAL: they are a draft until « Actualiser la recherche » commits
+  // them to the URL. Seeded from the URL so a shared custom link fills its own inputs.
+  const [customFrom, setCustomFrom] = useState(appliedCustom?.from ?? '');
+  const [customTo, setCustomTo] = useState(appliedCustom?.to ?? '');
   const range = useMemo(
     () => resolvePeriodRange(period, today, appliedCustom),
     [period, today, appliedCustom],
@@ -474,12 +491,23 @@ export default function OwnerPerformance() {
 
                       <PeriodFilters
                         active={period}
-                        onSelect={setPeriod}
+                        onSelect={(key) =>
+                          applySelection(
+                            key === 'custom'
+                              ? { period: key, custom: appliedCustom }
+                              : { period: key },
+                          )
+                        }
                         customFrom={customFrom}
                         customTo={customTo}
                         onCustomFromChange={setCustomFrom}
                         onCustomToChange={setCustomTo}
-                        onApplyCustom={() => setAppliedCustom({ from: customFrom, to: customTo })}
+                        onApplyCustom={() =>
+                          applySelection({
+                            period: 'custom',
+                            custom: { from: customFrom, to: customTo },
+                          })
+                        }
                       />
 
                       <ReportIntro
