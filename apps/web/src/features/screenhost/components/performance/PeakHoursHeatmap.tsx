@@ -1,5 +1,5 @@
 import { CalendarClock } from 'lucide-react';
-import { useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import { DAY_LABELS_SHORT } from '../../lib/affluence-grid';
 import {
@@ -8,14 +8,15 @@ import {
   provenanceGrid,
 } from '../../lib/affluence-provenance';
 import {
+  HEATMAP_HINT,
   PEAK_HOURS_EMPTY_TITLE,
   PEAK_HOURS_LEAD,
+  heatmapCellTitle,
   heatmapHours,
   heatmapLevel,
   heatmapScale,
   peakHoursEmpty,
 } from '../../lib/peak-hours';
-import { formatDecimalFr } from '../../lib/performance-derive';
 
 import {
   HEATMAP_CLOSED_CLASS,
@@ -52,8 +53,15 @@ interface PeakHoursHeatmapProps {
  * cell is SOLID when measured by the sensor, DOTTED (lighter, dashed outline) when it is an
  * estimation, and HACHURÉE when the hour is closed OR the slot carries no data at all — never a
  * coloured 0 without provenance. The ramp is relative to the grid's own min/max over open cells
- * that carry data; the tooltip shows the exact value and its provenance. A venue with no data at
- * all gets the explanatory state instead of a mute wall of hachures.
+ * that carry data. A venue with no data at all gets the explanatory state instead of a mute wall
+ * of hachures.
+ *
+ * MEJ-3 (Mejri 31/08 pt 3) — the native `title` tooltip is GONE. ONE `describe()` builds each
+ * cell's (value, kind, closed) descriptor, and both the colour and the text read from it, so the
+ * caption can never describe a different cell than the one under the cursor (the native tooltip
+ * lagged a cell behind on a fast traverse, which is what read as « an incorrect value »). The
+ * text itself lives in lib/peak-hours (`heatmapCellTitle`) where a test can pin it; `aria-label`
+ * carries the same string for assistive tech.
  */
 export function PeakHoursHeatmap({
   grid,
@@ -66,6 +74,21 @@ export function PeakHoursHeatmap({
   const hours = useMemo(() => heatmapHours(openingHour, closingHour), [openingHour, closingHour]);
   const kinds = useMemo(() => provenanceGrid(grid, sources), [grid, sources]);
   const empty = peakHoursEmpty({ has_data: hasData, counts });
+  const [hovered, setHovered] = useState<{ day: number; hour: number } | null>(null);
+
+  // MEJ-3 — THE cell descriptor. The colour, the aria-label and the caption all read from this
+  // one call, so what the caption says is by construction what the cell renders.
+  const describe = useCallback(
+    (day: number, hour: number) => ({
+      dayLabel: DAY_LABELS_SHORT[day] ?? '',
+      hour,
+      closed: closedHour(hour, openingHour, closingHour),
+      kind: kinds[day]?.[hour] ?? ('none' as const),
+      value: grid[day]?.[hour] ?? 0,
+    }),
+    [grid, kinds, openingHour, closingHour],
+  );
+
   const scale = useMemo(() => {
     const visible: (number | null)[] = [];
     for (let day = 0; day < 7; day += 1) {
@@ -77,6 +100,8 @@ export function PeakHoursHeatmap({
     }
     return heatmapScale(visible);
   }, [grid, kinds, hours, openingHour, closingHour]);
+
+  const caption = hovered ? heatmapCellTitle(describe(hovered.day, hovered.hour)) : HEATMAP_HINT;
 
   return (
     <section className="mb-[76px]">
@@ -92,7 +117,10 @@ export function PeakHoursHeatmap({
           </p>
         </div>
       ) : (
-        <div className="mt-8 overflow-x-auto rounded-xl border border-perf-line bg-white p-[26px]">
+        <div
+          className="mt-8 overflow-x-auto rounded-xl border border-perf-line bg-white p-[26px]"
+          onMouseLeave={() => setHovered(null)}
+        >
           <div className="min-w-[680px]">
             <div className="flex gap-1">
               <div className="w-[52px] flex-shrink-0" />
@@ -111,25 +139,21 @@ export function PeakHoursHeatmap({
                   {label}
                 </div>
                 {hours.map((hour) => {
-                  const closed = closedHour(hour, openingHour, closingHour);
-                  const kind = kinds[day]?.[hour] ?? 'none';
-                  const value = grid[day]?.[hour] ?? 0;
-                  const level = kind === 'none' ? 0 : heatmapLevel(value, scale);
-                  const hachure = closed || level === 0;
-                  const title = closed
-                    ? 'Fermé'
-                    : kind === 'none'
-                      ? `${label} ${hour}h — aucune donnée`
-                      : `${label} ${hour}h — ${formatDecimalFr(value)} pers. (${kind === 'measured' ? 'mesuré' : 'estimation'})`;
+                  const cell = describe(day, hour);
+                  const level = cell.kind === 'none' ? 0 : heatmapLevel(cell.value, scale);
+                  const hachure = cell.closed || level === 0;
                   return (
                     <div
                       key={`${label}-${hour}`}
-                      title={title}
-                      data-provenance={closed ? 'closed' : kind}
+                      aria-label={heatmapCellTitle(cell)}
+                      data-provenance={cell.closed ? 'closed' : cell.kind}
+                      onMouseEnter={() => setHovered({ day, hour })}
+                      onFocus={() => setHovered({ day, hour })}
+                      tabIndex={-1}
                       className={`h-[26px] min-w-0 flex-1 rounded ${
                         hachure
                           ? HEATMAP_CLOSED_CLASS
-                          : `${HEATMAP_LEVEL_CLASSES[level - 1]}${kind === 'backup' ? ` ${HEATMAP_ESTIMATION_CLASS}` : ''}`
+                          : `${HEATMAP_LEVEL_CLASSES[level - 1]}${cell.kind === 'backup' ? ` ${HEATMAP_ESTIMATION_CLASS}` : ''}`
                       }`}
                     />
                   );
@@ -138,7 +162,17 @@ export function PeakHoursHeatmap({
             ))}
           </div>
 
-          <div className="perf-mono mt-[18px] flex flex-wrap items-center gap-x-5 gap-y-2 text-[10px] uppercase tracking-[0.04em] text-perf-grey">
+          {/* MEJ-3 — the live cell readout: always the hovered cell's own value + source. */}
+          <p
+            aria-live="polite"
+            className={`mt-[18px] text-[12.5px] leading-[1.45] ${
+              hovered ? 'font-medium text-perf-ink' : 'text-perf-mist'
+            }`}
+          >
+            {caption}
+          </p>
+
+          <div className="perf-mono mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-[10px] uppercase tracking-[0.04em] text-perf-grey">
             <div className="flex items-center gap-2.5">
               <span>Faible</span>
               <div className="flex gap-[3px]">
