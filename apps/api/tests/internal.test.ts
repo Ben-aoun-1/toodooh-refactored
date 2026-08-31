@@ -199,6 +199,45 @@ describe('C1: POST /api/internal/affluence', () => {
     expect(rows[0]!.estimatedImpressions).toBe(250);
   });
 
+  // MEJ-5 — the ingest stores the hub's (day_of_week, hour) bucket VERBATIM. The contract is
+  // Africa/Tunis (the venue's own clock — L-disp compares `hour` against opening/closing_hour),
+  // and the hub currently violates it by bucketing in UTC. That is fixed UPSTREAM: a shift added
+  // here would double-correct the day the producer is fixed, and would put toodooh's grid an hour
+  // away from the hub's own venue page. This pin is the guard against exactly that well-meaning
+  // patch landing in toodooh.
+  it('MEJ-5: stores the weekday/hour bucket VERBATIM — no timezone shifting api-side', async () => {
+    const [host] = await db
+      .insert(screenhosts)
+      .values({ name: 'Place TZ' })
+      .returning({ id: screenhosts.id });
+
+    // 13h Monday in, 13h Monday out — including the wrap-prone edges (00h and 23h).
+    const res = await app!.inject({
+      method: 'POST',
+      url: '/api/internal/affluence',
+      headers: auth(),
+      payload: {
+        slots: [
+          { location_id: host!.id, day_of_week: 1, hour: 13, estimated_impressions: 1396 },
+          { location_id: host!.id, day_of_week: 1, hour: 0, estimated_impressions: 7 },
+          { location_id: host!.id, day_of_week: 7, hour: 23, estimated_impressions: 9 },
+        ],
+      },
+    });
+    expect(res.statusCode).toBe(200);
+
+    const rows = await db.select().from(screenhostAffluence);
+    expect(
+      rows
+        .map((r) => [r.dayOfWeek, r.hour, r.estimatedImpressions])
+        .sort((a, b) => a[0]! - b[0]! || a[1]! - b[1]!),
+    ).toEqual([
+      [1, 0, 7],
+      [1, 13, 1396],
+      [7, 23, 9],
+    ]);
+  });
+
   // AFF1 — provenance. The hub sends source: 'measured' | 'backup' on every slot (HUB-AFF1); it is
   // stored beside the value and overwritten latest-wins like the value itself. Display-only: no
   // pricing path reads it (grep-proof in the lane notes).
