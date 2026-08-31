@@ -107,6 +107,11 @@ describe('owner performance reads (owner-scoped, real Postgres)', () => {
       estimated_pct: number | null;
     }
 
+    // MEJ-R1 — the backup grid stands in only from the venue's ONBOARDING day (created_at)
+    // onward, so every fixture below states one. 2026-07-01 is well before the ranges under
+    // test: these cases assert the merge, not the floor (which has its own block at the end).
+    const ONBOARDED_BEFORE_ALL = { createdAt: new Date('2026-07-01T00:00:00Z') };
+
     const seedBackupWeek = async (sh: string, value: number): Promise<void> => {
       await db.insert(screenhostAffluence).values(
         Array.from({ length: 7 }, (_, i) => ({
@@ -121,7 +126,7 @@ describe('owner performance reads (owner-scoped, real Postgres)', () => {
 
     it('PAX day wins, backup grid otherwise — with per-day provenance on the wire', async () => {
       const me = await seedUser();
-      const sh = await seedScreenhost(me);
+      const sh = await seedScreenhost(me, ONBOARDED_BEFORE_ALL);
       // 2026-08-03 is a Monday. The sensor measured Monday (500); Tuesday it was silent.
       await db.insert(screenhostMonthlyStats).values({
         screenhostId: sh,
@@ -149,7 +154,7 @@ describe('owner performance reads (owner-scoped, real Postgres)', () => {
 
     it('a venue with ZERO readings serves the full backup estimate — never silent-zeros', async () => {
       const me = await seedUser();
-      const sh = await seedScreenhost(me);
+      const sh = await seedScreenhost(me, ONBOARDED_BEFORE_ALL);
       await seedBackupWeek(sh, 80); // no monthly-stats row at all
       mockSession(me);
 
@@ -163,9 +168,64 @@ describe('owner performance reads (owner-scoped, real Postgres)', () => {
       expect(body.estimated_pct).toBe(100);
     });
 
+    // MEJ-2 / ruling MEJ-R1 — the reproduction, end to end: a venue onboarded on 26/08 whose
+    // backup grid an admin typed on 31/08 must NOT be credited with the three Mondays that
+    // preceded its existence (« Pic 1 398 le 10/08 », 4 197 over 28 days).
+    it('the backup grid never answers for days BEFORE the venue was onboarded', async () => {
+      const me = await seedUser();
+      const sh = await seedScreenhost(me, { createdAt: new Date('2026-08-26T09:00:00Z') });
+      await db.insert(screenhostAffluence).values({
+        screenhostId: sh,
+        dayOfWeek: 1, // Monday only — the phantom-peak shape
+        hour: 13,
+        estimatedImpressions: 1396,
+        source: 'backup',
+      });
+      mockSession(me);
+
+      // 03, 10, 17 and 24/08 are Mondays before onboarding; 31/08 is the Monday after it.
+      const body = (
+        await get(`/api/screenhosts/${sh}/audience?from=2026-08-03&to=2026-08-31`)
+      ).json() as AudienceBody;
+      expect(body.days).toEqual([{ date: '2026-08-31', audience: 1396, source: 'estimated' }]);
+      expect(body.total_audience).toBe(1396); // not 4 × 1 396
+      expect(body.days.every((d) => d.date >= '2026-08-26')).toBe(true);
+    });
+
+    it('a MEASURED day before onboarding is still served — only the estimate is floored', async () => {
+      const me = await seedUser();
+      const sh = await seedScreenhost(me, { createdAt: new Date('2026-08-26T09:00:00Z') });
+      await db.insert(screenhostMonthlyStats).values({
+        screenhostId: sh,
+        month: '2026-08',
+        totalAudience: 700,
+        daily: [{ date: '2026-08-10', audience: 700, source: 'measured' }],
+        peakDayOfWeek: 1,
+        peakHour: 13,
+      });
+      await db.insert(screenhostAffluence).values({
+        screenhostId: sh,
+        dayOfWeek: 1,
+        hour: 13,
+        estimatedImpressions: 1396,
+        source: 'backup',
+      });
+      mockSession(me);
+
+      const body = (
+        await get(`/api/screenhosts/${sh}/audience?from=2026-08-03&to=2026-08-31`)
+      ).json() as AudienceBody;
+      expect(body.days).toEqual([
+        { date: '2026-08-10', audience: 700, source: 'measured' }, // kept: a reading is a fact
+        { date: '2026-08-31', audience: 1396, source: 'estimated' },
+      ]);
+      expect(body.measured_days).toBe(1);
+      expect(body.estimated_days).toBe(1);
+    });
+
     it('respects the période bounds and clamps to Tunis today (no future day)', async () => {
       const me = await seedUser();
-      const sh = await seedScreenhost(me);
+      const sh = await seedScreenhost(me, ONBOARDED_BEFORE_ALL);
       await seedBackupWeek(sh, 80);
       mockSession(me);
 

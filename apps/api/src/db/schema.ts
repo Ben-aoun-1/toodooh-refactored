@@ -443,8 +443,11 @@ export const screenhostAffluence = pgTable(
     screenhostId: uuid('screenhost_id')
       .notNull()
       .references(() => screenhosts.id, { onDelete: 'cascade' }),
-    dayOfWeek: integer('day_of_week').notNull(), // 1=Mon … 7=Sun (wedooh's convention)
-    hour: integer('hour').notNull(), // 0–23
+    // MEJ-5 — the CONTRACT is Africa/Tunis, the venue's own clock (L-disp compares `hour` against
+    // opening_hour/closing_hour, which are local). Stored verbatim from the hub; see the note on
+    // POST /api/internal/affluence for the upstream UTC violation that is banked, not patched here.
+    dayOfWeek: integer('day_of_week').notNull(), // 1=Mon … 7=Sun (wedooh's convention), Tunis
+    hour: integer('hour').notNull(), // 0–23, Tunis
     estimatedImpressions: integer('estimated_impressions').notNull(),
     source: affluenceSource('source'), // nullable: unknown provenance
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

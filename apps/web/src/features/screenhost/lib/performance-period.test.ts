@@ -11,6 +11,9 @@ import {
   peakObservedLabel,
   resolvePeriodRange,
   tunisTodayIso,
+  DEFAULT_PERIOD_SELECTION,
+  parsePeriodSelection,
+  writePeriodSelection,
 } from './performance-period';
 
 const TODAY = new Date(2026, 6, 7); // 2026-07-07 (local)
@@ -98,5 +101,74 @@ describe('peakObservedLabel (GREEN2 item 8a — no mockup token on screen)', () 
     expect(peakObservedLabel({ date: '2026-07-26' })).toBe('26/07/2026');
     expect(peakObservedLabel(null)).toBe('—');
     expect(peakObservedLabel(undefined)).toBe('—');
+  });
+});
+
+// MEJ-4 (Mejri 31/08 pt 4) — the période survives a reload because it lives in the URL. Before
+// this it was component state alone: a refresh snapped back to « 28 derniers jours » without the
+// owner touching anything, which is how a coherent « aujourd'hui » reading became the estimated
+// 28-day one reported as fictitious data.
+describe('parsePeriodSelection — the URL is the période', () => {
+  const parse = (qs: string) => parsePeriodSelection(new URLSearchParams(qs));
+
+  it('reads a pill key back verbatim', () => {
+    expect(parse('periode=7d')).toEqual({ period: '7d' });
+    expect(parse('periode=all')).toEqual({ period: 'all' });
+  });
+
+  it('reads a custom range from du/au', () => {
+    expect(parse('periode=custom&du=2026-08-01&au=2026-08-15')).toEqual({
+      period: 'custom',
+      custom: { from: '2026-08-01', to: '2026-08-15' },
+    });
+  });
+
+  it('falls back to the 28-day default on anything unusable — never a half-range', () => {
+    expect(parse('')).toEqual(DEFAULT_PERIOD_SELECTION);
+    expect(parse('periode=42j')).toEqual(DEFAULT_PERIOD_SELECTION);
+    expect(parse('periode=custom')).toEqual(DEFAULT_PERIOD_SELECTION); // no bounds
+    expect(parse('periode=custom&du=2026-08-01')).toEqual(DEFAULT_PERIOD_SELECTION); // half
+    expect(parse('periode=custom&du=01/08/2026&au=15/08/2026')).toEqual(DEFAULT_PERIOD_SELECTION);
+    expect(DEFAULT_PERIOD_SELECTION.period).toBe('28d'); // the documented default, unchanged
+  });
+});
+
+describe('writePeriodSelection — a shareable link, other params untouched', () => {
+  const write = (qs: string, selection: Parameters<typeof writePeriodSelection>[1]) =>
+    writePeriodSelection(new URLSearchParams(qs), selection).toString();
+
+  it('writes the pill key', () => {
+    expect(write('', { period: '3m' })).toBe('periode=3m');
+  });
+
+  it('writes both custom bounds', () => {
+    expect(write('', { period: 'custom', custom: { from: '2026-08-01', to: '2026-08-15' } })).toBe(
+      'periode=custom&du=2026-08-01&au=2026-08-15',
+    );
+  });
+
+  it('drops stale bounds when leaving the custom pill', () => {
+    expect(write('periode=custom&du=2026-08-01&au=2026-08-15', { period: '7d' })).toBe(
+      'periode=7d',
+    );
+  });
+
+  it('drops an incomplete custom pair instead of writing half a range', () => {
+    expect(write('', { period: 'custom' })).toBe('periode=custom');
+  });
+
+  it('preserves every other query param', () => {
+    expect(write('lieu=abc', { period: '12m' })).toBe('lieu=abc&periode=12m');
+  });
+
+  it('round-trips: what is written parses back identically', () => {
+    for (const selection of [
+      { period: '7d' as const },
+      { period: 'all' as const },
+      { period: 'custom' as const, custom: { from: '2026-01-02', to: '2026-03-04' } },
+    ]) {
+      const written = writePeriodSelection(new URLSearchParams(), selection);
+      expect(parsePeriodSelection(written)).toEqual(selection);
+    }
   });
 });

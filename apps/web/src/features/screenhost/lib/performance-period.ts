@@ -91,6 +91,72 @@ export function resolvePeriodRange(
   }
 }
 
+/**
+ * MEJ-4 (Mejri 31/08 pt 4) — THE période lives in the URL.
+ *
+ * It used to live in component state alone, so every reload silently snapped back to « 28
+ * derniers jours ». That is the exact mechanism that turned a coherent « aujourd'hui » reading
+ * into the 28-day estimated one Mejri then reported as fictitious: she had not changed the
+ * filter, the refresh had. Carrying it in the query string also makes a view shareable — the
+ * link IS the période.
+ *
+ * `periode` holds the pill key; `du` / `au` hold the custom bounds. Anything unparsable falls
+ * back to the 28-day default rather than filtering on half a range (the resolvePeriodRange rule).
+ */
+export const PERIOD_PARAM = 'periode';
+export const CUSTOM_FROM_PARAM = 'du';
+export const CUSTOM_TO_PARAM = 'au';
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const PERIOD_KEYS: readonly PeriodKey[] = PERIOD_PILLS.map((pill) => pill.key);
+
+export interface PeriodSelection {
+  period: PeriodKey;
+  /** Only ever set for 'custom', and only when BOTH bounds parsed. */
+  custom?: { from: string; to: string };
+}
+
+/** The default the page falls back to whenever the URL says nothing usable. */
+export const DEFAULT_PERIOD_SELECTION: PeriodSelection = { period: '28d' };
+
+const isPeriodKey = (value: string | null): value is PeriodKey =>
+  value !== null && (PERIOD_KEYS as readonly string[]).includes(value);
+
+/** Read the active période out of a query string. Never throws; never returns a half-range. */
+export function parsePeriodSelection(params: URLSearchParams): PeriodSelection {
+  const key = params.get(PERIOD_PARAM);
+  if (!isPeriodKey(key)) return DEFAULT_PERIOD_SELECTION;
+  if (key !== 'custom') return { period: key };
+  const from = params.get(CUSTOM_FROM_PARAM);
+  const to = params.get(CUSTOM_TO_PARAM);
+  if (from === null || to === null || !ISO_DATE.test(from) || !ISO_DATE.test(to)) {
+    return DEFAULT_PERIOD_SELECTION;
+  }
+  return { period: 'custom', custom: { from, to } };
+}
+
+/**
+ * The query string for a selection, PRESERVING every other param (the venue picker or any future
+ * one). The custom bounds are dropped for the non-custom pills so a stale `du`/`au` can never
+ * outlive the pill that owned them.
+ */
+export function writePeriodSelection(
+  params: URLSearchParams,
+  selection: PeriodSelection,
+): URLSearchParams {
+  const next = new URLSearchParams(params);
+  next.set(PERIOD_PARAM, selection.period);
+  const custom = selection.period === 'custom' ? selection.custom : undefined;
+  if (custom && ISO_DATE.test(custom.from) && ISO_DATE.test(custom.to)) {
+    next.set(CUSTOM_FROM_PARAM, custom.from);
+    next.set(CUSTOM_TO_PARAM, custom.to);
+  } else {
+    next.delete(CUSTOM_FROM_PARAM);
+    next.delete(CUSTOM_TO_PARAM);
+  }
+  return next;
+}
+
 /** Inclusive containment — ISO date strings compare lexicographically. */
 export function inRange(dateIso: string, range: DateRange): boolean {
   return dateIso >= range.from && dateIso <= range.to;

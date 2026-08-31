@@ -252,6 +252,21 @@ export const internalRoutes: FastifyPluginAsync<{ syncKey?: string }> = async (a
   });
 
   // ── C1: POST /api/internal/affluence ────────────────────────────────────────
+  // MEJ-5 (diagnosis, 2026-08-31) — TIMEZONE CONTRACT: `day_of_week` / `hour` are the venue's OWN
+  // clock, i.e. AFRICA/TUNIS weekday and hour. Every consumer reads them that way — the owner
+  // heatmap labels them « 13h », and L-disp compares them against screenhosts.opening_hour /
+  // closing_hour, which are local. toodooh stores what the hub sends VERBATIM and never shifts it:
+  // a correction applied here would double-correct the day the producer is fixed, and would make
+  // toodooh disagree with the hub's own venue page, which renders the same grid.
+  //
+  // KNOWN VIOLATION, upstream and NOT fixed here: the hub buckets in UTC
+  // (toodooh-dashboard/src/database/queries.js `placeHeatmap` — `strftime('%w'|'%H', r.timestamp)`
+  // with no 'localtime' modifier, over `readings.timestamp DEFAULT (datetime('now'))`, which
+  // SQLite writes in UTC). Tunisia is UTC+1 year-round, so every cell currently lands one hour
+  // early, and a reading between 00:00 and 01:00 Tunis lands on the previous weekday. The fix is
+  // one modifier in that query plus a re-push; it is banked because the grid also feeds
+  // money-adjacent engine paths (C_max, event pricing) and needs the operator's word.
+  //
   // Flat batch of {location_id, day_of_week, hour, estimated_impressions, source?}. Latest-value-wins
   // upsert on (screenhost, day, hour) — the value AND its provenance (a provenance-less re-push
   // resets source to NULL: unknown, never stale). Unknown location_ids are SKIPPED and reported

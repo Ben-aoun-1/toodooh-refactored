@@ -1,4 +1,5 @@
-import { affluenceEmpty } from './affluence-provenance';
+import { type ProvenanceKind, affluenceEmpty } from './affluence-provenance';
+import { formatDecimalFr } from './performance-derive';
 
 /**
  * PERF-QA1 R7 — the peak-hours section's HONEST semantics, in one pure home (apps/web has no
@@ -81,3 +82,36 @@ export function peakHoursEmpty(input: {
 }): boolean {
   return affluenceEmpty(input);
 }
+
+/**
+ * MEJ-3 (Mejri 31/08 pt 3) — THE S02 cell description: the value that cell RENDERS and where it
+ * comes from. It lived inline in the component as a native `title`, which made it (a) unpinnable
+ * — apps/web has no render harness, so nothing could assert what a cell claims — and (b)
+ * unreliable in practice: a native tooltip is anchored per element and lags behind the cursor
+ * when it slides across 26px cells, so the panel a tester reads can belong to the PREVIOUS cell.
+ * The string now lives here, and the component renders it into a live caption driven by the
+ * hovered cell's own (value, kind), so the number on screen is always that cell's.
+ *
+ * `closed` wins over everything: outside the venue's hours there is no audience to describe.
+ */
+export interface HeatmapCell {
+  /** « Lun », « Mar », … */
+  dayLabel: string;
+  /** 0–23, the venue's own clock. */
+  hour: number;
+  closed: boolean;
+  kind: ProvenanceKind;
+  /** The cell's rendered value (the number the colour encodes). */
+  value: number;
+}
+
+export function heatmapCellTitle(cell: HeatmapCell): string {
+  const at = `${cell.dayLabel} ${cell.hour}h`;
+  if (cell.closed) return `${at} — fermé`;
+  if (cell.kind === 'none') return `${at} — aucune donnée`;
+  const source = cell.kind === 'measured' ? 'mesuré' : 'estimation';
+  return `${at} — ${formatDecimalFr(cell.value)} pers. (${source})`;
+}
+
+/** The caption's resting state, before the reader has pointed at anything. */
+export const HEATMAP_HINT = 'Survolez une case pour en lire la valeur et sa source.';

@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   FALLBACK_HEATMAP_HOURS,
+  HEATMAP_HINT,
   PEAK_HOURS_EMPTY_TITLE,
   PEAK_HOURS_LEAD,
+  heatmapCellTitle,
   heatmapHours,
   heatmapLevel,
   heatmapScale,
@@ -85,5 +87,46 @@ describe('peakHoursEmpty (AFF1 ruling)', () => {
     // A NULL-source-only venue HAS data → renders as estimation, never the empty state.
     expect(peakHoursEmpty({ has_data: true, counts: { measured: 0, backup: 0 } })).toBe(false);
     expect(peakHoursEmpty({ has_data: true, counts: { measured: 0, backup: 5 } })).toBe(false);
+  });
+});
+
+// MEJ-3 (Mejri 31/08 pt 3) — the S02 cell readout. It was an inline native `title`: unpinnable
+// (no render harness) and, on a fast traverse of 26px cells, one cell behind the cursor. The
+// string lives here now and the component feeds it the SAME descriptor it colours the cell from.
+describe('heatmapCellTitle — the cell says what it renders and where it comes from', () => {
+  // fr-FR groups thousands with a NARROW NO-BREAK SPACE (U+202F), not a plain space — spelled
+  // out here so the pin cannot be "fixed" by typing an ordinary space that then never matches.
+  it('names the slot, the value and « mesuré » for a sensor cell', () => {
+    expect(
+      heatmapCellTitle({ dayLabel: 'Lun', hour: 13, closed: false, kind: 'measured', value: 1396 }),
+    ).toBe('Lun 13h — 1\u202f396 pers. (mesuré)');
+  });
+
+  it('says « estimation » for a backup cell — the value is never dressed as a measure', () => {
+    expect(
+      heatmapCellTitle({ dayLabel: 'Sam', hour: 9, closed: false, kind: 'backup', value: 80 }),
+    ).toBe('Sam 9h — 80 pers. (estimation)');
+  });
+
+  it('a data-less cell claims no number', () => {
+    expect(
+      heatmapCellTitle({ dayLabel: 'Dim', hour: 20, closed: false, kind: 'none', value: 0 }),
+    ).toBe('Dim 20h — aucune donnée');
+  });
+
+  it('closed wins over everything — outside the hours there is no audience to describe', () => {
+    expect(
+      heatmapCellTitle({ dayLabel: 'Mar', hour: 3, closed: true, kind: 'measured', value: 500 }),
+    ).toBe('Mar 3h — fermé');
+  });
+
+  it('a measured 0 still reads as a measure (AFF1: a measured zero IS a measurement)', () => {
+    expect(
+      heatmapCellTitle({ dayLabel: 'Jeu', hour: 8, closed: false, kind: 'measured', value: 0 }),
+    ).toBe('Jeu 8h — 0 pers. (mesuré)');
+  });
+
+  it('the resting caption invites the gesture instead of showing a stale cell', () => {
+    expect(HEATMAP_HINT).toBe('Survolez une case pour en lire la valeur et sa source.');
   });
 });

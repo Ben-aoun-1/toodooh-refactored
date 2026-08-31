@@ -23,6 +23,17 @@ import type { DateRange } from './report/derive.js';
  * A day with NO information — no measure AND a zero grid stand-in — is NOT a data day: it drops
  * out instead of dragging the averages down as a fake zero (a MEASURED zero, however, is a
  * measurement and stays). Averages therefore divide by days WITH data, as everywhere else.
+ *
+ * MEJ-R1 (operator ruling, 2026-08-31) — THE ESTIMATION FLOOR. The backup grid describes a
+ * TYPICAL WEEK, so it happily answers for any date you ask it about — including dates BEFORE the
+ * venue existed. That is how « Test Go To Market » (onboarded 26/08, grid typed by an admin on
+ * 31/08) came to show « Pic 1 398 le 10/08 » and 4 197 people over 28 days: three past Mondays
+ * multiplied by a number that had not been written yet. An estimate may fill a gap in a venue's
+ * history; it may not INVENT history. So the stand-in applies only from `onboardedIso` onward —
+ * earlier days are not data days at all and drop out, exactly like the silent-day rule above.
+ *
+ * MEASURED days are NEVER clamped: a real reading dated before the floor is a fact about the
+ * venue, and dropping it would be the same invention in reverse.
  */
 
 export interface PeriodDay {
@@ -49,10 +60,17 @@ export interface PeriodAudienceInput {
   range: DateRange;
   /** Tunis today — the last day the période may claim. */
   todayIso: string;
+  /**
+   * MEJ-R1 — the venue's onboarding day (Tunis calendar day of `screenhosts.created_at`): the
+   * FIRST day the backup grid may stand in for. `null` = no known floor, nothing is clamped.
+   * Required (not optional) so every call site states its floor rather than inheriting the
+   * unbounded behaviour by omission.
+   */
+  onboardedIso: string | null;
 }
 
 export function periodAudience(input: PeriodAudienceInput): PeriodAudience {
-  const { months, grid, range, todayIso } = input;
+  const { months, grid, range, todayIso, onboardedIso } = input;
   const byDate = new Map<string, MonthlyStatsDaily>();
   for (const month of months) {
     for (const entry of month.daily) byDate.set(entry.date, entry);
@@ -70,7 +88,8 @@ export function periodAudience(input: PeriodAudienceInput): PeriodAudience {
       const entry = byDate.get(date);
       if (isMeasuredDay(entry)) {
         days.push({ date, audience: entry.audience, source: 'measured' });
-      } else {
+      } else if (onboardedIso === null || date >= onboardedIso) {
+        // MEJ-R1 — the grid stands in only from the venue's onboarding day onward.
         const estimate = estimatedDayAudience(grid, date);
         if (estimate > 0) days.push({ date, audience: estimate, source: 'estimated' });
       }

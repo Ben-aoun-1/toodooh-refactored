@@ -111,6 +111,39 @@ describe('audienceKpis (S01)', () => {
   });
 });
 
+// MEJ-2 / ruling MEJ-R1 (2026-08-31) — « Pic d'audience » is a MEASURED day or nothing.
+describe('MEJ-R1 — the peak is a measured day or nothing', () => {
+  it('an estimated day is never the peak, however large', () => {
+    const kpis = audienceKpis(
+      [
+        { date: '2026-06-01', audience: 700, source: 'measured' },
+        { date: '2026-06-02', audience: 1396, source: 'estimated' }, // the phantom Monday
+      ],
+      14,
+    );
+    expect(kpis.global).toBe(2096); // the TOTAL still merges both (PERF-R1)
+    expect(kpis.peak).toEqual({ value: 700, date: '2026-06-01' }); // the PEAK does not
+  });
+
+  it('an all-estimated période has NO peak → the tile renders « — »', () => {
+    const kpis = audienceKpis(
+      [
+        { date: '2026-06-01', audience: 80, source: 'estimated' },
+        { date: '2026-06-02', audience: 1396, source: 'estimated' },
+      ],
+      14,
+    );
+    expect(kpis.peak).toBeNull();
+    expect(kpis.global).toBe(1476);
+    expect(kpis.measuredDays).toBe(0);
+  });
+
+  it('unmarked points still count as measured (legacy wires) and can peak', () => {
+    const kpis = audienceKpis([{ date: '2026-06-01', audience: 300 }], 14);
+    expect(kpis.peak).toEqual({ value: 300, date: '2026-06-01' });
+  });
+});
+
 describe('formatDecimalFr (the moyenne/h display)', () => {
   it('renders at most one comma decimal; whole numbers drop it', () => {
     expect(formatDecimalFr(0.3)).toBe('0,3');

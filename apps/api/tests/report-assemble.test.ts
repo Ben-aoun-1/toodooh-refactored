@@ -38,13 +38,18 @@ const seedUser = async (values: Partial<NewUser> = {}): Promise<string> => {
   return u?.id ?? '';
 };
 
+// MEJ-R1 — created_at is the venue's ONBOARDING day and the floor under the backup grid, so
+// every fixture states one. The default predates RANGE (June 2026): these cases assert the
+// merge, not the floor, which has its own case at the end of the file.
+const ONBOARDED_BEFORE_RANGE = new Date('2026-05-01T00:00:00Z');
+
 const seedScreenhost = async (
   ownerId: string,
   values: Partial<typeof screenhosts.$inferInsert> = {},
 ): Promise<string> => {
   const [s] = await db
     .insert(screenhosts)
-    .values({ name: 'Café Rapport', ownerId, ...values })
+    .values({ name: 'Café Rapport', ownerId, createdAt: ONBOARDED_BEFORE_RANGE, ...values })
     .returning();
   return s?.id ?? '';
 };
@@ -265,7 +270,38 @@ describe('assembleReportData (real Postgres)', () => {
     expect(data?.kpis.perDay).toBe(80);
     expect(data?.kpis.measuredDays).toBe(0);
     expect(data?.kpis.estimatedPct).toBe(100);
+    // MEJ-R1 — « Pic d'audience » is a MEASURED day or nothing: an all-estimated période has no
+    // peak, and the PDF tile renders « — » rather than naming an invented best day.
+    expect(data?.kpis.peak).toBeNull();
     expect(data?.heatEmpty).toBe(false);
+  });
+
+  // MEJ-2 / ruling MEJ-R1 — the PDF twin runs the SAME floor as the page's /audience read.
+  it('MEJ-R1: the PDF S01 never credits a venue for days before it was onboarded', async () => {
+    const owner = await seedUser();
+    // Onboarded mid-range (15 June) — the first half of the période predates the venue.
+    const venue = await seedScreenhost(owner, {
+      name: 'Café Nouveau',
+      openingHour: 8,
+      closingHour: 22,
+      createdAt: new Date('2026-06-15T09:00:00Z'),
+    });
+    await db.insert(screenhostAffluence).values(
+      Array.from({ length: 7 }, (_, i) => ({
+        screenhostId: venue,
+        dayOfWeek: i + 1,
+        hour: 10,
+        estimatedImpressions: 80,
+        source: 'backup' as const,
+      })),
+    );
+
+    const data = await assembleReportData(venue, RANGE, TODAY);
+    // 15→30 June inclusive = 16 days × 80, instead of the 30 × 80 an unfloored grid would claim.
+    expect(data?.kpis.global).toBe(16 * 80);
+    expect(data?.kpis.perDay).toBe(80);
+    expect(data?.kpis.measuredDays).toBe(0);
+    expect(data?.kpis.peak).toBeNull();
   });
 
   it('PERF-R2: the S02 grid is période-scoped — weekdays outside the range are masked', async () => {
