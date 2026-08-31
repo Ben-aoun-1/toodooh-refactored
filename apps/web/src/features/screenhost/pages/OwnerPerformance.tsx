@@ -41,7 +41,10 @@ import { useScreenhostsMine } from '../hooks/useScreenhostsMine';
 import { lineImpressions, sumLineImpressions } from '../lib/impressions-display';
 import { downloadMonthlyReport } from '../lib/monthly-report';
 import {
+  audienceCumulative,
   audienceKpis,
+  audienceOfMonth,
+  audienceTotal,
   campaignStatut,
   campaignTypeLabel,
   categoryLabel,
@@ -58,6 +61,7 @@ import {
   zeroFillDays,
 } from '../lib/performance-derive';
 import {
+  ALL_TIME_FROM,
   type PeriodSelection,
   formatDateFr,
   formatGeneratedAtFr,
@@ -157,6 +161,11 @@ export default function OwnerPerformance() {
   // PERF-R2 — the heatmap read carries the période too: the api masks the weekdays the période
   // does not contain (a 7+-day période keeps the whole week).
   const affluence = useScreenhostAffluence(selectedId, range);
+  // PERF-1b — the hero is « depuis le début », so it gets its OWN all-time merged read: the same
+  // api rule as S01 (PAX day first, backup grid otherwise, MEJ-2 onboarding floor), one point per
+  // REAL day. It replaces the monthly_stats read, which was measured-only, unfloored, and keyed by
+  // MONTH — every point landed on the 1st, which is why a fresh measurement read « 01/08/2026 ».
+  const allTime = useVenueAudience(selectedId, ALL_TIME_FROM, todayIso);
 
   // ── Per-venue datasets ──────────────────────────────────────────────────────
   const months = useMemo(() => monthlyStats.data?.months ?? [], [monthlyStats.data]);
@@ -165,17 +174,24 @@ export default function OwnerPerformance() {
     () => (earnings.data?.lines ?? []).filter((l) => l.screenhost_id === selectedId),
     [earnings.data, selectedId],
   );
+  // PERF-1b — the all-time MERGED day series: the hero curve, its total, and every monthly
+  // audience figure (card + Historique) derive from this one read.
+  const allTimeDays = useMemo(() => allTime.data?.days ?? [], [allTime.data]);
 
   // R1 — the generated-reports listing is THE month authority: card = newest row, Historique =
   // the rest. monthly_stats only DECORATES a report month with its audience figure (a hub-pushed
   // stats month with no stored report is no longer surfaced as a report).
   const reportRows = useMemo(() => reports.data?.reports ?? [], [reports.data]);
   const latestReport = reportRows[0] ?? null;
+  // PERF-1b — the card's audience comes from the MERGED day series, so it matches the PDF it
+  // links to (the stored report runs assembleReportData → periodAudience for the same month).
   const latestMonth = useMemo(() => {
     if (!latestReport) return null;
-    const stat = months.find((m) => m.month === latestReport.month);
-    return { month: latestReport.month, total_audience: stat?.total_audience ?? 0 };
-  }, [latestReport, months]);
+    return {
+      month: latestReport.month,
+      total_audience: audienceOfMonth(allTimeDays, latestReport.month),
+    };
+  }, [latestReport, allTimeDays]);
 
   // ── HOST/CAST first-data flags (Mejri ruling) — they NEVER gate each other's sections ─────────
   const affluenceGrid = useMemo(() => affluence.data?.grid ?? [], [affluence.data]);
@@ -185,11 +201,11 @@ export default function OwnerPerformance() {
     () =>
       reportRows.slice(1).map((r) => ({
         month: r.month,
-        totalAudience: months.find((m) => m.month === r.month)?.total_audience ?? 0,
+        totalAudience: audienceOfMonth(allTimeDays, r.month),
         impressions: impressionsOfMonth(days, r.month),
         generatedAtLabel: formatGeneratedAtFr(r.generated_at),
       })),
-    [reportRows, months, days],
+    [reportRows, allTimeDays, days],
   );
 
   // ── Hero (unfiltered, "depuis le début") ────────────────────────────────────
@@ -207,14 +223,8 @@ export default function OwnerPerformance() {
       ),
     [venueLines],
   );
-  const audienceTotal = useMemo(
-    () => months.reduce((sum, m) => sum + m.total_audience, 0),
-    [months],
-  );
-  const audienceSeries = useMemo(
-    () => cumulativeSeries(months.map((m) => ({ date: `${m.month}-01`, value: m.total_audience }))),
-    [months],
-  );
+  const heroAudienceTotal = useMemo(() => audienceTotal(allTimeDays), [allTimeDays]);
+  const audienceSeries = useMemo(() => audienceCumulative(allTimeDays), [allTimeDays]);
 
   // ── Period-driven derivations ───────────────────────────────────────────────
   const periodLines = useMemo(
@@ -363,7 +373,7 @@ export default function OwnerPerformance() {
   // SETTLED per-venue reads. A pending or failed read otherwise collapses to `?? []` defaults
   // and masquerades as « En attente du premier deal » / « Aucun rapport généré ». sps/pistes
   // stay outside the gate — their sections carry their own inline error states.
-  const perfReads = [profile, monthlyStats, impressions, earnings, affluence, reports];
+  const perfReads = [profile, monthlyStats, impressions, earnings, affluence, reports, allTime];
   const readsState = venueReadsState(
     perfReads.map((r) => ({ pending: r.isPending, error: r.isError })),
   );
@@ -483,7 +493,7 @@ export default function OwnerPerformance() {
                       <ProgressHero
                         revenueTotal={revenueTotal}
                         revenueSeries={revenueSeries}
-                        audienceTotal={audienceTotal}
+                        audienceTotal={heroAudienceTotal}
                         audienceSeries={audienceSeries}
                         hasHostData={hostHasData}
                         hasCastData={castHasData}

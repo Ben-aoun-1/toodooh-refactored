@@ -223,6 +223,26 @@ describe('owner performance reads (owner-scoped, real Postgres)', () => {
       expect(body.estimated_days).toBe(1);
     });
 
+    // PERF-1b — the HERO's own call: « depuis le début » (2020-01-01 → today). The MEJ-2 floor
+    // must hold over the all-time range too, or the curve would run back to 2020 on a grid the
+    // venue never had, and the hero would contradict S01 for the same days.
+    it('the all-time range the hero uses is floored at onboarding too', async () => {
+      const me = await seedUser();
+      const sh = await seedScreenhost(me, { createdAt: new Date('2026-08-26T09:00:00Z') });
+      await seedBackupWeek(sh, 80);
+      mockSession(me);
+
+      const body = (
+        await get(`/api/screenhosts/${sh}/audience?from=2020-01-01&to=2026-08-31`)
+      ).json() as AudienceBody;
+      expect(body.days.length).toBeGreaterThan(0);
+      // Not one day of the six years before the venue existed.
+      expect(body.days[0]?.date).toBe('2026-08-26');
+      expect(body.days.every((d) => d.date >= '2026-08-26')).toBe(true);
+      // …and the total is the floored window, not 2 435 days × 80.
+      expect(body.total_audience).toBe(body.days.length * 80);
+    });
+
     it('respects the période bounds and clamps to Tunis today (no future day)', async () => {
       const me = await seedUser();
       const sh = await seedScreenhost(me, ONBOARDED_BEFORE_ALL);
