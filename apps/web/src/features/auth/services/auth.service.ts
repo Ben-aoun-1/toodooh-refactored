@@ -52,7 +52,7 @@ export const authService = {
 
   async signUp(data: SignUpData): Promise<SignupResponse> {
     // Accepted-fields JSON (snake wire, Phase-1f F2). F5 is REVERSED for owners (R7/N4): owner volet
-    // files (cin_recto/cin_verso/registration_doc=RNE/bank_doc) ARE sent at signup via multipart (see
+    // files (registration_doc=RNE/bank_doc) ARE sent at signup via multipart (see
     // below). Still NOT sent: company_logo (no signup home) and the owner-extras
     // (cin/formule/number_of_screens/number_of_rooms/company_size — backend-stripped). Advertisers/
     // agencies stay JSON, no documents (F5 stands for them).
@@ -110,18 +110,17 @@ export const authService = {
       ...(fleetEstablishments?.length ? { fleet_establishments: fleetEstablishments } : {}),
     };
     // R7/N4 — owners now SEND their document volets (reversing F5 for owners): multipart with a
-    // `payload` field = the accepted-fields JSON string + named file parts (individual_owner →
-    // cin_recto/cin_verso; fleet_owner → rne; both → bank). Advertisers/agencies keep the JSON path
-    // verbatim (no documents at signup). Files never enter `payload` (only scalar fields are spread).
+    // `payload` field = the accepted-fields JSON string + named file parts. SIGN-2 (ruling
+    // 2026-08-31): an individual_owner sends NO legal volet (CIN is provide-later); fleet_owner
+    // sends `rne`; both may send `bank`. Advertisers keep the JSON path verbatim (no documents at
+    // signup). Files never enter `payload` (only scalar fields are spread).
     const isOwner = data.profile_type === 'individual_owner' || data.profile_type === 'fleet_owner';
     try {
       if (isOwner) {
         const form = new FormData();
         form.append('payload', JSON.stringify(payload));
-        if (data.profile_type === 'individual_owner') {
-          if (data.cin_recto) form.append('cin_recto', data.cin_recto);
-          if (data.cin_verso) form.append('cin_verso', data.cin_verso);
-        } else if (data.registration_doc) {
+        // Only the fleet owner carries a legal volet at signup.
+        if (data.profile_type !== 'individual_owner' && data.registration_doc) {
           form.append('rne', data.registration_doc);
         }
         if (data.bank_doc) form.append('bank', data.bank_doc);

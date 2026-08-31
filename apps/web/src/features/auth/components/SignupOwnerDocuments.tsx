@@ -9,8 +9,9 @@ import {
   MAX_DOCUMENT_BYTES,
 } from '@/features/profile/lib/document-caps';
 
-// R7/N4 — the OWNER signup document volets (reverses F5 for owners). individual_owner shows the two
-// CIN faces (recto/verso) + RIB; fleet_owner shows RNE + RIB. Each slot is a single mandatory file;
+// R7/N4 — the OWNER signup document volets (reverses F5 for owners). SIGN-2 (2026-08-31): the CIN
+// faces are GONE from signup — individual_owner shows the RIB only, fleet_owner shows RNE + RIB.
+// CIN becomes provide-later (admin request / post-signin upload), not abolished. Each slot is one file;
 // caps/MIME/size mirror the server via document-caps. Picks live in SignUpForm state and are sent as
 // multipart by authService.signUp. Complementaire stays an OPTIONAL post-signin add (not a volet here).
 interface SingleFileSlotProps {
@@ -83,22 +84,7 @@ export default function SignupOwnerDocuments({
 }: SignupOwnerDocumentsProps) {
   return (
     <div className="space-y-6">
-      {profileType === 'individual_owner' ? (
-        <>
-          <SingleFileSlot
-            label="Carte d'identité nationale (CIN) — Recto"
-            file={files.cinRecto}
-            onPick={(f) => onChange({ cinRecto: f })}
-            onClear={() => onChange({ cinRecto: null })}
-          />
-          <SingleFileSlot
-            label="Carte d'identité nationale (CIN) — Verso"
-            file={files.cinVerso}
-            onPick={(f) => onChange({ cinVerso: f })}
-            onClear={() => onChange({ cinVerso: null })}
-          />
-        </>
-      ) : (
+      {profileType !== 'individual_owner' && (
         <SingleFileSlot
           label="Registre de commerce (RNE)"
           file={files.rne}
