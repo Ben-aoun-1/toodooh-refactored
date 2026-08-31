@@ -1,5 +1,4 @@
 import { hashPassword } from 'better-auth/crypto';
-import { format, isValid, parseISO } from 'date-fns';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
@@ -19,6 +18,7 @@ import {
 } from '../db/schema.js';
 import { env } from '../env.js';
 import { generateUniqueAgentCode } from '../lib/agent-code.js';
+import { CALENDAR_DAY_MSG, ISO_DATE_RE, isCalendarDate } from '../lib/calendar-date.js';
 import { buildEligibilityPatch, type EligibilityPatchInput } from '../lib/eligibility-patch.js';
 import { mergeMonthlyAudience } from '../lib/monthly-audience.js';
 import { decryptWifiPassword } from '../lib/wifi-crypto.js';
@@ -72,13 +72,6 @@ const affluenceBodySchema = z.object({
 // UTC is fixed AT THE PRODUCER, never compensated here. The wire is nested per place — the shape is
 // FIXED with the hub session, so it is not "harmonised" with the flat siblings.
 //
-// The regex alone would accept 2026-02-30, which Postgres would then reject with a 500; the refine
-// makes a fake calendar day the 400 it deserves.
-const isCalendarDate = (value: string): boolean => {
-  const parsed = parseISO(value);
-  return isValid(parsed) && format(parsed, 'yyyy-MM-dd') === value;
-};
-
 const affluenceHourlyBodySchema = z.object({
   places: z
     .array(
@@ -89,8 +82,8 @@ const affluenceHourlyBodySchema = z.object({
             z.object({
               date: z
                 .string()
-                .regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD')
-                .refine(isCalendarDate, 'date must be a real calendar day'),
+                .regex(ISO_DATE_RE, 'date must be YYYY-MM-DD')
+                .refine(isCalendarDate, CALENDAR_DAY_MSG),
               hour: z.number().int().min(0).max(23),
               value: z.number().int().min(0),
             }),

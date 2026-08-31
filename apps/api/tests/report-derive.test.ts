@@ -59,6 +59,7 @@ describe('audienceKpis (web parity, S01)', () => {
         { date: '2026-06-03', audience: 500 },
       ],
       14,
+      0,
     );
     expect(kpis.global).toBe(2100);
     expect(kpis.perDay).toBe(700);
@@ -76,6 +77,9 @@ describe('audienceKpis (web parity, S01)', () => {
         { date: '2026-06-03', audience: 80, source: 'estimated' },
       ],
       14,
+      // AUD-HOURLY1-C — the share is the MERGE's (data points: cells + day-granularity history),
+      // handed in rather than re-derived from these day totals.
+      67,
     );
     expect(kpis.global).toBe(860); // estimated days COUNT (PERF-R1 supersedes US-P.5)
     expect(kpis.measuredDays).toBe(1);
@@ -85,13 +89,13 @@ describe('audienceKpis (web parity, S01)', () => {
   });
 
   it('perHour keeps one decimal instead of rounding to a misleading 0 (Mejri prod-test #3)', () => {
-    const kpis = audienceKpis([{ date: '2026-06-26', audience: 4 }], 14);
+    const kpis = audienceKpis([{ date: '2026-06-26', audience: 4 }], 14, 0);
     expect(kpis.perDay).toBe(4);
     expect(kpis.perHour).toBe(0.3); // 4 ÷ 14 = 0,2857… → one decimal, not 0
   });
 
   it('empty input → the honest empty state', () => {
-    expect(audienceKpis([], 14)).toEqual({
+    expect(audienceKpis([], 14, null)).toEqual({
       global: 0,
       perDay: null,
       perHour: null,
@@ -111,6 +115,7 @@ describe('MEJ-R1 — the peak is a measured day or nothing', () => {
         { date: '2026-06-02', audience: 1396, source: 'estimated' }, // the phantom Monday
       ],
       14,
+      0,
     );
     expect(kpis.global).toBe(2096); // the TOTAL still merges both (PERF-R1)
     expect(kpis.peak).toEqual({ value: 700, date: '2026-06-01' }); // the PEAK does not
@@ -123,6 +128,7 @@ describe('MEJ-R1 — the peak is a measured day or nothing', () => {
         { date: '2026-06-02', audience: 1396, source: 'estimated' },
       ],
       14,
+      0,
     );
     expect(kpis.peak).toBeNull();
     expect(kpis.global).toBe(1476);
@@ -130,7 +136,7 @@ describe('MEJ-R1 — the peak is a measured day or nothing', () => {
   });
 
   it('unmarked points still count as measured (legacy wires) and can peak', () => {
-    const kpis = audienceKpis([{ date: '2026-06-01', audience: 300 }], 14);
+    const kpis = audienceKpis([{ date: '2026-06-01', audience: 300 }], 14, 0);
     expect(kpis.peak).toEqual({ value: 300, date: '2026-06-01' });
   });
 });

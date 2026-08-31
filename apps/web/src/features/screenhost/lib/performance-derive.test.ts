@@ -59,6 +59,7 @@ describe('audienceKpis (S01)', () => {
         { date: '2026-06-03', audience: 500 },
       ],
       14,
+      0,
     );
     expect(kpis.global).toBe(2100);
     expect(kpis.perDay).toBe(700);
@@ -76,14 +77,17 @@ describe('audienceKpis (S01)', () => {
         { date: '2026-06-03', audience: 80, source: 'estimated' },
       ],
       14,
+      // AUD-HOURLY1-C — the share is the MERGE's (data points: cells + day-granularity history),
+      // handed in rather than re-derived from these day totals.
+      67,
     );
     expect(kpis.global).toBe(860); // estimated days COUNT (supersedes US-P.5 measured-only)
     expect(kpis.measuredDays).toBe(1);
-    expect(kpis.estimatedPct).toBe(67); // 2/3, rounded
+    expect(kpis.estimatedPct).toBe(67);
   });
 
   it('perHour keeps one decimal instead of rounding to a misleading 0 (Mejri prod-test #3)', () => {
-    const kpis = audienceKpis([{ date: '2026-06-26', audience: 4 }], 14);
+    const kpis = audienceKpis([{ date: '2026-06-26', audience: 4 }], 14, 0);
     expect(kpis.perDay).toBe(4);
     expect(kpis.perHour).toBe(0.3); // 4 ÷ 14 = 0,2857… → one decimal, not 0
   });
@@ -97,13 +101,14 @@ describe('audienceKpis (S01)', () => {
         { date: '2026-06-02', audience: 3 },
       ],
       4,
+      0,
     );
     expect(kpis.perDay).toBe(3); // display rounding still applies to the day figure
     expect(kpis.perHour).toBe(0.6); // 2.5 ÷ 4, NEVER 3 ÷ 4
   });
 
   it('empty input → the honest empty state', () => {
-    expect(audienceKpis([], 14)).toEqual({
+    expect(audienceKpis([], 14, null)).toEqual({
       global: 0,
       perDay: null,
       perHour: null,
@@ -123,6 +128,7 @@ describe('MEJ-R1 — the peak is a measured day or nothing', () => {
         { date: '2026-06-02', audience: 1396, source: 'estimated' }, // the phantom Monday
       ],
       14,
+      0,
     );
     expect(kpis.global).toBe(2096); // the TOTAL still merges both (PERF-R1)
     expect(kpis.peak).toEqual({ value: 700, date: '2026-06-01' }); // the PEAK does not
@@ -135,6 +141,7 @@ describe('MEJ-R1 — the peak is a measured day or nothing', () => {
         { date: '2026-06-02', audience: 1396, source: 'estimated' },
       ],
       14,
+      0,
     );
     expect(kpis.peak).toBeNull();
     expect(kpis.global).toBe(1476);
@@ -142,7 +149,7 @@ describe('MEJ-R1 — the peak is a measured day or nothing', () => {
   });
 
   it('unmarked points still count as measured (legacy wires) and can peak', () => {
-    const kpis = audienceKpis([{ date: '2026-06-01', audience: 300 }], 14);
+    const kpis = audienceKpis([{ date: '2026-06-01', audience: 300 }], 14, 0);
     expect(kpis.peak).toEqual({ value: 300, date: '2026-06-01' });
   });
 });
@@ -452,7 +459,7 @@ describe('audienceTotal / audienceOfMonth — the hero and S01 cannot disagree',
 
   it('the hero total IS the S01 global for the same points', () => {
     expect(audienceTotal(points)).toBe(222);
-    expect(audienceTotal(points)).toBe(audienceKpis(points, 14).global);
+    expect(audienceTotal(points)).toBe(audienceKpis(points, 14, 0).global);
   });
 
   it('a month is summed from the day series, not from a monthly row', () => {

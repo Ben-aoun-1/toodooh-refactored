@@ -129,7 +129,17 @@ export interface AudienceKpis {
  * PERF-QA1 R9 — divide FIRST, round ONCE at the end: rounding perDay before the /h divide
  * shifted the hourly figure (her 0,3 pers/h was computed off an already-rounded day average).
  */
-export function audienceKpis(points: DailyAudiencePoint[], hoursPerDay: number): AudienceKpis {
+/**
+ * AUD-HOURLY1-C — `estimatedPct` is now supplied by the CALLER, not derived here. The merge counts
+ * DATA POINTS (every merged cell, plus each day held only at day granularity), which this function
+ * cannot see from `points` alone — it only receives the day totals. Required, not optional, so a
+ * call site cannot silently fall back to the old day-share by omission (the MEJ-R1 precedent).
+ */
+export function audienceKpis(
+  points: DailyAudiencePoint[],
+  hoursPerDay: number,
+  estimatedPct: number | null,
+): AudienceKpis {
   if (points.length === 0)
     return {
       global: 0,
@@ -137,7 +147,7 @@ export function audienceKpis(points: DailyAudiencePoint[], hoursPerDay: number):
       perHour: null,
       peak: null,
       measuredDays: 0,
-      estimatedPct: null,
+      estimatedPct,
     };
   let global = 0;
   let peak: { value: number; date: string } | null = null;
@@ -156,7 +166,6 @@ export function audienceKpis(points: DailyAudiencePoint[], hoursPerDay: number):
   // One decimal (Mejri prod-test #3): 4 pers/day ÷ 14 h must read 0,3 — never a rounded 0.
   const perHour = hoursPerDay > 0 ? Math.round((perDayRaw / hoursPerDay) * 10) / 10 : null;
   const measuredCount = points.filter((p) => p.source !== 'estimated').length;
-  const estimatedPct = Math.round(((points.length - measuredCount) / points.length) * 100);
   return { global, perDay, perHour, peak, measuredDays: measuredCount, estimatedPct };
 }
 

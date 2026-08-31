@@ -243,8 +243,11 @@ export default function OwnerPerformance() {
     [profile.data],
   );
   const kpis = useMemo(
-    () => audienceKpis(periodAudience, hoursInfo.hours),
-    [periodAudience, hoursInfo],
+    // AUD-HOURLY1-C — « dont N % estimés » counts DATA POINTS (merged cells + day-granularity
+    // history), which only the api-side merge can see; it rides the wire rather than being
+    // re-derived from the day totals here.
+    () => audienceKpis(periodAudience, hoursInfo.hours, audience.data?.estimated_pct ?? null),
+    [periodAudience, hoursInfo, audience.data],
   );
   // S03 days: zero-filled over the period∩fetch-window UNCONDITIONALLY (R8 — 0 = day without
   // data, on the server's Tunis calendar); the section's pending placeholder still gates on

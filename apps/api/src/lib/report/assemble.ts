@@ -9,14 +9,14 @@ import {
   campaigns,
   events,
   proofOfPlay,
-  screenhostAffluence,
   screenhostMonthlyStats,
   screenhosts,
 } from '../../db/schema.js';
 import { tunisDateOf } from '../campaign-dates.js';
 import { getDispatchConfig } from '../dispatch/config.js';
 import { displayImpressionsSettled } from '../impressions-display.js';
-import { periodAudience, weekdaysInRange } from '../period-audience.js';
+import { loadBackupGrid, loadPeriodAudienceInput } from '../period-audience-source.js';
+import { periodAudience, weekGridFromCells } from '../period-audience.js';
 import { computeSps } from '../sps-score.js';
 
 import {
@@ -259,51 +259,10 @@ export async function assembleReportData(
     .orderBy(desc(screenhostMonthlyStats.month));
   const months = monthRows;
 
-  // 3) affluence slots → zero-filled 7×24 grid + AFF1 provenance — mirror of GET /:id/affluence
-  //    (sources null-filled, counts = pure provenance tallies, has_data = any row).
-  const slots = await db
-    .select({
-      dayOfWeek: screenhostAffluence.dayOfWeek,
-      hour: screenhostAffluence.hour,
-      estimatedImpressions: screenhostAffluence.estimatedImpressions,
-      source: screenhostAffluence.source,
-    })
-    .from(screenhostAffluence)
-    .where(eq(screenhostAffluence.screenhostId, venueId));
-  const grid: number[][] = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
-  const sources: (AffluenceSource | null)[][] = Array.from({ length: 7 }, () =>
-    Array.from({ length: 24 }, () => null),
-  );
-  const counts = { measured: 0, backup: 0 };
-  for (const slot of slots) {
-    const row = grid[slot.dayOfWeek - 1];
-    const sourceRow = sources[slot.dayOfWeek - 1];
-    if (row && sourceRow && slot.hour >= 0 && slot.hour <= 23) {
-      row[slot.hour] = slot.estimatedImpressions;
-      sourceRow[slot.hour] = slot.source;
-      if (slot.source) counts[slot.source] += 1;
-    }
-  }
-  // PERF-R2 — the période scopes S02: weekdays the range does not contain are masked out of the
-  // HEATMAP (values and provenance untouched on kept weekdays). The audience merge above keeps
-  // the FULL grid: a day's stand-in uses its own weekday, which is période-correct by construction.
-  const keptWeekdays = weekdaysInRange(range);
-  const heatSlots = slots.filter((slot) => keptWeekdays.has(slot.dayOfWeek));
-  const heatGrid: number[][] = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
-  const heatSources: (AffluenceSource | null)[][] = Array.from({ length: 7 }, () =>
-    Array.from({ length: 24 }, () => null),
-  );
-  const heatCounts = { measured: 0, backup: 0 };
-  for (const slot of heatSlots) {
-    const row = heatGrid[slot.dayOfWeek - 1];
-    const sourceRow = heatSources[slot.dayOfWeek - 1];
-    if (row && sourceRow && slot.hour >= 0 && slot.hour <= 23) {
-      row[slot.hour] = slot.estimatedImpressions;
-      sourceRow[slot.hour] = slot.source;
-      if (slot.source) heatCounts[slot.source] += 1;
-    }
-  }
-  const heatHasData = heatSlots.length > 0;
+  // 3) the venue's BACKUP grid. It no longer feeds S02 directly (see below) — it is the
+  //    stand-in source the merge reads, and the HOST first-data flag's second half.
+  const backupGrid = await loadBackupGrid(venueId);
+  const grid = backupGrid.values;
 
   // 4) delivered impressions per Tunis-local day in range — mirror of GET /:id/impressions-daily.
   const tunisDay = sql<string>`to_char(${proofOfPlay.receivedAt} at time zone 'Africa/Tunis', 'YYYY-MM-DD')`;
@@ -368,17 +327,44 @@ export async function assembleReportData(
   const hostFlag = hasHostData(months, grid);
   const castFlag = hasCastData(lines, rangeDays);
 
-  // S01 — PERF-R1: THE api-side merge (lib/period-audience.ts), the same helper the /audience
-  // route serves the page from. S02 — PERF-R2: the semaine type masked to the période's weekdays.
-  const merged = periodAudience({
-    months: monthRows,
-    grid,
-    range,
-    todayIso,
-    // MEJ-R1 — the SAME estimation floor the page's /audience read applies (the twin contract).
-    onboardedIso: tunisDateOf(venue.createdAt),
-  });
-  const kpis = audienceKpis(merged.days, openHoursPerDay(venue.openingHour, venue.closingHour));
+  // AUD-HOURLY1-C — S01 AND S02 both come out of THE merge (lib/period-audience.ts), the same
+  // helper the page's /audience and /affluence reads serve: per (date, hour), PAX first, the
+  // admin's grid as backup, the MEJ-2 floor bounding backup only. S02 is the période's own cells
+  // folded into weekday × hour — no longer the hub's rolling typical week with a weekday mask.
+  const merged = periodAudience(
+    await loadPeriodAudienceInput({
+      venueId,
+      range,
+      todayIso,
+      // MEJ-R1 — the SAME estimation floor the page applies (the twin contract); the venue row
+      // is already in hand, so the loader does not re-read it.
+      onboardedIso: tunisDateOf(venue.createdAt),
+    }),
+  );
+  const kpis = audienceKpis(
+    merged.days,
+    openHoursPerDay(venue.openingHour, venue.closingHour),
+    merged.estimatedPct, // the CELL/data-point share, the same number the page's wire carries
+  );
+
+  const week = weekGridFromCells(merged.cells);
+  const heatGrid: number[][] = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
+  const heatSources: (AffluenceSource | null)[][] = Array.from({ length: 7 }, () =>
+    Array.from({ length: 24 }, () => null),
+  );
+  const heatCounts = { measured: 0, backup: 0 };
+  let heatFilled = 0;
+  for (let row = 0; row < 7; row += 1) {
+    for (let hour = 0; hour < 24; hour += 1) {
+      const cell = week[row]![hour]!;
+      if (cell.value === null || cell.source === null) continue;
+      heatGrid[row]![hour] = cell.value;
+      heatSources[row]![hour] = cell.source;
+      heatCounts[cell.source] += 1;
+      heatFilled += 1;
+    }
+  }
+  const heatHasData = heatFilled > 0;
 
   const ratios = ratiosOrNull(venue);
   const periodLines = lines.filter((l) => lineInPeriod(l, range));

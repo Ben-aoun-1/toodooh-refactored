@@ -1,40 +1,78 @@
-import { addDays, format, parseISO } from 'date-fns';
+import { addDays, format, getDay, parseISO } from 'date-fns';
 
 import type { MonthlyStatsDaily } from '../db/schema.js';
 
-import { estimatedDayAudience, isMeasuredDay } from './monthly-audience.js';
+import { isMeasuredDay } from './monthly-audience.js';
 import type { DateRange } from './report/derive.js';
 
 /**
- * PERF-R1 / PERF-R2 (operator 2026-08-30 — supersede US-P.5 « measured-only ») — THE period
- * merge, api-side, reused by every surface (S01 KPIs, the /audience read, the PDF twin).
+ * THE période merge, api-side, reused by every surface (S01 KPIs, the /audience read, the S02
+ * grid and the PDF twins). One home, so the page and the document cannot disagree.
  *
- * RULE: for each day of the période → the PAX measure when one exists for that day, else the
- * venue's affluence grid stands in. `screenhost_affluence` IS the hub's per-cell PAX-first merge
- * (source 'measured' = the sensor, 'backup' = the manual grid), so day-level measure-wins over
- * the grid completes the ticket's cell rule at the granularity toodooh holds. Never a zero
- * because the sensor was silent; a venue with neither measure nor grid derives an HONEST zero.
+ * ── AUD-HOURLY1-C (amendment 2026-08-31) — THE MERGE IS PER (date, hour), NOT PER DAY ──────────
  *
- * Seeded by TOODOOH-AFF1's provenance work: `monthly-audience.ts` owns what "measured" means
- * and what a grid day estimates; `affluence-provenance.ts` owns per-cell labeling. This module
- * only adds the période: bounds are inclusive, and the current day is the last claimable one —
- * a période reaching into the future never invents audience for days that have not happened.
+ * WHY: Mejri unplugged the sensor, waited, and « rien ne s'est passé ». Because the merge ran at
+ * DAY level, a day carrying ANY reading was "measured" wholesale, so the hour the sensor was dark
+ * could never fall back to the admin's grid. The hub has always done this per cell; toodooh now
+ * matches it. Per (date, hour) of the période — the 2026-08-26 ruling (« PAX first, the manual
+ * grid as BACKUP where the measure is 0 during opening hours »):
  *
- * A day with NO information — no measure AND a zero grid stand-in — is NOT a data day: it drops
- * out instead of dragging the averages down as a fake zero (a MEASURED zero, however, is a
- * measurement and stays). Averages therefore divide by days WITH data, as everywhere else.
+ *   1. measured cell present, value > 0            → MEASURED
+ *   2. measured cell present, value == 0           → the backup grid cell for that (dow, hour) if
+ *                                                    one EXISTS → BACKUP; if the grid has no such
+ *                                                    cell the measured zero STANDS (no grid cell
+ *                                                    means outside opening hours, by the hub's own
+ *                                                    definition — « opening hours » = the cells the
+ *                                                    admin filled)
+ *   3. no measured cell                            → the backup grid cell if one exists → BACKUP;
+ *                                                    else not a data point at all (the silent rule:
+ *                                                    it must not drag averages down)
+ *   4. the MEJ-2 onboarding floor bounds BACKUP ONLY — a real measurement before the floor is a
+ *      fact about the venue and always counts.
  *
- * MEJ-R1 (operator ruling, 2026-08-31) — THE ESTIMATION FLOOR. The backup grid describes a
- * TYPICAL WEEK, so it happily answers for any date you ask it about — including dates BEFORE the
- * venue existed. That is how « Test Go To Market » (onboarded 26/08, grid typed by an admin on
- * 31/08) came to show « Pic 1 398 le 10/08 » and 4 197 people over 28 days: three past Mondays
- * multiplied by a number that had not been written yet. An estimate may fill a gap in a venue's
- * history; it may not INVENT history. So the stand-in applies only from `onboardedIso` onward —
- * earlier days are not data days at all and drop out, exactly like the silent-day rule above.
+ * ── DAY PRECEDENCE (the subtle part) ───────────────────────────────────────────────────────────
+ * `screenhost_affluence_hourly` only carries the hub's rolling 35-day window, so for one date:
+ *   • ANY hourly cell for that date → the day is built FROM HOURS (rule above) and monthly_stats
+ *     is NEVER added on top — that would double count the same audience;
+ *   • else a MEASURED monthly_stats daily total → the day is measured at DAY granularity, with no
+ *     hour detail (this is history older than the window, and it contributes no S02 cell);
+ *   • else the backup grid, bounded by the floor.
  *
- * MEASURED days are NEVER clamped: a real reading dated before the floor is a fact about the
- * venue, and dropping it would be the same invention in reverse.
+ * ── VOCABULARY ─────────────────────────────────────────────────────────────────────────────────
+ * A DAY's source is 'measured' | 'estimated' (the /audience wire the web already reads); a CELL's
+ * is 'measured' | 'backup' (the AffluenceSource vocabulary S02 already renders). They are the same
+ * distinction under each consumer's own name.
+ *
+ * A day built from hours counts as MEASURED only when EVERY one of its cells is — one backup hour
+ * makes the day's total an estimation. That is not a new rule: it is `dayProvenance`'s ruling from
+ * AFF1 (the « Votre audience » day tiles), reused so the two surfaces keep saying the same thing,
+ * and it is the conservative side — a day whose total contains an estimate never claims to be a
+ * measurement, and therefore never becomes the « Pic d'audience » (MEJ-R1).
  */
+
+/** One MEASURED hourly cell as `screenhost_affluence_hourly` holds it (Tunis clock, verbatim). */
+export interface HourlyCell {
+  date: string; // YYYY-MM-DD
+  hour: number; // 0–23
+  value: number;
+}
+
+/**
+ * The venue's backup grid. `values` is the familiar 7×24 Monday-first grid; `has` says whether the
+ * admin actually FILLED that cell — the distinction rules 2 and 3 turn on, and one a zero-filled
+ * grid alone cannot express (a missing cell and a real 0 would be identical).
+ */
+export interface BackupGrid {
+  values: number[][];
+  has: boolean[][];
+}
+
+export interface PeriodCell {
+  date: string; // YYYY-MM-DD
+  hour: number; // 0–23
+  value: number;
+  source: 'measured' | 'backup';
+}
 
 export interface PeriodDay {
   date: string; // YYYY-MM-DD
@@ -44,40 +82,73 @@ export interface PeriodDay {
 
 export interface PeriodAudience {
   days: PeriodDay[];
+  /** The hour-granularity cells of the période — S02's source, and the caption's denominator. */
+  cells: PeriodCell[];
   total: number;
   measuredDays: number;
   estimatedDays: number;
-  /** % of the période's days that are estimated (rounded); null when the période holds no day. */
+  /**
+   * « dont N % estimés ». AUD-HOURLY1-C moved the denominator from DAYS to DATA POINTS: every
+   * merged cell counts once, and a day held only at day granularity (measured history older than
+   * the hourly window) counts once as measured. Cells alone would read « 100 % estimation » on a
+   * période whose measured half is old history with no cells — which would be a lie to a reader
+   * who checks this caption closely. null when the période holds no data point at all.
+   */
   estimatedPct: number | null;
 }
 
 export interface PeriodAudienceInput {
-  /** The venue's stored monthly-stats rows (any order; only rows overlapping the range matter). */
+  /** Stored monthly-stats rows (any order; only rows overlapping the range matter). */
   months: { month: string; daily: MonthlyStatsDaily[] }[];
-  /** The venue's 7×24 affluence grid, Monday-first (the hub's PAX-first merge). */
-  grid: number[][];
+  /** MEASURED hourly cells overlapping the range (the hub's rolling window). */
+  hourly: HourlyCell[];
+  /** The venue's backup grid + which cells the admin filled. */
+  grid: BackupGrid;
   /** Inclusive ISO bounds. */
   range: DateRange;
   /** Tunis today — the last day the période may claim. */
   todayIso: string;
   /**
    * MEJ-R1 — the venue's onboarding day (Tunis calendar day of `screenhosts.created_at`): the
-   * FIRST day the backup grid may stand in for. `null` = no known floor, nothing is clamped.
+   * FIRST day the BACKUP grid may stand in for. `null` = no known floor, nothing is clamped.
    * Required (not optional) so every call site states its floor rather than inheriting the
    * unbounded behaviour by omission.
    */
   onboardedIso: string | null;
 }
 
+/** A zero-filled 7×24 Monday-first grid with nothing marked as filled. */
+export const emptyBackupGrid = (): BackupGrid => ({
+  values: Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0)),
+  has: Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => false)),
+});
+
+/** date-fns getDay: 0 = Sunday → the grid's Monday-first row index. */
+const rowOf = (dateIso: string): number => (getDay(parseISO(dateIso)) + 6) % 7;
+
 export function periodAudience(input: PeriodAudienceInput): PeriodAudience {
-  const { months, grid, range, todayIso, onboardedIso } = input;
-  const byDate = new Map<string, MonthlyStatsDaily>();
+  const { months, hourly, grid, range, todayIso, onboardedIso } = input;
+
+  const measuredDayByDate = new Map<string, MonthlyStatsDaily>();
   for (const month of months) {
-    for (const entry of month.daily) byDate.set(entry.date, entry);
+    for (const entry of month.daily) measuredDayByDate.set(entry.date, entry);
+  }
+  // date → (hour → measured value). A date PRESENT here takes the hour path, even if every one of
+  // its cells is a zero: the hub sends measured zeros deliberately, so "the sensor said nothing"
+  // and "the sensor counted nobody" stay distinguishable right up to this merge.
+  const hourlyByDate = new Map<string, Map<number, number>>();
+  for (const cell of hourly) {
+    const forDate = hourlyByDate.get(cell.date) ?? new Map<number, number>();
+    forDate.set(cell.hour, cell.value);
+    hourlyByDate.set(cell.date, forDate);
   }
 
-  const last = range.to <= todayIso ? range.to : todayIso;
   const days: PeriodDay[] = [];
+  const cells: PeriodCell[] = [];
+  /** Days held at DAY granularity only (measured history) — one measured data point each. */
+  let dayGranularityMeasured = 0;
+
+  const last = range.to <= todayIso ? range.to : todayIso;
   if (range.from <= last) {
     for (
       let cursor = parseISO(range.from);
@@ -85,43 +156,117 @@ export function periodAudience(input: PeriodAudienceInput): PeriodAudience {
       cursor = addDays(cursor, 1)
     ) {
       const date = format(cursor, 'yyyy-MM-dd');
-      const entry = byDate.get(date);
+      // Rule 4 — the floor bounds BACKUP only; measurement is never clamped.
+      const mayBackup = onboardedIso === null || date >= onboardedIso;
+      const row = rowOf(date);
+      const measuredHours = hourlyByDate.get(date);
+
+      if (measuredHours !== undefined) {
+        // ── the hour path: monthly_stats is NEVER added on top (double counting) ──
+        const dayCells: PeriodCell[] = [];
+        for (let hour = 0; hour < 24; hour += 1) {
+          const measured = measuredHours.get(hour);
+          const gridHas = grid.has[row]?.[hour] === true && mayBackup;
+          const gridValue = grid.values[row]?.[hour] ?? 0;
+          if (measured !== undefined && measured > 0) {
+            dayCells.push({ date, hour, value: measured, source: 'measured' }); // rule 1
+          } else if (measured !== undefined) {
+            // rule 2 — a measured ZERO defers to the grid where the admin declared the venue open
+            if (gridHas) dayCells.push({ date, hour, value: gridValue, source: 'backup' });
+            else dayCells.push({ date, hour, value: 0, source: 'measured' });
+          } else if (gridHas) {
+            dayCells.push({ date, hour, value: gridValue, source: 'backup' }); // rule 3
+          }
+          // else: no measure, no grid cell → not a data point at all (the silent rule)
+        }
+        if (dayCells.length > 0) {
+          cells.push(...dayCells);
+          days.push({
+            date,
+            audience: dayCells.reduce((sum, c) => sum + c.value, 0),
+            // AFF1's dayProvenance ruling: one backup hour makes the whole day an estimation.
+            source: dayCells.every((c) => c.source === 'measured') ? 'measured' : 'estimated',
+          });
+        }
+        continue;
+      }
+
+      const entry = measuredDayByDate.get(date);
       if (isMeasuredDay(entry)) {
+        // ── day granularity: history older than the hourly window. No hour detail, no S02 cell.
         days.push({ date, audience: entry.audience, source: 'measured' });
-      } else if (onboardedIso === null || date >= onboardedIso) {
-        // MEJ-R1 — the grid stands in only from the venue's onboarding day onward.
-        const estimate = estimatedDayAudience(grid, date);
-        if (estimate > 0) days.push({ date, audience: estimate, source: 'estimated' });
+        dayGranularityMeasured += 1;
+        continue;
+      }
+
+      if (!mayBackup) continue;
+      // ── the backup grid alone, cell by cell so S02 still sees this date ──
+      const dayCells: PeriodCell[] = [];
+      for (let hour = 0; hour < 24; hour += 1) {
+        if (grid.has[row]?.[hour] === true) {
+          dayCells.push({ date, hour, value: grid.values[row]?.[hour] ?? 0, source: 'backup' });
+        }
+      }
+      if (dayCells.length > 0) {
+        cells.push(...dayCells);
+        days.push({
+          date,
+          audience: dayCells.reduce((sum, c) => sum + c.value, 0),
+          source: 'estimated',
+        });
       }
     }
   }
 
   const measuredDays = days.filter((d) => d.source === 'measured').length;
-  const estimatedDays = days.length - measuredDays;
+  const estimatedCells = cells.filter((c) => c.source === 'backup').length;
+  const dataPoints = cells.length + dayGranularityMeasured;
   return {
     days,
+    cells,
     total: days.reduce((sum, d) => sum + d.audience, 0),
     measuredDays,
-    estimatedDays,
-    estimatedPct: days.length === 0 ? null : Math.round((estimatedDays / days.length) * 100),
+    estimatedDays: days.length - measuredDays,
+    estimatedPct: dataPoints === 0 ? null : Math.round((estimatedCells / dataPoints) * 100),
   };
 }
 
+/** One aggregated S02 slot: `null` value = the période holds no cell for that (weekday, hour). */
+export interface WeekCell {
+  value: number | null;
+  source: 'measured' | 'backup' | null;
+}
+
 /**
- * PERF-R2 — the ISO weekdays (1=Mon..7=Sun) the période actually contains: the S02 heatmap masks
- * the weekdays the owner did not ask about. Any période of 7+ days keeps the whole week.
+ * AUD-HOURLY1-C — S02 becomes GENUINELY période-scoped: the période's own (date, hour) cells
+ * aggregated into weekday × hour, instead of rendering the hub's rolling typical week and merely
+ * masking the weekdays the période misses (PERF-R2's approach, now superseded).
+ *
+ * A slot's value is the MEAN of the cells that fall on it (rounded — the wire has always carried
+ * integers), and its provenance follows the same AFF1 ruling as everywhere else: measured only
+ * when every contributing cell is measured; one backup cell makes the slot an estimation.
  */
-export function weekdaysInRange(range: DateRange): Set<number> {
-  const weekdays = new Set<number>();
-  if (range.from > range.to) return weekdays;
-  for (
-    let cursor = parseISO(range.from);
-    !Number.isNaN(cursor.getTime()) &&
-    format(cursor, 'yyyy-MM-dd') <= range.to &&
-    weekdays.size < 7;
-    cursor = addDays(cursor, 1)
-  ) {
-    weekdays.add(((cursor.getDay() + 6) % 7) + 1); // date-fns getDay: 0=Sun → ISO 1=Mon..7=Sun
+export function weekGridFromCells(cells: PeriodCell[]): WeekCell[][] {
+  // Flat 7×24 accumulators — indexed arithmetic, no nested optional chains to appease.
+  const sums = new Array<number>(7 * 24).fill(0);
+  const counts = new Array<number>(7 * 24).fill(0);
+  const allMeasured = new Array<boolean>(7 * 24).fill(true);
+  for (const cell of cells) {
+    if (cell.hour < 0 || cell.hour > 23) continue;
+    const at = rowOf(cell.date) * 24 + cell.hour;
+    sums[at] = (sums[at] ?? 0) + cell.value;
+    counts[at] = (counts[at] ?? 0) + 1;
+    if (cell.source !== 'measured') allMeasured[at] = false;
   }
-  return weekdays;
+  return Array.from({ length: 7 }, (_, row) =>
+    Array.from({ length: 24 }, (__, hour) => {
+      const at = row * 24 + hour;
+      const n = counts[at] ?? 0;
+      if (n === 0) return { value: null, source: null };
+      return {
+        value: Math.round((sums[at] ?? 0) / n),
+        source: allMeasured[at] === true ? ('measured' as const) : ('backup' as const),
+      };
+    }),
+  );
 }
