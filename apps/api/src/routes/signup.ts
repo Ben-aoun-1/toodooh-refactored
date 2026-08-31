@@ -22,7 +22,7 @@ import { ALLOWED_DOCUMENT_MIME, MAX_DOCUMENT_BYTES } from '../lib/user-documents
 import { encryptWifiPassword } from '../lib/wifi-crypto.js';
 import { storage } from '../storage/s3-storage.js';
 import { validatePhone } from '../validation/phone.js';
-import { validateTaxNumber } from '../validation/tax-number.js';
+import { normalizeTaxNumber, validateTaxNumber } from '../validation/tax-number.js';
 
 // snake_case request shape (apps/web-facing per Decision 3) — the full signup wizard profile
 // (Phase 1e Commit 2 grow). role/status are NOT accepted: zod strips unknown keys and better-auth's
@@ -137,12 +137,17 @@ const deleteOrphanUser = async (email: string): Promise<void> => {
 };
 
 // ── R7/N4 — owner signup document volets (reverses F5 for owners) ──────────────────────────────
-// Owners post multipart: a `payload` field (the signup JSON) + the volet files. individual_owner →
-// CIN recto (pos1) + verso (pos2); fleet_owner → RNE; both → bank (RIB). Advertisers/agencies still
-// post JSON and submit no documents at signup (F5 stands for them).
+// Owners post multipart: a `payload` field (the signup JSON) + the volet files. fleet_owner → RNE;
+// both owner types → bank (RIB). Advertisers/agencies still post JSON and submit no documents.
+//
+// SIGN-2 (operator ruling 2026-08-31) — the CIN volets are GONE from signup: an individual owner is
+// asked for the RIB only. CIN is NOT abolished, it is PROVIDE-LATER — the 'cin' document category,
+// the admin request path and POST /api/profile/documents all still accept it after sign-in. An
+// unknown file part is ignored by the parser below, so a stale client still signs up cleanly; its
+// CIN parts are simply dropped rather than rejected.
 type VoletFile = { buffer: Buffer; mimetype: string; filename: string };
 
-const VOLET_FIELDS = ['cin_recto', 'cin_verso', 'rne', 'bank'] as const;
+const VOLET_FIELDS = ['rne', 'bank'] as const;
 type VoletField = (typeof VOLET_FIELDS)[number];
 const isVoletField = (name: string): name is VoletField =>
   (VOLET_FIELDS as readonly string[]).includes(name);
@@ -211,7 +216,7 @@ const persistVolet = async (
 export const signupRoute: FastifyPluginAsync = async (app) => {
   // Owners post multipart (a `payload` field + the volet files); advertisers/agencies still post JSON.
   // Registration is content-type-scoped — JSON requests are parsed by Fastify's JSON parser, unchanged.
-  // files:4 covers cin_recto/cin_verso/rne/bank; the fileSize limit is the shared 5 MB cap.
+  // files:4 leaves headroom over rne/bank; the fileSize limit is the shared 5 MB cap.
   await app.register(multipart, {
     limits: { fileSize: MAX_DOCUMENT_BYTES, files: 4, fields: 5 },
   });
@@ -323,7 +328,7 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
       const taxOwner = await db
         .select({ id: users.id })
         .from(users)
-        .where(eq(users.taxNumber, tax_number))
+        .where(eq(users.taxNumber, normalizeTaxNumber(tax_number)))
         .limit(1);
       if (taxOwner.length > 0) {
         return reply.status(409).send({
@@ -342,7 +347,8 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
           name: contact_name,
           businessName: business_name,
           contactPhone: contact_phone,
-          ...(tax_number ? { taxNumber: tax_number } : {}),
+          // SIGN-3 — stored in the ONE canonical form (separators stripped, upper-case).
+          ...(tax_number ? { taxNumber: normalizeTaxNumber(tax_number) } : {}),
           // Post-verify redirect target (Phase-1f F3). Absolute → passes better-auth's
           // originCheck (WEB_ORIGIN is trusted); the FE /verify-email page reads ?error=.
           callbackURL: `${env.WEB_ORIGIN}/verify-email`,
@@ -474,12 +480,9 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
         // a missing one simply leaves onboarding incomplete (C1). Degraded + never thrown: a storage/db
         // failure also leaves a volet absent, not a failed signup.
         if (isMultipart && isOwnerType(profile_type)) {
-          if (profile_type === 'individual_owner') {
-            if (voletFiles.cin_recto)
-              await persistVolet(persisted.id, 'cin', 1, voletFiles.cin_recto, request.log);
-            if (voletFiles.cin_verso)
-              await persistVolet(persisted.id, 'cin', 2, voletFiles.cin_verso, request.log);
-          } else if (voletFiles.rne) {
+          // SIGN-2 — only fleet_owner carries a legal volet at signup; an individual owner's CIN is
+          // provide-later. Both types may attach the RIB below.
+          if (profile_type !== 'individual_owner' && voletFiles.rne) {
             await persistVolet(persisted.id, 'rne', 1, voletFiles.rne, request.log);
           }
           if (voletFiles.bank)

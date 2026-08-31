@@ -53,6 +53,7 @@ import {
   EMAIL_REGEX,
   POSTAL_CODE_ERROR,
   TAX_NUMBER_ERROR,
+  normalizeTaxNumber,
   isValidPostalCode,
   isValidTaxNumber,
   stepFieldErrors,
@@ -267,7 +268,6 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
     postal_code: '',
     governorate_id: '',
     zone: '',
-    cin: '',
     formule: '',
     agent_toodooh: '',
     number_of_screens: undefined,
@@ -443,7 +443,9 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
   const checkTaxAvailable = async (
     taxRaw: string = String(formData.tax_number || ''),
   ): Promise<boolean> => {
-    const taxNumber = taxRaw.trim();
+    // SIGN-3 — cache and probe on the CANONICAL form: `1234567/A/M/M/000` and `1234567AMM000` are
+    // one matricule, so they must share one verdict (and one call against the 10/min limit).
+    const taxNumber = normalizeTaxNumber(taxRaw.trim());
     if (!taxNumber || !isValidTaxNumber(taxNumber)) return true; // the format gate owns these
     let available: boolean | null;
     if (lastTaxAvailability.current?.taxNumber === taxNumber) {
@@ -775,24 +777,16 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
         contact_name: composedContactName,
         profile_type: selectedProfileType,
         fonction: fonction.trim() || undefined,
-        // R7/N4 (reversed) — owner legal volet: fleet_owner → RNE (sent as `rne`); individual_owner →
-        // CIN recto/verso (sent as cin_recto/cin_verso). Non-owner keeps the existing RNE pick (JSON,
-        // dropped server-side). bank_doc is the owner RIB volet. All optional now — any blank volet is
-        // omitted by the service (|| undefined), so an owner can finalize with no documents.
+        // R7/N4 (reversed) — owner legal volet: fleet_owner → RNE (sent as `rne`). Non-owner keeps the
+        // existing RNE pick (JSON, dropped server-side). bank_doc is the owner RIB volet. SIGN-2 —
+        // individual_owner sends NO legal volet at signup: CIN moved to provide-later. All optional —
+        // any blank volet is omitted by the service (|| undefined), so an owner can finalize with none.
         registration_doc:
           selectedProfileType === 'fleet_owner'
             ? ownerVolets.rne || undefined
             : !isOwner
               ? rneFiles[0] || undefined
               : undefined,
-        cin_recto:
-          selectedProfileType === 'individual_owner'
-            ? ownerVolets.cinRecto || undefined
-            : undefined,
-        cin_verso:
-          selectedProfileType === 'individual_owner'
-            ? ownerVolets.cinVerso || undefined
-            : undefined,
         company_logo: companyLogo || undefined,
         bank_doc: isOwner ? ownerVolets.bank || undefined : undefined,
         // F6 — individual_owner's single screenhost location/WiFi (optional). The service omits any

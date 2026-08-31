@@ -2,6 +2,8 @@ import { isValidAgentCode, AGENT_CODE_ERROR } from '@/features/auth/utils/agent-
 import { isValidPassword } from '@/features/auth/utils/password';
 import { PHONE_FORMAT_ERROR, isValidTunisiaPhone } from '@/features/auth/utils/phone';
 
+import { TAX_NUMBER_ERROR, normalizeTaxNumber, validateTaxNumber } from './tax-number';
+
 /**
  * Per-step, per-field gate messages for the signup wizard (prod-blocker lane). Mirrors the old
  * `canGoNext()` conditions EXACTLY — same fields, same validators, per profile type — but returns
@@ -28,10 +30,13 @@ export const PASSWORD_MATCH_ERROR = 'Les mots de passe ne correspondent pas.';
 export const HOURS_WINDOW_ERROR = "Horaires invalides — la fermeture doit être après l'ouverture.";
 export const FLEET_MIN_ERROR = 'Ajoutez au moins un établissement pour continuer.';
 // Moved verbatim from SignUpForm (C5 #8a) — the backend matricule/postal mirrors keep one home.
-export const TAX_NUMBER_ERROR = 'Matricule invalide (7 à 20 caractères alphanumériques ou /).';
+// SIGN-3 — the matricule definition now lives in ONE place (`./tax-number`, byte-mirrored from
+// the api and pinned by a cross-package test); these re-exports keep every existing consumer
+// working without a second copy of the rule.
+export { TAX_NUMBER_ERROR, normalizeTaxNumber };
 export const POSTAL_CODE_ERROR = 'Code postal invalide (4 chiffres).';
 
-export const isValidTaxNumber = (value: string): boolean => /^[A-Za-z0-9/]{7,20}$/.test(value);
+export const isValidTaxNumber = (value: string): boolean => validateTaxNumber(value);
 export const isValidPostalCode = (value: string): boolean => /^\d{4}$/.test(value);
 export const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
