@@ -10,6 +10,7 @@ import {
   events,
   proofOfPlay,
   screenhostAffluence,
+  screenhostAffluenceHourly,
   screenhostMonthlyStats,
   screenhosts,
   screens,
@@ -229,18 +230,20 @@ describe('assembleReportData (real Postgres)', () => {
     expect(data?.campaignsBlock.cumulativeImpressions).toBe(800);
     expect(data?.campaignsBlock.top3).toEqual(['Ooredoo · Forfait Data']);
 
-    // S02 — AFF1: the MERGED typical-week grid WITH provenance (the page's rule, api-side).
-    // Mon 12h measured 80 → col 4; Sat 18h backup 120 → col 10; Wed 15h NULL-source 30 → col 7
-    // reads as an estimation. Everything else: no data → level 0 / none.
+    // S02 — AUD-HOURLY1-C: the PÉRIODE'S OWN cells folded into weekday × hour. This venue has no
+    // hourly cells, so every slot the merge fills comes from the admin's grid and is therefore an
+    // ESTIMATION — whatever the hub had marked on its own rolling slot. (A measured slot needs a
+    // screenhost_affluence_hourly cell; that path is pinned in screenhost-affluence.test.ts.)
+    // Mon 12h 80 → col 4; Sat 18h 120 → col 10; Wed 15h 30 → col 7. Elsewhere: no cell → none.
     const levels = data?.heatLevels ?? [];
     const kinds = data?.heatKinds ?? [];
     expect(levels).toHaveLength(7);
     expect(levels[0]?.[4]).toBeGreaterThan(0);
-    expect(kinds[0]?.[4]).toBe('measured');
+    expect(kinds[0]?.[4]).toBe('backup');
     expect(levels[5]?.[10]).toBe(5); // the max of the three
     expect(kinds[5]?.[10]).toBe('backup');
     expect(levels[2]?.[7]).toBeGreaterThan(0);
-    expect(kinds[2]?.[7]).toBe('backup'); // NULL source with a value → estimation, never measured
+    expect(kinds[2]?.[7]).toBe('backup');
     expect(levels[1]?.[4]).toBe(0);
     expect(kinds[1]?.[4]).toBe('none');
     expect(data?.heatEmpty).toBe(false);
@@ -304,7 +307,7 @@ describe('assembleReportData (real Postgres)', () => {
     expect(data?.kpis.peak).toBeNull();
   });
 
-  it('PERF-R2: the S02 grid is période-scoped — weekdays outside the range are masked', async () => {
+  it('AUD-HOURLY1-C: the PDF S02 is the période aggregated, and matches the page', async () => {
     const owner = await seedUser();
     const venue = await seedScreenhost(owner, { openingHour: 8, closingHour: 22 });
     await db.insert(screenhostAffluence).values([
@@ -312,21 +315,39 @@ describe('assembleReportData (real Postgres)', () => {
       { screenhostId: venue, dayOfWeek: 6, hour: 18, estimatedImpressions: 120, source: 'backup' },
     ]);
 
-    // 2026-06-01 (Mon) .. 2026-06-02 (Tue): Monday kept, Saturday masked.
+    // 2026-06-01 (Mon) .. 2026-06-02 (Tue): only Monday is in the période.
     const data = await assembleReportData(venue, { from: '2026-06-01', to: '2026-06-02' }, TODAY);
-    expect(data?.heatKinds[0]?.[4]).toBe('measured'); // Mon 12h → col 4, kept
+    // Filled from the grid → an estimation, since no hourly cell backs it.
+    expect(data?.heatKinds[0]?.[4]).toBe('backup'); // Mon 12h → col 4
     expect(data?.heatLevels[0]?.[4]).toBeGreaterThan(0);
-    expect(data?.heatKinds[5]?.[10]).toBe('none'); // Sat 18h masked by the période
+    expect(data?.heatKinds[5]?.[10]).toBe('none'); // Saturday is not in the période
     expect(data?.heatLevels[5]?.[10]).toBe(0);
 
-    // A période with none of the data weekdays → the explanatory empty state.
     const weekend = await assembleReportData(
       venue,
       { from: '2026-06-06', to: '2026-06-07' }, // Sat–Sun
       TODAY,
     );
     expect(weekend?.heatKinds[5]?.[10]).toBe('backup'); // Saturday IS in this période
-    expect(weekend?.heatKinds[0]?.[4]).toBe('none'); // Monday masked
+    expect(weekend?.heatKinds[0]?.[4]).toBe('none'); // Monday is not
+  });
+
+  it('AUD-HOURLY1-C: a MEASURED hourly cell reaches the PDF S02 as measured', async () => {
+    const owner = await seedUser();
+    const venue = await seedScreenhost(owner, { openingHour: 8, closingHour: 22 });
+    await db
+      .insert(screenhostAffluence)
+      .values([
+        { screenhostId: venue, dayOfWeek: 1, hour: 12, estimatedImpressions: 80, source: 'backup' },
+      ]);
+    await db.insert(screenhostAffluenceHourly).values([
+      { screenhostId: venue, date: '2026-06-01', hour: 12, value: 44 }, // a Monday
+    ]);
+
+    const data = await assembleReportData(venue, { from: '2026-06-01', to: '2026-06-01' }, TODAY);
+    expect(data?.heatKinds[0]?.[4]).toBe('measured');
+    expect(data?.kpis.global).toBe(44); // the measure, not the grid's 80
+    expect(data?.kpis.measuredDays).toBe(1);
   });
 });
 

@@ -87,7 +87,17 @@ export interface AudienceKpis {
  * S01 — averages divide by DAYS WITH DATA (not calendar days); null slots when no data.
  * TWIN of apps/web's audienceKpis (lib/performance-derive.ts) — page and PDF run the same maths.
  */
-export function audienceKpis(points: DailyAudiencePoint[], hoursPerDay: number): AudienceKpis {
+/**
+ * AUD-HOURLY1-C — `estimatedPct` is now supplied by the CALLER, not derived here. The merge counts
+ * DATA POINTS (every merged cell, plus each day held only at day granularity), which this function
+ * cannot see from `points` alone — it only receives the day totals. Required, not optional, so a
+ * call site cannot silently fall back to the old day-share by omission (the MEJ-R1 precedent).
+ */
+export function audienceKpis(
+  points: DailyAudiencePoint[],
+  hoursPerDay: number,
+  estimatedPct: number | null,
+): AudienceKpis {
   if (points.length === 0)
     return {
       global: 0,
@@ -95,7 +105,7 @@ export function audienceKpis(points: DailyAudiencePoint[], hoursPerDay: number):
       perHour: null,
       peak: null,
       measuredDays: 0,
-      estimatedPct: null,
+      estimatedPct,
     };
   let global = 0;
   let peak: { value: number; date: string } | null = null;
@@ -117,7 +127,6 @@ export function audienceKpis(points: DailyAudiencePoint[], hoursPerDay: number):
   // One decimal (Mejri prod-test #3): 4 pers/day ÷ 14 h must read 0,3 — never a rounded 0.
   const perHour = hoursPerDay > 0 ? Math.round((perDayRaw / hoursPerDay) * 10) / 10 : null;
   const measuredDaysCount = points.filter((p) => p.source !== 'estimated').length;
-  const estimatedPct = Math.round(((points.length - measuredDaysCount) / points.length) * 100);
   return { global, perDay, perHour, peak, measuredDays: measuredDaysCount, estimatedPct };
 }
 

@@ -6,6 +6,7 @@ import { db, sql } from '../src/db/client.js';
 import {
   type NewUser,
   screenhostAffluence,
+  screenhostAffluenceHourly,
   screenhostMonthlyReports,
   screenhosts,
   users,
@@ -56,9 +57,28 @@ const seedUser = async (values: Partial<NewUser> = {}): Promise<string> => {
   return u?.id ?? '';
 };
 
-const seedScreenhost = async (ownerId: string, name = 'Café Test'): Promise<string> => {
-  const [s] = await db.insert(screenhosts).values({ name, ownerId }).returning();
+const seedScreenhost = async (
+  ownerId: string,
+  name = 'Café Test',
+  values: Partial<typeof screenhosts.$inferInsert> = {},
+): Promise<string> => {
+  const [s] = await db
+    .insert(screenhosts)
+    .values({ name, ownerId, ...values })
+    .returning();
   return s?.id ?? '';
+};
+
+/** MEJ-R1 — the backup grid answers only from the venue's onboarding day; every ranged fixture
+ *  below is onboarded well before the périodes under test. */
+const ONBOARDED_EARLY = { createdAt: new Date('2026-07-01T00:00:00Z') };
+
+const seedHourly = async (
+  screenhostId: string,
+  cells: { date: string; hour: number; value: number }[],
+): Promise<void> => {
+  if (cells.length === 0) return;
+  await db.insert(screenhostAffluenceHourly).values(cells.map((c) => ({ screenhostId, ...c })));
 };
 
 const seedAffluence = async (
@@ -82,10 +102,16 @@ afterAll(async () => {
   await sql.end();
 });
 
-// PERF-R2 (operator 2026-08-30) — the période scopes the heatmap read: ?from&to masks the
-// weekdays the période does not contain (a 7+-day période keeps the whole week). The merged
-// PAX-first values and their provenance are untouched — only weekday membership is scoped.
-describe('screenhost affluence read — ?from&to période mask (PERF-R2)', () => {
+// AUD-HOURLY1-C — ?from&to no longer MASKS the hub's rolling typical week (PERF-R2's approach):
+// it aggregates the PÉRIODE'S OWN (date, hour) cells into weekday × hour, through the same merge
+// S01 runs. Two consequences these tests pin:
+//   • the MEJ-2 onboarding floor applies — the backup grid cannot answer for days before the
+//     venue existed, so every fixture states its onboarding date;
+//   • provenance is DERIVED, not read back. A slot the merge filled from the admin's grid is
+//     'backup' even where the hub had marked its rolling-grid slot 'measured', because in the
+//     période view the real measurement comes from screenhost_affluence_hourly. The BARE read
+//     (« Votre audience ») still serves the hub's stored provenance, untouched.
+describe('screenhost affluence read — ?from&to période aggregation (AUD-HOURLY1-C)', () => {
   let app: ReturnType<typeof buildApp>;
 
   beforeEach(async () => {
@@ -103,9 +129,9 @@ describe('screenhost affluence read — ?from&to période mask (PERF-R2)', () =>
   const getRange = (id: string, qs: string) =>
     app.inject({ method: 'GET', url: `/api/screenhosts/${id}/affluence${qs}` });
 
-  it('masks the weekdays outside the période; kept cells keep value AND provenance', async () => {
+  it('serves only the weekdays the période contains, from the merge', async () => {
     const me = await seedUser();
-    const sh = await seedScreenhost(me);
+    const sh = await seedScreenhost(me, 'Café Test', ONBOARDED_EARLY);
     await seedAffluence(sh, [
       { day: 1, hour: 9, value: 100, source: 'measured' }, // Monday — inside the période
       { day: 3, hour: 18, value: 250, source: 'backup' }, // Wednesday — outside
@@ -116,17 +142,52 @@ describe('screenhost affluence read — ?from&to période mask (PERF-R2)', () =>
     const res = await getRange(sh, '?from=2026-08-03&to=2026-08-04');
     expect(res.statusCode).toBe(200);
     const body = res.json() as AffluenceResponse;
-    expect(body.grid[0]?.[9]).toBe(100); // Monday kept (PAX cell wins stays visible)
-    expect(body.sources[0]?.[9]).toBe('measured');
-    expect(body.grid[2]?.[18]).toBe(0); // Wednesday masked
+    expect(body.grid[0]?.[9]).toBe(100); // Monday: the grid stood in for an unmeasured hour
+    // …and it says so: no hourly cell exists, so this value is an ESTIMATION whatever the hub
+    // had marked on its own rolling slot.
+    expect(body.sources[0]?.[9]).toBe('backup');
+    expect(body.grid[2]?.[18]).toBe(0); // Wednesday is not in the période — no cell at all
     expect(body.sources[2]?.[18]).toBeNull();
-    expect(body.counts).toEqual({ measured: 1, backup: 0 });
+    expect(body.counts).toEqual({ measured: 0, backup: 1 });
     expect(body.has_data).toBe(true);
+  });
+
+  it('a MEASURED hourly cell shows through as measured, and wins over the grid', async () => {
+    const me = await seedUser();
+    const sh = await seedScreenhost(me, 'Café Test', ONBOARDED_EARLY);
+    await seedAffluence(sh, [{ day: 1, hour: 9, value: 100, source: 'backup' }]);
+    await seedHourly(sh, [{ date: '2026-08-03', hour: 9, value: 12 }]); // a Monday
+    mockSession(me);
+
+    const body = (await getRange(sh, '?from=2026-08-03&to=2026-08-03')).json() as AffluenceResponse;
+    expect(body.grid[0]?.[9]).toBe(12); // the measure, not the grid's 100
+    expect(body.sources[0]?.[9]).toBe('measured');
+    expect(body.counts).toEqual({ measured: 1, backup: 0 });
+  });
+
+  it("Mejri's outage, end to end: a measured ZERO hour renders the grid value as backup", async () => {
+    const me = await seedUser();
+    const sh = await seedScreenhost(me, 'Café Test', ONBOARDED_EARLY);
+    await seedAffluence(sh, [
+      { day: 1, hour: 9, value: 25, source: 'backup' },
+      { day: 1, hour: 10, value: 30, source: 'backup' },
+    ]);
+    await seedHourly(sh, [
+      { date: '2026-08-03', hour: 9, value: 12 },
+      { date: '2026-08-03', hour: 10, value: 0 }, // the sensor was unplugged
+    ]);
+    mockSession(me);
+
+    const body = (await getRange(sh, '?from=2026-08-03&to=2026-08-03')).json() as AffluenceResponse;
+    expect(body.grid[0]?.[9]).toBe(12);
+    expect(body.sources[0]?.[9]).toBe('measured');
+    expect(body.grid[0]?.[10]).toBe(30); // FORCED from the admin's grid, not left at 0
+    expect(body.sources[0]?.[10]).toBe('backup');
   });
 
   it('a période containing none of the data weekdays serves the empty state', async () => {
     const me = await seedUser();
-    const sh = await seedScreenhost(me);
+    const sh = await seedScreenhost(me, 'Café Test', ONBOARDED_EARLY);
     await seedAffluence(sh, [{ day: 3, hour: 18, value: 250, source: 'backup' }]);
     mockSession(me);
 
@@ -137,9 +198,9 @@ describe('screenhost affluence read — ?from&to période mask (PERF-R2)', () =>
     expect(body.counts).toEqual({ measured: 0, backup: 0 });
   });
 
-  it('a 7+-day période keeps every weekday, and no params keeps the unscoped read', async () => {
+  it('a 7+-day période reaches every weekday; the BARE read keeps the stored provenance', async () => {
     const me = await seedUser();
-    const sh = await seedScreenhost(me);
+    const sh = await seedScreenhost(me, 'Café Test', ONBOARDED_EARLY);
     await seedAffluence(sh, [
       { day: 1, hour: 9, value: 100, source: 'measured' },
       { day: 7, hour: 12, value: 60, source: 'backup' },
@@ -149,10 +210,13 @@ describe('screenhost affluence read — ?from&to période mask (PERF-R2)', () =>
     const week = (await getRange(sh, '?from=2026-08-01&to=2026-08-31')).json() as AffluenceResponse;
     expect(week.grid[0]?.[9]).toBe(100);
     expect(week.grid[6]?.[12]).toBe(60);
-    expect(week.counts).toEqual({ measured: 1, backup: 1 });
+    // Both derived from the grid → both estimations in the période view.
+    expect(week.counts).toEqual({ measured: 0, backup: 2 });
 
+    // « Votre audience » (no params) is untouched by this lane: the hub's own provenance stands.
     const bare = (await getRange(sh, '')).json() as AffluenceResponse;
     expect(bare.counts).toEqual({ measured: 1, backup: 1 });
+    expect(bare.sources[0]?.[9]).toBe('measured');
   });
 
   it('rejects a malformed or one-sided from/to (400)', async () => {
@@ -161,6 +225,8 @@ describe('screenhost affluence read — ?from&to période mask (PERF-R2)', () =>
     mockSession(me);
     expect((await getRange(sh, '?from=03/08/2026&to=2026-08-04')).statusCode).toBe(400);
     expect((await getRange(sh, '?from=2026-08-03')).statusCode).toBe(400);
+    // AUD-HOURLY1-C rider — well-shaped but impossible; it now reaches a Postgres DATE range.
+    expect((await getRange(sh, '?from=2026-02-30&to=2026-03-01')).statusCode).toBe(400);
   });
 });
 

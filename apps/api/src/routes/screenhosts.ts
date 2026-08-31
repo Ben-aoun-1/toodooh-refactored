@@ -27,6 +27,7 @@ import {
   zones,
   screenhostUnavailability,
 } from '../db/schema.js';
+import { CALENDAR_DAY_MSG, ISO_DATE_RE, isCalendarDate } from '../lib/calendar-date.js';
 import { tunisDateOf } from '../lib/campaign-dates.js';
 import { runRefusalCascade } from '../lib/dispatch/cascade.js';
 import { getDispatchConfig } from '../lib/dispatch/config.js';
@@ -36,7 +37,8 @@ import { createEngineTrace, type EngineTrace } from '../lib/engine-journal/trace
 import { releaseBlocHours, runEventRefusalCascade } from '../lib/event-dispatch/dispatch.js';
 import { displayImpressionsSettled } from '../lib/impressions-display.js';
 import { measuredDays, measuredTotal } from '../lib/monthly-audience.js';
-import { periodAudience, weekdaysInRange } from '../lib/period-audience.js';
+import { loadPeriodAudienceInput } from '../lib/period-audience-source.js';
+import { periodAudience, weekGridFromCells } from '../lib/period-audience.js';
 import { pushPlaylistToVenue } from '../lib/playout/push.js';
 import { assembleReportData } from '../lib/report/assemble.js';
 import { buildPistes } from '../lib/report/pistes.js';
@@ -677,20 +679,17 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
     }
 
-    // PERF-R2 (operator 2026-08-30) — optional ?from&to: the période scopes this read by masking
-    // the WEEKDAYS it does not contain (a 7+-day période keeps the whole week — the grid stays
-    // the hub's rolling PAX-first merge; only weekday membership is scoped). Both params or
-    // neither: a one-sided range is a validation error, not a guess.
+    // AUD-HOURLY1-C — optional ?from&to. WITH a range, S02 is GENUINELY période-scoped: the grid
+    // is the période's own (date, hour) cells aggregated into weekday × hour, through the same
+    // merge S01 runs. PERF-R2's weekday MASK over the hub's rolling typical week is superseded —
+    // a weekday the période does not contain simply has no cell to aggregate.
+    // WITHOUT a range the rolling typical week is served unchanged: that is « Votre audience » on
+    // the owner dashboard, which this lane leaves alone.
+    // Both params or neither: a one-sided range is a validation error, not a guess.
     const parsedQuery = z
       .object({
-        from: z
-          .string()
-          .regex(/^\d{4}-\d{2}-\d{2}$/)
-          .optional(),
-        to: z
-          .string()
-          .regex(/^\d{4}-\d{2}-\d{2}$/)
-          .optional(),
+        from: z.string().regex(ISO_DATE_RE).refine(isCalendarDate, CALENDAR_DAY_MSG).optional(),
+        to: z.string().regex(ISO_DATE_RE).refine(isCalendarDate, CALENDAR_DAY_MSG).optional(),
       })
       .refine((q) => (q.from === undefined) === (q.to === undefined), {
         message: 'from and to come together',
@@ -707,50 +706,74 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         })),
       });
     }
-    const maskRange =
+    const periodRange =
       parsedQuery.data.from !== undefined && parsedQuery.data.to !== undefined
         ? { from: parsedQuery.data.from, to: parsedQuery.data.to }
         : null;
-    const keptWeekdays = maskRange ? weekdaysInRange(maskRange) : null;
-
-    const slots = await db
-      .select({
-        dayOfWeek: screenhostAffluence.dayOfWeek,
-        hour: screenhostAffluence.hour,
-        estimatedImpressions: screenhostAffluence.estimatedImpressions,
-        source: screenhostAffluence.source,
-      })
-      .from(screenhostAffluence)
-      .where(eq(screenhostAffluence.screenhostId, owned.id));
-    const keptSlots =
-      keptWeekdays === null ? slots : slots.filter((slot) => keptWeekdays.has(slot.dayOfWeek));
 
     // Zero-filled 7×24 grid (Monday-first); day_of_week 1=Mon…7=Sun → row 0…6. `sources` is the
-    // same shape, null-filled.
+    // same shape, null-filled. `counts` tallies provenance only.
     const grid: number[][] = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
     const sources: (AffluenceSource | null)[][] = Array.from({ length: 7 }, () =>
       Array.from({ length: 24 }, () => null),
     );
     const counts = { measured: 0, backup: 0 };
-    for (const slot of keptSlots) {
-      const row = grid[slot.dayOfWeek - 1];
-      const sourceRow = sources[slot.dayOfWeek - 1];
-      if (row && sourceRow && slot.hour >= 0 && slot.hour <= 23) {
-        row[slot.hour] = slot.estimatedImpressions;
-        sourceRow[slot.hour] = slot.source;
-        if (slot.source) counts[slot.source] += 1;
+    let filled = 0;
+
+    if (periodRange === null) {
+      // ── the hub's rolling typical week, as served since AFF1 (« Votre audience ») ──
+      const slots = await db
+        .select({
+          dayOfWeek: screenhostAffluence.dayOfWeek,
+          hour: screenhostAffluence.hour,
+          estimatedImpressions: screenhostAffluence.estimatedImpressions,
+          source: screenhostAffluence.source,
+        })
+        .from(screenhostAffluence)
+        .where(eq(screenhostAffluence.screenhostId, owned.id));
+      for (const slot of slots) {
+        const row = grid[slot.dayOfWeek - 1];
+        const sourceRow = sources[slot.dayOfWeek - 1];
+        if (row && sourceRow && slot.hour >= 0 && slot.hour <= 23) {
+          row[slot.hour] = slot.estimatedImpressions;
+          sourceRow[slot.hour] = slot.source;
+          if (slot.source) counts[slot.source] += 1;
+        }
+      }
+      filled = slots.length;
+    } else {
+      // ── the période's OWN cells, merged per (date, hour) then folded into a weekday × hour
+      //    grid: the same helper, the same numbers as S01 and the PDF. ──
+      const merged = periodAudience(
+        await loadPeriodAudienceInput({
+          venueId: owned.id,
+          range: periodRange,
+          todayIso: tunisDateOf(new Date()),
+        }),
+      );
+      const week = weekGridFromCells(merged.cells);
+      for (let row = 0; row < 7; row += 1) {
+        for (let hour = 0; hour < 24; hour += 1) {
+          const cell = week[row]![hour]!;
+          if (cell.value === null || cell.source === null) continue;
+          grid[row]![hour] = cell.value;
+          sources[row]![hour] = cell.source;
+          counts[cell.source] += 1;
+          filled += 1;
+        }
       }
     }
 
-    return reply.status(200).send({ grid, has_data: keptSlots.length > 0, sources, counts });
+    return reply.status(200).send({ grid, has_data: filled > 0, sources, counts });
   });
 
-  // GET /api/screenhosts/:id/audience?from&to — PERF-R1 (operator 2026-08-30, supersedes
-  // US-P.5 « measured-only »): the merged période audience, ONE api-side rule
-  // (lib/period-audience.ts) reused by the page AND the PDF twin. Per day: the PAX measure when
-  // one exists, else the venue's affluence grid stands in — never a zero because the sensor was
-  // silent; per-day provenance rides on the wire. The span guard is generous (the scan is
-  // monthly-stats rows, not proof_of_play) so « Depuis le début » (2020-01-01) fits.
+  // GET /api/screenhosts/:id/audience?from&to — the merged période audience, ONE api-side rule
+  // (lib/period-audience.ts) reused by the page AND the PDF twin. AUD-HOURLY1-C: the merge is now
+  // per (date, hour) — a day the sensor covered only partly falls back to the admin's grid for the
+  // hours it did not, which is what « rien ne s'est passé » was about. Per-day provenance still
+  // rides on the wire; `estimated_pct` is now the share of DATA POINTS (see PeriodAudience).
+  // The span guard is generous (the scan is monthly-stats + hourly rows, not proof_of_play) so
+  // « Depuis le début » (2020-01-01) fits.
   app.get('/api/screenhosts/:id/audience', ownerGuard, async (request, reply) => {
     const parsedParams = idParamSchema.safeParse(request.params);
     if (!parsedParams.success) {
@@ -760,10 +783,13 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         fields: [{ field: 'id', reason: 'must be a uuid' }],
       });
     }
+    // AUD-HOURLY1-C — these bounds now reach Postgres as a DATE range (the hourly cells), so an
+    // impossible-but-well-shaped day like 2026-02-30 would 500 instead of 400. Refined, like the
+    // ingest's own `date` field (slice A's banked rider, same class).
     const parsedQuery = z
       .object({
-        from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-        to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        from: z.string().regex(ISO_DATE_RE).refine(isCalendarDate, CALENDAR_DAY_MSG),
+        to: z.string().regex(ISO_DATE_RE).refine(isCalendarDate, CALENDAR_DAY_MSG),
       })
       .safeParse(request.query);
     if (!parsedQuery.success) {
@@ -810,40 +836,15 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
     }
 
-    const monthRows = await db
-      .select({ month: screenhostMonthlyStats.month, daily: screenhostMonthlyStats.daily })
-      .from(screenhostMonthlyStats)
-      .where(
-        and(
-          eq(screenhostMonthlyStats.screenhostId, owned.id),
-          gte(screenhostMonthlyStats.month, from.slice(0, 7)),
-          lte(screenhostMonthlyStats.month, to.slice(0, 7)),
-        ),
-      );
-    const slotRows = await db
-      .select({
-        dayOfWeek: screenhostAffluence.dayOfWeek,
-        hour: screenhostAffluence.hour,
-        estimatedImpressions: screenhostAffluence.estimatedImpressions,
-      })
-      .from(screenhostAffluence)
-      .where(eq(screenhostAffluence.screenhostId, owned.id));
-    const affluenceGrid: number[][] = Array.from({ length: 7 }, () =>
-      Array.from({ length: 24 }, () => 0),
+    const merged = periodAudience(
+      await loadPeriodAudienceInput({
+        venueId: owned.id,
+        range: { from, to },
+        todayIso: tunisDateOf(new Date()),
+        // MEJ-R1 — the floor bounds BACKUP only; the venue row is already in hand.
+        onboardedIso: tunisDateOf(owned.createdAt),
+      }),
     );
-    for (const slot of slotRows) {
-      const row = affluenceGrid[slot.dayOfWeek - 1];
-      if (row && slot.hour >= 0 && slot.hour <= 23) row[slot.hour] = slot.estimatedImpressions;
-    }
-
-    const merged = periodAudience({
-      months: monthRows,
-      grid: affluenceGrid,
-      range: { from, to },
-      todayIso: tunisDateOf(new Date()),
-      // MEJ-R1 — the estimation floor: the grid never answers for days before the venue existed.
-      onboardedIso: tunisDateOf(owned.createdAt),
-    });
     return reply.status(200).send({
       days: merged.days,
       total_audience: merged.total,
