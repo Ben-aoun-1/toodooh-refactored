@@ -13,6 +13,7 @@ import {
   screenhostMonthlyStats,
   screenhosts,
 } from '../../db/schema.js';
+import { tunisDateOf } from '../campaign-dates.js';
 import { getDispatchConfig } from '../dispatch/config.js';
 import { displayImpressionsSettled } from '../impressions-display.js';
 import { periodAudience, weekdaysInRange } from '../period-audience.js';
@@ -228,6 +229,8 @@ export async function assembleReportData(
       class: screenhosts.class,
       openingHour: screenhosts.openingHour,
       closingHour: screenhosts.closingHour,
+      // MEJ-R1 — the venue's onboarding day; the backup grid may not answer for earlier days.
+      createdAt: screenhosts.createdAt,
       genderMalePct: screenhosts.genderMalePct,
       genderFemalePct: screenhosts.genderFemalePct,
       age17To30Pct: screenhosts.age17To30Pct,
@@ -367,7 +370,14 @@ export async function assembleReportData(
 
   // S01 — PERF-R1: THE api-side merge (lib/period-audience.ts), the same helper the /audience
   // route serves the page from. S02 — PERF-R2: the semaine type masked to the période's weekdays.
-  const merged = periodAudience({ months: monthRows, grid, range, todayIso });
+  const merged = periodAudience({
+    months: monthRows,
+    grid,
+    range,
+    todayIso,
+    // MEJ-R1 — the SAME estimation floor the page's /audience read applies (the twin contract).
+    onboardedIso: tunisDateOf(venue.createdAt),
+  });
   const kpis = audienceKpis(merged.days, openHoursPerDay(venue.openingHour, venue.closingHour));
 
   const ratios = ratiosOrNull(venue);

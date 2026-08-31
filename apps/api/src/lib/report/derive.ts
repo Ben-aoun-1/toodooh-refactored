@@ -83,7 +83,10 @@ export interface AudienceKpis {
   estimatedPct: number | null;
 }
 
-/** S01 — averages divide by DAYS WITH DATA (not calendar days); null slots when no data. */
+/**
+ * S01 — averages divide by DAYS WITH DATA (not calendar days); null slots when no data.
+ * TWIN of apps/web's audienceKpis (lib/performance-derive.ts) — page and PDF run the same maths.
+ */
 export function audienceKpis(points: DailyAudiencePoint[], hoursPerDay: number): AudienceKpis {
   if (points.length === 0)
     return {
@@ -98,6 +101,13 @@ export function audienceKpis(points: DailyAudiencePoint[], hoursPerDay: number):
   let peak: { value: number; date: string } | null = null;
   for (const p of points) {
     global += p.audience;
+    // MEJ-R1 (operator 2026-08-31) — « Pic d'audience » is a MEASURED day or nothing. The
+    // audience TOTAL merges measure and estimate (PERF-R1), but a peak names a specific day as
+    // this venue's best: a typical-week stand-in cannot carry that claim, and a grid cell copied
+    // across three past Mondays produced exactly the « Pic 1 398 le 10/08 » that started MEJ-2.
+    // No measured day in the période → null → the tile renders « — ». An UNMARKED point counts
+    // as measured (legacy wires), mirroring measuredDays below.
+    if (p.source === 'estimated') continue;
     if (peak === null || p.audience > peak.value) peak = { value: p.audience, date: p.date };
   }
   // PERF-QA1 R9 — divide FIRST, round ONCE at the end (parity with the page's derive: an

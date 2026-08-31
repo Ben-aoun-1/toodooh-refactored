@@ -799,8 +799,10 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
     }
 
     // Owner scoping in the WHERE: a foreign screenhost id is indistinguishable from a missing one.
+    // MEJ-R1 — created_at rides along: it is the venue's ONBOARDING day, the first day the backup
+    // grid may stand in for (see lib/period-audience.ts).
     const [owned] = await db
-      .select({ id: screenhosts.id })
+      .select({ id: screenhosts.id, createdAt: screenhosts.createdAt })
       .from(screenhosts)
       .where(and(eq(screenhosts.id, parsedParams.data.id), eq(screenhosts.ownerId, userId)))
       .limit(1);
@@ -839,6 +841,8 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       grid: affluenceGrid,
       range: { from, to },
       todayIso: tunisDateOf(new Date()),
+      // MEJ-R1 — the estimation floor: the grid never answers for days before the venue existed.
+      onboardedIso: tunisDateOf(owned.createdAt),
     });
     return reply.status(200).send({
       days: merged.days,

@@ -143,6 +143,12 @@ export function audienceKpis(points: DailyAudiencePoint[], hoursPerDay: number):
   let peak: { value: number; date: string } | null = null;
   for (const p of points) {
     global += p.audience;
+    // MEJ-R1 (operator 2026-08-31) — « Pic d'audience » is a MEASURED day or nothing. The total
+    // merges measure and estimate (PERF-R1), but a peak names a specific day as this venue's
+    // best, and a typical-week stand-in cannot carry that claim (« Pic 1 398 le 10/08 » on a
+    // venue onboarded on 26/08 is the defect that ruled this). No measured day → null → « — ».
+    // An UNMARKED point counts as measured (legacy wires), mirroring measuredDays below.
+    if (p.source === 'estimated') continue;
     if (peak === null || p.audience > peak.value) peak = { value: p.audience, date: p.date };
   }
   const perDayRaw = global / points.length;
