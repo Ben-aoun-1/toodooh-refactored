@@ -8,6 +8,7 @@ import {
   businessSectors,
   governorates,
   screenhostAffluence,
+  screenhostAffluenceHourly,
   screenhostMonthlyStats,
   screenhosts,
   screens,
@@ -322,6 +323,190 @@ describe('C1: POST /api/internal/affluence', () => {
       },
     });
     expect(res.statusCode).toBe(400);
+  });
+});
+
+// AUD-HOURLY1-A — the MEASURED per-(date, hour) receiver. STORAGE ONLY: nothing reads the table in
+// this slice, so these tests describe the wire and the row, not any owner-facing number.
+describe('C1h: POST /api/internal/affluence-hourly', () => {
+  let app: ReturnType<typeof buildApp> | undefined;
+  beforeEach(async () => {
+    await resetAuthTables();
+    app = buildApp();
+    await app.ready();
+  });
+  afterEach(async () => {
+    if (app) await app.close();
+    app = undefined;
+  });
+
+  const seedVenue = async (name = 'Place H'): Promise<string> => {
+    const [host] = await db.insert(screenhosts).values({ name }).returning({ id: screenhosts.id });
+    return host!.id;
+  };
+
+  const push = (places: unknown, key = SYNC_KEY) =>
+    app!.inject({
+      method: 'POST',
+      url: '/api/internal/affluence-hourly',
+      headers: auth(key),
+      payload: { places },
+    });
+
+  it("401 on a bad key — the guard is the siblings' guard", async () => {
+    expect((await push([], 'wrong-key')).statusCode).toBe(401);
+  });
+
+  it('upserts the cells and re-upserts idempotently, latest value winning', async () => {
+    const venue = await seedVenue();
+    const first = await push([
+      {
+        toodooh_screenhost_id: venue,
+        cells: [
+          { date: '2026-08-31', hour: 14, value: 3 },
+          { date: '2026-08-31', hour: 15, value: 7 },
+        ],
+      },
+    ]);
+    expect(first.statusCode).toBe(200);
+    expect(first.json<{ upserted: number; unknown_locations: string[] }>()).toEqual({
+      upserted: 2,
+      unknown_locations: [],
+    });
+
+    // Same two cells again, one with a new value → still TWO rows, the newer value kept.
+    const second = await push([
+      {
+        toodooh_screenhost_id: venue,
+        cells: [
+          { date: '2026-08-31', hour: 14, value: 5 },
+          { date: '2026-08-31', hour: 15, value: 7 },
+        ],
+      },
+    ]);
+    expect(second.statusCode).toBe(200);
+    expect(second.json<{ upserted: number }>().upserted).toBe(2);
+
+    const rows = await db
+      .select()
+      .from(screenhostAffluenceHourly)
+      .where(eq(screenhostAffluenceHourly.screenhostId, venue));
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => [r.hour, r.value]).sort((a, b) => a[0]! - b[0]!)).toEqual([
+      [14, 5],
+      [15, 7],
+    ]);
+  });
+
+  // THE PIN (MEJ-5's sibling): a cell sent as 14 is stored as 14. The contract is Africa/Tunis and
+  // toodooh stores it VERBATIM — a producer bucketing in UTC is fixed at the producer. This test
+  // exists to fail the day someone "fixes" the timezone here instead of on the hub.
+  it('stores date and hour VERBATIM — no timezone shifting api-side', async () => {
+    const venue = await seedVenue();
+    await push([
+      {
+        toodooh_screenhost_id: venue,
+        cells: [
+          { date: '2026-08-31', hour: 14, value: 3 }, // the ticket's own example
+          { date: '2026-08-31', hour: 0, value: 1 }, // midnight — the wrap-prone edge
+          { date: '2026-08-31', hour: 23, value: 2 }, // and the other one
+        ],
+      },
+    ]);
+    const rows = await db.select().from(screenhostAffluenceHourly);
+    expect(
+      rows
+        .map((r) => [r.date, r.hour, r.value])
+        .sort((a, b) => (a[1] as number) - (b[1] as number)),
+    ).toEqual([
+      ['2026-08-31', 0, 1],
+      ['2026-08-31', 14, 3],
+      ['2026-08-31', 23, 2],
+    ]);
+  });
+
+  it('an unknown screenhost id is SKIPPED and reported, never fatal', async () => {
+    const venue = await seedVenue();
+    const unknownId = '11111111-1111-4111-8111-111111111111';
+    const res = await push([
+      { toodooh_screenhost_id: venue, cells: [{ date: '2026-08-31', hour: 9, value: 4 }] },
+      { toodooh_screenhost_id: unknownId, cells: [{ date: '2026-08-31', hour: 9, value: 99 }] },
+    ]);
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ upserted: number; unknown_locations: string[] }>()).toEqual({
+      upserted: 1, // the known venue's cell landed
+      unknown_locations: [unknownId],
+    });
+    const rows = await db.select().from(screenhostAffluenceHourly);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.screenhostId).toBe(venue);
+  });
+
+  it('400 on hour 24 and on a malformed / impossible date', async () => {
+    const venue = await seedVenue();
+    expect(
+      (
+        await push([
+          { toodooh_screenhost_id: venue, cells: [{ date: '2026-08-31', hour: 24, value: 1 }] },
+        ])
+      ).statusCode,
+    ).toBe(400);
+    expect(
+      (
+        await push([
+          { toodooh_screenhost_id: venue, cells: [{ date: '31/08/2026', hour: 9, value: 1 }] },
+        ])
+      ).statusCode,
+    ).toBe(400);
+    // Regex-shaped but not a real day — would otherwise reach Postgres as a 500.
+    expect(
+      (
+        await push([
+          { toodooh_screenhost_id: venue, cells: [{ date: '2026-02-30', hour: 9, value: 1 }] },
+        ])
+      ).statusCode,
+    ).toBe(400);
+    expect(
+      (
+        await push([
+          { toodooh_screenhost_id: venue, cells: [{ date: '2026-08-31', hour: 9, value: -1 }] },
+        ])
+      ).statusCode,
+    ).toBe(400);
+    expect(await db.select().from(screenhostAffluenceHourly)).toHaveLength(0);
+  });
+
+  it('tolerates a cell repeated inside ONE batch (last wins, no conflict crash)', async () => {
+    const venue = await seedVenue();
+    const res = await push([
+      {
+        toodooh_screenhost_id: venue,
+        cells: [
+          { date: '2026-08-31', hour: 14, value: 3 },
+          { date: '2026-08-31', hour: 14, value: 8 },
+        ],
+      },
+    ]);
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ upserted: number }>().upserted).toBe(1); // deduped, not double-counted
+    const rows = await db.select().from(screenhostAffluenceHourly);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.value).toBe(8);
+  });
+
+  it('an empty batch is a 200 no-op', async () => {
+    const res = await push([]);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ upserted: 0, unknown_locations: [] });
+  });
+
+  it('a venue delete cascades its hourly cells away', async () => {
+    const venue = await seedVenue();
+    await push([
+      { toodooh_screenhost_id: venue, cells: [{ date: '2026-08-31', hour: 14, value: 3 }] },
+    ]);
+    await db.delete(screenhosts).where(eq(screenhosts.id, venue));
+    expect(await db.select().from(screenhostAffluenceHourly)).toHaveLength(0);
   });
 });
 
