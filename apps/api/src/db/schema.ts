@@ -470,6 +470,59 @@ export const screenhostAffluence = pgTable(
 export type ScreenhostAffluence = typeof screenhostAffluence.$inferSelect;
 export type NewScreenhostAffluence = typeof screenhostAffluence.$inferInsert;
 
+// ── screenhost_affluence_hourly (AUD-HOURLY1-A — the MEASURED hourly series) ──────────
+// The hub pushes one row per (venue, calendar date, hour) it actually measured, through
+// POST /api/internal/affluence-hourly. This is the series US-P.5 always required and toodooh
+// never held: `screenhost_affluence` above is a dow×hour TYPICAL WEEK (a rolling merge with no
+// calendar-day resolution), which is why S02 could not colour a measured cell.
+//
+// THE CONTRACT, and the reason it is written on the columns rather than in a doc:
+//   • `date` and `hour` are AFRICA/TUNIS clock values — the venue's own clock, the same frame as
+//     screenhosts.opening_hour/closing_hour. They are stored VERBATIM: toodooh NEVER shifts them.
+//     A producer that buckets in UTC is fixed AT THE PRODUCER (MEJ-5) — correcting here would
+//     double-correct the day it is repaired and put toodooh an hour off the hub's own venue page.
+//     A test pins the verbatim storage precisely to stop that patch landing here.
+//   • `value` is the ROUNDED AVERAGE of the sensor's counts within that hour (the hub's own
+//     aggregation), not a sum of raw readings.
+//   • MEASURED CELLS ONLY. A missing cell means "no measure" — never a zero. The dow×hour backup
+//     grid stands in at READ time (slice C); nothing in this table is ever synthesised.
+// Latest-value-wins on (screenhost, date, hour), mirroring the affluence + monthly-stats ingests.
+//
+// The UNIQUE index below doubles as the range index: its leading (screenhost_id, date) prefix is
+// exactly what a « this venue, this période » read scans, so a separate index would be redundant.
+export const screenhostAffluenceHourly = pgTable(
+  'screenhost_affluence_hourly',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    screenhostId: uuid('screenhost_id')
+      .notNull()
+      .references(() => screenhosts.id, { onDelete: 'cascade' }),
+    /** Africa/Tunis calendar day, stored verbatim (see the contract above). */
+    date: date('date').notNull(),
+    /** Africa/Tunis hour 0–23, stored verbatim — never shifted api-side. */
+    hour: integer('hour').notNull(),
+    /** The rounded average of the sensor's counts in that hour. Measured only. */
+    value: integer('value').notNull(),
+    receivedAt: timestamp('received_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    // Idempotency key AND the (screenhost_id, date) range index — one object, both jobs.
+    uniqueIndex('screenhost_affluence_hourly_cell_uq').on(
+      table.screenhostId,
+      table.date,
+      table.hour,
+    ),
+    check(
+      'screenhost_affluence_hourly_hour_range',
+      sql`${table.hour} >= 0 AND ${table.hour} <= 23`,
+    ),
+    check('screenhost_affluence_hourly_value_nonneg', sql`${table.value} >= 0`),
+  ],
+);
+
+export type ScreenhostAffluenceHourly = typeof screenhostAffluenceHourly.$inferSelect;
+export type NewScreenhostAffluenceHourly = typeof screenhostAffluenceHourly.$inferInsert;
+
 // ── screenhost unavailability (E2, VF jours_dispo_i) ────────────────────────
 // Owner-declared per-day unavailability, VENUE-level (never per-screen). The engine's day source:
 // assemblePool filters each venue's window days by this set — capacity (Hi), créneaux and the

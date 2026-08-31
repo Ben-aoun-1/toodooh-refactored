@@ -1,5 +1,6 @@
 import { hashPassword } from 'better-auth/crypto';
-import { and, eq, inArray } from 'drizzle-orm';
+import { format, isValid, parseISO } from 'date-fns';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
@@ -10,6 +11,7 @@ import {
   businessSectors,
   governorates,
   screenhostAffluence,
+  screenhostAffluenceHourly,
   screenhostMonthlyStats,
   screenhosts,
   screens,
@@ -27,6 +29,7 @@ import { requireSyncKey } from '../middleware/require-sync-key.js';
 // Three edges (all consumed by wedooh's already-deployed S-W1 client, so the shapes are LOCKED):
 //   B1  GET  /api/internal/locations?email=  — pull/reconcile an owner's locations (carries WiFi).
 //   C1  POST /api/internal/affluence         — ingest pushed audience-estimate slots.
+//   C1h POST /api/internal/affluence-hourly  — ingest MEASURED (date, hour) cells (AUD-HOURLY1-A).
 //   A   POST /api/internal/agents            — provision a screenhost_agent + its referral code.
 // numeric→string: Drizzle maps Postgres numeric to a JS string, so lat/lng are Number()-ed to honor
 // the contract's `number | null`. NaN guards keep a malformed value as null rather than NaN.
@@ -62,6 +65,40 @@ const affluenceBodySchema = z.object({
       }),
     )
     .max(168 * 64), // generous batch ceiling (a full week is 168 slots/location)
+});
+
+// AUD-HOURLY1-A — the MEASURED hourly series. `date`/`hour` are AFRICA/TUNIS clock values and are
+// stored VERBATIM (see the column comments on screenhost_affluence_hourly): a producer bucketing in
+// UTC is fixed AT THE PRODUCER, never compensated here. The wire is nested per place — the shape is
+// FIXED with the hub session, so it is not "harmonised" with the flat siblings.
+//
+// The regex alone would accept 2026-02-30, which Postgres would then reject with a 500; the refine
+// makes a fake calendar day the 400 it deserves.
+const isCalendarDate = (value: string): boolean => {
+  const parsed = parseISO(value);
+  return isValid(parsed) && format(parsed, 'yyyy-MM-dd') === value;
+};
+
+const affluenceHourlyBodySchema = z.object({
+  places: z
+    .array(
+      z.object({
+        toodooh_screenhost_id: z.uuid(),
+        cells: z
+          .array(
+            z.object({
+              date: z
+                .string()
+                .regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be YYYY-MM-DD')
+                .refine(isCalendarDate, 'date must be a real calendar day'),
+              hour: z.number().int().min(0).max(23),
+              value: z.number().int().min(0),
+            }),
+          )
+          .max(24 * 400), // a venue's whole backfill window, hour by hour
+      }),
+    )
+    .max(200),
 });
 
 // C2: monthly-stats batch — the ACTUAL monthly audience the hub pushes (operator ruling), upserted
@@ -327,6 +364,80 @@ export const internalRoutes: FastifyPluginAsync<{ syncKey?: string }> = async (a
     }
 
     return reply.status(200).send({ upserted, unknown_locations: unknownLocations });
+  });
+
+  // ── C1h: POST /api/internal/affluence-hourly (AUD-HOURLY1-A) ────────────────
+  // The MEASURED per-(date, hour) audience the dow×hour grid could never carry. STORAGE ONLY in
+  // this slice: nothing reads the table yet (periodAudience, S01, S02 and the PDF are untouched),
+  // so it deploys INERT, before the hub starts pushing.
+  //
+  // Same non-strict posture as its siblings: an unknown screenhost id is SKIPPED and reported,
+  // never fatal — a hub holding a place toodooh does not (yet) know must not lose the whole batch.
+  // Latest-value-wins on (screenhost, date, hour).
+  app.post('/api/internal/affluence-hourly', guard, async (request, reply) => {
+    const parsed = affluenceHourlyBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'INVALID_INPUT',
+        message: 'Validation failed',
+        statusCode: 400,
+        requestId: request.id,
+        fields: parsed.error.issues.map((i) => ({ field: i.path.join('.'), reason: i.message })),
+      });
+    }
+    const { places } = parsed.data;
+    if (places.length === 0) {
+      return reply.status(200).send({ upserted: 0, unknown_locations: [] });
+    }
+
+    const requestedIds = [...new Set(places.map((p) => p.toodooh_screenhost_id))];
+    const known = await db
+      .select({ id: screenhosts.id })
+      .from(screenhosts)
+      .where(inArray(screenhosts.id, requestedIds));
+    const knownIds = new Set(known.map((k) => k.id));
+    const unknownLocations = requestedIds.filter((id) => !knownIds.has(id));
+
+    // DEDUPE INSIDE THE BATCH FIRST — last cell wins. A multi-row upsert whose own values collide
+    // on the conflict target fails outright ("cannot affect row a second time"), so a hub that
+    // repeats a cell within one push would otherwise 500 instead of being tolerated.
+    const byCell = new Map<string, typeof screenhostAffluenceHourly.$inferInsert>();
+    for (const place of places) {
+      if (!knownIds.has(place.toodooh_screenhost_id)) continue;
+      for (const cell of place.cells) {
+        byCell.set(`${place.toodooh_screenhost_id}|${cell.date}|${cell.hour}`, {
+          screenhostId: place.toodooh_screenhost_id,
+          date: cell.date, // VERBATIM — Tunis clock, never shifted here
+          hour: cell.hour, // VERBATIM
+          value: cell.value,
+        });
+      }
+    }
+    const rows = [...byCell.values()];
+
+    if (rows.length > 0) {
+      const CHUNK = 500;
+      await db.transaction(async (tx) => {
+        for (let i = 0; i < rows.length; i += CHUNK) {
+          await tx
+            .insert(screenhostAffluenceHourly)
+            .values(rows.slice(i, i + CHUNK))
+            .onConflictDoUpdate({
+              target: [
+                screenhostAffluenceHourly.screenhostId,
+                screenhostAffluenceHourly.date,
+                screenhostAffluenceHourly.hour,
+              ],
+              set: {
+                value: sql`excluded.value`,
+                receivedAt: new Date(),
+              },
+            });
+        }
+      });
+    }
+
+    return reply.status(200).send({ upserted: rows.length, unknown_locations: unknownLocations });
   });
 
   // ── C2: POST /api/internal/monthly-stats ────────────────────────────────────
