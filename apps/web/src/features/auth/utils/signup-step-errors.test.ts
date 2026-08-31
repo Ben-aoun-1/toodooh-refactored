@@ -30,7 +30,7 @@ const baseCtx = (over: Partial<StepErrorCtx> = {}): StepErrorCtx => ({
   password: 'Motdepasse1',
   confirmPassword: 'Motdepasse1',
   etablissementName: 'Café Central',
-  taxNumber: '1234567A',
+  taxNumber: '1234567AMM000', // SIGN-3 canonical: 7 digits + 3 letters + 3 digits
   businessSectorId: 'sector-1',
   etablissementScreens: '2',
   etablissementRooms: '3',

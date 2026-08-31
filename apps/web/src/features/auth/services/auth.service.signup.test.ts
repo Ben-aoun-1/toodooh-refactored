@@ -289,13 +289,13 @@ describe('authService.signUp → POST /signup (Phase-1f F2)', () => {
     expect(postForm).not.toHaveBeenCalled();
   });
 
-  it('individual_owner → multipart: payload + cin_recto + cin_verso + bank parts (no rne)', async () => {
+  // SIGN-2 (operator ruling 2026-08-31) — an individual owner signs up with the RIB alone: the CIN
+  // volets left signup entirely (they are provide-later now), so the multipart carries no CIN part.
+  it('individual_owner → multipart: payload + bank ONLY (no CIN, no rne)', async () => {
     postForm.mockResolvedValue(ok);
     await authService.signUp({
       ...advertiser,
       profile_type: 'individual_owner',
-      cin_recto: ownerFile('recto.pdf'),
-      cin_verso: ownerFile('verso.pdf'),
       bank_doc: ownerFile('rib.pdf'),
     });
     expect(post).not.toHaveBeenCalled();
@@ -303,10 +303,19 @@ describe('authService.signUp → POST /signup (Phase-1f F2)', () => {
     expect(postForm.mock.calls[0][0]).toBe('/signup');
     const form = ownerForm();
     expect(typeof form.get('payload')).toBe('string');
-    expect(form.get('cin_recto')).toBeInstanceOf(File);
-    expect(form.get('cin_verso')).toBeInstanceOf(File);
     expect(form.get('bank')).toBeInstanceOf(File);
+    expect(form.get('cin_recto')).toBeNull(); // the intake is gone from signup
+    expect(form.get('cin_verso')).toBeNull();
     expect(form.get('rne')).toBeNull(); // individual owner sends no RNE
+  });
+
+  it('individual_owner with NO document at all still posts multipart and completes', async () => {
+    postForm.mockResolvedValue(ok);
+    await authService.signUp({ ...advertiser, profile_type: 'individual_owner' });
+    expect(postForm).toHaveBeenCalledTimes(1);
+    const form = ownerForm();
+    expect(typeof form.get('payload')).toBe('string');
+    expect(form.get('bank')).toBeNull();
   });
 
   it('fleet_owner → multipart: payload + rne + bank parts (no CIN)', async () => {

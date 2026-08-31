@@ -99,11 +99,37 @@ describe('PATCH /api/profile/business', () => {
     expect(row?.businessSectorId).toBe(sectorId);
   });
 
+  // SIGN-3 (operator ruling 2026-08-31) — INPUT validation only.
+  it('tax_number: any spelling is stored in the ONE canonical form', async () => {
+    mockSession(userId);
+    for (const spelling of ['1234567/A/M/M/000', '1234567 A M M 000', '1234567amm000']) {
+      const res = await patch({ tax_number: spelling });
+      expect(res.statusCode, spelling).toBe(200);
+      expect(res.json<{ taxNumber: string | null }>().taxNumber, spelling).toBe('1234567AMM000');
+    }
+  });
+
+  it('a LEGACY matricule is never re-validated: editing another field still saves', async () => {
+    mockSession(userId);
+    // Put a pre-ruling value straight into the column (no migration, no backfill — it stays).
+    await db.update(users).set({ taxNumber: 'LEGACY/123' }).where(eq(users.id, userId));
+
+    // An edit that does not touch the matricule must not be blocked by its legacy shape.
+    const res = await patch({ business_name: 'Renommée SARL' });
+    expect(res.statusCode).toBe(200);
+
+    const [row] = await db
+      .select({ taxNumber: users.taxNumber })
+      .from(users)
+      .where(eq(users.id, userId));
+    expect(row?.taxNumber).toBe('LEGACY/123'); // untouched — never re-validated, never rewritten
+  });
+
   it('tax_number: valid stored, null clears, bad format → 400', async () => {
     mockSession(userId);
-    expect((await patch({ tax_number: '1234567ABC' })).statusCode).toBe(200);
+    expect((await patch({ tax_number: '1234567ABC000' })).statusCode).toBe(200);
     expect((await db.select().from(users).where(eq(users.id, userId)))[0]?.taxNumber).toBe(
-      '1234567ABC',
+      '1234567ABC000',
     );
     expect((await patch({ tax_number: null })).statusCode).toBe(200);
     expect((await db.select().from(users).where(eq(users.id, userId)))[0]?.taxNumber).toBeNull();

@@ -1,6 +1,6 @@
 // R7/N4 — owner signup posts multipart: a `payload` field (the signup JSON) + the volet files. This
-// builds that body for fastify `inject`. Volets default to the body's profile_type (individual_owner
-// → cin_recto/cin_verso/bank; fleet_owner → rne/bank); `omit` drops parts (missing-volet tests) and
+// builds that body for fastify `inject`. Volets default to the body's profile_type (SIGN-2:
+// individual_owner → bank ONLY, the CIN intake left signup; fleet_owner → rne/bank); `omit` drops parts and
 // `files` overrides a part (e.g. a bad MIME). Dependency-free (form-data isn't installed). Shared by
 // signup.test.ts and signup-screenhosts.test.ts.
 export type MultipartFile = { filename: string; contentType: string; content: Buffer };
@@ -13,8 +13,7 @@ const defaultVolets = (profileType: unknown): Record<string, MultipartFile> => {
     contentType: 'application/pdf',
     content: VOLET_PDF,
   });
-  if (profileType === 'individual_owner')
-    return { cin_recto: pdf('recto'), cin_verso: pdf('verso'), bank: pdf('rib') };
+  if (profileType === 'individual_owner') return { bank: pdf('rib') };
   if (profileType === 'fleet_owner') return { rne: pdf('rne'), bank: pdf('rib') };
   return {};
 };

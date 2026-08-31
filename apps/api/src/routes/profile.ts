@@ -8,7 +8,7 @@ import { snapshotBankState, writeBankAudit } from '../lib/bank-audit.js';
 import { IBAN_ERROR, RIB_ERROR, validateIbanTn, validateRib } from '../lib/bank-validation.js';
 import { requireAuth } from '../middleware/require-auth.js';
 import { validatePhone } from '../validation/phone.js';
-import { validateTaxNumber } from '../validation/tax-number.js';
+import { normalizeTaxNumber, validateTaxNumber } from '../validation/tax-number.js';
 
 // Section-scoped partial update of the authenticated user's business fields. All fields
 // optional; at least one required (empty PATCH → 400). Deferred owner-extras
@@ -122,7 +122,11 @@ export const profileRoutes: FastifyPluginAsync = async (app) => {
     // Map snake_case wire → drizzle camelCase columns (only supplied keys).
     const patch: Partial<typeof users.$inferInsert> = {};
     if (data.business_name !== undefined) patch.businessName = data.business_name;
-    if (data.tax_number !== undefined) patch.taxNumber = data.tax_number;
+    // SIGN-3 — INPUT only: a supplied matricule is validated + normalised; an ABSENT one is never
+    // looked at, so editing any other field on a legacy profile is untouched by the new format.
+    if (data.tax_number !== undefined) {
+      patch.taxNumber = data.tax_number === null ? null : normalizeTaxNumber(data.tax_number);
+    }
     if (data.business_sector_id !== undefined) patch.businessSectorId = data.business_sector_id;
     if (data.business_type !== undefined) patch.businessType = data.business_type;
 

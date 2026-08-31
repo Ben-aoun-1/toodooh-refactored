@@ -42,7 +42,7 @@ const validPayload = {
   contact_name: 'Test Owner',
   business_name: 'Test Biz',
   contact_phone: '+21612345678',
-  tax_number: '1234567ABC',
+  tax_number: '1234567ABC000',
   terms_accepted: true,
 };
 
@@ -87,7 +87,7 @@ describe('POST /api/signup', () => {
     expect(u).toHaveLength(1);
     const created = u[0];
     expect(created?.businessName).toBe('Test Biz');
-    expect(created?.taxNumber).toBe('1234567ABC');
+    expect(created?.taxNumber).toBe('1234567ABC000');
     expect(created?.contactPhone).toBe('+21612345678');
     expect(created?.role).toBe('advertiser'); // input:false default
     expect(created?.status).toBe('pending'); // input:false default
@@ -120,7 +120,7 @@ describe('POST /api/signup', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/signup',
-      payload: { ...validPayload, email: 'failmail@example.com', tax_number: '5550001QQ' },
+      payload: { ...validPayload, email: 'failmail@example.com', tax_number: '5550001QQZ000' },
     });
     expect(res.statusCode).toBe(201);
     const u = await db.select().from(users).where(eq(users.email, 'failmail@example.com'));
@@ -132,7 +132,7 @@ describe('POST /api/signup', () => {
     const res2 = await app.inject({
       method: 'POST',
       url: '/api/signup',
-      payload: { ...validPayload, tax_number: '7654321XYZ' },
+      payload: { ...validPayload, tax_number: '7654321XYZ000' },
     });
     expect(res2.statusCode).toBe(201); // generic, NOT 409
     const u = await db.select().from(users).where(eq(users.email, 'owner@example.com'));
@@ -165,7 +165,7 @@ describe('POST /api/signup', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/signup',
-      payload: { ...validPayload, tax_number: '7654321XYZ' },
+      payload: { ...validPayload, tax_number: '7654321XYZ000' },
     });
     expect(res.statusCode).toBe(201); // identical to a normal dup-email — no banned leak
     const rows = await db.select().from(users).where(eq(users.email, 'owner@example.com'));
@@ -249,7 +249,7 @@ describe('POST /api/signup', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/signup',
-      payload: { ...validPayload, email: 'fresh@example.com', tax_number: '9999999ZZ' },
+      payload: { ...validPayload, email: 'fresh@example.com', tax_number: '9999999ZZZ000' },
     });
     expect(res.statusCode).toBe(500);
     expect(res.json<{ error: string }>().error).toBe('INTERNAL_ERROR');
@@ -384,7 +384,7 @@ describe('POST /api/signup', () => {
         await fullProfile({
           profile_type: 'fleet_owner',
           agent_toodooh: 'ATTACKER',
-          tax_number: '7654321XYZ',
+          tax_number: '7654321XYZ000',
         }),
       ),
     });
@@ -529,7 +529,7 @@ describe('POST /api/signup', () => {
         await fullProfile({
           profile_type: 'individual_owner',
           agent_toodooh: 'DUPCODE1',
-          tax_number: '7654321XYZ',
+          tax_number: '7654321XYZ000',
         }),
       ),
     });
@@ -543,7 +543,9 @@ describe('POST /api/signup', () => {
   const usersByEmail = async (email: string) =>
     db.select().from(users).where(eq(users.email, email));
 
-  it('valid individual_owner (CIN recto+verso + bank) → 201 + user_documents rows', async () => {
+  // SIGN-2 (operator ruling 2026-08-31) — an individual owner signs up with the RIB alone. CIN is
+  // provide-later: the category and the post-signin upload path stay, signup just stops asking.
+  it('valid individual_owner (bank only) → 201 + a bank row, and NO cin row', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/signup',
@@ -552,13 +554,27 @@ describe('POST /api/signup', () => {
     expect(res.statusCode).toBe(201);
     const userId = res.json<{ userId: string }>().userId;
     const docs = await docsFor(userId);
-    expect(
-      docs
-        .filter((d) => d.category === 'cin')
-        .map((d) => d.position)
-        .sort(),
-    ).toEqual([1, 2]); // both faces
     expect(docs.some((d) => d.category === 'bank' && d.position === 1)).toBe(true);
+    expect(docs.filter((d) => d.category === 'cin')).toEqual([]);
+  });
+
+  // A stale client still posting CIN parts must not break: the parser ignores unknown file parts.
+  it('a CIN part sent by a stale client is IGNORED, not rejected', async () => {
+    const pdf = {
+      filename: 'recto.pdf',
+      contentType: 'application/pdf',
+      content: Buffer.from('%PDF-1.4 stale'),
+    };
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      ...signupMultipart(await fullProfile({ profile_type: 'individual_owner' }), {
+        files: { cin_recto: pdf, cin_verso: pdf },
+      }),
+    });
+    expect(res.statusCode).toBe(201);
+    const docs = await docsFor(res.json<{ userId: string }>().userId);
+    expect(docs.filter((d) => d.category === 'cin')).toEqual([]);
   });
 
   // Regression lock (C8): each signup volet row's id MUST equal the UUID embedded in its storageKey,
@@ -571,7 +587,7 @@ describe('POST /api/signup', () => {
     });
     expect(res.statusCode).toBe(201);
     const docs = await docsFor(res.json<{ userId: string }>().userId);
-    expect(docs).toHaveLength(3); // cin recto + verso + bank
+    expect(docs).toHaveLength(1); // SIGN-2 — the RIB alone
     for (const row of docs) {
       expect(row.storageKey).toBe(`${row.category}/${row.userId}/${row.id}`);
       expect(isRowOwnedKey(row)).toBe(true);
@@ -648,29 +664,21 @@ describe('POST /api/signup', () => {
     });
     expect(res.statusCode).toBe(201);
     const docs = await docsFor(res.json<{ userId: string }>().userId);
-    // The two CIN faces persist; the omitted bank volet is simply absent (no longer a 400).
-    expect(
-      docs
-        .filter((d) => d.category === 'cin')
-        .map((d) => d.position)
-        .sort(),
-    ).toEqual([1, 2]);
-    expect(docs.some((d) => d.category === 'bank')).toBe(false);
+    // SIGN-2 — an individual owner's only signup volet is the RIB, and omitting it is allowed:
+    // the account is created with NO document at all and finishes provide-later.
+    expect(docs).toEqual([]);
   });
 
-  it('individual_owner with only one CIN face (recto, no verso) → 201, the recto persists (incomplete, not blocked)', async () => {
+  it('individual_owner with NO volet at all → 201, provide-later from an empty set', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/signup',
       ...signupMultipart(await fullProfile({ profile_type: 'individual_owner' }), {
-        omit: ['cin_verso'],
+        omit: ['bank'],
       }),
     });
     expect(res.statusCode).toBe(201);
-    const docs = await docsFor(res.json<{ userId: string }>().userId);
-    // Only the recto (position 1) lands → documentPresence reads CIN as INCOMPLETE (ITEM 4, see
-    // user-documents.test.ts). A partial CIN is persisted, never blocked.
-    expect(docs.filter((d) => d.category === 'cin').map((d) => d.position)).toEqual([1]);
+    expect(await docsFor(res.json<{ userId: string }>().userId)).toEqual([]);
   });
 
   it('advertiser JSON signup (no docs) → still 201, unchanged', async () => {

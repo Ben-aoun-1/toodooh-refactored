@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 import { db } from '../db/client.js';
 import { users } from '../db/schema.js';
-import { validateTaxNumber } from '../validation/tax-number.js';
+import { normalizeTaxNumber, validateTaxNumber } from '../validation/tax-number.js';
 
 // Signup-wizard tax-number (matricule fiscal) pre-check (Kais QA3). Same shape and ruling as
 // email-availability: the wizard may tell the user outright whether a matricule is already
@@ -14,9 +14,10 @@ import { validateTaxNumber } from '../validation/tax-number.js';
 // is semi-public business data and the control is explicitly requested, so revealing "taken" is
 // accepted; the endpoint stays rate-limited so bulk harvesting remains expensive.
 //
-// The lookup MUST agree with the signup route's 409 pre-check (signup.ts: eq(users.taxNumber,
-// tax_number) on the raw, format-validated value) so the inline verdict and the submit verdict
-// never disagree. No case transform — the column is exact-match text.
+// The lookup MUST agree with the signup route's 409 pre-check so the inline verdict and the submit
+// verdict never disagree — both now compare the NORMALISED value (SIGN-3). Comparing raw spellings
+// let the same matricule slip past this check under different separators: `1234567/A/M/M/000` and
+// `1234567AMM000` are one matricule, and signup stores the canonical form.
 
 const MAX_PER_MINUTE = 10;
 
@@ -51,7 +52,7 @@ export const taxAvailabilityRoute: FastifyPluginAsync = async (app) => {
     const [row] = await db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.taxNumber, parsed.data.tax_number))
+      .where(eq(users.taxNumber, normalizeTaxNumber(parsed.data.tax_number)))
       .limit(1);
 
     return reply.status(200).send({ available: !row });
