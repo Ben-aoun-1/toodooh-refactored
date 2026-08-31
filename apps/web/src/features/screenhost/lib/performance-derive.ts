@@ -243,6 +243,37 @@ export function cumulativeSeries(items: { date: string; value: number }[]): Cumu
   });
 }
 
+/**
+ * PERF-1b (Mejri 31/08 pt 4) — « Votre progression depuis le début », one point per REAL day.
+ *
+ * The hero used to plot `monthly_stats` keyed by MONTH, at `${month}-01`: after real data arrived
+ * the curve showed the right value dated **01/08/2026** instead of the day it was measured. The
+ * fix is not a label change — it is plotting the day-level series `periodAudience` already builds
+ * (same helper as S01, same MEJ-2 onboarding floor, no new wire), so a point's date is the date
+ * its audience happened.
+ */
+export function audienceCumulative(points: DailyAudiencePoint[]): CumulativePoint[] {
+  return cumulativeSeries(points.map((p) => ({ date: p.date, value: p.audience })));
+}
+
+/**
+ * PERF-1b — the hero's headline. It is Σ of the SAME points S01 sums, so « depuis le début » and
+ * « Audience globale » can never disagree for the same range (`audienceKpis(...).global`).
+ */
+export function audienceTotal(points: DailyAudiencePoint[]): number {
+  return points.reduce((sum, p) => sum + p.audience, 0);
+}
+
+/**
+ * PERF-1b — one month's audience out of the day-level series (the monthly card + Historique).
+ * Mirrors impressionsOfMonth. Replaces the raw `monthly_stats.total_audience` read, which was
+ * measured-only and unfloored — so the card disagreed with the PDF it links to, which has run on
+ * `periodAudience` since PERF-R1/MEJ-2.
+ */
+export function audienceOfMonth(points: DailyAudiencePoint[], month: string): number {
+  return points.reduce((sum, p) => (p.date.startsWith(`${month}-`) ? sum + p.audience : sum), 0);
+}
+
 export interface DemographicBand {
   key: keyof VenueRatios;
   label: string;

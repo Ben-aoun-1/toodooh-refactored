@@ -19,6 +19,9 @@ import {
   openHours,
   venueReadsState,
   zeroFillDays,
+  audienceCumulative,
+  audienceOfMonth,
+  audienceTotal,
 } from './performance-derive';
 
 const line = (over: Partial<PerformanceEarningsLine> = {}): PerformanceEarningsLine => ({
@@ -398,5 +401,72 @@ describe('campaignTypeLabel (US-P.9)', () => {
     expect(campaignTypeLabel('event')).toBe('Événement');
     expect(campaignTypeLabel('standard')).toBe('Standard');
     expect(campaignTypeLabel('')).toBe('—');
+  });
+});
+
+// PERF-1b (Mejri 31/08 pt 4) — « Votre progression depuis le début » showed the right value on the
+// WRONG date: the hero plotted monthly_stats keyed by MONTH, so every point landed at `${month}-01`
+// and a measurement taken today read « 01/08/2026 ». The curve now plots the day-level series
+// periodAudience already builds — same helper as S01, same MEJ-2 floor, no new wire.
+describe('audienceCumulative — one point per REAL day, never the month boundary', () => {
+  it('a venue whose only measurement is today plots TODAY on the last point', () => {
+    const series = audienceCumulative([{ date: '2026-08-31', audience: 42, source: 'measured' }]);
+    expect(series).toEqual([{ date: '2026-08-31', cumulative: 42 }]);
+    expect(series.at(-1)?.date).not.toBe('2026-08-01'); // the defect, stated as a guard
+  });
+
+  it('accumulates in date order, each point carrying its own day', () => {
+    expect(
+      audienceCumulative([
+        { date: '2026-08-30', audience: 10, source: 'estimated' },
+        { date: '2026-08-29', audience: 5, source: 'measured' },
+        { date: '2026-08-31', audience: 7, source: 'measured' },
+      ]),
+    ).toEqual([
+      { date: '2026-08-29', cumulative: 5 },
+      { date: '2026-08-30', cumulative: 15 },
+      { date: '2026-08-31', cumulative: 22 },
+    ]);
+  });
+
+  it('no day is ever collapsed onto the 1st of its month', () => {
+    const dates = audienceCumulative([
+      { date: '2026-07-14', audience: 1 },
+      { date: '2026-08-31', audience: 1 },
+    ]).map((p) => p.date);
+    expect(dates).toEqual(['2026-07-14', '2026-08-31']);
+    expect(dates.some((d) => d.endsWith('-01'))).toBe(false);
+  });
+
+  it('an empty series is an empty curve (the hero keeps its wait-state)', () => {
+    expect(audienceCumulative([])).toEqual([]);
+  });
+});
+
+describe('audienceTotal / audienceOfMonth — the hero and S01 cannot disagree', () => {
+  const points = [
+    { date: '2026-07-31', audience: 100, source: 'measured' as const },
+    { date: '2026-08-30', audience: 80, source: 'estimated' as const },
+    { date: '2026-08-31', audience: 42, source: 'measured' as const },
+  ];
+
+  it('the hero total IS the S01 global for the same points', () => {
+    expect(audienceTotal(points)).toBe(222);
+    expect(audienceTotal(points)).toBe(audienceKpis(points, 14).global);
+  });
+
+  it('a month is summed from the day series, not from a monthly row', () => {
+    expect(audienceOfMonth(points, '2026-08')).toBe(122); // 80 estimated + 42 measured
+    expect(audienceOfMonth(points, '2026-07')).toBe(100);
+    expect(audienceOfMonth(points, '2026-09')).toBe(0);
+  });
+
+  it('the month prefix is exact — 2026-08 never catches 2026-08x or 2026-0', () => {
+    expect(audienceOfMonth([{ date: '2026-08-01', audience: 9 }], '2026-0')).toBe(0);
+  });
+
+  it('empty input totals 0, not null', () => {
+    expect(audienceTotal([])).toBe(0);
+    expect(audienceOfMonth([], '2026-08')).toBe(0);
   });
 });
