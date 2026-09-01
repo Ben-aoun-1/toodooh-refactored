@@ -1,4 +1,10 @@
-import { type PeriodKey, PERIOD_PILLS } from '../../lib/performance-period';
+import {
+  type PeriodKey,
+  PARKED_PERIOD_NOTE,
+  PERIOD_PILLS,
+  isPeriodParked,
+  periodPillLabel,
+} from '../../lib/performance-period';
 
 interface PeriodFiltersProps {
   active: PeriodKey;
@@ -34,21 +40,29 @@ export function PeriodFilters({
       <div className="flex flex-wrap gap-2">
         {PERIOD_PILLS.map((pill) => {
           const isActive = pill.key === active;
+          // PERF-CUSTOM1 — a parked pill is rendered, DISABLED and annotated « bientôt disponible »:
+          // an owner clicking it used to get nothing and no explanation. The label + the parked set
+          // live in lib/performance-period (this repo has no render harness, so a rule that lives
+          // in a component is unpinnable); the root cause is documented there.
+          const parked = isPeriodParked(pill.key);
           return (
             <button
               key={pill.key}
               type="button"
               onClick={() => onSelect(pill.key)}
+              disabled={parked}
               aria-pressed={isActive}
+              aria-disabled={parked || undefined}
+              title={parked ? PARKED_PERIOD_NOTE : undefined}
               className={`rounded-full px-[17px] py-[9px] text-[13px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary ${
-                isActive
-                  ? 'border border-brand-primary bg-brand-primary font-semibold text-[#0D2B1F]'
-                  : `border bg-white font-medium text-perf-grey hover:border-perf-green hover:text-perf-ink ${
-                      pill.key === 'custom' ? 'border-dashed border-perf-line' : 'border-perf-line'
-                    }`
+                parked
+                  ? 'cursor-not-allowed border border-dashed border-perf-line bg-white font-medium italic text-perf-mist'
+                  : isActive
+                    ? 'border border-brand-primary bg-brand-primary font-semibold text-[#0D2B1F]'
+                    : 'border border-perf-line bg-white font-medium text-perf-grey hover:border-perf-green hover:text-perf-ink'
               }`}
             >
-              {pill.label}
+              {periodPillLabel(pill)}
             </button>
           );
         })}
