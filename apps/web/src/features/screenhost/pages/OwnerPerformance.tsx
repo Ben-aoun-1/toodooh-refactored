@@ -540,6 +540,7 @@ export default function OwnerPerformance() {
                         category={category}
                         campaignsCount={periodLines.length}
                         hasCastData={castHasData}
+                        coverageDays={periodAudience.length}
                       />
 
                       <AudienceKpisSection

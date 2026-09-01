@@ -1,4 +1,5 @@
 import { type DateRange, formatDateFr } from '../../lib/performance-period';
+import { coverageLabel, daysInRange } from '../../lib/report-coverage';
 
 import { PENDING_LABEL } from './Pending';
 import { Var } from './Var';
@@ -11,6 +12,8 @@ interface ReportIntroProps {
   campaignsCount: number;
   /** CAST first-data flag — once true, "Campagnes incluses" shows the count, 0 included. */
   hasCastData: boolean;
+  /** RPT-COV1 — days of the période that carry data (the merge's own days). */
+  coverageDays: number;
 }
 
 /** §7 — the intro strip: Commerce / Période analysée / Catégorie / Campagnes incluses. */
@@ -20,8 +23,15 @@ export function ReportIntro({
   category,
   campaignsCount,
   hasCastData,
+  coverageDays,
 }: ReportIntroProps) {
-  const cells: { label: string; value: React.ReactNode }[] = [
+  // RPT-COV1 — « 1 jour de données sur 31 » under the période, so a thin report says so on its
+  // face. Same rule and same words as the PDF (lib/report-coverage is a byte-pinned twin).
+  const coverage = coverageLabel({
+    daysWithData: coverageDays,
+    daysInPeriod: daysInRange(range.from, range.to),
+  });
+  const cells: { label: string; value: React.ReactNode; note?: string }[] = [
     { label: 'Commerce', value: <Var>{venueName}</Var> },
     {
       label: 'Période analysée',
@@ -30,6 +40,7 @@ export function ReportIntro({
           <Var>{formatDateFr(range.from)}</Var> – <Var>{formatDateFr(range.to)}</Var>
         </>
       ),
+      ...(coverage === null ? {} : { note: coverage }),
     },
     { label: 'Catégorie', value: <Var>{category}</Var> },
     {
@@ -53,6 +64,9 @@ export function ReportIntro({
           <div className="mt-2 text-[17px] font-semibold tracking-[-0.012em] text-perf-ink">
             {cell.value}
           </div>
+          {cell.note !== undefined && (
+            <div className="perf-mono mt-1.5 text-[10.5px] text-perf-mist">{cell.note}</div>
+          )}
         </div>
       ))}
     </div>

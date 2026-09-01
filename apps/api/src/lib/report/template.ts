@@ -1,5 +1,6 @@
 import { PROVENANCE_LABELS, type ProvenanceKind } from './affluence-provenance.js';
 import type { ReportData } from './assemble.js';
+import { coverageLabel, daysInRange } from './coverage.js';
 import { demoBarPct } from './demographic-bar.js';
 import {
   type DailyImpressionsPoint,
@@ -255,6 +256,13 @@ export function renderReportHtml(
 ): string {
   const { kpis, hostHasData, castHasData } = data;
   const period = `${formatDateFr(data.range.from)} – ${formatDateFr(data.range.to)}`;
+  // RPT-COV1 — « 1 jour de données sur 31 », so a thin month says so ON ITS FACE. Mejri had an
+  // August report resting on 31/08 alone with nothing in the document admitting it. Deliberately
+  // NOT a minimum-data threshold: a month with real data still gets its report.
+  const coverage = coverageLabel({
+    daysWithData: data.coverageDays,
+    daysInPeriod: daysInRange(data.range.from, data.range.to),
+  });
 
   // ── shared chrome ────────────────────────────────────────────────────────────────────────────
   const runhead = `
@@ -268,7 +276,7 @@ export function renderReportHtml(
   const metastrip = `
   <div class="metastrip">
     <div class="cell"><div class="lbl">Commerce</div><div class="val">${esc(data.venueName)}</div></div>
-    <div class="cell"><div class="lbl">Période analysée</div><div class="val"><span class="accent">${period}</span></div></div>
+    <div class="cell"><div class="lbl">Période analysée</div><div class="val"><span class="accent">${period}</span></div>${coverage === null ? '' : `<div class="cov">${coverage}</div>`}</div>
     <div class="cell"><div class="lbl">Catégorie</div><div class="val">${esc(data.category)}</div></div>
     <div class="cell"><div class="lbl">Campagnes incluses</div><div class="val">${castHasData ? String(data.campaignsBlock.count) : `<span class="wait">${PENDING}</span>`}</div></div>
   </div>`;
@@ -755,6 +763,7 @@ body{
 .stat-num{ font-size:30pt; font-weight:700; letter-spacing:-.03em; color:var(--ink); line-height:1; }
 .stat-num .unit{ font-size:12pt; font-weight:400; color:var(--muted); letter-spacing:0; }
 .stat-wait{ font-family:var(--serif); font-style:italic; font-size:11.5pt; color:var(--muted); line-height:1.2; }
+.cov{ font-family:var(--mono); font-size:7.5pt; color:var(--faint); margin-top:5px; letter-spacing:.01em; }
 .stat-desc{ font-size:8.5pt; color:var(--muted); margin-top:8px; max-width:34ch; }
 .stat-sub{ margin-top:11px; padding-top:11px; border-top:1px solid var(--line-soft); }
 .stat-hi{ color:var(--mint); font-family:var(--mono); font-size:8.5pt; }

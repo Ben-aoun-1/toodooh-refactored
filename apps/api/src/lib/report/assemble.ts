@@ -89,6 +89,11 @@ export interface ReportData {
   venueName: string;
   category: string;
   range: DateRange;
+  /**
+   * RPT-COV1 — days of the analysed period that CARRY DATA (the merge's own days). The
+   * denominator is derived from `range` by both surfaces, so there is one rule for each half.
+   */
+  coverageDays: number;
   /** DD/MM/YYYY of the render day — the masthead's "Généré le". */
   generatedLabel: string;
   hostHasData: boolean;
@@ -475,6 +480,10 @@ export async function assembleReportData(
     venueName: venue.name,
     category: categoryLabel(venue.sectorName, venue.class),
     range,
+    // RPT-COV1 — the merge's days ARE the days that carry data: a date with no cell never becomes
+    // a data point. Whether they are measured or estimated is disclosed separately by
+    // « dont N % estimés », so it is deliberately not folded in here.
+    coverageDays: merged.days.length,
     generatedLabel: formatDateFr(todayIso),
     hostHasData: hostFlag,
     castHasData: castFlag,

@@ -354,6 +354,7 @@ const reportData = (over: Partial<ReportData> = {}): ReportData => ({
   category: 'Café · Salon de thé',
   sps: null,
   range: { from: '2026-06-01', to: '2026-06-30' },
+  coverageDays: 30, // RPT-COV1 — a full-coverage fixture unless a test says otherwise
   generatedLabel: '10/07/2026',
   hostHasData: true,
   castHasData: true,
