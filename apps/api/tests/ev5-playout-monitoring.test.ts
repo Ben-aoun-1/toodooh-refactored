@@ -40,7 +40,7 @@ import { walletBalance } from '../src/lib/recharges.js';
 import { computeSps } from '../src/lib/sps-score.js';
 import { adminEventsRoutes } from '../src/routes/admin-events.js';
 
-import { resetAuthTables } from './helpers/db-test-setup.js';
+import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 
 // EV5 — event playout + the dual-proof monitor + the direct refund + attestation + R4.
 // The campaign playout SOURCE is byte-identical (the composition pin below); manquements are LOST
@@ -110,7 +110,7 @@ const seedVenue = async (): Promise<{ id: string; ownerId: string }> => {
   const id = sh?.id ?? '';
   await db
     .insert(screenhostAffluence)
-    .values({ screenhostId: id, dayOfWeek: 1, hour: 19, estimatedImpressions: 100 });
+    .values(bothHalves({ screenhostId: id, dayOfWeek: 1, hour: 19, estimatedImpressions: 100 }));
   return { id, ownerId };
 };
 

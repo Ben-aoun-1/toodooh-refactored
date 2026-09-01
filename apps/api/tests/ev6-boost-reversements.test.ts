@@ -31,7 +31,7 @@ import { settleEventPositioning } from '../src/lib/event-playout/settlement.js';
 import { fenetreDiffusion } from '../src/lib/fenetre-diffusion.js';
 import { eventBoostRoutes } from '../src/routes/event-boost.js';
 
-import { resetAuthTables } from './helpers/db-test-setup.js';
+import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 
 // EV6 — the event booster (ZONES ONLY) + the venue reversement lines on E7's rail (source='event',
 // DELIVERED value only). The campaign booster and the campaign reversement path are byte-untouched
@@ -110,7 +110,7 @@ const seedVenue = async (
   const id = sh?.id ?? '';
   await db
     .insert(screenhostAffluence)
-    .values({ screenhostId: id, dayOfWeek: 1, hour: 19, estimatedImpressions: 100 });
+    .values(bothHalves({ screenhostId: id, dayOfWeek: 1, hour: 19, estimatedImpressions: 100 }));
   return { id, ownerId };
 };
 

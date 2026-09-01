@@ -17,7 +17,7 @@ import {
 import { encryptWifiPassword } from '../src/lib/wifi-crypto.js';
 import { internalRoutes } from '../src/routes/internal.js';
 
-import { resetAuthTables } from './helpers/db-test-setup.js';
+import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 
 // Integration suite — real Postgres (DATABASE_URL). The /api/internal/* surface is service-
 // authenticated (Bearer WEDOOH_SYNC_KEY); the plugin takes the key as an option so the test never
@@ -180,8 +180,11 @@ describe('C1: POST /api/internal/affluence', () => {
       },
     });
     expect(first.statusCode).toBe(200);
-    expect(first.json<{ upserted: number; unknown_locations: string[] }>()).toEqual({
+    expect(
+      first.json<{ upserted: number; slot_rows: number; unknown_locations: string[] }>(),
+    ).toEqual({
       upserted: 1,
+      slot_rows: 2, // MEJ-13-B — an hour-shaped cell writes BOTH halves
       unknown_locations: [unknownId],
     });
 
@@ -196,8 +199,11 @@ describe('C1: POST /api/internal/affluence', () => {
     });
     expect(second.statusCode).toBe(200);
     const rows = await db.select().from(screenhostAffluence);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]!.estimatedImpressions).toBe(250);
+    // MEJ-13-B — an hour-shaped cell is TWO rows now (both halves, same value: a cell is a level,
+    // so half an hour of it is not half the people). Still one cell, still latest-value-wins.
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => r.estimatedImpressions)).toEqual([250, 250]);
+    expect(rows.map((r) => r.slot).sort((a, b) => a - b)).toEqual([18, 19]);
   });
 
   // MEJ-5 — the ingest stores the hub's (day_of_week, hour) bucket VERBATIM. The contract is
@@ -228,10 +234,17 @@ describe('C1: POST /api/internal/affluence', () => {
     expect(res.statusCode).toBe(200);
 
     const rows = await db.select().from(screenhostAffluence);
+    // MEJ-13-B — each hour-shaped cell is stored as both of its halves, so assert the DISTINCT
+    // (weekday, hour, value) triples: the verbatim contract is about the bucket, not the row count.
     expect(
-      rows
-        .map((r) => [r.dayOfWeek, r.hour, r.estimatedImpressions])
-        .sort((a, b) => a[0]! - b[0]! || a[1]! - b[1]!),
+      [
+        ...new Map(
+          rows.map((r) => [
+            `${r.dayOfWeek}|${r.hour}`,
+            [r.dayOfWeek, r.hour, r.estimatedImpressions],
+          ]),
+        ).values(),
+      ].sort((a, b) => a[0]! - b[0]! || a[1]! - b[1]!),
     ).toEqual([
       [1, 0, 7],
       [1, 13, 1396],
@@ -260,17 +273,19 @@ describe('C1: POST /api/internal/affluence', () => {
       (await pushOne(host!.id, { estimated_impressions: 0, source: 'measured' })).statusCode,
     ).toBe(200);
     let rows = await db.select().from(screenhostAffluence);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]!.source).toBe('measured');
+    // MEJ-13-B — an hour-shaped cell is TWO rows (both halves, same value); provenance rides
+    // on both, so asserting the first row still asserts the cell.
+    expect(rows).toHaveLength(2);
+    expect(rows.every((r) => r.source === 'measured')).toBe(true);
 
     // The hub's merge flipped this slot to the manual backup → the stored provenance follows.
     expect(
       (await pushOne(host!.id, { estimated_impressions: 40, source: 'backup' })).statusCode,
     ).toBe(200);
     rows = await db.select().from(screenhostAffluence);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]!.source).toBe('backup');
-    expect(rows[0]!.estimatedImpressions).toBe(40);
+    expect(rows).toHaveLength(2);
+    expect(rows.every((r) => r.source === 'backup')).toBe(true);
+    expect(rows.every((r) => r.estimatedImpressions === 40)).toBe(true);
   });
 
   it('AFF1: an absent source stores NULL (older hub stays compatible) — on first push and on re-push', async () => {
@@ -289,8 +304,8 @@ describe('C1: POST /api/internal/affluence', () => {
     ).toBe(200);
     expect((await pushOne(host!.id, { estimated_impressions: 12 })).statusCode).toBe(200);
     rows = await db.select().from(screenhostAffluence);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]!.source).toBeNull();
+    expect(rows).toHaveLength(2);
+    expect(rows.every((r) => r.source === null)).toBe(true);
   });
 
   it('AFF1: 400 on an invalid source (like any other field)', async () => {
@@ -369,8 +384,11 @@ describe('C1h: POST /api/internal/affluence-hourly', () => {
       },
     ]);
     expect(first.statusCode).toBe(200);
-    expect(first.json<{ upserted: number; unknown_locations: string[] }>()).toEqual({
+    expect(
+      first.json<{ upserted: number; slot_rows: number; unknown_locations: string[] }>(),
+    ).toEqual({
       upserted: 2,
+      slot_rows: 4, // MEJ-13-B — an hour-shaped cell writes BOTH halves
       unknown_locations: [],
     });
 
@@ -391,8 +409,14 @@ describe('C1h: POST /api/internal/affluence-hourly', () => {
       .select()
       .from(screenhostAffluenceHourly)
       .where(eq(screenhostAffluenceHourly.screenhostId, venue));
-    expect(rows).toHaveLength(2);
-    expect(rows.map((r) => [r.hour, r.value]).sort((a, b) => a[0]! - b[0]!)).toEqual([
+    // MEJ-13-B — two hour-shaped cells are FOUR half-hour rows; the cells themselves are the
+    // distinct (hour, value) pairs.
+    expect(rows).toHaveLength(4);
+    expect(
+      [...new Set(rows.map((r) => `${r.hour}|${r.value}`))]
+        .sort()
+        .map((k) => k.split('|').map(Number)),
+    ).toEqual([
       [14, 5],
       [15, 7],
     ]);
@@ -414,10 +438,14 @@ describe('C1h: POST /api/internal/affluence-hourly', () => {
       },
     ]);
     const rows = await db.select().from(screenhostAffluenceHourly);
+    // MEJ-13-B — the verbatim contract is about the BUCKET, not the row count: each hour-shaped
+    // cell is stored as both halves, so compare the distinct (date, hour, value) triples.
     expect(
-      rows
-        .map((r) => [r.date, r.hour, r.value])
-        .sort((a, b) => (a[1] as number) - (b[1] as number)),
+      [
+        ...new Map(
+          rows.map((r) => [`${r.date}|${r.hour}`, [r.date, r.hour, r.value] as const]),
+        ).values(),
+      ].sort((a, b) => a[1] - b[1]),
     ).toEqual([
       ['2026-08-31', 0, 1],
       ['2026-08-31', 14, 3],
@@ -433,13 +461,16 @@ describe('C1h: POST /api/internal/affluence-hourly', () => {
       { toodooh_screenhost_id: unknownId, cells: [{ date: '2026-08-31', hour: 9, value: 99 }] },
     ]);
     expect(res.statusCode).toBe(200);
-    expect(res.json<{ upserted: number; unknown_locations: string[] }>()).toEqual({
+    expect(
+      res.json<{ upserted: number; slot_rows: number; unknown_locations: string[] }>(),
+    ).toEqual({
       upserted: 1, // the known venue's cell landed
+      slot_rows: 2, // MEJ-13-B — an hour-shaped cell writes BOTH halves
       unknown_locations: [unknownId],
     });
     const rows = await db.select().from(screenhostAffluenceHourly);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]!.screenhostId).toBe(venue);
+    expect(rows).toHaveLength(2); // MEJ-13-B — one hour-shaped cell, both halves
+    expect(rows.every((r) => r.screenhostId === venue)).toBe(true);
   });
 
   it('400 on hour 24 and on a malformed / impossible date', async () => {
@@ -490,8 +521,8 @@ describe('C1h: POST /api/internal/affluence-hourly', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json<{ upserted: number }>().upserted).toBe(1); // deduped, not double-counted
     const rows = await db.select().from(screenhostAffluenceHourly);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]!.value).toBe(8);
+    expect(rows).toHaveLength(2); // MEJ-13-B — both halves of the one deduped cell
+    expect(rows.every((r) => r.value === 8)).toBe(true);
   });
 
   it('an empty batch is a 200 no-op', async () => {
@@ -576,12 +607,14 @@ describe('C2: POST /api/internal/monthly-stats', () => {
       .values({ name: 'Place Grille' })
       .returning({ id: screenhosts.id });
     // Mondays 10h → 100 (nothing else): every Monday of May 2026 estimates at 100.
-    await db.insert(screenhostAffluence).values({
-      screenhostId: host!.id,
-      dayOfWeek: 1,
-      hour: 10,
-      estimatedImpressions: 100,
-    });
+    await db.insert(screenhostAffluence).values(
+      bothHalves({
+        screenhostId: host!.id,
+        dayOfWeek: 1,
+        hour: 10,
+        estimatedImpressions: 100,
+      }),
+    );
 
     const res = await app!.inject({
       method: 'POST',

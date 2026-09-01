@@ -20,7 +20,7 @@ import { assemblePool } from '../src/lib/dispatch/pool.js';
 import { adminEventsRoutes } from '../src/routes/admin-events.js';
 import { eventsRoutes } from '../src/routes/events.js';
 
-import { resetAuthTables } from './helpers/db-test-setup.js';
+import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 
 // EV1 — the event entity + catalogue + suggestions + the slots_evt seam (real Postgres):
 //  - admin CRUD per the §10 field set (type LOCKED sport; the removed legacy fields do not
@@ -427,7 +427,7 @@ describe('EV1 — events entity + catalogue + suggestions (real Postgres)', () =
       for (const dow of [1, 2])
         for (let h = 8; h < 18; h += 1)
           rows.push({ screenhostId: shId, dayOfWeek: dow, hour: h, estimatedImpressions: 100 });
-      await db.insert(screenhostAffluence).values(rows);
+      await db.insert(screenhostAffluence).values(bothHalves(rows));
       return shId;
     };
 

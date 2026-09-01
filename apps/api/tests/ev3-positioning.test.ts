@@ -40,7 +40,7 @@ import { cartRoutes } from '../src/routes/cart.js';
 import { creativesRoutes } from '../src/routes/creatives.js';
 import { eventsRoutes } from '../src/routes/events.js';
 
-import { resetAuthTables } from './helpers/db-test-setup.js';
+import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 
 // EV3 — the positioning parcours' API layer: a positioning IS a campaign row (campaign_type
 // 'event' + event_id BINDING — the binding, not the type string, is the discriminator; legacy
@@ -113,7 +113,7 @@ const seedVenue = async (): Promise<string> => {
   const id = sh?.id ?? '';
   await db
     .insert(screenhostAffluence)
-    .values({ screenhostId: id, dayOfWeek: 1, hour: 8, estimatedImpressions: 100 });
+    .values(bothHalves({ screenhostId: id, dayOfWeek: 1, hour: 8, estimatedImpressions: 100 }));
   return id;
 };
 

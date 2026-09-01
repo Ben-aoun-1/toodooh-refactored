@@ -20,7 +20,7 @@ import {
 } from '../src/db/schema.js';
 import { campaignDispatchRoutes } from '../src/routes/campaign-dispatch.js';
 
-import { resetAuthTables } from './helpers/db-test-setup.js';
+import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 
 // Integration — real Postgres. End-to-end dispatch: a well-formed campaign + targeting + eligible
 // screenhosts + affluence → a frozen PlanDiffusion. Config is the seeded V1 singleton.
@@ -116,7 +116,7 @@ const seedEligibleScreenhost = async (
   for (const dow of [1, 2])
     for (let h = 8; h < 18; h += 1)
       rows.push({ screenhostId: id, dayOfWeek: dow, hour: h, estimatedImpressions: affluence });
-  await db.insert(screenhostAffluence).values(rows);
+  await db.insert(screenhostAffluence).values(bothHalves(rows));
   return id;
 };
 
@@ -332,7 +332,7 @@ describe('campaign dispatch entrypoint (L-disp, real Postgres)', () => {
         });
         bumped = true;
       }
-    await db.insert(screenhostAffluence).values(rows);
+    await db.insert(screenhostAffluence).values(bothHalves(rows));
     mockSession(admin);
 
     // i_cible 100000 > fact 36018 → the SH's full residual is allocated (the fractional path).

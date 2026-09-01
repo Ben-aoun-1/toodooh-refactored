@@ -28,7 +28,7 @@ import { walletLedger } from '../src/lib/wallet-ledger.js';
 import { cartRoutes } from '../src/routes/cart.js';
 import { rechargesRoutes } from '../src/routes/recharges.js';
 
-import { resetAuthTables } from './helpers/db-test-setup.js';
+import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 
 // FIX2 (Option A ruling — reservation semantics) against real Postgres. THE probe inversion: the
 // exact sequence that DEMONSTRATED the overdraft hole (fund 550 → confirm 400 → confirm another
@@ -90,7 +90,7 @@ const seedVenue = async (ownerId: string, categoryId: string): Promise<void> => 
   for (const dow of [1, 2, 3, 4, 5, 6, 7])
     for (let h = 8; h < 18; h += 1)
       rows.push({ screenhostId: id, dayOfWeek: dow, hour: h, estimatedImpressions: 100 });
-  await db.insert(screenhostAffluence).values(rows);
+  await db.insert(screenhostAffluence).values(bothHalves(rows));
 };
 
 const seedCreative = async (advertiserId: string): Promise<string> => {

@@ -25,7 +25,7 @@ import { createEngineTrace } from '../src/lib/engine-journal/trace.js';
 import { reconcileCampaignById } from '../src/lib/reconcile/reconcile-service.js';
 import { adminEngineJournalRoutes } from '../src/routes/admin-engine-journal.js';
 
-import { resetAuthTables } from './helpers/db-test-setup.js';
+import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 
 // LOG1 — per-phase pins over the REAL engine (real Postgres): the journal records why the engine
 // did what it did, and the engine's own outcomes are byte-unchanged (the full pre-LOG1 suite
@@ -68,14 +68,16 @@ const seedVenue = async (ownerId: string, name: string): Promise<string> => {
     })
     .returning();
   await db.insert(screenhostAffluence).values(
-    Array.from({ length: 7 }, (_, d) =>
-      Array.from({ length: 24 }, (_, h) => ({
-        screenhostId: sh?.id ?? '',
-        dayOfWeek: d + 1,
-        hour: h,
-        estimatedImpressions: 100,
-      })),
-    ).flat(),
+    bothHalves(
+      Array.from({ length: 7 }, (_, d) =>
+        Array.from({ length: 24 }, (_, h) => ({
+          screenhostId: sh?.id ?? '',
+          dayOfWeek: d + 1,
+          hour: h,
+          estimatedImpressions: 100,
+        })),
+      ).flat(),
+    ),
   );
   return sh?.id ?? '';
 };

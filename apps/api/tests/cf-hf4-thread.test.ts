@@ -26,7 +26,7 @@ import { adminCreativesRoutes } from '../src/routes/admin-creatives.js';
 import { campaignsRoutes } from '../src/routes/campaigns.js';
 import { screenhostsRoutes } from '../src/routes/screenhosts.js';
 
-import { resetAuthTables } from './helpers/db-test-setup.js';
+import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 
 // CF-HF4 — the thread batch:
 //  - ENGAGEMENT is window-overlap-aware + terminal-releasing (the r_i=1 anti-concentration
@@ -104,7 +104,7 @@ const seedVenue = async (
   for (const dow of [1, 2])
     for (let h = 8; h < 18; h += 1)
       rows.push({ screenhostId: shId, dayOfWeek: dow, hour: h, estimatedImpressions: 100 });
-  await db.insert(screenhostAffluence).values(rows);
+  await db.insert(screenhostAffluence).values(bothHalves(rows));
   return { shId, ownerId };
 };
 

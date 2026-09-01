@@ -21,7 +21,7 @@ import { adminCampaignsRoutes } from '../src/routes/admin-campaigns.js';
 import { adminCreativesRoutes } from '../src/routes/admin-creatives.js';
 import { campaignsRoutes } from '../src/routes/campaigns.js';
 
-import { resetAuthTables } from './helpers/db-test-setup.js';
+import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 
 // CF-HF3 (Mejri retest batch 3) — the api half:
 //  (4) an APPROVED IMAGE creative activates end-to-end (the gate is type-agnostic — PINNED; the
@@ -137,7 +137,7 @@ const seedImageActivatable = async (): Promise<{
   for (const dow of [1, 2])
     for (let h = 8; h < 18; h += 1)
       rows.push({ screenhostId: sh?.id ?? '', dayOfWeek: dow, hour: h, estimatedImpressions: 100 });
-  await db.insert(screenhostAffluence).values(rows);
+  await db.insert(screenhostAffluence).values(bothHalves(rows));
   seq += 1;
   await db.insert(recharges).values({
     advertiserId: advertiser,

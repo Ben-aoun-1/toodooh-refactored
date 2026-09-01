@@ -19,7 +19,7 @@ import {
 import { runDispatch } from '../src/lib/dispatch/dispatch-service.js';
 import { screenhostsRoutes } from '../src/routes/screenhosts.js';
 
-import { resetAuthTables } from './helpers/db-test-setup.js';
+import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 
 // E3 — the refusal cascade (US-2.8), real Postgres, driven through the REAL reject route. Engine
 // fixtures mirror campaign-dispatch.test.ts: cpm 10 / s 10 → T 0.6, seuil = seuilImpressions(10)
@@ -124,7 +124,7 @@ const seedVenue = async (
   for (const dow of [1, 2])
     for (let h = 8; h < 18; h += 1)
       rows.push({ screenhostId: id, dayOfWeek: dow, hour: h, estimatedImpressions: affluence });
-  await db.insert(screenhostAffluence).values(rows);
+  await db.insert(screenhostAffluence).values(bothHalves(rows));
   return id;
 };
 

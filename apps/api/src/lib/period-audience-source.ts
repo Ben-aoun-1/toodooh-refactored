@@ -9,6 +9,7 @@ import {
 } from '../db/schema.js';
 
 import { tunisDateOf } from './campaign-dates.js';
+import { collapseHalvesSql } from './half-hour-slots.js';
 import { emptyBackupGrid, type BackupGrid, type PeriodAudienceInput } from './period-audience.js';
 import type { DateRange } from './report/derive.js';
 
@@ -23,14 +24,18 @@ import type { DateRange } from './report/derive.js';
 
 /** The venue's backup grid + which cells the admin actually FILLED (rules 2 and 3 turn on it). */
 export const loadBackupGrid = async (venueId: string): Promise<BackupGrid> => {
+  // MEJ-13-B — BackupGrid stays 7×24 (slice C widens it), so the half-hour rows collapse to their
+  // hour HERE, in SQL. round(avg(halves)) is the ruled value and is exact when the halves agree.
+  // Without this the grid assignment below would take an arbitrary half, last row wins.
   const rows = await db
     .select({
       dayOfWeek: screenhostAffluence.dayOfWeek,
       hour: screenhostAffluence.hour,
-      estimatedImpressions: screenhostAffluence.estimatedImpressions,
+      estimatedImpressions: collapseHalvesSql(screenhostAffluence.estimatedImpressions),
     })
     .from(screenhostAffluence)
-    .where(eq(screenhostAffluence.screenhostId, venueId));
+    .where(eq(screenhostAffluence.screenhostId, venueId))
+    .groupBy(screenhostAffluence.dayOfWeek, screenhostAffluence.hour);
   const grid = emptyBackupGrid();
   for (const row of rows) {
     const index = row.dayOfWeek - 1;
@@ -71,11 +76,12 @@ export async function loadPeriodAudienceInput(
       ),
     // The MEASURED hourly cells. The (screenhost_id, date, hour) unique index serves this range
     // read on its leading prefix — the reason slice A shipped one index rather than two.
+    // MEJ-13-B — periodAudience keys its cells on (date, hour), so the halves collapse here too.
     db
       .select({
         date: screenhostAffluenceHourly.date,
         hour: screenhostAffluenceHourly.hour,
-        value: screenhostAffluenceHourly.value,
+        value: collapseHalvesSql(screenhostAffluenceHourly.value),
       })
       .from(screenhostAffluenceHourly)
       .where(
@@ -84,7 +90,8 @@ export async function loadPeriodAudienceInput(
           gte(screenhostAffluenceHourly.date, range.from),
           lte(screenhostAffluenceHourly.date, range.to),
         ),
-      ),
+      )
+      .groupBy(screenhostAffluenceHourly.date, screenhostAffluenceHourly.hour),
     loadBackupGrid(venueId),
     params.onboardedIso !== undefined
       ? Promise.resolve(params.onboardedIso)
