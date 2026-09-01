@@ -10,6 +10,8 @@ export interface PlatformStats {
     total: number;
     pending: number;
     approved: number;
+    /** SIGN-4 — the OWNER half of `pending`: how many Hosts are awaiting validation. */
+    pending_owners: number;
     owners: number;
     advertisers: number;
   };
