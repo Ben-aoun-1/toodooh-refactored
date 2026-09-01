@@ -1,5 +1,6 @@
 import { Info } from 'lucide-react';
 
+import { demoBarPct } from '../../lib/demographic-bar';
 import { type DemographicBreakdown, formatIntFr } from '../../lib/performance-derive';
 
 import { PENDING_LABEL } from './Pending';
@@ -22,14 +23,11 @@ function DemoRow({
   count,
   maxCount,
   pending,
-  placeholderPct,
 }: {
   label: string;
   count: number;
   maxCount: number;
   pending: boolean;
-  /** The EMPTY mockup still draws decorative bar widths — reproduced when pending. */
-  placeholderPct: number;
 }) {
   return (
     <div>
@@ -46,7 +44,8 @@ function DemoRow({
         )}
       </div>
       <div className="mt-2">
-        <DemoBar pct={pending ? placeholderPct : maxCount > 0 ? (count / maxCount) * 100 : 0} />
+        {/* MEJ-14a — pending draws the track only; the mockup's decorative widths are gone. */}
+        <DemoBar pct={demoBarPct({ pending, count, maxCount })} />
       </div>
     </div>
   );
@@ -105,14 +104,12 @@ export function DemographicsSection({
               count={breakdown?.femmes ?? 0}
               maxCount={sexeMax}
               pending={pending}
-              placeholderPct={50}
             />
             <DemoRow
               label="Hommes"
               count={breakdown?.hommes ?? 0}
               maxCount={sexeMax}
               pending={pending}
-              placeholderPct={50}
             />
           </div>
         </div>
@@ -128,14 +125,13 @@ export function DemographicsSection({
                 { key: 'age_46_60_pct' as const, label: '46 – 60 ans', count: 0 },
                 { key: 'age_60_plus_pct' as const, label: '60 ans et plus', count: 0 },
               ]
-            ).map((band, idx) => (
+            ).map((band) => (
               <DemoRow
                 key={band.key}
                 label={band.label}
                 count={band.count}
                 maxCount={ageMax}
                 pending={pending}
-                placeholderPct={[32, 28, 14, 6][idx] ?? 0}
               />
             ))}
           </div>

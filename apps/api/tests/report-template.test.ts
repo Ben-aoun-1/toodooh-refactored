@@ -209,6 +209,18 @@ describe('renderReportHtml — structure shared by both states', () => {
     expect(html).toContain('Votre score de priorité');
   });
 
+  it('MEJ-14a: real figures still fill the S04 bars in proportion to the group maximum', () => {
+    const s04 = section04(renderReportHtml(fullData()));
+    const fills = [...s04.matchAll(/class="bar-fill" style="width:([^"]+)"/g)].map((m) => m[1]);
+    expect(fills).toHaveLength(6);
+    // femmes 11128 is the sexe maximum → 100 %; hommes 10272 is its 92.3 %.
+    expect(fills[0]).toBe('100%');
+    expect(fills[1]).toBe(`${(10272 / 11128) * 100}%`);
+    // 17–30 (7276) is the age maximum → 100 %; nothing is empty when the figures are real.
+    expect(fills[2]).toBe('100%');
+    expect(fills.some((w) => w === '0%')).toBe(false);
+  });
+
   it('renders the E4 S08 SPS card — ring with the REAL score, the 4 ruled criteria + weights + values', () => {
     expect(html).toContain('class="score-ring"');
     expect(html).toContain('Score actuel');
@@ -239,6 +251,16 @@ describe('renderReportHtml — structure shared by both states', () => {
   });
 });
 
+/**
+ * The S04 slice only. Anchored on the SECTION TITLES, not on 'Section 04' — the stylesheet in
+ * <head> carries a `(Section 04)` comment, so indexOf would slice the CSS instead of the section.
+ */
+const section04 = (html: string): string =>
+  html.slice(
+    html.indexOf('Profil typologique de votre clientèle'),
+    html.indexOf('Vos revenus de la période'),
+  );
+
 describe('renderReportHtml — EMPTY variants (both flags false)', () => {
   const html = renderReportHtml(baseData());
 
@@ -253,6 +275,25 @@ describe('renderReportHtml — EMPTY variants (both flags false)', () => {
     expect(html).not.toContain('JJ/MM/AAAA');
     expect(html).toContain('Aucun maximum observé sur la période.');
     expect(html).toContain('Nom de la campagne');
+  });
+
+  // MEJ-14a (Mejri, ruled through the operator 2026-09-01) — the S04 bars carried COLOUR while no
+  // figures existed behind them, so an empty section read as measured data. Both surfaces drew the
+  // EMPTY mockup's decorative widths faithfully (sexe 50/50; ages 32/28/14/6). Pending now renders
+  // the TRACK ONLY. The page shares the rule (lib/report/demographic-bar.ts, byte-pinned twin), so
+  // this pin and the web one fail together if either drifts.
+  it('MEJ-14a: every S04 bar is EMPTY while the figures are « en attente »', () => {
+    const s04 = section04(html);
+    // The pending copy IS there — the section still says it is waiting…
+    expect(s04).toContain('En attente du premier deal');
+    // …and every one of its six bars (Femmes, Hommes + the four age bands) is an empty track.
+    const fills = [...s04.matchAll(/class="bar-fill" style="width:([^"]+)"/g)].map((m) => m[1]);
+    expect(fills).toHaveLength(6);
+    expect(fills.every((w) => w === '0%')).toBe(true);
+    // The decorative widths themselves must never reappear on this surface.
+    for (const decorative of ['width:50%', 'width:32%', 'width:28%', 'width:14%', 'width:6%']) {
+      expect(s04).not.toContain(decorative);
+    }
   });
 
   it("quotes the S04 fallback category when the venue has no sector ('—')", () => {
