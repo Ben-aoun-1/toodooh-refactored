@@ -16,6 +16,8 @@ import {
   screens,
   users,
 } from '../src/db/schema.js';
+import { loadPeriodAudienceInput } from '../src/lib/period-audience-source.js';
+import { periodAudience } from '../src/lib/period-audience.js';
 import { assembleReportData, heatmapKinds, heatmapLevels } from '../src/lib/report/assemble.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
@@ -447,5 +449,93 @@ describe('assembleReportData — upcomingEvents (the Piste 01 window)', () => {
   it('an empty catalogue is null, not a zero count', async () => {
     const venue = await seedScreenhost(await seedUser());
     expect((await assembleReportData(venue, RANGE, TODAY))?.upcomingEvents).toBeNull();
+  });
+});
+
+// ── MEJ-9 (2026-09-01) — the row and the PDF cannot disagree ──────────────────────────────────
+//
+// REPRODUCTION FIRST (the ticket named two candidates; only one is real):
+//  (a) « the stored row's audience counter is computed measured-only » — FALSE. There IS no stored
+//      counter: `screenhost_monthly_reports` holds (screenhost_id, month, storage_key,
+//      generated_at) and nothing else. The history row's figures are derived CLIENT-SIDE from the
+//      merged /audience read (`audienceOfMonth(allTimeDays, month)`), which has been the
+//      periodAudience merge since PERF-1b. The row was never measured-only.
+//  (b) « the PDF is a pre-clamp artefact » — TRUE, and it is the whole explanation. The July PDF
+//      was rendered on 31/08 BEFORE the MEJ-2 floor reached prod (deployed 20:19 that evening), so
+//      the backup grid still answered for a month in which the venue did not exist → « 5 540 pers,
+//      100 % estimation ». The row, computed live after the deploy, applies the floor → 0.
+//
+// So no LIVE path can produce that disagreement any more; what remains is frozen artefacts, whose
+// regeneration is a prod data action. These tests pin the invariant that keeps it that way: the
+// month figure the PAGE derives (an all-time merge filtered to the month) and the one the PDF
+// renders (a month-range merge) are the same number, because they are the same helper.
+describe('MEJ-9 — the history row and the PDF read ONE merge', () => {
+  const monthTotalFromAllTime = async (venueId: string, month: string): Promise<number> => {
+    const merged = periodAudience(
+      await loadPeriodAudienceInput({
+        venueId,
+        range: { from: '2020-01-01', to: TODAY },
+        todayIso: TODAY,
+      }),
+    );
+    // exactly what the page's audienceOfMonth does over the same wire
+    return merged.days
+      .filter((d) => d.date.startsWith(`${month}-`))
+      .reduce((sum, d) => sum + d.audience, 0);
+  };
+
+  it("a month entirely before onboarding is 0 on BOTH sides (Mejri's July)", async () => {
+    const owner = await seedUser();
+    // Onboarded 26/08 — as her venue was. July precedes it entirely.
+    const venue = await seedScreenhost(owner, {
+      openingHour: 8,
+      closingHour: 22,
+      createdAt: new Date('2026-08-26T09:00:00Z'),
+    });
+    await db.insert(screenhostAffluence).values(
+      Array.from({ length: 7 }, (_, i) => ({
+        screenhostId: venue,
+        dayOfWeek: i + 1,
+        hour: 10,
+        estimatedImpressions: 80,
+        source: 'backup' as const,
+      })),
+    );
+
+    const pdf = await assembleReportData(venue, { from: '2026-07-01', to: '2026-07-31' }, TODAY);
+    expect(pdf?.kpis.global).toBe(0); // the PDF a regeneration would produce TODAY
+    expect(pdf?.kpis.peak).toBeNull();
+    expect(await monthTotalFromAllTime(venue, '2026-07')).toBe(0); // and the page's row
+  });
+
+  it('a month WITH data agrees to the person on both sides', async () => {
+    const owner = await seedUser();
+    const venue = await seedScreenhost(owner, {
+      openingHour: 8,
+      closingHour: 22,
+      createdAt: new Date('2026-05-01T00:00:00Z'),
+    });
+    await db.insert(screenhostAffluence).values(
+      Array.from({ length: 7 }, (_, i) => ({
+        screenhostId: venue,
+        dayOfWeek: i + 1,
+        hour: 10,
+        estimatedImpressions: 80,
+        source: 'backup' as const,
+      })),
+    );
+    await db.insert(screenhostMonthlyStats).values({
+      screenhostId: venue,
+      month: '2026-06',
+      totalAudience: 500,
+      daily: [{ date: '2026-06-15', audience: 500, source: 'measured' }],
+      peakDayOfWeek: 1,
+      peakHour: 10,
+    });
+
+    const pdf = await assembleReportData(venue, { from: '2026-06-01', to: '2026-06-30' }, TODAY);
+    const row = await monthTotalFromAllTime(venue, '2026-06');
+    expect(pdf?.kpis.global).toBeGreaterThan(0);
+    expect(row).toBe(pdf?.kpis.global); // the invariant: same helper, same number
   });
 });
