@@ -21,7 +21,7 @@ import { loadPeriodAudienceInput } from '../src/lib/period-audience-source.js';
 import { periodAudience } from '../src/lib/period-audience.js';
 import { assembleReportData, heatmapKinds, heatmapLevels } from '../src/lib/report/assemble.js';
 
-import { resetAuthTables } from './helpers/db-test-setup.js';
+import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 
 // Integration — real Postgres. assembleReportData must read through the SAME tables the owner
 // reads use and derive the template inputs with the page's semantics (flags, zero-fill, hachure).
@@ -133,11 +133,25 @@ describe('assembleReportData (real Postgres)', () => {
       peakDayOfWeek: 6,
       peakHour: 13,
     });
-    await db.insert(screenhostAffluence).values([
-      { screenhostId: venue, dayOfWeek: 1, hour: 12, estimatedImpressions: 80, source: 'measured' },
-      { screenhostId: venue, dayOfWeek: 6, hour: 18, estimatedImpressions: 120, source: 'backup' },
-      { screenhostId: venue, dayOfWeek: 3, hour: 15, estimatedImpressions: 30, source: null },
-    ]);
+    await db.insert(screenhostAffluence).values(
+      bothHalves([
+        {
+          screenhostId: venue,
+          dayOfWeek: 1,
+          hour: 12,
+          estimatedImpressions: 80,
+          source: 'measured',
+        },
+        {
+          screenhostId: venue,
+          dayOfWeek: 6,
+          hour: 18,
+          estimatedImpressions: 120,
+          source: 'backup',
+        },
+        { screenhostId: venue, dayOfWeek: 3, hour: 15, estimatedImpressions: 30, source: null },
+      ]),
+    );
 
     // CAST side: a proof chain (2 VIDEO_ENDED on June 10) + one reconciled payout line.
     const [screen] = await db
@@ -261,13 +275,15 @@ describe('assembleReportData (real Postgres)', () => {
     });
     // No monthly-stats at all — only the admin's backup grid, every weekday at 10h.
     await db.insert(screenhostAffluence).values(
-      Array.from({ length: 7 }, (_, i) => ({
-        screenhostId: venue,
-        dayOfWeek: i + 1,
-        hour: 10,
-        estimatedImpressions: 80,
-        source: 'backup' as const,
-      })),
+      bothHalves(
+        Array.from({ length: 7 }, (_, i) => ({
+          screenhostId: venue,
+          dayOfWeek: i + 1,
+          hour: 10,
+          estimatedImpressions: 80,
+          source: 'backup' as const,
+        })),
+      ),
     );
 
     const data = await assembleReportData(venue, RANGE, TODAY);
@@ -293,13 +309,15 @@ describe('assembleReportData (real Postgres)', () => {
       createdAt: new Date('2026-06-15T09:00:00Z'),
     });
     await db.insert(screenhostAffluence).values(
-      Array.from({ length: 7 }, (_, i) => ({
-        screenhostId: venue,
-        dayOfWeek: i + 1,
-        hour: 10,
-        estimatedImpressions: 80,
-        source: 'backup' as const,
-      })),
+      bothHalves(
+        Array.from({ length: 7 }, (_, i) => ({
+          screenhostId: venue,
+          dayOfWeek: i + 1,
+          hour: 10,
+          estimatedImpressions: 80,
+          source: 'backup' as const,
+        })),
+      ),
     );
 
     const data = await assembleReportData(venue, RANGE, TODAY);
@@ -313,10 +331,24 @@ describe('assembleReportData (real Postgres)', () => {
   it('AUD-HOURLY1-C: the PDF S02 is the période aggregated, and matches the page', async () => {
     const owner = await seedUser();
     const venue = await seedScreenhost(owner, { openingHour: 8, closingHour: 22 });
-    await db.insert(screenhostAffluence).values([
-      { screenhostId: venue, dayOfWeek: 1, hour: 12, estimatedImpressions: 80, source: 'measured' },
-      { screenhostId: venue, dayOfWeek: 6, hour: 18, estimatedImpressions: 120, source: 'backup' },
-    ]);
+    await db.insert(screenhostAffluence).values(
+      bothHalves([
+        {
+          screenhostId: venue,
+          dayOfWeek: 1,
+          hour: 12,
+          estimatedImpressions: 80,
+          source: 'measured',
+        },
+        {
+          screenhostId: venue,
+          dayOfWeek: 6,
+          hour: 18,
+          estimatedImpressions: 120,
+          source: 'backup',
+        },
+      ]),
+    );
 
     // 2026-06-01 (Mon) .. 2026-06-02 (Tue): only Monday is in the période.
     const data = await assembleReportData(venue, { from: '2026-06-01', to: '2026-06-02' }, TODAY);
@@ -342,15 +374,23 @@ describe('assembleReportData (real Postgres)', () => {
     const owner = await seedUser();
     const venue = await seedScreenhost(owner, { openingHour: 8, closingHour: 22 });
     // A Monday-12h grid cell: it stands in on 01/06 (a Monday), making that day MIXED.
-    await db
-      .insert(screenhostAffluence)
-      .values([
-        { screenhostId: venue, dayOfWeek: 1, hour: 12, estimatedImpressions: 80, source: 'backup' },
-      ]);
-    await db.insert(screenhostAffluenceHourly).values([
-      { screenhostId: venue, date: '2026-06-01', hour: 13, value: 300 }, // Monday, measured
-      { screenhostId: venue, date: '2026-06-02', hour: 13, value: 50 }, // Tuesday, all-measured
-    ]);
+    await db.insert(screenhostAffluence).values(
+      bothHalves([
+        {
+          screenhostId: venue,
+          dayOfWeek: 1,
+          hour: 12,
+          estimatedImpressions: 80,
+          source: 'backup',
+        },
+      ]),
+    );
+    await db.insert(screenhostAffluenceHourly).values(
+      bothHalves([
+        { screenhostId: venue, date: '2026-06-01', hour: 13, value: 300 }, // Monday, measured
+        { screenhostId: venue, date: '2026-06-02', hour: 13, value: 50 }, // Tuesday, all-measured
+      ]),
+    );
 
     const data = await assembleReportData(venue, { from: '2026-06-01', to: '2026-06-02' }, TODAY);
     // 01/06 = 300 measured + 80 forced from the grid = 380, and it holds a measurement.
@@ -361,14 +401,22 @@ describe('assembleReportData (real Postgres)', () => {
   it('AUD-HOURLY1-C: a MEASURED hourly cell reaches the PDF S02 as measured', async () => {
     const owner = await seedUser();
     const venue = await seedScreenhost(owner, { openingHour: 8, closingHour: 22 });
-    await db
-      .insert(screenhostAffluence)
-      .values([
-        { screenhostId: venue, dayOfWeek: 1, hour: 12, estimatedImpressions: 80, source: 'backup' },
-      ]);
-    await db.insert(screenhostAffluenceHourly).values([
-      { screenhostId: venue, date: '2026-06-01', hour: 12, value: 44 }, // a Monday
-    ]);
+    await db.insert(screenhostAffluence).values(
+      bothHalves([
+        {
+          screenhostId: venue,
+          dayOfWeek: 1,
+          hour: 12,
+          estimatedImpressions: 80,
+          source: 'backup',
+        },
+      ]),
+    );
+    await db.insert(screenhostAffluenceHourly).values(
+      bothHalves([
+        { screenhostId: venue, date: '2026-06-01', hour: 12, value: 44 }, // a Monday
+      ]),
+    );
 
     const data = await assembleReportData(venue, { from: '2026-06-01', to: '2026-06-01' }, TODAY);
     expect(data?.heatKinds[0]?.[4]).toBe('measured');
@@ -560,13 +608,15 @@ describe('MEJ-9 — the history row and the PDF read ONE merge', () => {
       createdAt: new Date('2026-08-26T09:00:00Z'),
     });
     await db.insert(screenhostAffluence).values(
-      Array.from({ length: 7 }, (_, i) => ({
-        screenhostId: venue,
-        dayOfWeek: i + 1,
-        hour: 10,
-        estimatedImpressions: 80,
-        source: 'backup' as const,
-      })),
+      bothHalves(
+        Array.from({ length: 7 }, (_, i) => ({
+          screenhostId: venue,
+          dayOfWeek: i + 1,
+          hour: 10,
+          estimatedImpressions: 80,
+          source: 'backup' as const,
+        })),
+      ),
     );
 
     const pdf = await assembleReportData(venue, { from: '2026-07-01', to: '2026-07-31' }, TODAY);
@@ -583,13 +633,15 @@ describe('MEJ-9 — the history row and the PDF read ONE merge', () => {
       createdAt: new Date('2026-05-01T00:00:00Z'),
     });
     await db.insert(screenhostAffluence).values(
-      Array.from({ length: 7 }, (_, i) => ({
-        screenhostId: venue,
-        dayOfWeek: i + 1,
-        hour: 10,
-        estimatedImpressions: 80,
-        source: 'backup' as const,
-      })),
+      bothHalves(
+        Array.from({ length: 7 }, (_, i) => ({
+          screenhostId: venue,
+          dayOfWeek: i + 1,
+          hour: 10,
+          estimatedImpressions: 80,
+          source: 'backup' as const,
+        })),
+      ),
     );
     await db.insert(screenhostMonthlyStats).values({
       screenhostId: venue,

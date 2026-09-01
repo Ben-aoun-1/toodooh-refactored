@@ -40,7 +40,7 @@ import { computeSps } from '../src/lib/sps-score.js';
 import { adminCampaignsRoutes } from '../src/routes/admin-campaigns.js';
 import { screenhostsRoutes } from '../src/routes/screenhosts.js';
 
-import { resetAuthTables } from './helpers/db-test-setup.js';
+import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 
 // EV4 — the bloc dispatch engine: D2 SPS ordering, D3 greedy concentration to I_cible_evt,
 // D4 anti-miette DROP (both sides of the 20-TND line), D5/D7 N_max atomic block, D6 partial +
@@ -115,7 +115,7 @@ const seedVenue = async (opts: {
         hour: h,
         estimatedImpressions: opts.affluence ?? 100,
       });
-  await db.insert(screenhostAffluence).values(rows);
+  await db.insert(screenhostAffluence).values(bothHalves(rows));
   return { id, ownerId };
 };
 

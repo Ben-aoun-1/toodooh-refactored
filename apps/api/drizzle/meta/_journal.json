@@ -463,6 +463,13 @@
       "when": 1788195262685,
       "tag": "0065_affluence_hourly",
       "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1788291534713,
+      "tag": "0066_half_hour_slots",
+      "breakpoints": true
     }
   ]
 }

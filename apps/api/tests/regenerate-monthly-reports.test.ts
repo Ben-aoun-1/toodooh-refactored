@@ -13,7 +13,7 @@ import {
 } from '../src/db/schema.js';
 import { storage } from '../src/storage/s3-storage.js';
 
-import { resetAuthTables } from './helpers/db-test-setup.js';
+import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 
 // The R1.5 restyle regeneration — chromium mocked at the render seam, storage.upload spied,
 // real Postgres (the monthly-job harness). The contract under test: same storage_key overwritten,
@@ -69,7 +69,7 @@ const seedVenueWithData = async (ownerId: string, name: string): Promise<string>
   const id = s?.id ?? '';
   await db
     .insert(screenhostAffluence)
-    .values({ screenhostId: id, dayOfWeek: 1, hour: 12, estimatedImpressions: 40 });
+    .values(bothHalves({ screenhostId: id, dayOfWeek: 1, hour: 12, estimatedImpressions: 40 }));
   return id;
 };
 

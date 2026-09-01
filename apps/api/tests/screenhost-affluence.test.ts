@@ -14,7 +14,7 @@ import {
 import { screenhostsRoutes } from '../src/routes/screenhosts.js';
 import { storage } from '../src/storage/s3-storage.js';
 
-import { resetAuthTables } from './helpers/db-test-setup.js';
+import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 
 // Integration suite — real Postgres. getSession is mocked to drive the owner identity. Affluence is
 // the venue audience pattern (weekday × hour); this exercises the first READER of the write-only
@@ -78,7 +78,9 @@ const seedHourly = async (
   cells: { date: string; hour: number; value: number }[],
 ): Promise<void> => {
   if (cells.length === 0) return;
-  await db.insert(screenhostAffluenceHourly).values(cells.map((c) => ({ screenhostId, ...c })));
+  await db
+    .insert(screenhostAffluenceHourly)
+    .values(bothHalves(cells.map((c) => ({ screenhostId, ...c }))));
 };
 
 const seedAffluence = async (
@@ -87,13 +89,15 @@ const seedAffluence = async (
 ): Promise<void> => {
   if (slots.length === 0) return;
   await db.insert(screenhostAffluence).values(
-    slots.map((s) => ({
-      screenhostId,
-      dayOfWeek: s.day,
-      hour: s.hour,
-      estimatedImpressions: s.value,
-      source: s.source ?? null,
-    })),
+    bothHalves(
+      slots.map((s) => ({
+        screenhostId,
+        dayOfWeek: s.day,
+        hour: s.hour,
+        estimatedImpressions: s.value,
+        source: s.source ?? null,
+      })),
+    ),
   );
 };
 

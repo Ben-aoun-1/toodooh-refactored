@@ -10,6 +10,7 @@ import {
   screenhosts,
 } from '../../db/schema.js';
 import { type BlocDiffusion, fenetreDiffusion } from '../fenetre-diffusion.js';
+import { collapseHalvesSql } from '../half-hour-slots.js';
 
 // EV2 — the EVENT pricing engine (D51: its OWN module). The campaign engine is untouched and
 // UNIMPORTED — no lib/dispatch, no campaign-* libs (boundary-pinned like E7's rail). The event
@@ -64,10 +65,15 @@ export const blocCells = (start: Date, end: Date): TunisCell[] => {
  * Returns the effective A_max, or the 50 fallback (UNPERSISTED) when nothing is known.
  */
 export const computeAmax = async (screenhostId: string): Promise<number> => {
+  // MEJ-13-B — A_max is the busiest HOUR, so the max runs over collapsed hours, never over raw
+  // halves. `max(halves)` is precisely the rule the contract rejects: it would ratchet A_max up on
+  // a single busy half-hour and, because the ratchet never writes downward, that inflation would
+  // be permanent — on the event-pricing / C_max_evt path.
   const grid = await db
-    .select({ v: screenhostAffluence.estimatedImpressions })
+    .select({ v: collapseHalvesSql(screenhostAffluence.estimatedImpressions) })
     .from(screenhostAffluence)
-    .where(eq(screenhostAffluence.screenhostId, screenhostId));
+    .where(eq(screenhostAffluence.screenhostId, screenhostId))
+    .groupBy(screenhostAffluence.dayOfWeek, screenhostAffluence.hour);
   const gridMax = grid.reduce((m, r) => Math.max(m, r.v), 0);
   const [stored] = await db
     .select({ amaxPph: screenhostAmax.amaxPph })

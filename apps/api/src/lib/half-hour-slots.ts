@@ -1,0 +1,68 @@
+import { sql, type SQL } from 'drizzle-orm';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
+
+/**
+ * MEJ-13-B — the half-hour slot vocabulary, in one place.
+ *
+ * A slot is 0–47, `slot = hour × 2 + half`, half 0 = :00–:29, on the venue's own Africa/Tunis
+ * clock. Both affluence tables are keyed on it since the wire gained half-hour resolution.
+ *
+ * THE INVARIANT the whole programme is built to defend: **no headline number may move because the
+ * grid got finer.** A cell is a LEVEL — people PRESENT during the slot — not a flow. Half an hour
+ * of a level is not half the people, so an hour expands into both halves carrying the SAME value.
+ */
+
+/** Slots per hour, and therefore the expansion factor of an hour-shaped push. */
+export const HALVES_PER_HOUR = 2;
+/** 0–47. */
+export const SLOTS_PER_DAY = 24 * HALVES_PER_HOUR;
+
+/** The two slots an hour occupies, in order: [:00–:29, :30–:59]. */
+export const slotsOfHour = (hour: number): [number, number] => [
+  hour * HALVES_PER_HOUR,
+  hour * HALVES_PER_HOUR + 1,
+];
+
+/** The hour a slot falls in — integer division, mirroring the DB's `hour = slot / 2` CHECK. */
+export const hourOfSlot = (slot: number): number => Math.floor(slot / HALVES_PER_HOUR);
+
+/**
+ * THE HOUR-COLLAPSE RULE (ruled 2026-09-01) — what a half-hour grid answers to an HOUR-keyed
+ * consumer:
+ *
+ *     hour_value = round((h0 + h1) / 2)
+ *
+ * It is DERIVED from the level semantics, not chosen: an hour spanning two halves carries their
+ * time-weighted average. Three properties make it the only defensible rule, and each one is a bug
+ * that would otherwise be on the money path:
+ *
+ * 1. **Equal halves return the old value EXACTLY** — which is every cell after the migration and
+ *    every cell an hour-shaped push writes. That is what keeps the wire bit-identical on unchanged
+ *    input, and it IS the acceptance test for the programme.
+ * 2. It is the invariant's `Σ (value × slot_hours)` read at hour granularity, so this collapse and
+ *    slice C's duration-weighted sums can never disagree.
+ * 3. `max()` would silently INFLATE and `first()` (or a last-write-wins map) would silently
+ *    TRUNCATE `estimated_impressions` the moment the halves differ — on the dispatch / C_max /
+ *    event-pricing / settlement path.
+ *
+ * A single half (only one row present) collapses to itself: averaging it against an absent
+ * reading would invent a zero, and a missing cell is "no measure", never a zero.
+ */
+export const collapseHalvesToHour = (halves: readonly number[]): number => {
+  if (halves.length === 0) return 0;
+  const sum = halves.reduce((total, value) => total + value, 0);
+  return Math.round(sum / halves.length);
+};
+
+/**
+ * The SAME collapse, expressed for SQL so an hour-keyed read can do it in the database rather than
+ * hauling both halves into JS. `round(avg(v))` over a `GROUP BY … , hour` is exactly
+ * `round((h0 + h1) / 2)` for a full hour, and exactly the surviving half when only one row exists.
+ *
+ * There are two expressions of one rule, so `half-hour-slots.test.ts` pins them AGAINST EACH OTHER
+ * on the same inputs, including the .5 boundary — Postgres `round()` on a numeric is half-away-
+ * from-zero and JS `Math.round` is half-up, which agree for the non-negative values these columns
+ * hold (both CHECK >= 0) and would silently diverge if that ever stopped being true.
+ */
+export const collapseHalvesSql = (column: AnyPgColumn): SQL<number> =>
+  sql<number>`round(avg(${column}))::int`;

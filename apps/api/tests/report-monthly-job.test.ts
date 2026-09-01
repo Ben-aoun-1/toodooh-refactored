@@ -26,7 +26,7 @@ import {
 } from '../src/lib/report/monthly-job.js';
 import { storage } from '../src/storage/s3-storage.js';
 
-import { resetAuthTables } from './helpers/db-test-setup.js';
+import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 
 // The month-end job (R1) — chromium is mocked at the render seam; storage.upload is spied. The
 // UNIQUE(screenhost, month) idempotency + notification-once semantics run against real Postgres.
@@ -102,7 +102,7 @@ const seedVenueWithData = async (
   // candidate but never a CATCH-UP month (the R2-amendment gate).
   await db
     .insert(screenhostAffluence)
-    .values({ screenhostId: id, dayOfWeek: 1, hour: 12, estimatedImpressions: 40 });
+    .values(bothHalves({ screenhostId: id, dayOfWeek: 1, hour: 12, estimatedImpressions: 40 }));
   return id;
 };
 
@@ -371,10 +371,12 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
   it('MEJ-10: measured hourly cells alone qualify the month (no stats row, no proof)', async () => {
     const owner = await seedUser();
     const venue = await seedVenueWithData(owner, 'Café Capteur Seul');
-    await db.insert(screenhostAffluenceHourly).values([
-      { screenhostId: venue, date: '2026-06-15', hour: 13, value: 120 },
-      { screenhostId: venue, date: '2026-06-15', hour: 14, value: 90 },
-    ]);
+    await db.insert(screenhostAffluenceHourly).values(
+      bothHalves([
+        { screenhostId: venue, date: '2026-06-15', hour: 13, value: 120 },
+        { screenhostId: venue, date: '2026-06-15', hour: 14, value: 90 },
+      ]),
+    );
     const upload = vi
       .spyOn(storage, 'upload')
       .mockImplementation(async (params) => ({ key: params.key }));
@@ -396,7 +398,7 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
     // July cells: after June's bounds — June must stay ungenerated.
     await db
       .insert(screenhostAffluenceHourly)
-      .values([{ screenhostId: venue, date: '2026-07-02', hour: 13, value: 120 }]);
+      .values(bothHalves([{ screenhostId: venue, date: '2026-07-02', hour: 13, value: 120 }]));
     vi.spyOn(storage, 'upload').mockImplementation(async (params) => ({ key: params.key }));
 
     const result = await runMonthlyReportSweep(silentLog, NOW);

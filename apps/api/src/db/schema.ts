@@ -447,7 +447,15 @@ export const screenhostAffluence = pgTable(
     // opening_hour/closing_hour, which are local). Stored verbatim from the hub; see the note on
     // POST /api/internal/affluence for the upstream UTC violation that is banked, not patched here.
     dayOfWeek: integer('day_of_week').notNull(), // 1=Mon … 7=Sun (wedooh's convention), Tunis
-    hour: integer('hour').notNull(), // 0–23, Tunis
+    hour: integer('hour').notNull(), // 0–23, Tunis — DERIVED from slot, enforced by CHECK below
+    /**
+     * MEJ-13-B — the half-hour slot, 0–47: `slot = hour × 2 + half`, half 0 = :00–:29 (Tunis).
+     * THE KEY of this table since the wire gained half-hour resolution; `hour` stays as its
+     * derived companion so every pre-slice-C reader keeps working, and the CHECK below makes the
+     * two incapable of disagreeing. A cell is a LEVEL (people present), so an hour expands into
+     * both halves with the SAME value — never v/2 (see POST /api/internal/affluence).
+     */
+    slot: integer('slot').notNull(),
     estimatedImpressions: integer('estimated_impressions').notNull(),
     source: affluenceSource('source'), // nullable: unknown provenance
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -457,12 +465,17 @@ export const screenhostAffluence = pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
-    uniqueIndex('screenhost_affluence_slot_uq').on(table.screenhostId, table.dayOfWeek, table.hour),
+    uniqueIndex('screenhost_affluence_slot_uq').on(table.screenhostId, table.dayOfWeek, table.slot),
     check(
       'screenhost_affluence_day_range',
       sql`${table.dayOfWeek} >= 1 AND ${table.dayOfWeek} <= 7`,
     ),
     check('screenhost_affluence_hour_range', sql`${table.hour} >= 0 AND ${table.hour} <= 23`),
+    check('screenhost_affluence_slot_range', sql`${table.slot} >= 0 AND ${table.slot} <= 47`),
+    // MEJ-13-B — `hour` is slot's derived companion, not a second source of truth. Rule 3 of the
+    // receiver contract (slot wins, hour ignored) is only safe because a stored row cannot carry
+    // an hour that contradicts its slot.
+    check('screenhost_affluence_hour_matches_slot', sql`${table.hour} = ${table.slot} / 2`),
     check('screenhost_affluence_impressions_nonneg', sql`${table.estimatedImpressions} >= 0`),
   ],
 );
@@ -499,9 +512,15 @@ export const screenhostAffluenceHourly = pgTable(
       .references(() => screenhosts.id, { onDelete: 'cascade' }),
     /** Africa/Tunis calendar day, stored verbatim (see the contract above). */
     date: date('date').notNull(),
-    /** Africa/Tunis hour 0–23, stored verbatim — never shifted api-side. */
+    /** Africa/Tunis hour 0–23 — DERIVED from slot, enforced by CHECK below; never shifted. */
     hour: integer('hour').notNull(),
-    /** The rounded average of the sensor's counts in that hour. Measured only. */
+    /**
+     * MEJ-13-B — the half-hour slot, 0–47 (`slot = hour × 2 + half`, half 0 = :00–:29), Tunis.
+     * THE KEY. An hour-shaped push expands into both halves with the SAME value: the cell is a
+     * level, so half an hour of it is not half the people.
+     */
+    slot: integer('slot').notNull(),
+    /** The rounded average of the sensor's counts in that slot. Measured only. */
     value: integer('value').notNull(),
     receivedAt: timestamp('received_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -510,12 +529,17 @@ export const screenhostAffluenceHourly = pgTable(
     uniqueIndex('screenhost_affluence_hourly_cell_uq').on(
       table.screenhostId,
       table.date,
-      table.hour,
+      table.slot,
     ),
     check(
       'screenhost_affluence_hourly_hour_range',
       sql`${table.hour} >= 0 AND ${table.hour} <= 23`,
     ),
+    check(
+      'screenhost_affluence_hourly_slot_range',
+      sql`${table.slot} >= 0 AND ${table.slot} <= 47`,
+    ),
+    check('screenhost_affluence_hourly_hour_matches_slot', sql`${table.hour} = ${table.slot} / 2`),
     check('screenhost_affluence_hourly_value_nonneg', sql`${table.value} >= 0`),
   ],
 );

@@ -20,7 +20,7 @@ import { plusCalendarDays, premiereDateDisponible } from '../src/lib/campaign-da
 import { getDispatchConfig } from '../src/lib/dispatch/config.js';
 import { cartRoutes } from '../src/routes/cart.js';
 
-import { resetAuthTables } from './helpers/db-test-setup.js';
+import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 
 // CF-C1 (spec §1.10–1.14) — the panier. Real Postgres; session mocked. A "launchable" fixture
 // mirrors the E5 hand-computation: one venue (all-dow affluence 100, 8–18h) → C_max 540 for a
@@ -85,7 +85,7 @@ const seedVenue = async (ownerId: string, categoryId: string): Promise<string> =
   for (const dow of [1, 2, 3, 4, 5, 6, 7])
     for (let h = 8; h < 18; h += 1)
       rows.push({ screenhostId: id, dayOfWeek: dow, hour: h, estimatedImpressions: 100 });
-  await db.insert(screenhostAffluence).values(rows);
+  await db.insert(screenhostAffluence).values(bothHalves(rows));
   return id;
 };
 

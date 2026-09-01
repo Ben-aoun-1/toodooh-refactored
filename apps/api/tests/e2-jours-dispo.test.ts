@@ -31,7 +31,7 @@ import {
 } from '../src/lib/dispatch/redispatch.js';
 import { screenhostsRoutes } from '../src/routes/screenhosts.js';
 
-import { resetAuthTables } from './helpers/db-test-setup.js';
+import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 
 // E2 (VF jours_dispo_i) — owner-declared per-day unavailability: capacity/créneaux/C_max respect
 // it through ONE day source (PoolEntry.days); a fully-unavailable venue drops from the pool;
@@ -105,7 +105,7 @@ const seedVenue = async (
   for (const dow of opts.dows ?? [1, 2])
     for (let h = 8; h < 18; h += 1)
       rows.push({ screenhostId: shId, dayOfWeek: dow, hour: h, estimatedImpressions: 100 });
-  await db.insert(screenhostAffluence).values(rows);
+  await db.insert(screenhostAffluence).values(bothHalves(rows));
   if (opts.liveness) {
     const lastSeenAt =
       opts.liveness === 'alive'

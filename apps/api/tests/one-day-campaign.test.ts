@@ -16,7 +16,7 @@ import {
 } from '../src/db/schema.js';
 import { runDispatch } from '../src/lib/dispatch/dispatch-service.js';
 
-import { resetAuthTables } from './helpers/db-test-setup.js';
+import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 
 // EV1 rider (the CF-HF3 watch-item, ruled LEGAL): a ONE-DAY campaign (start = end). The web's
 // Période step was the only blocker in the chain — the server never mirrored the strict < and the
@@ -71,12 +71,14 @@ describe('one-day campaign (start = end) — the server chain', () => {
       })
       .returning();
     await db.insert(screenhostAffluence).values(
-      Array.from({ length: 10 }, (_, i) => ({
-        screenhostId: venue?.id ?? '',
-        dayOfWeek: 1,
-        hour: 8 + i,
-        estimatedImpressions: 100,
-      })),
+      bothHalves(
+        Array.from({ length: 10 }, (_, i) => ({
+          screenhostId: venue?.id ?? '',
+          dayOfWeek: 1,
+          hour: 8 + i,
+          estimatedImpressions: 100,
+        })),
+      ),
     );
 
     const advertiserId = await seedUser({ role: 'advertiser' });

@@ -30,7 +30,7 @@ import { EVENT_SPOT_MAX_SECONDS, validateEventSpot } from '../src/lib/event-pric
 import { adminEventsRoutes } from '../src/routes/admin-events.js';
 import { eventsRoutes } from '../src/routes/events.js';
 
-import { resetAuthTables } from './helpers/db-test-setup.js';
+import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 
 // EV2 — the EVENT pricing engine (its own module, D51): the A_max ratchet, the per-bloc D1
 // availability (full-bloc-only, per-Tunis-date, E2 + foreign reservations), the I_max/C_max
@@ -95,12 +95,14 @@ const seedVenue = async (opts: {
   const shId = sh?.id ?? '';
   if (opts.affluence?.length) {
     await db.insert(screenhostAffluence).values(
-      opts.affluence.map((v, i) => ({
-        screenhostId: shId,
-        dayOfWeek: 1 + (i % 7),
-        hour: 8 + Math.floor(i / 7),
-        estimatedImpressions: v,
-      })),
+      bothHalves(
+        opts.affluence.map((v, i) => ({
+          screenhostId: shId,
+          dayOfWeek: 1 + (i % 7),
+          hour: 8 + Math.floor(i / 7),
+          estimatedImpressions: v,
+        })),
+      ),
     );
   }
   return shId;
@@ -166,7 +168,9 @@ describe('EV2 — the event pricing engine (real Postgres)', () => {
       expect(await computeAmax(shId)).toBe(120); // history survives the shrink
       await db
         .insert(screenhostAffluence)
-        .values({ screenhostId: shId, dayOfWeek: 7, hour: 22, estimatedImpressions: 150 });
+        .values(
+          bothHalves({ screenhostId: shId, dayOfWeek: 7, hour: 22, estimatedImpressions: 150 }),
+        );
       expect(await computeAmax(shId)).toBe(150); // growth persists
       const [row] = await db
         .select()

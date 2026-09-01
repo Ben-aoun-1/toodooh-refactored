@@ -22,7 +22,7 @@ import { runDispatch } from '../src/lib/dispatch/dispatch-service.js';
 import { screenhostMatchesTargeting } from '../src/lib/dispatch/eligibility.js';
 import { adminCampaignsRoutes } from '../src/routes/admin-campaigns.js';
 
-import { resetAuthTables } from './helpers/db-test-setup.js';
+import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 
 // E5.1 (VF US-2.1, canonical) — EMPTY targeting = the whole network. The matcher passes-all on an
 // empty list, the NO_TARGETING refusal is retired, and a zero-line campaign proceeds through
@@ -88,7 +88,7 @@ const seedVenue = async (
   for (const dow of [1, 2])
     for (let h = 8; h < 18; h += 1)
       rows.push({ screenhostId: id, dayOfWeek: dow, hour: h, estimatedImpressions: 100 });
-  await db.insert(screenhostAffluence).values(rows);
+  await db.insert(screenhostAffluence).values(bothHalves(rows));
   return id;
 };
 

@@ -13,6 +13,7 @@ import {
   screenhosts,
 } from '../../db/schema.js';
 import { NOOP_TRACE, type EngineTrace } from '../engine-journal/trace.js';
+import { collapseHalvesSql } from '../half-hour-slots.js';
 
 import {
   broadcastableHours,
@@ -191,16 +192,26 @@ export const assemblePool = async (
 
   // Affluence (Ai) for the candidates; engaged broadcast SECONDS (other plans' allocations) cap the
   // per-screen F-budget below.
+  // MEJ-13-B — Ai is read per CLOCK HOUR (affByKey below, and the broadcastableHours loop), while
+  // the table now holds half-hour rows. Collapse to the hour in SQL: round(avg(halves)) is the
+  // ruled value, exact whenever the halves agree. Without the GROUP BY the keyed map would take
+  // whichever half the planner happened to return last — an arbitrary Ai on the dispatch,
+  // capacité, C_max and créneau-impressions path.
   const affluenceRows = candidateIds.length
     ? await executor
         .select({
           screenhostId: screenhostAffluence.screenhostId,
           dayOfWeek: screenhostAffluence.dayOfWeek,
           hour: screenhostAffluence.hour,
-          estimatedImpressions: screenhostAffluence.estimatedImpressions,
+          estimatedImpressions: collapseHalvesSql(screenhostAffluence.estimatedImpressions),
         })
         .from(screenhostAffluence)
         .where(inArray(screenhostAffluence.screenhostId, candidateIds))
+        .groupBy(
+          screenhostAffluence.screenhostId,
+          screenhostAffluence.dayOfWeek,
+          screenhostAffluence.hour,
+        )
     : [];
   const excludedAllocationIds = [
     ...(opts.excludeAllocationId === undefined ? [] : [opts.excludeAllocationId]),

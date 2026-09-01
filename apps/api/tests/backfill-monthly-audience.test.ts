@@ -11,7 +11,7 @@ import {
   users,
 } from '../src/db/schema.js';
 
-import { resetAuthTables } from './helpers/db-test-setup.js';
+import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 
 // PERF-QA2 — the backfill walk. A JOB, not a migration (ruled 2026-08-20): prod migrations run on
 // service start and an audience rewrite must never ride a deploy. DRY-RUN by default; --execute
@@ -59,7 +59,7 @@ const seedGrid = async (venueId: string, createdAt: Date): Promise<void> => {
       });
     }
   }
-  await db.insert(screenhostAffluence).values(rows);
+  await db.insert(screenhostAffluence).values(bothHalves(rows));
 };
 
 const zeroDaily = (month: string, days: number) =>

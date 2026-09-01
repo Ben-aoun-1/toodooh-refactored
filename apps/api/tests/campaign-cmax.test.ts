@@ -22,7 +22,7 @@ import { plusCalendarDays, premiereDateDisponible } from '../src/lib/campaign-da
 import { getDispatchConfig } from '../src/lib/dispatch/config.js';
 import { campaignsRoutes } from '../src/routes/campaigns.js';
 
-import { resetAuthTables } from './helpers/db-test-setup.js';
+import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 
 // E5 (VF US-1.3/1.4) — the C_max ceiling. Real Postgres; session mocked. The pool math is pinned
 // against a HAND-COMPUTED fixture (defaults: t10s=0.6, F=300s, CPM standard=15):
@@ -140,7 +140,7 @@ const seedVenue = async (
   for (const dow of dows)
     for (let h = 8; h < 18; h += 1)
       rows.push({ screenhostId: id, dayOfWeek: dow, hour: h, estimatedImpressions: affluence });
-  await db.insert(screenhostAffluence).values(rows);
+  await db.insert(screenhostAffluence).values(bothHalves(rows));
   return id;
 };
 

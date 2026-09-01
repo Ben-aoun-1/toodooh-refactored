@@ -35,6 +35,7 @@ import { REDISPATCH_HEARTBEAT_TOLERANCE_MS } from '../lib/dispatch/redispatch.js
 import { buildEligibilityPatch } from '../lib/eligibility-patch.js';
 import { createEngineTrace, type EngineTrace } from '../lib/engine-journal/trace.js';
 import { releaseBlocHours, runEventRefusalCascade } from '../lib/event-dispatch/dispatch.js';
+import { collapseHalvesSql } from '../lib/half-hour-slots.js';
 import { displayImpressionsSettled } from '../lib/impressions-display.js';
 import { measuredDays, measuredTotal } from '../lib/monthly-audience.js';
 import { loadPeriodAudienceInput } from '../lib/period-audience-source.js';
@@ -722,15 +723,24 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
 
     if (periodRange === null) {
       // ── the hub's rolling typical week, as served since AFF1 (« Votre audience ») ──
+      // MEJ-13-B — this read is HOUR-keyed and its `counts` / `filled` are RAW ROW COUNTS, so
+      // half-hour rows would double the provenance tallies from 168 to 336 on deploy alone, with
+      // every half still equal. Collapsing to the hour in SQL keeps the wire's numbers where they
+      // were. Provenance of a collapsed hour: the shared source when BOTH halves carry the same
+      // one, else NULL (unknown) — claiming « measured » for an hour that is half backup would
+      // overstate it. Slice C replaces this with the ruled « mixte » once the wire can say so.
       const slots = await db
         .select({
           dayOfWeek: screenhostAffluence.dayOfWeek,
           hour: screenhostAffluence.hour,
-          estimatedImpressions: screenhostAffluence.estimatedImpressions,
-          source: screenhostAffluence.source,
+          estimatedImpressions: collapseHalvesSql(screenhostAffluence.estimatedImpressions),
+          source: sql<
+            'measured' | 'backup' | null
+          >`case when count(*) = count(${screenhostAffluence.source}) and count(distinct ${screenhostAffluence.source}) = 1 then min(${screenhostAffluence.source}) else null end`,
         })
         .from(screenhostAffluence)
-        .where(eq(screenhostAffluence.screenhostId, owned.id));
+        .where(eq(screenhostAffluence.screenhostId, owned.id))
+        .groupBy(screenhostAffluence.dayOfWeek, screenhostAffluence.hour);
       for (const slot of slots) {
         const row = grid[slot.dayOfWeek - 1];
         const sourceRow = sources[slot.dayOfWeek - 1];

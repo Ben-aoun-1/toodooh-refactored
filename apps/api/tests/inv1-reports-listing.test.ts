@@ -15,7 +15,7 @@ import { runMonthlyReportSweep } from '../src/lib/report/monthly-job.js';
 import { screenhostsRoutes } from '../src/routes/screenhosts.js';
 import { storage } from '../src/storage/s3-storage.js';
 
-import { resetAuthTables } from './helpers/db-test-setup.js';
+import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 
 // HOTFIX INV-1 — the prod regression pin: at ~23:55 on 2026-08-07 the reports LISTING returned
 // empty for a venue whose stored July report still served through the by-month route. The pin
@@ -116,7 +116,9 @@ describe('INV-1 — listing survives catch-up sweep ticks over existing months (
     // Prod's data shape: lifetime affluence (candidate signal) + hub-pushed stats for June/July.
     await db
       .insert(screenhostAffluence)
-      .values({ screenhostId: venue, dayOfWeek: 1, hour: 12, estimatedImpressions: 40 });
+      .values(
+        bothHalves({ screenhostId: venue, dayOfWeek: 1, hour: 12, estimatedImpressions: 40 }),
+      );
     for (const month of ['2026-06', '2026-07']) {
       await db.insert(screenhostMonthlyStats).values({
         screenhostId: venue,

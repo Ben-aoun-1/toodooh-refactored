@@ -9,6 +9,7 @@ import {
   agents,
   businessSectors,
   governorates,
+  type NewScreenhostAffluence,
   screenhostAffluence,
   screenhostAffluenceHourly,
   screenhostMonthlyStats,
@@ -20,6 +21,7 @@ import { env } from '../env.js';
 import { generateUniqueAgentCode } from '../lib/agent-code.js';
 import { CALENDAR_DAY_MSG, ISO_DATE_RE, isCalendarDate } from '../lib/calendar-date.js';
 import { buildEligibilityPatch, type EligibilityPatchInput } from '../lib/eligibility-patch.js';
+import { collapseHalvesSql, hourOfSlot, slotsOfHour } from '../lib/half-hour-slots.js';
 import { mergeMonthlyAudience } from '../lib/monthly-audience.js';
 import { decryptWifiPassword } from '../lib/wifi-crypto.js';
 import { requireSyncKey } from '../middleware/require-sync-key.js';
@@ -51,20 +53,35 @@ const decryptWifi = (encrypted: string | null): string | null => {
   }
 };
 
+// MEJ-13-B — THE RECEIVER RULE, both endpoints, one shape (contract stated 2026-09-01):
+//   1. `slot` present            → store that slot verbatim.
+//   2. `slot` absent, `hour` set → store BOTH halves with the SAME value (a cell is a LEVEL —
+//                                  people present — so half an hour of it is not half the people;
+//                                  never v/2).
+//   3. both present              → `slot` wins, `hour` ignored. No error, no reconciliation: the
+//                                  sender is mid-roll and that is expected, not a fault.
+//   4. neither                   → 400, the cell is unusable.
+// Rule 2 is what lets the two boxes deploy in EITHER ORDER: an old-shape push produces exactly
+// what today's push produces, expanded, so the money path cannot move on unchanged input.
+const HALF_HOUR_CELL_MSG = 'each cell needs hour or slot';
+
 const affluenceBodySchema = z.object({
   slots: z
     .array(
-      z.object({
-        location_id: z.uuid(),
-        day_of_week: z.number().int().min(1).max(7),
-        hour: z.number().int().min(0).max(23),
-        estimated_impressions: z.number().int().min(0),
-        // AFF1 provenance (HUB-AFF1 sends it on every slot). Optional so a pre-AFF1 hub stays
-        // compatible: absent → NULL (unknown), never a default guess. Invalid → 400 like any field.
-        source: z.enum(['measured', 'backup']).optional(),
-      }),
+      z
+        .object({
+          location_id: z.uuid(),
+          day_of_week: z.number().int().min(1).max(7),
+          hour: z.number().int().min(0).max(23).optional(),
+          slot: z.number().int().min(0).max(47).optional(),
+          estimated_impressions: z.number().int().min(0),
+          // AFF1 provenance (HUB-AFF1 sends it on every slot). Optional so a pre-AFF1 hub stays
+          // compatible: absent → NULL (unknown), never a default guess. Invalid → 400 like any field.
+          source: z.enum(['measured', 'backup']).optional(),
+        })
+        .refine((c) => c.slot !== undefined || c.hour !== undefined, HALF_HOUR_CELL_MSG),
     )
-    .max(168 * 64), // generous batch ceiling (a full week is 168 slots/location)
+    .max(336 * 64), // batch ceiling — a full week is 336 half-hour slots/location
 });
 
 // AUD-HOURLY1-A — the MEASURED hourly series. `date`/`hour` are AFRICA/TUNIS clock values and are
@@ -79,16 +96,19 @@ const affluenceHourlyBodySchema = z.object({
         toodooh_screenhost_id: z.uuid(),
         cells: z
           .array(
-            z.object({
-              date: z
-                .string()
-                .regex(ISO_DATE_RE, 'date must be YYYY-MM-DD')
-                .refine(isCalendarDate, CALENDAR_DAY_MSG),
-              hour: z.number().int().min(0).max(23),
-              value: z.number().int().min(0),
-            }),
+            z
+              .object({
+                date: z
+                  .string()
+                  .regex(ISO_DATE_RE, 'date must be YYYY-MM-DD')
+                  .refine(isCalendarDate, CALENDAR_DAY_MSG),
+                hour: z.number().int().min(0).max(23).optional(),
+                slot: z.number().int().min(0).max(47).optional(),
+                value: z.number().int().min(0),
+              })
+              .refine((c) => c.slot !== undefined || c.hour !== undefined, HALF_HOUR_CELL_MSG),
           )
-          .max(24 * 400), // a venue's whole backfill window, hour by hour
+          .max(48 * 400), // a venue's whole backfill window, half-hour by half-hour
       }),
     )
     .max(200),
@@ -104,15 +124,24 @@ const emptyGrid = (): number[][] =>
 const loadAffluenceGrids = async (venueIds: string[]): Promise<Map<string, number[][]>> => {
   const grids = new Map<string, number[][]>();
   if (venueIds.length === 0) return grids;
+  // MEJ-13-B — the grid this feeds is HOUR-keyed (7×24) and lib/monthly-audience.ts SUMS a
+  // weekday's row into screenhost_monthly_stats. The table is half-hour rows, so collapse in SQL:
+  // round(avg(halves)) is the ruled hour value, and it returns the old number exactly whenever the
+  // two halves are equal — which is every cell an hour-shaped push writes.
   const slots = await db
     .select({
       screenhostId: screenhostAffluence.screenhostId,
       dayOfWeek: screenhostAffluence.dayOfWeek,
       hour: screenhostAffluence.hour,
-      estimatedImpressions: screenhostAffluence.estimatedImpressions,
+      estimatedImpressions: collapseHalvesSql(screenhostAffluence.estimatedImpressions),
     })
     .from(screenhostAffluence)
-    .where(inArray(screenhostAffluence.screenhostId, venueIds));
+    .where(inArray(screenhostAffluence.screenhostId, venueIds))
+    .groupBy(
+      screenhostAffluence.screenhostId,
+      screenhostAffluence.dayOfWeek,
+      screenhostAffluence.hour,
+    );
   for (const slot of slots) {
     let grid = grids.get(slot.screenhostId);
     if (!grid) {
@@ -325,38 +354,77 @@ export const internalRoutes: FastifyPluginAsync<{ syncKey?: string }> = async (a
     const knownIds = new Set(known.map((k) => k.id));
     const unknownLocations = requestedIds.filter((id) => !knownIds.has(id));
 
-    const toUpsert = slots.filter((s) => knownIds.has(s.location_id));
-    let upserted = 0;
-    if (toUpsert.length > 0) {
+    // MEJ-13-B — expand each wire cell onto the slots it addresses (rules 1 and 2), then dedupe
+    // inside the batch. Two writes are needed:
+    //  • EXPLICIT beats EXPANDED for the same slot. Rule 3 says slot wins over hour within one
+    //    cell; a mid-roll sender that emits both shapes in one batch is the same situation across
+    //    cells, so an hour-expansion must never overwrite a slot the sender stated outright.
+    //    (Judgment call in a gap the contract does not cover — flagged in the PR.)
+    //  • Among equal precedence, LAST wins, matching the endpoint's latest-value-wins semantics.
+    const byCell = new Map<string, { explicit: boolean; row: NewScreenhostAffluence }>();
+    for (const cell of slots) {
+      if (!knownIds.has(cell.location_id)) continue;
+      const explicit = cell.slot !== undefined;
+      const targets = explicit ? [cell.slot as number] : slotsOfHour(cell.hour as number);
+      for (const slot of targets) {
+        const key = `${cell.location_id}|${cell.day_of_week}|${slot}`;
+        if (byCell.get(key)?.explicit === true && !explicit) continue;
+        byCell.set(key, {
+          explicit,
+          row: {
+            screenhostId: cell.location_id,
+            dayOfWeek: cell.day_of_week,
+            hour: hourOfSlot(slot), // DERIVED from slot — never the wire's hour (rule 3)
+            slot,
+            estimatedImpressions: cell.estimated_impressions,
+            source: cell.source ?? null,
+          },
+        });
+      }
+    }
+    const rows = [...byCell.values()].map((entry) => entry.row);
+    // `upserted` is a RECEIPT TO THE SENDER about what IT sent, so it stays wire cells: how many
+    // rows we chose to write is our storage detail, and a receipt that doubles across a deploy
+    // boundary invites someone to open an incident. The row count rides along as its own field.
+    // Distinct wire cells accepted — a sender that repeats one cell is not credited twice, which
+    // is the receipt semantics these endpoints have always had.
+    const acceptedCells = new Set(
+      slots
+        .filter((cell) => knownIds.has(cell.location_id))
+        .map(
+          (cell) =>
+            `${cell.location_id}|${cell.day_of_week}|${cell.slot !== undefined ? `s${cell.slot}` : `h${cell.hour}`}`,
+        ),
+    ).size;
+
+    if (rows.length > 0) {
+      const CHUNK = 500;
       await db.transaction(async (tx) => {
-        for (const slot of toUpsert) {
+        for (let i = 0; i < rows.length; i += CHUNK) {
           await tx
             .insert(screenhostAffluence)
-            .values({
-              screenhostId: slot.location_id,
-              dayOfWeek: slot.day_of_week,
-              hour: slot.hour,
-              estimatedImpressions: slot.estimated_impressions,
-              source: slot.source ?? null,
-            })
+            .values(rows.slice(i, i + CHUNK))
             .onConflictDoUpdate({
               target: [
                 screenhostAffluence.screenhostId,
                 screenhostAffluence.dayOfWeek,
-                screenhostAffluence.hour,
+                screenhostAffluence.slot,
               ],
               set: {
-                estimatedImpressions: slot.estimated_impressions,
-                source: slot.source ?? null,
+                estimatedImpressions: sql`excluded.estimated_impressions`,
+                source: sql`excluded.source`,
                 updatedAt: new Date(),
               },
             });
-          upserted += 1;
         }
       });
     }
 
-    return reply.status(200).send({ upserted, unknown_locations: unknownLocations });
+    return reply.status(200).send({
+      upserted: acceptedCells,
+      slot_rows: rows.length,
+      unknown_locations: unknownLocations,
+    });
   });
 
   // ── C1h: POST /api/internal/affluence-hourly (AUD-HOURLY1-A) ────────────────
@@ -394,19 +462,44 @@ export const internalRoutes: FastifyPluginAsync<{ syncKey?: string }> = async (a
     // DEDUPE INSIDE THE BATCH FIRST — last cell wins. A multi-row upsert whose own values collide
     // on the conflict target fails outright ("cannot affect row a second time"), so a hub that
     // repeats a cell within one push would otherwise 500 instead of being tolerated.
-    const byCell = new Map<string, typeof screenhostAffluenceHourly.$inferInsert>();
+    // MEJ-13-B — same expansion and same precedence as the sibling endpoint (see there).
+    const byCell = new Map<
+      string,
+      { explicit: boolean; row: typeof screenhostAffluenceHourly.$inferInsert }
+    >();
     for (const place of places) {
       if (!knownIds.has(place.toodooh_screenhost_id)) continue;
       for (const cell of place.cells) {
-        byCell.set(`${place.toodooh_screenhost_id}|${cell.date}|${cell.hour}`, {
-          screenhostId: place.toodooh_screenhost_id,
-          date: cell.date, // VERBATIM — Tunis clock, never shifted here
-          hour: cell.hour, // VERBATIM
-          value: cell.value,
-        });
+        const explicit = cell.slot !== undefined;
+        const targets = explicit ? [cell.slot as number] : slotsOfHour(cell.hour as number);
+        for (const slot of targets) {
+          const key = `${place.toodooh_screenhost_id}|${cell.date}|${slot}`;
+          if (byCell.get(key)?.explicit === true && !explicit) continue;
+          byCell.set(key, {
+            explicit,
+            row: {
+              screenhostId: place.toodooh_screenhost_id,
+              date: cell.date, // VERBATIM — Tunis clock, never shifted here
+              hour: hourOfSlot(slot), // DERIVED from slot (rule 3)
+              slot,
+              value: cell.value,
+            },
+          });
+        }
       }
     }
-    const rows = [...byCell.values()];
+    const rows = [...byCell.values()].map((entry) => entry.row);
+    // Wire cells, not rows — the same receipt rule as the sibling endpoint above.
+    const acceptedCells = new Set(
+      places
+        .filter((place) => knownIds.has(place.toodooh_screenhost_id))
+        .flatMap((place) =>
+          place.cells.map(
+            (cell) =>
+              `${place.toodooh_screenhost_id}|${cell.date}|${cell.slot !== undefined ? `s${cell.slot}` : `h${cell.hour}`}`,
+          ),
+        ),
+    ).size;
 
     if (rows.length > 0) {
       const CHUNK = 500;
@@ -419,7 +512,7 @@ export const internalRoutes: FastifyPluginAsync<{ syncKey?: string }> = async (a
               target: [
                 screenhostAffluenceHourly.screenhostId,
                 screenhostAffluenceHourly.date,
-                screenhostAffluenceHourly.hour,
+                screenhostAffluenceHourly.slot,
               ],
               set: {
                 value: sql`excluded.value`,
@@ -430,7 +523,11 @@ export const internalRoutes: FastifyPluginAsync<{ syncKey?: string }> = async (a
       });
     }
 
-    return reply.status(200).send({ upserted: rows.length, unknown_locations: unknownLocations });
+    return reply.status(200).send({
+      upserted: acceptedCells,
+      slot_rows: rows.length,
+      unknown_locations: unknownLocations,
+    });
   });
 
   // ── C2: POST /api/internal/monthly-stats ────────────────────────────────────

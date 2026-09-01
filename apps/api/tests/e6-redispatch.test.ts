@@ -29,7 +29,7 @@ import {
 } from '../src/lib/dispatch/redispatch.js';
 import { screenhostsRoutes } from '../src/routes/screenhosts.js';
 
-import { resetAuthTables } from './helpers/db-test-setup.js';
+import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 
 // E6 — redispatching, real Postgres. Fixtures pin the engine numbers: cpm 10 / s 10 → T 0.6,
 // seuil = seuilImpressions(10) = 2000; venues aff 100, hours 8–18 over a Mon–Tue window (Hi = 20,
@@ -111,7 +111,7 @@ const seedVenue = async (
   for (const dow of [1, 2])
     for (let h = 8; h < 18; h += 1)
       rows.push({ screenhostId: shId, dayOfWeek: dow, hour: h, estimatedImpressions: aff });
-  await db.insert(screenhostAffluence).values(rows);
+  await db.insert(screenhostAffluence).values(bothHalves(rows));
 
   let screenId: string | null = null;
   if (liveness !== 'no-screen') {

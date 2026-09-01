@@ -18,7 +18,7 @@ import {
 } from '../src/db/schema.js';
 import { screenhostsRoutes } from '../src/routes/screenhosts.js';
 
-import { resetAuthTables } from './helpers/db-test-setup.js';
+import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 
 // Integration suite — real Postgres. The Lane F owner performance reads: /:id/profile (venue
 // identity card + hub-synced ratios), /:id/monthly-stats (the JSON read of the hub's actual
@@ -114,13 +114,15 @@ describe('owner performance reads (owner-scoped, real Postgres)', () => {
 
     const seedBackupWeek = async (sh: string, value: number): Promise<void> => {
       await db.insert(screenhostAffluence).values(
-        Array.from({ length: 7 }, (_, i) => ({
-          screenhostId: sh,
-          dayOfWeek: i + 1,
-          hour: 10,
-          estimatedImpressions: value,
-          source: 'backup' as const,
-        })),
+        bothHalves(
+          Array.from({ length: 7 }, (_, i) => ({
+            screenhostId: sh,
+            dayOfWeek: i + 1,
+            hour: 10,
+            estimatedImpressions: value,
+            source: 'backup' as const,
+          })),
+        ),
       );
     };
 
@@ -176,13 +178,15 @@ describe('owner performance reads (owner-scoped, real Postgres)', () => {
     it('the backup grid never answers for days BEFORE the venue was onboarded', async () => {
       const me = await seedUser();
       const sh = await seedScreenhost(me, { createdAt: new Date('2026-08-26T09:00:00Z') });
-      await db.insert(screenhostAffluence).values({
-        screenhostId: sh,
-        dayOfWeek: 1, // Monday only — the phantom-peak shape
-        hour: 13,
-        estimatedImpressions: 1396,
-        source: 'backup',
-      });
+      await db.insert(screenhostAffluence).values(
+        bothHalves({
+          screenhostId: sh,
+          dayOfWeek: 1, // Monday only — the phantom-peak shape
+          hour: 13,
+          estimatedImpressions: 1396,
+          source: 'backup',
+        }),
+      );
       mockSession(me);
 
       // 03, 10, 17 and 24/08 are Mondays before onboarding; 31/08 is the Monday after it.
@@ -207,13 +211,15 @@ describe('owner performance reads (owner-scoped, real Postgres)', () => {
         peakDayOfWeek: 1,
         peakHour: 13,
       });
-      await db.insert(screenhostAffluence).values({
-        screenhostId: sh,
-        dayOfWeek: 1,
-        hour: 13,
-        estimatedImpressions: 1396,
-        source: 'backup',
-      });
+      await db.insert(screenhostAffluence).values(
+        bothHalves({
+          screenhostId: sh,
+          dayOfWeek: 1,
+          hour: 13,
+          estimatedImpressions: 1396,
+          source: 'backup',
+        }),
+      );
       mockSession(me);
 
       const body = (
