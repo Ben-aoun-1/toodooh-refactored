@@ -14,6 +14,10 @@ import {
   DEFAULT_PERIOD_SELECTION,
   parsePeriodSelection,
   writePeriodSelection,
+  PARKED_PERIOD_NOTE,
+  PERIOD_PILLS,
+  isPeriodParked,
+  periodPillLabel,
 } from './performance-period';
 
 const TODAY = new Date(2026, 6, 7); // 2026-07-07 (local)
@@ -170,5 +174,44 @@ describe('writePeriodSelection — a shareable link, other params untouched', ()
       const written = writePeriodSelection(new URLSearchParams(), selection);
       expect(parsePeriodSelection(written)).toEqual(selection);
     }
+  });
+});
+
+// PERF-CUSTOM1 (opérateur, 2026-09-01) — « Personnalisé » est PARQUÉ, pas réparé. Ce dépôt n'a pas
+// de harnais de rendu (vitest tourne en environnement node, un .test.tsx n'exécute AUCUN test), donc
+// l'état « désactivé » et son libellé vivent dans ce lib pur où un test peut les atteindre ; le
+// composant s'y branche. C'est l'équivalent le plus proche de l'assertion de rendu demandée.
+describe('PERF-CUSTOM1 — la pastille « Personnalisé » est parquée', () => {
+  it('custom est la SEULE pastille parquée', () => {
+    expect(PERIOD_PILLS.filter((p) => isPeriodParked(p.key)).map((p) => p.key)).toEqual(['custom']);
+  });
+
+  it('les autres pastilles restent utilisables, dans leur ordre', () => {
+    expect(PERIOD_PILLS.filter((p) => !isPeriodParked(p.key)).map((p) => p.key)).toEqual([
+      '7d',
+      '28d',
+      '3m',
+      '12m',
+      'all',
+    ]);
+  });
+
+  it('la pastille parquée annonce « bientôt disponible »', () => {
+    expect(PARKED_PERIOD_NOTE).toBe('bientôt disponible');
+    expect(periodPillLabel({ key: 'custom', label: 'Personnalisé' })).toBe(
+      'Personnalisé — bientôt disponible',
+    );
+  });
+
+  it('une pastille utilisable garde son libellé nu', () => {
+    expect(periodPillLabel({ key: '28d', label: '28 derniers jours' })).toBe('28 derniers jours');
+  });
+
+  it('le défaut 28 jours et le chemin URL sont inchangés (un dépaquage les retrouve)', () => {
+    expect(DEFAULT_PERIOD_SELECTION.period).toBe('28d');
+    // La branche custom fonctionne toujours dès que les DEUX bornes sont présentes.
+    expect(
+      parsePeriodSelection(new URLSearchParams('periode=custom&du=2026-08-01&au=2026-08-15')),
+    ).toEqual({ period: 'custom', custom: { from: '2026-08-01', to: '2026-08-15' } });
   });
 });
