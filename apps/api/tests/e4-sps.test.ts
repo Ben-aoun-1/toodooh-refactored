@@ -18,14 +18,17 @@ import {
   screens,
   users,
 } from '../src/db/schema.js';
+import type { EligibleScreenhost } from '../src/lib/dispatch/selection.js';
 import { orderedQueue } from '../src/lib/dispatch/selection.js';
 import { DISPATCH_CONFIG_DEFAULTS } from '../src/lib/dispatch/thresholds.js';
 import {
   EVENT_RESPECT_DEFAULT,
   computeSps,
   recomputeVenueSps,
+  SPS_NEUTRAL,
   runSpsRecomputeTick,
   spsComputable,
+  spsObservationsFor,
   tunisWeekStart,
   weightedSps,
 } from '../src/lib/sps-score.js';
@@ -413,6 +416,72 @@ describe('E4 — the SPS score engine (real Postgres)', () => {
         .from(screenhosts)
         .where(eq(screenhosts.id, shId));
       expect(Number(row?.sps)).toBe(90);
+    });
+  });
+
+  // SPS-DISPATCH1 (ruled 2026-09-01) — dispatch must not rank a venue on a score made of
+  // defaults. The predicate is the one MEJ-14b already wrote; what is new is that dispatch reads
+  // it through a BATCHED loader, because computeSps per candidate would be six queries a venue on
+  // the hot path. The two must never disagree: a venue reading « À venir » to its owner while
+  // ranking on its 90 is exactly the divergence this lane removes.
+  describe('SPS-DISPATCH1 — the batched observations loader AGREES with computeSps', () => {
+    it('venue by venue, across every observation kind, batched === per-venue', async () => {
+      const bare = await seedVenue(); // nothing at all
+      const decided = await seedVenue();
+      const accepted = await seedVenue();
+
+      const p1 = await seedCampaignWithPlan();
+      await seedAllocation(p1.planId, decided.shId, { statut: 'REFUSE', createdAt: NOW });
+      const p2 = await seedCampaignWithPlan();
+      await seedAllocation(p2.planId, accepted.shId, { statut: 'ACCEPTE', createdAt: NOW });
+
+      const ids = [bare.shId, decided.shId, accepted.shId];
+      const batched = await spsObservationsFor(ids, NOW);
+      for (const id of ids) {
+        const perVenue = (await computeSps(id, NOW)).observations;
+        // Compared as a labelled string so a failure names WHICH venue and WHICH counter drifted.
+        expect(`${id}: ${JSON.stringify(batched.get(id))}`).toBe(
+          `${id}: ${JSON.stringify(perVenue)}`,
+        );
+      }
+      // …and the batch actually distinguishes them, or the agreement above would be vacuous.
+      expect(spsComputable(batched.get(bare.shId)!)).toBe(false);
+      expect(spsComputable(batched.get(decided.shId)!)).toBe(true);
+      expect(spsComputable(batched.get(accepted.shId)!)).toBe(true);
+    });
+
+    it('an empty id list is a no-op, and an unknown id simply has no entry', async () => {
+      expect((await spsObservationsFor([], NOW)).size).toBe(0);
+      const map = await spsObservationsFor(['11111111-1111-4111-8111-111111111111'], NOW);
+      expect(spsComputable(map.get('11111111-1111-4111-8111-111111111111')!)).toBe(false);
+    });
+  });
+
+  describe('SPS-DISPATCH1 — the NEUTRAL midpoint, and what it must NOT be', () => {
+    it('an unscored venue sorts BETWEEN an earned score above and an earned score below', () => {
+      // The ruling in one assertion: not first (it has earned nothing), not last (a new screen
+      // can only earn a score by receiving campaigns, so last place is an onboarding deadlock).
+      const entry = (id: string, sps: number): EligibleScreenhost => ({
+        id,
+        sps,
+        anciennete: 0,
+        revenuJour: 0,
+        activeToday: false,
+        residualCapacity: 1000,
+      });
+      const order = orderedQueue(
+        [entry('c-low', 20), entry('b-unscored', SPS_NEUTRAL), entry('a-high', 80)],
+        1_000_000,
+      ).map((e) => e.id);
+      expect(order).toEqual(['a-high', 'b-unscored', 'c-low']);
+      expect(order[0]).not.toBe('b-unscored');
+      expect(order[order.length - 1]).not.toBe('b-unscored');
+    });
+
+    it('the neutral value is the midpoint of the range, not an endpoint', () => {
+      expect(SPS_NEUTRAL).toBe(50);
+      expect(SPS_NEUTRAL).toBeGreaterThan(0);
+      expect(SPS_NEUTRAL).toBeLessThan(100);
     });
   });
 

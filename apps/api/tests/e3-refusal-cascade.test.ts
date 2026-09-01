@@ -11,6 +11,8 @@ import {
   campaignDispatchPlan,
   campaigns,
   campaignTargeting,
+  eventAttestations,
+  events,
   notifications,
   screenhostAffluence,
   screenhosts,
@@ -125,6 +127,23 @@ const seedVenue = async (
     for (let h = 8; h < 18; h += 1)
       rows.push({ screenhostId: id, dayOfWeek: dow, hour: h, estimatedImpressions: affluence });
   await db.insert(screenhostAffluence).values(bothHalves(rows));
+
+  // SPS-DISPATCH1 — these venues are ordered BY their stored sps, which is the whole point of the
+  // cascade tests. A venue with no history at all now ranks at the neutral midpoint instead (its
+  // stored score would be made of defaults), so give each one a single real observation: an
+  // inspection it passed. That leaves every SPS VALUE untouched — respect was already 100 by the
+  // EVENT_RESPECT_DEFAULT rule — and simply makes the stored score an earned one.
+  const [ev] = await db
+    .insert(events)
+    .values({
+      name: `Cascade inspection ${sps}`,
+      kickoffAt: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000),
+      endsAt: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000),
+    })
+    .returning();
+  await db
+    .insert(eventAttestations)
+    .values({ eventId: ev?.id ?? '', screenhostId: id, authorId: ownerId, respecte: true });
   return id;
 };
 
