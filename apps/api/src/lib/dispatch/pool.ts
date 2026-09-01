@@ -14,6 +14,7 @@ import {
 } from '../../db/schema.js';
 import { NOOP_TRACE, type EngineTrace } from '../engine-journal/trace.js';
 import { collapseHalvesSql } from '../half-hour-slots.js';
+import { SPS_NEUTRAL, spsComputable, spsObservationsFor } from '../sps-score.js';
 
 import {
   broadcastableHours,
@@ -313,6 +314,10 @@ export const assemblePool = async (
         )
     : [];
 
+  // SPS-DISPATCH1 — which candidates have a score that rests on anything. Batched: calling
+  // computeSps per candidate would be six queries a venue on the hot path.
+  const spsObservations = await spsObservationsFor(candidateIds);
+
   const affByKey = new Map<string, number>();
   for (const a of affluenceRows)
     affByKey.set(`${a.screenhostId}:${a.dayOfWeek}:${a.hour}`, a.estimatedImpressions);
@@ -390,9 +395,21 @@ export const assemblePool = async (
       );
       continue;
     }
+    // SPS-DISPATCH1 (ruled 2026-09-01) — an unscored venue does NOT carry its defaults-90 into the
+    // ordering. Three of the four SPS variables answer 100 to an empty set, so a never-connected
+    // venue scores 90 and outranked venues live for months. It ranks at the NEUTRAL midpoint
+    // instead: « we do not know yet » is not a claim in either direction.
+    //
+    // DISPLAY-ONLY ELSEWHERE, ORDERING-ONLY HERE: `screenhosts.sps` still stores the real 90, the
+    // daily job still writes it, C_max and capacité are untouched (they read affluence, never the
+    // score), and the owner still sees « À venir » via MEJ-14b. The ONE thing that changes is this
+    // number's use as a sort key — and it is the SAME predicate the owner surfaces use, so the two
+    // can never disagree about whether a venue is scored.
+    const observations = spsObservations.get(sh.id);
+    const scored = observations !== undefined && spsComputable(observations);
     pool.push({
       id: sh.id,
-      sps: Number(sh.sps),
+      sps: scored ? Number(sh.sps) : SPS_NEUTRAL,
       // V1 STUB (hardcoded — NOT registre-derived): no last-service / per-day-revenue registre
       // exists yet, so the dignity rule + ancienneté tiebreak are INERT until one does. Only
       // `engagements` (above) is genuinely derived from stored plans. TODO: wire a registre.
