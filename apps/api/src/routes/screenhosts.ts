@@ -846,7 +846,14 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       }),
     );
     return reply.status(200).send({
-      days: merged.days,
+      // MEJ-R2 — `has_measured` rides along so the page applies the SAME peak eligibility as the
+      // PDF twin (snake_case, like every other key on this wire).
+      days: merged.days.map((d) => ({
+        date: d.date,
+        audience: d.audience,
+        source: d.source,
+        has_measured: d.hasMeasured,
+      })),
       total_audience: merged.total,
       measured_days: merged.measuredDays,
       estimated_days: merged.estimatedDays,

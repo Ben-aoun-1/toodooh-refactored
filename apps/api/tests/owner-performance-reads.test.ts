@@ -142,9 +142,11 @@ describe('owner performance reads (owner-scoped, real Postgres)', () => {
       const res = await get(`/api/screenhosts/${sh}/audience?from=2026-08-03&to=2026-08-04`);
       expect(res.statusCode).toBe(200);
       const body = res.json() as AudienceBody;
+      // MEJ-R2 — `has_measured` rides the wire: the measured day is eligible for the peak, the
+      // grid-filled one is not.
       expect(body.days).toEqual([
-        { date: '2026-08-03', audience: 500, source: 'measured' },
-        { date: '2026-08-04', audience: 80, source: 'estimated' },
+        { date: '2026-08-03', audience: 500, source: 'measured', has_measured: true },
+        { date: '2026-08-04', audience: 80, source: 'estimated', has_measured: false },
       ]);
       expect(body.total_audience).toBe(580);
       expect(body.measured_days).toBe(1);
@@ -187,7 +189,9 @@ describe('owner performance reads (owner-scoped, real Postgres)', () => {
       const body = (
         await get(`/api/screenhosts/${sh}/audience?from=2026-08-03&to=2026-08-31`)
       ).json() as AudienceBody;
-      expect(body.days).toEqual([{ date: '2026-08-31', audience: 1396, source: 'estimated' }]);
+      expect(body.days).toEqual([
+        { date: '2026-08-31', audience: 1396, source: 'estimated', has_measured: false },
+      ]);
       expect(body.total_audience).toBe(1396); // not 4 × 1 396
       expect(body.days.every((d) => d.date >= '2026-08-26')).toBe(true);
     });
@@ -216,8 +220,8 @@ describe('owner performance reads (owner-scoped, real Postgres)', () => {
         await get(`/api/screenhosts/${sh}/audience?from=2026-08-03&to=2026-08-31`)
       ).json() as AudienceBody;
       expect(body.days).toEqual([
-        { date: '2026-08-10', audience: 700, source: 'measured' }, // kept: a reading is a fact
-        { date: '2026-08-31', audience: 1396, source: 'estimated' },
+        { date: '2026-08-10', audience: 700, source: 'measured', has_measured: true }, // a fact
+        { date: '2026-08-31', audience: 1396, source: 'estimated', has_measured: false },
       ]);
       expect(body.measured_days).toBe(1);
       expect(body.estimated_days).toBe(1);

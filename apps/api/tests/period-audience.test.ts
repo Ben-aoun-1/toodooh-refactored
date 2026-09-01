@@ -71,7 +71,9 @@ describe("AUD-HOURLY1-C — Mejri's scenario: the sensor goes dark for ONE hour"
 
   it("S01's total carries the forced value — « rien ne s'est passé » is over", () => {
     expect(result.total).toBe(42); // 12 measured + 30 backup, NOT 12
-    expect(result.days).toEqual([{ date: TODAY, audience: 42, source: 'estimated' }]);
+    expect(result.days).toEqual([
+      { date: TODAY, audience: 42, source: 'estimated', hasMeasured: true },
+    ]);
     // One backup hour makes the DAY an estimation (AFF1's dayProvenance ruling), so it can never
     // become the « Pic d'audience » (MEJ-R1).
     expect(result.measuredDays).toBe(0);
@@ -110,7 +112,9 @@ describe('AUD-HOURLY1-C — the four merge rules', () => {
       input({ hourly: hours(TODAY, [[3, 0]]), grid: emptyBackupGrid() }),
     );
     expect(result.cells).toEqual([{ date: TODAY, hour: 3, value: 0, source: 'measured' }]);
-    expect(result.days).toEqual([{ date: TODAY, audience: 0, source: 'measured' }]);
+    expect(result.days).toEqual([
+      { date: TODAY, audience: 0, source: 'measured', hasMeasured: true },
+    ]);
   });
 
   it('rules 2 and 3 together: the dark hour stands at 0, a never-measured open hour is filled', () => {
@@ -175,7 +179,9 @@ describe('AUD-HOURLY1-C — the four merge rules', () => {
         onboardedIso: '2026-08-26',
       }),
     );
-    expect(result.days).toEqual([{ date: TODAY, audience: 30, source: 'estimated' }]);
+    expect(result.days).toEqual([
+      { date: TODAY, audience: 30, source: 'estimated', hasMeasured: false },
+    ]);
   });
 });
 
@@ -200,7 +206,9 @@ describe('AUD-HOURLY1-C — day precedence (the rolling 35-day window)', () => {
     );
     // 12, not 912 and not 900 — the hourly window owns this date.
     expect(result.total).toBe(12);
-    expect(result.days).toEqual([{ date: TODAY, audience: 12, source: 'measured' }]);
+    expect(result.days).toEqual([
+      { date: TODAY, audience: 12, source: 'measured', hasMeasured: true },
+    ]);
   });
 
   it('history older than the window still reads from monthly_stats, at DAY granularity', () => {
@@ -211,7 +219,9 @@ describe('AUD-HOURLY1-C — day precedence (the rolling 35-day window)', () => {
         grid: gridWith([[MONDAY, 9, 30]]),
       }),
     );
-    expect(result.days).toEqual([{ date: '2026-07-27', audience: 400, source: 'measured' }]);
+    expect(result.days).toEqual([
+      { date: '2026-07-27', audience: 400, source: 'measured', hasMeasured: true },
+    ]);
     expect(result.cells).toEqual([]); // no hour detail → contributes nothing to S02
   });
 
@@ -249,6 +259,55 @@ describe('AUD-HOURLY1-C — day precedence (the rolling 35-day window)', () => {
       }),
     );
     expect(result.days.map((d) => d.date)).toEqual([TODAY]);
+  });
+});
+
+// MEJ-R2 (architect 2026-09-01) — every day carries whether it holds AT LEAST ONE measured cell.
+// `source` answers the stricter "is EVERY cell measured"; both are needed and they differ exactly
+// on the mixed day that started this ticket.
+describe('periodAudience — hasMeasured, the peak-eligibility flag', () => {
+  it('a MIXED day is source:estimated but hasMeasured:true (Mejri 31/08)', () => {
+    const result = periodAudience(
+      input({
+        hourly: hours(TODAY, [
+          [9, 373],
+          [10, 0], // the outage hour, forced from the grid
+        ]),
+        grid: gridWith([[MONDAY, 10, 30]]),
+      }),
+    );
+    expect(result.days).toEqual([
+      { date: TODAY, audience: 403, source: 'estimated', hasMeasured: true },
+    ]);
+  });
+
+  it('a grid-ONLY day is hasMeasured:false — never eligible for the peak', () => {
+    const result = periodAudience(input({ grid: gridWith([[MONDAY, 9, 1396]]) }));
+    expect(result.days).toEqual([
+      { date: TODAY, audience: 1396, source: 'estimated', hasMeasured: false },
+    ]);
+  });
+
+  it('day-granularity measured history is hasMeasured:true', () => {
+    const result = periodAudience(
+      input({
+        range: { from: '2026-07-27', to: '2026-07-27' }, // a Monday outside the hourly window
+        months: [
+          { month: '2026-07', daily: [{ date: '2026-07-27', audience: 400, source: 'measured' }] },
+        ],
+        grid: gridWith([[MONDAY, 9, 30]]),
+      }),
+    );
+    expect(result.days).toEqual([
+      { date: '2026-07-27', audience: 400, source: 'measured', hasMeasured: true },
+    ]);
+  });
+
+  it('an all-measured day is both source:measured and hasMeasured:true', () => {
+    const result = periodAudience(input({ hourly: hours(TODAY, [[9, 12]]) }));
+    expect(result.days).toEqual([
+      { date: TODAY, audience: 12, source: 'measured', hasMeasured: true },
+    ]);
   });
 });
 

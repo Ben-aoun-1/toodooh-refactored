@@ -332,6 +332,29 @@ describe('assembleReportData (real Postgres)', () => {
     expect(weekend?.heatKinds[0]?.[4]).toBe('none'); // Monday is not
   });
 
+  // MEJ-R2 (architect 2026-09-01) — the PDF's peak follows the same rule as the page: the highest
+  // MERGED day among the days holding ≥1 measured cell. Under MEJ-R1 the mixed day below was
+  // skipped whole and the smaller all-measured day was named instead.
+  it('MEJ-R2: a MIXED day outranks a smaller all-measured day in the PDF peak', async () => {
+    const owner = await seedUser();
+    const venue = await seedScreenhost(owner, { openingHour: 8, closingHour: 22 });
+    // A Monday-12h grid cell: it stands in on 01/06 (a Monday), making that day MIXED.
+    await db
+      .insert(screenhostAffluence)
+      .values([
+        { screenhostId: venue, dayOfWeek: 1, hour: 12, estimatedImpressions: 80, source: 'backup' },
+      ]);
+    await db.insert(screenhostAffluenceHourly).values([
+      { screenhostId: venue, date: '2026-06-01', hour: 13, value: 300 }, // Monday, measured
+      { screenhostId: venue, date: '2026-06-02', hour: 13, value: 50 }, // Tuesday, all-measured
+    ]);
+
+    const data = await assembleReportData(venue, { from: '2026-06-01', to: '2026-06-02' }, TODAY);
+    // 01/06 = 300 measured + 80 forced from the grid = 380, and it holds a measurement.
+    expect(data?.kpis.peak).toEqual({ value: 380, date: '2026-06-01' });
+    expect(data?.kpis.global).toBe(430); // the tile can never exceed « Audience globale »
+  });
+
   it('AUD-HOURLY1-C: a MEASURED hourly cell reaches the PDF S02 as measured', async () => {
     const owner = await seedUser();
     const venue = await seedScreenhost(owner, { openingHour: 8, closingHour: 22 });
