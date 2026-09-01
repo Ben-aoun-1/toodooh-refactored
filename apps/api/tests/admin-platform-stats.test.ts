@@ -45,7 +45,14 @@ const seedUser = async (values: Partial<NewUser> = {}): Promise<string> => {
 };
 
 interface StatsBody {
-  users: { total: number; pending: number; approved: number; owners: number; advertisers: number };
+  users: {
+    total: number;
+    pending: number;
+    approved: number;
+    pending_owners: number;
+    owners: number;
+    advertisers: number;
+  };
   screens: { total: number; active: number };
   campaigns: {
     total: number;
@@ -78,6 +85,21 @@ describe('GET /api/admin/platform-stats (real Postgres)', () => {
   });
 
   const get = () => app.inject({ method: 'GET', url: '/api/admin/platform-stats' });
+
+  // SIGN-4 — pending_owners must count ONLY the Hosts, so the badge's tooltip cannot mislead.
+  it('SIGN-4: pending_owners counts pending Hosts only, never pending advertisers', async () => {
+    const adminId = await seedUser({ role: 'admin' });
+    mockSession(adminId);
+    await seedUser({ role: 'advertiser', status: 'pending' });
+    await seedUser({ role: 'advertiser', status: 'pending' });
+    await seedUser({ role: 'individual_owner', status: 'pending' });
+    await seedUser({ role: 'fleet_owner', status: 'pending' });
+    await seedUser({ role: 'fleet_owner', status: 'approved' }); // not waiting
+
+    const body = (await get()).json() as StatsBody;
+    expect(body.users.pending).toBe(4); // everything actually waiting on the admin
+    expect(body.users.pending_owners).toBe(2); // …of which two are Hosts
+  });
 
   it('403 for a non-admin', async () => {
     mockSession(await seedUser({ role: 'advertiser' }), 'advertiser');
@@ -146,7 +168,15 @@ describe('GET /api/admin/platform-stats (real Postgres)', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json() as StatsBody;
 
-    expect(body.users).toEqual({ total: 3, pending: 1, approved: 2, owners: 2, advertisers: 1 });
+    // SIGN-4 — pending_owners is the OWNER half of `pending`: the pending individual_owner above.
+    expect(body.users).toEqual({
+      total: 3,
+      pending: 1,
+      approved: 2,
+      pending_owners: 1,
+      owners: 2,
+      advertisers: 1,
+    });
     expect(body.screens).toEqual({ total: 2, active: 1 });
     expect(body.campaigns.total).toBe(3);
     expect(body.campaigns.draft).toBe(1);

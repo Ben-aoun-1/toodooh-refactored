@@ -10,8 +10,9 @@ import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
 // [requireAuth, requireAdmin]; a non-admin 403s. Read-only aggregation; no migration.
 //
 // What is derivable vs FLAGGED-no-source (the FE renders the missing ones as 0/—/empty, never fakes):
-//  - users:     total/pending/approved/owners/advertisers — scoped to END-USER roles (internal
-//               accounts are not platform users, mirroring the moderation-queue semantics).
+//  - users:     total/pending/approved/pending_owners/owners/advertisers — scoped to
+//               END-USER roles (internal accounts are not platform users, mirroring the
+//               moderation-queue semantics).
 //  - screens:   total + active (is_active). "online" has NO reliable signal yet → omitted.
 //  - campaigns: total + per-status + requested-budget sum/avg (the indicative budget; real pricing
 //               is L-price). "views"/impressions are NOT modelled yet → omitted.
@@ -77,12 +78,16 @@ export const adminPlatformStatsRoutes: FastifyPluginAsync = async (app) => {
     let usersApproved = 0;
     let owners = 0;
     let advertisers = 0;
+    // SIGN-4 — the OWNER half of `pending`, so the admin queue badge can say what is waiting
+    // rather than just how many. Free: the role × status grid is already grouped.
+    let pendingOwners = 0;
     for (const row of userRows) {
       usersTotal += row.c;
       if (row.status === 'pending') usersPending += row.c;
       if (row.status === 'approved') usersApproved += row.c;
       if (OWNER_ROLES.has(row.role)) owners += row.c;
       if (row.role === 'advertiser') advertisers += row.c;
+      if (row.status === 'pending' && OWNER_ROLES.has(row.role)) pendingOwners += row.c;
     }
 
     // campaigns — per-status counts + budget aggregates.
@@ -110,6 +115,7 @@ export const adminPlatformStatsRoutes: FastifyPluginAsync = async (app) => {
         total: usersTotal,
         pending: usersPending,
         approved: usersApproved,
+        pending_owners: pendingOwners, // SIGN-4
         owners,
         advertisers,
       },
