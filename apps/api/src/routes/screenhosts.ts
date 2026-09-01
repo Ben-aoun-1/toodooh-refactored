@@ -46,7 +46,7 @@ import { pistesForReportCached } from '../lib/report/recommendations.js';
 import { renderPdf } from '../lib/report/render.js';
 import { renderReportHtml } from '../lib/report/template.js';
 import { venueSlug } from '../lib/slug.js';
-import { computeSps, recomputeVenueSps } from '../lib/sps-score.js';
+import { computeSps, recomputeVenueSps, spsComputable } from '../lib/sps-score.js';
 import { pushApprovedOwnerLocations } from '../lib/wedooh-sync.js';
 import { decryptWifiPassword, encryptWifiPassword } from '../lib/wifi-crypto.js';
 import { requireActiveAccount, requireAdmin, requireAuth } from '../middleware/require-auth.js';
@@ -1388,7 +1388,17 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
 
     try {
       const cfg = await getDispatchConfig();
-      const { sps, variables } = await computeSps(owned.id);
+      const { sps, variables, observations } = await computeSps(owned.id);
+      // MEJ-14b — a score built ENTIRELY out of empty-set defaults is not a score. A venue with no
+      // history on any contributing variable scores 90/100 (three variables answer 100 to an empty
+      // set; only remplissage falls to 0), which outranked venues live for months. Degrade to the
+      // wire's existing null semantics so the page shows « À venir » — the same nulls the compute
+      // hiccup already produced, so no new state and no new copy.
+      if (!spsComputable(observations)) {
+        return reply
+          .status(200)
+          .send({ as_of: tunisDateOf(new Date()), sps: null, variables: null });
+      }
       // PERF-R1 — a live score is genuinely not période-able: the page labels it « au <date> »
       // instead of silently ignoring the filter, and this is that date (Tunis).
       return reply.status(200).send({

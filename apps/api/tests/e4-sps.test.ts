@@ -25,6 +25,7 @@ import {
   computeSps,
   recomputeVenueSps,
   runSpsRecomputeTick,
+  spsComputable,
   tunisWeekStart,
   weightedSps,
 } from '../src/lib/sps-score.js';
@@ -358,6 +359,60 @@ describe('E4 — the SPS score engine (real Postgres)', () => {
         remplissage: 0,
       });
       expect(sps).toBe(90);
+    });
+  });
+
+  // MEJ-14b / SPS-D1 (Mejri, ruled through the operator 2026-09-01) — that 90 is real arithmetic
+  // on empty sets, and it is NOT changed here: dispatch keeps reading it (SPS-DISPATCH1 is the
+  // open, unruled question of whether it should). What this lane adds is the ability to tell a
+  // measured score from one made of defaults, so the OWNER SURFACES can decline to show the latter.
+  describe('MEJ-14b — observations + the computability predicate (display only)', () => {
+    it('the predicate is pure: any ONE observation makes a score showable, none makes it À venir', () => {
+      const none = { decided: 0, attested: 0, scheduledElapsed: 0, engagedSeconds: 0 };
+      expect(spsComputable(none)).toBe(false);
+      // Each variable on its own is enough — the venue has history SOMEWHERE.
+      expect(spsComputable({ ...none, decided: 1 })).toBe(true);
+      expect(spsComputable({ ...none, attested: 1 })).toBe(true);
+      expect(spsComputable({ ...none, scheduledElapsed: 1 })).toBe(true);
+      expect(spsComputable({ ...none, engagedSeconds: 1 })).toBe(true);
+    });
+
+    it('a never-connected venue reports ZERO observations behind its 90', async () => {
+      const { shId } = await seedVenue();
+      const { sps, observations } = await computeSps(shId, NOW);
+      expect(sps).toBe(90); // the arithmetic is untouched…
+      expect(observations).toEqual({
+        decided: 0,
+        attested: 0,
+        scheduledElapsed: 0,
+        engagedSeconds: 0,
+      });
+      expect(spsComputable(observations)).toBe(false); // …but nothing measured is under it
+    });
+
+    it('one decision is history: the observation count moves and the score becomes showable', async () => {
+      const { shId } = await seedVenue();
+      const { planId } = await seedCampaignWithPlan();
+      await seedAllocation(planId, shId, { statut: 'ACCEPTE', createdAt: NOW });
+
+      const { sps, observations } = await computeSps(shId, NOW);
+      expect(observations.decided).toBe(1);
+      expect(spsComputable(observations)).toBe(true);
+      // An ACCEPTE decision keeps acceptation at 100, so the total is STILL 90 — the number did
+      // not change, only whether it rests on anything. That is the whole point of the ruling.
+      expect(sps).toBe(90);
+    });
+
+    it('BOUNDARY: the stored score and dispatch ordering are untouched by this lane', async () => {
+      const { shId } = await seedVenue();
+      // The persisted snapshot the dispatch queue orders on still gets the full 90 written to it:
+      // hiding a number on the owner's page must not silently re-rank the network.
+      expect(await recomputeVenueSps(shId, NOW)).toBe(90);
+      const [row] = await db
+        .select({ sps: screenhosts.sps })
+        .from(screenhosts)
+        .where(eq(screenhosts.id, shId));
+      expect(Number(row?.sps)).toBe(90);
     });
   });
 

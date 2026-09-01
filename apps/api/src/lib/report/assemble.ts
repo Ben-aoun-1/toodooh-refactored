@@ -17,7 +17,7 @@ import { getDispatchConfig } from '../dispatch/config.js';
 import { displayImpressionsSettled } from '../impressions-display.js';
 import { loadBackupGrid, loadPeriodAudienceInput } from '../period-audience-source.js';
 import { periodAudience, weekGridFromCells } from '../period-audience.js';
-import { computeSps } from '../sps-score.js';
+import { computeSps, spsComputable } from '../sps-score.js';
 
 import {
   type AffluenceSource,
@@ -401,39 +401,47 @@ export async function assembleReportData(
   let spsBlock: ReportData['sps'] = null;
   try {
     const cfg = await getDispatchConfig();
-    const { sps, variables } = await computeSps(venueId);
+    const { sps, variables, observations } = await computeSps(venueId);
+    // MEJ-14b — the PDF's S08 and Piste 03 follow the SAME predicate as the page: a score made
+    // entirely of empty-set defaults (90/100 for a never-connected venue) is not shown at all.
+    // Leaving spsBlock null is what both already do for a compute hiccup — S08 renders « À venir »
+    // and piste03 falls to its wait body, so a hidden score on the page can never be paired with
+    // « votre score est de 90/100 » in the piste text.
+    //
     // PERF-QA2 — each criterion carries its KEY: Piste 03 names the weakest weighted variable and
     // proposes the lever that moves THAT variable, and a lever must never be matched on a label
     // string (a reworded label would silently swap the advice).
-    spsBlock = {
-      score: sps,
-      criteria: [
-        {
-          key: 'acceptation',
-          label: "Taux d'acceptation des campagnes",
-          weight: cfg.spsWeightAcceptation,
-          value: variables.acceptation,
-        },
-        {
-          key: 'respect_evenements',
-          label: 'Respect des événements acceptés',
-          weight: cfg.spsWeightRespectEvenements,
-          value: variables.respect_evenements,
-        },
-        {
-          key: 'activite',
-          label: "Activité de l'écran",
-          weight: cfg.spsWeightActivite,
-          value: variables.activite,
-        },
-        {
-          key: 'remplissage',
-          label: 'Taux de remplissage',
-          weight: cfg.spsWeightRemplissage,
-          value: variables.remplissage,
-        },
-      ],
-    };
+    spsBlock = !spsComputable(observations)
+      ? null
+      : {
+          score: sps,
+          criteria: [
+            {
+              key: 'acceptation',
+              label: "Taux d'acceptation des campagnes",
+              weight: cfg.spsWeightAcceptation,
+              value: variables.acceptation,
+            },
+            {
+              key: 'respect_evenements',
+              label: 'Respect des événements acceptés',
+              weight: cfg.spsWeightRespectEvenements,
+              value: variables.respect_evenements,
+            },
+            {
+              key: 'activite',
+              label: "Activité de l'écran",
+              weight: cfg.spsWeightActivite,
+              value: variables.activite,
+            },
+            {
+              key: 'remplissage',
+              label: 'Taux de remplissage',
+              weight: cfg.spsWeightRemplissage,
+              value: variables.remplissage,
+            },
+          ],
+        };
   } catch {
     spsBlock = null;
   }

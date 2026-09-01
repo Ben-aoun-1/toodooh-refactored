@@ -7,6 +7,7 @@ import {
   campaignScreenhostPayout,
   campaigns,
   creatives,
+  eventAttestations,
   events,
   proofOfPlay,
   screenhostAffluence,
@@ -373,6 +374,49 @@ describe('assembleReportData (real Postgres)', () => {
     expect(data?.heatKinds[0]?.[4]).toBe('measured');
     expect(data?.kpis.global).toBe(44); // the measure, not the grid's 80
     expect(data?.kpis.measuredDays).toBe(1);
+  });
+});
+
+// MEJ-14b / SPS-D1 (Mejri, ruled through the operator 2026-09-01) — the PDF's S08 and Piste 03
+// read THIS block, so the document follows the same predicate as the page. A hidden score on the
+// page paired with « votre score est de 90/100 » in the piste would be worse than today.
+describe('assembleReportData — the S08 SPS block follows the computability predicate (MEJ-14b)', () => {
+  it('a no-history venue assembles sps: null, so S08 and Piste 03 both wait', async () => {
+    const owner = await seedUser();
+    const venue = await seedScreenhost(owner);
+    const data = await assembleReportData(venue, RANGE, TODAY);
+    expect(data).not.toBeNull();
+    // Not 90, not 0 — absent. « À venir » is what the template renders from a null block.
+    expect(data?.sps).toBeNull();
+  });
+
+  it('one real observation and the block is assembled in full — the pin is not vacuous', async () => {
+    const owner = await seedUser();
+    const venue = await seedScreenhost(owner);
+    // An inspection: history on the respect variable, dated well into the past so it cannot also
+    // land in the Piste 01 upcoming-events teaser. The 90 d window reads the ATTESTATION's date.
+    const [ev] = await db
+      .insert(events)
+      .values({
+        name: 'Match archivé',
+        kickoffAt: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000),
+        endsAt: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000),
+      })
+      .returning();
+    await db
+      .insert(eventAttestations)
+      .values({ eventId: ev?.id ?? '', screenhostId: venue, authorId: owner, respecte: true });
+
+    const data = await assembleReportData(venue, RANGE, TODAY);
+    expect(data?.sps).not.toBeNull();
+    // The SCORE IS UNCHANGED by the ruling — 90 stays 90 once it is measured.
+    expect(data?.sps?.score).toBe(90);
+    expect(data?.sps?.criteria.map((c) => c.key)).toEqual([
+      'acceptation',
+      'respect_evenements',
+      'activite',
+      'remplissage',
+    ]);
   });
 });
 
