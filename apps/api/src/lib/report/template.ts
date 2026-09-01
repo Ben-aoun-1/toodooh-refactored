@@ -1,5 +1,6 @@
 import { PROVENANCE_LABELS, type ProvenanceKind } from './affluence-provenance.js';
 import type { ReportData } from './assemble.js';
+import { demoBarPct } from './demographic-bar.js';
 import {
   type DailyImpressionsPoint,
   formatDateFr,
@@ -46,10 +47,6 @@ const DAY_LABELS = ['LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM', 'DIM'];
 export const HIST_MAX_ROWS = 8;
 /** Same fixed-page discipline for the S05 detail list (page 3 must never rely on clipping). */
 export const REV_MAX_ROWS = 4;
-
-/** The EMPTY mockup's decorative S04 bar widths (sexe 50/50; the four ruled age bands). */
-const PLACEHOLDER_SEXE_PCT = [50, 50];
-const PLACEHOLDER_AGE_PCT = [32, 28, 14, 6];
 
 // The S07 titles + bodies USED to live here (R3, « 3 thèmes FIXES »). They moved to
 // lib/report/pistes.ts on 2026-08-20 when R3 was superseded by Mejri's 13-juil « Retour
@@ -382,19 +379,15 @@ export function renderReportHtml(
   const persValue = (count: number): string =>
     `<span class="val">${formatIntFr(count)} pers.</span>`;
   const waitValue = `<span class="val wait">${PENDING}</span>`;
-  const sexeRows = demoPending
-    ? barRow('Femmes', waitValue, PLACEHOLDER_SEXE_PCT[0] ?? 0) +
-      barRow('Hommes', waitValue, PLACEHOLDER_SEXE_PCT[1] ?? 0)
-    : barRow(
-        'Femmes',
-        persValue(b?.femmes ?? 0),
-        sexeMax > 0 ? ((b?.femmes ?? 0) / sexeMax) * 100 : 0,
-      ) +
-      barRow(
-        'Hommes',
-        persValue(b?.hommes ?? 0),
-        sexeMax > 0 ? ((b?.hommes ?? 0) / sexeMax) * 100 : 0,
-      );
+  // MEJ-14a — pending draws the TRACK ONLY (demoBarPct returns 0); the mockup's decorative
+  // widths are gone from both surfaces, which share the rule so they cannot disagree again.
+  const sexeRow = (name: string, count: number): string =>
+    barRow(
+      name,
+      demoPending ? waitValue : persValue(count),
+      demoBarPct({ pending: demoPending, count, maxCount: sexeMax }),
+    );
+  const sexeRows = sexeRow('Femmes', b?.femmes ?? 0) + sexeRow('Hommes', b?.hommes ?? 0);
   const ageBands = b?.ages ?? [
     { label: '17 – 30 ans', count: 0 },
     { label: '31 – 45 ans', count: 0 },
@@ -402,10 +395,12 @@ export function renderReportHtml(
     { label: '60 ans et plus', count: 0 },
   ];
   const ageRows = ageBands
-    .map((band, idx) =>
-      demoPending
-        ? barRow(band.label, waitValue, PLACEHOLDER_AGE_PCT[idx] ?? 0)
-        : barRow(band.label, persValue(band.count), ageMax > 0 ? (band.count / ageMax) * 100 : 0),
+    .map((band) =>
+      barRow(
+        band.label,
+        demoPending ? waitValue : persValue(band.count),
+        demoBarPct({ pending: demoPending, count: band.count, maxCount: ageMax }),
+      ),
     )
     .join('');
   const s04 = `
