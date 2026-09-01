@@ -13,6 +13,12 @@ export interface DailyAudiencePoint {
   audience: number;
   /** PERF-R1 — per-day provenance; an unmarked point counts as measured (legacy wires). */
   source?: 'measured' | 'estimated';
+  /**
+   * MEJ-R2 (architect 2026-09-01) — does this day hold AT LEAST ONE measured cell? That, not
+   * "every cell measured", is what makes a day eligible to be the « Pic d'audience ». Unmarked
+   * points (legacy wires) fall back to `source`, so nothing that predates this field changes.
+   */
+  hasMeasured?: boolean;
 }
 
 export interface DailyImpressionsPoint {
@@ -153,12 +159,15 @@ export function audienceKpis(
   let peak: { value: number; date: string } | null = null;
   for (const p of points) {
     global += p.audience;
-    // MEJ-R1 (operator 2026-08-31) — « Pic d'audience » is a MEASURED day or nothing. The total
-    // merges measure and estimate (PERF-R1), but a peak names a specific day as this venue's
-    // best, and a typical-week stand-in cannot carry that claim (« Pic 1 398 le 10/08 » on a
-    // venue onboarded on 26/08 is the defect that ruled this). No measured day → null → « — ».
-    // An UNMARKED point counts as measured (legacy wires), mirroring measuredDays below.
-    if (p.source === 'estimated') continue;
+    // MEJ-R2 (architect 2026-09-01, amending MEJ-R1) — the peak is the highest MERGED day total
+    // among the days holding AT LEAST ONE measured cell. MEJ-R1's « every hour measured » reading
+    // discarded a genuinely real day for one backup hour: Mejri's 31/08 measured 373 people, held
+    // one grid-filled hour, and the tile named « 5 le 01/09 » instead. MEJ-R1's real target
+    // survives — a day built ENTIRELY from the typical-week grid holds no measured cell and can
+    // never be the peak, so « Pic 1 398 le 10/08 » on a venue onboarded 26/08 stays impossible
+    // (and the MEJ-2 floor bounds the backup independently). The VALUE stays the merged day total
+    // the page already sums, so the tile cannot contradict « Audience globale ».
+    if (!(p.hasMeasured ?? p.source !== 'estimated')) continue;
     if (peak === null || p.audience > peak.value) peak = { value: p.audience, date: p.date };
   }
   const perDayRaw = global / points.length;

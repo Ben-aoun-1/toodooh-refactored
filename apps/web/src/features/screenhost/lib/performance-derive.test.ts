@@ -120,37 +120,73 @@ describe('audienceKpis (S01)', () => {
 });
 
 // MEJ-2 / ruling MEJ-R1 (2026-08-31) — « Pic d'audience » is a MEASURED day or nothing.
-describe('MEJ-R1 — the peak is a measured day or nothing', () => {
-  it('an estimated day is never the peak, however large', () => {
+describe('MEJ-R2 — the peak is the highest MERGED day among days holding a measurement', () => {
+  // THE REGRESSION (Mejri, 01/09): 31/08 measured 373 people but contained ONE grid-filled hour,
+  // so MEJ-R1's « every hour measured » reading skipped the whole day and the tile named the
+  // 5-person 01/09 as the peak. A day with at least one measured cell is now eligible, and the
+  // value is the merged day total the page already sums.
+  it('a MIXED day (1 measured hour + 1 backup hour) can be the peak', () => {
     const kpis = audienceKpis(
       [
-        { date: '2026-06-01', audience: 700, source: 'measured' },
-        { date: '2026-06-02', audience: 1396, source: 'estimated' }, // the phantom Monday
+        { date: '2026-08-31', audience: 373, source: 'estimated', hasMeasured: true },
+        { date: '2026-09-01', audience: 5, source: 'measured', hasMeasured: true },
       ],
       14,
-      0,
+      50,
+    );
+    expect(kpis.peak).toEqual({ value: 373, date: '2026-08-31' }); // was « 5 le 01/09 »
+    expect(kpis.global).toBe(378); // and it cannot contradict « Audience globale »
+  });
+
+  it("MEJ-R1's real target survives: a grid-ONLY day is never the peak, however large", () => {
+    const kpis = audienceKpis(
+      [
+        { date: '2026-06-01', audience: 700, source: 'measured', hasMeasured: true },
+        // the phantom Monday: built entirely from the typical-week grid
+        { date: '2026-06-02', audience: 1396, source: 'estimated', hasMeasured: false },
+      ],
+      14,
+      50,
     );
     expect(kpis.global).toBe(2096); // the TOTAL still merges both (PERF-R1)
     expect(kpis.peak).toEqual({ value: 700, date: '2026-06-01' }); // the PEAK does not
   });
 
-  it('an all-estimated période has NO peak → the tile renders « — »', () => {
+  it('a période with no measured cell at all has NO peak → the tile renders « — »', () => {
     const kpis = audienceKpis(
       [
-        { date: '2026-06-01', audience: 80, source: 'estimated' },
-        { date: '2026-06-02', audience: 1396, source: 'estimated' },
+        { date: '2026-06-01', audience: 80, source: 'estimated', hasMeasured: false },
+        { date: '2026-06-02', audience: 1396, source: 'estimated', hasMeasured: false },
       ],
       14,
-      0,
+      100,
     );
     expect(kpis.peak).toBeNull();
     expect(kpis.global).toBe(1476);
-    expect(kpis.measuredDays).toBe(0);
   });
 
   it('unmarked points still count as measured (legacy wires) and can peak', () => {
     const kpis = audienceKpis([{ date: '2026-06-01', audience: 300 }], 14, 0);
     expect(kpis.peak).toEqual({ value: 300, date: '2026-06-01' });
+  });
+
+  it('hasMeasured OVERRIDES the source fallback in both directions', () => {
+    // estimated + hasMeasured → eligible…
+    expect(
+      audienceKpis(
+        [{ date: '2026-06-01', audience: 9, source: 'estimated', hasMeasured: true }],
+        14,
+        50,
+      ).peak,
+    ).toEqual({ value: 9, date: '2026-06-01' });
+    // …and measured + !hasMeasured → not (belt and braces; the merge never emits this pair).
+    expect(
+      audienceKpis(
+        [{ date: '2026-06-01', audience: 9, source: 'measured', hasMeasured: false }],
+        14,
+        0,
+      ).peak,
+    ).toBeNull();
   });
 });
 

@@ -78,6 +78,13 @@ export interface PeriodDay {
   date: string; // YYYY-MM-DD
   audience: number;
   source: 'measured' | 'estimated';
+  /**
+   * MEJ-R2 — does this day hold AT LEAST ONE measured cell? `source` answers a different, stricter
+   * question ("is EVERY cell measured", AFF1's dayProvenance) and both are needed: `source` drives
+   * the provenance a reader sees, `hasMeasured` drives peak eligibility. A day built entirely from
+   * the grid has neither.
+   */
+  hasMeasured: boolean;
 }
 
 export interface PeriodAudience {
@@ -186,6 +193,8 @@ export function periodAudience(input: PeriodAudienceInput): PeriodAudience {
             audience: dayCells.reduce((sum, c) => sum + c.value, 0),
             // AFF1's dayProvenance ruling: one backup hour makes the whole day an estimation.
             source: dayCells.every((c) => c.source === 'measured') ? 'measured' : 'estimated',
+            // MEJ-R2 — but ONE measured cell is enough to make the day peak-eligible.
+            hasMeasured: dayCells.some((c) => c.source === 'measured'),
           });
         }
         continue;
@@ -194,7 +203,7 @@ export function periodAudience(input: PeriodAudienceInput): PeriodAudience {
       const entry = measuredDayByDate.get(date);
       if (isMeasuredDay(entry)) {
         // ── day granularity: history older than the hourly window. No hour detail, no S02 cell.
-        days.push({ date, audience: entry.audience, source: 'measured' });
+        days.push({ date, audience: entry.audience, source: 'measured', hasMeasured: true });
         dayGranularityMeasured += 1;
         continue;
       }
@@ -213,6 +222,7 @@ export function periodAudience(input: PeriodAudienceInput): PeriodAudience {
           date,
           audience: dayCells.reduce((sum, c) => sum + c.value, 0),
           source: 'estimated',
+          hasMeasured: false, // grid only — MEJ-R1's real target: never the peak
         });
       }
     }

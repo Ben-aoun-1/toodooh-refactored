@@ -90,6 +90,8 @@ export interface VenueAudienceDay {
   date: string; // YYYY-MM-DD
   audience: number;
   source: 'measured' | 'estimated';
+  /** MEJ-R2 — the day holds ≥1 MEASURED cell, so it may be the « Pic d'audience ». */
+  has_measured: boolean;
 }
 
 /** GET /api/screenhosts/:id/audience?from&to — the merged période read (PERF-R1). */

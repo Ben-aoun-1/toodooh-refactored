@@ -231,7 +231,18 @@ export default function OwnerPerformance() {
     () => venueLines.filter((l) => lineInPeriod(l, range)),
     [venueLines, range],
   );
-  const periodAudience = useMemo(() => audience.data?.days ?? [], [audience.data]);
+  // MEJ-R2 — the wire's snake_case `has_measured` becomes the derive's `hasMeasured`, so the page
+  // and the PDF twin apply the SAME peak eligibility (a day with ≥1 measured cell).
+  const periodAudience = useMemo(
+    () =>
+      (audience.data?.days ?? []).map((d) => ({
+        date: d.date,
+        audience: d.audience,
+        source: d.source,
+        hasMeasured: d.has_measured,
+      })),
+    [audience.data],
+  );
   // PERF-R2 (supersedes AFF1's « never the période ») — S02 renders the hub's MERGED PAX-first
   // grid WITH provenance, MASKED api-side to the weekdays the période contains (colour = level,
   // outline = source, unchanged).
