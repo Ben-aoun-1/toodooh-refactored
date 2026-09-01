@@ -11,6 +11,7 @@ import {
   pistesForReportCached,
   recommendationCacheKey,
   resetRecommendationsForTests,
+  SYSTEM_PROMPT,
 } from '../src/lib/report/recommendations.js';
 
 // R3 — the SDK is mocked at the module root (no key, no network in CI); the zod output-format
@@ -432,6 +433,55 @@ describe('buildRecommendationInput (ReportData → minimized payload)', () => {
     };
     const creneauxOf = (cells: [number, number, number][]) =>
       buildRecommendationInput(reportData({ heatLevels: gridWith(cells) })).creneaux;
+
+    // MEJ-12 (2026-09-01) — Piste 02 announced « Les lundis 13h-14h concentrent l'audience » while
+    // the venue's measured peak was lundi 20h-21h. The RANKING was right: heatmapLevels scores by
+    // value, and an admin had typed 1 396 into the hub grid at Monday 13h, so that cell scored
+    // level 5 while the measured 20h cell scored 1 — S02 colours it identically. What was missing
+    // is the DISCLOSURE S02 carries (dotted = estimation): the payload asserted a typed guess as
+    // observed footfall. The slot is still named — hiding it would make the piste and S02 disagree,
+    // which is the actual defect — it just says what it is.
+    const kindsWith = (estimatedCells: [number, number][]) => {
+      const kinds = Array.from({ length: 7 }, () =>
+        Array.from({ length: 14 }, () => 'measured' as 'measured' | 'backup' | 'none'),
+      );
+      for (const [day, hourIdx] of estimatedCells) kinds[day]![hourIdx] = 'backup';
+      return kinds;
+    };
+
+    it('MEJ-12: an ESTIMATED slot is still ranked, and says so', () => {
+      const c = buildRecommendationInput(
+        reportData({
+          heatLevels: gridWith([
+            [0, 5, 5], // Lun 13h — the admin's typed 1 396 → top level
+            [0, 12, 1], // Lun 20h — the REAL measured peak, lower level
+          ]),
+          heatKinds: kindsWith([[0, 5]]),
+        }),
+      ).creneaux;
+      // Same slot order as S02 colours it — the two surfaces cannot name different créneaux…
+      expect(c.plusForts).toEqual(['Lun 13h (estimation)', 'Lun 20h']);
+      // …and the model can no longer read the typed cell as observed footfall.
+      expect(c.plusForts[0]).toContain('(estimation)');
+      expect(c.plusForts[1]).not.toContain('(estimation)');
+    });
+
+    it('MEJ-12: a slot with no provenance at all is disclosed as an estimation too', () => {
+      const c = buildRecommendationInput(
+        reportData({
+          heatLevels: gridWith([[2, 3, 4]]), // Mer 11h
+          heatKinds: kindsWith([]).map((row, day) =>
+            day === 2 ? row.map((k, i) => (i === 3 ? ('none' as const) : k)) : row,
+          ),
+        }),
+      ).creneaux;
+      expect(c.plusForts).toEqual(['Mer 11h (estimation)']);
+    });
+
+    it('MEJ-12: the system prompt tells the model what « (estimation) » means', () => {
+      expect(SYSTEM_PROMPT).toContain('(estimation)');
+      expect(SYSTEM_PROMPT).toContain('capteur');
+    });
 
     it('0 open cells → both lists empty', () => {
       expect(creneauxOf([])).toEqual({ plusForts: [], plusFaibles: [] });
