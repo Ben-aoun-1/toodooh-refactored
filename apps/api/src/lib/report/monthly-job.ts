@@ -149,6 +149,16 @@ export function lastClosedMonths(now: Date, count: number): ClosedMonth[] {
  * MEJ-10 — this now gates EVERY month, the previous closed one included. It used to exempt it,
  * which left it standing on the lifetime candidate query alone: any venue that had ever had an
  * affluence cell qualified, so a venue onboarded in August produced a July PDF out of nothing.
+ *
+ * The gate is deliberately GENEROUS about what counts as evidence and STRICT only about the month
+ * bounds and the onboarding floor. The failure it prevents is a report that should not exist; the
+ * failure it could introduce is a report that should exist and silently does not — and that one
+ * reaches the owner with no error at all. Hence the THIRD branch: `screenhost_affluence_hourly`,
+ * the measured series AUD-HOURLY1 added, is the freshest direct evidence a venue was alive in a
+ * month. `screenhost_monthly_stats` alone is not enough — the hub only pushes it for places with a
+ * LINKED device and skips any (place, month) whose total is ≤ 0, so a venue whose device was
+ * unassigned when the sweep ran (routine since HUB-DEV1/ASG1) can hold a full month of measured
+ * hourly cells and no monthly_stats row.
  */
 async function hasMonthScopedData(
   venueId: string,
@@ -167,7 +177,10 @@ async function hasMonthScopedData(
           OR EXISTS (SELECT 1 FROM proof_of_play pp
               WHERE pp.screenhost_id = ${screenhosts.id}
               AND to_char(pp.received_at at time zone 'Africa/Tunis', 'YYYY-MM-DD')
-                BETWEEN ${from} AND ${to}))`,
+                BETWEEN ${from} AND ${to})
+          OR EXISTS (SELECT 1 FROM screenhost_affluence_hourly h
+              WHERE h.screenhost_id = ${screenhosts.id}
+              AND h.date BETWEEN ${from} AND ${to}))`,
       ),
     )
     .limit(1);

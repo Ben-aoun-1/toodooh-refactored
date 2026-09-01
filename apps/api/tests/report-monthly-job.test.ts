@@ -9,6 +9,7 @@ import {
   notifications,
   proofOfPlay,
   screenhostAffluence,
+  screenhostAffluenceHourly,
   screenhostMonthlyReports,
   screenhostMonthlyStats,
   screenhosts,
@@ -359,6 +360,53 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
     expect(await db.select().from(notifications).where(eq(notifications.userId, owner))).toEqual(
       [],
     );
+  });
+
+  // MEJ-10 rider — the gate must be GENEROUS about evidence. `screenhost_monthly_stats` arrives
+  // only from the hub's pushMonthlyStats, which covers places with a LINKED device and skips any
+  // (place, month) whose total is ≤ 0. A venue whose device was unassigned when the sweep ran
+  // (routine since HUB-DEV1/ASG1) can therefore hold a full month of MEASURED hourly cells and no
+  // monthly_stats row — and a report that should exist, silently not existing, reaches the owner
+  // with no error at all.
+  it('MEJ-10: measured hourly cells alone qualify the month (no stats row, no proof)', async () => {
+    const owner = await seedUser();
+    const venue = await seedVenueWithData(owner, 'Café Capteur Seul');
+    await db.insert(screenhostAffluenceHourly).values([
+      { screenhostId: venue, date: '2026-06-15', hour: 13, value: 120 },
+      { screenhostId: venue, date: '2026-06-15', hour: 14, value: 90 },
+    ]);
+    const upload = vi
+      .spyOn(storage, 'upload')
+      .mockImplementation(async (params) => ({ key: params.key }));
+
+    await runMonthlyReportSweep(silentLog, NOW);
+    expect(upload).toHaveBeenCalledWith(
+      expect.objectContaining({ key: `reports/${venue}/2026-06.pdf` }),
+    );
+    const rows = await db
+      .select()
+      .from(screenhostMonthlyReports)
+      .where(eq(screenhostMonthlyReports.screenhostId, venue));
+    expect(rows.map((r) => r.month)).toEqual(['2026-06']);
+  });
+
+  it('MEJ-10: hourly cells OUTSIDE the month do not qualify it', async () => {
+    const owner = await seedUser();
+    const venue = await seedVenueWithData(owner, 'Café Hors Mois');
+    // July cells: after June's bounds — June must stay ungenerated.
+    await db
+      .insert(screenhostAffluenceHourly)
+      .values([{ screenhostId: venue, date: '2026-07-02', hour: 13, value: 120 }]);
+    vi.spyOn(storage, 'upload').mockImplementation(async (params) => ({ key: params.key }));
+
+    const result = await runMonthlyReportSweep(silentLog, NOW);
+    expect(result.generated).toBe(0);
+    expect(
+      await db
+        .select()
+        .from(screenhostMonthlyReports)
+        .where(eq(screenhostMonthlyReports.screenhostId, venue)),
+    ).toEqual([]);
   });
 
   it('MEJ-10: a month wholly BEFORE onboarding never generates, even with data in it', async () => {
