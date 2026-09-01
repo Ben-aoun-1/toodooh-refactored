@@ -99,6 +99,8 @@ export interface ReportData {
   /** AFF1 — 7×14 provenance per cell (measured / backup = estimation / none); closed hours read
    * as none. The template layers the estimation treatment over the level from this. */
   heatKinds: ProvenanceKind[][];
+  /** MEJ-12 — the merged values behind the levels, for ranking créneaux by size. */
+  heatValues: number[][];
   /** AFF1 — the explanatory empty state: no measured, no backup AND no data (the page's rule). */
   heatEmpty: boolean;
   /** Zero-filled period days once castHasData; [] before the first CAST data. */
@@ -173,6 +175,26 @@ export function heatmapKinds(
   const kinds = provenanceGrid(grid, sources);
   return Array.from({ length: 7 }, (_, day) =>
     HEATMAP_HOURS.map((hour) => (closed(hour) ? 'none' : (kinds[day]?.[hour] ?? 'none'))),
+  );
+}
+
+/**
+ * MEJ-12 — the 7×14 merged VALUES beside heatmapLevels, on the same hour window. The levels are a
+ * coarse 1–5 bucket, so several cells share the top one; ranking créneaux needs the real numbers
+ * to name the busiest slot rather than the earliest one that reached the bucket.
+ */
+export function heatmapValues(
+  grid: number[][],
+  sources: (AffluenceSource | null)[][],
+  openingHour: number | null,
+  closingHour: number | null,
+): number[][] {
+  const closed = closedAt(openingHour, closingHour);
+  const kinds = provenanceGrid(grid, sources);
+  return Array.from({ length: 7 }, (_, day) =>
+    HEATMAP_HOURS.map((hour) =>
+      closed(hour) || kinds[day]?.[hour] === 'none' ? 0 : (grid[day]?.[hour] ?? 0),
+    ),
   );
 }
 
@@ -451,6 +473,7 @@ export async function assembleReportData(
     kpis,
     heatLevels: heatmapLevels(heatGrid, heatSources, venue.openingHour, venue.closingHour),
     heatKinds: heatmapKinds(heatGrid, heatSources, venue.openingHour, venue.closingHour),
+    heatValues: heatmapValues(heatGrid, heatSources, venue.openingHour, venue.closingHour),
     heatEmpty: affluenceEmpty({ has_data: heatHasData, counts: heatCounts }),
     days: castFlag ? zeroFillDays(rangeDays, range) : [],
     breakdown: ratios ? demographicBreakdown(ratios, kpis.global) : null,

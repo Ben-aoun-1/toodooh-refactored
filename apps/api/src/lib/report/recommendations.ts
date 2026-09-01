@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { env } from '../../env.js';
 import { logger } from '../../logger.js';
 
+import type { ProvenanceKind } from './affluence-provenance.js';
 import type { ReportData } from './assemble.js';
 
 const log = logger.child({ module: 'report-recommendations' });
@@ -50,7 +51,12 @@ export interface RecommendationInput {
     moyenneParHeure: number | null;
     pic: { valeur: number; date: string } | null;
   };
-  /** Busiest / quietest open slots from the heatmap, e.g. "Ven 18h". */
+  /**
+   * Busiest / quietest open slots from the heatmap, e.g. "Ven 18h" — the SAME ranking S02 colours,
+   * so the two surfaces can never name different slots. MEJ-12: a slot whose value comes from the
+   * admin's grid rather than the sensor is labelled "(estimation)", because the model otherwise
+   * asserts it as a measurement.
+   */
   creneaux: { plusForts: string[]; plusFaibles: string[] };
   campagnes: { nombre: number; revenuTotalTnd: string };
   demographie: {
@@ -64,7 +70,8 @@ const MODEL = 'claude-haiku-4-5';
 const MAX_TOKENS = 1024;
 const REQUEST_TIMEOUT_MS = 10_000;
 
-const SYSTEM_PROMPT = `Tu es le conseiller data d'un commerçant partenaire de TOODOOH, un réseau d'affichage publicitaire DOOH en Tunisie : des écrans installés dans son lieu diffusent des campagnes d'annonceurs, et le commerçant touche un revenu sur les impressions servies.
+/** Exported so MEJ-12's pin can assert the « (estimation) » instruction exists. */
+export const SYSTEM_PROMPT = `Tu es le conseiller data d'un commerçant partenaire de TOODOOH, un réseau d'affichage publicitaire DOOH en Tunisie : des écrans installés dans son lieu diffusent des campagnes d'annonceurs, et le commerçant touche un revenu sur les impressions servies.
 
 À partir des chiffres fournis en entrée — et UNIQUEMENT de ces chiffres — analyse les créneaux faibles et les périodes creuses du lieu, puis propose comment les redynamiser pour développer l'audience et les revenus publicitaires.
 
@@ -73,7 +80,8 @@ Règles strictes :
 - Aucune promesse ni garantie de revenus : formule des pistes d'action, jamais des engagements de résultat.
 - UN SEUL paragraphe de 30 mots maximum, sans titre.
 - Rédige en français, en vouvoiement (« vous », « votre lieu »), dans le ton de conseil concret du rapport.
-- Si une donnée est absente ou nulle, ne la mentionne pas.`;
+- Si une donnée est absente ou nulle, ne la mentionne pas.
+- Un créneau suivi de « (estimation) » n'a PAS été mesuré par le capteur : c'est la grille type saisie pour ce lieu. Tu peux le citer, mais dis alors qu'il est estimé — ne le présente jamais comme une fréquentation constatée.`;
 
 // Lazy singleton — constructed on first use and ONLY when the key is provisioned (explicit
 // apiKey from env.ts, never the SDK's ambient env resolution: the no-key path stays
@@ -230,20 +238,47 @@ export async function generateRecommendationsCached(
 const DAY_LABELS_FR = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'] as const;
 const FIRST_HEATMAP_HOUR = 8; // the grid's 14 columns span 8h–21h (the page's visible hours)
 
-/** Top/bottom OPEN slots from the 7×14 ramp levels (0 = closed/no-data, never a créneau). */
-const heatmapSlots = (levels: number[][]): { plusForts: string[]; plusFaibles: string[] } => {
-  const open: { label: string; level: number }[] = [];
+/**
+ * Top/bottom OPEN slots from the 7×14 ramp levels (0 = closed/no-data, never a créneau).
+ *
+ * MEJ-12 (2026-09-01) — Piste 02 announced « Les lundis 13h-14h concentrent l'audience » while the
+ * venue's real measured peak was lundi 20h-21h. The ranking was not wrong: `heatmapLevels` scores
+ * by VALUE, and an admin had typed 1 396 into the hub grid at Monday 13h, so that cell legitimately
+ * scored level 5 while the measured 20h cell scored 1 — S02 colours it exactly the same way. What
+ * was wrong is that S02 DISCLOSES the cell as an estimation (dotted outline) and the payload did
+ * not, so the model stated an admin's guess as observed footfall.
+ *
+ * The fix is disclosure, NOT exclusion: dropping backup cells would make the piste and S02 name
+ * different slots, which is the defect this ticket is about. The ranking is untouched; the label
+ * carries the provenance, and the system prompt tells the model what it means.
+ */
+const heatmapSlots = (
+  levels: number[][],
+  kinds: ProvenanceKind[][],
+  values: number[][],
+): { plusForts: string[]; plusFaibles: string[] } => {
+  const open: { label: string; level: number; value: number }[] = [];
   levels.forEach((row, day) => {
     row.forEach((level, hourIdx) => {
       if (level > 0) {
+        const estimated = kinds[day]?.[hourIdx] !== 'measured';
         open.push({
-          label: `${DAY_LABELS_FR[day] ?? '—'} ${FIRST_HEATMAP_HOUR + hourIdx}h`,
+          label: `${DAY_LABELS_FR[day] ?? '—'} ${FIRST_HEATMAP_HOUR + hourIdx}h${
+            estimated ? ' (estimation)' : ''
+          }`,
           level,
+          value: values[day]?.[hourIdx] ?? 0,
         });
       }
     });
   });
-  const byLevelDesc = [...open].sort((a, b) => b.level - a.level);
+  // Rank by VALUE, level as the tie-break. Sorting by level alone ranked on a coarse 1–5 bucket,
+  // and Array.prototype.sort is STABLE, so cells sharing the top bucket kept insertion order —
+  // day-major, ascending hour. The earliest hour to reach the bucket therefore displaced the real
+  // maximum: on Mejri's two days, 16h/17h/18h took the three fort slots and the true 20h peak was
+  // named nowhere. Ranking by value does not contradict S02: S02 colours by level, so tied cells
+  // look identical there and naming the biggest of them is a refinement of the same lit-up cell.
+  const byLevelDesc = [...open].sort((a, b) => b.value - a.value || b.level - a.level);
   // R3.1 — the two lists are DISJOINT: a slot never reads as both fort and faible (the old
   // slice(-3) reused fort cells below 6 open slots and the model echoed the contradiction).
   // Fewer/empty plusFaibles beats a contradiction when the grid is nearly empty.
@@ -271,7 +306,7 @@ export function buildRecommendationInput(data: ReportData): RecommendationInput 
           pic: data.kpis.peak ? { valeur: data.kpis.peak.value, date: data.kpis.peak.date } : null,
         }
       : { globale: null, moyenneParJour: null, moyenneParHeure: null, pic: null },
-    creneaux: heatmapSlots(data.heatLevels),
+    creneaux: heatmapSlots(data.heatLevels, data.heatKinds, data.heatValues),
     campagnes: {
       nombre: data.castHasData ? data.campaignsBlock.count : 0,
       revenuTotalTnd: data.castHasData ? data.revenue.totalLabel : '0',

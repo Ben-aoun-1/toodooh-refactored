@@ -50,6 +50,7 @@ const baseData = (over: Partial<ReportData> = {}): ReportData => ({
   kpis: { global: 0, perDay: null, perHour: null, peak: null, measuredDays: 0, estimatedPct: null },
   heatLevels: Array.from({ length: 7 }, () => Array.from({ length: 14 }, () => 0)),
   heatKinds: Array.from({ length: 7 }, () => Array.from({ length: 14 }, () => 'none' as const)),
+  heatValues: Array.from({ length: 7 }, () => Array.from({ length: 14 }, () => 0)),
   heatEmpty: false,
   days: [],
   breakdown: null,

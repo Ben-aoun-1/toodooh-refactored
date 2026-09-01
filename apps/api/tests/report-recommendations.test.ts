@@ -11,6 +11,7 @@ import {
   pistesForReportCached,
   recommendationCacheKey,
   resetRecommendationsForTests,
+  SYSTEM_PROMPT,
 } from '../src/lib/report/recommendations.js';
 
 // R3 — the SDK is mocked at the module root (no key, no network in CI); the zod output-format
@@ -365,6 +366,7 @@ const reportData = (over: Partial<ReportData> = {}): ReportData => ({
     estimatedPct: 0,
   },
   heatKinds: Array.from({ length: 7 }, () => Array.from({ length: 14 }, () => 'measured' as const)),
+  heatValues: Array.from({ length: 7 }, () => Array.from({ length: 14 }, () => 0)),
   heatEmpty: false,
   // one hot cell (Ven idx4, 18h → hourIdx 10 = level 5), one warm, one weak, rest closed
   heatLevels: Array.from({ length: 7 }, (_, day) =>
@@ -432,6 +434,102 @@ describe('buildRecommendationInput (ReportData → minimized payload)', () => {
     };
     const creneauxOf = (cells: [number, number, number][]) =>
       buildRecommendationInput(reportData({ heatLevels: gridWith(cells) })).creneaux;
+
+    // ── MEJ-12 (2026-09-01) — « les lundis 13h-14h concentrent l'audience », true max at 20h ──
+    //
+    // FIRST REPRODUCTION WAS WRONG and is recorded here so it is not retried: it used a merged
+    // Monday-13h backup cell of 1 396. That cannot be her data — `periodAudience.total` is the sum
+    // of the merged cells and her S01 read « 378 », so no 1 396 cell was in the période (the MEJ-2
+    // floor bounds backup to ≥ 26/08, and 31/08 is the only Monday in range).
+    //
+    // THE REAL CAUSE: `heatmapSlots` ranked by `level` — the coarse 1–5 bucket — and
+    // Array.prototype.sort is STABLE, so cells sharing the top bucket kept insertion order:
+    // day-major, ASCENDING HOUR. The earliest hour to reach the bucket displaced the true maximum.
+    const kindsWith = (estimatedCells: [number, number][]) => {
+      const kinds = Array.from({ length: 7 }, () =>
+        Array.from({ length: 14 }, () => 'measured' as 'measured' | 'backup' | 'none'),
+      );
+      for (const [day, hourIdx] of estimatedCells) kinds[day]![hourIdx] = 'backup';
+      return kinds;
+    };
+    const valuesWith = (cells: [number, number, number][]): number[][] => {
+      const grid = Array.from({ length: 7 }, () => Array.from({ length: 14 }, () => 0));
+      for (const [day, hourIdx, value] of cells) grid[day]![hourIdx] = value;
+      return grid;
+    };
+
+    it('MEJ-12: the BUSIEST slot leads, not the earliest one in the same level bucket', () => {
+      // Mejri's shape: two days, all MEASURED, Σ = 378, true max Monday 20h (56). Real levels for
+      // this data are 4,4,4,5,5,5,4,5 across 13h→20h — four cells tie at 5 and 20h is the last.
+      const cells: [number, number, number][] = [
+        [0, 5, 40], // Lun 13h
+        [0, 6, 45], // Lun 14h
+        [0, 7, 42], // Lun 15h
+        [0, 8, 48], // Lun 16h  ← level 5
+        [0, 9, 50], // Lun 17h  ← level 5
+        [0, 10, 52], // Lun 18h ← level 5
+        [0, 11, 40], // Lun 19h
+        [0, 12, 56], // Lun 20h ← level 5 AND the true maximum
+        [1, 5, 5], // Mar 13h
+      ];
+      const built = buildRecommendationInput(
+        reportData({
+          heatLevels: gridWith([
+            [0, 5, 4],
+            [0, 6, 4],
+            [0, 7, 4],
+            [0, 8, 5],
+            [0, 9, 5],
+            [0, 10, 5],
+            [0, 11, 4],
+            [0, 12, 5],
+            [1, 5, 1],
+          ]),
+          heatKinds: kindsWith([]),
+          heatValues: valuesWith(cells),
+        }),
+      );
+      // Before: ['Lun 16h', 'Lun 17h', 'Lun 18h'] — the true 20h peak named NOWHERE.
+      expect(built.creneaux.plusForts[0]).toBe('Lun 20h');
+      expect(built.creneaux.plusForts).toEqual(['Lun 20h', 'Lun 18h', 'Lun 17h']);
+    });
+
+    it('MEJ-12: an ESTIMATED slot is still ranked, and says so', () => {
+      const built = buildRecommendationInput(
+        reportData({
+          heatLevels: gridWith([
+            [0, 5, 5],
+            [0, 12, 1],
+          ]),
+          heatKinds: kindsWith([[0, 5]]),
+          heatValues: valuesWith([
+            [0, 5, 1396], // the admin's typed cell — bigger, so it still leads…
+            [0, 12, 300],
+          ]),
+        }),
+      ).creneaux;
+      // …but the model can no longer read it as observed footfall. Hiding it would make the piste
+      // and S02 name different slots, which is the defect this ticket is about.
+      expect(built.plusForts).toEqual(['Lun 13h (estimation)', 'Lun 20h']);
+    });
+
+    it('MEJ-12: a slot with no provenance at all is disclosed as an estimation too', () => {
+      const built = buildRecommendationInput(
+        reportData({
+          heatLevels: gridWith([[2, 3, 4]]),
+          heatKinds: kindsWith([]).map((row, day) =>
+            day === 2 ? row.map((k, i) => (i === 3 ? ('none' as const) : k)) : row,
+          ),
+          heatValues: valuesWith([[2, 3, 90]]),
+        }),
+      ).creneaux;
+      expect(built.plusForts).toEqual(['Mer 11h (estimation)']);
+    });
+
+    it('MEJ-12: the system prompt tells the model what « (estimation) » means', () => {
+      expect(SYSTEM_PROMPT).toContain('(estimation)');
+      expect(SYSTEM_PROMPT).toContain('capteur');
+    });
 
     it('0 open cells → both lists empty', () => {
       expect(creneauxOf([])).toEqual({ plusForts: [], plusFaibles: [] });
