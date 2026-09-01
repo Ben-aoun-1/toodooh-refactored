@@ -5,6 +5,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import { db } from '../../db/client.js';
 import { notifications, screenhostMonthlyReports, screenhosts } from '../../db/schema.js';
 import { storage } from '../../storage/s3-storage.js';
+import { tunisDateOf } from '../campaign-dates.js';
 
 import { assembleReportData } from './assemble.js';
 import { pistesForReport } from './recommendations.js';
@@ -20,12 +21,18 @@ import { renderReportHtml } from './template.js';
 // no-op. PERF-QA1 R2 — bounded catch-up: each tick considers the LAST 3 CLOSED MONTHS (same
 // idempotency per month), so a month the sweep missed (api down over a month boundary, chromium
 // absent…) self-heals within the window instead of being lost forever.
+// MEJ-10 (2026-09-01) — the R2 amendment gated the OLDER catch-up months on month-scoped data but
+// left the PREVIOUS-CLOSED-MONTH path on the LIFETIME candidate gates alone, so the one month that
+// could fabricate was the one nobody gated: a venue created 26/08, whose only data was an affluence
+// grid an admin typed in August, got a full JULY report generated on 31/08. Both gates now apply to
+// every month, plus the MEJ-R1 onboarding floor.
+//
 // R2 AMENDMENT (ratified 2026-08-05) — catch-up must not burst: only the PREVIOUS CLOSED month
 // notifies; older catch-up months generate SILENTLY (they surface in the reports listing with
 // their real generated_at — nobody gets a « rapport de mai est prêt » in August) and ONLY when
 // the venue has MONTH-SCOPED data for that month (a hub-pushed stats row, or ≥1 proof inside the
-// month's Tunis bounds) — no fabricated near-empty backdated PDFs. The previous-closed-month
-// path keeps the ruled LIFETIME candidate gates + its notification, unchanged.
+// month's Tunis bounds) — no fabricated near-empty backdated PDFs. Its NOTIFICATION rule is
+// unchanged: only the previous closed month notifies.
 
 const MONTHS_FR = [
   'janvier',
@@ -135,10 +142,23 @@ export function lastClosedMonths(now: Date, count: number): ClosedMonth[] {
 }
 
 /**
- * R2 amendment — the catch-up gate: a NON-current month only generates over REAL month-scoped
- * data (a hub-pushed monthly_stats row for that month, or at least one proof_of_play received
- * inside the month's TUNIS bounds — the reconcile calendar). The previous closed month never
- * goes through this gate.
+ * The month-scoped data gate: a month only generates over REAL data belonging to IT (a hub-pushed
+ * monthly_stats row for that month, or at least one proof_of_play received inside the month's
+ * TUNIS bounds — the reconcile calendar).
+ *
+ * MEJ-10 — this now gates EVERY month, the previous closed one included. It used to exempt it,
+ * which left it standing on the lifetime candidate query alone: any venue that had ever had an
+ * affluence cell qualified, so a venue onboarded in August produced a July PDF out of nothing.
+ *
+ * The gate is deliberately GENEROUS about what counts as evidence and STRICT only about the month
+ * bounds and the onboarding floor. The failure it prevents is a report that should not exist; the
+ * failure it could introduce is a report that should exist and silently does not — and that one
+ * reaches the owner with no error at all. Hence the THIRD branch: `screenhost_affluence_hourly`,
+ * the measured series AUD-HOURLY1 added, is the freshest direct evidence a venue was alive in a
+ * month. `screenhost_monthly_stats` alone is not enough — the hub only pushes it for places with a
+ * LINKED device and skips any (place, month) whose total is ≤ 0, so a venue whose device was
+ * unassigned when the sweep ran (routine since HUB-DEV1/ASG1) can hold a full month of measured
+ * hourly cells and no monthly_stats row.
  */
 async function hasMonthScopedData(
   venueId: string,
@@ -157,7 +177,10 @@ async function hasMonthScopedData(
           OR EXISTS (SELECT 1 FROM proof_of_play pp
               WHERE pp.screenhost_id = ${screenhosts.id}
               AND to_char(pp.received_at at time zone 'Africa/Tunis', 'YYYY-MM-DD')
-                BETWEEN ${from} AND ${to}))`,
+                BETWEEN ${from} AND ${to})
+          OR EXISTS (SELECT 1 FROM screenhost_affluence_hourly h
+              WHERE h.screenhost_id = ${screenhosts.id}
+              AND h.date BETWEEN ${from} AND ${to}))`,
       ),
     )
     .limit(1);
@@ -202,7 +225,14 @@ export async function runMonthlyReportSweep(
   // "Each venue with any data": one EXISTS-driven scan — a venue qualifies when ANY of the four
   // data sources has at least one row for it (monthly stats / affluence / payouts / proofs).
   const candidates = await db
-    .select({ id: screenhosts.id, ownerId: screenhosts.ownerId, name: screenhosts.name })
+    .select({
+      id: screenhosts.id,
+      ownerId: screenhosts.ownerId,
+      name: screenhosts.name,
+      // MEJ-10 — the venue's onboarding day; a month wholly before it describes a venue that did
+      // not exist (the MEJ-R1 floor, applied here to whole months instead of single days).
+      createdAt: screenhosts.createdAt,
+    })
     .from(screenhosts)
     .where(
       sql`EXISTS (SELECT 1 FROM screenhost_monthly_stats s WHERE s.screenhost_id = ${screenhosts.id})
@@ -230,9 +260,18 @@ export async function runMonthlyReportSweep(
           continue;
         }
 
-        // R2 amendment — a catch-up month (anything but the previous closed month) generates
-        // only over REAL month-scoped data; no fabricated backdated PDFs.
-        if (month !== currentMonth && !(await hasMonthScopedData(venue.id, month, from, to))) {
+        // MEJ-10 — the MEJ-R1 floor, at month granularity: a month that ends BEFORE the venue was
+        // onboarded describes a period in which it did not exist. Skipped before the data gate
+        // because it is the cheaper of the two and the more absolute.
+        if (to < tunisDateOf(venue.createdAt)) {
+          result.skipped += 1;
+          continue;
+        }
+
+        // MEJ-10 — EVERY month (the previous closed one included) generates only over REAL
+        // month-scoped data. Exempting the previous closed month left it on the LIFETIME candidate
+        // gates, which is how a venue onboarded 26/08 produced a July report out of nothing.
+        if (!(await hasMonthScopedData(venue.id, month, from, to))) {
           result.skipped += 1;
           continue;
         }

@@ -9,6 +9,7 @@ import {
   notifications,
   proofOfPlay,
   screenhostAffluence,
+  screenhostAffluenceHourly,
   screenhostMonthlyReports,
   screenhostMonthlyStats,
   screenhosts,
@@ -81,8 +82,20 @@ const seedUser = async (values: Partial<NewUser> = {}): Promise<string> => {
   return u?.id ?? '';
 };
 
-const seedVenueWithData = async (ownerId: string, name: string): Promise<string> => {
-  const [s] = await db.insert(screenhosts).values({ name, ownerId }).returning();
+// MEJ-10 — a month wholly BEFORE the venue's onboarding never generates, so every fixture states
+// when it was onboarded. 2026-01-01 is well before the test window (April–June 2026); the floor
+// itself has its own case at the end of the file.
+const ONBOARDED = new Date('2026-01-01T00:00:00Z');
+
+const seedVenueWithData = async (
+  ownerId: string,
+  name: string,
+  values: Partial<typeof screenhosts.$inferInsert> = {},
+): Promise<string> => {
+  const [s] = await db
+    .insert(screenhosts)
+    .values({ name, ownerId, createdAt: ONBOARDED, ...values })
+    .returning();
   const id = s?.id ?? '';
   // Any data qualifies a venue — one affluence slot is the cheapest HOST signal. NB: affluence
   // is LIFETIME data (rolling typical week, not month-scoped), so it qualifies the venue as a
@@ -261,11 +274,12 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
   const summariesOf = (infos: { obj: Record<string, unknown>; msg: string | undefined }[]) =>
     infos.filter((e) => e.msg === 'monthly report sweep done');
 
-  // R2-amendment pin (2): the previous closed month generates + notifies over the LIFETIME
-  // gates; data-less catch-up months are SKIPPED — a fresh venue never gets a backdated burst.
+  // MEJ-10 — the previous closed month generates + notifies when it has REAL month-scoped data
+  // (it no longer rides the LIFETIME gates); data-less catch-up months are SKIPPED as before.
   it('generates + notifies the PREVIOUS CLOSED month only; data-less catch-up months skip', async () => {
     const owner = await seedUser();
     const venue = await seedVenueWithData(owner, 'Café Mensuel');
+    await seedMonthStats(venue, '2026-06'); // June's own data — MEJ-10 requires it
     const upload = vi
       .spyOn(storage, 'upload')
       .mockImplementation(async (params) => ({ key: params.key }));
@@ -318,6 +332,115 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
     expect(
       await db.select().from(notifications).where(eq(notifications.userId, owner)),
     ).toHaveLength(1);
+  });
+
+  // ── MEJ-10 (2026-09-01) — the previous closed month was the ONE month nobody gated ──
+  // Mejri's venue was created 26/08 and its only data was an affluence grid an admin typed in
+  // August; on 31/08 the sweep produced a full JULY report out of nothing, because the
+  // previous-closed-month path skipped the month-scoped gate and stood on the LIFETIME candidate
+  // query alone.
+  it('MEJ-10: the previous closed month does NOT generate without month-scoped data', async () => {
+    const owner = await seedUser();
+    const venue = await seedVenueWithData(owner, 'Café Sans Juin'); // affluence only = LIFETIME
+    const upload = vi
+      .spyOn(storage, 'upload')
+      .mockImplementation(async (params) => ({ key: params.key }));
+
+    const result = await runMonthlyReportSweep(silentLog, NOW);
+    expect(result.generated).toBe(0);
+    expect(result.skipped).toBe(3); // June, May, April — all three now gated
+    expect(upload).not.toHaveBeenCalled();
+    expect(
+      await db
+        .select()
+        .from(screenhostMonthlyReports)
+        .where(eq(screenhostMonthlyReports.screenhostId, venue)),
+    ).toEqual([]);
+    // …and no notification for a report that does not exist.
+    expect(await db.select().from(notifications).where(eq(notifications.userId, owner))).toEqual(
+      [],
+    );
+  });
+
+  // MEJ-10 rider — the gate must be GENEROUS about evidence. `screenhost_monthly_stats` arrives
+  // only from the hub's pushMonthlyStats, which covers places with a LINKED device and skips any
+  // (place, month) whose total is ≤ 0. A venue whose device was unassigned when the sweep ran
+  // (routine since HUB-DEV1/ASG1) can therefore hold a full month of MEASURED hourly cells and no
+  // monthly_stats row — and a report that should exist, silently not existing, reaches the owner
+  // with no error at all.
+  it('MEJ-10: measured hourly cells alone qualify the month (no stats row, no proof)', async () => {
+    const owner = await seedUser();
+    const venue = await seedVenueWithData(owner, 'Café Capteur Seul');
+    await db.insert(screenhostAffluenceHourly).values([
+      { screenhostId: venue, date: '2026-06-15', hour: 13, value: 120 },
+      { screenhostId: venue, date: '2026-06-15', hour: 14, value: 90 },
+    ]);
+    const upload = vi
+      .spyOn(storage, 'upload')
+      .mockImplementation(async (params) => ({ key: params.key }));
+
+    await runMonthlyReportSweep(silentLog, NOW);
+    expect(upload).toHaveBeenCalledWith(
+      expect.objectContaining({ key: `reports/${venue}/2026-06.pdf` }),
+    );
+    const rows = await db
+      .select()
+      .from(screenhostMonthlyReports)
+      .where(eq(screenhostMonthlyReports.screenhostId, venue));
+    expect(rows.map((r) => r.month)).toEqual(['2026-06']);
+  });
+
+  it('MEJ-10: hourly cells OUTSIDE the month do not qualify it', async () => {
+    const owner = await seedUser();
+    const venue = await seedVenueWithData(owner, 'Café Hors Mois');
+    // July cells: after June's bounds — June must stay ungenerated.
+    await db
+      .insert(screenhostAffluenceHourly)
+      .values([{ screenhostId: venue, date: '2026-07-02', hour: 13, value: 120 }]);
+    vi.spyOn(storage, 'upload').mockImplementation(async (params) => ({ key: params.key }));
+
+    const result = await runMonthlyReportSweep(silentLog, NOW);
+    expect(result.generated).toBe(0);
+    expect(
+      await db
+        .select()
+        .from(screenhostMonthlyReports)
+        .where(eq(screenhostMonthlyReports.screenhostId, venue)),
+    ).toEqual([]);
+  });
+
+  it('MEJ-10: a month wholly BEFORE onboarding never generates, even with data in it', async () => {
+    const owner = await seedUser();
+    // Onboarded 2026-06-10: May and April precede the venue entirely; June contains the day.
+    const venue = await seedVenueWithData(owner, 'Café Nouveau', {
+      createdAt: new Date('2026-06-10T09:00:00Z'),
+    });
+    await seedMonthStats(venue, '2026-06');
+    await seedMonthStats(venue, '2026-05'); // real month-scoped data for a month it did not exist
+    vi.spyOn(storage, 'upload').mockImplementation(async (params) => ({ key: params.key }));
+
+    await runMonthlyReportSweep(silentLog, NOW);
+    const rows = await db
+      .select()
+      .from(screenhostMonthlyReports)
+      .where(eq(screenhostMonthlyReports.screenhostId, venue));
+    // June only: the floor outranks the data gate — a month before the venue existed describes
+    // nothing, whatever rows happen to carry that month key.
+    expect(rows.map((r) => r.month)).toEqual(['2026-06']);
+  });
+
+  it('MEJ-10: the notification path for a legitimate previous month is unchanged', async () => {
+    const owner = await seedUser();
+    const venue = await seedVenueWithData(owner, 'Café Légitime');
+    await seedMonthStats(venue, '2026-06');
+    vi.spyOn(storage, 'upload').mockImplementation(async (params) => ({ key: params.key }));
+
+    await runMonthlyReportSweep(silentLog, NOW);
+    const notifs = await db.select().from(notifications).where(eq(notifications.userId, owner));
+    expect(notifs).toHaveLength(1);
+    expect(notifs[0]?.type).toBe('monthly_report_ready');
+    expect(notifs[0]?.body).toContain('juin 2026');
+    void venue;
   });
 
   // R2-amendment pin (1): a missed month with REAL month-scoped data self-heals SILENTLY —
@@ -389,7 +512,8 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
 
   it('calls the AI pistes generator ONCE per generated report and freezes its output (R3)', async () => {
     const owner = await seedUser();
-    await seedVenueWithData(owner, 'Café IA');
+    const venueIa = await seedVenueWithData(owner, 'Café IA');
+    await seedMonthStats(venueIa, '2026-06'); // MEJ-10 — June needs its own data to generate
     vi.spyOn(storage, 'upload').mockImplementation(async (params) => ({ key: params.key }));
     pistesSpy.mockResolvedValue('Corps IA du créneau faible.');
 
@@ -409,6 +533,7 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
   it('a generator failure NEVER fails the report — it still stores, Piste 02 « À venir » (US-P.10)', async () => {
     const owner = await seedUser();
     const venue = await seedVenueWithData(owner, 'Café Sans IA');
+    await seedMonthStats(venue, '2026-06'); // MEJ-10
     vi.spyOn(storage, 'upload').mockImplementation(async (params) => ({ key: params.key }));
     pistesSpy.mockRejectedValue(new Error('anthropic exploded'));
 
@@ -470,7 +595,8 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
 
   it('a generating tick emits the summary with its real counts', async () => {
     const owner = await seedUser();
-    await seedVenueWithData(owner, 'Café Résumé');
+    const venueSummary = await seedVenueWithData(owner, 'Café Résumé');
+    await seedMonthStats(venueSummary, '2026-06'); // MEJ-10
     vi.spyOn(storage, 'upload').mockImplementation(async (params) => ({ key: params.key }));
     const { infos, log } = captureLog();
     await runMonthlyReportSweep(log, NOW);
@@ -504,7 +630,9 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
     const venues: string[] = [];
     for (let i = 0; i < MAX_SWEEP_ATTEMPTS_PER_TICK + 1; i += 1) {
       const owner = await seedUser();
-      venues.push(await seedVenueWithData(owner, `Café Cap ${i}`));
+      const capVenue = await seedVenueWithData(owner, `Café Cap ${i}`);
+      await seedMonthStats(capVenue, '2026-06'); // MEJ-10
+      venues.push(capVenue);
     }
     vi.spyOn(storage, 'upload').mockImplementation(async (params) => ({ key: params.key }));
 
@@ -527,7 +655,8 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
   // firing (overlapping sweeps compound chromium + query load; the incident's compounding path).
   it('a still-running sweep makes the next guarded tick a logged no-op', async () => {
     const owner = await seedUser();
-    await seedVenueWithData(owner, 'Café Long');
+    const venueLong = await seedVenueWithData(owner, 'Café Long');
+    await seedMonthStats(venueLong, '2026-06'); // MEJ-10
     vi.spyOn(storage, 'upload').mockImplementation(async (params) => ({ key: params.key }));
     let release: (() => void) | undefined;
     renderSpy.mockImplementationOnce(
@@ -561,6 +690,8 @@ describe('runMonthlyReportSweep (real Postgres, mocked render/storage)', () => {
     const ownerB = await seedUser();
     const venueA = await seedVenueWithData(ownerA, 'Café Qui Casse');
     const venueB = await seedVenueWithData(ownerB, 'Café Qui Marche');
+    await seedMonthStats(venueA, '2026-06'); // MEJ-10
+    await seedMonthStats(venueB, '2026-06');
 
     vi.spyOn(storage, 'upload').mockImplementation(async (params) =>
       params.key.includes(venueA) ? { error: 'disk full' } : { key: params.key },
