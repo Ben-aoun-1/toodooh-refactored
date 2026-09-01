@@ -76,10 +76,46 @@ export interface SpsVariables {
   remplissage: number;
 }
 
+/**
+ * MEJ-14b / SPS-D1 — what each variable actually RESTS ON, so a caller can tell a measured score
+ * from a score made of defaults. Counts only; nothing here feeds the score itself.
+ */
+export interface SpsObservations {
+  /** Decided allocations (campaign + event) in the acceptation window. */
+  decided: number;
+  /** Event attestations in the respect window. */
+  attested: number;
+  /** Elapsed scheduled créneaux in the activité window. */
+  scheduledElapsed: number;
+  /** Engaged broadcast seconds in the current Tunis week. */
+  engagedSeconds: number;
+}
+
 export interface SpsResult {
   sps: number;
   variables: SpsVariables;
+  /** MEJ-14b — the evidence behind `variables`; see spsComputable. */
+  observations: SpsObservations;
 }
+
+/**
+ * MEJ-14b (Mejri, ruled through the operator 2026-09-01) — is this score worth SHOWING?
+ *
+ * Three of the four variables answer 100 to an empty set, each for a good reason: no decisions is
+ * not a refusal, no inspection is not a breach (EVENT_RESPECT_DEFAULT), nothing scheduled is not a
+ * failure to broadcast. Only remplissage falls to 0. So a venue that has never been connected
+ * scores 100·40 % + 100·30 % + 100·20 % + 0·10 % = **90/100** and outranks venues live for months
+ * — a number built entirely out of defaults, with nothing measured underneath it.
+ *
+ * A score is computable once ANY ONE variable rests on a real observation. If none does, the
+ * surfaces show « À venir » rather than a number: never 0 either, which would read as a verdict.
+ *
+ * DISPLAY ONLY — deliberately. This does not change the score, the stored `screenhosts.sps`, or
+ * dispatch ordering: that venue's 90 still outranks in dispatch, and whether it SHOULD is a
+ * separate open question (SPS-DISPATCH1), not ruled here.
+ */
+export const spsComputable = (o: SpsObservations): boolean =>
+  o.decided > 0 || o.attested > 0 || o.scheduledElapsed > 0 || o.engagedSeconds > 0;
 
 /** The weighted total, clamped to [0, 100] (weights are validated Σ = 100 at the edit path). */
 export const weightedSps = (
@@ -250,7 +286,15 @@ export const computeSps = async (screenhostId: string, now = new Date()): Promis
     activite,
     remplissage,
   };
-  return { sps: weightedSps(variables, cfg), variables };
+  // MEJ-14b — the evidence, alongside the score. The score itself is UNCHANGED: dispatch and the
+  // stored snapshot keep reading exactly what they read before.
+  const observations: SpsObservations = {
+    decided: allDecided.length,
+    attested: attested.length,
+    scheduledElapsed: scheduled,
+    engagedSeconds,
+  };
+  return { sps: weightedSps(variables, cfg), variables, observations };
 };
 
 /** Compute + persist one venue's score (the on-decision hook; failures are the caller's warn). */

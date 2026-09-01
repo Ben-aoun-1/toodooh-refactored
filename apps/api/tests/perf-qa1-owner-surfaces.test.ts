@@ -8,6 +8,7 @@ import {
   campaigns,
   creatives,
   dispatchConfig,
+  eventAttestations,
   events,
   type NewUser,
   proofOfPlay,
@@ -22,6 +23,7 @@ import {
   PISTE_02_WAIT_BODY,
   PISTE_02_TITLE,
   PISTE_03_TITLE,
+  PISTE_03_WAIT_BODY,
 } from '../src/lib/report/pistes.js';
 import { venueSlug } from '../src/lib/slug.js';
 import { screenhostsRoutes } from '../src/routes/screenhosts.js';
@@ -75,6 +77,32 @@ const seedScreenhost = async (ownerId: string, name = 'Café Période'): Promise
 };
 
 /** Minimal campaign + creative pair so proof_of_play rows can exist (FKs are RESTRICT). */
+/**
+ * MEJ-14b — give a venue ONE real observation so its SPS is computable at all.
+ *
+ * An inspection is the lightest genuine history (event + attestation, no dispatch machinery), and
+ * `respecte: true` leaves every variable's VALUE exactly where the empty set left it — respect was
+ * already 100 by the EVENT_RESPECT_DEFAULT rule. So the score these tests assert is unchanged;
+ * what changes is that it is now a MEASURED 90 rather than a 90 made of defaults.
+ */
+const seedInspection = async (screenhostId: string, authorId: string): Promise<void> => {
+  seq += 1;
+  const [ev] = await db
+    .insert(events)
+    .values({
+      name: `PQ1 inspection ${seq}`,
+      // LONG past: a recent event would surface in Piste 01's upcoming-events teaser and change
+      // a copy assertion that has nothing to do with the SPS. The 90 d respect window reads the
+      // ATTESTATION's created_at (fresh, below), not the event date, so this stays observable.
+      kickoffAt: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000),
+      endsAt: new Date(Date.now() - 200 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000),
+    })
+    .returning();
+  await db
+    .insert(eventAttestations)
+    .values({ eventId: ev?.id ?? '', screenhostId, authorId, respecte: true });
+};
+
 const seedProofChain = async (): Promise<{ campaignId: string; creativeId: string }> => {
   const advertiserId = await seedUser({ role: 'advertiser' });
   const [creative] = await db
@@ -271,6 +299,7 @@ describe('PERF-QA1 owner surfaces (real Postgres)', () => {
     it('PERF-R1: carries as_of (Tunis today) so the page can label the live score « au <date> »', async () => {
       const me = await seedUser();
       const sh = await seedScreenhost(me);
+      await seedInspection(sh, me); // MEJ-14b — as_of is about the DATE, so keep the score shown
       mockSession(me);
       const body = (await get(`/api/screenhosts/${sh}/sps`)).json<SpsBody & { as_of?: string }>();
       const tunisToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Tunis' }).format(
@@ -282,6 +311,7 @@ describe('PERF-QA1 owner surfaces (real Postgres)', () => {
     it('serves the live score with the DEFAULT config weights 40/30/20/10 when no config row exists', async () => {
       const me = await seedUser();
       const sh = await seedScreenhost(me);
+      await seedInspection(sh, me); // MEJ-14b — weights only reach the wire when a score is shown
       mockSession(me);
       const res = await get(`/api/screenhosts/${sh}/sps`);
       expect(res.statusCode).toBe(200);
@@ -297,6 +327,39 @@ describe('PERF-QA1 owner surfaces (real Postgres)', () => {
       expect(typeof body.variables?.remplissage.value).toBe('number');
     });
 
+    // MEJ-14b / SPS-D1 (Mejri, ruled through the operator 2026-09-01) — a never-connected venue
+    // scored 90/100 and outranked venues live for months: three of the four variables answer 100
+    // to an empty set (no decisions is not a refusal, no inspection is not a breach, nothing
+    // scheduled is not a failure) and only remplissage falls to 0. Show « À venir » instead —
+    // never 0, which would read as a verdict.
+    it('MEJ-14b: a venue with NO history serves nulls so the page reads « À venir », never 90', async () => {
+      const me = await seedUser();
+      const sh = await seedScreenhost(me);
+      mockSession(me);
+      const res = await get(`/api/screenhosts/${sh}/sps`);
+      expect(res.statusCode).toBe(200);
+      const body = res.json<SpsBody & { as_of?: string }>();
+      expect(body.sps).toBeNull();
+      expect(body.variables).toBeNull();
+      // as_of still answers: the page labels its wait-state, it does not fail.
+      expect(typeof body.as_of).toBe('string');
+    });
+
+    it('MEJ-14b: ONE real observation is enough — the score comes back, unchanged at 90', async () => {
+      const me = await seedUser();
+      const sh = await seedScreenhost(me);
+      mockSession(me);
+      expect((await get(`/api/screenhosts/${sh}/sps`)).json<SpsBody>().sps).toBeNull();
+
+      // A single inspection is history on ONE variable, which is the whole predicate.
+      await seedInspection(sh, me);
+      const body = (await get(`/api/screenhosts/${sh}/sps`)).json<SpsBody>();
+      // The SCORE ITSELF is untouched by this lane — 90 is still 90, it is merely now measured.
+      // (Dispatch ordering reads that same 90 and is deliberately NOT changed here: SPS-DISPATCH1.)
+      expect(body.sps).toBe(90);
+      expect(body.variables?.respect_evenements.value).toBe(100);
+    });
+
     it('weights come from the CONFIG row when one exists — never hardcoded (pins R6)', async () => {
       await db.insert(dispatchConfig).values({
         seuilDiffusable: 1000,
@@ -310,6 +373,7 @@ describe('PERF-QA1 owner surfaces (real Postgres)', () => {
       });
       const me = await seedUser();
       const sh = await seedScreenhost(me);
+      await seedInspection(sh, me); // MEJ-14b — idem
       mockSession(me);
       const body = (await get(`/api/screenhosts/${sh}/sps`)).json<SpsBody>();
       expect(body.variables?.acceptation.weight).toBe(35);
@@ -350,12 +414,18 @@ describe('PERF-QA1 owner surfaces (real Postgres)', () => {
     it('serves the generator BYTE-EQUAL when the AI seam yields nothing (single home)', async () => {
       const me = await seedUser();
       const sh = await seedScreenhost(me);
+      // MEJ-14b — this venue needs ONE real observation, or Piste 03 is now (correctly) a wait
+      // state and there is no generator output to compare. Before the ruling this test asserted
+      // « votre score de priorité est de 90/100 » for a BARE venue: it documented the defect as
+      // intended behaviour. The inspection leaves every value where it was (respect was already
+      // 100), so the assertions below are unchanged — the 90 is simply measured now.
+      await seedInspection(sh, me);
       mockSession(me);
       const res = await get(`/api/screenhosts/${sh}/pistes?${range}`);
       expect(res.statusCode).toBe(200);
-      // A bare venue: nothing in the event catalogue → the honest no-events teaser; no AI body →
-      // the generic angles-morts copy; a computable SPS (default weights, nothing engaged →
-      // 40+30+20+0 = 90) → the real analysis, naming remplissage as the weighted weak point.
+      // Nothing in the event catalogue → the honest no-events teaser; no AI body → the generic
+      // angles-morts copy; a computable SPS (default weights, nothing engaged → 40+30+20+0 = 90)
+      // → the real analysis, naming remplissage as the weighted weak point.
       const body = res.json<PistesBody>();
       expect(body.pistes.map((p) => [p.num, p.title, p.pending])).toEqual([
         ['01', PISTE_01_TITLE, false],
@@ -373,6 +443,7 @@ describe('PERF-QA1 owner surfaces (real Postgres)', () => {
     it('goes through the SAME cache-wrapped seam as the period report, keyed venue × period', async () => {
       const me = await seedUser();
       const sh = await seedScreenhost(me);
+      await seedInspection(sh, me); // MEJ-14b — idem: Piste 03 needs a computable score to exist
       mockSession(me);
       pistesCachedSpy.mockResolvedValue('Corps IA du créneau faible.');
       const res = await get(`/api/screenhosts/${sh}/pistes?${range}`);
@@ -389,6 +460,20 @@ describe('PERF-QA1 owner surfaces (real Postgres)', () => {
       // …and the ai body only ever displaces Piste 02 — 01/03 stay generator-authored.
       expect(body.pistes[0]?.body).toBe(PISTE_01_NO_EVENTS_BODY);
       expect(body.pistes[2]?.body).toContain('Votre score de priorité est de');
+    });
+
+    // MEJ-14b — the ruling's real teeth: a hidden score on the page paired with « votre score est
+    // de 90/100 » in the piste text would be WORSE than showing the 90 everywhere. Piste 03 reads
+    // the same SPS block the page and the PDF read, so one predicate governs all three.
+    it('MEJ-14b: a no-history venue gets the Piste 03 WAIT body — never « votre score est de 90/100 »', async () => {
+      const me = await seedUser();
+      const sh = await seedScreenhost(me); // deliberately bare: no observation on any variable
+      mockSession(me);
+      const body = (await get(`/api/screenhosts/${sh}/pistes?${range}`)).json<PistesBody>();
+      expect(body.pistes[2]?.pending).toBe(true);
+      expect(body.pistes[2]?.body).toBe(PISTE_03_WAIT_BODY);
+      expect(body.pistes[2]?.body).not.toContain('90');
+      expect(body.pistes[2]?.title).toBe(PISTE_03_TITLE); // the title is fixed either way
     });
 
     it('a pistes-seam failure never fails the response — 200 with the generic body', async () => {
