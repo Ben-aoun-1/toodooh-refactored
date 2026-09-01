@@ -44,6 +44,7 @@ const baseData = (over: Partial<ReportData> = {}): ReportData => ({
     ],
   },
   range: { from: '2026-06-01', to: '2026-06-30' },
+  coverageDays: 30, // RPT-COV1 — a full-coverage fixture unless a test says otherwise
   generatedLabel: '08/07/2026',
   hostHasData: false,
   castHasData: false,
@@ -219,6 +220,18 @@ describe('renderReportHtml — structure shared by both states', () => {
     // 17–30 (7276) is the age maximum → 100 %; nothing is empty when the figures are real.
     expect(fills[2]).toBe('100%');
     expect(fills.some((w) => w === '0%')).toBe(false);
+  });
+
+  // RPT-COV1 — a thin report must admit it IN THE DOCUMENT. Mejri had an August report resting on
+  // 31/08 alone with nothing on its face saying so. Same rule and same words as the page (the
+  // helper is a byte-pinned twin), rendered beside « Période analysée ».
+  it('RPT-COV1: the header states the coverage next to the période', () => {
+    const thin = renderReportHtml(baseData({ coverageDays: 1 }));
+    expect(thin).toContain('Période analysée');
+    expect(thin).toContain('1 jour de données sur 30'); // the fixture's range is a 30-day June
+    const full = renderReportHtml(baseData({ coverageDays: 30 }));
+    expect(full).toContain('30 jours de données sur 30'); // a full month states its completeness
+    expect(full).not.toContain('1 jour de données sur 30');
   });
 
   it('renders the E4 S08 SPS card — ring with the REAL score, the 4 ruled criteria + weights + values', () => {
