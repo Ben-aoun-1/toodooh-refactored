@@ -255,8 +255,9 @@ const FIRST_HEATMAP_HOUR = 8; // the grid's 14 columns span 8h–21h (the page's
 const heatmapSlots = (
   levels: number[][],
   kinds: ProvenanceKind[][],
+  values: number[][],
 ): { plusForts: string[]; plusFaibles: string[] } => {
-  const open: { label: string; level: number }[] = [];
+  const open: { label: string; level: number; value: number }[] = [];
   levels.forEach((row, day) => {
     row.forEach((level, hourIdx) => {
       if (level > 0) {
@@ -266,11 +267,18 @@ const heatmapSlots = (
             estimated ? ' (estimation)' : ''
           }`,
           level,
+          value: values[day]?.[hourIdx] ?? 0,
         });
       }
     });
   });
-  const byLevelDesc = [...open].sort((a, b) => b.level - a.level);
+  // Rank by VALUE, level as the tie-break. Sorting by level alone ranked on a coarse 1–5 bucket,
+  // and Array.prototype.sort is STABLE, so cells sharing the top bucket kept insertion order —
+  // day-major, ascending hour. The earliest hour to reach the bucket therefore displaced the real
+  // maximum: on Mejri's two days, 16h/17h/18h took the three fort slots and the true 20h peak was
+  // named nowhere. Ranking by value does not contradict S02: S02 colours by level, so tied cells
+  // look identical there and naming the biggest of them is a refinement of the same lit-up cell.
+  const byLevelDesc = [...open].sort((a, b) => b.value - a.value || b.level - a.level);
   // R3.1 — the two lists are DISJOINT: a slot never reads as both fort and faible (the old
   // slice(-3) reused fort cells below 6 open slots and the model echoed the contradiction).
   // Fewer/empty plusFaibles beats a contradiction when the grid is nearly empty.
@@ -298,7 +306,7 @@ export function buildRecommendationInput(data: ReportData): RecommendationInput 
           pic: data.kpis.peak ? { valeur: data.kpis.peak.value, date: data.kpis.peak.date } : null,
         }
       : { globale: null, moyenneParJour: null, moyenneParHeure: null, pic: null },
-    creneaux: heatmapSlots(data.heatLevels, data.heatKinds),
+    creneaux: heatmapSlots(data.heatLevels, data.heatKinds, data.heatValues),
     campagnes: {
       nombre: data.castHasData ? data.campaignsBlock.count : 0,
       revenuTotalTnd: data.castHasData ? data.revenue.totalLabel : '0',
