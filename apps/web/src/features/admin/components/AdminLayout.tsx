@@ -20,6 +20,12 @@ import {
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
+import { usePlatformStats } from '@/features/admin/hooks/usePlatformStats';
+import {
+  pendingBadgeLabel,
+  pendingBadgeTitle,
+  showPendingBadge,
+} from '@/features/admin/lib/pending-queue';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { logger } from '@/lib/logger';
 
@@ -32,6 +38,13 @@ interface AdminLayoutProps {
 }
 
 export default function AdminLayout({ children, title, subtitle }: AdminLayoutProps) {
+  // SIGN-4 — one admin-guarded aggregate the dashboard already reads; React Query dedupes it
+  // across pages, so the badge costs no new endpoint and no extra round trip on the dashboard.
+  const platformStats = usePlatformStats();
+  const pendingQueue = {
+    total: platformStats.data?.users.pending ?? 0,
+    owners: platformStats.data?.users.pending_owners ?? 0,
+  };
   // Phase-1g (D3): identity + role derived from the one auth store.
   const user = useAuthStore((s) => s.user);
   const role = useAuthStore((s) => s.role);
@@ -153,7 +166,20 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
                 }`}
               >
                 <Users className="mr-3 h-5 w-5" />
-                Utilisateurs
+                <span className="flex-1 text-left">Utilisateurs</span>
+                {/* SIGN-4 — the pending-validation queue, so an admin learns a Host is waiting
+                    without opening the page. Rules (visibility, cap, wording) live in
+                    lib/pending-queue: this repo has no render harness, so a rule kept in a
+                    component is unpinnable. */}
+                {showPendingBadge(pendingQueue) && (
+                  <span
+                    title={pendingBadgeTitle(pendingQueue)}
+                    aria-label={pendingBadgeTitle(pendingQueue)}
+                    className="ml-2 inline-flex min-w-[22px] items-center justify-center rounded-full bg-amber-500 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-white"
+                  >
+                    {pendingBadgeLabel(pendingQueue)}
+                  </span>
+                )}
               </button>
 
               <button
