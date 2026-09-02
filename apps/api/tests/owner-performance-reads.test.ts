@@ -153,7 +153,10 @@ describe('owner performance reads (owner-scoped, real Postgres)', () => {
       expect(body.total_audience).toBe(580);
       expect(body.measured_days).toBe(1);
       expect(body.estimated_days).toBe(1);
-      expect(body.estimated_pct).toBe(50);
+      // Slice C — VALUE-WEIGHTED: the silent Tuesday is 80 people of 580, not « one day of two ».
+      // The old share of DATA POINTS said 50 %, which a reader would have taken to mean half the
+      // audience was guessed on a période that measured 500 of its 580.
+      expect(body.estimated_pct).toBe(14); // 80 / 580
     });
 
     it('a venue with ZERO readings serves the full backup estimate — never silent-zeros', async () => {

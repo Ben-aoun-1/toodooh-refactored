@@ -9,7 +9,7 @@ import {
 } from '../db/schema.js';
 
 import { tunisDateOf } from './campaign-dates.js';
-import { collapseHalvesSql } from './half-hour-slots.js';
+import { SLOTS_PER_DAY } from './half-hour-slots.js';
 import { emptyBackupGrid, type BackupGrid, type PeriodAudienceInput } from './period-audience.js';
 import type { DateRange } from './report/derive.js';
 
@@ -24,24 +24,23 @@ import type { DateRange } from './report/derive.js';
 
 /** The venue's backup grid + which cells the admin actually FILLED (rules 2 and 3 turn on it). */
 export const loadBackupGrid = async (venueId: string): Promise<BackupGrid> => {
-  // MEJ-13-B — BackupGrid stays 7×24 (slice C widens it), so the half-hour rows collapse to their
-  // hour HERE, in SQL. round(avg(halves)) is the ruled value and is exact when the halves agree.
-  // Without this the grid assignment below would take an arbitrary half, last row wins.
+  // Slice C — the grid is 7×48 now, so the rows are read SLOT-SHAPED and the MEJ-13-B collapse is
+  // gone from this path. (It stays at dispatch/pool.ts, event-pricing and monthly-audience, which
+  // are hour-keyed by design — see the notes there.)
   const rows = await db
     .select({
       dayOfWeek: screenhostAffluence.dayOfWeek,
-      hour: screenhostAffluence.hour,
-      estimatedImpressions: collapseHalvesSql(screenhostAffluence.estimatedImpressions),
+      slot: screenhostAffluence.slot,
+      estimatedImpressions: screenhostAffluence.estimatedImpressions,
     })
     .from(screenhostAffluence)
-    .where(eq(screenhostAffluence.screenhostId, venueId))
-    .groupBy(screenhostAffluence.dayOfWeek, screenhostAffluence.hour);
+    .where(eq(screenhostAffluence.screenhostId, venueId));
   const grid = emptyBackupGrid();
   for (const row of rows) {
     const index = row.dayOfWeek - 1;
-    if (index < 0 || index > 6 || row.hour < 0 || row.hour > 23) continue;
-    grid.values[index]![row.hour] = row.estimatedImpressions;
-    grid.has[index]![row.hour] = true;
+    if (index < 0 || index > 6 || row.slot < 0 || row.slot >= SLOTS_PER_DAY) continue;
+    grid.values[index]![row.slot] = row.estimatedImpressions;
+    grid.has[index]![row.slot] = true;
   }
   return grid;
 };
@@ -76,12 +75,12 @@ export async function loadPeriodAudienceInput(
       ),
     // The MEASURED hourly cells. The (screenhost_id, date, hour) unique index serves this range
     // read on its leading prefix — the reason slice A shipped one index rather than two.
-    // MEJ-13-B — periodAudience keys its cells on (date, hour), so the halves collapse here too.
+    // Slice C — periodAudience keys its cells on (date, SLOT); no collapse on this path.
     db
       .select({
         date: screenhostAffluenceHourly.date,
-        hour: screenhostAffluenceHourly.hour,
-        value: collapseHalvesSql(screenhostAffluenceHourly.value),
+        slot: screenhostAffluenceHourly.slot,
+        value: screenhostAffluenceHourly.value,
       })
       .from(screenhostAffluenceHourly)
       .where(
@@ -90,8 +89,7 @@ export async function loadPeriodAudienceInput(
           gte(screenhostAffluenceHourly.date, range.from),
           lte(screenhostAffluenceHourly.date, range.to),
         ),
-      )
-      .groupBy(screenhostAffluenceHourly.date, screenhostAffluenceHourly.hour),
+      ),
     loadBackupGrid(venueId),
     params.onboardedIso !== undefined
       ? Promise.resolve(params.onboardedIso)

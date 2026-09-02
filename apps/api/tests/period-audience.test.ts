@@ -22,18 +22,45 @@ const TODAY = '2026-08-31'; // a Monday
 const MONDAY = 1;
 const TUESDAY = 2;
 
-/** A backup grid with the given (isoDay 1=Mon..7, hour, value) cells FILLED by the admin. */
+/**
+ * A backup grid with the given (isoDay 1=Mon..7, HOUR, value) cells FILLED by the admin.
+ *
+ * Slice C — the grid is 7×48 now, and an hour-shaped fixture fills BOTH of its halves with the
+ * SAME value, exactly as the ingest does for an hour-shaped push. That is deliberate: every
+ * assertion in this file keeps the number it always had, which IS the slice-C pin — on equal
+ * halves nothing moves. The unequal cases are written explicitly, by slot.
+ */
 const gridWith = (cells: [day: number, hour: number, value: number][]): BackupGrid => {
   const grid = emptyBackupGrid();
   for (const [day, hour, value] of cells) {
-    grid.values[day - 1]![hour] = value;
-    grid.has[day - 1]![hour] = true;
+    for (const slot of [hour * 2, hour * 2 + 1]) {
+      grid.values[day - 1]![slot] = value;
+      grid.has[day - 1]![slot] = true;
+    }
   }
   return grid;
 };
 
+/** A backup grid keyed by SLOT — for the cases where the two halves differ on purpose. */
+const gridWithSlots = (cells: [day: number, slot: number, value: number][]): BackupGrid => {
+  const grid = emptyBackupGrid();
+  for (const [day, slot, value] of cells) {
+    grid.values[day - 1]![slot] = value;
+    grid.has[day - 1]![slot] = true;
+  }
+  return grid;
+};
+
+/** Measured cells given per HOUR — both halves, same level (the level semantics). */
 const hours = (date: string, pairs: [hour: number, value: number][]): HourlyCell[] =>
-  pairs.map(([hour, value]) => ({ date, hour, value }));
+  pairs.flatMap(([hour, value]) => [
+    { date, slot: hour * 2, value },
+    { date, slot: hour * 2 + 1, value },
+  ]);
+
+/** Measured cells given per SLOT — for the deliberately unequal halves. */
+const slots = (date: string, pairs: [slot: number, value: number][]): HourlyCell[] =>
+  pairs.map(([slot, value]) => ({ date, slot, value }));
 
 const input = (over: Partial<PeriodAudienceInput> = {}): PeriodAudienceInput => ({
   months: [],
@@ -64,8 +91,10 @@ describe("AUD-HOURLY1-C — Mejri's scenario: the sensor goes dark for ONE hour"
 
   it('the outage hour renders the FORCED grid value with source backup', () => {
     expect(result.cells).toEqual([
-      { date: TODAY, hour: 9, value: 12, source: 'measured' },
-      { date: TODAY, hour: 10, value: 30, source: 'backup' }, // not 0, and not « measured »
+      { date: TODAY, slot: 18, value: 12, source: 'measured' },
+      { date: TODAY, slot: 19, value: 12, source: 'measured' },
+      { date: TODAY, slot: 20, value: 30, source: 'backup' },
+      { date: TODAY, slot: 21, value: 30, source: 'backup' }, // not 0, and not « measured »
     ]);
   });
 
@@ -81,12 +110,15 @@ describe("AUD-HOURLY1-C — Mejri's scenario: the sensor goes dark for ONE hour"
 
   it("S02's cell for that slot is the backup value, marked as an estimation", () => {
     const week = weekGridFromCells(result.cells);
-    expect(week[MONDAY - 1]![10]).toEqual({ value: 30, source: 'backup' });
-    expect(week[MONDAY - 1]![9]).toEqual({ value: 12, source: 'measured' });
+    expect(week[MONDAY - 1]![20]).toEqual({ value: 30, source: 'backup' }); // 10h00
+    expect(week[MONDAY - 1]![18]).toEqual({ value: 12, source: 'measured' }); // 9h00
   });
 
-  it('the caption counts CELLS: one of the two data points is estimated → 50 %', () => {
-    expect(result.estimatedPct).toBe(50);
+  // Slice C redefined this caption: it weights by VALUE, not by counting rows. Mejri's outage
+  // hour is worth 30 against the measured hour's 12, so it is the LARGER part of that day's
+  // audience even though it is one cell of two — 71 %, not the 50 % a row count would claim.
+  it("the caption weights by VALUE: the outage hour is most of that day's audience → 71 %", () => {
+    expect(result.estimatedPct).toBe(71); // 30 / (30 + 12), the 0.5 cancelling on both sides
   });
 });
 
@@ -95,14 +127,20 @@ describe('AUD-HOURLY1-C — the four merge rules', () => {
     const result = periodAudience(
       input({ hourly: hours(TODAY, [[9, 12]]), grid: gridWith([[MONDAY, 9, 999]]) }),
     );
-    expect(result.cells).toEqual([{ date: TODAY, hour: 9, value: 12, source: 'measured' }]);
+    expect(result.cells).toEqual([
+      { date: TODAY, slot: 18, value: 12, source: 'measured' },
+      { date: TODAY, slot: 19, value: 12, source: 'measured' },
+    ]);
   });
 
   it('rule 2: a measured ZERO defers to the grid cell when the admin filled one', () => {
     const result = periodAudience(
       input({ hourly: hours(TODAY, [[9, 0]]), grid: gridWith([[MONDAY, 9, 30]]) }),
     );
-    expect(result.cells).toEqual([{ date: TODAY, hour: 9, value: 30, source: 'backup' }]);
+    expect(result.cells).toEqual([
+      { date: TODAY, slot: 18, value: 30, source: 'backup' },
+      { date: TODAY, slot: 19, value: 30, source: 'backup' },
+    ]);
   });
 
   it('rule 2: a measured ZERO STANDS where the grid has no cell (outside opening hours)', () => {
@@ -111,7 +149,10 @@ describe('AUD-HOURLY1-C — the four merge rules', () => {
     const result = periodAudience(
       input({ hourly: hours(TODAY, [[3, 0]]), grid: emptyBackupGrid() }),
     );
-    expect(result.cells).toEqual([{ date: TODAY, hour: 3, value: 0, source: 'measured' }]);
+    expect(result.cells).toEqual([
+      { date: TODAY, slot: 6, value: 0, source: 'measured' },
+      { date: TODAY, slot: 7, value: 0, source: 'measured' },
+    ]);
     expect(result.days).toEqual([
       { date: TODAY, audience: 0, source: 'measured', hasMeasured: true },
     ]);
@@ -122,8 +163,10 @@ describe('AUD-HOURLY1-C — the four merge rules', () => {
       input({ hourly: hours(TODAY, [[3, 0]]), grid: gridWith([[MONDAY, 9, 30]]) }),
     );
     expect(result.cells).toEqual([
-      { date: TODAY, hour: 3, value: 0, source: 'measured' }, // closed hour, zero stands
-      { date: TODAY, hour: 9, value: 30, source: 'backup' }, // open hour with no measure, filled
+      { date: TODAY, slot: 6, value: 0, source: 'measured' },
+      { date: TODAY, slot: 7, value: 0, source: 'measured' }, // closed hour, zero stands
+      { date: TODAY, slot: 18, value: 30, source: 'backup' },
+      { date: TODAY, slot: 19, value: 30, source: 'backup' }, // open hour with no measure, filled
     ]);
   });
 
@@ -135,11 +178,14 @@ describe('AUD-HOURLY1-C — the four merge rules', () => {
       }),
     );
     expect(result.cells).toEqual([
-      { date: TODAY, hour: 9, value: 5, source: 'measured' },
-      { date: TODAY, hour: 11, value: 40, source: 'backup' },
+      { date: TODAY, slot: 18, value: 5, source: 'measured' }, // 9h00
+      { date: TODAY, slot: 19, value: 5, source: 'measured' }, // 9h30
+      { date: TODAY, slot: 22, value: 40, source: 'backup' }, // 11h00
+      { date: TODAY, slot: 23, value: 40, source: 'backup' }, // 11h30
     ]);
-    // 10h has no measure and no grid cell → absent, so it cannot drag the averages down.
-    expect(result.cells.some((c) => c.hour === 10)).toBe(false);
+    // 10h has no measure and no grid cell → absent in BOTH halves, so it cannot drag the
+    // averages down.
+    expect(result.cells.some((c) => c.slot === 20 || c.slot === 21)).toBe(false);
   });
 
   it('rule 4: the floor bounds BACKUP only — a measurement before it always counts', () => {
@@ -153,9 +199,11 @@ describe('AUD-HOURLY1-C — the four merge rules', () => {
     );
     expect(result.cells).toEqual([
       // The pre-floor MEASUREMENT is a fact about the venue and stays…
-      { date: '2026-08-24', hour: 9, value: 7, source: 'measured' },
+      { date: '2026-08-24', slot: 18, value: 7, source: 'measured' },
+      { date: '2026-08-24', slot: 19, value: 7, source: 'measured' },
       // …while the post-floor measured zero may defer to the grid.
-      { date: TODAY, hour: 9, value: 30, source: 'backup' },
+      { date: TODAY, slot: 18, value: 30, source: 'backup' },
+      { date: TODAY, slot: 19, value: 30, source: 'backup' },
     ]);
   });
 
@@ -168,7 +216,10 @@ describe('AUD-HOURLY1-C — the four merge rules', () => {
         onboardedIso: '2026-08-26',
       }),
     );
-    expect(result.cells).toEqual([{ date: '2026-08-24', hour: 9, value: 0, source: 'measured' }]);
+    expect(result.cells).toEqual([
+      { date: '2026-08-24', slot: 18, value: 0, source: 'measured' },
+      { date: '2026-08-24', slot: 19, value: 0, source: 'measured' },
+    ]);
   });
 
   it('rule 4: the backup grid alone never answers for days before the floor', () => {
@@ -311,27 +362,174 @@ describe('periodAudience — hasMeasured, the peak-eligibility flag', () => {
   });
 });
 
-describe('weekGridFromCells — S02 is the période folded into a weekday × hour grid', () => {
+// ── Slice C — the half-hour merge ────────────────────────────────────────────────────────────
+//
+// Every assertion ABOVE is the slice-C pin: the fixtures write both halves of each hour, which is
+// what an hour-shaped push produces, and not one number moved. These are the cases that only exist
+// once the halves can differ.
+describe('slice C — duration-weighted sums and unequal halves', () => {
+  it('THE INVARIANT: equal halves give exactly the old day total, not double it', () => {
+    // 24 hours at 100 → the day is Σ (100 × 0.5) over 48 slots = 2400, which is Σ 100 over 24
+    // hours. Summing 48 cells unweighted would say 4800 — the silent doubling this guards.
+    const everyHour: [number, number][] = Array.from({ length: 24 }, (_, h) => [h, 100]);
+    const result = periodAudience(input({ hourly: hours(TODAY, everyHour) }));
+    expect(result.days[0]?.audience).toBe(2400);
+    expect(result.total).toBe(2400);
+    expect(result.cells).toHaveLength(48); // stored per half…
+    expect(result.days[0]?.audience).not.toBe(4800); // …but never counted twice
+  });
+
+  it('MEJ-8: a half-hour outage now MOVES the day total, and in the expected direction', () => {
+    // 9h00 measured at 200; 9h30 the sensor went dark and the admin's grid says 40. Before the
+    // half-hour grid the hour bucket was carried by its surviving reading and the outage was
+    // INVISIBLE. Now it costs the day exactly the half-hour it lost.
+    const result = periodAudience(
+      input({
+        hourly: slots(TODAY, [[18, 200]]),
+        grid: gridWithSlots([[MONDAY, 19, 40]]),
+      }),
+    );
+    expect(result.days[0]?.audience).toBe(120); // 200×0.5 + 40×0.5
+    expect(result.days[0]?.audience).toBeLessThan(200); // the outage is visible, not absorbed
+    // …and the day is an estimation now, because one of its halves is the admin's grid.
+    expect(result.days[0]?.source).toBe('estimated');
+    expect(result.days[0]?.hasMeasured).toBe(true); // but still peak-eligible (MEJ-R2)
+  });
+
+  it('a lone measured half stands alone — the missing half is not invented as a zero', () => {
+    const result = periodAudience(input({ hourly: slots(TODAY, [[18, 200]]) }));
+    expect(result.cells).toHaveLength(1);
+    expect(result.days[0]?.audience).toBe(100); // 200 × 0.5, for the half hour it actually covers
+    expect(result.days[0]?.source).toBe('measured');
+  });
+
+  it('the day total rounds to whole people, and only ever on unequal halves', () => {
+    // 9h00 = 100, 9h30 = 101 → 100.5 → 101. Equal halves can never need this (their sum is the
+    // old integer exactly), so rounding cannot perturb an existing number.
+    const odd = periodAudience(
+      input({
+        hourly: slots(TODAY, [
+          [18, 100],
+          [19, 101],
+        ]),
+      }),
+    );
+    expect(odd.days[0]?.audience).toBe(101);
+    const even = periodAudience(input({ hourly: hours(TODAY, [[9, 100]]) }));
+    expect(even.days[0]?.audience).toBe(100);
+  });
+
+  // ACCEPTED, not discovered later (planner ruling): Math.round sends TIES UP, and a tie happens
+  // whenever a day's weighted slot sum is odd — so on unequal halves the day total runs high by at
+  // most +0.5, ≈ +0.25 on average, against totals in the hundreds. That is below the precision the
+  // estimate carries anyway; banker's rounding and a fractional wire both cost more than they buy.
+  // This assertion exists so the bias has a NAME when someone notices « the totals run slightly
+  // high » and goes looking.
+  it('ACCEPTED BIAS: an odd weighted sum rounds UP, never to even and never truncated', () => {
+    // 9h00 = 100, 9h30 = 101 → 100.5. Half-up gives 101; banker's rounding would give 100.
+    const odd = periodAudience(
+      input({
+        hourly: slots(TODAY, [
+          [18, 100],
+          [19, 101],
+        ]),
+      }),
+    );
+    expect(odd.days[0]?.audience).toBe(101);
+    // …and the same shape one lower, to show it is the .5 that rounds up, not a floor/ceil.
+    const evenSum = periodAudience(
+      input({
+        hourly: slots(TODAY, [
+          [18, 100],
+          [19, 102],
+        ]),
+      }),
+    );
+    expect(evenSum.days[0]?.audience).toBe(101); // 101.0 exactly
+  });
+
+  // Slice C, ruled 2026-09-01 — « dont N % estimés » is VALUE-WEIGHTED:
+  //     Σ (estimated audience) / Σ (all audience)
+  // and is the ONE quantity exempt from the equal-halves bit-identical pin, because it is a
+  // definition change rather than a granularity change.
+  describe('estimatedPct — the share of PEOPLE, not of rows', () => {
+    it('a half-estimated hour weights by its VALUE, not by counting one row of two', () => {
+      const result = periodAudience(
+        input({
+          hourly: slots(TODAY, [[18, 200]]),
+          grid: gridWithSlots([[MONDAY, 19, 40]]),
+        }),
+      );
+      expect(result.cells).toHaveLength(2);
+      // 40 estimated against 240 total (both halves × 0.5 cancels) → 17 %, not the 50 % that
+      // counting rows would have claimed for a half-hour worth a sixth of the audience.
+      expect(result.estimatedPct).toBe(17);
+    });
+
+    it('THE REALISTIC SHAPE: 27 measured history days + one half-estimated day of slots', () => {
+      // The case that condemned the point share: it would read ≈ 32 % estimés (24 backup slots
+      // out of 27 + 48 points) on a venue that measured 27 days straight. The truth is the
+      // estimated PEOPLE, which is a rounding error beside a month of measured history.
+      const from = '2026-08-04'; // a Monday, 27 days before TODAY
+      const daily = Array.from({ length: 27 }, (_, i) => {
+        const day = String(4 + i).padStart(2, '0');
+        return { date: `2026-08-${day}`, audience: 1000, source: 'measured' as const };
+      });
+      const result = periodAudience(
+        input({
+          range: { from, to: TODAY },
+          months: [{ month: '2026-08', daily }],
+          // The last day only: 12 measured hours, and 12 hours the admin's grid stands in for.
+          hourly: hours(
+            TODAY,
+            Array.from({ length: 12 }, (_, h) => [h + 8, 100]),
+          ),
+          grid: gridWith(Array.from({ length: 12 }, (_, h) => [MONDAY, h + 20, 50])),
+        }),
+      );
+      expect(result.measuredDays).toBe(27);
+      expect(result.estimatedPct).not.toBeNull();
+      // 600 estimated people-hours against 27 000 + 1 800 → 2 %, not 32 %.
+      expect(result.estimatedPct!).toBeLessThan(5);
+    });
+
+    it('null still means NO DATA AT ALL — the meaning the PDF branches on', () => {
+      expect(periodAudience(input({})).estimatedPct).toBeNull();
+    });
+
+    it('a période holding data but ZERO audience falls back to the point share, never to null', () => {
+      // Degenerate: the sensor counted nobody all period. There is no audience to apportion, but
+      // there IS data — so null (which means « no data ») would mislead the surfaces that branch
+      // on it, and the point share is the only defined answer left.
+      const result = periodAudience(input({ hourly: hours(TODAY, [[9, 0]]) }));
+      expect(result.cells).toHaveLength(2);
+      expect(result.estimatedPct).toBe(0); // measured zeros — nothing estimated
+    });
+  });
+});
+
+describe('weekGridFromCells — S02 is the période folded into a weekday × slot grid', () => {
   it('averages the cells that fall on a slot and rounds', () => {
     const week = weekGridFromCells([
-      { date: '2026-08-24', hour: 9, value: 10, source: 'measured' }, // Monday
-      { date: TODAY, hour: 9, value: 15, source: 'measured' }, // Monday
+      { date: '2026-08-24', slot: 18, value: 10, source: 'measured' }, // Monday
+      { date: TODAY, slot: 18, value: 15, source: 'measured' }, // Monday
     ]);
-    expect(week[MONDAY - 1]![9]).toEqual({ value: 13, source: 'measured' }); // 12.5 → 13
+    expect(week[MONDAY - 1]![18]).toEqual({ value: 13, source: 'measured' }); // 12.5 → 13
   });
 
   it('one backup cell makes the whole slot an estimation (the AFF1 ruling)', () => {
     const week = weekGridFromCells([
-      { date: '2026-08-24', hour: 9, value: 10, source: 'measured' },
-      { date: TODAY, hour: 9, value: 30, source: 'backup' },
+      { date: '2026-08-24', slot: 18, value: 10, source: 'measured' },
+      { date: TODAY, slot: 18, value: 30, source: 'backup' },
     ]);
-    expect(week[MONDAY - 1]![9]).toEqual({ value: 20, source: 'backup' });
+    expect(week[MONDAY - 1]![18]).toEqual({ value: 20, source: 'backup' });
   });
 
   it('a slot the période holds no cell for is null — hachured, never a coloured 0', () => {
-    const week = weekGridFromCells([{ date: TODAY, hour: 9, value: 10, source: 'measured' }]);
-    expect(week[MONDAY - 1]![10]).toEqual({ value: null, source: null });
-    expect(week[TUESDAY - 1]![9]).toEqual({ value: null, source: null });
+    const week = weekGridFromCells([{ date: TODAY, slot: 18, value: 10, source: 'measured' }]);
+    expect(week[MONDAY - 1]![20]).toEqual({ value: null, source: null }); // 10h00
+    expect(week[MONDAY - 1]![19]).toEqual({ value: null, source: null }); // the OTHER half of 9h
+    expect(week[TUESDAY - 1]![18]).toEqual({ value: null, source: null });
   });
 
   it('an empty période yields an all-null grid, not zeros', () => {

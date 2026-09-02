@@ -146,13 +146,13 @@ describe('screenhost affluence read — ?from&to période aggregation (AUD-HOURL
     const res = await getRange(sh, '?from=2026-08-03&to=2026-08-04');
     expect(res.statusCode).toBe(200);
     const body = res.json() as AffluenceResponse;
-    expect(body.grid[0]?.[9]).toBe(100); // Monday: the grid stood in for an unmeasured hour
+    expect(body.grid[0]?.[18]).toBe(100); // Monday: the grid stood in for an unmeasured hour
     // …and it says so: no hourly cell exists, so this value is an ESTIMATION whatever the hub
     // had marked on its own rolling slot.
-    expect(body.sources[0]?.[9]).toBe('backup');
-    expect(body.grid[2]?.[18]).toBe(0); // Wednesday is not in the période — no cell at all
-    expect(body.sources[2]?.[18]).toBeNull();
-    expect(body.counts).toEqual({ measured: 0, backup: 1 });
+    expect(body.sources[0]?.[18]).toBe('backup');
+    expect(body.grid[2]?.[36]).toBe(0); // Wednesday is not in the période — no cell at all
+    expect(body.sources[2]?.[36]).toBeNull();
+    expect(body.counts).toEqual({ measured: 0, backup: 2 }); // slice C — tallies count SLOTS, so an hour-shaped fixture counts twice
     expect(body.has_data).toBe(true);
   });
 
@@ -164,9 +164,9 @@ describe('screenhost affluence read — ?from&to période aggregation (AUD-HOURL
     mockSession(me);
 
     const body = (await getRange(sh, '?from=2026-08-03&to=2026-08-03')).json() as AffluenceResponse;
-    expect(body.grid[0]?.[9]).toBe(12); // the measure, not the grid's 100
-    expect(body.sources[0]?.[9]).toBe('measured');
-    expect(body.counts).toEqual({ measured: 1, backup: 0 });
+    expect(body.grid[0]?.[18]).toBe(12); // the measure, not the grid's 100
+    expect(body.sources[0]?.[18]).toBe('measured');
+    expect(body.counts).toEqual({ measured: 2, backup: 0 }); // slice C — tallies count SLOTS, so an hour-shaped fixture counts twice
   });
 
   it("Mejri's outage, end to end: a measured ZERO hour renders the grid value as backup", async () => {
@@ -183,10 +183,10 @@ describe('screenhost affluence read — ?from&to période aggregation (AUD-HOURL
     mockSession(me);
 
     const body = (await getRange(sh, '?from=2026-08-03&to=2026-08-03')).json() as AffluenceResponse;
-    expect(body.grid[0]?.[9]).toBe(12);
-    expect(body.sources[0]?.[9]).toBe('measured');
-    expect(body.grid[0]?.[10]).toBe(30); // FORCED from the admin's grid, not left at 0
-    expect(body.sources[0]?.[10]).toBe('backup');
+    expect(body.grid[0]?.[18]).toBe(12);
+    expect(body.sources[0]?.[18]).toBe('measured');
+    expect(body.grid[0]?.[20]).toBe(30); // FORCED from the admin's grid, not left at 0
+    expect(body.sources[0]?.[20]).toBe('backup');
   });
 
   it('a période containing none of the data weekdays serves the empty state', async () => {
@@ -212,15 +212,15 @@ describe('screenhost affluence read — ?from&to période aggregation (AUD-HOURL
     mockSession(me);
 
     const week = (await getRange(sh, '?from=2026-08-01&to=2026-08-31')).json() as AffluenceResponse;
-    expect(week.grid[0]?.[9]).toBe(100);
-    expect(week.grid[6]?.[12]).toBe(60);
+    expect(week.grid[0]?.[18]).toBe(100);
+    expect(week.grid[6]?.[24]).toBe(60);
     // Both derived from the grid → both estimations in the période view.
-    expect(week.counts).toEqual({ measured: 0, backup: 2 });
+    expect(week.counts).toEqual({ measured: 0, backup: 4 }); // slice C — tallies count SLOTS, so an hour-shaped fixture counts twice
 
     // « Votre audience » (no params) is untouched by this lane: the hub's own provenance stands.
     const bare = (await getRange(sh, '')).json() as AffluenceResponse;
-    expect(bare.counts).toEqual({ measured: 1, backup: 1 });
-    expect(bare.sources[0]?.[9]).toBe('measured');
+    expect(bare.counts).toEqual({ measured: 2, backup: 2 }); // slice C — tallies count SLOTS, so an hour-shaped fixture counts twice
+    expect(bare.sources[0]?.[18]).toBe('measured');
   });
 
   it('rejects a malformed or one-sided from/to (400)', async () => {
@@ -252,7 +252,7 @@ describe('screenhost affluence read (owner-scoped, real Postgres)', () => {
   const get = (id: string) =>
     app.inject({ method: 'GET', url: `/api/screenhosts/${id}/affluence` });
 
-  it('returns a 7×24 grid with the owner’s slots placed (Monday-first)', async () => {
+  it('returns a 7×48 grid with the owner’s slots placed (Monday-first)', async () => {
     const me = await seedUser();
     const sh = await seedScreenhost(me);
     await seedAffluence(sh, [
@@ -267,10 +267,10 @@ describe('screenhost affluence read (owner-scoped, real Postgres)', () => {
     const body = res.json() as AffluenceResponse;
     expect(body.has_data).toBe(true);
     expect(body.grid).toHaveLength(7);
-    expect(body.grid.every((row) => row.length === 24)).toBe(true);
-    expect(body.grid[0]?.[9]).toBe(100); // Monday=row 0
-    expect(body.grid[2]?.[18]).toBe(250); // Wednesday=row 2
-    expect(body.grid[6]?.[23]).toBe(40); // Sunday=row 6
+    expect(body.grid.every((row) => row.length === 48)).toBe(true); // slice C — SLOT columns
+    expect(body.grid[0]?.[18]).toBe(100); // Monday=row 0
+    expect(body.grid[2]?.[36]).toBe(250); // Wednesday=row 2
+    expect(body.grid[6]?.[46]).toBe(40); // Sunday=row 6
     expect(body.grid[1]?.[0]).toBe(0); // untouched slot
   });
 
@@ -290,7 +290,7 @@ describe('screenhost affluence read (owner-scoped, real Postgres)', () => {
   // AFF1 — provenance rides beside the grid: sources[day][hour] mirrors grid's Monday-first shape,
   // counts are PURE provenance tallies (a measured 0 is still a measurement; a NULL-source row —
   // pushed by a pre-AFF1 hub — is neither).
-  it('AFF1: returns sources (7×24, Monday-first) + counts, a measured 0 counting as measured', async () => {
+  it('AFF1: returns sources (7×48, Monday-first) + counts, a measured 0 counting as measured', async () => {
     const me = await seedUser();
     const sh = await seedScreenhost(me);
     await seedAffluence(sh, [
@@ -305,14 +305,14 @@ describe('screenhost affluence read (owner-scoped, real Postgres)', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json() as AffluenceResponse;
     expect(body.sources).toHaveLength(7);
-    expect(body.sources.every((row) => row.length === 24)).toBe(true);
-    expect(body.sources[0]?.[9]).toBe('measured');
-    expect(body.sources[0]?.[10]).toBe('measured');
-    expect(body.sources[2]?.[18]).toBe('backup');
-    expect(body.sources[4]?.[8]).toBeNull(); // value present, provenance unknown
+    expect(body.sources.every((row) => row.length === 48)).toBe(true); // slice C
+    expect(body.sources[0]?.[18]).toBe('measured');
+    expect(body.sources[0]?.[20]).toBe('measured');
+    expect(body.sources[2]?.[36]).toBe('backup');
+    expect(body.sources[4]?.[16]).toBeNull(); // value present, provenance unknown
     expect(body.sources[1]?.[0]).toBeNull(); // no row at all
-    expect(body.grid[4]?.[8]).toBe(12); // the value itself is unaffected by unknown provenance
-    expect(body.counts).toEqual({ measured: 2, backup: 1 });
+    expect(body.grid[4]?.[16]).toBe(12); // the value itself is unaffected by unknown provenance
+    expect(body.counts).toEqual({ measured: 4, backup: 2 }); // slice C — tallies count SLOTS, so an hour-shaped fixture counts twice
   });
 
   it('AFF1: an empty venue returns all-null sources + zero counts', async () => {

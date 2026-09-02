@@ -35,7 +35,7 @@ import { REDISPATCH_HEARTBEAT_TOLERANCE_MS } from '../lib/dispatch/redispatch.js
 import { buildEligibilityPatch } from '../lib/eligibility-patch.js';
 import { createEngineTrace, type EngineTrace } from '../lib/engine-journal/trace.js';
 import { releaseBlocHours, runEventRefusalCascade } from '../lib/event-dispatch/dispatch.js';
-import { collapseHalvesSql } from '../lib/half-hour-slots.js';
+import { SLOTS_PER_DAY } from '../lib/half-hour-slots.js';
 import { displayImpressionsSettled } from '../lib/impressions-display.js';
 import { measuredDays, measuredTotal } from '../lib/monthly-audience.js';
 import { loadPeriodAudienceInput } from '../lib/period-audience-source.js';
@@ -648,7 +648,7 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
   // "typical week" weekday × hour grid of estimated audience the hub pushes via POST
   // /api/internal/affluence (this is the first READER of screenhost_affluence — the ingest is
   // unchanged). Same owner-scoping as the WiFi routes: a foreign/missing id is a 404. Returns a
-  // zero-filled 7×24 grid (grid[0]=Monday … grid[6]=Sunday; hour index 0–23, matching wedooh's
+  // zero-filled 7×48 grid (grid[0]=Monday … grid[6]=Sunday; SLOT index 0–47 since slice C;
   // 1=Mon…7=Sun / 0–23 slots) + has_data, so the dashboard can show an empty state. Summaries
   // (peak day/hour, daily average, weekly total) are derived client-side from the grid.
   // AFF1: `sources` mirrors the grid's shape with each slot's provenance ('measured' | 'backup' |
@@ -712,11 +712,15 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         ? { from: parsedQuery.data.from, to: parsedQuery.data.to }
         : null;
 
-    // Zero-filled 7×24 grid (Monday-first); day_of_week 1=Mon…7=Sun → row 0…6. `sources` is the
-    // same shape, null-filled. `counts` tallies provenance only.
-    const grid: number[][] = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
+    // Slice C — zero-filled 7×48 grid (Monday-first), columns indexed by SLOT (0–47);
+    // day_of_week 1=Mon…7=Sun → row 0…6. `sources` is the same shape, null-filled. `counts`
+    // tallies provenance only, now per SLOT — which is also why the MEJ-13-B hour-collapse is gone
+    // from this read: the wire is slot-shaped, so nothing here needs to pretend it is hourly.
+    const grid: number[][] = Array.from({ length: 7 }, () =>
+      Array.from({ length: SLOTS_PER_DAY }, () => 0),
+    );
     const sources: (AffluenceSource | null)[][] = Array.from({ length: 7 }, () =>
-      Array.from({ length: 24 }, () => null),
+      Array.from({ length: SLOTS_PER_DAY }, () => null),
     );
     const counts = { measured: 0, backup: 0 };
     let filled = 0;
@@ -732,22 +736,19 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       const slots = await db
         .select({
           dayOfWeek: screenhostAffluence.dayOfWeek,
-          hour: screenhostAffluence.hour,
-          estimatedImpressions: collapseHalvesSql(screenhostAffluence.estimatedImpressions),
-          source: sql<
-            'measured' | 'backup' | null
-          >`case when count(*) = count(${screenhostAffluence.source}) and count(distinct ${screenhostAffluence.source}) = 1 then min(${screenhostAffluence.source}) else null end`,
+          slot: screenhostAffluence.slot,
+          estimatedImpressions: screenhostAffluence.estimatedImpressions,
+          source: screenhostAffluence.source,
         })
         .from(screenhostAffluence)
-        .where(eq(screenhostAffluence.screenhostId, owned.id))
-        .groupBy(screenhostAffluence.dayOfWeek, screenhostAffluence.hour);
-      for (const slot of slots) {
-        const row = grid[slot.dayOfWeek - 1];
-        const sourceRow = sources[slot.dayOfWeek - 1];
-        if (row && sourceRow && slot.hour >= 0 && slot.hour <= 23) {
-          row[slot.hour] = slot.estimatedImpressions;
-          sourceRow[slot.hour] = slot.source;
-          if (slot.source) counts[slot.source] += 1;
+        .where(eq(screenhostAffluence.screenhostId, owned.id));
+      for (const cell of slots) {
+        const row = grid[cell.dayOfWeek - 1];
+        const sourceRow = sources[cell.dayOfWeek - 1];
+        if (row && sourceRow && cell.slot >= 0 && cell.slot < SLOTS_PER_DAY) {
+          row[cell.slot] = cell.estimatedImpressions;
+          sourceRow[cell.slot] = cell.source;
+          if (cell.source) counts[cell.source] += 1;
         }
       }
       filled = slots.length;
@@ -763,11 +764,11 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       );
       const week = weekGridFromCells(merged.cells);
       for (let row = 0; row < 7; row += 1) {
-        for (let hour = 0; hour < 24; hour += 1) {
-          const cell = week[row]![hour]!;
+        for (let slot = 0; slot < SLOTS_PER_DAY; slot += 1) {
+          const cell = week[row]![slot]!;
           if (cell.value === null || cell.source === null) continue;
-          grid[row]![hour] = cell.value;
-          sources[row]![hour] = cell.source;
+          grid[row]![slot] = cell.value;
+          sources[row]![slot] = cell.source;
           counts[cell.source] += 1;
           filled += 1;
         }

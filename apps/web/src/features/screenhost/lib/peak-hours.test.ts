@@ -10,6 +10,9 @@ import {
   heatmapLevel,
   heatmapScale,
   peakHoursEmpty,
+  slotLabel,
+  heatmapSlots,
+  collapseHourCell,
 } from './peak-hours';
 
 describe('PEAK_HOURS_LEAD (the byte-equality contract with the PDF)', () => {
@@ -93,36 +96,118 @@ describe('peakHoursEmpty (AFF1 ruling)', () => {
 // MEJ-3 (Mejri 31/08 pt 3) — the S02 cell readout. It was an inline native `title`: unpinnable
 // (no render harness) and, on a fast traverse of 26px cells, one cell behind the cursor. The
 // string lives here now and the component feeds it the SAME descriptor it colours the cell from.
+// ── Slice C — the half-hour heatmap rules ────────────────────────────────────────────────────
+//
+// These cannot be pinned through the component (WEB-GATE1: apps/web has no render harness), so
+// they live here and the component only lays them out.
+describe('slotLabel — the venue clock, both halves', () => {
+  it('the :00 half keeps the plain hour, the :30 half says so', () => {
+    expect(slotLabel(26)).toBe('13h');
+    expect(slotLabel(27)).toBe('13h30');
+    expect(slotLabel(0)).toBe('0h');
+    expect(slotLabel(47)).toBe('23h30');
+  });
+});
+
+describe('heatmapSlots — two columns per open hour, in order', () => {
+  it('an 8h–10h venue yields 8h, 8h30, 9h, 9h30', () => {
+    expect(heatmapSlots(8, 10)).toEqual([16, 17, 18, 19]);
+  });
+
+  it('unknown hours fall back to the mockup window, still doubled', () => {
+    expect(heatmapSlots(null, null)).toHaveLength(28); // 14 hours × 2
+    expect(heatmapSlots(null, null)[0]).toBe(16); // 8h00
+  });
+});
+
+describe('collapseHourCell — what ONE column shows at ≤375 px', () => {
+  it('two measured halves collapse to their mean, still measured', () => {
+    expect(
+      collapseHourCell([
+        { value: 100, kind: 'measured' },
+        { value: 200, kind: 'measured' },
+      ]),
+    ).toEqual({ value: 150, kind: 'measured' });
+  });
+
+  it('MIXTE: a measured half beside an ESTIMATED one — the disagreement a phone cannot show', () => {
+    expect(
+      collapseHourCell([
+        { value: 200, kind: 'measured' },
+        { value: 40, kind: 'backup' },
+      ]),
+    ).toEqual({ value: 120, kind: 'mixte' });
+  });
+
+  it('a measured half beside an EMPTY one stays MEASURED, and is not halved towards a zero', () => {
+    // Nothing contradicts the measure, so the hour is measured; and averaging against an absent
+    // reading would invent a 0 the sensor never observed.
+    expect(
+      collapseHourCell([
+        { value: 200, kind: 'measured' },
+        { value: null, kind: 'none' },
+      ]),
+    ).toEqual({ value: 200, kind: 'measured' });
+  });
+
+  it('two estimated halves stay an estimation — mixte never widens to « not clearly measured »', () => {
+    expect(
+      collapseHourCell([
+        { value: 10, kind: 'backup' },
+        { value: 20, kind: 'backup' },
+      ]),
+    ).toEqual({ value: 15, kind: 'backup' });
+  });
+
+  it('an hour with nothing in either half is no data at all', () => {
+    expect(
+      collapseHourCell([
+        { value: null, kind: 'none' },
+        { value: null, kind: 'none' },
+      ]),
+    ).toEqual({ value: null, kind: 'none' });
+  });
+
+  it('the collapsed value rounds, matching the api rule for an hour-keyed consumer', () => {
+    expect(
+      collapseHourCell([
+        { value: 100, kind: 'measured' },
+        { value: 101, kind: 'measured' },
+      ]),
+    ).toEqual({ value: 101, kind: 'measured' }); // 100.5 → 101
+  });
+});
+
 describe('heatmapCellTitle — the cell says what it renders and where it comes from', () => {
   // fr-FR groups thousands with a NARROW NO-BREAK SPACE (U+202F), not a plain space — spelled
   // out here so the pin cannot be "fixed" by typing an ordinary space that then never matches.
   it('names the slot, the value and « mesuré » for a sensor cell', () => {
     expect(
-      heatmapCellTitle({ dayLabel: 'Lun', hour: 13, closed: false, kind: 'measured', value: 1396 }),
+      heatmapCellTitle({ dayLabel: 'Lun', slot: 26, closed: false, kind: 'measured', value: 1396 }),
     ).toBe('Lun 13h — 1\u202f396 pers. (mesuré)');
   });
 
   it('says « estimation » for a backup cell — the value is never dressed as a measure', () => {
     expect(
-      heatmapCellTitle({ dayLabel: 'Sam', hour: 9, closed: false, kind: 'backup', value: 80 }),
+      heatmapCellTitle({ dayLabel: 'Sam', slot: 18, closed: false, kind: 'backup', value: 80 }),
     ).toBe('Sam 9h — 80 pers. (estimation)');
   });
 
   it('a data-less cell claims no number', () => {
     expect(
-      heatmapCellTitle({ dayLabel: 'Dim', hour: 20, closed: false, kind: 'none', value: 0 }),
+      heatmapCellTitle({ dayLabel: 'Dim', slot: 40, closed: false, kind: 'none', value: 0 }),
     ).toBe('Dim 20h — aucune donnée');
   });
 
   it('closed wins over everything — outside the hours there is no audience to describe', () => {
     expect(
-      heatmapCellTitle({ dayLabel: 'Mar', hour: 3, closed: true, kind: 'measured', value: 500 }),
+      heatmapCellTitle({ dayLabel: 'Mar', slot: 6, closed: true, kind: 'measured', value: 500 }),
     ).toBe('Mar 3h — fermé');
   });
 
   it('a measured 0 still reads as a measure (AFF1: a measured zero IS a measurement)', () => {
     expect(
-      heatmapCellTitle({ dayLabel: 'Jeu', hour: 8, closed: false, kind: 'measured', value: 0 }),
+      heatmapCellTitle({ dayLabel: 'Jeu', slot: 16, closed: false, kind: 'measured', value: 0 }),
     ).toBe('Jeu 8h — 0 pers. (mesuré)');
   });
 

@@ -1,4 +1,4 @@
-import { type ProvenanceKind, affluenceEmpty } from './affluence-provenance';
+import { collapsedHourKind, type ProvenanceKind, affluenceEmpty } from './affluence-provenance';
 import { formatDecimalFr } from './performance-derive';
 
 /**
@@ -97,8 +97,8 @@ export function peakHoursEmpty(input: {
 export interface HeatmapCell {
   /** « Lun », « Mar », … */
   dayLabel: string;
-  /** 0–23, the venue's own clock. */
-  hour: number;
+  /** 0–47 — the half-hour slot on the venue's own clock (slice C). */
+  slot: number;
   closed: boolean;
   kind: ProvenanceKind;
   /** The cell's rendered value (the number the colour encodes). */
@@ -106,7 +106,7 @@ export interface HeatmapCell {
 }
 
 export function heatmapCellTitle(cell: HeatmapCell): string {
-  const at = `${cell.dayLabel} ${cell.hour}h`;
+  const at = `${cell.dayLabel} ${slotLabel(cell.slot)}`;
   if (cell.closed) return `${at} — fermé`;
   if (cell.kind === 'none') return `${at} — aucune donnée`;
   const source = cell.kind === 'measured' ? 'mesuré' : 'estimation';
@@ -115,3 +115,59 @@ export function heatmapCellTitle(cell: HeatmapCell): string {
 
 /** The caption's resting state, before the reader has pointed at anything. */
 export const HEATMAP_HINT = 'Survolez une case pour en lire la valeur et sa source.';
+
+// ── Slice C — the half-hour heatmap ───────────────────────────────────────────────────────────
+//
+// S02 renders TWO sub-columns per hour on desktop. At ≤375 px that is 28 columns on a phone, which
+// AFF1 already fought a width battle over, so the narrow layout collapses back to one column per
+// hour. These rules live here rather than in the component because apps/web has no render harness
+// (WEB-GATE1): a rule left in a .tsx is a rule nobody can pin.
+
+/** The viewport at or below which S02 collapses its halves back into hours. */
+export const HEATMAP_COLLAPSE_MAX_PX = 375;
+
+/** Slots per hour, mirrored from the api's half-hour vocabulary. */
+const HALVES_PER_HOUR = 2;
+
+/** « 13h » / « 13h30 » — a slot on the venue's own clock. */
+export function slotLabel(slot: number): string {
+  const hour = Math.floor(slot / HALVES_PER_HOUR);
+  return slot % HALVES_PER_HOUR === 0 ? `${hour}h` : `${hour}h30`;
+}
+
+/** The heatmap's SLOT columns: each open hour contributes its two halves, in order. */
+export function heatmapSlots(openingHour: number | null, closingHour: number | null): number[] {
+  return heatmapHours(openingHour, closingHour).flatMap((hour) => [
+    hour * HALVES_PER_HOUR,
+    hour * HALVES_PER_HOUR + 1,
+  ]);
+}
+
+/** One rendered half-hour: the value the colour encodes, and where it came from. */
+export interface HalfCell {
+  value: number | null;
+  kind: ProvenanceKind;
+}
+
+/**
+ * The narrow layout's collapse: what ONE hour column shows for its two halves.
+ *
+ * The value is the mean of the halves that carry data, rounded — the same rule the api applies
+ * whenever a half-hour grid answers an hour-keyed consumer, so the phone and the desktop can never
+ * disagree about a number. A half carrying nothing is not averaged against: an hour measured for
+ * 30 minutes shows what it measured, never that halved towards a zero it never observed.
+ *
+ * The kind is `collapsedHourKind`: measured beside empty is measured, and only measured beside
+ * ESTIMATED is « mixte » — the disagreement a reader at 375 px could not otherwise see.
+ */
+export function collapseHourCell(halves: readonly HalfCell[]): HalfCell {
+  const carrying = halves.filter((half) => half.value !== null && half.kind !== 'none');
+  if (carrying.length === 0) {
+    return { value: null, kind: 'none' };
+  }
+  const sum = carrying.reduce((total, half) => total + (half.value ?? 0), 0);
+  return {
+    value: Math.round(sum / carrying.length),
+    kind: collapsedHourKind(carrying.map((half) => half.kind)),
+  };
+}

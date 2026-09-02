@@ -65,10 +65,15 @@ export const blocCells = (start: Date, end: Date): TunisCell[] => {
  * Returns the effective A_max, or the 50 fallback (UNPERSISTED) when nothing is known.
  */
 export const computeAmax = async (screenhostId: string): Promise<number> => {
-  // MEJ-13-B — A_max is the busiest HOUR, so the max runs over collapsed hours, never over raw
-  // halves. `max(halves)` is precisely the rule the contract rejects: it would ratchet A_max up on
-  // a single busy half-hour and, because the ratchet never writes downward, that inflation would
-  // be permanent — on the event-pricing / C_max_evt path.
+  // ⚠️ THIS COLLAPSE IS PERMANENT — do NOT "finish the half-hour migration" by deleting it.
+  //
+  // You are looking at a GROUP BY on `hour` over a table keyed by `slot`, and it looks like a
+  // leftover from slice B. It is not. A_max is the busiest HOUR by definition, and the ratchet
+  // never writes downward — `max(halves)` would inflate it PERMANENTLY on one busy half-hour.
+  // The half-hour grid is the storage; an hour is what THIS consumer means. `round(avg(halves))`
+  // is its correct input, and it returns the old value exactly whenever the halves agree.
+  // (Slice C removed the collapse from the READ paths that went slot-shaped — period-audience and
+  // the /affluence wire. This one, event-pricing's A_max and monthly-audience stay by design.)
   const grid = await db
     .select({ v: collapseHalvesSql(screenhostAffluence.estimatedImpressions) })
     .from(screenhostAffluence)

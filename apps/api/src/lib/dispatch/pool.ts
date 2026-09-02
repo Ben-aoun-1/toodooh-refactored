@@ -193,11 +193,15 @@ export const assemblePool = async (
 
   // Affluence (Ai) for the candidates; engaged broadcast SECONDS (other plans' allocations) cap the
   // per-screen F-budget below.
-  // MEJ-13-B — Ai is read per CLOCK HOUR (affByKey below, and the broadcastableHours loop), while
-  // the table now holds half-hour rows. Collapse to the hour in SQL: round(avg(halves)) is the
-  // ruled value, exact whenever the halves agree. Without the GROUP BY the keyed map would take
-  // whichever half the planner happened to return last — an arbitrary Ai on the dispatch,
-  // capacité, C_max and créneau-impressions path.
+  // ⚠️ THIS COLLAPSE IS PERMANENT — do NOT "finish the half-hour migration" by deleting it.
+  //
+  // You are looking at a GROUP BY on `hour` over a table keyed by `slot`, and it looks like a
+  // leftover from slice B. It is not. Ai is defined per CLOCK HOUR: `affByKey` is keyed on it and the
+  // broadcastableHours loop walks integer hours from opening to closing.
+  // The half-hour grid is the storage; an hour is what THIS consumer means. `round(avg(halves))`
+  // is its correct input, and it returns the old value exactly whenever the halves agree.
+  // (Slice C removed the collapse from the READ paths that went slot-shaped — period-audience and
+  // the /affluence wire. This one, event-pricing's A_max and monthly-audience stay by design.)
   const affluenceRows = candidateIds.length
     ? await executor
         .select({
