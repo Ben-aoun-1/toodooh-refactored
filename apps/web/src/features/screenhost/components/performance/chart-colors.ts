@@ -33,16 +33,21 @@ export const HEATMAP_CLOSED_CLASS =
   'bg-[repeating-linear-gradient(-45deg,#F1F5F3,#F1F5F3_3px,#E4ECE7_3px,#E4ECE7_6px)]';
 
 /**
- * AFF1 — the estimation treatment layered over a ramp level: a dashed outline, so an estimated
- * cell KEEPS ITS INTENSITY but never passes for a sensor reading. Paired with the « Estimation »
- * legend swatch; the hachure stays reserved for closed / no-data cells.
+ * AFF1 — the estimation treatment layered over a ramp level: an estimated cell KEEPS ITS INTENSITY
+ * but never passes for a sensor reading. Paired with the « Estimation » legend swatch; the dense
+ * hachure stays reserved for closed / no-data cells.
  *
- * S02-FUT1 (2026-09-02) — `opacity-60` is GONE, and dropping it restores AFF1's own stated intent
- * rather than changing it: « keeps its intensity » and a 40 % wash were always in tension. On the
- * 26 px cells this class was written for, the dashed outline carried the signal and the wash was
- * a hint. Slice C halved the cells to ~13 px: the 1 px outline became faint, the wash dominated,
- * and a low-level estimated cell rendered ALMOST WHITE — reading as « no data » rather than as an
- * estimation, which is the one thing the hachure is reserved for. Verified side by side at 13 px.
+ * S02-SRC1 (Mejri, ruled 2026-09-02) — THE SIGNAL IS THE HATCH, not the outline and not a wash.
+ * Two earlier attempts each failed at one end of the ramp, and both failures are the same mistake:
+ * relying on something a 13 px cell cannot show.
+ *   • `opacity-60` (AFF1) washed the colour out. Fine at 26 px; after slice C halved the cells a
+ *     LOW-level estimated cell rendered almost white and read as « aucune donnée ».
+ *   • Dropping the opacity (02/09 14:41, mine) fixed that end and broke the other: her slot 27 is
+ *     the day's MAXIMUM, so it is the DARKEST ramp step, and a 1 px dashed outline is invisible on
+ *     it. She photographed exactly that cell.
+ * A low-density diagonal hatch works at BOTH ends because it is drawn ON the colour rather than
+ * taken out of it: the cell keeps its ramp step, and the stripes read on dark and light alike.
+ * The dashed outline stays as the secondary cue.
  */
 export const HEATMAP_ESTIMATION_CLASS =
-  'outline outline-1 outline-dashed -outline-offset-1 outline-perf-mist';
+  'bg-[repeating-linear-gradient(-45deg,transparent,transparent_2px,rgba(255,255,255,0.62)_2px,rgba(255,255,255,0.62)_3.5px)] outline outline-1 outline-dashed -outline-offset-1 outline-perf-mist';
