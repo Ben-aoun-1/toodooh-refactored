@@ -802,10 +802,14 @@ body{
 }
 /* AFF1 — estimation treatment layered over a ramp level: lighter + a near-white dashed outline
    (print-safe; a mist-toned outline vanished on the bright levels — measured on the P2 render). */
-/* S02-FUT1 — opacity dropped here for the same reason as the page (chart-colors.ts): slice C
-   halved these cells, and the wash made a low-level estimated cell read as no-data. The dashed
-   outline alone carries the provenance; the page and the document stay identical in treatment. */
-.hest{ outline:1.5px dashed rgba(242,247,244,0.9); outline-offset:-2px; }
+/* S02-SRC1 — the estimation signal is a low-density diagonal HATCH drawn ON the ramp colour, plus
+   the dashed outline. A wash (opacity) failed at the light end and a bare outline failed at the
+   dark end — both rely on something a half-width cell cannot show. Twin of the page's
+   HEATMAP_ESTIMATION_CLASS; the dense hachure stays reserved for closed / no-data. */
+.hest{
+  background-image:repeating-linear-gradient(-45deg,transparent,transparent 2px,rgba(237,246,239,0.55) 2px,rgba(237,246,239,0.55) 3.5px);
+  outline:1.5px dashed rgba(242,247,244,0.9); outline-offset:-2px;
+}
 .heat-legend{
   margin-top:16px; display:flex; align-items:center; gap:8px; flex-wrap:nowrap; white-space:nowrap;
   font-family:var(--mono); font-size:6.8pt; letter-spacing:.14em; text-transform:uppercase; color:var(--faint);
