@@ -197,9 +197,16 @@ export default function OwnerPerformance() {
   const affluenceGrid = useMemo(() => affluence.data?.grid ?? [], [affluence.data]);
   const hostHasData = useMemo(() => hasHostData(months, affluenceGrid), [months, affluenceGrid]);
   const castHasData = useMemo(() => hasCastData(venueLines, days), [venueLines, days]);
+  // RPT-HIST1 (Mejri, 2026-09-02) — l'historique liste TOUS les rapports, le vedette compris :
+  // « Dès lors que le rapport du mois d'août est disponible et téléchargeable, il doit également
+  // apparaître dans l'historique des rapports mensuels. » Elle renverse son propre US-P.2, qui
+  // demandait « every month AFTER the latest one (the latest lives on the monthly card) » — d'où
+  // le `.slice(1)` retiré ici. La carte vedette reste en place ; les deux surfaces montrent le
+  // mois courant, et les compteurs de la ligne viennent de la MÊME fusion que la carte
+  // (`audienceOfMonth`), donc les deux ne peuvent pas afficher des chiffres différents.
   const historyRows = useMemo(
     () =>
-      reportRows.slice(1).map((r) => ({
+      reportRows.map((r) => ({
         month: r.month,
         totalAudience: audienceOfMonth(allTimeDays, r.month),
         impressions: impressionsOfMonth(days, r.month),
