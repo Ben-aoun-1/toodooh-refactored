@@ -6,9 +6,10 @@ import { z } from 'zod';
 
 import { env } from '../../env.js';
 import { logger } from '../../logger.js';
+import { hourOfSlot } from '../half-hour-slots.js';
 
 import type { ProvenanceKind } from './affluence-provenance.js';
-import type { ReportData } from './assemble.js';
+import { HEATMAP_SLOTS, type ReportData } from './assemble.js';
 
 const log = logger.child({ module: 'report-recommendations' });
 
@@ -81,6 +82,7 @@ Règles strictes :
 - UN SEUL paragraphe de 30 mots maximum, sans titre.
 - Rédige en français, en vouvoiement (« vous », « votre lieu »), dans le ton de conseil concret du rapport.
 - Si une donnée est absente ou nulle, ne la mentionne pas.
+- Chaque créneau nommé couvre 30 minutes (« 13h30 » = 13h30–14h00). Ne fusionne pas plusieurs créneaux en une plage horaire et ne cite jamais une heure absente des données fournies : le lieu est fermé en dehors des créneaux listés.
 - Un créneau suivi de « (estimation) » n'a PAS été mesuré par le capteur : c'est la grille type saisie pour ce lieu. Tu peux le citer, mais dis alors qu'il est estimé — ne le présente jamais comme une fréquentation constatée.`;
 
 // Lazy singleton — constructed on first use and ONLY when the key is provisioned (explicit
@@ -236,10 +238,28 @@ export async function generateRecommendationsCached(
 // the body the page shows for the same inputs are the SAME generation.
 
 const DAY_LABELS_FR = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'] as const;
-const FIRST_HEATMAP_HOUR = 8; // the grid's 14 columns span 8h–21h (the page's visible hours)
+/**
+ * PISTE-LBL1 (Mejri, 2026-09-02) — THE COLUMN → CLOCK LABEL, derived from the SAME array that
+ * built the columns.
+ *
+ * It used to be `8 + columnIndex`, which was right while the grid was 14 hourly columns and became
+ * nonsense the moment slice C made it 28 half-hour ones: column 15 printed « 23h » and column 25
+ * printed « 33h », and the model turned the first into « vos créneaux nocturnes (23h-25h) » on a
+ * café that closes at 21h. A bulk index conversion missed this one line.
+ *
+ * Indexing `HEATMAP_SLOTS` instead of re-deriving the arithmetic is the actual fix: there is now
+ * ONE source for what column N means, and a future change to the window or the granularity moves
+ * the labels with it instead of leaving them behind.
+ */
+const slotColumnLabel = (columnIndex: number): string | null => {
+  const slot = HEATMAP_SLOTS[columnIndex];
+  if (slot === undefined) return null; // a column the window does not have is not a créneau
+  const hour = hourOfSlot(slot);
+  return slot % 2 === 0 ? `${hour}h` : `${hour}h30`;
+};
 
 /**
- * Top/bottom OPEN slots from the 7×14 ramp levels (0 = closed/no-data, never a créneau).
+ * Top/bottom OPEN slots from the 7×28 ramp levels (0 = closed/no-data, never a créneau).
  *
  * MEJ-12 (2026-09-01) — Piste 02 announced « Les lundis 13h-14h concentrent l'audience » while the
  * venue's real measured peak was lundi 20h-21h. The ranking was not wrong: `heatmapLevels` scores
@@ -259,17 +279,20 @@ const heatmapSlots = (
 ): { plusForts: string[]; plusFaibles: string[] } => {
   const open: { label: string; level: number; value: number }[] = [];
   levels.forEach((row, day) => {
-    row.forEach((level, hourIdx) => {
-      if (level > 0) {
-        const estimated = kinds[day]?.[hourIdx] !== 'measured';
-        open.push({
-          label: `${DAY_LABELS_FR[day] ?? '—'} ${FIRST_HEATMAP_HOUR + hourIdx}h${
-            estimated ? ' (estimation)' : ''
-          }`,
-          level,
-          value: values[day]?.[hourIdx] ?? 0,
-        });
-      }
+    row.forEach((level, columnIndex) => {
+      // level 0 is a CLOSED slot or one with no data, and it never becomes a créneau — which is
+      // also why no label can name an hour outside [opening, closing): heatmapLevels zeroes those
+      // columns before this ever sees them. Pinned, because Mejri's second sentence (« recommend
+      // only within opening hours ») was this same bug read from the other side.
+      if (level <= 0) return;
+      const clock = slotColumnLabel(columnIndex);
+      if (clock === null) return;
+      const estimated = kinds[day]?.[columnIndex] !== 'measured';
+      open.push({
+        label: `${DAY_LABELS_FR[day] ?? '—'} ${clock}${estimated ? ' (estimation)' : ''}`,
+        level,
+        value: values[day]?.[columnIndex] ?? 0,
+      });
     });
   });
   // Rank by VALUE, level as the tie-break. Sorting by level alone ranked on a coarse 1–5 bucket,

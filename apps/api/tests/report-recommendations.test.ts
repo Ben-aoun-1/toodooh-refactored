@@ -366,15 +366,16 @@ const reportData = (over: Partial<ReportData> = {}): ReportData => ({
     measuredDays: 28,
     estimatedPct: 0,
   },
-  heatKinds: Array.from({ length: 7 }, () => Array.from({ length: 14 }, () => 'measured' as const)),
-  heatValues: Array.from({ length: 7 }, () => Array.from({ length: 14 }, () => 0)),
+  heatKinds: Array.from({ length: 7 }, () => Array.from({ length: 28 }, () => 'measured' as const)),
+  heatValues: Array.from({ length: 7 }, () => Array.from({ length: 28 }, () => 0)),
   heatEmpty: false,
-  // one hot cell (Ven idx4, 18h → hourIdx 10 = level 5), one warm, one weak, rest closed
+  // PISTE-LBL1 — the grid is 28 SLOT columns since slice C, so column c is hour 8 + ⌊c/2⌋ and
+  // the :00 half is even. Ven 18h → column 20; Sam 17h → 18; Mar 9h → 2.
   heatLevels: Array.from({ length: 7 }, (_, day) =>
-    Array.from({ length: 14 }, (_, h) => {
-      if (day === 4 && h === 10) return 5;
-      if (day === 5 && h === 9) return 3;
-      if (day === 1 && h === 1) return 1;
+    Array.from({ length: 28 }, (_, c) => {
+      if (day === 4 && c === 20) return 5;
+      if (day === 5 && c === 18) return 3;
+      if (day === 1 && c === 2) return 1;
       return 0;
     }),
   ),
@@ -426,7 +427,7 @@ describe('buildRecommendationInput (ReportData → minimized payload)', () => {
   // the model repeated the contradiction). Fewer/empty faibles beats a contradiction. ───────────
   describe('heatmap slot dedupe matrix', () => {
     const gridWith = (cells: [number, number, number][]): number[][] => {
-      const grid = Array.from({ length: 7 }, () => Array.from({ length: 14 }, () => 0));
+      const grid = Array.from({ length: 7 }, () => Array.from({ length: 28 }, () => 0));
       for (const [day, hourIdx, level] of cells) {
         const row = grid[day];
         if (row) row[hourIdx] = level;
@@ -448,13 +449,13 @@ describe('buildRecommendationInput (ReportData → minimized payload)', () => {
     // day-major, ASCENDING HOUR. The earliest hour to reach the bucket displaced the true maximum.
     const kindsWith = (estimatedCells: [number, number][]) => {
       const kinds = Array.from({ length: 7 }, () =>
-        Array.from({ length: 14 }, () => 'measured' as 'measured' | 'backup' | 'none'),
+        Array.from({ length: 28 }, () => 'measured' as 'measured' | 'backup' | 'none'),
       );
       for (const [day, hourIdx] of estimatedCells) kinds[day]![hourIdx] = 'backup';
       return kinds;
     };
     const valuesWith = (cells: [number, number, number][]): number[][] => {
-      const grid = Array.from({ length: 7 }, () => Array.from({ length: 14 }, () => 0));
+      const grid = Array.from({ length: 7 }, () => Array.from({ length: 28 }, () => 0));
       for (const [day, hourIdx, value] of cells) grid[day]![hourIdx] = value;
       return grid;
     };
@@ -462,29 +463,30 @@ describe('buildRecommendationInput (ReportData → minimized payload)', () => {
     it('MEJ-12: the BUSIEST slot leads, not the earliest one in the same level bucket', () => {
       // Mejri's shape: two days, all MEASURED, Σ = 378, true max Monday 20h (56). Real levels for
       // this data are 4,4,4,5,5,5,4,5 across 13h→20h — four cells tie at 5 and 20h is the last.
+      // PISTE-LBL1 — SLOT columns since slice C: hour H is column (H − 8) × 2, the :00 half.
       const cells: [number, number, number][] = [
-        [0, 5, 40], // Lun 13h
-        [0, 6, 45], // Lun 14h
-        [0, 7, 42], // Lun 15h
-        [0, 8, 48], // Lun 16h  ← level 5
-        [0, 9, 50], // Lun 17h  ← level 5
-        [0, 10, 52], // Lun 18h ← level 5
-        [0, 11, 40], // Lun 19h
-        [0, 12, 56], // Lun 20h ← level 5 AND the true maximum
-        [1, 5, 5], // Mar 13h
+        [0, 10, 40], // Lun 13h
+        [0, 12, 45], // Lun 14h
+        [0, 14, 42], // Lun 15h
+        [0, 16, 48], // Lun 16h  ← level 5
+        [0, 18, 50], // Lun 17h  ← level 5
+        [0, 20, 52], // Lun 18h ← level 5
+        [0, 22, 40], // Lun 19h
+        [0, 24, 56], // Lun 20h ← level 5 AND the true maximum
+        [1, 10, 5], // Mar 13h
       ];
       const built = buildRecommendationInput(
         reportData({
           heatLevels: gridWith([
-            [0, 5, 4],
-            [0, 6, 4],
-            [0, 7, 4],
-            [0, 8, 5],
-            [0, 9, 5],
-            [0, 10, 5],
-            [0, 11, 4],
-            [0, 12, 5],
-            [1, 5, 1],
+            [0, 10, 4],
+            [0, 12, 4],
+            [0, 14, 4],
+            [0, 16, 5],
+            [0, 18, 5],
+            [0, 20, 5],
+            [0, 22, 4],
+            [0, 24, 5],
+            [1, 10, 1],
           ]),
           heatKinds: kindsWith([]),
           heatValues: valuesWith(cells),
@@ -499,13 +501,13 @@ describe('buildRecommendationInput (ReportData → minimized payload)', () => {
       const built = buildRecommendationInput(
         reportData({
           heatLevels: gridWith([
-            [0, 5, 5],
-            [0, 12, 1],
+            [0, 10, 5], // Lun 13h00
+            [0, 24, 1], // Lun 20h00
           ]),
-          heatKinds: kindsWith([[0, 5]]),
+          heatKinds: kindsWith([[0, 10]]),
           heatValues: valuesWith([
-            [0, 5, 1396], // the admin's typed cell — bigger, so it still leads…
-            [0, 12, 300],
+            [0, 10, 1396], // the admin's typed cell — bigger, so it still leads…
+            [0, 24, 300],
           ]),
         }),
       ).creneaux;
@@ -517,11 +519,11 @@ describe('buildRecommendationInput (ReportData → minimized payload)', () => {
     it('MEJ-12: a slot with no provenance at all is disclosed as an estimation too', () => {
       const built = buildRecommendationInput(
         reportData({
-          heatLevels: gridWith([[2, 3, 4]]),
+          heatLevels: gridWith([[2, 6, 4]]), // Mer 11h00 → slot column 6
           heatKinds: kindsWith([]).map((row, day) =>
-            day === 2 ? row.map((k, i) => (i === 3 ? ('none' as const) : k)) : row,
+            day === 2 ? row.map((k, i) => (i === 6 ? ('none' as const) : k)) : row,
           ),
-          heatValues: valuesWith([[2, 3, 90]]),
+          heatValues: valuesWith([[2, 6, 90]]),
         }),
       ).creneaux;
       expect(built.plusForts).toEqual(['Mer 11h (estimation)']);
@@ -532,14 +534,54 @@ describe('buildRecommendationInput (ReportData → minimized payload)', () => {
       expect(SYSTEM_PROMPT).toContain('capteur');
     });
 
+    // ── PISTE-LBL1 (Mejri, 2026-09-02) — the LIVE regression ────────────────────────────────
+    //
+    // Slice C made the grid 28 half-hour columns and this label builder still read them as hours:
+    // column 15 printed « 23h » and column 25 « 33h », and the model turned the first into
+    // « Vos créneaux nocturnes (23h-25h) » on a venue that closes at 21h.
+    it('PISTE-LBL1: her index range 15–25 labels as afternoon half-hours, never 23h or 33h', () => {
+      for (const [column, expected] of [
+        [15, 'Lun 15h30'],
+        [16, 'Lun 16h'],
+        [20, 'Lun 18h'],
+        [25, 'Lun 20h30'],
+      ] as const) {
+        const [label] = creneauxOf([[0, column, 5]]).plusForts;
+        expect(`col ${column} → ${label}`).toBe(`col ${column} → ${expected}`);
+      }
+    });
+
+    it('PISTE-LBL1: NO column of the grid can name an hour outside the 8h–21h30 window', () => {
+      // Every column, on every day, at once — the pin that would have caught the regression.
+      const everyColumn: [number, number, number][] = [];
+      for (let day = 0; day < 7; day += 1) {
+        for (let column = 0; column < 28; column += 1) everyColumn.push([day, column, 3]);
+      }
+      const { plusForts, plusFaibles } = creneauxOf(everyColumn);
+      for (const label of [...plusForts, ...plusFaibles]) {
+        const hour = Number(/(\d+)h/.exec(label)?.[1]);
+        expect(`${label} → ${hour}`).toBe(`${label} → ${hour}`); // parsed at all
+        expect(hour).toBeGreaterThanOrEqual(8);
+        expect(hour).toBeLessThanOrEqual(21); // 21h30 is the last column; 23h/33h are impossible
+      }
+    });
+
+    it('PISTE-LBL1: a CLOSED slot is never named — level 0 is not a créneau', () => {
+      // Her second sentence, from the other side: heatmapLevels zeroes closed columns, so the
+      // label builder never sees them. An all-closed grid names nothing at all.
+      expect(creneauxOf([]).plusForts).toEqual([]);
+      // …and a grid with one open column names exactly that one.
+      expect(creneauxOf([[0, 6, 2]]).plusForts).toEqual(['Lun 11h']);
+    });
+
     it('0 open cells → both lists empty', () => {
       expect(creneauxOf([])).toEqual({ plusForts: [], plusFaibles: [] });
     });
 
     it('2 open cells → both become forts, faibles empty (never echoed back)', () => {
       const c = creneauxOf([
-        [4, 10, 5], // Ven 18h
-        [1, 1, 1], // Mar 9h
+        [4, 20, 5], // Ven 18h → slot column 20
+        [1, 2, 1], // Mar 9h → column 2
       ]);
       expect(c.plusForts).toEqual(['Ven 18h', 'Mar 9h']);
       expect(c.plusFaibles).toEqual([]);
@@ -547,10 +589,10 @@ describe('buildRecommendationInput (ReportData → minimized payload)', () => {
 
     it('4 open cells → 3 forts + the single remaining faible (fewer beats contradiction)', () => {
       const c = creneauxOf([
-        [4, 10, 5], // Ven 18h
-        [5, 9, 4], // Sam 17h
-        [0, 4, 3], // Lun 12h
-        [1, 1, 1], // Mar 9h
+        [4, 20, 5], // Ven 18h
+        [5, 18, 4], // Sam 17h
+        [0, 8, 3], // Lun 12h
+        [1, 2, 1], // Mar 9h
       ]);
       expect(c.plusForts).toEqual(['Ven 18h', 'Sam 17h', 'Lun 12h']);
       expect(c.plusFaibles).toEqual(['Mar 9h']);
@@ -558,12 +600,12 @@ describe('buildRecommendationInput (ReportData → minimized payload)', () => {
 
     it('6 open cells → two full DISJOINT lists, faibles weakest-first', () => {
       const c = creneauxOf([
-        [4, 10, 5], // Ven 18h
-        [5, 9, 5], // Sam 17h
-        [4, 11, 4], // Ven 19h
-        [2, 6, 3], // Mer 14h
-        [3, 7, 2], // Jeu 15h
-        [1, 1, 1], // Mar 9h
+        [4, 20, 5], // Ven 18h
+        [5, 18, 5], // Sam 17h
+        [4, 22, 4], // Ven 19h
+        [2, 12, 3], // Mer 14h
+        [3, 14, 2], // Jeu 15h
+        [1, 2, 1], // Mar 9h
       ]);
       expect(c.plusForts).toEqual(['Ven 18h', 'Sam 17h', 'Ven 19h']);
       expect(c.plusFaibles).toEqual(['Mar 9h', 'Jeu 15h', 'Mer 14h']);
@@ -574,8 +616,9 @@ describe('buildRecommendationInput (ReportData → minimized payload)', () => {
       // 2 full days open (Lun+Mar, 14 hours each): levels ramp so the extremes are unambiguous.
       const cells: [number, number, number][] = [];
       for (let h = 0; h < 14; h += 1) {
-        cells.push([0, h, h < 3 ? 5 : 3]); // Lun: three level-5 peaks, the rest level 3
-        cells.push([1, h, h < 3 ? 1 : 2]); // Mar: three level-1 troughs, the rest level 2
+        const col = h * 2; // the :00 half of each open hour — labels stay whole hours
+        cells.push([0, col, h < 3 ? 5 : 3]); // Lun: three level-5 peaks, the rest level 3
+        cells.push([1, col, h < 3 ? 1 : 2]); // Mar: three level-1 troughs, the rest level 2
       }
       const c = creneauxOf(cells);
       expect(c.plusForts).toEqual(['Lun 8h', 'Lun 9h', 'Lun 10h']);
