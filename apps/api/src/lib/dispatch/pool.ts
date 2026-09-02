@@ -13,7 +13,7 @@ import {
   screenhosts,
 } from '../../db/schema.js';
 import { NOOP_TRACE, type EngineTrace } from '../engine-journal/trace.js';
-import { collapseHalvesSql } from '../half-hour-slots.js';
+import { collapseHalvesSql, inEffectSql } from '../half-hour-slots.js';
 import { SPS_NEUTRAL, spsComputable, spsObservationsFor } from '../sps-score.js';
 
 import {
@@ -211,7 +211,13 @@ export const assemblePool = async (
           estimatedImpressions: collapseHalvesSql(screenhostAffluence.estimatedImpressions),
         })
         .from(screenhostAffluence)
-        .where(inArray(screenhostAffluence.screenhostId, candidateIds))
+        // OFF-1 — a suspended manual cell is ABSENT for Ai. Filtered HERE, before the collapse.
+        .where(
+          and(
+            inArray(screenhostAffluence.screenhostId, candidateIds),
+            inEffectSql(screenhostAffluence.inEffect),
+          ),
+        )
         .groupBy(
           screenhostAffluence.screenhostId,
           screenhostAffluence.dayOfWeek,

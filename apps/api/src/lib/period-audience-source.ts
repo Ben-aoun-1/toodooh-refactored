@@ -9,7 +9,7 @@ import {
 } from '../db/schema.js';
 
 import { tunisDateOf } from './campaign-dates.js';
-import { SLOTS_PER_DAY, tunisSlotOf } from './half-hour-slots.js';
+import { SLOTS_PER_DAY, inEffectSql, tunisSlotOf } from './half-hour-slots.js';
 import { emptyBackupGrid, type BackupGrid, type PeriodAudienceInput } from './period-audience.js';
 import type { DateRange } from './report/derive.js';
 
@@ -34,7 +34,11 @@ export const loadBackupGrid = async (venueId: string): Promise<BackupGrid> => {
       estimatedImpressions: screenhostAffluence.estimatedImpressions,
     })
     .from(screenhostAffluence)
-    .where(eq(screenhostAffluence.screenhostId, venueId));
+    // OFF-1 — a suspended manual cell never reaches the grid at all: `has` stays false for that
+    // slot, so the merge's rule 3 cannot fall back to a value the hub has withdrawn.
+    .where(
+      and(eq(screenhostAffluence.screenhostId, venueId), inEffectSql(screenhostAffluence.inEffect)),
+    );
   const grid = emptyBackupGrid();
   for (const row of rows) {
     const index = row.dayOfWeek - 1;
@@ -88,6 +92,7 @@ export async function loadPeriodAudienceInput(
         date: screenhostAffluenceHourly.date,
         slot: screenhostAffluenceHourly.slot,
         value: screenhostAffluenceHourly.value,
+        deviceOnline: screenhostAffluenceHourly.deviceOnline,
       })
       .from(screenhostAffluenceHourly)
       .where(

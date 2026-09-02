@@ -61,6 +61,7 @@ const rowsFor = async (venue: string) =>
       slot: screenhostAffluence.slot,
       estimatedImpressions: screenhostAffluence.estimatedImpressions,
       source: screenhostAffluence.source,
+      inEffect: screenhostAffluence.inEffect,
     })
     .from(screenhostAffluence)
     .where(eq(screenhostAffluence.screenhostId, venue))
@@ -213,6 +214,116 @@ describe('MEJ-13-B — the hourly (measured) endpoint follows the same rule', ()
       [40, 55],
     ]);
     expect(rows.map((r) => r.hour)).toEqual([13, 13, 20]);
+  });
+});
+
+// ── OFF-1 — the two optional flags on the wire ───────────────────────────────────────────────
+describe('OFF-1 — the wire carries in_effect and device_online, both optional', () => {
+  let app: ReturnType<typeof buildApp> | undefined;
+  beforeEach(async () => {
+    await resetAuthTables();
+    app = buildApp();
+    await app.ready();
+  });
+  afterEach(async () => {
+    if (app) await app.close();
+    app = undefined;
+  });
+
+  it('in_effect round-trips on the typical-week wire, and ABSENT stays NULL', async () => {
+    const venue = await seedVenue();
+    await app!.inject({
+      method: 'POST',
+      url: '/api/internal/affluence',
+      headers: auth,
+      payload: {
+        slots: [
+          {
+            location_id: venue,
+            day_of_week: 1,
+            slot: 26,
+            estimated_impressions: 50,
+            in_effect: true,
+          },
+          {
+            location_id: venue,
+            day_of_week: 1,
+            slot: 27,
+            estimated_impressions: 56,
+            in_effect: false,
+          },
+          { location_id: venue, day_of_week: 1, slot: 28, estimated_impressions: 70 }, // absent
+        ],
+      },
+    });
+    const rows = await rowsFor(venue);
+    expect(rows.map((r) => [r.slot, r.inEffect])).toEqual([
+      [26, true],
+      [27, false],
+      [28, null], // absent = unknown = in effect, never a default guess
+    ]);
+  });
+
+  it('a re-push FLIPS in_effect back — suspension is reversible, not a tombstone', async () => {
+    const venue = await seedVenue();
+    const push = (inEffect: boolean) =>
+      app!.inject({
+        method: 'POST',
+        url: '/api/internal/affluence',
+        headers: auth,
+        payload: {
+          slots: [
+            {
+              location_id: venue,
+              day_of_week: 1,
+              slot: 27,
+              estimated_impressions: 56,
+              in_effect: inEffect,
+            },
+          ],
+        },
+      });
+    await push(false);
+    expect((await rowsFor(venue))[0]?.inEffect).toBe(false);
+    await push(true); // the device went genuinely offline — the manual cell applies again
+    expect((await rowsFor(venue))[0]?.inEffect).toBe(true);
+    expect(await rowsFor(venue)).toHaveLength(1); // still ONE row: no delete, no duplicate
+  });
+
+  it('the hourly wire accepts value: null with device_online — an EMPTY slot is a fact', async () => {
+    const venue = await seedVenue();
+    const res = await app!.inject({
+      method: 'POST',
+      url: '/api/internal/affluence-hourly',
+      headers: auth,
+      payload: {
+        places: [
+          {
+            toodooh_screenhost_id: venue,
+            cells: [
+              { date: '2026-09-02', slot: 26, value: 5 },
+              { date: '2026-09-02', slot: 27, value: null, device_online: true },
+              { date: '2026-09-02', slot: 30, value: null, device_online: false },
+            ],
+          },
+        ],
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    const rows = await db
+      .select({
+        slot: screenhostAffluenceHourly.slot,
+        value: screenhostAffluenceHourly.value,
+        deviceOnline: screenhostAffluenceHourly.deviceOnline,
+      })
+      .from(screenhostAffluenceHourly)
+      .where(eq(screenhostAffluenceHourly.screenhostId, venue))
+      .orderBy(asc(screenhostAffluenceHourly.slot));
+    expect(rows).toEqual([
+      { slot: 26, value: 5, deviceOnline: null },
+      { slot: 27, value: null, deviceOnline: true }, // « the sensor said nothing », not a zero
+      { slot: 30, value: null, deviceOnline: false },
+    ]);
   });
 });
 

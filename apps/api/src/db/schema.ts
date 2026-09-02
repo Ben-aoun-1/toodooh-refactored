@@ -458,6 +458,21 @@ export const screenhostAffluence = pgTable(
     slot: integer('slot').notNull(),
     estimatedImpressions: integer('estimated_impressions').notNull(),
     source: affluenceSource('source'), // nullable: unknown provenance
+    /**
+     * OFF-1 — is this manual cell CURRENTLY IN EFFECT? NULL = unknown = yes (every row written
+     * before the flag existed, and every hub that does not send it).
+     *
+     * The hub suspends a typical-week cell with `false` while the device is online at that slot,
+     * and restores it with `true` when the device is genuinely offline. It exists because this
+     * table is a latest-value-wins upsert with NO delete: simply omitting a cell would FREEZE its
+     * last pushed value here forever, still feeding dispatch, C_max, A_max and monthly audience —
+     * the exact opposite of the rule. A reversible flag, not a tombstone.
+     *
+     * EVERY reader treats `false` as ABSENT, and must filter it BEFORE its hour-collapse: a
+     * suspended half averaged in and then removed would carry half of a value the rule says does
+     * not exist. See `inEffectSql` — one predicate, four call sites.
+     */
+    inEffect: boolean('in_effect'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
@@ -520,8 +535,23 @@ export const screenhostAffluenceHourly = pgTable(
      * level, so half an hour of it is not half the people.
      */
     slot: integer('slot').notNull(),
-    /** The rounded average of the sensor's counts in that slot. Measured only. */
-    value: integer('value').notNull(),
+    /**
+     * The rounded average of the sensor's counts in that slot.
+     *
+     * OFF-1 — NULLABLE since 0067: the hub now sends a cell for every slot it has an opinion
+     * about, and an EMPTY slot arrives as `value: null` carrying only `device_online`. A null is
+     * « the sensor reported nothing here », which is a different fact from a measured 0.
+     */
+    value: integer('value'),
+    /**
+     * OFF-1 — was the device ONLINE during this slot, as the hub judges it? NULL = unknown (any
+     * row written before the flag, or a hub that does not send it) and behaves exactly as before.
+     *
+     * The hub derives it: a slot is offline when it AND the previous slot are silent (≥ 1 h against
+     * a 30-min cadence); a single empty slot between readings is jitter, so the device is online.
+     * The merge reads it as Mejri ruled: manual values apply ONLY while the sensor is off.
+     */
+    deviceOnline: boolean('device_online'),
     receivedAt: timestamp('received_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
@@ -540,7 +570,7 @@ export const screenhostAffluenceHourly = pgTable(
       sql`${table.slot} >= 0 AND ${table.slot} <= 47`,
     ),
     check('screenhost_affluence_hourly_hour_matches_slot', sql`${table.hour} = ${table.slot} / 2`),
-    check('screenhost_affluence_hourly_value_nonneg', sql`${table.value} >= 0`),
+    check('screenhost_affluence_hourly_value_nonneg', sql`${table.value} >= 0`), // NULL passes
   ],
 );
 
