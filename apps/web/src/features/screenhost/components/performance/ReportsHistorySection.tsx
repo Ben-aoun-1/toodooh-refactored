@@ -12,13 +12,16 @@ interface HistoryRow {
 }
 
 interface ReportsHistorySectionProps {
-  /** Every month AFTER the latest one (the latest lives on the monthly card), newest first. */
+  /**
+   * RPT-HIST1 — EVERY generated month, newest first, INCLUDING the one featured on the monthly
+   * card. It used to exclude the latest (US-P.2); Mejri reversed that on 2026-09-02.
+   */
   rows: HistoryRow[];
   onConsult: (month: string) => void;
   onDownload: (month: string) => void;
 }
 
-/** §4 — "Historique de vos rapports mensuels": one white card row per archived month. */
+/** §4 — "Historique de vos rapports mensuels": one white card row per generated month. */
 export function ReportsHistorySection({ rows, onConsult, onDownload }: ReportsHistorySectionProps) {
   return (
     <section className="mb-12">
