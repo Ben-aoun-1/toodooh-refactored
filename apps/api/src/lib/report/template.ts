@@ -802,7 +802,10 @@ body{
 }
 /* AFF1 — estimation treatment layered over a ramp level: lighter + a near-white dashed outline
    (print-safe; a mist-toned outline vanished on the bright levels — measured on the P2 render). */
-.hest{ opacity:.6; outline:1.5px dashed rgba(242,247,244,0.9); outline-offset:-2px; }
+/* S02-FUT1 — opacity dropped here for the same reason as the page (chart-colors.ts): slice C
+   halved these cells, and the wash made a low-level estimated cell read as no-data. The dashed
+   outline alone carries the provenance; the page and the document stay identical in treatment. */
+.hest{ outline:1.5px dashed rgba(242,247,244,0.9); outline-offset:-2px; }
 .heat-legend{
   margin-top:16px; display:flex; align-items:center; gap:8px; flex-wrap:nowrap; white-space:nowrap;
   font-family:var(--mono); font-size:6.8pt; letter-spacing:.14em; text-transform:uppercase; color:var(--faint);

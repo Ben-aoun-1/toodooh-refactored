@@ -80,3 +80,24 @@ export const collapseHalvesToHour = (halves: readonly number[]): number => {
  */
 export const collapseHalvesSql = (column: AnyPgColumn): SQL<number> =>
   sql<number>`round(avg(${column}))::int`;
+
+/**
+ * S02-FUT1 (Mejri, ruled 2026-09-02) — the current half-hour slot on the **Africa/Tunis** clock.
+ *
+ * The boundary between a slot that has ELAPSED and one that has not. It mirrors
+ * `dispatch/redispatch.ts`'s `tunisNowSlot` / `isElapsed`, which have carried the same rule at hour
+ * granularity since E6: **the in-progress slot is NOT elapsed.** Same rule, finer grid — not a new
+ * idea, and deliberately worded the same way so the two cannot drift apart in meaning.
+ */
+export const tunisSlotOf = (now: Date): number => {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Africa/Tunis',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(now);
+  const at = (type: 'hour' | 'minute'): number =>
+    Number(parts.find((part) => part.type === type)?.value ?? '0');
+  const hour = at('hour') % 24; // en-GB can render midnight as 24
+  return hour * HALVES_PER_HOUR + (at('minute') >= 30 ? 1 : 0);
+};

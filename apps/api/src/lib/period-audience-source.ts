@@ -9,7 +9,7 @@ import {
 } from '../db/schema.js';
 
 import { tunisDateOf } from './campaign-dates.js';
-import { SLOTS_PER_DAY } from './half-hour-slots.js';
+import { SLOTS_PER_DAY, tunisSlotOf } from './half-hour-slots.js';
 import { emptyBackupGrid, type BackupGrid, type PeriodAudienceInput } from './period-audience.js';
 import type { DateRange } from './report/derive.js';
 
@@ -54,6 +54,13 @@ export interface PeriodSourceParams {
    * to save a query; omit it and the loader reads `screenhosts.created_at` itself.
    */
   onboardedIso?: string | null;
+  /**
+   * S02-FUT1 — the current Tunis half-hour slot. Defaults to the clock at call time, which is the
+   * same instant every surface derives `todayIso` from. Pass it only to freeze the boundary (the
+   * tests do); the three production surfaces all take the default, so they cannot disagree about
+   * what « not yet » means.
+   */
+  nowSlot?: number;
 }
 
 export async function loadPeriodAudienceInput(
@@ -101,5 +108,13 @@ export async function loadPeriodAudienceInput(
           .then((rows) => (rows[0] ? tunisDateOf(rows[0].createdAt) : null)),
   ]);
 
-  return { months, hourly: hourlyRows, grid, range, todayIso, onboardedIso };
+  return {
+    months,
+    hourly: hourlyRows,
+    grid,
+    range,
+    todayIso,
+    nowSlot: params.nowSlot ?? tunisSlotOf(new Date()),
+    onboardedIso,
+  };
 }
