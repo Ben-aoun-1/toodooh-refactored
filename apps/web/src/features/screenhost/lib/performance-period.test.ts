@@ -14,10 +14,7 @@ import {
   DEFAULT_PERIOD_SELECTION,
   parsePeriodSelection,
   writePeriodSelection,
-  PARKED_PERIOD_NOTE,
   PERIOD_PILLS,
-  isPeriodParked,
-  periodPillLabel,
 } from './performance-period';
 
 const TODAY = new Date(2026, 6, 7); // 2026-07-07 (local)
@@ -130,10 +127,43 @@ describe('parsePeriodSelection — the URL is the période', () => {
   it('falls back to the 28-day default on anything unusable — never a half-range', () => {
     expect(parse('')).toEqual(DEFAULT_PERIOD_SELECTION);
     expect(parse('periode=42j')).toEqual(DEFAULT_PERIOD_SELECTION);
-    expect(parse('periode=custom')).toEqual(DEFAULT_PERIOD_SELECTION); // no bounds
-    expect(parse('periode=custom&du=2026-08-01')).toEqual(DEFAULT_PERIOD_SELECTION); // half
-    expect(parse('periode=custom&du=01/08/2026&au=15/08/2026')).toEqual(DEFAULT_PERIOD_SELECTION);
     expect(DEFAULT_PERIOD_SELECTION.period).toBe('28d'); // the documented default, unchanged
+  });
+
+  // ── PERF-CUSTOM1 (Mejri, 2026-09-02) — THE DEADLOCK, and the case none of MEJ-4's tests had ──
+  //
+  // Clicking « Personnalisé » writes `periode=custom` with no du/au, because the bounds do not
+  // exist yet. Falling back to '28d' HERE meant `active` was never 'custom', so the date inputs —
+  // the only way to supply those bounds — never rendered. The pill could not be reached from the
+  // UI at all: circular, and invisible to every test that started from a complete URL.
+  it("PERF-CUSTOM1: « Personnalisé » with NO dates stays custom — that is the click's own path", () => {
+    expect(parse('periode=custom')).toEqual({ period: 'custom' });
+    expect(parse('periode=custom&du=2026-08-01')).toEqual({ period: 'custom' }); // half a pair
+    expect(parse('periode=custom&du=01/08/2026&au=15/08/2026')).toEqual({ period: 'custom' });
+    // …and it carries NO bounds, so nothing downstream can filter on half a range.
+    expect(parse('periode=custom').custom).toBeUndefined();
+  });
+
+  it('PERF-CUSTOM1: the half-range rule still holds, one level down at the RANGE', () => {
+    // The selection says WHICH PILL IS OPEN; the range says WHAT IS FILTERED. Conflating them is
+    // what made the pill unreachable, so the guard lives where the filtering happens.
+    const selection = parse('periode=custom');
+    expect(resolvePeriodRange(selection.period, TODAY, selection.custom)).toEqual(
+      resolvePeriodRange('28d', TODAY),
+    );
+  });
+
+  it('PERF-CUSTOM1: the round trip survives a refresh (MEJ-4) with and without bounds', () => {
+    const bare = writePeriodSelection(new URLSearchParams(), { period: 'custom' });
+    expect(parsePeriodSelection(bare)).toEqual({ period: 'custom' });
+    const withBounds = writePeriodSelection(new URLSearchParams(), {
+      period: 'custom',
+      custom: { from: '2026-08-01', to: '2026-08-15' },
+    });
+    expect(parsePeriodSelection(withBounds)).toEqual({
+      period: 'custom',
+      custom: { from: '2026-08-01', to: '2026-08-15' },
+    });
   });
 });
 
@@ -177,39 +207,24 @@ describe('writePeriodSelection — a shareable link, other params untouched', ()
   });
 });
 
-// PERF-CUSTOM1 (opérateur, 2026-09-01) — « Personnalisé » est PARQUÉ, pas réparé. Ce dépôt n'a pas
-// de harnais de rendu (vitest tourne en environnement node, un .test.tsx n'exécute AUCUN test), donc
-// l'état « désactivé » et son libellé vivent dans ce lib pur où un test peut les atteindre ; le
-// composant s'y branche. C'est l'équivalent le plus proche de l'assertion de rendu demandée.
-describe('PERF-CUSTOM1 — la pastille « Personnalisé » est parquée', () => {
-  it('custom est la SEULE pastille parquée', () => {
-    expect(PERIOD_PILLS.filter((p) => isPeriodParked(p.key)).map((p) => p.key)).toEqual(['custom']);
+// PERF-CUSTOM1 (Mejri, 2026-09-02) — le parcage du 01/09 est LEVÉ : « Le filtre ne fonctionne pas
+// encore. Pour pouvoir poursuivre les tests, ce point est primordial. » Ce dépôt n'a pas de harnais
+// de rendu (vitest tourne en environnement node, un .test.tsx n'exécute AUCUN test), donc ce qui
+// peut être épinglé ici l'est ici ; le composant ne fait plus que rendre le libellé nu.
+describe('PERF-CUSTOM1 — la pastille « Personnalisé » est DÉPARQUÉE', () => {
+  it('les six pastilles sont utilisables, dans leur ordre', () => {
+    expect(PERIOD_PILLS.map((p) => p.key)).toEqual(['7d', '28d', '3m', '12m', 'all', 'custom']);
   });
 
-  it('les autres pastilles restent utilisables, dans leur ordre', () => {
-    expect(PERIOD_PILLS.filter((p) => !isPeriodParked(p.key)).map((p) => p.key)).toEqual([
-      '7d',
-      '28d',
-      '3m',
-      '12m',
-      'all',
-    ]);
+  it("PERF-CUSTOM1: le dépaquage — la pastille n'est plus annotée ni désactivée", () => {
+    // Mejri renverse le parcage du 01/09 : « Le filtre ne fonctionne pas encore. Pour pouvoir
+    // poursuivre les tests, ce point est primordial. » Le libellé redevient nu, et le seul état
+    // qui reste est actif / inactif.
+    expect(PERIOD_PILLS.find((p) => p.key === 'custom')?.label).toBe('Personnalisé');
   });
 
-  it('la pastille parquée annonce « bientôt disponible »', () => {
-    expect(PARKED_PERIOD_NOTE).toBe('bientôt disponible');
-    expect(periodPillLabel({ key: 'custom', label: 'Personnalisé' })).toBe(
-      'Personnalisé — bientôt disponible',
-    );
-  });
-
-  it('une pastille utilisable garde son libellé nu', () => {
-    expect(periodPillLabel({ key: '28d', label: '28 derniers jours' })).toBe('28 derniers jours');
-  });
-
-  it('le défaut 28 jours et le chemin URL sont inchangés (un dépaquage les retrouve)', () => {
+  it('le défaut 28 jours et le chemin URL restent ceux de MEJ-4', () => {
     expect(DEFAULT_PERIOD_SELECTION.period).toBe('28d');
-    // La branche custom fonctionne toujours dès que les DEUX bornes sont présentes.
     expect(
       parsePeriodSelection(new URLSearchParams('periode=custom&du=2026-08-01&au=2026-08-15')),
     ).toEqual({ period: 'custom', custom: { from: '2026-08-01', to: '2026-08-15' } });
