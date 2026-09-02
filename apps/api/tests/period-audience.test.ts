@@ -68,6 +68,10 @@ const input = (over: Partial<PeriodAudienceInput> = {}): PeriodAudienceInput => 
   grid: emptyBackupGrid(),
   range: { from: TODAY, to: TODAY },
   todayIso: TODAY,
+  // S02-FUT1 — 48 means « the whole day has elapsed », which is what every test written before the
+  // ruling implicitly assumed. Keeping that here is what makes their numbers bit-identical; the
+  // rule's own tests pass a real boundary.
+  nowSlot: 48,
   onboardedIso: null,
   ...over,
 });
@@ -505,6 +509,111 @@ describe('slice C — duration-weighted sums and unequal halves', () => {
       expect(result.cells).toHaveLength(2);
       expect(result.estimatedPct).toBe(0); // measured zeros — nothing estimated
     });
+  });
+});
+
+// ── S02-FUT1 (Mejri, ruled 2026-09-02) — RULE 5: no backup for a slot that has not happened ──
+//
+// « J'ai programmé manuellement dans le Hub : 50 entre 13h00 et 13h30, 56 entre 13h30 et 14h00. Le
+// capteur est actuellement en ligne et l'heure de 13h00 n'est pas encore arrivée. Pourtant, ces
+// valeurs apparaissent déjà dans Peak Hours. Les données forcées ne devraient être prises en
+// compte que lorsque le capteur est offline. »
+//
+// A slot is « offline » once it has ELAPSED without a reading. Before then nothing has failed, so
+// there is nothing for the grid to stand in for.
+describe('S02-FUT1 — the grid may not answer for a slot that has not elapsed', () => {
+  // TODAY is a Monday; 12h50 Tunis is slot 25, so 13h00 (26) and 13h30 (27) are still ahead.
+  const NOW_1250 = 25;
+
+  it('HER CASE: the sensor is online at 12h50 and 13h00/13h30 show NOTHING today', () => {
+    const result = periodAudience(
+      input({
+        nowSlot: NOW_1250,
+        grid: gridWithSlots([
+          [MONDAY, 26, 50], // 13h00–13h30, typed into the hub
+          [MONDAY, 27, 56], // 13h30–14h00
+        ]),
+      }),
+    );
+    // Not a backup cell, not a zero — not a data point at all.
+    expect(result.cells).toEqual([]);
+    expect(result.days).toEqual([]);
+    expect(result.total).toBe(0);
+    expect(result.estimatedPct).toBeNull();
+  });
+
+  it('the SAME grid cells DO answer for a past day in the période — 01/09 is not lost', () => {
+    // The missed-report visibility she asked for the day before: a PAST slot with no reading
+    // still falls back to the admin's grid. Only « not yet » is excluded.
+    const result = periodAudience(
+      input({
+        nowSlot: NOW_1250,
+        range: { from: '2026-08-24', to: TODAY }, // 24/08 is a Monday, a week earlier
+        grid: gridWithSlots([
+          [MONDAY, 26, 50],
+          [MONDAY, 27, 56],
+        ]),
+      }),
+    );
+    expect(result.cells).toEqual([
+      { date: '2026-08-24', slot: 26, value: 50, source: 'backup' },
+      { date: '2026-08-24', slot: 27, value: 56, source: 'backup' },
+    ]);
+    expect(result.days.map((d) => d.date)).toEqual(['2026-08-24']); // today contributes nothing
+    expect(result.days[0]?.audience).toBe(53); // (50 + 56) × 0.5
+  });
+
+  it('the IN-PROGRESS slot is not elapsed either — the E6 boundary, at slot granularity', () => {
+    // 12h50 sits inside slot 25. It has not finished, so the sensor has not yet failed to report.
+    const during = periodAudience(
+      input({ nowSlot: NOW_1250, grid: gridWithSlots([[MONDAY, 25, 40]]) }),
+    );
+    expect(during.cells).toEqual([]);
+    // …and the moment it HAS elapsed (now = 13h00, slot 26), the grid answers for it.
+    const after = periodAudience(input({ nowSlot: 26, grid: gridWithSlots([[MONDAY, 25, 40]]) }));
+    expect(after.cells).toEqual([{ date: TODAY, slot: 25, value: 40, source: 'backup' }]);
+  });
+
+  it('a MEASURED reading is never suppressed — the rule bounds BACKUP only', () => {
+    // If the sensor did report inside the current slot, that is observed data, not a stand-in.
+    const result = periodAudience(
+      input({
+        nowSlot: NOW_1250,
+        hourly: slots(TODAY, [[25, 90]]),
+        grid: gridWithSlots([[MONDAY, 25, 40]]),
+      }),
+    );
+    expect(result.cells).toEqual([{ date: TODAY, slot: 25, value: 90, source: 'measured' }]);
+  });
+
+  it("today's day total and « dont N % estimés » shrink accordingly — correct, not a regression", () => {
+    const result = periodAudience(
+      input({
+        nowSlot: NOW_1250,
+        // 8h00–12h00 elapsed and estimated; 13h00 onwards typed but still ahead.
+        grid: gridWithSlots([
+          ...Array.from({ length: 8 }, (_, i): [number, number, number] => [MONDAY, 16 + i, 10]),
+          [MONDAY, 26, 50],
+          [MONDAY, 27, 56],
+        ]),
+      }),
+    );
+    expect(result.cells).toHaveLength(8); // only the elapsed ones
+    expect(result.days[0]?.audience).toBe(40); // 8 × 10 × 0.5 — the future 106 is not counted
+    expect(result.estimatedPct).toBe(100); // everything it DOES hold is estimated
+  });
+
+  it('the DAY-GRANULARITY history path is untouched by the rule', () => {
+    // A measured day from monthly_stats has no slots to be « not yet » about.
+    const result = periodAudience(
+      input({
+        nowSlot: 0, // the very start of the day: every slot is still ahead
+        months: [{ month: '2026-08', daily: [{ date: TODAY, audience: 700, source: 'measured' }] }],
+      }),
+    );
+    expect(result.days).toEqual([
+      { date: TODAY, audience: 700, source: 'measured', hasMeasured: true },
+    ]);
   });
 });
 

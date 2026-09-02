@@ -132,6 +132,14 @@ export interface PeriodAudienceInput {
   /** Tunis today — the last day the période may claim. */
   todayIso: string;
   /**
+   * S02-FUT1 — the CURRENT half-hour slot on the Tunis clock (0–47), from the SAME instant as
+   * `todayIso`. The boundary between a slot that has elapsed and one that has not.
+   *
+   * Required, not optional, for the reason MEJ-R1's floor is: a caller that omits it would get the
+   * old behaviour silently, and the old behaviour is the defect.
+   */
+  nowSlot: number;
+  /**
    * MEJ-R1 — the venue's onboarding day (Tunis calendar day of `screenhosts.created_at`): the
    * FIRST day the BACKUP grid may stand in for. `null` = no known floor, nothing is clamped.
    * Required (not optional) so every call site states its floor rather than inheriting the
@@ -159,7 +167,7 @@ const dayAudience = (dayCells: readonly PeriodCell[]): number =>
 const rowOf = (dateIso: string): number => (getDay(parseISO(dateIso)) + 6) % 7;
 
 export function periodAudience(input: PeriodAudienceInput): PeriodAudience {
-  const { months, hourly, grid, range, todayIso, onboardedIso } = input;
+  const { months, hourly, grid, range, todayIso, nowSlot, onboardedIso } = input;
 
   const measuredDayByDate = new Map<string, MonthlyStatsDaily>();
   for (const month of months) {
@@ -192,6 +200,17 @@ export function periodAudience(input: PeriodAudienceInput): PeriodAudience {
       const date = format(cursor, 'yyyy-MM-dd');
       // Rule 4 — the floor bounds BACKUP only; measurement is never clamped.
       const mayBackup = onboardedIso === null || date >= onboardedIso;
+      // S02-FUT1 (Mejri, ruled 2026-09-02) — RULE 5. A slot is « offline » only once it has
+      // ELAPSED without a reading. Mejri typed 50 and 56 into the hub grid for 13h00 and 13h30,
+      // looked at Peak Hours at 12h50 with the sensor ONLINE, and saw them already counted: the
+      // grid was standing in for a failure that had not happened. « Les données forcées ne
+      // devraient être prises en compte que lorsque le capteur est offline. »
+      //
+      // Only TODAY can hold a future slot (the loop already stops at `todayIso`), and the
+      // in-progress slot is NOT elapsed — the same boundary `dispatch/redispatch.ts` has drawn at
+      // hour granularity since E6. A PAST slot with no reading still falls back to the grid: that
+      // is the missed-report visibility she asked for on 01/09, and it is not what changed.
+      const elapsed = (slot: number): boolean => date < todayIso || slot < nowSlot;
       const row = rowOf(date);
       const measuredSlots = hourlyByDate.get(date);
 
@@ -204,7 +223,7 @@ export function periodAudience(input: PeriodAudienceInput): PeriodAudience {
         const dayCells: PeriodCell[] = [];
         for (let slot = 0; slot < SLOTS_PER_DAY; slot += 1) {
           const measured = measuredSlots.get(slot);
-          const gridHas = grid.has[row]?.[slot] === true && mayBackup;
+          const gridHas = grid.has[row]?.[slot] === true && mayBackup && elapsed(slot);
           const gridValue = grid.values[row]?.[slot] ?? 0;
           if (measured !== undefined && measured > 0) {
             dayCells.push({ date, slot, value: measured, source: 'measured' }); // rule 1
@@ -244,7 +263,7 @@ export function periodAudience(input: PeriodAudienceInput): PeriodAudience {
       // ── the backup grid alone, cell by cell so S02 still sees this date ──
       const dayCells: PeriodCell[] = [];
       for (let slot = 0; slot < SLOTS_PER_DAY; slot += 1) {
-        if (grid.has[row]?.[slot] === true) {
+        if (grid.has[row]?.[slot] === true && elapsed(slot)) {
           dayCells.push({ date, slot, value: grid.values[row]?.[slot] ?? 0, source: 'backup' });
         }
       }
