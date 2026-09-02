@@ -34,7 +34,7 @@ describe('cellProvenance (value, source) → measured | backup | none', () => {
   });
 });
 
-describe('provenanceGrid — the 7×24 kinds grid from the api grid + sources', () => {
+describe('provenanceGrid — the 7×48 kinds grid from the api grid + sources', () => {
   const grid = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
   const sources: ('measured' | 'backup' | null)[][] = Array.from({ length: 7 }, () =>
     Array.from({ length: 24 }, () => null),
@@ -50,7 +50,7 @@ describe('provenanceGrid — the 7×24 kinds grid from the api grid + sources', 
   it('maps every cell through cellProvenance, Monday-first', () => {
     const kinds = provenanceGrid(grid, sources);
     expect(kinds).toHaveLength(7);
-    expect(kinds.every((row) => row.length === 24)).toBe(true);
+    expect(kinds.every((row) => row.length === 48)).toBe(true); // slice C — SLOT columns
     expect(kinds[0]?.[9]).toBe('measured');
     expect(kinds[0]?.[10]).toBe('measured');
     expect(kinds[1]?.[12]).toBe('backup');

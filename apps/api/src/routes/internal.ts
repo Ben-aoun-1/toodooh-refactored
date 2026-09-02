@@ -124,10 +124,15 @@ const emptyGrid = (): number[][] =>
 const loadAffluenceGrids = async (venueIds: string[]): Promise<Map<string, number[][]>> => {
   const grids = new Map<string, number[][]>();
   if (venueIds.length === 0) return grids;
-  // MEJ-13-B — the grid this feeds is HOUR-keyed (7×24) and lib/monthly-audience.ts SUMS a
-  // weekday's row into screenhost_monthly_stats. The table is half-hour rows, so collapse in SQL:
-  // round(avg(halves)) is the ruled hour value, and it returns the old number exactly whenever the
-  // two halves are equal — which is every cell an hour-shaped push writes.
+  // ⚠️ THIS COLLAPSE IS PERMANENT — do NOT "finish the half-hour migration" by deleting it.
+  //
+  // You are looking at a GROUP BY on `hour` over a table keyed by `slot`, and it looks like a
+  // leftover from slice B. It is not. lib/monthly-audience.ts sums a WEEKDAY'S 24-hour row into
+  // screenhost_monthly_stats — a 7×24 grid is the shape it reads.
+  // The half-hour grid is the storage; an hour is what THIS consumer means. `round(avg(halves))`
+  // is its correct input, and it returns the old value exactly whenever the halves agree.
+  // (Slice C removed the collapse from the READ paths that went slot-shaped — period-audience and
+  // the /affluence wire. This one, event-pricing's A_max and monthly-audience stay by design.)
   const slots = await db
     .select({
       screenhostId: screenhostAffluence.screenhostId,

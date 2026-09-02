@@ -42,6 +42,8 @@ const CHART_PENDING = 'Évolution en attente du premier deal';
 const NO_CAMPAIGN_IN_PERIOD = 'Aucune campagne sur la période analysée.';
 
 const HOUR_LABELS = Array.from({ length: 14 }, (_, i) => `${i + 8}h`);
+/** Slice C — 28 half-hour columns under 14 hour labels, each label spanning its two halves. */
+const HEATMAP_COLS = HOUR_LABELS.length * 2;
 const DAY_LABELS = ['LUN', 'MAR', 'MER', 'JEU', 'VEN', 'SAM', 'DIM'];
 
 /** Ruled deviation: at most 8 history rows; overflow folds into one summary row. */
@@ -221,11 +223,14 @@ const heatmapHtml = (levels: number[][], kinds: ProvenanceKind[][], empty: boole
     return `
       <div class="heat-empty"><div class="t">${PEAK_HOURS_EMPTY_TITLE}</div><div class="s">La carte des peak hours apparaîtra ici dès que votre capteur d'audience aura mesuré des passages dans votre établissement.</div></div>`;
   }
+  // Slice C — the document follows the DESKTOP rendering: both halves drawn, the hour label
+  // spanning them (grid-column: span 2). A PDF has no width to collapse for, so it never shows the
+  // « mixte » kind — that exists only where 375 px forces two halves into one column.
   const header =
     `<div class="heat-hlabel"></div>` +
-    HOUR_LABELS.map((h) => `<div class="heat-hlabel">${h}</div>`).join('');
+    HOUR_LABELS.map((h) => `<div class="heat-hlabel heat-hspan">${h}</div>`).join('');
   const rows = DAY_LABELS.map((label, day) => {
-    const cells = (levels[day] ?? Array.from({ length: 14 }, () => 0))
+    const cells = (levels[day] ?? Array.from({ length: HEATMAP_COLS }, () => 0))
       .map((level, col) =>
         level === 0
           ? `<div class="heat-cell hclosed"></div>`
@@ -774,14 +779,17 @@ body{
   border-radius:10px; padding:12px 18px;
 }
 .heat{ width:100%; }
-.heat-grid{ display:grid; grid-template-columns:34px repeat(14, 1fr); gap:4px; }
+/* Slice C — 28 half-hour columns; the hour labels span two each. Tighter gap so 28 cells still
+   read as a week rather than a barcode. */
+.heat-grid{ display:grid; grid-template-columns:34px repeat(28, 1fr); gap:2px; }
+.heat-hspan{ grid-column:span 2; }
 .heat-hlabel, .heat-dlabel{
   font-family:var(--mono); font-size:6.5pt; letter-spacing:.05em; color:var(--faint);
   display:flex; align-items:center;
 }
 .heat-hlabel{ justify-content:center; padding-bottom:4px; }
 .heat-dlabel{ justify-content:flex-start; }
-.heat-cell{ aspect-ratio:1.15/1; border-radius:3px; }
+.heat-cell{ aspect-ratio:0.62/1; border-radius:2px; }
 .h0{ background:rgba(118,230,171,0.06); }
 .h1{ background:rgba(118,230,171,0.14); }
 .h2{ background:rgba(118,230,171,0.30); }

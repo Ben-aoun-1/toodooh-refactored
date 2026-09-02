@@ -17,6 +17,20 @@ export const HALVES_PER_HOUR = 2;
 /** 0–47. */
 export const SLOTS_PER_DAY = 24 * HALVES_PER_HOUR;
 
+/**
+ * Slice C — the DURATION of one slot, in hours. Every sum over slots is weighted by it:
+ * `Σ (value × SLOT_HOURS)`.
+ *
+ * This is the whole defence of the invariant. A cell is a LEVEL, so a day's audience is the
+ * integral of that level over the day, not the sum of its cells. Summing 48 cells unweighted would
+ * DOUBLE every audience total, every monthly report and every `estimated_impressions` the day the
+ * grid got finer — the failure mode that is not a crash, just every number quietly ×2.
+ *
+ * On equal halves `Σ (v × 0.5)` over two halves is exactly `v` over the hour, so every existing
+ * number is bit-identical. That equality is the pin, not a happy accident.
+ */
+export const SLOT_HOURS = 1 / HALVES_PER_HOUR;
+
 /** The two slots an hour occupies, in order: [:00–:29, :30–:59]. */
 export const slotsOfHour = (hour: number): [number, number] => [
   hour * HALVES_PER_HOUR,

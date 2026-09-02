@@ -14,6 +14,7 @@ import {
 } from '../../db/schema.js';
 import { tunisDateOf } from '../campaign-dates.js';
 import { getDispatchConfig } from '../dispatch/config.js';
+import { SLOTS_PER_DAY, hourOfSlot } from '../half-hour-slots.js';
 import { displayImpressionsSettled } from '../impressions-display.js';
 import { loadBackupGrid, loadPeriodAudienceInput } from '../period-audience-source.js';
 import { periodAudience, weekGridFromCells } from '../period-audience.js';
@@ -61,6 +62,13 @@ import type { SpsBlock, UpcomingEvents } from './pistes.js';
 
 /** The mockups' visible hour columns — 8h through 21h (mirror of the page heatmap). */
 export const HEATMAP_HOURS = Array.from({ length: 14 }, (_, i) => i + 8);
+
+/**
+ * Slice C — the same window in SLOTS: 8h00 … 21h30, two columns per hour, 28 in all. The PDF
+ * follows the DESKTOP rendering (a document has no width constraint to collapse for), so it draws
+ * both halves and never the « mixte » kind — that exists only where 375 px forces the collapse.
+ */
+export const HEATMAP_SLOTS = HEATMAP_HOURS.flatMap((hour) => [hour * 2, hour * 2 + 1]);
 
 /**
  * PERF-QA2 — the Piste 01 teaser window: events kicking off within this many days of the render
@@ -142,7 +150,7 @@ const closedAt =
   };
 
 /**
- * AFF1 — 7×14 hachure/ramp levels over the MERGED typical-week grid, exactly like the page:
+ * AFF1 — 7×28 hachure/ramp levels (14 hours × 2 halves) over the MERGED typical-week grid, exactly like the page:
  * level 0 is a closed hour OR a cell with no data (kind none); 1–5 ramp linearly over the grid's
  * own min/max across open cells that carry data — measured AND estimated share ONE scale, the
  * provenance rides separately (heatmapKinds) as the estimation treatment.
@@ -155,21 +163,23 @@ export function heatmapLevels(
 ): number[][] {
   const closed = closedAt(openingHour, closingHour);
   const kinds = provenanceGrid(grid, sources);
-  const valueAt = (day: number, hour: number): number | null =>
-    kinds[day]?.[hour] === 'none' ? null : (grid[day]?.[hour] ?? null);
+  const valueAt = (day: number, slot: number): number | null =>
+    kinds[day]?.[slot] === 'none' ? null : (grid[day]?.[slot] ?? null);
   const visible: (number | null)[] = [];
   for (let day = 0; day < 7; day += 1) {
-    for (const hour of HEATMAP_HOURS) {
-      if (!closed(hour)) visible.push(valueAt(day, hour));
+    for (const slot of HEATMAP_SLOTS) {
+      if (!closed(hourOfSlot(slot))) visible.push(valueAt(day, slot));
     }
   }
   const scale = heatmapScale(visible);
   return Array.from({ length: 7 }, (_, day) =>
-    HEATMAP_HOURS.map((hour) => (closed(hour) ? 0 : heatmapLevel(valueAt(day, hour), scale))),
+    HEATMAP_SLOTS.map((slot) =>
+      closed(hourOfSlot(slot)) ? 0 : heatmapLevel(valueAt(day, slot), scale),
+    ),
   );
 }
 
-/** AFF1 — the 7×14 provenance beside heatmapLevels (closed hours read as none). */
+/** AFF1 — the 7×28 provenance beside heatmapLevels (closed hours read as none). */
 export function heatmapKinds(
   grid: number[][],
   sources: (AffluenceSource | null)[][],
@@ -179,12 +189,14 @@ export function heatmapKinds(
   const closed = closedAt(openingHour, closingHour);
   const kinds = provenanceGrid(grid, sources);
   return Array.from({ length: 7 }, (_, day) =>
-    HEATMAP_HOURS.map((hour) => (closed(hour) ? 'none' : (kinds[day]?.[hour] ?? 'none'))),
+    HEATMAP_SLOTS.map((slot) =>
+      closed(hourOfSlot(slot)) ? 'none' : (kinds[day]?.[slot] ?? 'none'),
+    ),
   );
 }
 
 /**
- * MEJ-12 — the 7×14 merged VALUES beside heatmapLevels, on the same hour window. The levels are a
+ * MEJ-12 — the 7×28 merged VALUES beside heatmapLevels, on the same hour window. The levels are a
  * coarse 1–5 bucket, so several cells share the top one; ranking créneaux needs the real numbers
  * to name the busiest slot rather than the earliest one that reached the bucket.
  */
@@ -197,8 +209,8 @@ export function heatmapValues(
   const closed = closedAt(openingHour, closingHour);
   const kinds = provenanceGrid(grid, sources);
   return Array.from({ length: 7 }, (_, day) =>
-    HEATMAP_HOURS.map((hour) =>
-      closed(hour) || kinds[day]?.[hour] === 'none' ? 0 : (grid[day]?.[hour] ?? 0),
+    HEATMAP_SLOTS.map((slot) =>
+      closed(hourOfSlot(slot)) || kinds[day]?.[slot] === 'none' ? 0 : (grid[day]?.[slot] ?? 0),
     ),
   );
 }
@@ -371,22 +383,24 @@ export async function assembleReportData(
   const kpis = audienceKpis(
     merged.days,
     openHoursPerDay(venue.openingHour, venue.closingHour),
-    merged.estimatedPct, // the CELL/data-point share, the same number the page's wire carries
+    merged.estimatedPct, // the VALUE-WEIGHTED share (slice C), the same number the page's wire carries
   );
 
   const week = weekGridFromCells(merged.cells);
-  const heatGrid: number[][] = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
+  const heatGrid: number[][] = Array.from({ length: 7 }, () =>
+    Array.from({ length: SLOTS_PER_DAY }, () => 0),
+  );
   const heatSources: (AffluenceSource | null)[][] = Array.from({ length: 7 }, () =>
-    Array.from({ length: 24 }, () => null),
+    Array.from({ length: SLOTS_PER_DAY }, () => null),
   );
   const heatCounts = { measured: 0, backup: 0 };
   let heatFilled = 0;
   for (let row = 0; row < 7; row += 1) {
-    for (let hour = 0; hour < 24; hour += 1) {
-      const cell = week[row]![hour]!;
+    for (let slot = 0; slot < SLOTS_PER_DAY; slot += 1) {
+      const cell = week[row]![slot]!;
       if (cell.value === null || cell.source === null) continue;
-      heatGrid[row]![hour] = cell.value;
-      heatSources[row]![hour] = cell.source;
+      heatGrid[row]![slot] = cell.value;
+      heatSources[row]![slot] = cell.source;
       heatCounts[cell.source] += 1;
       heatFilled += 1;
     }

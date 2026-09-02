@@ -24,7 +24,7 @@ describe('cellProvenance (twin of the web helper)', () => {
 });
 
 describe('provenanceGrid', () => {
-  it('maps a 7×24 grid + sources, tolerating a missing sources grid', () => {
+  it('maps a 7×48 grid + sources, tolerating a missing sources grid', () => {
     const grid = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
     const sources: ('measured' | 'backup' | null)[][] = Array.from({ length: 7 }, () =>
       Array.from({ length: 24 }, () => null),

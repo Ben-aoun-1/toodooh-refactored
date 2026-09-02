@@ -6,13 +6,18 @@ import {
   type AffluenceSource,
   PROVENANCE_LABELS,
   provenanceGrid,
+  provenanceLabel,
 } from '../../lib/affluence-provenance';
 import {
   HEATMAP_HINT,
   PEAK_HOURS_EMPTY_TITLE,
   PEAK_HOURS_LEAD,
   heatmapCellTitle,
+  type HalfCell,
+  collapseHourCell,
   heatmapHours,
+  heatmapSlots,
+  slotLabel,
   heatmapLevel,
   heatmapScale,
   peakHoursEmpty,
@@ -35,7 +40,7 @@ const closedHour = (
 };
 
 interface PeakHoursHeatmapProps {
-  /** The api's 7×24 MERGED typical-week grid (grid[0]=Monday), values as served. */
+  /** The api's 7×48 MERGED typical-week grid (grid[0]=Monday), values as served — SLOT columns. */
   grid: number[][];
   /** AFF1 — the matching 7×24 provenance grid (null = unknown / no row). */
   sources: (AffluenceSource | null)[][];
@@ -72,36 +77,41 @@ export function PeakHoursHeatmap({
   closingHour,
 }: PeakHoursHeatmapProps) {
   const hours = useMemo(() => heatmapHours(openingHour, closingHour), [openingHour, closingHour]);
+  // Slice C — desktop draws both halves of every hour; ≤375 px collapses them back (the rules,
+  // including which pairs read « mixte », live in lib/peak-hours: WEB-GATE1).
+  const slots = useMemo(() => heatmapSlots(openingHour, closingHour), [openingHour, closingHour]);
   const kinds = useMemo(() => provenanceGrid(grid, sources), [grid, sources]);
   const empty = peakHoursEmpty({ has_data: hasData, counts });
-  const [hovered, setHovered] = useState<{ day: number; hour: number } | null>(null);
+  const [hovered, setHovered] = useState<{ day: number; slot: number } | null>(null);
 
   // MEJ-3 — THE cell descriptor. The colour, the aria-label and the caption all read from this
   // one call, so what the caption says is by construction what the cell renders.
   const describe = useCallback(
-    (day: number, hour: number) => ({
+    (day: number, slot: number) => ({
       dayLabel: DAY_LABELS_SHORT[day] ?? '',
-      hour,
-      closed: closedHour(hour, openingHour, closingHour),
-      kind: kinds[day]?.[hour] ?? ('none' as const),
-      value: grid[day]?.[hour] ?? 0,
+      slot,
+      closed: closedHour(Math.floor(slot / 2), openingHour, closingHour),
+      kind: kinds[day]?.[slot] ?? ('none' as const),
+      value: grid[day]?.[slot] ?? 0,
     }),
     [grid, kinds, openingHour, closingHour],
   );
 
   const scale = useMemo(() => {
+    // The scale spans the SLOTS the reader actually sees, so the collapsed phone layout colours
+    // against the same bounds as the desktop one.
     const visible: (number | null)[] = [];
     for (let day = 0; day < 7; day += 1) {
-      for (const hour of hours) {
-        if (!closedHour(hour, openingHour, closingHour)) {
-          visible.push(kinds[day]?.[hour] === 'none' ? null : (grid[day]?.[hour] ?? null));
+      for (const slot of slots) {
+        if (!closedHour(Math.floor(slot / 2), openingHour, closingHour)) {
+          visible.push(kinds[day]?.[slot] === 'none' ? null : (grid[day]?.[slot] ?? null));
         }
       }
     }
     return heatmapScale(visible);
-  }, [grid, kinds, hours, openingHour, closingHour]);
+  }, [grid, kinds, slots, openingHour, closingHour]);
 
-  const caption = hovered ? heatmapCellTitle(describe(hovered.day, hovered.hour)) : HEATMAP_HINT;
+  const caption = hovered ? heatmapCellTitle(describe(hovered.day, hovered.slot)) : HEATMAP_HINT;
 
   return (
     <section className="mb-[76px]">
@@ -121,13 +131,14 @@ export function PeakHoursHeatmap({
           className="mt-8 overflow-x-auto rounded-xl border border-perf-line bg-white p-[26px]"
           onMouseLeave={() => setHovered(null)}
         >
-          <div className="min-w-[680px]">
+          {/* Slice C — DESKTOP: two sub-columns per hour, the hour label spanning both. */}
+          <div className="hidden min-w-[920px] min-[376px]:block">
             <div className="flex gap-1">
               <div className="w-[52px] flex-shrink-0" />
               {hours.map((hour) => (
                 <div
                   key={hour}
-                  className="perf-mono min-w-0 flex-1 pb-2 text-center text-[10px] text-perf-mist"
+                  className="perf-mono min-w-0 flex-[2] pb-2 text-center text-[10px] text-perf-mist"
                 >
                   {hour}h
                 </div>
@@ -138,22 +149,76 @@ export function PeakHoursHeatmap({
                 <div className="perf-mono w-[52px] flex-shrink-0 self-center pr-1.5 text-[11px] uppercase tracking-[0.05em] text-perf-grey">
                   {label}
                 </div>
+                {hours.map((hour) => (
+                  <div key={`${label}-${hour}`} className="flex min-w-0 flex-[2] gap-px">
+                    {[hour * 2, hour * 2 + 1].map((slot) => {
+                      const cell = describe(day, slot);
+                      const level = cell.kind === 'none' ? 0 : heatmapLevel(cell.value, scale);
+                      const hachure = cell.closed || level === 0;
+                      return (
+                        <div
+                          key={slot}
+                          aria-label={heatmapCellTitle(cell)}
+                          data-provenance={cell.closed ? 'closed' : cell.kind}
+                          data-slot={slot}
+                          onMouseEnter={() => setHovered({ day, slot })}
+                          onFocus={() => setHovered({ day, slot })}
+                          tabIndex={-1}
+                          className={`h-[26px] min-w-0 flex-1 rounded-[2px] ${
+                            hachure
+                              ? HEATMAP_CLOSED_CLASS
+                              : `${HEATMAP_LEVEL_CLASSES[level - 1]}${cell.kind === 'backup' ? ` ${HEATMAP_ESTIMATION_CLASS}` : ''}`
+                          }`}
+                        />
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+
+          {/* Slice C — ≤375 px: 28 columns do not fit a phone, so the halves collapse back into
+              their hour. An hour whose halves disagree in source reads « mixte » — the ONLY place
+              that kind exists, because here the mixing is forced by the viewport, not chosen. */}
+          <div className="min-w-0 min-[376px]:hidden">
+            <div className="flex gap-1">
+              <div className="w-[38px] flex-shrink-0" />
+              {hours.map((hour) => (
+                <div
+                  key={hour}
+                  className="perf-mono min-w-0 flex-1 pb-2 text-center text-[8px] text-perf-mist"
+                >
+                  {hour}
+                </div>
+              ))}
+            </div>
+            {DAY_LABELS_SHORT.map((label, day) => (
+              <div key={label} className="mt-1 flex gap-1">
+                <div className="perf-mono w-[38px] flex-shrink-0 self-center pr-1 text-[10px] uppercase tracking-[0.04em] text-perf-grey">
+                  {label}
+                </div>
                 {hours.map((hour) => {
-                  const cell = describe(day, hour);
-                  const level = cell.kind === 'none' ? 0 : heatmapLevel(cell.value, scale);
-                  const hachure = cell.closed || level === 0;
+                  const halves: HalfCell[] = [hour * 2, hour * 2 + 1].map((slot) => {
+                    const c = describe(day, slot);
+                    return { value: c.kind === 'none' ? null : c.value, kind: c.kind };
+                  });
+                  const merged = collapseHourCell(halves);
+                  const closed = closedHour(hour, openingHour, closingHour);
+                  const level = merged.value === null ? 0 : heatmapLevel(merged.value, scale);
+                  const hachure = closed || level === 0;
+                  const estimated = merged.kind === 'backup' || merged.kind === 'mixte';
                   return (
                     <div
-                      key={`${label}-${hour}`}
-                      aria-label={heatmapCellTitle(cell)}
-                      data-provenance={cell.closed ? 'closed' : cell.kind}
-                      onMouseEnter={() => setHovered({ day, hour })}
-                      onFocus={() => setHovered({ day, hour })}
-                      tabIndex={-1}
-                      className={`h-[26px] min-w-0 flex-1 rounded ${
+                      key={`${label}-h${hour}`}
+                      aria-label={`${label} ${slotLabel(hour * 2)} — ${
+                        closed ? 'fermé' : provenanceLabel(merged.kind)
+                      }`}
+                      data-provenance={closed ? 'closed' : merged.kind}
+                      className={`h-[22px] min-w-0 flex-1 rounded-[2px] ${
                         hachure
                           ? HEATMAP_CLOSED_CLASS
-                          : `${HEATMAP_LEVEL_CLASSES[level - 1]}${cell.kind === 'backup' ? ` ${HEATMAP_ESTIMATION_CLASS}` : ''}`
+                          : `${HEATMAP_LEVEL_CLASSES[level - 1]}${estimated ? ` ${HEATMAP_ESTIMATION_CLASS}` : ''}`
                       }`}
                     />
                   );
@@ -195,6 +260,16 @@ export function PeakHoursHeatmap({
             <div className="flex items-center gap-1.5">
               <div className={`h-3.5 w-3.5 rounded-[3px] ${HEATMAP_CLOSED_CLASS}`} />
               <span>Fermé / aucune donnée</span>
+            </div>
+            {/* Slice C — narrow layout ONLY: on this width an hour is one column, so a mixed hour
+                is drawn in the estimation treatment (the conservative side — it never claims to be
+                a measure) and this line is what tells the reader such an hour exists. On desktop
+                the two halves are drawn separately and there is nothing to explain. */}
+            <div className="flex items-center gap-1.5 min-[376px]:hidden">
+              <div
+                className={`h-3.5 w-3.5 rounded-[3px] ${HEATMAP_LEVEL_CLASSES[2]} ${HEATMAP_ESTIMATION_CLASS}`}
+              />
+              <span>{PROVENANCE_LABELS.mixte} — demi-heures regroupées</span>
             </div>
           </div>
         </div>

@@ -2,6 +2,7 @@ import { addDays, format, getDay, parseISO } from 'date-fns';
 
 import type { MonthlyStatsDaily } from '../db/schema.js';
 
+import { SLOTS_PER_DAY, SLOT_HOURS } from './half-hour-slots.js';
 import { isMeasuredDay } from './monthly-audience.js';
 import type { DateRange } from './report/derive.js';
 
@@ -50,10 +51,10 @@ import type { DateRange } from './report/derive.js';
  * measurement, and therefore never becomes the « Pic d'audience » (MEJ-R1).
  */
 
-/** One MEASURED hourly cell as `screenhost_affluence_hourly` holds it (Tunis clock, verbatim). */
+/** One MEASURED half-hour cell as `screenhost_affluence_hourly` holds it (Tunis, verbatim). */
 export interface HourlyCell {
   date: string; // YYYY-MM-DD
-  hour: number; // 0–23
+  slot: number; // 0–47 — slot = hour × 2 + half, half 0 = :00–:29
   value: number;
 }
 
@@ -63,13 +64,14 @@ export interface HourlyCell {
  * grid alone cannot express (a missing cell and a real 0 would be identical).
  */
 export interface BackupGrid {
+  /** 7×48, Monday-first rows, columns indexed by SLOT (0–47). */
   values: number[][];
   has: boolean[][];
 }
 
 export interface PeriodCell {
   date: string; // YYYY-MM-DD
-  hour: number; // 0–23
+  slot: number; // 0–47
   value: number;
   source: 'measured' | 'backup';
 }
@@ -95,11 +97,25 @@ export interface PeriodAudience {
   measuredDays: number;
   estimatedDays: number;
   /**
-   * « dont N % estimés ». AUD-HOURLY1-C moved the denominator from DAYS to DATA POINTS: every
-   * merged cell counts once, and a day held only at day granularity (measured history older than
-   * the hourly window) counts once as measured. Cells alone would read « 100 % estimation » on a
-   * période whose measured half is old history with no cells — which would be a lie to a reader
-   * who checks this caption closely. null when the période holds no data point at all.
+   * « dont N % estimés » — VALUE-WEIGHTED since slice C (ruled 2026-09-01):
+   *
+   *     Σ (estimated audience) / Σ (all audience)
+   *
+   * It used to be a share of DATA POINTS, and that made it granularity-dependent in a way no
+   * reader could guess: a day of measured history older than the hourly window is ONE point, while
+   * a day of half-hour cells is 48. On the realistic shape — 27 measured history days plus one
+   * half-estimated day of slots — the point share says ≈ 32 % estimés when under 2 % of the PEOPLE
+   * are estimated. Nobody reads « dont 32 % estimés » as « 32 % of rows »; they read people. An
+   * overstatement of uncertainty is a lie in the same way an understatement is.
+   *
+   * Weighting by value says what the words say, and it is granularity-independent for free: a day
+   * is a day whether it arrives as one point or forty-eight, and the slot duration cancels out of
+   * the ratio. THIS IS A DEFINITION CHANGE and is the one quantity exempt from slice C's
+   * equal-halves bit-identical pin (ruled).
+   *
+   * `null` still means EXACTLY what it meant: the période holds no data point at all. A période
+   * that holds data whose total audience is 0 falls back to the point share rather than to null,
+   * so `null` keeps its one meaning for the surfaces that branch on it.
    */
   estimatedPct: number | null;
 }
@@ -124,11 +140,20 @@ export interface PeriodAudienceInput {
   onboardedIso: string | null;
 }
 
-/** A zero-filled 7×24 Monday-first grid with nothing marked as filled. */
+/** A zero-filled 7×48 Monday-first grid with nothing marked as filled. */
 export const emptyBackupGrid = (): BackupGrid => ({
-  values: Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0)),
-  has: Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => false)),
+  values: Array.from({ length: 7 }, () => Array.from({ length: SLOTS_PER_DAY }, () => 0)),
+  has: Array.from({ length: 7 }, () => Array.from({ length: SLOTS_PER_DAY }, () => false)),
 });
+
+/**
+ * Slice C — a day's audience from its cells: the level integrated over the day, NOT the sum of the
+ * cells. Rounded to a whole number of people, which is a no-op whenever the two halves of every
+ * hour agree (their `Σ (v × 0.5)` is exactly the old integer) and an honest integer when they do
+ * not. Rounding at the DAY, not at the slot, so a half-person never accumulates across 48 cells.
+ */
+const dayAudience = (dayCells: readonly PeriodCell[]): number =>
+  Math.round(dayCells.reduce((sum, c) => sum + c.value * SLOT_HOURS, 0));
 
 /** date-fns getDay: 0 = Sunday → the grid's Monday-first row index. */
 const rowOf = (dateIso: string): number => (getDay(parseISO(dateIso)) + 6) % 7;
@@ -146,7 +171,7 @@ export function periodAudience(input: PeriodAudienceInput): PeriodAudience {
   const hourlyByDate = new Map<string, Map<number, number>>();
   for (const cell of hourly) {
     const forDate = hourlyByDate.get(cell.date) ?? new Map<number, number>();
-    forDate.set(cell.hour, cell.value);
+    forDate.set(cell.slot, cell.value);
     hourlyByDate.set(cell.date, forDate);
   }
 
@@ -154,6 +179,8 @@ export function periodAudience(input: PeriodAudienceInput): PeriodAudience {
   const cells: PeriodCell[] = [];
   /** Days held at DAY granularity only (measured history) — one measured data point each. */
   let dayGranularityMeasured = 0;
+  /** …and their audience, which is MEASURED and so weights the value-share's denominator only. */
+  let dayGranularityAudience = 0;
 
   const last = range.to <= todayIso ? range.to : todayIso;
   if (range.from <= last) {
@@ -166,23 +193,27 @@ export function periodAudience(input: PeriodAudienceInput): PeriodAudience {
       // Rule 4 — the floor bounds BACKUP only; measurement is never clamped.
       const mayBackup = onboardedIso === null || date >= onboardedIso;
       const row = rowOf(date);
-      const measuredHours = hourlyByDate.get(date);
+      const measuredSlots = hourlyByDate.get(date);
 
-      if (measuredHours !== undefined) {
-        // ── the hour path: monthly_stats is NEVER added on top (double counting) ──
+      if (measuredSlots !== undefined) {
+        // ── the slot path: monthly_stats is NEVER added on top (double counting) ──
+        // The four rules are UNCHANGED by slice C; only their granularity moved from the hour to
+        // the half-hour. A slot with no reading is now genuinely empty, where the hour bucket used
+        // to be carried by its other half — that is the point of the ruling (MEJ-8's invisible
+        // outage), and it is why an hour whose readings cluster in one half MOVES the day total.
         const dayCells: PeriodCell[] = [];
-        for (let hour = 0; hour < 24; hour += 1) {
-          const measured = measuredHours.get(hour);
-          const gridHas = grid.has[row]?.[hour] === true && mayBackup;
-          const gridValue = grid.values[row]?.[hour] ?? 0;
+        for (let slot = 0; slot < SLOTS_PER_DAY; slot += 1) {
+          const measured = measuredSlots.get(slot);
+          const gridHas = grid.has[row]?.[slot] === true && mayBackup;
+          const gridValue = grid.values[row]?.[slot] ?? 0;
           if (measured !== undefined && measured > 0) {
-            dayCells.push({ date, hour, value: measured, source: 'measured' }); // rule 1
+            dayCells.push({ date, slot, value: measured, source: 'measured' }); // rule 1
           } else if (measured !== undefined) {
             // rule 2 — a measured ZERO defers to the grid where the admin declared the venue open
-            if (gridHas) dayCells.push({ date, hour, value: gridValue, source: 'backup' });
-            else dayCells.push({ date, hour, value: 0, source: 'measured' });
+            if (gridHas) dayCells.push({ date, slot, value: gridValue, source: 'backup' });
+            else dayCells.push({ date, slot, value: 0, source: 'measured' });
           } else if (gridHas) {
-            dayCells.push({ date, hour, value: gridValue, source: 'backup' }); // rule 3
+            dayCells.push({ date, slot, value: gridValue, source: 'backup' }); // rule 3
           }
           // else: no measure, no grid cell → not a data point at all (the silent rule)
         }
@@ -190,7 +221,7 @@ export function periodAudience(input: PeriodAudienceInput): PeriodAudience {
           cells.push(...dayCells);
           days.push({
             date,
-            audience: dayCells.reduce((sum, c) => sum + c.value, 0),
+            audience: dayAudience(dayCells),
             // AFF1's dayProvenance ruling: one backup hour makes the whole day an estimation.
             source: dayCells.every((c) => c.source === 'measured') ? 'measured' : 'estimated',
             // MEJ-R2 — but ONE measured cell is enough to make the day peak-eligible.
@@ -205,22 +236,23 @@ export function periodAudience(input: PeriodAudienceInput): PeriodAudience {
         // ── day granularity: history older than the hourly window. No hour detail, no S02 cell.
         days.push({ date, audience: entry.audience, source: 'measured', hasMeasured: true });
         dayGranularityMeasured += 1;
+        dayGranularityAudience += entry.audience;
         continue;
       }
 
       if (!mayBackup) continue;
       // ── the backup grid alone, cell by cell so S02 still sees this date ──
       const dayCells: PeriodCell[] = [];
-      for (let hour = 0; hour < 24; hour += 1) {
-        if (grid.has[row]?.[hour] === true) {
-          dayCells.push({ date, hour, value: grid.values[row]?.[hour] ?? 0, source: 'backup' });
+      for (let slot = 0; slot < SLOTS_PER_DAY; slot += 1) {
+        if (grid.has[row]?.[slot] === true) {
+          dayCells.push({ date, slot, value: grid.values[row]?.[slot] ?? 0, source: 'backup' });
         }
       }
       if (dayCells.length > 0) {
         cells.push(...dayCells);
         days.push({
           date,
-          audience: dayCells.reduce((sum, c) => sum + c.value, 0),
+          audience: dayAudience(dayCells),
           source: 'estimated',
           hasMeasured: false, // grid only — MEJ-R1's real target: never the peak
         });
@@ -231,13 +263,32 @@ export function periodAudience(input: PeriodAudienceInput): PeriodAudience {
   const measuredDays = days.filter((d) => d.source === 'measured').length;
   const estimatedCells = cells.filter((c) => c.source === 'backup').length;
   const dataPoints = cells.length + dayGranularityMeasured;
+
+  // The value-weighted share (see PeriodAudience.estimatedPct). Both sides are duration-weighted,
+  // so the 0.5 cancels — it is written out anyway because the day-granularity term below is
+  // already a whole day's audience, and mixing a level with a day total would be an easy silent
+  // unit error.
+  let estimatedAudience = 0;
+  let cellAudience = 0;
+  for (const cell of cells) {
+    const weighted = cell.value * SLOT_HOURS;
+    cellAudience += weighted;
+    if (cell.source === 'backup') estimatedAudience += weighted;
+  }
+  const totalAudience = cellAudience + dayGranularityAudience;
+
   return {
     days,
     cells,
     total: days.reduce((sum, d) => sum + d.audience, 0),
     measuredDays,
     estimatedDays: days.length - measuredDays,
-    estimatedPct: dataPoints === 0 ? null : Math.round((estimatedCells / dataPoints) * 100),
+    estimatedPct:
+      dataPoints === 0
+        ? null // no data at all — the ONE meaning of null, which surfaces branch on
+        : totalAudience === 0
+          ? Math.round((estimatedCells / dataPoints) * 100) // degenerate: nobody to apportion
+          : Math.round((estimatedAudience / totalAudience) * 100),
   };
 }
 
@@ -258,19 +309,19 @@ export interface WeekCell {
  */
 export function weekGridFromCells(cells: PeriodCell[]): WeekCell[][] {
   // Flat 7×24 accumulators — indexed arithmetic, no nested optional chains to appease.
-  const sums = new Array<number>(7 * 24).fill(0);
-  const counts = new Array<number>(7 * 24).fill(0);
-  const allMeasured = new Array<boolean>(7 * 24).fill(true);
+  const sums = new Array<number>(7 * SLOTS_PER_DAY).fill(0);
+  const counts = new Array<number>(7 * SLOTS_PER_DAY).fill(0);
+  const allMeasured = new Array<boolean>(7 * SLOTS_PER_DAY).fill(true);
   for (const cell of cells) {
-    if (cell.hour < 0 || cell.hour > 23) continue;
-    const at = rowOf(cell.date) * 24 + cell.hour;
+    if (cell.slot < 0 || cell.slot >= SLOTS_PER_DAY) continue;
+    const at = rowOf(cell.date) * SLOTS_PER_DAY + cell.slot;
     sums[at] = (sums[at] ?? 0) + cell.value;
     counts[at] = (counts[at] ?? 0) + 1;
     if (cell.source !== 'measured') allMeasured[at] = false;
   }
   return Array.from({ length: 7 }, (_, row) =>
-    Array.from({ length: 24 }, (__, hour) => {
-      const at = row * 24 + hour;
+    Array.from({ length: SLOTS_PER_DAY }, (__, slot) => {
+      const at = row * SLOTS_PER_DAY + slot;
       const n = counts[at] ?? 0;
       if (n === 0) return { value: null, source: null };
       return {

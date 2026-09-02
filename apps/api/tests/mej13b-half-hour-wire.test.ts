@@ -10,6 +10,7 @@ import {
   screenhosts,
   users,
 } from '../src/db/schema.js';
+import { computeAmax } from '../src/lib/event-pricing/pricing.js';
 import { loadBackupGrid } from '../src/lib/period-audience-source.js';
 import { internalRoutes } from '../src/routes/internal.js';
 
@@ -259,7 +260,7 @@ describe('MEJ-13-B — an old-shape push and a new-shape push agree, cell for ce
     return cells;
   };
 
-  it('THE INVARIANT: the merged 7×24 grid is IDENTICAL either way', async () => {
+  it('THE INVARIANT: the merged grid is IDENTICAL either way', async () => {
     const oldVenue = await seedVenue();
     const newVenue = await seedVenue();
 
@@ -287,14 +288,19 @@ describe('MEJ-13-B — an old-shape push and a new-shape push agree, cell for ce
     expect(oldGrid.values).toEqual(newGrid.values);
     expect(oldGrid.has).toEqual(newGrid.has);
 
-    // …and it still carries the ORIGINAL numbers, not doubled and not halved.
-    expect(oldGrid.values[0]?.[13]).toBe(113); // dow 1, hour 13
-    expect(oldGrid.values[6]?.[23]).toBe(723); // dow 7, hour 23
+    // …and it still carries the ORIGINAL numbers, not doubled and not halved. Slice C made the
+    // grid SLOT-indexed, so hour 13 is slots 26/27 — both halves carrying the hour's own level.
+    expect(oldGrid.values[0]?.[26]).toBe(113); // dow 1, 13h00
+    expect(oldGrid.values[0]?.[27]).toBe(113); // dow 1, 13h30 — the same level, never halved
+    expect(oldGrid.values[6]?.[46]).toBe(723); // dow 7, 23h00
   });
 
-  it('unequal halves collapse to their mean for an hour-keyed reader — not max, not first', async () => {
+  // Slice C moved period-audience onto slots, so this venue's unequal halves now reach the owner
+  // surfaces INTACT. The collapse survives only where a consumer is hour-keyed BY DESIGN — and
+  // A_max is the sharpest of the three, because its ratchet never writes downward: `max(halves)`
+  // would have inflated it permanently off one busy half-hour.
+  it('an hour-keyed consumer still collapses: A_max is the mean of the halves, never the max', async () => {
     const venue = await seedVenue();
-    // What the hub produces once it re-buckets measured data: a busy half and a quiet one.
     await app!.inject({
       method: 'POST',
       url: '/api/internal/affluence',
@@ -306,10 +312,9 @@ describe('MEJ-13-B — an old-shape push and a new-shape push agree, cell for ce
         ],
       },
     });
-    const grid = await loadBackupGrid(venue);
-    expect(grid.values[0]?.[13]).toBe(150); // round((100 + 200) / 2)
-    expect(grid.values[0]?.[13]).not.toBe(200); // max() would INFLATE — A_max ratchets, permanently
-    expect(grid.values[0]?.[13]).not.toBe(100); // first() would TRUNCATE
+    const amax = await computeAmax(venue);
+    expect(amax).toBe(150); // round((100 + 200) / 2)
+    expect(amax).not.toBe(200); // max() would ratchet A_max up here, and never back down
   });
 });
 

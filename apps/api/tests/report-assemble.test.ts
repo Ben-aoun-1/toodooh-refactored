@@ -228,7 +228,12 @@ describe('assembleReportData (real Postgres)', () => {
     expect(data?.kpis.perHour).toBe(14.8); // 207.14… / 14 h, one decimal
     expect(data?.kpis.peak).toEqual({ value: 900, date: '2026-06-14' });
     expect(data?.kpis.measuredDays).toBe(3);
-    expect(data?.kpis.estimatedPct).toBe(79); // 11 / 14
+    // Slice C — the caption is VALUE-WEIGHTED: Σ estimated audience / Σ all audience, so it is
+    // granularity-independent (a day is a day whether it arrives as one point or forty-eight).
+    // Here: 4 Mondays × 80 + 4 Wednesdays × 30 + 3 Saturdays × 120 = 800 estimated, against
+    // 800 + 2 100 of measured day-granularity history = 2 900. A share of ROWS would have said
+    // 88 % of the same data — the number a reader would have taken to mean people.
+    expect(data?.kpis.estimatedPct).toBe(28); // 800 / 2 900
 
     // S03 — zero-filled June: 30 days, 2 impressions on the 10th, 0 elsewhere.
     expect(data?.days).toHaveLength(30);
@@ -251,18 +256,23 @@ describe('assembleReportData (real Postgres)', () => {
     // hourly cells, so every slot the merge fills comes from the admin's grid and is therefore an
     // ESTIMATION — whatever the hub had marked on its own rolling slot. (A measured slot needs a
     // screenhost_affluence_hourly cell; that path is pinned in screenhost-affluence.test.ts.)
-    // Mon 12h 80 → col 4; Sat 18h 120 → col 10; Wed 15h 30 → col 7. Elsewhere: no cell → none.
+    // Slice C — the window is 28 SLOT columns starting at 8h00, so hour h occupies columns
+    // (h − 8) × 2 and + 1. Mon 12h 80 → cols 8/9; Sat 18h 120 → cols 20/21; Wed 15h 30 → cols
+    // 14/15. An hour-shaped grid fills BOTH halves, so each pair reads the same.
     const levels = data?.heatLevels ?? [];
     const kinds = data?.heatKinds ?? [];
     expect(levels).toHaveLength(7);
-    expect(levels[0]?.[4]).toBeGreaterThan(0);
-    expect(kinds[0]?.[4]).toBe('backup');
-    expect(levels[5]?.[10]).toBe(5); // the max of the three
-    expect(kinds[5]?.[10]).toBe('backup');
-    expect(levels[2]?.[7]).toBeGreaterThan(0);
-    expect(kinds[2]?.[7]).toBe('backup');
-    expect(levels[1]?.[4]).toBe(0);
-    expect(kinds[1]?.[4]).toBe('none');
+    expect(levels[0]).toHaveLength(28);
+    expect(levels[0]?.[8]).toBeGreaterThan(0);
+    expect(levels[0]?.[9]).toBe(levels[0]?.[8]); // the hour's other half, same value
+    expect(kinds[0]?.[8]).toBe('backup');
+    expect(kinds[0]?.[9]).toBe('backup');
+    expect(levels[5]?.[20]).toBe(5); // the max of the three
+    expect(kinds[5]?.[20]).toBe('backup');
+    expect(levels[2]?.[14]).toBeGreaterThan(0);
+    expect(kinds[2]?.[14]).toBe('backup');
+    expect(levels[1]?.[8]).toBe(0);
+    expect(kinds[1]?.[8]).toBe('none');
     expect(data?.heatEmpty).toBe(false);
   });
 
@@ -353,18 +363,18 @@ describe('assembleReportData (real Postgres)', () => {
     // 2026-06-01 (Mon) .. 2026-06-02 (Tue): only Monday is in the période.
     const data = await assembleReportData(venue, { from: '2026-06-01', to: '2026-06-02' }, TODAY);
     // Filled from the grid → an estimation, since no hourly cell backs it.
-    expect(data?.heatKinds[0]?.[4]).toBe('backup'); // Mon 12h → col 4
-    expect(data?.heatLevels[0]?.[4]).toBeGreaterThan(0);
-    expect(data?.heatKinds[5]?.[10]).toBe('none'); // Saturday is not in the période
-    expect(data?.heatLevels[5]?.[10]).toBe(0);
+    expect(data?.heatKinds[0]?.[8]).toBe('backup'); // Mon 12h → col 4
+    expect(data?.heatLevels[0]?.[8]).toBeGreaterThan(0);
+    expect(data?.heatKinds[5]?.[20]).toBe('none'); // Saturday is not in the période
+    expect(data?.heatLevels[5]?.[20]).toBe(0);
 
     const weekend = await assembleReportData(
       venue,
       { from: '2026-06-06', to: '2026-06-07' }, // Sat–Sun
       TODAY,
     );
-    expect(weekend?.heatKinds[5]?.[10]).toBe('backup'); // Saturday IS in this période
-    expect(weekend?.heatKinds[0]?.[4]).toBe('none'); // Monday is not
+    expect(weekend?.heatKinds[5]?.[20]).toBe('backup'); // Saturday IS in this période
+    expect(weekend?.heatKinds[0]?.[8]).toBe('none'); // Monday is not
   });
 
   // MEJ-R2 (architect 2026-09-01) — the PDF's peak follows the same rule as the page: the highest
@@ -419,7 +429,7 @@ describe('assembleReportData (real Postgres)', () => {
     );
 
     const data = await assembleReportData(venue, { from: '2026-06-01', to: '2026-06-01' }, TODAY);
-    expect(data?.heatKinds[0]?.[4]).toBe('measured');
+    expect(data?.heatKinds[0]?.[8]).toBe('measured');
     expect(data?.kpis.global).toBe(44); // the measure, not the grid's 80
     expect(data?.kpis.measuredDays).toBe(1);
   });
@@ -469,50 +479,56 @@ describe('assembleReportData — the S08 SPS block follows the computability pre
 });
 
 describe('heatmapLevels / heatmapKinds', () => {
+  // Slice C — the grids are 7×48 (SLOT-indexed) and the builders return 28 columns: the 14-hour
+  // window, two halves each. Column c therefore covers hour 8 + floor(c / 2).
   const measuredAll = Array.from({ length: 7 }, () =>
-    Array.from({ length: 24 }, () => 'measured' as const),
+    Array.from({ length: 48 }, () => 'measured' as const),
   );
+  const emptyGrid = (): number[][] =>
+    Array.from({ length: 7 }, () => Array.from({ length: 48 }, () => 0));
+  const emptySources = (): ('measured' | 'backup' | null)[][] =>
+    Array.from({ length: 7 }, () => Array.from({ length: 48 }, () => null));
+
   it('closed hours are level 0 regardless of value; null hours mean nothing is closed', () => {
-    const grid = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 10));
+    const grid = Array.from({ length: 7 }, () => Array.from({ length: 48 }, () => 10));
     const withHours = heatmapLevels(grid, measuredAll, 9, 20);
-    expect(withHours[0]?.[0]).toBe(0); // 8h < opening 9h → closed
-    expect(withHours[0]?.[1]).toBeGreaterThan(0); // 9h open
-    expect(withHours[0]?.[12]).toBe(0); // 20h ≥ closing → closed
+    expect(withHours[0]?.[0]).toBe(0); // 8h00 < opening 9h → closed
+    expect(withHours[0]?.[1]).toBe(0); // 8h30 too — BOTH halves of a closed hour are closed
+    expect(withHours[0]?.[2]).toBeGreaterThan(0); // 9h00 open
+    expect(withHours[0]?.[3]).toBeGreaterThan(0); // 9h30 open
+    expect(withHours[0]?.[24]).toBe(0); // 20h00 ≥ closing → closed
     const noHours = heatmapLevels(grid, measuredAll, null, null);
     expect(noHours.flat().every((lvl) => lvl > 0)).toBe(true);
+    expect(noHours[0]).toHaveLength(28);
   });
 
   it('a backup cell keeps its ramp level (same scale) and is flagged by heatmapKinds', () => {
-    const grid = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
-    const sources: ('measured' | 'backup' | null)[][] = Array.from({ length: 7 }, () =>
-      Array.from({ length: 24 }, () => null),
-    );
-    grid[0]![9] = 10;
-    sources[0]![9] = 'measured';
-    grid[0]![10] = 10;
-    sources[0]![10] = 'backup';
+    const grid = emptyGrid();
+    const sources = emptySources();
+    grid[0]![18] = 10; // 9h00
+    sources[0]![18] = 'measured';
+    grid[0]![20] = 10; // 10h00
+    sources[0]![20] = 'backup';
     const levels = heatmapLevels(grid, sources, null, null);
     const kinds = heatmapKinds(grid, sources, null, null);
-    expect(levels[0]?.[1]).toBe(levels[0]?.[2]); // 9h and 10h: same value → same level
-    expect(kinds[0]?.[1]).toBe('measured');
-    expect(kinds[0]?.[2]).toBe('backup');
-    expect(kinds[0]?.[3]).toBe('none');
+    expect(levels[0]?.[2]).toBe(levels[0]?.[4]); // 9h00 and 10h00: same value → same level
+    expect(kinds[0]?.[2]).toBe('measured');
+    expect(kinds[0]?.[4]).toBe('backup');
+    expect(kinds[0]?.[6]).toBe('none'); // 11h00 — nothing there
     expect(kinds).toHaveLength(7);
-    expect(kinds[0]).toHaveLength(14);
+    expect(kinds[0]).toHaveLength(28);
   });
 
   it('a measured ZERO is level 1 (a measurement), a provenance-less zero is level 0 (no data)', () => {
-    const grid = Array.from({ length: 7 }, () => Array.from({ length: 24 }, () => 0));
-    const sources: ('measured' | 'backup' | null)[][] = Array.from({ length: 7 }, () =>
-      Array.from({ length: 24 }, () => null),
-    );
-    grid[0]![9] = 8;
-    sources[0]![9] = 'measured';
-    sources[0]![10] = 'measured'; // measured 0
+    const grid = emptyGrid();
+    const sources = emptySources();
+    grid[0]![18] = 8; // 9h00
+    sources[0]![18] = 'measured';
+    sources[0]![20] = 'measured'; // 10h00 — a measured 0
     const levels = heatmapLevels(grid, sources, null, null);
-    expect(levels[0]?.[1]).toBe(5);
-    expect(levels[0]?.[2]).toBe(1);
-    expect(levels[0]?.[3]).toBe(0);
+    expect(levels[0]?.[2]).toBe(5);
+    expect(levels[0]?.[4]).toBe(1);
+    expect(levels[0]?.[6]).toBe(0);
   });
 });
 
