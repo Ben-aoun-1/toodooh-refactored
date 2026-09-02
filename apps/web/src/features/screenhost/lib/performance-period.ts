@@ -25,30 +25,6 @@ export const PERIOD_PILLS: { key: PeriodKey; label: string }[] = [
   { key: 'custom', label: 'Personnalisé' },
 ];
 
-/**
- * PERF-CUSTOM1 (opérateur, 2026-09-01) — « Personnalisé » est PARQUÉ, pas réparé : la pastille est
- * désactivée et annoncée « bientôt disponible » plutôt que de rester un clic sans effet.
- *
- * Pour qui le déparque : le clic écrit `periode=custom` SANS du/au (il n'y a pas encore de bornes),
- * `parsePeriodSelection` retombe alors sur '28d', donc `active` ne vaut jamais 'custom' et
- * PeriodFilters ne rend jamais les champs de dates qui auraient fourni ces bornes. Circulaire.
- * Détail complet au BACKLOG, entrée PERF-CUSTOM1.
- *
- * Le chemin URL est laissé INTACT : la branche custom fonctionne dès que les deux bornes sont
- * présentes, et aucun lien de ce genre ne peut exister dans la nature (l'UI n'a jamais su en
- * produire). C'est exactement ce qu'un dépaquage voudrait retrouver.
- */
-export const PARKED_PERIOD_KEYS: readonly PeriodKey[] = ['custom'];
-export const PARKED_PERIOD_NOTE = 'bientôt disponible';
-
-/** Is this pill parked (rendered, disabled, annotated) rather than usable? */
-export const isPeriodParked = (key: PeriodKey): boolean => PARKED_PERIOD_KEYS.includes(key);
-
-/** The pill's visible text — parked pills carry the note so the owner gets an honest "not yet". */
-export const periodPillLabel = (pill: { key: PeriodKey; label: string }): string =>
-  isPeriodParked(pill.key) ? `${pill.label} — ${PARKED_PERIOD_NOTE}` : pill.label;
-
-/** "Depuis le début" lower bound — before any TOODOOH data exists, so it filters nothing out. */
 export const ALL_TIME_FROM = '2020-01-01';
 
 const iso = (d: Date): string => format(d, 'yyyy-MM-dd');
@@ -152,8 +128,17 @@ export function parsePeriodSelection(params: URLSearchParams): PeriodSelection {
   if (key !== 'custom') return { period: key };
   const from = params.get(CUSTOM_FROM_PARAM);
   const to = params.get(CUSTOM_TO_PARAM);
+  // PERF-CUSTOM1 (Mejri, 2026-09-02 — she reverses the parking) — « Personnalisé » WITHOUT usable
+  // bounds is still « Personnalisé ». Falling back to '28d' here was the deadlock: the click wrote
+  // `periode=custom` with no du/au, the selection came back as '28d', so `active` was never
+  // 'custom' and the date inputs — which are the ONLY way to supply the bounds — never rendered.
+  //
+  // « Never filter on half a range » is NOT lost: it lives one level down, where it belongs.
+  // `resolvePeriodRange('custom', today, undefined)` returns the 28-day window, so the data stays
+  // on 28 days until both bounds exist. The selection says WHICH PILL IS OPEN; the range says WHAT
+  // IS FILTERED. Conflating the two is what made the pill unreachable.
   if (from === null || to === null || !ISO_DATE.test(from) || !ISO_DATE.test(to)) {
-    return DEFAULT_PERIOD_SELECTION;
+    return { period: 'custom' };
   }
   return { period: 'custom', custom: { from, to } };
 }
