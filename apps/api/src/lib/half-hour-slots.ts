@@ -101,3 +101,21 @@ export const tunisSlotOf = (now: Date): number => {
   const hour = at('hour') % 24; // en-GB can render midnight as 24
   return hour * HALVES_PER_HOUR + (at('minute') >= 30 ? 1 : 0);
 };
+
+/**
+ * OFF-1 — « this manual cell currently applies ». THE predicate, in ONE place, for all four
+ * readers of `screenhost_affluence`.
+ *
+ * `IS NOT FALSE` is the whole rule: NULL (unknown — every row predating the flag, and every hub
+ * that does not send it) and TRUE both pass; only an explicit FALSE is excluded. That is what
+ * makes this deploy inert until the hub starts sending.
+ *
+ * ⚠️ IT MUST GO IN THE `WHERE`, BEFORE THE HOUR-COLLAPSE — never applied to the result.
+ * `collapseHalvesSql` averages the halves of an hour, so a suspended half averaged in and then
+ * removed would still carry half of a value the rule says does not exist: on a pair of 56 and a
+ * suspended 20, filtering afterwards yields 38 where the answer is 56. Pinned by test.
+ *
+ * Four call sites, one predicate, because the MEJ-13-B lane paid for the lesson that a rule
+ * copied per reader drifts per reader.
+ */
+export const inEffectSql = (column: AnyPgColumn): SQL<unknown> => sql`${column} IS NOT FALSE`;

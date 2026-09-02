@@ -10,7 +10,7 @@ import {
   screenhosts,
 } from '../../db/schema.js';
 import { type BlocDiffusion, fenetreDiffusion } from '../fenetre-diffusion.js';
-import { collapseHalvesSql } from '../half-hour-slots.js';
+import { collapseHalvesSql, inEffectSql } from '../half-hour-slots.js';
 
 // EV2 — the EVENT pricing engine (D51: its OWN module). The campaign engine is untouched and
 // UNIMPORTED — no lib/dispatch, no campaign-* libs (boundary-pinned like E7's rail). The event
@@ -77,7 +77,14 @@ export const computeAmax = async (screenhostId: string): Promise<number> => {
   const grid = await db
     .select({ v: collapseHalvesSql(screenhostAffluence.estimatedImpressions) })
     .from(screenhostAffluence)
-    .where(eq(screenhostAffluence.screenhostId, screenhostId))
+    // OFF-1 — a suspended manual cell is ABSENT for A_max. Filtered before the collapse: the
+    // ratchet never writes downward, so a suspended half leaking into the mean would be permanent.
+    .where(
+      and(
+        eq(screenhostAffluence.screenhostId, screenhostId),
+        inEffectSql(screenhostAffluence.inEffect),
+      ),
+    )
     .groupBy(screenhostAffluence.dayOfWeek, screenhostAffluence.hour);
   const gridMax = grid.reduce((m, r) => Math.max(m, r.v), 0);
   const [stored] = await db

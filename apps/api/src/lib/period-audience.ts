@@ -51,11 +51,17 @@ import type { DateRange } from './report/derive.js';
  * measurement, and therefore never becomes the « Pic d'audience » (MEJ-R1).
  */
 
-/** One MEASURED half-hour cell as `screenhost_affluence_hourly` holds it (Tunis, verbatim). */
+/** One half-hour cell as `screenhost_affluence_hourly` holds it (Tunis, verbatim). */
 export interface HourlyCell {
   date: string; // YYYY-MM-DD
   slot: number; // 0–47 — slot = hour × 2 + half, half 0 = :00–:29
-  value: number;
+  /**
+   * OFF-1 — `null` = the sensor reported NOTHING for this slot, which is a different fact from a
+   * measured 0 (« it counted nobody »). The distinction is the one MEJ-1 and AFF1 exist to keep.
+   */
+  value: number | null;
+  /** OFF-1 — was the device up during this slot, per the hub? `null`/absent = unknown. */
+  deviceOnline?: boolean | null;
 }
 
 /**
@@ -176,10 +182,10 @@ export function periodAudience(input: PeriodAudienceInput): PeriodAudience {
   // date → (hour → measured value). A date PRESENT here takes the hour path, even if every one of
   // its cells is a zero: the hub sends measured zeros deliberately, so "the sensor said nothing"
   // and "the sensor counted nobody" stay distinguishable right up to this merge.
-  const hourlyByDate = new Map<string, Map<number, number>>();
+  const hourlyByDate = new Map<string, Map<number, HourlyCell>>();
   for (const cell of hourly) {
-    const forDate = hourlyByDate.get(cell.date) ?? new Map<number, number>();
-    forDate.set(cell.slot, cell.value);
+    const forDate = hourlyByDate.get(cell.date) ?? new Map<number, HourlyCell>();
+    forDate.set(cell.slot, cell);
     hourlyByDate.set(cell.date, forDate);
   }
 
@@ -222,15 +228,32 @@ export function periodAudience(input: PeriodAudienceInput): PeriodAudience {
         // outage), and it is why an hour whose readings cluster in one half MOVES the day total.
         const dayCells: PeriodCell[] = [];
         for (let slot = 0; slot < SLOTS_PER_DAY; slot += 1) {
-          const measured = measuredSlots.get(slot);
+          const cell = measuredSlots.get(slot);
           const gridHas = grid.has[row]?.[slot] === true && mayBackup && elapsed(slot);
           const gridValue = grid.values[row]?.[slot] ?? 0;
-          if (measured !== undefined && measured > 0) {
-            dayCells.push({ date, slot, value: measured, source: 'measured' }); // rule 1
-          } else if (measured !== undefined) {
-            // rule 2 — a measured ZERO defers to the grid where the admin declared the venue open
-            if (gridHas) dayCells.push({ date, slot, value: gridValue, source: 'backup' });
+          // OFF-1 (Mejri, ruled 2026-09-02) — « les données forcées ne devraient être prises en
+          // compte que lorsque le capteur est offline ». The manual grid stands in for a FAILURE;
+          // while the sensor is up there is nothing to stand in for. `online` is the hub's own
+          // judgement (a slot is offline only when it AND the previous one are silent — a single
+          // gap is jitter); unknown behaves exactly as before, which is what makes this inert
+          // until the hub sends the flag.
+          //
+          // THE FOUR STATES, in order:
+          //   value > 0        → measured                                        (rule 1)
+          //   value === 0      → online: a REAL zero · offline/unknown: the grid  (rule 2, gated)
+          //   value === null   → online: NOT a data point · offline/unknown: grid (rule 3, gated)
+          //   no cell at all   → the grid, as today                               (rule 3)
+          const online = cell?.deviceOnline === true;
+          if (cell !== undefined && cell.value !== null && cell.value > 0) {
+            dayCells.push({ date, slot, value: cell.value, source: 'measured' }); // rule 1
+          } else if (cell !== undefined && cell.value === 0) {
+            // rule 2 — a measured ZERO from an ONLINE device is a real zero, not a backup trigger.
+            if (!online && gridHas)
+              dayCells.push({ date, slot, value: gridValue, source: 'backup' });
             else dayCells.push({ date, slot, value: 0, source: 'measured' });
+          } else if (cell !== undefined && cell.value === null && online) {
+            // The sensor was up and reported nothing: no measure, no backup, nothing has failed.
+            continue;
           } else if (gridHas) {
             dayCells.push({ date, slot, value: gridValue, source: 'backup' }); // rule 3
           }

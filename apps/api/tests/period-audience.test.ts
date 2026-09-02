@@ -617,6 +617,95 @@ describe('S02-FUT1 — the grid may not answer for a slot that has not elapsed',
   });
 });
 
+// ── OFF-1 (Mejri, ruled 2026-09-02) — the manual grid applies ONLY while the sensor is OFF ──
+//
+// « Vérifier qu'elles ne soient pas prises en compte tant que le capteur est actif et continue
+// d'envoyer des données. » The grid stands in for a FAILURE; while the sensor is up there is
+// nothing to stand in for. Supersedes the 26/08 « backup where measured is 0 » reading.
+describe('OFF-1 — device_online gates the backup', () => {
+  const MONDAY_SLOT = 26; // 13h00
+
+  /** A cell the hub sends for a slot it has an opinion about. */
+  const cellAt = (slot: number, value: number | null, deviceOnline?: boolean) => ({
+    date: TODAY,
+    slot,
+    value,
+    ...(deviceOnline === undefined ? {} : { deviceOnline }),
+  });
+
+  it('HER CASE: sensor ONLINE, one empty slot, grid 56 → not a data point at all', () => {
+    const result = periodAudience(
+      input({
+        hourly: [cellAt(MONDAY_SLOT, null, true)],
+        grid: gridWithSlots([[MONDAY, MONDAY_SLOT, 56]]),
+      }),
+    );
+    expect(result.cells).toEqual([]); // no measure, no backup — nothing has failed
+    expect(result.total).toBe(0);
+  });
+
+  it('a GENUINE outage — the hub says offline — still falls back to the grid', () => {
+    const result = periodAudience(
+      input({
+        hourly: [cellAt(MONDAY_SLOT, null, false)],
+        grid: gridWithSlots([[MONDAY, MONDAY_SLOT, 56]]),
+      }),
+    );
+    expect(result.cells).toEqual([{ date: TODAY, slot: MONDAY_SLOT, value: 56, source: 'backup' }]);
+  });
+
+  it('a measured ZERO from an ONLINE device is a REAL zero, not a backup trigger', () => {
+    const online = periodAudience(
+      input({
+        hourly: [cellAt(MONDAY_SLOT, 0, true)],
+        grid: gridWithSlots([[MONDAY, MONDAY_SLOT, 56]]),
+      }),
+    );
+    expect(online.cells).toEqual([
+      { date: TODAY, slot: MONDAY_SLOT, value: 0, source: 'measured' },
+    ]);
+    // …and the same zero from an OFFLINE device still defers to the grid (the 26/08 behaviour).
+    const offline = periodAudience(
+      input({
+        hourly: [cellAt(MONDAY_SLOT, 0, false)],
+        grid: gridWithSlots([[MONDAY, MONDAY_SLOT, 56]]),
+      }),
+    );
+    expect(offline.cells).toEqual([
+      { date: TODAY, slot: MONDAY_SLOT, value: 56, source: 'backup' },
+    ]);
+  });
+
+  it('a measured VALUE always wins, online or not — the gate bounds the BACKUP only', () => {
+    for (const online of [true, false, undefined]) {
+      const result = periodAudience(
+        input({
+          hourly: [cellAt(MONDAY_SLOT, 90, online)],
+          grid: gridWithSlots([[MONDAY, MONDAY_SLOT, 56]]),
+        }),
+      );
+      expect(`online=${String(online)} → ${JSON.stringify(result.cells)}`).toBe(
+        `online=${String(online)} → ${JSON.stringify([
+          { date: TODAY, slot: MONDAY_SLOT, value: 90, source: 'measured' },
+        ])}`,
+      );
+    }
+  });
+
+  it('THE INERT CASE: the flag ABSENT behaves exactly as before the ruling', () => {
+    // This is what makes toodooh deployable BEFORE the hub sends anything.
+    const noFlag = periodAudience(
+      input({
+        hourly: [cellAt(MONDAY_SLOT, null)],
+        grid: gridWithSlots([[MONDAY, MONDAY_SLOT, 56]]),
+      }),
+    );
+    const noCellAtAll = periodAudience(input({ grid: gridWithSlots([[MONDAY, MONDAY_SLOT, 56]]) }));
+    expect(noFlag.cells).toEqual([{ date: TODAY, slot: MONDAY_SLOT, value: 56, source: 'backup' }]);
+    expect(noFlag.cells).toEqual(noCellAtAll.cells); // indistinguishable, as ruled
+  });
+});
+
 describe('weekGridFromCells — S02 is the période folded into a weekday × slot grid', () => {
   it('averages the cells that fall on a slot and rounds', () => {
     const week = weekGridFromCells([

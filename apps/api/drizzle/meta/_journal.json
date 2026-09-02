@@ -470,6 +470,13 @@
       "when": 1788291534713,
       "tag": "0066_half_hour_slots",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1788368601215,
+      "tag": "0067_offline_gated_backup",
+      "breakpoints": true
     }
   ]
 }

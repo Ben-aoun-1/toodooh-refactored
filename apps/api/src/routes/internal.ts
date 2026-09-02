@@ -21,7 +21,7 @@ import { env } from '../env.js';
 import { generateUniqueAgentCode } from '../lib/agent-code.js';
 import { CALENDAR_DAY_MSG, ISO_DATE_RE, isCalendarDate } from '../lib/calendar-date.js';
 import { buildEligibilityPatch, type EligibilityPatchInput } from '../lib/eligibility-patch.js';
-import { collapseHalvesSql, hourOfSlot, slotsOfHour } from '../lib/half-hour-slots.js';
+import { collapseHalvesSql, hourOfSlot, inEffectSql, slotsOfHour } from '../lib/half-hour-slots.js';
 import { mergeMonthlyAudience } from '../lib/monthly-audience.js';
 import { decryptWifiPassword } from '../lib/wifi-crypto.js';
 import { requireSyncKey } from '../middleware/require-sync-key.js';
@@ -78,6 +78,11 @@ const affluenceBodySchema = z.object({
           // AFF1 provenance (HUB-AFF1 sends it on every slot). Optional so a pre-AFF1 hub stays
           // compatible: absent → NULL (unknown), never a default guess. Invalid → 400 like any field.
           source: z.enum(['measured', 'backup']).optional(),
+          // OFF-1 — is this manual cell currently applicable? Absent = unknown = yes, so a hub
+          // that does not send it behaves exactly as today. `false` SUSPENDS the cell without
+          // deleting it: this endpoint is latest-value-wins with no delete, so an omitted cell
+          // would freeze its last value here forever.
+          in_effect: z.boolean().optional(),
         })
         .refine((c) => c.slot !== undefined || c.hour !== undefined, HALF_HOUR_CELL_MSG),
     )
@@ -104,7 +109,11 @@ const affluenceHourlyBodySchema = z.object({
                   .refine(isCalendarDate, CALENDAR_DAY_MSG),
                 hour: z.number().int().min(0).max(23).optional(),
                 slot: z.number().int().min(0).max(47).optional(),
-                value: z.number().int().min(0),
+                // OFF-1 — NULL = the sensor reported nothing for this slot, which is NOT the same
+                // fact as a measured 0. The hub now sends a cell for every slot it has an opinion
+                // about, so an empty one arrives carrying only `device_online`.
+                value: z.number().int().min(0).nullable(),
+                device_online: z.boolean().optional(),
               })
               .refine((c) => c.slot !== undefined || c.hour !== undefined, HALF_HOUR_CELL_MSG),
           )
@@ -141,7 +150,14 @@ const loadAffluenceGrids = async (venueIds: string[]): Promise<Map<string, numbe
       estimatedImpressions: collapseHalvesSql(screenhostAffluence.estimatedImpressions),
     })
     .from(screenhostAffluence)
-    .where(inArray(screenhostAffluence.screenhostId, venueIds))
+    // OFF-1 — a suspended manual cell is ABSENT for the monthly audience it feeds. Before the
+    // collapse, like the other three readers.
+    .where(
+      and(
+        inArray(screenhostAffluence.screenhostId, venueIds),
+        inEffectSql(screenhostAffluence.inEffect),
+      ),
+    )
     .groupBy(
       screenhostAffluence.screenhostId,
       screenhostAffluence.dayOfWeek,
@@ -383,6 +399,7 @@ export const internalRoutes: FastifyPluginAsync<{ syncKey?: string }> = async (a
             slot,
             estimatedImpressions: cell.estimated_impressions,
             source: cell.source ?? null,
+            inEffect: cell.in_effect ?? null,
           },
         });
       }
@@ -418,6 +435,7 @@ export const internalRoutes: FastifyPluginAsync<{ syncKey?: string }> = async (a
               set: {
                 estimatedImpressions: sql`excluded.estimated_impressions`,
                 source: sql`excluded.source`,
+                inEffect: sql`excluded.in_effect`,
                 updatedAt: new Date(),
               },
             });
@@ -488,6 +506,7 @@ export const internalRoutes: FastifyPluginAsync<{ syncKey?: string }> = async (a
               hour: hourOfSlot(slot), // DERIVED from slot (rule 3)
               slot,
               value: cell.value,
+              deviceOnline: cell.device_online ?? null,
             },
           });
         }
@@ -521,6 +540,7 @@ export const internalRoutes: FastifyPluginAsync<{ syncKey?: string }> = async (a
               ],
               set: {
                 value: sql`excluded.value`,
+                deviceOnline: sql`excluded.device_online`,
                 receivedAt: new Date(),
               },
             });
