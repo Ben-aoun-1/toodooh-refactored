@@ -12,7 +12,6 @@ import {
   screenhostMonthlyStats,
   screenhosts,
 } from '../../db/schema.js';
-import { tunisDateOf } from '../campaign-dates.js';
 import { getDispatchConfig } from '../dispatch/config.js';
 import { SLOTS_PER_DAY, hourOfSlot } from '../half-hour-slots.js';
 import { displayImpressionsSettled } from '../impressions-display.js';
@@ -375,9 +374,10 @@ export async function assembleReportData(
       venueId,
       range,
       todayIso,
-      // MEJ-R1 — the SAME estimation floor the page applies (the twin contract); the venue row
-      // is already in hand, so the loader does not re-read it.
-      onboardedIso: tunisDateOf(venue.createdAt),
+      // MEJ-7b — the floor is NOT passed any more: the loader derives it, once, for every surface.
+      // This line used to read `tunisDateOf(venue.createdAt)`, one of THREE independent copies,
+      // which is how a venue created before its sensor kept getting backup for days that had no
+      // sensor. A caller that cannot state the floor cannot disagree about it.
     }),
   );
   const kpis = audienceKpis(

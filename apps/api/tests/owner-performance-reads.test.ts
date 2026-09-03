@@ -270,7 +270,15 @@ describe('owner performance reads (owner-scoped, real Postgres)', () => {
         await get(`/api/screenhosts/${sh}/audience?from=${from}&to=2030-01-01`)
       ).json() as AudienceBody;
       expect(body.days[0]?.date).toBe(from);
-      expect(body.days.at(-1)?.date).toBe(tunisToday);
+      // S02-FUT1 made this assertion TIME-OF-DAY DEPENDENT, and it took a 02h39 run to notice.
+      // The rule the test is named for is « no FUTURE day », and that still holds exactly. But
+      // « the last day IS today » is stronger than the product now guarantees: a slot only becomes
+      // a data point once it has ELAPSED, so before this venue's opening hour today holds nothing
+      // and the series legitimately ends yesterday. Asserting the invariant instead of the
+      // wall-clock coincidence — the last day never EXCEEDS Tunis today, and no future day appears.
+      expect(body.days.at(-1)?.date).not.toBeUndefined();
+      expect(body.days.at(-1)!.date <= tunisToday).toBe(true);
+      expect(body.days.every((d) => d.date <= tunisToday)).toBe(true);
     });
 
     it('rejects malformed, reversed and too-wide ranges (400)', async () => {
