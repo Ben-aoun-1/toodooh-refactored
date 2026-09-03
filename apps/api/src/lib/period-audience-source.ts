@@ -1,4 +1,4 @@
-import { and, eq, gte, lte } from 'drizzle-orm';
+import { and, asc, eq, gte, isNotNull, lte } from 'drizzle-orm';
 
 import { db } from '../db/client.js';
 import {
@@ -49,15 +49,60 @@ export const loadBackupGrid = async (venueId: string): Promise<BackupGrid> => {
   return grid;
 };
 
+/**
+ * MEJ-7b (Mejri, ruled 2026-09-02) — THE ESTIMATION FLOOR: the first day the backup grid may
+ * stand in for. ONE derivation, no parameter, so no caller can hold a different opinion.
+ *
+ * It used to be the venue's creation day, computed independently in THREE places — this loader,
+ * `report/assemble.ts` and the `/audience` route. Her venue was created 26/08 and its sensor
+ * attached 31/08, so « Votre progression depuis le début » showed 57 people for 26/08: the manual
+ * grid answering for a Wednesday on which no sensor existed. « Il faut avoir 3 jours d'affluence
+ * et non pas 4 jours. »
+ *
+ *     floor = max(creation day, earliest measured reading)
+ *
+ * A READING IS PROOF OF OBSERVATION — the same principle the hub uses for its own window. toodooh
+ * does not know when the device was linked (that push is still a stub; MEJ-7 proper is a wire, and
+ * it is banked), but it knows when the venue was first observed, and the grid may not pretend to
+ * describe anything earlier.
+ *
+ * ⚠️ `value IS NOT NULL` is load-bearing, not defensive. Since OFF-1 the hub sends rows for EMPTY
+ * slots (`value: null` carrying only `device_online`) — 8 386 of them on the first push. Such a row
+ * is a RECORD OF SILENCE, not a reading; counting it would drag the floor back to the first slot
+ * the hub reported on and restore this very bug in a new disguise.
+ *
+ * No measured row at all → the creation day, unchanged. A manual-only venue is « offline
+ * everywhere », so its grid applies from creation — the same reading of the world as OFF-1.
+ */
+export const estimationFloor = async (venueId: string): Promise<string | null> => {
+  const [[venue], [firstReading]] = await Promise.all([
+    db
+      .select({ createdAt: screenhosts.createdAt })
+      .from(screenhosts)
+      .where(eq(screenhosts.id, venueId))
+      .limit(1),
+    db
+      .select({ date: screenhostAffluenceHourly.date })
+      .from(screenhostAffluenceHourly)
+      .where(
+        and(
+          eq(screenhostAffluenceHourly.screenhostId, venueId),
+          isNotNull(screenhostAffluenceHourly.value),
+        ),
+      )
+      .orderBy(asc(screenhostAffluenceHourly.date))
+      .limit(1),
+  ]);
+  if (!venue) return null;
+  const createdIso = tunisDateOf(venue.createdAt);
+  // ISO dates compare lexicographically, so `max` is a string comparison.
+  return firstReading && firstReading.date > createdIso ? firstReading.date : createdIso;
+};
+
 export interface PeriodSourceParams {
   venueId: string;
   range: DateRange;
   todayIso: string;
-  /**
-   * MEJ-R1's floor. Pass it when the caller already holds the venue row (assembleReportData does)
-   * to save a query; omit it and the loader reads `screenhosts.created_at` itself.
-   */
-  onboardedIso?: string | null;
   /**
    * S02-FUT1 — the current Tunis half-hour slot. Defaults to the clock at call time, which is the
    * same instant every surface derives `todayIso` from. Pass it only to freeze the boundary (the
@@ -103,14 +148,7 @@ export async function loadPeriodAudienceInput(
         ),
       ),
     loadBackupGrid(venueId),
-    params.onboardedIso !== undefined
-      ? Promise.resolve(params.onboardedIso)
-      : db
-          .select({ createdAt: screenhosts.createdAt })
-          .from(screenhosts)
-          .where(eq(screenhosts.id, venueId))
-          .limit(1)
-          .then((rows) => (rows[0] ? tunisDateOf(rows[0].createdAt) : null)),
+    estimationFloor(venueId),
   ]);
 
   return {

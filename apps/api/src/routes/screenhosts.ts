@@ -852,8 +852,9 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         venueId: owned.id,
         range: { from, to },
         todayIso: tunisDateOf(new Date()),
-        // MEJ-R1 — the floor bounds BACKUP only; the venue row is already in hand.
-        onboardedIso: tunisDateOf(owned.createdAt),
+        // MEJ-7b — the floor comes from the loader now (max of creation and the first measured
+        // reading). THIS surface is « Votre progression depuis le début », the one that showed
+        // 26/08 for a venue whose sensor was attached on 31/08.
       }),
     );
     return reply.status(200).send({
