@@ -401,11 +401,13 @@ export function renderReportHtml(
       demoBarPct({ pending: demoPending, count, maxCount: sexeMax }),
     );
   const sexeRows = sexeRow('Femmes', b?.femmes ?? 0) + sexeRow('Hommes', b?.hommes ?? 0);
+  // CLS-AGE1 — THREE bands since 03/09. This pending placeholder is its own copy of the band list
+  // (the merged breakdown is null here, so there is nothing to map), which is exactly why it was
+  // the site a label change would miss. MEJ-14a's empty-bars pin caught it.
   const ageBands = b?.ages ?? [
     { label: '17 – 30 ans', count: 0 },
     { label: '31 – 45 ans', count: 0 },
-    { label: '46 – 60 ans', count: 0 },
-    { label: '60 ans et plus', count: 0 },
+    { label: '46 ans et plus', count: 0 },
   ];
   const ageRows = ageBands
     .map((band) =>

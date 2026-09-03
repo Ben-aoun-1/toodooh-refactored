@@ -386,8 +386,9 @@ const reportData = (over: Partial<ReportData> = {}): ReportData => ({
     ages: [
       { key: 'age_17_30_pct', label: '17 – 30 ans', count: 7276 },
       { key: 'age_31_45_pct', label: '31 – 45 ans', count: 6206 },
-      { key: 'age_46_60_pct', label: '46 – 60 ans', count: 3852 },
-      { key: 'age_60_plus_pct', label: '60 ans et plus', count: 2140 },
+      // CLS-AGE1 — one band now; 3852 + 2140 = 5992, the same people.
+
+      { key: 'age_46_plus_pct', label: '46 ans et plus', count: 5992 },
     ],
   },
   revenue: { totalLabel: '1 065', count: 3, rows: [] },

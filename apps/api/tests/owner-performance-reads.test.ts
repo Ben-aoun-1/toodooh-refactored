@@ -345,8 +345,7 @@ describe('owner performance reads (owner-scoped, real Postgres)', () => {
         genderFemalePct: '44.50',
         age17To30Pct: '30.00',
         age31To45Pct: '40.00',
-        age46To60Pct: '20.25',
-        age60PlusPct: '9.75',
+        age46PlusPct: '30.00',
       });
       mockSession(me);
 
@@ -364,10 +363,57 @@ describe('owner performance reads (owner-scoped, real Postgres)', () => {
           gender_female_pct: 44.5,
           age_17_30_pct: 30,
           age_31_45_pct: 40,
-          age_46_60_pct: 20.25,
-          age_60_plus_pct: 9.75,
+          age_46_plus_pct: 30,
         },
       });
+    });
+
+    // CLS-AGE1 — THE regression this lane exists to kill. Before it, the every-non-null gate
+    // spanned the two retired columns, so a class the hub pushed in the new shape (46+ only)
+    // failed the gate: /profile answered `ratios: null`, S04 rendered « en attente du premier
+    // deal » forever, and the venue was indistinguishable from one the hub had never measured.
+    // Both retired columns are left NULL here ON PURPOSE — that IS the new shape.
+    it('a class pushed in the NEW shape (46+ set, both retired columns NULL) is NOT starved', async () => {
+      const me = await seedUser();
+      const mine = await seedScreenhost(me, {
+        genderMalePct: '48.00',
+        genderFemalePct: '52.00',
+        age17To30Pct: '34.00',
+        age31To45Pct: '29.00',
+        age46PlusPct: '37.00',
+        // age46To60Pct / age60PlusPct deliberately absent.
+      });
+      mockSession(me);
+
+      const res = await get(`/api/screenhosts/${mine}/profile`);
+      expect(res.statusCode).toBe(200);
+      expect(res.json<{ ratios: unknown }>().ratios).toEqual({
+        gender_male_pct: 48,
+        gender_female_pct: 52,
+        age_17_30_pct: 34,
+        age_31_45_pct: 29,
+        age_46_plus_pct: 37,
+      });
+    });
+
+    // The mirror: the retired columns can no longer CARRY a class on their own. A row holding only
+    // the old pair is a pre-migration leftover the backfill missed — it starves, and that is right,
+    // because nothing may read those two columns any more.
+    it('the two RETIRED columns alone do not satisfy the gate', async () => {
+      const me = await seedUser();
+      const mine = await seedScreenhost(me, {
+        genderMalePct: '48.00',
+        genderFemalePct: '52.00',
+        age17To30Pct: '34.00',
+        age31To45Pct: '29.00',
+        age46To60Pct: '20.00',
+        age60PlusPct: '17.00',
+      });
+      mockSession(me);
+
+      const res = await get(`/api/screenhosts/${mine}/profile`);
+      expect(res.statusCode).toBe(200);
+      expect(res.json<{ ratios: unknown }>().ratios).toBeNull();
     });
 
     it('ratios is NULL (never partial) when any ratio column is unset; nullable fields explicit', async () => {

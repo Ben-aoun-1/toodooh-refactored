@@ -382,6 +382,16 @@ export const screenhosts = pgTable(
     genderFemalePct: numeric('gender_female_pct', { precision: 5, scale: 2 }),
     age17To30Pct: numeric('age_17_30_pct', { precision: 5, scale: 2 }),
     age31To45Pct: numeric('age_31_45_pct', { precision: 5, scale: 2 }),
+    /**
+     * CLS-AGE1 (Mejri, ruled 2026-09-03) — the age bands are THREE: 17–30, 31–45, **46+**.
+     * Supersedes her own US-P.7, which listed four.
+     */
+    age46PlusPct: numeric('age_46_plus_pct', { precision: 5, scale: 2 }),
+    /**
+     * ⚠️ RETAINED, UNREAD. The two buckets `age_46_plus_pct` replaces. Kept nullable so a hub that
+     * has not yet deployed its half can keep sending them (the ingest sums them); nothing reads
+     * them after CLS-AGE1. Dropping them is a follow-up, once the hub has stopped sending them.
+     */
     age46To60Pct: numeric('age_46_60_pct', { precision: 5, scale: 2 }),
     age60PlusPct: numeric('age_60_plus_pct', { precision: 5, scale: 2 }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

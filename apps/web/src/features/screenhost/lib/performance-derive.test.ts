@@ -317,16 +317,17 @@ describe('cumulativeSeries (hero charts)', () => {
   });
 });
 
-describe('demographicBreakdown (S04 — four real bands only)', () => {
+describe('demographicBreakdown (S04 — three real bands since CLS-AGE1)', () => {
   it('scales ratios to person counts against the period audience', () => {
+    // CLS-AGE1 — the same class as before, with 18 % + 10 % merged into one 28 % band. The two
+    // surviving counts are UNCHANGED, which is what « summed, not recomputed » has to mean.
     const breakdown = demographicBreakdown(
       {
         gender_male_pct: 48,
         gender_female_pct: 52,
         age_17_30_pct: 34,
         age_31_45_pct: 29,
-        age_46_60_pct: 18,
-        age_60_plus_pct: 10,
+        age_46_plus_pct: 28,
       },
       21400,
     );
@@ -335,10 +336,12 @@ describe('demographicBreakdown (S04 — four real bands only)', () => {
     expect(breakdown.ages.map((b) => b.label)).toEqual([
       '17 – 30 ans',
       '31 – 45 ans',
-      '46 – 60 ans',
-      '60 ans et plus',
+      '46 ans et plus',
     ]);
     expect(breakdown.ages[0]?.count).toBe(7276);
+    // 28 % of 21 400 = 5 992 — exactly the old 18 % (3 852) + 10 % (2 140).
+    expect(breakdown.ages[2]?.count).toBe(5992);
+    expect(breakdown.ages[2]?.count).toBe(3852 + 2140);
   });
 });
 

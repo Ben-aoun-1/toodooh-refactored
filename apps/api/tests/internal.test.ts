@@ -836,6 +836,8 @@ describe('C3: POST /api/internal/screenhost-eligibility', () => {
   });
 
   // ── Lane D: the assigned class's demographic ratios ride the same C3 edge ──
+  // CLS-AGE1 — the OLD four-bucket shape, kept on purpose: it is what the hub still sends until
+  // its own half deploys, and the receiver must go on accepting it.
   const RATIOS = {
     gender_male_pct: 55.5,
     gender_female_pct: 44.5,
@@ -843,6 +845,14 @@ describe('C3: POST /api/internal/screenhost-eligibility', () => {
     age_31_45_pct: 40,
     age_46_60_pct: 20.25,
     age_60_plus_pct: 9.75,
+  };
+  /** The NEW three-bucket shape — 20.25 + 9.75 already merged by the hub. */
+  const RATIOS_3 = {
+    gender_male_pct: 55.5,
+    gender_female_pct: 44.5,
+    age_17_30_pct: 30,
+    age_31_45_pct: 40,
+    age_46_plus_pct: 30,
   };
 
   const selectRatios = async (id: string) => {
@@ -852,8 +862,7 @@ describe('C3: POST /api/internal/screenhost-eligibility', () => {
         genderFemalePct: screenhosts.genderFemalePct,
         age17To30Pct: screenhosts.age17To30Pct,
         age31To45Pct: screenhosts.age31To45Pct,
-        age46To60Pct: screenhosts.age46To60Pct,
-        age60PlusPct: screenhosts.age60PlusPct,
+        age46PlusPct: screenhosts.age46PlusPct,
         class: screenhosts.class,
         businessSectorId: screenhosts.businessSectorId,
       })
@@ -862,7 +871,7 @@ describe('C3: POST /api/internal/screenhost-eligibility', () => {
     return row!;
   };
 
-  it('a ratios-ONLY item (no class/sector) stores all six columns; unknown locations still skipped', async () => {
+  it('a ratios-ONLY item (no class/sector) stores the ratio columns; unknown locations still skipped', async () => {
     const [host] = await db
       .insert(screenhosts)
       .values({ name: 'Place R' })
@@ -891,14 +900,14 @@ describe('C3: POST /api/internal/screenhost-eligibility', () => {
     expect(Number(row.genderFemalePct)).toBeCloseTo(44.5, 2);
     expect(Number(row.age17To30Pct)).toBeCloseTo(30, 2);
     expect(Number(row.age31To45Pct)).toBeCloseTo(40, 2);
-    expect(Number(row.age46To60Pct)).toBeCloseTo(20.25, 2);
-    expect(Number(row.age60PlusPct)).toBeCloseTo(9.75, 2);
+    // CLS-AGE1 — the two retired buckets arrive and are SUMMED into the one column.
+    expect(Number(row.age46PlusPct)).toBeCloseTo(30, 2);
     // A ratios-only item touches nothing else.
     expect(row.class).toBeNull();
     expect(row.businessSectorId).toBeNull();
   });
 
-  it('absent ratios key → the six columns untouched; explicit null → all six cleared', async () => {
+  it('absent ratios key → the ratio columns untouched; explicit null → cleared', async () => {
     const [host] = await db
       .insert(screenhosts)
       .values({ name: 'Place S' })
@@ -916,7 +925,7 @@ describe('C3: POST /api/internal/screenhost-eligibility', () => {
     expect((await post({ class: 'moyen' })).statusCode).toBe(200);
     const afterAbsent = await selectRatios(host!.id);
     expect(Number(afterAbsent.genderMalePct)).toBeCloseTo(55.5, 2);
-    expect(Number(afterAbsent.age60PlusPct)).toBeCloseTo(9.75, 2);
+    expect(Number(afterAbsent.age46PlusPct)).toBeCloseTo(30, 2); // CLS-AGE1 — 20.25 + 9.75
     expect(afterAbsent.class).toBe('moyen');
 
     // Explicit null → all six cleared; the other columns stay.
@@ -926,9 +935,67 @@ describe('C3: POST /api/internal/screenhost-eligibility', () => {
     expect(afterNull.genderFemalePct).toBeNull();
     expect(afterNull.age17To30Pct).toBeNull();
     expect(afterNull.age31To45Pct).toBeNull();
-    expect(afterNull.age46To60Pct).toBeNull();
-    expect(afterNull.age60PlusPct).toBeNull();
+    expect(afterNull.age46PlusPct).toBeNull();
     expect(afterNull.class).toBe('moyen');
+  });
+
+  // ── CLS-AGE1 — BOTH shapes, because the hub has no interim ────────────────────────────────
+  //
+  // Its C3 push is generic over its field constant: six fields until it deploys, five after, no
+  // middle state. And this validator 400s the WHOLE batch on one bad item, so refusing the old
+  // shape would take eligibility down for every venue in the window between the two deploys.
+  it('CLS-AGE1: a FOUR-bucket push and a THREE-bucket push of the same class store the same value', async () => {
+    const [a] = await db
+      .insert(screenhosts)
+      .values({ name: 'Four' })
+      .returning({ id: screenhosts.id });
+    const [b] = await db
+      .insert(screenhosts)
+      .values({ name: 'Three' })
+      .returning({ id: screenhosts.id });
+    const send = (id: string, ratios: unknown) =>
+      app!.inject({
+        method: 'POST',
+        url: '/api/internal/screenhost-eligibility',
+        headers: auth(),
+        payload: { items: [{ location_id: id, ratios }] },
+      });
+
+    expect((await send(a!.id, RATIOS)).statusCode).toBe(200); // the hub, today
+    expect((await send(b!.id, RATIOS_3)).statusCode).toBe(200); // the hub, after its deploy
+
+    const four = await selectRatios(a!.id);
+    const three = await selectRatios(b!.id);
+    expect(Number(four.age46PlusPct)).toBeCloseTo(30, 2); // 20.25 + 9.75, summed on arrival
+    expect(Number(four.age46PlusPct)).toBeCloseTo(Number(three.age46PlusPct), 2);
+  });
+
+  it('CLS-AGE1: a ratios object with NEITHER the new field nor both old ones is a 400', async () => {
+    const [sh] = await db
+      .insert(screenhosts)
+      .values({ name: 'Half' })
+      .returning({ id: screenhosts.id });
+    const res = await app!.inject({
+      method: 'POST',
+      url: '/api/internal/screenhost-eligibility',
+      headers: auth(),
+      payload: {
+        items: [
+          {
+            location_id: sh!.id,
+            // 46–60 without 60+: half a merge, which would silently under-count the band.
+            ratios: {
+              gender_male_pct: 50,
+              gender_female_pct: 50,
+              age_17_30_pct: 30,
+              age_31_45_pct: 40,
+              age_46_60_pct: 20,
+            },
+          },
+        ],
+      },
+    });
+    expect(res.statusCode).toBe(400);
   });
 
   it('400 on a partial ratios object and on an out-of-range ratio', async () => {

@@ -876,9 +876,9 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/screenhosts/:id/profile — owner-scoped venue identity card (Lane F, the performances
   // page): sector NAME + class + operating hours + SPS + the hub-synced demographic ratios. Same
   // owner-scoping as the WiFi/affluence reads (foreign/missing id → 404). Drizzle numeric → string,
-  // so every numeric is Number()-ed (NaN-guarded). `ratios` is null unless ALL six columns are set —
-  // a partial object never reaches the wire (the C3 ingest writes all-or-null, but a drifted row
-  // must not leak a partial shape).
+  // so every numeric is Number()-ed (NaN-guarded). `ratios` is null unless ALL FIVE ratio columns
+  // are set — a partial object never reaches the wire (the C3 ingest writes all-or-null, but a
+  // drifted row must not leak a partial shape).
   app.get('/api/screenhosts/:id/profile', ownerGuard, async (request, reply) => {
     const parsedParams = idParamSchema.safeParse(request.params);
     if (!parsedParams.success) {
@@ -908,8 +908,7 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         genderFemalePct: screenhosts.genderFemalePct,
         age17To30Pct: screenhosts.age17To30Pct,
         age31To45Pct: screenhosts.age31To45Pct,
-        age46To60Pct: screenhosts.age46To60Pct,
-        age60PlusPct: screenhosts.age60PlusPct,
+        age46PlusPct: screenhosts.age46PlusPct,
       })
       .from(screenhosts)
       .leftJoin(businessSectors, eq(screenhosts.businessSectorId, businessSectors.id))
@@ -919,13 +918,16 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
     }
 
+    // CLS-AGE1 — THREE bands, and the every-non-null gate now spans exactly those three. It used
+    // to include the two retired columns, so a class pushed in the new shape would have failed the
+    // gate and starved S04 on the page — « en attente » forever, indistinguishable from a class
+    // the hub had never sent.
     const ratioValues = {
       gender_male_pct: num(row.genderMalePct),
       gender_female_pct: num(row.genderFemalePct),
       age_17_30_pct: num(row.age17To30Pct),
       age_31_45_pct: num(row.age31To45Pct),
-      age_46_60_pct: num(row.age46To60Pct),
-      age_60_plus_pct: num(row.age60PlusPct),
+      age_46_plus_pct: num(row.age46PlusPct),
     };
     const ratios = Object.values(ratioValues).every((v) => v !== null) ? ratioValues : null;
 

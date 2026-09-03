@@ -117,13 +117,13 @@ export function DemographicsSection({
           <h4 className="perf-mono mb-1 border-b border-perf-line pb-[11px] text-[10px] font-semibold uppercase tracking-[0.1em] text-perf-grey">
             Répartition par tranche d'âge
           </h4>
+          {/* CLS-AGE1 — THREE bands since 03/09; the pending placeholder mirrors them exactly. */}
           <div className="space-y-4 pt-4">
             {(
               breakdown?.ages ?? [
                 { key: 'age_17_30_pct' as const, label: '17 – 30 ans', count: 0 },
                 { key: 'age_31_45_pct' as const, label: '31 – 45 ans', count: 0 },
-                { key: 'age_46_60_pct' as const, label: '46 – 60 ans', count: 0 },
-                { key: 'age_60_plus_pct' as const, label: '60 ans et plus', count: 0 },
+                { key: 'age_46_plus_pct' as const, label: '46 ans et plus', count: 0 },
               ]
             ).map((band) => (
               <DemoRow

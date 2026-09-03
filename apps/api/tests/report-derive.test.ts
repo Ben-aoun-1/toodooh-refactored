@@ -262,8 +262,7 @@ describe('demographicBreakdown (web parity, S04 — four real bands only)', () =
         gender_female_pct: 52,
         age_17_30_pct: 34,
         age_31_45_pct: 29,
-        age_46_60_pct: 18,
-        age_60_plus_pct: 10,
+        age_46_plus_pct: 28, // CLS-AGE1 — was 18 + 10
       },
       21400,
     );
@@ -272,8 +271,8 @@ describe('demographicBreakdown (web parity, S04 — four real bands only)', () =
     expect(breakdown.ages.map((b) => b.label)).toEqual([
       '17 – 30 ans',
       '31 – 45 ans',
-      '46 – 60 ans',
-      '60 ans et plus',
+      // CLS-AGE1 — one band since 03/09.
+      '46 ans et plus',
     ]);
     expect(breakdown.ages[0]?.count).toBe(7276);
   });
