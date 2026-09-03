@@ -214,29 +214,27 @@ export function heatmapValues(
   );
 }
 
-/** All six ratio columns or null — a partial row never leaks (the C3 all-or-null contract). */
+/**
+ * Every ratio column or null — a partial row never leaks (the C3 all-or-null contract).
+ *
+ * CLS-AGE1 — the gate is over the THREE bands. It used to require the two retired columns too, so
+ * a class the hub pushed in the new three-bucket shape (46–60 and 60+ both NULL) would have failed
+ * it and rendered S04 « en attente » FOREVER, on the page and the PDF, with no error — looking
+ * exactly like a class the hub had never pushed. The columns are retained but must not be required.
+ */
 function ratiosOrNull(venue: {
   genderMalePct: string | null;
   genderFemalePct: string | null;
   age17To30Pct: string | null;
   age31To45Pct: string | null;
-  age46To60Pct: string | null;
-  age60PlusPct: string | null;
+  age46PlusPct: string | null;
 }): VenueRatios | null {
   const male = numOrNull(venue.genderMalePct);
   const female = numOrNull(venue.genderFemalePct);
   const a17 = numOrNull(venue.age17To30Pct);
   const a31 = numOrNull(venue.age31To45Pct);
-  const a46 = numOrNull(venue.age46To60Pct);
-  const a60 = numOrNull(venue.age60PlusPct);
-  if (
-    male === null ||
-    female === null ||
-    a17 === null ||
-    a31 === null ||
-    a46 === null ||
-    a60 === null
-  ) {
+  const a46 = numOrNull(venue.age46PlusPct);
+  if (male === null || female === null || a17 === null || a31 === null || a46 === null) {
     return null;
   }
   return {
@@ -244,8 +242,7 @@ function ratiosOrNull(venue: {
     gender_female_pct: female,
     age_17_30_pct: a17,
     age_31_45_pct: a31,
-    age_46_60_pct: a46,
-    age_60_plus_pct: a60,
+    age_46_plus_pct: a46,
   };
 }
 
@@ -273,8 +270,7 @@ export async function assembleReportData(
       genderFemalePct: screenhosts.genderFemalePct,
       age17To30Pct: screenhosts.age17To30Pct,
       age31To45Pct: screenhosts.age31To45Pct,
-      age46To60Pct: screenhosts.age46To60Pct,
-      age60PlusPct: screenhosts.age60PlusPct,
+      age46PlusPct: screenhosts.age46PlusPct,
     })
     .from(screenhosts)
     .leftJoin(businessSectors, eq(screenhosts.businessSectorId, businessSectors.id))

@@ -116,8 +116,7 @@ describe('assembleReportData (real Postgres)', () => {
       genderFemalePct: '52',
       age17To30Pct: '34',
       age31To45Pct: '29',
-      age46To60Pct: '18',
-      age60PlusPct: '10',
+      age46PlusPct: '28',
     });
 
     // HOST side: one monthly-stats month + a couple of affluence slots.
@@ -240,9 +239,16 @@ describe('assembleReportData (real Postgres)', () => {
     expect(data?.days.find((d) => d.date === '2026-06-10')?.impressions).toBe(2);
     expect(data?.days.find((d) => d.date === '2026-06-11')?.impressions).toBe(0);
 
-    // S04 — ratios × the MERGED global audience (2900).
+    // S04 — ratios × the MERGED global audience (2900). CLS-AGE1: the venue carries the THREE-band
+    // shape (46+ = 28 %, the old 18 + 10), and `ratiosOrNull` gates on exactly those five columns —
+    // a fixture in the retired shape would leave `breakdown` null and take every line below with it.
     expect(data?.breakdown?.femmes).toBe(1508); // 52 %
     expect(data?.breakdown?.hommes).toBe(1392); // 48 %
+    expect(data?.breakdown?.ages.map((b) => [b.label, b.count])).toEqual([
+      ['17 – 30 ans', 986], // 34 %
+      ['31 – 45 ans', 841], // 29 %
+      ['46 ans et plus', 812], // 28 %
+    ]);
 
     // S05/S06 — the reconciled line, period-overlapping, Passée by 2026-07-08.
     expect(data?.revenue.count).toBe(1);

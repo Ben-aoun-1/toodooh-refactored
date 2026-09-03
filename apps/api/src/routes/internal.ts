@@ -207,20 +207,42 @@ const monthlyStatsBodySchema = z.object({
 //     it OMITS them; the partial mapping then leaves any admin-set hours/capacity UNTOUCHED. They are
 //     accepted here so the contract is forward-compatible if the hub ever sources them.
 //   - `ratios` (Lane D) is the assigned class's demographic split, OPTIONAL per item: absent → the
-//     six columns untouched; explicit null → all six cleared; object present → ALL SIX required (a
-//     partial ratio object is a 400), each 0–100. Sum-to-100 stays HUB-side (the catalog validates
-//     at class creation) — the receiver checks ranges only. Handled ROUTE-LOCALLY by ruling: the
+//     ratio columns untouched; explicit null → cleared; object present → the four common fields
+//     plus EITHER age_46_plus_pct OR both retired buckets (a partial ratio object is a 400), each
+//     0–100. Sum-to-100 stays HUB-side (the catalog validates at class creation) — the receiver
+//     checks ranges only. Handled ROUTE-LOCALLY by ruling: the
 //     shared buildEligibilityPatch is NOT extended (the admin PATCH must never gain a ratios
 //     surface; ratios come only from the hub catalog).
 const ratioPct = z.number().min(0).max(100);
-const eligibilityRatiosSchema = z.object({
-  gender_male_pct: ratioPct,
-  gender_female_pct: ratioPct,
-  age_17_30_pct: ratioPct,
-  age_31_45_pct: ratioPct,
-  age_46_60_pct: ratioPct,
-  age_60_plus_pct: ratioPct,
-});
+// CLS-AGE1 — the age bands are THREE (17–30, 31–45, 46+), and this schema accepts BOTH shapes on
+// purpose. The hub's C3 push is generic over its field constant, so it has no interim: it sends six
+// fields until it deploys and five after, with no middle state. This validator is a plain object
+// whose failure 400s the WHOLE batch, so a five-only schema would take eligibility down for every
+// venue in the window between the two deploys.
+//   • `age_46_plus_pct` present → stored as sent;
+//   • absent but BOTH retired buckets present → stored as their SUM.
+// A partial ratio object stays a 400, as before. Delete the six-field branch with the columns, in
+// the follow-up — not now.
+const eligibilityRatiosSchema = z
+  .object({
+    gender_male_pct: ratioPct,
+    gender_female_pct: ratioPct,
+    age_17_30_pct: ratioPct,
+    age_31_45_pct: ratioPct,
+    age_46_plus_pct: ratioPct.optional(),
+    age_46_60_pct: ratioPct.optional(),
+    age_60_plus_pct: ratioPct.optional(),
+  })
+  .refine(
+    (r) =>
+      r.age_46_plus_pct !== undefined ||
+      (r.age_46_60_pct !== undefined && r.age_60_plus_pct !== undefined),
+    'ratios need age_46_plus_pct, or both age_46_60_pct and age_60_plus_pct',
+  );
+
+/** CLS-AGE1 — the 46+ share, whichever shape the hub sent. */
+const age46Plus = (r: z.infer<typeof eligibilityRatiosSchema>): number =>
+  r.age_46_plus_pct ?? (r.age_46_60_pct ?? 0) + (r.age_60_plus_pct ?? 0);
 const eligibilityBodySchema = z.object({
   items: z
     .array(
@@ -724,8 +746,9 @@ export const internalRoutes: FastifyPluginAsync<{ syncKey?: string }> = async (a
             patch.genderFemalePct = r === null ? null : r.gender_female_pct.toString();
             patch.age17To30Pct = r === null ? null : r.age_17_30_pct.toString();
             patch.age31To45Pct = r === null ? null : r.age_31_45_pct.toString();
-            patch.age46To60Pct = r === null ? null : r.age_46_60_pct.toString();
-            patch.age60PlusPct = r === null ? null : r.age_60_plus_pct.toString();
+            // CLS-AGE1 — ONE column now. The retired pair is left untouched: it is unread, and
+            // clearing it would destroy the only record of how a migrated class was split.
+            patch.age46PlusPct = r === null ? null : age46Plus(r).toString();
           }
           if (Object.keys(patch).length === 0) continue; // nothing to write for this row
           await tx.update(screenhosts).set(patch).where(eq(screenhosts.id, item.location_id));

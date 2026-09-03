@@ -106,8 +106,9 @@ const fullData = (over: Partial<ReportData> = {}): ReportData =>
       ages: [
         { key: 'age_17_30_pct', label: '17 – 30 ans', count: 7276 },
         { key: 'age_31_45_pct', label: '31 – 45 ans', count: 6206 },
-        { key: 'age_46_60_pct', label: '46 – 60 ans', count: 3852 },
-        { key: 'age_60_plus_pct', label: '60 ans et plus', count: 2140 },
+        // CLS-AGE1 — one band now; 3852 + 2140 = 5992, the same people.
+
+        { key: 'age_46_plus_pct', label: '46 ans et plus', count: 5992 },
       ],
     },
     revenue: {
@@ -213,7 +214,8 @@ describe('renderReportHtml — structure shared by both states', () => {
   it('MEJ-14a: real figures still fill the S04 bars in proportion to the group maximum', () => {
     const s04 = section04(renderReportHtml(fullData()));
     const fills = [...s04.matchAll(/class="bar-fill" style="width:([^"]+)"/g)].map((m) => m[1]);
-    expect(fills).toHaveLength(6);
+    // CLS-AGE1 — 2 sexe + THREE age bands = 5 bars (was 6).
+    expect(fills).toHaveLength(5);
     // femmes 11128 is the sexe maximum → 100 %; hommes 10272 is its 92.3 %.
     expect(fills[0]).toBe('100%');
     expect(fills[1]).toBe(`${(10272 / 11128) * 100}%`);
@@ -301,7 +303,7 @@ describe('renderReportHtml — EMPTY variants (both flags false)', () => {
     expect(s04).toContain('En attente du premier deal');
     // …and every one of its six bars (Femmes, Hommes + the four age bands) is an empty track.
     const fills = [...s04.matchAll(/class="bar-fill" style="width:([^"]+)"/g)].map((m) => m[1]);
-    expect(fills).toHaveLength(6);
+    expect(fills).toHaveLength(5); // CLS-AGE1 — 2 sexe + 3 age bands
     expect(fills.every((w) => w === '0%')).toBe(true);
     // The decorative widths themselves must never reappear on this surface.
     for (const decorative of ['width:50%', 'width:32%', 'width:28%', 'width:14%', 'width:6%']) {

@@ -49,8 +49,8 @@ export interface VenueRatios {
   gender_female_pct: number;
   age_17_30_pct: number;
   age_31_45_pct: number;
-  age_46_60_pct: number;
-  age_60_plus_pct: number;
+  /** CLS-AGE1 — the last two buckets merged into one « 46 ans et plus » (Mejri, 03/09). */
+  age_46_plus_pct: number;
 }
 
 /** ISO date of an earnings line's reconciliation timestamp (the fallback anchor). */
@@ -314,8 +314,7 @@ export function demographicBreakdown(ratios: VenueRatios, audience: number): Dem
     ages: [
       { key: 'age_17_30_pct', label: '17 – 30 ans', count: persons(ratios.age_17_30_pct) },
       { key: 'age_31_45_pct', label: '31 – 45 ans', count: persons(ratios.age_31_45_pct) },
-      { key: 'age_46_60_pct', label: '46 – 60 ans', count: persons(ratios.age_46_60_pct) },
-      { key: 'age_60_plus_pct', label: '60 ans et plus', count: persons(ratios.age_60_plus_pct) },
+      { key: 'age_46_plus_pct', label: '46 ans et plus', count: persons(ratios.age_46_plus_pct) },
     ],
   };
 }
@@ -339,7 +338,7 @@ export function formatTndCellFr(value: number): string {
   return `${value.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} TND`;
 }
 
-/** '17 – 30 ans' venue category line: 'business_sector · Class' ('Café · Premium'). */
+/** Venue category line: 'business_sector · Class' ('Café · Premium'). */
 export function categoryLabel(
   sector: string | null,
   venueClass: 'populaire' | 'moyen' | 'premium' | null,
