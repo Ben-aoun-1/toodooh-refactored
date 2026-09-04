@@ -1,5 +1,11 @@
 import type { BusinessSector } from '@/features/auth/types/auth';
 
+// UI-1 — the owner-facing sector LABELS live in the byte-pinned twin next door
+// (sector-display-name.ts, shared with apps/api so the page and the PDF agree).
+import { normalizeSectorName } from './sector-display-name';
+
+export { sectorDisplayName } from './sector-display-name';
+
 /** Liste finale des secteurs d'activité (annonceurs), hors ligne « Agence de Publicité ». */
 export const ADVERTISER_BUSINESS_SECTOR_NAMES: readonly string[] = [
   'Agriculture et agroalimentaire',
@@ -31,16 +37,15 @@ export const ADVERTISER_BUSINESS_SECTOR_NAMES: readonly string[] = [
 /** Secteur proposé par défaut à l'inscription agence. */
 export const AGENCY_BUSINESS_SECTOR_NAME = 'Agence de Publicité';
 
-function normalizeSectorName(name: string): string {
-  return name
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, ' ');
-}
-
-/** Secteurs réservés aux propriétaires (hors liste annonceur/agence). */
+/**
+ * Secteurs réservés aux propriétaires (hors liste annonceur/agence).
+ *
+ * ⚠️ **Cette liste ne correspond à AUCUNE ligne en base aujourd'hui** — les secteurs propriétaires
+ * stockés sont « Café », « Resto », « Resto/Bar », « Salle de sport », « Espace de loisir ». Ce
+ * n'est donc pas la liste des secteurs propriétaires : c'est un filtre de repli, supplanté par le
+ * discriminant `business_sectors.audience` (`/business-sectors?audience=owner`), qui ne s'exécute
+ * que si le filtrage par `display_order` ne rend rien. Mort plutôt que faux — nettoyage banqué.
+ */
 const OWNER_SIGNUP_SECTOR_NAMES = new Set<string>([
   'Cafés populaires',
   'Bars',

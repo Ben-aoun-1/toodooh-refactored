@@ -1,3 +1,4 @@
+import { sectorDisplayName } from '@/features/advertiser/constants/sector-display-name';
 import { zonesRecapLabel } from '@/features/campaigns/lib/zones-selection';
 import { apiClient } from '@/lib/api-client';
 
@@ -73,7 +74,7 @@ export const campaignTypeLabel = (type: string): string => {
 
 /** Category names, or the ALL fallback — [] means every category is targeted. */
 export const categoriesLabel = (names: readonly string[]): string =>
-  names.length === 0 ? 'Toutes les catégories' : names.join(', ');
+  names.length === 0 ? 'Toutes les catégories' : names.map(sectorDisplayName).join(', ');
 
 /** Zone names, or « Tout le réseau » — the SAME fallback the wizard recap shows (CF-Z1). */
 export const zonesLabel = (names: readonly string[]): string => zonesRecapLabel(names);

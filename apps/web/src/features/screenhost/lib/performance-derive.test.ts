@@ -397,6 +397,14 @@ describe('categoryLabel', () => {
     expect(categoryLabel('Café', null)).toBe('Café');
     expect(categoryLabel(null, 'premium')).toBe('—');
   });
+
+  // UI-1 — the label is DISPLAY-mapped inside categoryLabel, so the performance page header and
+  // the PDF header cannot disagree for the same venue. The stored name is what arrived here.
+  it('renders the display name for the two renamed sectors', () => {
+    expect(categoryLabel('Resto', 'premium')).toBe('Restaurants · Premium');
+    expect(categoryLabel('Resto/Bar', 'moyen')).toBe('Lounges/Bars · Moyen');
+    expect(categoryLabel('Resto', null)).toBe('Restaurants');
+  });
 });
 
 describe('zeroFillDays — the R8 pin (her 26/06 case)', () => {

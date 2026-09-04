@@ -17,6 +17,7 @@ import React, { useState, useEffect, type ReactNode } from 'react';
 import { toast } from 'react-hot-toast';
 import { useLocation } from 'react-router-dom';
 
+import { sectorDisplayName } from '@/features/advertiser/constants/sector-display-name';
 import { isValidPassword, passwordChecks } from '@/features/auth/utils/password';
 import { getErrorMessage } from '@/lib/errors';
 
@@ -743,7 +744,7 @@ export default function ProfileSettings({
                         <option value="">Sélectionner</option>
                         {sector.options.map((s) => (
                           <option key={s.id} value={s.id}>
-                            {s.name}
+                            {sectorDisplayName(s.name)}
                           </option>
                         ))}
                       </select>
