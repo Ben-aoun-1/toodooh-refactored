@@ -146,17 +146,20 @@ describe('owner performance reads (owner-scoped, real Postgres)', () => {
       const body = res.json() as AudienceBody;
       // MEJ-R2 — `has_measured` rides the wire: the measured day is eligible for the peak, the
       // grid-filled one is not.
+      // FLOW-1 — the grid HOUR fills both halves and a day is their SUM, so the silent Tuesday is
+      // worth 160. The measured Monday arrives at DAY granularity from monthly_stats and is
+      // untouched: what this test pins — the measure winning over the grid — is unchanged.
       expect(body.days).toEqual([
         { date: '2026-08-03', audience: 500, source: 'measured', has_measured: true },
-        { date: '2026-08-04', audience: 80, source: 'estimated', has_measured: false },
+        { date: '2026-08-04', audience: 160, source: 'estimated', has_measured: false },
       ]);
-      expect(body.total_audience).toBe(580);
+      expect(body.total_audience).toBe(660);
       expect(body.measured_days).toBe(1);
       expect(body.estimated_days).toBe(1);
-      // Slice C — VALUE-WEIGHTED: the silent Tuesday is 80 people of 580, not « one day of two ».
+      // Slice C — VALUE-WEIGHTED: the silent Tuesday is 160 people of 660, not « one day of two ».
       // The old share of DATA POINTS said 50 %, which a reader would have taken to mean half the
-      // audience was guessed on a période that measured 500 of its 580.
-      expect(body.estimated_pct).toBe(14); // 80 / 580
+      // audience was guessed on a période that measured 500 of its 660.
+      expect(body.estimated_pct).toBe(24); // 160 / 660
     });
 
     it('a venue with ZERO readings serves the full backup estimate — never silent-zeros', async () => {
@@ -169,8 +172,9 @@ describe('owner performance reads (owner-scoped, real Postgres)', () => {
         await get(`/api/screenhosts/${sh}/audience?from=2026-08-01&to=2026-08-07`)
       ).json() as AudienceBody;
       expect(body.days).toHaveLength(7);
-      expect(body.days.every((d) => d.audience === 80 && d.source === 'estimated')).toBe(true);
-      expect(body.total_audience).toBe(560);
+      // FLOW-1: 80 in each half of 10h → 160 for the day.
+      expect(body.days.every((d) => d.audience === 160 && d.source === 'estimated')).toBe(true);
+      expect(body.total_audience).toBe(1120);
       expect(body.measured_days).toBe(0);
       expect(body.estimated_pct).toBe(100);
     });
@@ -197,9 +201,9 @@ describe('owner performance reads (owner-scoped, real Postgres)', () => {
         await get(`/api/screenhosts/${sh}/audience?from=2026-08-03&to=2026-08-31`)
       ).json() as AudienceBody;
       expect(body.days).toEqual([
-        { date: '2026-08-31', audience: 1396, source: 'estimated', has_measured: false },
+        { date: '2026-08-31', audience: 2792, source: 'estimated', has_measured: false }, // 1 396 per half
       ]);
-      expect(body.total_audience).toBe(1396); // not 4 × 1 396
+      expect(body.total_audience).toBe(2792); // ONE Monday, not 4 — the floor is what this pins
       expect(body.days.every((d) => d.date >= '2026-08-26')).toBe(true);
     });
 
@@ -230,7 +234,7 @@ describe('owner performance reads (owner-scoped, real Postgres)', () => {
       ).json() as AudienceBody;
       expect(body.days).toEqual([
         { date: '2026-08-10', audience: 700, source: 'measured', has_measured: true }, // a fact
-        { date: '2026-08-31', audience: 1396, source: 'estimated', has_measured: false },
+        { date: '2026-08-31', audience: 2792, source: 'estimated', has_measured: false },
       ]);
       expect(body.measured_days).toBe(1);
       expect(body.estimated_days).toBe(1);
@@ -252,8 +256,8 @@ describe('owner performance reads (owner-scoped, real Postgres)', () => {
       // Not one day of the six years before the venue existed.
       expect(body.days[0]?.date).toBe('2026-08-26');
       expect(body.days.every((d) => d.date >= '2026-08-26')).toBe(true);
-      // …and the total is the floored window, not 2 435 days × 80.
-      expect(body.total_audience).toBe(body.days.length * 80);
+      // …and the total is the floored window, not 2 435 days of it. FLOW-1: 80 per half → 160/day.
+      expect(body.total_audience).toBe(body.days.length * 160);
     });
 
     it('respects the période bounds and clamps to Tunis today (no future day)', async () => {

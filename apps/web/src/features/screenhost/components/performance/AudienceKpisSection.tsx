@@ -1,4 +1,4 @@
-import { AUDIENCE_KPIS_LEAD, NO_MEASURE_NOTE } from '../../lib/audience-copy';
+import { AUDIENCE_KPIS_LEAD, NO_MEASURE_NOTE, PER_HOUR_DESC } from '../../lib/audience-copy';
 import { type AudienceKpis, formatDecimalFr, formatIntFr } from '../../lib/performance-derive';
 import { peakObservedLabel } from '../../lib/performance-period';
 
@@ -109,7 +109,7 @@ export function AudienceKpisSection({
               />
             </div>
             <p className="mt-1 text-[12.5px] leading-[1.45] text-perf-grey">
-              Densité moyenne d'audience pendant les heures d'ouverture
+              {PER_HOUR_DESC}
               {hoursEstimated ? <> (estimation 14 h).</> : '.'}
             </p>
           </div>

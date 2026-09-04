@@ -2,7 +2,7 @@ import { addDays, format, getDay, parseISO } from 'date-fns';
 
 import type { MonthlyStatsDaily } from '../db/schema.js';
 
-import { SLOTS_PER_DAY, SLOT_HOURS } from './half-hour-slots.js';
+import { SLOTS_PER_DAY } from './half-hour-slots.js';
 import { isMeasuredDay } from './monthly-audience.js';
 import type { DateRange } from './report/derive.js';
 
@@ -161,13 +161,22 @@ export const emptyBackupGrid = (): BackupGrid => ({
 });
 
 /**
- * Slice C — a day's audience from its cells: the level integrated over the day, NOT the sum of the
- * cells. Rounded to a whole number of people, which is a no-op whenever the two halves of every
- * hour agree (their `Σ (v × 0.5)` is exactly the old integer) and an honest integer when they do
- * not. Rounding at the DAY, not at the slot, so a half-person never accumulates across 48 cells.
+ * FLOW-1 (Mejri, ruled 2026-09-04) — a day's audience is the plain SUM of its cells.
+ *
+ * A cell is what the sensor counted in that half-hour slot, so the cells PARTITION the day and add
+ * up to it. Her User Stories say the same thing from the other end: « Ai_jh : Ai découpé par jour
+ * de semaine × heure » — a division of Ai, which only reconciles if the parts sum to the whole.
+ *
+ * This REVERSES slice C's « a cell is a LEVEL, integrated over the day » for the audience
+ * surfaces: that rule made a day `Σ (v × 0.5)`, exactly half of what she and the hub both count.
+ * « la somme dans le Hub et Peak Hours est de 274 personnes, contre 137 personnes pour les
+ * variables mentionnées » — 274/137 = 2, and this factor was it. Her ruling over the architect's
+ * invariant, which survives untouched everywhere else (see the hour collapses, FLOW-2).
+ *
+ * Integers in, integer out: no weighting and therefore nothing to round.
  */
 const dayAudience = (dayCells: readonly PeriodCell[]): number =>
-  Math.round(dayCells.reduce((sum, c) => sum + c.value * SLOT_HOURS, 0));
+  dayCells.reduce((sum, c) => sum + c.value, 0);
 
 /** date-fns getDay: 0 = Sunday → the grid's Monday-first row index. */
 const rowOf = (dateIso: string): number => (getDay(parseISO(dateIso)) + 6) % 7;
@@ -306,16 +315,15 @@ export function periodAudience(input: PeriodAudienceInput): PeriodAudience {
   const estimatedCells = cells.filter((c) => c.source === 'backup').length;
   const dataPoints = cells.length + dayGranularityMeasured;
 
-  // The value-weighted share (see PeriodAudience.estimatedPct). Both sides are duration-weighted,
-  // so the 0.5 cancels — it is written out anyway because the day-granularity term below is
-  // already a whole day's audience, and mixing a level with a day total would be an easy silent
-  // unit error.
+  // The value-weighted share (see PeriodAudience.estimatedPct). FLOW-1 — a cell's value IS its
+  // audience now, so there is no factor to write out and nothing cancels: both terms below are
+  // people, and so is the day-granularity term they are added to. The RATIO is unchanged by this
+  // lane — the old 0.5 divided out of numerator and denominator alike.
   let estimatedAudience = 0;
   let cellAudience = 0;
   for (const cell of cells) {
-    const weighted = cell.value * SLOT_HOURS;
-    cellAudience += weighted;
-    if (cell.source === 'backup') estimatedAudience += weighted;
+    cellAudience += cell.value;
+    if (cell.source === 'backup') estimatedAudience += cell.value;
   }
   const totalAudience = cellAudience + dayGranularityAudience;
 
