@@ -77,8 +77,8 @@ export function PeakHoursHeatmap({
   closingHour,
 }: PeakHoursHeatmapProps) {
   const hours = useMemo(() => heatmapHours(openingHour, closingHour), [openingHour, closingHour]);
-  // Slice C — desktop draws both halves of every hour; ≤375 px collapses them back (the rules,
-  // including which pairs read « mixte », live in lib/peak-hours: WEB-GATE1).
+  // Slice C — desktop draws both halves of every hour; ≤375 px collapses them back to the HIGHER
+  // half's peak (PEAK-MAX1). The rules live in lib/peak-hours, never here: WEB-GATE1.
   const slots = useMemo(() => heatmapSlots(openingHour, closingHour), [openingHour, closingHour]);
   const kinds = useMemo(() => provenanceGrid(grid, sources), [grid, sources]);
   const empty = peakHoursEmpty({ has_data: hasData, counts });
@@ -179,8 +179,8 @@ export function PeakHoursHeatmap({
           </div>
 
           {/* Slice C — ≤375 px: 28 columns do not fit a phone, so the halves collapse back into
-              their hour. An hour whose halves disagree in source reads « mixte » — the ONLY place
-              that kind exists, because here the mixing is forced by the viewport, not chosen. */}
+              their hour. PEAK-MAX1: the column shows the HIGHER of the two half-hour peaks and
+              carries that half's provenance, so it names a reading that actually happened. */}
           <div className="min-w-0 min-[376px]:hidden">
             <div className="flex gap-1">
               <div className="w-[38px] flex-shrink-0" />
@@ -207,7 +207,7 @@ export function PeakHoursHeatmap({
                   const closed = closedHour(hour, openingHour, closingHour);
                   const level = merged.value === null ? 0 : heatmapLevel(merged.value, scale);
                   const hachure = closed || level === 0;
-                  const estimated = merged.kind === 'backup' || merged.kind === 'mixte';
+                  const estimated = merged.kind === 'backup';
                   return (
                     <div
                       key={`${label}-h${hour}`}
@@ -260,16 +260,6 @@ export function PeakHoursHeatmap({
             <div className="flex items-center gap-1.5">
               <div className={`h-3.5 w-3.5 rounded-[3px] ${HEATMAP_CLOSED_CLASS}`} />
               <span>Fermé / aucune donnée</span>
-            </div>
-            {/* Slice C — narrow layout ONLY: on this width an hour is one column, so a mixed hour
-                is drawn in the estimation treatment (the conservative side — it never claims to be
-                a measure) and this line is what tells the reader such an hour exists. On desktop
-                the two halves are drawn separately and there is nothing to explain. */}
-            <div className="flex items-center gap-1.5 min-[376px]:hidden">
-              <div
-                className={`h-3.5 w-3.5 rounded-[3px] ${HEATMAP_LEVEL_CLASSES[2]} ${HEATMAP_ESTIMATION_CLASS}`}
-              />
-              <span>{PROVENANCE_LABELS.mixte} — demi-heures regroupées</span>
             </div>
           </div>
         </div>

@@ -706,21 +706,116 @@ describe('OFF-1 — device_online gates the backup', () => {
   });
 });
 
+// PEAK-MAX1 acceptance — S02's rule must not leak into any other figure. S01, the day totals, the
+// hero series and estimated_pct all read `merged.cells` / `merged.days`, never the week grid, and
+// this is the test that says so rather than hoping it. The fixture is chosen so the MEAN and the
+// MAX differ on every slot: if a day total ever started following the grid, these numbers move.
+describe('PEAK-MAX1 — the peak rule stays inside S02', () => {
+  // Every date is ELAPSED (<= todayIso): S02-FUT1 makes a slot a data point only once it has been,
+  // so a Tuesday after TODAY would simply be absent and would prove nothing here.
+  const TUESDAY_ISO = '2026-08-25';
+  const twoWeeks = input({
+    range: { from: '2026-08-24', to: TODAY },
+    hourly: [
+      ...slots('2026-08-24', [[18, 10]]), // Monday, quiet
+      ...slots(TODAY, [[18, 40]]), // Monday a week later, the peak
+      ...slots(TUESDAY_ISO, [[18, 20]]), // Tuesday
+    ],
+  });
+
+  it("the day totals are the DAY's own cells — never the peak, never the mean", () => {
+    const merged = periodAudience(twoWeeks);
+    const byDate = new Map(merged.days.map((d) => [d.date, d.audience]));
+    // One half-hour slot at value v is v × SLOT_HOURS, rounded at the day.
+    expect(byDate.get('2026-08-24')).toBe(5); // 10 × 0.5
+    expect(byDate.get(TODAY)).toBe(20); // 40 × 0.5
+    expect(byDate.get(TUESDAY_ISO)).toBe(10); // 20 × 0.5
+    // The peak (40) is NOT the quiet Monday's total, which is the leak this pins against.
+    expect(byDate.get('2026-08-24')).not.toBe(20);
+  });
+
+  it('the total and estimated_pct read the cells, and the grid reads the peak, independently', () => {
+    const merged = periodAudience(twoWeeks);
+    expect(merged.total).toBe(35); // 5 + 20 + 10 — the sum of the DAYS
+    expect(merged.estimatedPct).toBe(0); // every cell measured
+    // The same merge, folded: Monday's slot 18 shows its PEAK, not the 25 a mean would give.
+    const week = weekGridFromCells(merged.cells);
+    expect(week[MONDAY - 1]![18]).toEqual({ value: 40, source: 'measured' });
+    expect(week[TUESDAY - 1]![18]).toEqual({ value: 20, source: 'measured' });
+    // And the grid's peak is NOT the total: two quantities, two rules.
+    expect(week[MONDAY - 1]![18]!.value).not.toBe(merged.total);
+  });
+});
+
+// PEAK-MAX1 (Mejri, confirmed by the operator 2026-09-04) — S02 shows the PEAK on each slot, not
+// the mean. « Peak means the highest value ever recorded at a specific thirty-minute slot … it will
+// be the same for months after unless there is another thirty-minute slot that had a reading higher
+// than the peak last recorded. » These tests previously pinned the MEAN (12.5 → 13) and the AFF1
+// « one backup cell makes the whole slot an estimation » rule; both were correct for a mean and are
+// wrong for a max, so they are rewritten rather than kept alongside.
 describe('weekGridFromCells — S02 is the période folded into a weekday × slot grid', () => {
-  it('averages the cells that fall on a slot and rounds', () => {
+  it('takes the HIGHEST value on the slot, not the mean', () => {
     const week = weekGridFromCells([
       { date: '2026-08-24', slot: 18, value: 10, source: 'measured' }, // Monday
       { date: TODAY, slot: 18, value: 15, source: 'measured' }, // Monday
     ]);
-    expect(week[MONDAY - 1]![18]).toEqual({ value: 13, source: 'measured' }); // 12.5 → 13
+    // The mean rule said 13 here (12.5 rounded). The peak is 15, and it is a real reading.
+    expect(week[MONDAY - 1]![18]).toEqual({ value: 15, source: 'measured' });
   });
 
-  it('one backup cell makes the whole slot an estimation (the AFF1 ruling)', () => {
-    const week = weekGridFromCells([
+  // Her persistence property, stated as a rule rather than as an example: a later, quieter week
+  // never lowers a cell; only a higher reading raises it. Order of arrival must not matter.
+  it('a LATER, LOWER week never lowers the cell; a higher one raises it', () => {
+    const rising = weekGridFromCells([
+      { date: '2026-08-17', slot: 18, value: 40, source: 'measured' },
+      { date: '2026-08-24', slot: 18, value: 12, source: 'measured' }, // quieter week, later
+      { date: TODAY, slot: 18, value: 9, source: 'measured' }, // quieter still
+    ]);
+    expect(rising[MONDAY - 1]![18]).toEqual({ value: 40, source: 'measured' });
+
+    const overtaken = weekGridFromCells([
+      { date: '2026-08-17', slot: 18, value: 40, source: 'measured' },
+      { date: TODAY, slot: 18, value: 41, source: 'measured' }, // one higher reading is enough
+    ]);
+    expect(overtaken[MONDAY - 1]![18]).toEqual({ value: 41, source: 'measured' });
+  });
+
+  // The provenance is the HOLDER's, not the group's. Under the old mean rule the first case read
+  // { 20, backup }: an average containing an estimate is partly estimated. Under a max the number
+  // shown IS one cell's, so a sensor reading is never disclosed as an estimation because some other
+  // week's backup cell sat lower on the same slot.
+  it('provenance follows the cell that HOLDS the max, either way round', () => {
+    const backupWins = weekGridFromCells([
       { date: '2026-08-24', slot: 18, value: 10, source: 'measured' },
       { date: TODAY, slot: 18, value: 30, source: 'backup' },
     ]);
-    expect(week[MONDAY - 1]![18]).toEqual({ value: 20, source: 'backup' });
+    expect(backupWins[MONDAY - 1]![18]).toEqual({ value: 30, source: 'backup' });
+
+    const measuredWins = weekGridFromCells([
+      { date: '2026-08-24', slot: 18, value: 30, source: 'measured' },
+      { date: TODAY, slot: 18, value: 10, source: 'backup' },
+    ]);
+    expect(measuredWins[MONDAY - 1]![18]).toEqual({ value: 30, source: 'measured' });
+  });
+
+  it('a tie between a measured and a backup cell goes to MEASURED, in either order', () => {
+    const measuredFirst = weekGridFromCells([
+      { date: '2026-08-24', slot: 18, value: 20, source: 'measured' },
+      { date: TODAY, slot: 18, value: 20, source: 'backup' },
+    ]);
+    expect(measuredFirst[MONDAY - 1]![18]).toEqual({ value: 20, source: 'measured' });
+
+    const backupFirst = weekGridFromCells([
+      { date: '2026-08-24', slot: 18, value: 20, source: 'backup' },
+      { date: TODAY, slot: 18, value: 20, source: 'measured' },
+    ]);
+    expect(backupFirst[MONDAY - 1]![18]).toEqual({ value: 20, source: 'measured' });
+  });
+
+  // A reading of 0 is a DATA POINT, not an absence — the distinction the null contract rests on.
+  it('a measured 0 keeps its cell rather than reading as no data', () => {
+    const week = weekGridFromCells([{ date: TODAY, slot: 18, value: 0, source: 'measured' }]);
+    expect(week[MONDAY - 1]![18]).toEqual({ value: 0, source: 'measured' });
   });
 
   it('a slot the période holds no cell for is null — hachured, never a coloured 0', () => {

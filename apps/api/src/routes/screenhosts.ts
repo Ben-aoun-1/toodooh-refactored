@@ -732,7 +732,8 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       // every half still equal. Collapsing to the hour in SQL keeps the wire's numbers where they
       // were. Provenance of a collapsed hour: the shared source when BOTH halves carry the same
       // one, else NULL (unknown) — claiming « measured » for an hour that is half backup would
-      // overstate it. Slice C replaces this with the ruled « mixte » once the wire can say so.
+      // overstate it. (PEAK-MAX1 retired the « mixte » kind this line once anticipated: a cell now
+      // shows ONE reading and carries that reading's provenance, so nothing blends any more.)
       const slots = await db
         .select({
           dayOfWeek: screenhostAffluence.dayOfWeek,

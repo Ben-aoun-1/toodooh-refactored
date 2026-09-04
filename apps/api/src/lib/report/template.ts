@@ -63,7 +63,7 @@ export const REV_MAX_ROWS = 4;
 // BYTE-IDENTICAL twin in apps/web (lib/peak-hours.ts), each side pinned by an exact-literal
 // test. Page and PDF are RULE-identical.
 export const PEAK_HOURS_LEAD =
-  "Semaine type de votre audience sur la période analysée, croisant les jours de la semaine et les heures d'ouverture — mesure de votre capteur en priorité, estimation en secours. Plus la couleur est vive, plus l'audience est élevée. Les cases pleines sont mesurées par votre capteur, les cases en pointillé sont des estimations. Les zones rayées correspondent à vos heures de fermeture, aux jours hors période ou aux créneaux sans aucune donnée.";
+  "Vos pics d'audience sur la période analysée : pour chaque créneau, la valeur la plus haute enregistrée, croisant les jours de la semaine et les heures d'ouverture — mesure de votre capteur en priorité, estimation en secours. Plus la couleur est vive, plus l'audience est élevée. Les cases pleines sont mesurées par votre capteur, les cases en pointillé sont des estimations. Les zones rayées correspondent à vos heures de fermeture, aux jours hors période ou aux créneaux sans aucune donnée.";
 
 // PERF-R1 (operator 2026-08-30) — the S01 lead + the no-measure note, BYTE-IDENTICAL twins of
 // apps/web's AudienceKpisSection literals, pinned on both sides. The note renders ONLY when
@@ -224,8 +224,8 @@ const heatmapHtml = (levels: number[][], kinds: ProvenanceKind[][], empty: boole
       <div class="heat-empty"><div class="t">${PEAK_HOURS_EMPTY_TITLE}</div><div class="s">La carte des peak hours apparaîtra ici dès que votre capteur d'audience aura mesuré des passages dans votre établissement.</div></div>`;
   }
   // Slice C — the document follows the DESKTOP rendering: both halves drawn, the hour label
-  // spanning them (grid-column: span 2). A PDF has no width to collapse for, so it never shows the
-  // « mixte » kind — that exists only where 375 px forces two halves into one column.
+  // spanning them (grid-column: span 2). A PDF has no width to collapse for, so it never collapses
+  // an hour at all; every column here is one half-hour slot's own peak (PEAK-MAX1).
   const header =
     `<div class="heat-hlabel"></div>` +
     HOUR_LABELS.map((h) => `<div class="heat-hlabel heat-hspan">${h}</div>`).join('');

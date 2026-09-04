@@ -345,30 +345,54 @@ export interface WeekCell {
  * aggregated into weekday × hour, instead of rendering the hub's rolling typical week and merely
  * masking the weekdays the période misses (PERF-R2's approach, now superseded).
  *
- * A slot's value is the MEAN of the cells that fall on it (rounded — the wire has always carried
- * integers), and its provenance follows the same AFF1 ruling as everywhere else: measured only
- * when every contributing cell is measured; one backup cell makes the slot an estimation.
+ * PEAK-MAX1 (Mejri, confirmed by the operator 2026-09-04) — a slot's value is the **HIGHEST**
+ * in-effect value among the cells that fall on it, not their mean. « Peak means the highest value
+ * ever recorded at a specific thirty-minute slot … it will be the same for months after unless
+ * there is another thirty-minute slot that had a reading higher than the peak last recorded. » A
+ * later, quieter week therefore never lowers a cell; only a higher reading raises it. This
+ * supersedes her own spec sheet's « Audience moyenne … sur l'ensemble de la période ».
+ *
+ * The période scoping STAYS (she reported the section ignoring the filter as a defect on 04/08);
+ * « Depuis le début » is what gives the all-time persistence she describes.
+ *
+ * Provenance is the source of the cell that HOLDS the max, with a measured cell winning a tie.
+ * The old rule — one backup cell makes the whole slot an estimation — was a MEAN rule, and it was
+ * right for a mean: an average containing an estimate is partly estimated. Under a max the number
+ * displayed IS one cell's, so its provenance is that cell's; calling a sensor reading an
+ * « estimation » because some other week's backup cell sat lower on the same slot would be false.
+ *
+ * Inputs are integers and the max of integers is an integer, so nothing is rounded here — the
+ * wire's integer contract holds without a Math.round.
  */
 export function weekGridFromCells(cells: PeriodCell[]): WeekCell[][] {
-  // Flat 7×24 accumulators — indexed arithmetic, no nested optional chains to appease.
-  const sums = new Array<number>(7 * SLOTS_PER_DAY).fill(0);
-  const counts = new Array<number>(7 * SLOTS_PER_DAY).fill(0);
-  const allMeasured = new Array<boolean>(7 * SLOTS_PER_DAY).fill(true);
+  // Flat 7×SLOTS_PER_DAY accumulators — indexed arithmetic, no nested optional chains to appease.
+  // `null` in `peaks` means « no cell here yet » and survives to the output as the ONE meaning of
+  // null: hachure. It is never a coloured 0, which is why the emptiness test is `=== null` and not
+  // a falsy check — a genuine reading of 0 is a data point and must keep its cell.
+  const peaks = new Array<number | null>(7 * SLOTS_PER_DAY).fill(null);
+  const peakMeasured = new Array<boolean>(7 * SLOTS_PER_DAY).fill(false);
   for (const cell of cells) {
     if (cell.slot < 0 || cell.slot >= SLOTS_PER_DAY) continue;
     const at = rowOf(cell.date) * SLOTS_PER_DAY + cell.slot;
-    sums[at] = (sums[at] ?? 0) + cell.value;
-    counts[at] = (counts[at] ?? 0) + 1;
-    if (cell.source !== 'measured') allMeasured[at] = false;
+    const best = peaks[at];
+    const measured = cell.source === 'measured';
+    if (best === null || best === undefined || cell.value > best) {
+      peaks[at] = cell.value;
+      peakMeasured[at] = measured;
+    } else if (cell.value === best && measured) {
+      // Tie between a measured and a backup cell of the same value: measured wins, so the number
+      // is never disclosed as an estimation when a sensor observed exactly it.
+      peakMeasured[at] = true;
+    }
   }
   return Array.from({ length: 7 }, (_, row) =>
     Array.from({ length: SLOTS_PER_DAY }, (__, slot) => {
       const at = row * SLOTS_PER_DAY + slot;
-      const n = counts[at] ?? 0;
-      if (n === 0) return { value: null, source: null };
+      const peak = peaks[at];
+      if (peak === null || peak === undefined) return { value: null, source: null };
       return {
-        value: Math.round((sums[at] ?? 0) / n),
-        source: allMeasured[at] === true ? ('measured' as const) : ('backup' as const),
+        value: peak,
+        source: peakMeasured[at] === true ? ('measured' as const) : ('backup' as const),
       };
     }),
   );

@@ -1,4 +1,4 @@
-import { collapsedHourKind, type ProvenanceKind, affluenceEmpty } from './affluence-provenance';
+import { type ProvenanceKind, affluenceEmpty } from './affluence-provenance';
 import { formatDecimalFr } from './performance-derive';
 
 /**
@@ -12,14 +12,19 @@ import { formatDecimalFr } from './performance-derive';
  * without the other — the two surfaces must never disagree on what this grid means. Do not
  * reword one without the other.
  *
- * PERF-R2 (operator 2026-08-30, supersedes AFF1's « never the période ») — the semaine type IS
- * période-scoped now: the /affluence read masks the weekdays the période does not contain (a
- * 7+-day période keeps the whole week). Values stay the hub's rolling PAX-first merge WITH
- * provenance (solid = measured by the sensor, dotted = estimation, hachure = closed, out of the
- * période, or no data at all).
+ * PEAK-MAX1 (Mejri, confirmed by the operator 2026-09-04) — the grid is no longer a « semaine
+ * type ». Each cell is the HIGHEST audience recorded on that créneau over the période: « peak means
+ * the highest value ever recorded at a specific thirty-minute slot ». A quieter later week never
+ * lowers a cell; only a higher reading raises it. The lead had to say so — « semaine type » reads
+ * as a typical week, which is exactly the average this rule replaced.
+ *
+ * The période scoping STAYS (PERF-R2, operator 2026-08-30, superseding AFF1's « never the
+ * période »): « Depuis le début » is what gives the all-time persistence she describes. Provenance
+ * is unchanged in meaning (solid = measured by the sensor, dotted = estimation, hachure = closed,
+ * out of the période, or no data at all) — it now names the cell that HOLDS the peak.
  */
 export const PEAK_HOURS_LEAD =
-  "Semaine type de votre audience sur la période analysée, croisant les jours de la semaine et les heures d'ouverture — mesure de votre capteur en priorité, estimation en secours. Plus la couleur est vive, plus l'audience est élevée. Les cases pleines sont mesurées par votre capteur, les cases en pointillé sont des estimations. Les zones rayées correspondent à vos heures de fermeture, aux jours hors période ou aux créneaux sans aucune donnée.";
+  "Vos pics d'audience sur la période analysée : pour chaque créneau, la valeur la plus haute enregistrée, croisant les jours de la semaine et les heures d'ouverture — mesure de votre capteur en priorité, estimation en secours. Plus la couleur est vive, plus l'audience est élevée. Les cases pleines sont mesurées par votre capteur, les cases en pointillé sont des estimations. Les zones rayées correspondent à vos heures de fermeture, aux jours hors période ou aux créneaux sans aucune donnée.";
 
 /** The S02 empty-state title — pinned here because the component itself is unpinnable. */
 export const PEAK_HOURS_EMPTY_TITLE = "Pas encore de mesure d'audience";
@@ -152,22 +157,31 @@ export interface HalfCell {
 /**
  * The narrow layout's collapse: what ONE hour column shows for its two halves.
  *
- * The value is the mean of the halves that carry data, rounded — the same rule the api applies
- * whenever a half-hour grid answers an hour-keyed consumer, so the phone and the desktop can never
- * disagree about a number. A half carrying nothing is not averaged against: an hour measured for
- * 30 minutes shows what it measured, never that halved towards a zero it never observed.
+ * PEAK-MAX1 (2026-09-04) — the value is the HIGHER of the two half-hour peaks, not their mean.
+ * S02 now shows, per slot, the highest audience recorded on it over the période; an hour's peak is
+ * therefore the peak of its better half. The mean stated a number no slot ever reached and, worse,
+ * it was LOWER than the true peak in the one section named for peaks — halves peaking 100 and 200
+ * would have rendered 150 on a phone and 200 on a desktop, for the same venue and période.
  *
- * The kind is `collapsedHourKind`: measured beside empty is measured, and only measured beside
- * ESTIMATED is « mixte » — the disagreement a reader at 375 px could not otherwise see.
+ * The phone and the desktop agree because both show a slot's PEAK. (The api's
+ * `collapseHalvesToHour` / `collapseHalvesSql` remain MEANS and are untouched: those collapse RAW
+ * readings upstream of the merge — a different quantity, not this display.)
+ *
+ * The kind is the kind of the half that HOLDS the max, measured winning a tie — the same rule the
+ * api applies to the grid, and for the same reason: the number shown IS one half's, so its
+ * provenance is that half's. A half carrying nothing is ignored rather than counted against the
+ * other: an hour measured for 30 minutes shows what it measured.
  */
 export function collapseHourCell(halves: readonly HalfCell[]): HalfCell {
   const carrying = halves.filter((half) => half.value !== null && half.kind !== 'none');
   if (carrying.length === 0) {
     return { value: null, kind: 'none' };
   }
-  const sum = carrying.reduce((total, half) => total + (half.value ?? 0), 0);
-  return {
-    value: Math.round(sum / carrying.length),
-    kind: collapsedHourKind(carrying.map((half) => half.kind)),
-  };
+  let best: HalfCell = carrying[0] as HalfCell;
+  for (const half of carrying.slice(1)) {
+    const higher = (half.value ?? 0) > (best.value ?? 0);
+    const tieToMeasured = half.value === best.value && half.kind === 'measured';
+    if (higher || tieToMeasured) best = half;
+  }
+  return { value: best.value, kind: best.kind };
 }

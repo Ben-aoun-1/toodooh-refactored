@@ -608,21 +608,25 @@ describe('S03 labeled axes (R3 — Mejri item 4, OVERRIDES the axis-less mockup)
   });
 });
 
-// PERF-QA1 R7 / AFF1 — the S02 lead: HONEST typical-week semantics WITH provenance. The
-// exact-literal pin below is one half of the cross-package byte-equality contract — apps/web pins
-// the SAME literal over its PEAK_HOURS_LEAD twin (lib/peak-hours.ts), so neither side can drift
-// without its own test failing. Do not reword one without the other.
-describe('S02 lead (PERF-R2 — the période-scoped semaine type, with provenance)', () => {
+// PEAK-MAX1 (2026-09-04) — the S02 lead states the PEAK semantics: each cell is the highest value
+// recorded on that créneau over the période. « Semaine type » had to go, because it reads as a
+// typical week — precisely the average this rule replaced. The exact-literal pin below is one half
+// of the cross-package byte-equality contract — apps/web pins the SAME literal over its
+// PEAK_HOURS_LEAD twin (lib/peak-hours.ts), so neither side can drift without its own test
+// failing. Do not reword one without the other.
+describe('S02 lead (PEAK-MAX1 — the période-scoped PEAK grid, with provenance)', () => {
   it('pins the exact wording (byte-equality contract with apps/web)', () => {
     expect(PEAK_HOURS_LEAD).toBe(
-      "Semaine type de votre audience sur la période analysée, croisant les jours de la semaine et les heures d'ouverture — mesure de votre capteur en priorité, estimation en secours. Plus la couleur est vive, plus l'audience est élevée. Les cases pleines sont mesurées par votre capteur, les cases en pointillé sont des estimations. Les zones rayées correspondent à vos heures de fermeture, aux jours hors période ou aux créneaux sans aucune donnée.",
+      "Vos pics d'audience sur la période analysée : pour chaque créneau, la valeur la plus haute enregistrée, croisant les jours de la semaine et les heures d'ouverture — mesure de votre capteur en priorité, estimation en secours. Plus la couleur est vive, plus l'audience est élevée. Les cases pleines sont mesurées par votre capteur, les cases en pointillé sont des estimations. Les zones rayées correspondent à vos heures de fermeture, aux jours hors période ou aux créneaux sans aucune donnée.",
     );
   });
 
   it('the rendered document names the période scope and BOTH provenances', () => {
     const html = renderReportHtml(baseData());
     expect(html).toContain(PEAK_HOURS_LEAD);
-    expect(html).toContain('Semaine type');
+    expect(html).toContain("Vos pics d'audience"); // PEAK-MAX1, no longer « Semaine type »
+    expect(html).not.toContain('Semaine type');
+    expect(html).toContain('la valeur la plus haute enregistrée');
     expect(html).toContain('période analysée'); // PERF-R2: the période scopes S02 too
     expect(html).toContain('mesure de votre capteur en priorité');
     expect(html).toContain('estimation en secours');
