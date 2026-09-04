@@ -23,6 +23,7 @@ import type {
   ScreenhostEligibility,
   VenueClass,
 } from '@/features/admin/services/admin-screenhost.service';
+import { sectorDisplayName } from '@/features/advertiser/constants/sector-display-name';
 import type { BusinessSector } from '@/features/auth/types/auth';
 import { HOUR_OPTIONS } from '@/features/screenhost/lib/venue-hours';
 import type { ScreenhostWifi } from '@/features/screenhost/services/screenhost.service';
@@ -141,7 +142,7 @@ export default function ScreenhostEligibilityCard({
             <option value={CLEAR}>—</option>
             {sectors.map((s) => (
               <option key={s.id} value={s.id}>
-                {s.name}
+                {sectorDisplayName(s.name)}
               </option>
             ))}
           </select>

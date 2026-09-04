@@ -1,5 +1,7 @@
 import { addDays, format, parseISO } from 'date-fns';
 
+import { sectorDisplayName } from './sector-display-name.js';
+
 /**
  * Pure derivations for the R1 report — a deliberate API-SIDE MIRROR of the web lib
  * (apps/web/src/features/screenhost/lib/performance-derive.ts + performance-period.ts): the FE
@@ -227,9 +229,11 @@ export function categoryLabel(
   venueClass: 'populaire' | 'moyen' | 'premium' | null,
 ): string {
   if (!sector) return '—';
-  if (!venueClass) return sector;
+  // UI-1 — the STORED name matched everything up to here; only the rendered string is mapped.
+  const label = sectorDisplayName(sector);
+  if (!venueClass) return label;
   const classLabel = venueClass.charAt(0).toUpperCase() + venueClass.slice(1);
-  return `${sector} · ${classLabel}`;
+  return `${label} · ${classLabel}`;
 }
 
 // ── fr-FR formatting — HAND-ROLLED (deterministic across Node ICU builds), matching what the

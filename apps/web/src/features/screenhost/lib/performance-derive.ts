@@ -1,5 +1,7 @@
 import { addDays, format, parseISO } from 'date-fns';
 
+import { sectorDisplayName } from '@/features/advertiser/constants/sector-display-name';
+
 import { type DateRange, inRange } from './performance-period';
 
 /**
@@ -344,9 +346,11 @@ export function categoryLabel(
   venueClass: 'populaire' | 'moyen' | 'premium' | null,
 ): string {
   if (!sector) return '—';
-  if (!venueClass) return sector;
+  // UI-1 — the STORED name matched everything up to here; only the rendered string is mapped.
+  const label = sectorDisplayName(sector);
+  if (!venueClass) return label;
   const classLabel = venueClass.charAt(0).toUpperCase() + venueClass.slice(1);
-  return `${sector} · ${classLabel}`;
+  return `${label} · ${classLabel}`;
 }
 
 /** INV-1 — one per-venue read's lifecycle as the page consumes it (React Query v5 vocabulary). */

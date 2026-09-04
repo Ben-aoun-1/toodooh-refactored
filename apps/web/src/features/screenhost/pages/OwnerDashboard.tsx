@@ -16,6 +16,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
+import { sectorDisplayName } from '@/features/advertiser/constants/sector-display-name';
 import { useBusinessProfile } from '@/features/auth/hooks/useBusinessProfile';
 import { useOwnerBusinessSectors } from '@/features/auth/hooks/useOwnerBusinessSectors';
 import { useSectors } from '@/features/auth/hooks/useSectors';
@@ -140,8 +141,9 @@ export default function OwnerDashboard() {
     const id = profile?.business_sector_id;
     if (!id) return '';
     const fromOwner = ownerSectors?.find((s) => s.id === id)?.name?.trim();
-    if (fromOwner) return fromOwner;
-    return sectors?.find((s) => s.id === id)?.name?.trim() || '';
+    if (fromOwner) return sectorDisplayName(fromOwner);
+    const fromAll = sectors?.find((s) => s.id === id)?.name?.trim();
+    return fromAll ? sectorDisplayName(fromAll) : '';
   }, [profile, sectors, ownerSectors]);
 
   // Redirige vers la connexion si la session est absente.

@@ -1,6 +1,7 @@
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 
+import { sectorDisplayName } from '@/features/advertiser/constants/sector-display-name';
 import { useOwnerBusinessSectors } from '@/features/auth/hooks/useOwnerBusinessSectors';
 
 import { useCampaignTargeting } from '../hooks/useCampaignTargeting';
@@ -47,7 +48,8 @@ export const CampaignTargetingPanel = forwardRef<
   }, [targeting.isLoading, targeting.rows, categoryOnly]);
 
   const categories = useMemo(
-    () => (sectors.data ?? []).map((s) => ({ id: s.id, name: s.name })),
+    // UI-1 — the LABEL is mapped; `id` stays the match key, so targeting is unaffected.
+    () => (sectors.data ?? []).map((s) => ({ id: s.id, name: sectorDisplayName(s.name) })),
     [sectors.data],
   );
 

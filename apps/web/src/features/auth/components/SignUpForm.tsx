@@ -21,6 +21,7 @@ import {
   AGENCY_BUSINESS_SECTOR_NAME,
   sectorsForAdvertiserAgencySignup,
 } from '@/features/advertiser/constants/advertiserBusinessSectors';
+import { sectorDisplayName } from '@/features/advertiser/constants/sector-display-name';
 import {
   DEFAULT_CLOSING_HOUR,
   DEFAULT_OPENING_HOUR,
@@ -950,8 +951,10 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
       <div className="text-center mb-6">
         <img src={responsableStepIcon} alt="" className="w-16 h-16 object-contain mx-auto mb-3" />
         <h2 className="text-xl font-bold text-gray-900">
+          {/* UI-1 (operator, 04/09) — « agent » was the internal word; the person filling this in
+              is the screenhost. Plural to match its sibling. */}
           {selectedProfileType === 'individual_owner'
-            ? "Information sur l'agent"
+            ? 'Informations sur le screenhost'
             : 'Informations sur le responsable'}
         </h2>
         <p className="text-sm text-gray-500">Renseignez vos informations professionnelles</p>
@@ -1322,7 +1325,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
                 <option value="">Sélectionnez votre secteur</option>
                 {getDisplaySectors().map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.name}
+                    {sectorDisplayName(s.name)}
                   </option>
                 ))}
               </select>
@@ -1511,7 +1514,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
                   {isOwner && <option value="">Sélectionnez votre secteur</option>}
                   {getDisplaySectors().map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.name}
+                      {sectorDisplayName(s.name)}
                     </option>
                   ))}
                 </select>
