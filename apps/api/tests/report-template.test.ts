@@ -10,6 +10,7 @@ import {
   HIST_MAX_ROWS,
   AUDIENCE_KPIS_LEAD,
   NO_MEASURE_NOTE,
+  PER_HOUR_DESC,
   PEAK_HOURS_LEAD,
   REV_MAX_ROWS,
   impressionsChartSvg,
@@ -643,6 +644,16 @@ describe('S01 (PERF-R1 — merged période, provenance in the caption)', () => {
     expect(NO_MEASURE_NOTE).toBe(
       "Aucune mesure du capteur d'audience sur la période — les impressions proviennent de la preuve de diffusion, une source indépendante.",
     );
+  });
+
+  // FLOW-1 — her definition of moyenne/heure (Pers_atteintes ÷ heures d'ouverture réelles). The
+  // old « Densité moyenne d'audience » described a LEVEL held over time, the reading this lane
+  // removed. First time this sentence is pinned: it lived inline in both packages.
+  it('pins the per-hour description (byte-equality contract with apps/web)', () => {
+    expect(PER_HOUR_DESC).toBe("Personnes détectées par heure d'ouverture, en moyenne");
+    const html = renderReportHtml(fullData());
+    expect(html).toContain(PER_HOUR_DESC);
+    expect(html).not.toContain('Densité moyenne');
   });
 
   it('renders the estimated share as « dont N % estimés »', () => {

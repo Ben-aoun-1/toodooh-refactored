@@ -16,3 +16,15 @@ export const AUDIENCE_KPIS_LEAD =
  */
 export const NO_MEASURE_NOTE =
   "Aucune mesure du capteur d'audience sur la période — les impressions proviennent de la preuve de diffusion, une source indépendante.";
+
+/**
+ * FLOW-1 (Mejri, ruled 2026-09-04) — the « Audience moyenne / heure » description, in HER terms:
+ * moyenne/heure = Pers_atteintes ÷ heures d'ouverture réelles, and Pers_atteintes is « le nombre de
+ * personnes détectées par le capteur sur la période ». « Densité moyenne d'audience » described a
+ * LEVEL held over time, which is the reading this lane removed.
+ *
+ * No trailing period: the page appends « (estimation 14 h). » when the opening hours are inferred.
+ * This sentence lived INLINE in both packages until now — twins by convention, agreeing only by
+ * coincidence, with nothing to catch a one-sided reword. It is pinned on both sides from here.
+ */
+export const PER_HOUR_DESC = "Personnes détectées par heure d'ouverture, en moyenne";

@@ -103,9 +103,9 @@ describe("AUD-HOURLY1-C — Mejri's scenario: the sensor goes dark for ONE hour"
   });
 
   it("S01's total carries the forced value — « rien ne s'est passé » is over", () => {
-    expect(result.total).toBe(42); // 12 measured + 30 backup, NOT 12
+    expect(result.total).toBe(84); // (12 + 12) measured + (30 + 30) backup — FLOW-1 sums cells
     expect(result.days).toEqual([
-      { date: TODAY, audience: 42, source: 'estimated', hasMeasured: true },
+      { date: TODAY, audience: 84, source: 'estimated', hasMeasured: true },
     ]);
     // One backup hour makes the DAY an estimation (AFF1's dayProvenance ruling), so it can never
     // become the « Pic d'audience » (MEJ-R1).
@@ -235,7 +235,7 @@ describe('AUD-HOURLY1-C — the four merge rules', () => {
       }),
     );
     expect(result.days).toEqual([
-      { date: TODAY, audience: 30, source: 'estimated', hasMeasured: false },
+      { date: TODAY, audience: 60, source: 'estimated', hasMeasured: false }, // 30 per half
     ]);
   });
 });
@@ -259,10 +259,10 @@ describe('AUD-HOURLY1-C — day precedence (the rolling 35-day window)', () => {
         grid: gridWith([[MONDAY, 9, 30]]),
       }),
     );
-    // 12, not 912 and not 900 — the hourly window owns this date.
-    expect(result.total).toBe(12);
+    // 24, not 912 and not 900 — the hourly window owns this date (12 in each half of 9h).
+    expect(result.total).toBe(24);
     expect(result.days).toEqual([
-      { date: TODAY, audience: 12, source: 'measured', hasMeasured: true },
+      { date: TODAY, audience: 24, source: 'measured', hasMeasured: true },
     ]);
   });
 
@@ -278,6 +278,37 @@ describe('AUD-HOURLY1-C — day precedence (the rolling 35-day window)', () => {
       { date: '2026-07-27', audience: 400, source: 'measured', hasMeasured: true },
     ]);
     expect(result.cells).toEqual([]); // no hour detail → contributes nothing to S02
+  });
+
+  // FLOW-1 — the two paths into a day's audience must now AGREE. The hub's monthly-stats push is
+  // SUM(total_count) for the day; the slot path was Σ (v × 0.5) and therefore said HALF of it. This
+  // is the disagreement Mejri reported as « 274 personnes … contre 137 » and the reason the slot
+  // path was the odd one out. Same day, same people, expressed both ways.
+  //
+  // ⚠️ THIS IS A FIXTURE, not evidence about prod: the halves below are hand-written to differ, the
+  // way a real per-slot sensor push does. It pins the ARITHMETIC of the two paths, not the shape of
+  // any stored data.
+  it('FLOW-1: the slot path and the monthly-stats path give the SAME day total', () => {
+    const HALVES: [number, number][] = [
+      [18, 40], // 9h00
+      [19, 35], // 9h30 — a real per-slot push rarely ties
+      [20, 62], // 10h00
+      [21, 55], // 10h30
+    ];
+    const dayTotal = HALVES.reduce((sum, [, v]) => sum + v, 0); // 192
+
+    const fromSlots = periodAudience(input({ hourly: slots(TODAY, HALVES) }));
+    expect(fromSlots.days[0]?.audience).toBe(dayTotal);
+
+    // The same day arriving as the hub's day-granularity total, outside the hourly window.
+    const fromMonthly = periodAudience(
+      input({
+        range: { from: '2026-07-27', to: '2026-07-27' },
+        months: [{ month: '2026-07', daily: [{ date: '2026-07-27', audience: dayTotal }] }],
+      }),
+    );
+    expect(fromMonthly.days[0]?.audience).toBe(dayTotal);
+    expect(fromSlots.days[0]?.audience).toBe(fromMonthly.days[0]?.audience);
   });
 
   it('a measured history day is a MEASURED data point in the caption denominator', () => {
@@ -332,14 +363,14 @@ describe('periodAudience — hasMeasured, the peak-eligibility flag', () => {
       }),
     );
     expect(result.days).toEqual([
-      { date: TODAY, audience: 403, source: 'estimated', hasMeasured: true },
+      { date: TODAY, audience: 806, source: 'estimated', hasMeasured: true }, // (373 + 373) + (30 + 30)
     ]);
   });
 
   it('a grid-ONLY day is hasMeasured:false — never eligible for the peak', () => {
     const result = periodAudience(input({ grid: gridWith([[MONDAY, 9, 1396]]) }));
     expect(result.days).toEqual([
-      { date: TODAY, audience: 1396, source: 'estimated', hasMeasured: false },
+      { date: TODAY, audience: 2792, source: 'estimated', hasMeasured: false }, // 1396 per half
     ]);
   });
 
@@ -361,7 +392,7 @@ describe('periodAudience — hasMeasured, the peak-eligibility flag', () => {
   it('an all-measured day is both source:measured and hasMeasured:true', () => {
     const result = periodAudience(input({ hourly: hours(TODAY, [[9, 12]]) }));
     expect(result.days).toEqual([
-      { date: TODAY, audience: 12, source: 'measured', hasMeasured: true },
+      { date: TODAY, audience: 24, source: 'measured', hasMeasured: true }, // 12 per half
     ]);
   });
 });
@@ -371,45 +402,51 @@ describe('periodAudience — hasMeasured, the peak-eligibility flag', () => {
 // Every assertion ABOVE is the slice-C pin: the fixtures write both halves of each hour, which is
 // what an hour-shaped push produces, and not one number moved. These are the cases that only exist
 // once the halves can differ.
-describe('slice C — duration-weighted sums and unequal halves', () => {
-  it('THE INVARIANT: equal halves give exactly the old day total, not double it', () => {
-    // 24 hours at 100 → the day is Σ (100 × 0.5) over 48 slots = 2400, which is Σ 100 over 24
-    // hours. Summing 48 cells unweighted would say 4800 — the silent doubling this guards.
+// FLOW-1 (Mejri, ruled 2026-09-04) — a day's audience is the plain SUM of its half-hour cells.
+// This block previously pinned slice C's duration weighting (Σ v × 0.5) and its rounding, both of
+// which were the architect's « a cell is a LEVEL » invariant. She overruled it: « la somme dans le
+// Hub et Peak Hours est de 274 personnes, contre 137 personnes pour les variables mentionnées » —
+// exactly the factor 2 this weighting introduced. The tests are rewritten, not kept alongside; the
+// old « THE INVARIANT: … not double it » test was guarding precisely what she asked for.
+describe('FLOW-1 — a day is the SUM of its cells', () => {
+  it('24 hours at 100 sum to 4800 across the 48 stored halves', () => {
+    // The weighted rule gave 2400 here, treating 100 as a level held for half an hour. Under the
+    // sum each cell is its own count, so the day is what the sensor counted in all 48 slots.
     const everyHour: [number, number][] = Array.from({ length: 24 }, (_, h) => [h, 100]);
     const result = periodAudience(input({ hourly: hours(TODAY, everyHour) }));
-    expect(result.days[0]?.audience).toBe(2400);
-    expect(result.total).toBe(2400);
-    expect(result.cells).toHaveLength(48); // stored per half…
-    expect(result.days[0]?.audience).not.toBe(4800); // …but never counted twice
+    expect(result.cells).toHaveLength(48);
+    expect(result.days[0]?.audience).toBe(4800);
+    expect(result.total).toBe(4800);
   });
 
-  it('MEJ-8: a half-hour outage now MOVES the day total, and in the expected direction', () => {
+  it('MEJ-8: a half-hour outage still MOVES the day total, in the expected direction', () => {
     // 9h00 measured at 200; 9h30 the sensor went dark and the admin's grid says 40. Before the
     // half-hour grid the hour bucket was carried by its surviving reading and the outage was
-    // INVISIBLE. Now it costs the day exactly the half-hour it lost.
+    // INVISIBLE. It still costs the day the half-hour it lost — now as a plain sum.
     const result = periodAudience(
       input({
         hourly: slots(TODAY, [[18, 200]]),
         grid: gridWithSlots([[MONDAY, 19, 40]]),
       }),
     );
-    expect(result.days[0]?.audience).toBe(120); // 200×0.5 + 40×0.5
-    expect(result.days[0]?.audience).toBeLessThan(200); // the outage is visible, not absorbed
-    // …and the day is an estimation now, because one of its halves is the admin's grid.
+    expect(result.days[0]?.audience).toBe(240); // 200 + 40
+    // The outage is still visible: a measured 9h30 near 200 would have given ~400, not 240.
+    expect(result.days[0]?.audience).toBeLessThan(400);
     expect(result.days[0]?.source).toBe('estimated');
-    expect(result.days[0]?.hasMeasured).toBe(true); // but still peak-eligible (MEJ-R2)
+    expect(result.days[0]?.hasMeasured).toBe(true); // still peak-eligible (MEJ-R2)
   });
 
   it('a lone measured half stands alone — the missing half is not invented as a zero', () => {
     const result = periodAudience(input({ hourly: slots(TODAY, [[18, 200]]) }));
     expect(result.cells).toHaveLength(1);
-    expect(result.days[0]?.audience).toBe(100); // 200 × 0.5, for the half hour it actually covers
+    expect(result.days[0]?.audience).toBe(200); // what that half-hour counted, verbatim
     expect(result.days[0]?.source).toBe('measured');
   });
 
-  it('the day total rounds to whole people, and only ever on unequal halves', () => {
-    // 9h00 = 100, 9h30 = 101 → 100.5 → 101. Equal halves can never need this (their sum is the
-    // old integer exactly), so rounding cannot perturb an existing number.
+  it('integers in, integer out — there is nothing left to round', () => {
+    // 100 + 101 = 201. The weighted rule produced 100.5 here and had to round, which is where the
+    // « ACCEPTED BIAS: an odd weighted sum rounds UP » ruling came from. Both are now moot: a sum
+    // of integers is an integer, so no tie can arise and no bias can accumulate.
     const odd = periodAudience(
       input({
         hourly: slots(TODAY, [
@@ -418,97 +455,89 @@ describe('slice C — duration-weighted sums and unequal halves', () => {
         ]),
       }),
     );
-    expect(odd.days[0]?.audience).toBe(101);
+    expect(odd.days[0]?.audience).toBe(201);
+    expect(Number.isInteger(odd.days[0]?.audience)).toBe(true);
+
     const even = periodAudience(input({ hourly: hours(TODAY, [[9, 100]]) }));
-    expect(even.days[0]?.audience).toBe(100);
+    expect(even.days[0]?.audience).toBe(200); // both halves of 9h, each its own count
   });
 
-  // ACCEPTED, not discovered later (planner ruling): Math.round sends TIES UP, and a tie happens
-  // whenever a day's weighted slot sum is odd — so on unequal halves the day total runs high by at
-  // most +0.5, ≈ +0.25 on average, against totals in the hundreds. That is below the precision the
-  // estimate carries anyway; banker's rounding and a fractional wire both cost more than they buy.
-  // This assertion exists so the bias has a NAME when someone notices « the totals run slightly
-  // high » and goes looking.
-  it('ACCEPTED BIAS: an odd weighted sum rounds UP, never to even and never truncated', () => {
-    // 9h00 = 100, 9h30 = 101 → 100.5. Half-up gives 101; banker's rounding would give 100.
-    const odd = periodAudience(
+  // Her 02/09 case, restated at the new rule: measured 7 + 15 + 5 + 10 across 12h–14h30 with the
+  // admin's grid answering 13h30 at 56. The day was 47 under the weighting and is 93 now, while
+  // « dont N % estimés » is unmoved — the 0.5 divided out of both sides of that ratio.
+  it("Mejri's 02/09 day is 93, and « dont N % estimés » stays 60 %", () => {
+    const result = periodAudience(
       input({
         hourly: slots(TODAY, [
-          [18, 100],
-          [19, 101],
+          [24, 7],
+          [25, 15],
+          [26, 5],
+          [29, 10],
         ]),
+        grid: gridWithSlots([[MONDAY, 27, 56]]),
       }),
     );
-    expect(odd.days[0]?.audience).toBe(101);
-    // …and the same shape one lower, to show it is the .5 that rounds up, not a floor/ceil.
-    const evenSum = periodAudience(
+    expect(result.days[0]?.audience).toBe(93); // 7 + 15 + 5 + 56 + 10
+    expect(result.estimatedPct).toBe(60); // 56 / 93
+  });
+});
+
+// Slice C, ruled 2026-09-01 — « dont N % estimés » is VALUE-WEIGHTED:
+//     Σ (estimated audience) / Σ (all audience)
+// and is the ONE quantity exempt from the equal-halves bit-identical pin, because it is a
+// definition change rather than a granularity change.
+describe('estimatedPct — the share of PEOPLE, not of rows', () => {
+  it('a half-estimated hour weights by its VALUE, not by counting one row of two', () => {
+    const result = periodAudience(
       input({
-        hourly: slots(TODAY, [
-          [18, 100],
-          [19, 102],
-        ]),
+        hourly: slots(TODAY, [[18, 200]]),
+        grid: gridWithSlots([[MONDAY, 19, 40]]),
       }),
     );
-    expect(evenSum.days[0]?.audience).toBe(101); // 101.0 exactly
+    expect(result.cells).toHaveLength(2);
+    // 40 estimated against 240 total (both halves × 0.5 cancels) → 17 %, not the 50 % that
+    // counting rows would have claimed for a half-hour worth a sixth of the audience.
+    expect(result.estimatedPct).toBe(17);
   });
 
-  // Slice C, ruled 2026-09-01 — « dont N % estimés » is VALUE-WEIGHTED:
-  //     Σ (estimated audience) / Σ (all audience)
-  // and is the ONE quantity exempt from the equal-halves bit-identical pin, because it is a
-  // definition change rather than a granularity change.
-  describe('estimatedPct — the share of PEOPLE, not of rows', () => {
-    it('a half-estimated hour weights by its VALUE, not by counting one row of two', () => {
-      const result = periodAudience(
-        input({
-          hourly: slots(TODAY, [[18, 200]]),
-          grid: gridWithSlots([[MONDAY, 19, 40]]),
-        }),
-      );
-      expect(result.cells).toHaveLength(2);
-      // 40 estimated against 240 total (both halves × 0.5 cancels) → 17 %, not the 50 % that
-      // counting rows would have claimed for a half-hour worth a sixth of the audience.
-      expect(result.estimatedPct).toBe(17);
+  it('THE REALISTIC SHAPE: 27 measured history days + one half-estimated day of slots', () => {
+    // The case that condemned the point share: it would read ≈ 32 % estimés (24 backup slots
+    // out of 27 + 48 points) on a venue that measured 27 days straight. The truth is the
+    // estimated PEOPLE, which is a rounding error beside a month of measured history.
+    const from = '2026-08-04'; // a Monday, 27 days before TODAY
+    const daily = Array.from({ length: 27 }, (_, i) => {
+      const day = String(4 + i).padStart(2, '0');
+      return { date: `2026-08-${day}`, audience: 1000, source: 'measured' as const };
     });
+    const result = periodAudience(
+      input({
+        range: { from, to: TODAY },
+        months: [{ month: '2026-08', daily }],
+        // The last day only: 12 measured hours, and 12 hours the admin's grid stands in for.
+        hourly: hours(
+          TODAY,
+          Array.from({ length: 12 }, (_, h) => [h + 8, 100]),
+        ),
+        grid: gridWith(Array.from({ length: 12 }, (_, h) => [MONDAY, h + 20, 50])),
+      }),
+    );
+    expect(result.measuredDays).toBe(27);
+    expect(result.estimatedPct).not.toBeNull();
+    // 600 estimated people-hours against 27 000 + 1 800 → 2 %, not 32 %.
+    expect(result.estimatedPct!).toBeLessThan(5);
+  });
 
-    it('THE REALISTIC SHAPE: 27 measured history days + one half-estimated day of slots', () => {
-      // The case that condemned the point share: it would read ≈ 32 % estimés (24 backup slots
-      // out of 27 + 48 points) on a venue that measured 27 days straight. The truth is the
-      // estimated PEOPLE, which is a rounding error beside a month of measured history.
-      const from = '2026-08-04'; // a Monday, 27 days before TODAY
-      const daily = Array.from({ length: 27 }, (_, i) => {
-        const day = String(4 + i).padStart(2, '0');
-        return { date: `2026-08-${day}`, audience: 1000, source: 'measured' as const };
-      });
-      const result = periodAudience(
-        input({
-          range: { from, to: TODAY },
-          months: [{ month: '2026-08', daily }],
-          // The last day only: 12 measured hours, and 12 hours the admin's grid stands in for.
-          hourly: hours(
-            TODAY,
-            Array.from({ length: 12 }, (_, h) => [h + 8, 100]),
-          ),
-          grid: gridWith(Array.from({ length: 12 }, (_, h) => [MONDAY, h + 20, 50])),
-        }),
-      );
-      expect(result.measuredDays).toBe(27);
-      expect(result.estimatedPct).not.toBeNull();
-      // 600 estimated people-hours against 27 000 + 1 800 → 2 %, not 32 %.
-      expect(result.estimatedPct!).toBeLessThan(5);
-    });
+  it('null still means NO DATA AT ALL — the meaning the PDF branches on', () => {
+    expect(periodAudience(input({})).estimatedPct).toBeNull();
+  });
 
-    it('null still means NO DATA AT ALL — the meaning the PDF branches on', () => {
-      expect(periodAudience(input({})).estimatedPct).toBeNull();
-    });
-
-    it('a période holding data but ZERO audience falls back to the point share, never to null', () => {
-      // Degenerate: the sensor counted nobody all period. There is no audience to apportion, but
-      // there IS data — so null (which means « no data ») would mislead the surfaces that branch
-      // on it, and the point share is the only defined answer left.
-      const result = periodAudience(input({ hourly: hours(TODAY, [[9, 0]]) }));
-      expect(result.cells).toHaveLength(2);
-      expect(result.estimatedPct).toBe(0); // measured zeros — nothing estimated
-    });
+  it('a période holding data but ZERO audience falls back to the point share, never to null', () => {
+    // Degenerate: the sensor counted nobody all period. There is no audience to apportion, but
+    // there IS data — so null (which means « no data ») would mislead the surfaces that branch
+    // on it, and the point share is the only defined answer left.
+    const result = periodAudience(input({ hourly: hours(TODAY, [[9, 0]]) }));
+    expect(result.cells).toHaveLength(2);
+    expect(result.estimatedPct).toBe(0); // measured zeros — nothing estimated
   });
 });
 
@@ -560,7 +589,7 @@ describe('S02-FUT1 — the grid may not answer for a slot that has not elapsed',
       { date: '2026-08-24', slot: 27, value: 56, source: 'backup' },
     ]);
     expect(result.days.map((d) => d.date)).toEqual(['2026-08-24']); // today contributes nothing
-    expect(result.days[0]?.audience).toBe(53); // (50 + 56) × 0.5
+    expect(result.days[0]?.audience).toBe(106); // 50 + 56 — FLOW-1 sums, no weighting
   });
 
   it('the IN-PROGRESS slot is not elapsed either — the E6 boundary, at slot granularity', () => {
@@ -599,7 +628,7 @@ describe('S02-FUT1 — the grid may not answer for a slot that has not elapsed',
       }),
     );
     expect(result.cells).toHaveLength(8); // only the elapsed ones
-    expect(result.days[0]?.audience).toBe(40); // 8 × 10 × 0.5 — the future 106 is not counted
+    expect(result.days[0]?.audience).toBe(80); // 8 × 10 — the future 106 is not counted
     expect(result.estimatedPct).toBe(100); // everything it DOES hold is estimated
   });
 
@@ -726,17 +755,17 @@ describe('PEAK-MAX1 — the peak rule stays inside S02', () => {
   it("the day totals are the DAY's own cells — never the peak, never the mean", () => {
     const merged = periodAudience(twoWeeks);
     const byDate = new Map(merged.days.map((d) => [d.date, d.audience]));
-    // One half-hour slot at value v is v × SLOT_HOURS, rounded at the day.
-    expect(byDate.get('2026-08-24')).toBe(5); // 10 × 0.5
-    expect(byDate.get(TODAY)).toBe(20); // 40 × 0.5
-    expect(byDate.get(TUESDAY_ISO)).toBe(10); // 20 × 0.5
+    // FLOW-1 — one half-hour slot at value v contributes exactly v.
+    expect(byDate.get('2026-08-24')).toBe(10);
+    expect(byDate.get(TODAY)).toBe(40);
+    expect(byDate.get(TUESDAY_ISO)).toBe(20);
     // The peak (40) is NOT the quiet Monday's total, which is the leak this pins against.
-    expect(byDate.get('2026-08-24')).not.toBe(20);
+    expect(byDate.get('2026-08-24')).not.toBe(40);
   });
 
   it('the total and estimated_pct read the cells, and the grid reads the peak, independently', () => {
     const merged = periodAudience(twoWeeks);
-    expect(merged.total).toBe(35); // 5 + 20 + 10 — the sum of the DAYS
+    expect(merged.total).toBe(70); // 10 + 40 + 20 — the sum of the DAYS
     expect(merged.estimatedPct).toBe(0); // every cell measured
     // The same merge, folded: Monday's slot 18 shows its PEAK, not the 25 a mean would give.
     const week = weekGridFromCells(merged.cells);
