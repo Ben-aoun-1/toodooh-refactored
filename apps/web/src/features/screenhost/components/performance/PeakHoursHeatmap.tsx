@@ -261,10 +261,6 @@ export function PeakHoursHeatmap({
               <div className={`h-3.5 w-3.5 rounded-[3px] ${HEATMAP_CLOSED_CLASS}`} />
               <span>Fermé / aucune donnée</span>
             </div>
-            {/* Slice C — narrow layout ONLY: on this width an hour is one column, so a mixed hour
-                is drawn in the estimation treatment (the conservative side — it never claims to be
-                a measure) and this line is what tells the reader such an hour exists. On desktop
-                the two halves are drawn separately and there is nothing to explain. */}
           </div>
         </div>
       )}
