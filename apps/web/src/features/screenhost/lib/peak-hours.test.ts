@@ -20,12 +20,14 @@ describe('PEAK_HOURS_LEAD (the byte-equality contract with the PDF)', () => {
   // side can be reworded without its own pin failing — do not change one without the other.
   it('pins the exact wording', () => {
     expect(PEAK_HOURS_LEAD).toBe(
-      "Semaine type de votre audience sur la période analysée, croisant les jours de la semaine et les heures d'ouverture — mesure de votre capteur en priorité, estimation en secours. Plus la couleur est vive, plus l'audience est élevée. Les cases pleines sont mesurées par votre capteur, les cases en pointillé sont des estimations. Les zones rayées correspondent à vos heures de fermeture, aux jours hors période ou aux créneaux sans aucune donnée.",
+      "Vos pics d'audience sur la période analysée : pour chaque créneau, la valeur la plus haute enregistrée, croisant les jours de la semaine et les heures d'ouverture — mesure de votre capteur en priorité, estimation en secours. Plus la couleur est vive, plus l'audience est élevée. Les cases pleines sont mesurées par votre capteur, les cases en pointillé sont des estimations. Les zones rayées correspondent à vos heures de fermeture, aux jours hors période ou aux créneaux sans aucune donnée.",
     );
   });
 
-  it('PERF-R2 — names the période scope AND both provenances', () => {
-    expect(PEAK_HOURS_LEAD).toContain('Semaine type');
+  it('PEAK-MAX1 — names the PEAK, the période scope AND both provenances', () => {
+    expect(PEAK_HOURS_LEAD).toContain("Vos pics d'audience");
+    expect(PEAK_HOURS_LEAD).toContain('la valeur la plus haute enregistrée');
+    expect(PEAK_HOURS_LEAD).not.toContain('Semaine type');
     expect(PEAK_HOURS_LEAD).toContain('période analysée'); // the période scopes S02 now
     expect(PEAK_HOURS_LEAD).toContain('mesure de votre capteur en priorité');
     expect(PEAK_HOURS_LEAD).toContain('estimation en secours');
@@ -120,43 +122,79 @@ describe('heatmapSlots — two columns per open hour, in order', () => {
   });
 });
 
+// PEAK-MAX1 (2026-09-04) — the collapsed hour is the HIGHER of its two half-hour peaks, carrying
+// that half's provenance. These tests previously pinned the MEAN and the retired « mixte » kind;
+// both were right for a mean and are false under a peak, so they are rewritten, not kept alongside.
 describe('collapseHourCell — what ONE column shows at ≤375 px', () => {
-  it('two measured halves collapse to their mean, still measured', () => {
+  it('two measured halves collapse to the HIGHER peak, still measured', () => {
+    // The mean rule said 150 here — a number neither half ever reached, and LOWER than the peak in
+    // the one section named for peaks.
     expect(
       collapseHourCell([
         { value: 100, kind: 'measured' },
         { value: 200, kind: 'measured' },
       ]),
-    ).toEqual({ value: 150, kind: 'measured' });
+    ).toEqual({ value: 200, kind: 'measured' });
   });
 
-  it('MIXTE: a measured half beside an ESTIMATED one — the disagreement a phone cannot show', () => {
+  it('the provenance is the HOLDER of the max, whichever half that is', () => {
+    expect(
+      collapseHourCell([
+        { value: 100, kind: 'measured' },
+        { value: 200, kind: 'backup' },
+      ]),
+    ).toEqual({ value: 200, kind: 'backup' });
+
+    // Formerly « mixte »: a measured 200 beside an estimated 40 rendered { 120, mixte } and was
+    // DRAWN as an estimation. The sensor reading now stands on its own, disclosed as measured.
     expect(
       collapseHourCell([
         { value: 200, kind: 'measured' },
         { value: 40, kind: 'backup' },
       ]),
-    ).toEqual({ value: 120, kind: 'mixte' });
+    ).toEqual({ value: 200, kind: 'measured' });
   });
 
-  it('a measured half beside an EMPTY one stays MEASURED, and is not halved towards a zero', () => {
-    // Nothing contradicts the measure, so the hour is measured; and averaging against an absent
-    // reading would invent a 0 the sensor never observed.
+  it('a tie between a measured and an estimated half goes to MEASURED, in either order', () => {
+    expect(
+      collapseHourCell([
+        { value: 150, kind: 'measured' },
+        { value: 150, kind: 'backup' },
+      ]),
+    ).toEqual({ value: 150, kind: 'measured' });
+
+    expect(
+      collapseHourCell([
+        { value: 150, kind: 'backup' },
+        { value: 150, kind: 'measured' },
+      ]),
+    ).toEqual({ value: 150, kind: 'measured' });
+  });
+
+  it('a half beside an EMPTY one shows itself, unchanged', () => {
+    // An hour measured for 30 minutes shows what it measured; an absent half is not a 0.
     expect(
       collapseHourCell([
         { value: 200, kind: 'measured' },
         { value: null, kind: 'none' },
       ]),
     ).toEqual({ value: 200, kind: 'measured' });
+
+    expect(
+      collapseHourCell([
+        { value: null, kind: 'none' },
+        { value: 40, kind: 'backup' },
+      ]),
+    ).toEqual({ value: 40, kind: 'backup' });
   });
 
-  it('two estimated halves stay an estimation — mixte never widens to « not clearly measured »', () => {
+  it('two estimated halves stay an estimation, at the higher of the two', () => {
     expect(
       collapseHourCell([
         { value: 10, kind: 'backup' },
         { value: 20, kind: 'backup' },
       ]),
-    ).toEqual({ value: 15, kind: 'backup' });
+    ).toEqual({ value: 20, kind: 'backup' });
   });
 
   it('an hour with nothing in either half is no data at all', () => {
@@ -168,13 +206,13 @@ describe('collapseHourCell — what ONE column shows at ≤375 px', () => {
     ).toEqual({ value: null, kind: 'none' });
   });
 
-  it('the collapsed value rounds, matching the api rule for an hour-keyed consumer', () => {
+  it('a max of integers needs no rounding — the value is one half, verbatim', () => {
     expect(
       collapseHourCell([
         { value: 100, kind: 'measured' },
         { value: 101, kind: 'measured' },
       ]),
-    ).toEqual({ value: 101, kind: 'measured' }); // 100.5 → 101
+    ).toEqual({ value: 101, kind: 'measured' });
   });
 });
 

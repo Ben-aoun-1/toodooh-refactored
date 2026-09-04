@@ -65,7 +65,7 @@ export const HEATMAP_HOURS = Array.from({ length: 14 }, (_, i) => i + 8);
 /**
  * Slice C — the same window in SLOTS: 8h00 … 21h30, two columns per hour, 28 in all. The PDF
  * follows the DESKTOP rendering (a document has no width constraint to collapse for), so it draws
- * both halves and never the « mixte » kind — that exists only where 375 px forces the collapse.
+ * both halves and never collapses an hour; each column is one half-hour slot's peak (PEAK-MAX1).
  */
 export const HEATMAP_SLOTS = HEATMAP_HOURS.flatMap((hour) => [hour * 2, hour * 2 + 1]);
 

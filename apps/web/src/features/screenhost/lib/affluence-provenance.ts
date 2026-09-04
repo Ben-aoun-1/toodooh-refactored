@@ -18,20 +18,22 @@ const SLOTS_PER_DAY = 48;
 export type AffluenceSource = 'measured' | 'backup';
 
 /**
- * What a surface renders for a cell: solid / estimation / hachure — plus, since slice C, `mixte`.
+ * What a surface renders for a cell: solid / estimation / hachure.
  *
- * `mixte` is a COLLAPSED-HOUR kind and nothing else. It exists only where a half-hour grid is
- * squeezed back into one column for width (S02 at ≤375 px), because there the mixing is FORCED by
- * the viewport rather than chosen. It must never widen into « anything not clearly measured »:
+ * PEAK-MAX1 (2026-09-04) RETIRED the `mixte` kind. It was slice C's collapsed-hour kind and
+ * nothing else — « the number you see blends a measure and an estimation » — and under the peak
+ * rule no number is a blend any more: a cell, collapsed or not, shows ONE reading and therefore
+ * carries that reading's provenance. The state was not merely unreachable, it had become false by
+ * construction, and a legend row no cell can ever wear is a lie of its own.
+ *
  * `cellProvenance`'s conservative rule stands untouched — a cell with an unknown source and a
  * value is still `backup`, an estimation, exactly as AFF1 ruled.
  */
-export type ProvenanceKind = 'measured' | 'backup' | 'none' | 'mixte';
+export type ProvenanceKind = 'measured' | 'backup' | 'none';
 
 export const PROVENANCE_LABELS = {
   measured: 'Mesuré (capteur)',
   backup: 'Estimation',
-  mixte: 'Mixte (mesure + estimation)',
 } as const;
 
 /** « Votre audience » — the one line under the summaries when not ONE slot is measured. */
@@ -100,19 +102,4 @@ export function affluenceEmpty(input: {
   counts: { measured: number; backup: number };
 }): boolean {
   return !input.has_data && input.counts.measured === 0 && input.counts.backup === 0;
-}
-
-/**
- * Slice C — the kind of ONE HOUR whose two half-hour cells are collapsed for width.
- *
- * Halves that carry no data are ignored rather than counted as disagreement: an hour with one
- * measured half and one empty half is measured, not mixed — nothing contradicts the measure. Only
- * a genuine measured-beside-estimated pair is `mixte`, which is the disagreement a reader at
- * 375 px cannot otherwise see.
- */
-export function collapsedHourKind(halves: readonly ProvenanceKind[]): ProvenanceKind {
-  const carrying = halves.filter((kind) => kind !== 'none');
-  if (carrying.length === 0) return 'none';
-  const first = carrying[0] as ProvenanceKind;
-  return carrying.every((kind) => kind === first) ? first : 'mixte';
 }
