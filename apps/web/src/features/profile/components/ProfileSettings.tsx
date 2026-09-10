@@ -19,7 +19,17 @@ import { useLocation } from 'react-router-dom';
 
 import { sectorDisplayName } from '@/features/advertiser/constants/sector-display-name';
 import { isValidPassword, passwordChecks } from '@/features/auth/utils/password';
+import {
+  adresseFormFrom,
+  emptyPasswordForm,
+  entrepriseFormFrom,
+  notificationsFormFrom,
+  responsableFormFrom,
+  type ProfileFormInitialValues,
+} from '@/features/profile/lib/profile-forms';
 import { getErrorMessage } from '@/lib/errors';
+
+export type { ProfileFormInitialValues };
 
 type TabId = 'responsable' | 'entreprise' | 'notifications' | 'confidentialite';
 type EntrepriseSubId =
@@ -36,27 +46,6 @@ type ConfidentialiteSubId = 'password' | 'delete';
  * wrapper (advertiser `useUserProfile`, owner `useBusinessProfile`) so this
  * component is decoupled from the two profile shapes.
  */
-export interface ProfileFormInitialValues {
-  last_name: string;
-  first_name: string;
-  fonction: string;
-  contact_phone: string;
-  business_name: string;
-  tax_number: string;
-  business_sector_id: string;
-  company_size: string;
-  number_of_screens: string;
-  number_of_rooms: string;
-  street_address: string;
-  city: string;
-  postal_code: string;
-  governorate_id: string;
-  zone: string;
-  notify_news_updates: boolean;
-  notify_reminders_events: boolean;
-  notify_promotions_offers: boolean;
-}
-
 interface ContactPatch {
   contact_name: string;
   contact_phone: string;
@@ -320,33 +309,29 @@ export default function ProfileSettings({
   useEffect(() => {
     const v = initialValues;
     if (!v) return;
-    setResponsableForm({
-      last_name: v.last_name,
-      first_name: v.first_name,
-      fonction: v.fonction,
-      contact_phone: v.contact_phone,
-    });
-    setEntrepriseForm({
-      business_name: v.business_name,
-      tax_number: v.tax_number,
-      business_sector_id: v.business_sector_id,
-      company_size: v.company_size,
-      number_of_screens: v.number_of_screens,
-      number_of_rooms: v.number_of_rooms,
-    });
-    setAdresseForm({
-      street_address: v.street_address,
-      city: v.city,
-      postal_code: v.postal_code,
-      governorate_id: v.governorate_id,
-      zone: v.zone,
-    });
-    setNotificationsForm({
-      notify_news_updates: v.notify_news_updates,
-      notify_reminders_events: v.notify_reminders_events,
-      notify_promotions_offers: v.notify_promotions_offers,
-    });
+    setResponsableForm(responsableFormFrom(v));
+    setEntrepriseForm(entrepriseFormFrom(v));
+    setAdresseForm(adresseFormFrom(v));
+    setNotificationsForm(notificationsFormFrom(v));
   }, [initialValues]);
+
+  // CANCEL-NOOP1 — every « Annuler » returns its OWN form to the saved values, through the same
+  // mapping the hydration effect just used, so a cancel lands exactly where first paint landed.
+  // Four of the five buttons previously had no onClick at all and were silently inert.
+  const cancelResponsable = (): void => {
+    if (initialValues) setResponsableForm(responsableFormFrom(initialValues));
+  };
+  const cancelEntreprise = (): void => {
+    if (initialValues) setEntrepriseForm(entrepriseFormFrom(initialValues));
+  };
+  const cancelAdresse = (): void => {
+    if (initialValues) setAdresseForm(adresseFormFrom(initialValues));
+  };
+  const cancelNotifications = (): void => {
+    if (initialValues) setNotificationsForm(notificationsFormFrom(initialValues));
+  };
+  // Nothing saved to return to — clearing the three fields also clears the derived validity ticks.
+  const cancelPassword = (): void => setPasswordData(emptyPasswordForm());
 
   const handleSaveResponsable = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -608,6 +593,7 @@ export default function ProfileSettings({
               <div className="flex gap-3 pt-6 justify-end">
                 <button
                   type="button"
+                  onClick={cancelResponsable}
                   className="px-5 py-2.5 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50"
                 >
                   Annuler
@@ -814,6 +800,7 @@ export default function ProfileSettings({
                 <div className="flex gap-3 pt-2">
                   <button
                     type="button"
+                    onClick={cancelEntreprise}
                     className="px-5 py-2.5 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50"
                   >
                     Annuler
@@ -960,6 +947,7 @@ export default function ProfileSettings({
                 <div className="flex gap-3 pt-4 justify-end">
                   <button
                     type="button"
+                    onClick={cancelAdresse}
                     className="px-5 py-2.5 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50"
                   >
                     Annuler
@@ -1040,14 +1028,7 @@ export default function ProfileSettings({
               <div className="flex gap-3 pt-8 justify-end">
                 <button
                   type="button"
-                  onClick={() =>
-                    initialValues &&
-                    setNotificationsForm({
-                      notify_news_updates: initialValues.notify_news_updates,
-                      notify_reminders_events: initialValues.notify_reminders_events,
-                      notify_promotions_offers: initialValues.notify_promotions_offers,
-                    })
-                  }
+                  onClick={cancelNotifications}
                   className="px-5 py-2.5 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50"
                 >
                   Annuler
@@ -1185,6 +1166,7 @@ export default function ProfileSettings({
                 <div className="flex gap-3 pt-4 justify-end">
                   <button
                     type="button"
+                    onClick={cancelPassword}
                     className="px-5 py-2.5 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50"
                   >
                     Annuler
