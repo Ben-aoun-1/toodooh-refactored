@@ -27,6 +27,7 @@ import {
   responsableFormFrom,
   type ProfileFormInitialValues,
 } from '@/features/profile/lib/profile-forms';
+import { companySizeLabel, companySizeOptions, type CompanySizeScale } from '@/lib/company-size';
 import { getErrorMessage } from '@/lib/errors';
 
 export type { ProfileFormInitialValues };
@@ -103,7 +104,12 @@ interface ProfileSettingsProps {
   documentsSlot: ReactNode;
   /** Which optional Entreprise fields render for this role. */
   fields: {
-    companySize: boolean;
+    /**
+     * The `company_size` scale this role reads, or false to hide the field. SIZE-MISM1 — the
+     * scale is INJECTED like `sector` above: an advertiser stores an employee band, a fleet
+     * owner stores a parc count, and Settings must offer whichever set signup wrote.
+     */
+    companySize: CompanySizeScale | false;
     numberOfScreens: boolean;
     numberOfRooms: boolean;
     zone: boolean;
@@ -742,7 +748,8 @@ export default function ProfileSettings({
                         className="block text-sm font-medium text-gray-700 mb-1"
                         htmlFor="company-size"
                       >
-                        Taille de l&apos;entreprise <span className="text-red-500">*</span>
+                        {companySizeLabel(fields.companySize)}{' '}
+                        <span className="text-red-500">*</span>
                       </label>
                       <select
                         value={entrepriseForm.company_size}
@@ -753,11 +760,11 @@ export default function ProfileSettings({
                         id="company-size"
                       >
                         <option value="">Sélectionner</option>
-                        <option value="1-5">1-5</option>
-                        <option value="6-10">6-10</option>
-                        <option value="11-50">11-50</option>
-                        <option value="51-200">51-200</option>
-                        <option value="200+">200+</option>
+                        {companySizeOptions(fields.companySize).map((v) => (
+                          <option key={v} value={v}>
+                            {v}
+                          </option>
+                        ))}
                       </select>
                     </div>
                   )}

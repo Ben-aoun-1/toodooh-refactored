@@ -103,7 +103,7 @@ export default function UserProfile() {
           onChanged={() => void invalidateProfile()}
         />
       }
-      fields={{ companySize: true, numberOfScreens: false, numberOfRooms: false, zone: false }}
+      fields={{ companySize: 'company', numberOfScreens: false, numberOfRooms: false, zone: false }}
       copy={{
         remindersText: 'Recevez des rappels pour vos événements, échéances et rendez-vous à venir.',
         addressLabel: 'Adresse',
