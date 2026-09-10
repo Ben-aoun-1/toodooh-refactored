@@ -119,13 +119,17 @@ export const stepFieldErrors = (step: number, ctx: StepErrorCtx): StepErrors => 
       errors['businessSector'] = REQUIRED_FIELD_ERROR;
     }
     if (!ctx.companySize) errors['companySize'] = REQUIRED_FIELD_ERROR;
-    requireText(errors, 'streetAddress', ctx.streetAddress);
-    requireText(errors, 'city', ctx.city);
-    requireText(errors, 'zone', ctx.zone);
-    if (ctx.profileType === 'fleet_owner' && !isValidPostalCode(ctx.postalCode.trim())) {
-      errors['postalCode'] = POSTAL_CODE_ERROR;
+    // SIGN-DUP1 — step 2 is company identity only; the address moved to the « Adresse » step,
+    // which used to ask for it a SECOND time off the same formData keys. A fleet_owner is the
+    // exception: its step 3 is the parc list, never renderStep3, so step 2 is the only address
+    // it is ever asked for and its gate stays here, unchanged.
+    if (ctx.profileType === 'fleet_owner') {
+      requireText(errors, 'streetAddress', ctx.streetAddress);
+      requireText(errors, 'city', ctx.city);
+      requireText(errors, 'zone', ctx.zone);
+      if (!isValidPostalCode(ctx.postalCode.trim())) errors['postalCode'] = POSTAL_CODE_ERROR;
+      if (!ctx.governorateId) errors['governorate'] = REQUIRED_FIELD_ERROR;
     }
-    if (!ctx.governorateId) errors['governorate'] = REQUIRED_FIELD_ERROR;
     return errors;
   }
 
@@ -142,10 +146,12 @@ export const stepFieldErrors = (step: number, ctx: StepErrorCtx): StepErrors => 
       if (!ctx.governorateId) errors['governorate'] = REQUIRED_FIELD_ERROR;
       return errors;
     }
-    // advertiser / agency — the recap-side address gate (no zone here, mirroring the old gate).
+    // advertiser / agency — the ONLY address gate for these profiles now (SIGN-DUP1). Zone joins
+    // it here: it used to be gated on step 2, so gating it nowhere would let it through empty.
     requireText(errors, 'streetAddress', ctx.streetAddress);
     requireText(errors, 'city', ctx.city);
     if (!isValidPostalCode(ctx.postalCode.trim())) errors['postalCode'] = POSTAL_CODE_ERROR;
+    requireText(errors, 'zone', ctx.zone);
     if (!ctx.governorateId) errors['governorate'] = REQUIRED_FIELD_ERROR;
     return errors;
   }
