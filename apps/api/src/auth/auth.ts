@@ -14,7 +14,13 @@ import {
   verificationEmailSubject,
   verificationEmailTemplate,
 } from '../email/template.js';
+import {
+  agentWelcomeEmailPlainText,
+  agentWelcomeEmailSubject,
+  agentWelcomeEmailTemplate,
+} from '../email/welcome-agent-template.js';
 import { env } from '../env.js';
+import { takeAgentInvite } from '../lib/agent-invite.js';
 import { logger } from '../logger.js';
 
 // Exported for test spying. Per-send transport (no pool — Decision 2).
@@ -59,17 +65,35 @@ const sendResetPassword = async (args: {
   url: string;
 }): Promise<void> => {
   const { user, url } = args;
+  // SET-PW1 — a freshly INVITED agent gets the welcome template instead, carrying this same
+  // tokenized url on its « Définir mon mot de passe » button. better-auth only ever exposes a
+  // minted token here, so this is the one place that link can be built. The invite is
+  // single-consumption (lib/agent-invite), so an ordinary later reset renders the generic mail.
+  const invite = takeAgentInvite(user.email);
+  const fields = invite && {
+    name: invite.name,
+    agentCode: invite.agentCode,
+    loginEmail: user.email,
+    tempPassword: invite.tempPassword,
+    resetUrl: url,
+  };
   try {
     const result = await emailSender.send({
       to: user.email,
-      subject: resetEmailSubject,
-      html: resetEmailTemplate({ name: user.name ?? '', resetUrl: url }),
-      text: resetEmailPlainText({ name: user.name ?? '', resetUrl: url }),
+      subject: fields ? agentWelcomeEmailSubject : resetEmailSubject,
+      html: fields
+        ? agentWelcomeEmailTemplate(fields)
+        : resetEmailTemplate({ name: user.name ?? '', resetUrl: url }),
+      text: fields
+        ? agentWelcomeEmailPlainText(fields)
+        : resetEmailPlainText({ name: user.name ?? '', resetUrl: url }),
     });
+    // The log names WHICH template went out — a welcome and an ordinary reset now share this path.
+    const kind = fields ? 'agent welcome email' : 'reset email';
     if ('error' in result) {
-      logger.error({ to: user.email, error: result.error }, 'reset email failed');
+      logger.error({ to: user.email, error: result.error }, `${kind} failed`);
     } else {
-      logger.info({ to: user.email, messageId: result.messageId }, 'reset email sent');
+      logger.info({ to: user.email, messageId: result.messageId }, `${kind} sent`);
     }
   } catch (err) {
     logger.error({ to: user.email, err }, 'reset email threw (swallowed)');
