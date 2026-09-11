@@ -1,18 +1,25 @@
 import { defineConfig } from 'vitest/config';
 
+import { baseDatabaseUrl, workerCount } from './tests/helpers/parallel-db.js';
+
 export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts'],
-    // Run test files sequentially: signup.test.ts and profile.test.ts both write the
-    // shared `users` table (signup truncates in beforeEach), so parallel files would
-    // race on the same Postgres. The api suite is small — serializing is cheap.
-    fileParallelism: false,
+    // Files run IN PARALLEL, one Postgres database per worker (tests/helpers/parallel-db.ts).
+    // The suite used to be serial because signup/profile/admin… all TRUNCATE the same tables;
+    // each worker now owns a private clone of the migrated template, so that reason is gone.
+    // Measured 2026-09-11: 1740 tests took 579 s serial in CI. TEST_WORKERS=1 restores the
+    // old behaviour for bisecting an order-dependent failure.
+    maxWorkers: workerCount(),
+    globalSetup: ['./tests/helpers/global-setup.ts'],
+    setupFiles: ['./tests/helpers/setup-worker-db.ts'],
     // The eager env singleton (src/env.ts) parses at import. Integration tests
     // (signup.test.ts) need a REAL DATABASE_URL, so read process.env first and
-    // fall back to the fake for DB-free suites (CF-21 shim, env-aware).
+    // fall back to the fake for DB-free suites (CF-21 shim, env-aware). This is the
+    // TEMPLATE url; setup-worker-db.ts rewrites it per worker before src/env.ts loads.
     env: {
-      DATABASE_URL: process.env['DATABASE_URL'] ?? 'postgresql://test:test@localhost:5432/test_db',
+      DATABASE_URL: baseDatabaseUrl(),
       AUTH_SECRET: process.env['AUTH_SECRET'] ?? 'test-auth-secret-at-least-32-characters-long',
       // WIFI_ENC_KEY = base64 of 32 zero bytes (a 32-byte key); a fixed test key,
       // never a real secret. wifi-crypto round-trips against this in unit tests.
