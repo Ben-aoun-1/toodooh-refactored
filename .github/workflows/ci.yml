@@ -1,4 +1,6 @@
 # CI — automated verification of the four gates on every push to main and every PR.
+# This is the GATE OF RECORD: deploy.yml no longer re-runs any of it, it checks that this workflow
+# passed on the commit being deployed (DEPLOY-GATE1, 2026-09-11).
 #
 # Baseline-gated gates (typecheck, lint): the cleanup phase handed off to CI with
 # accepted, deferred debt blocked on the Phase-1 Supabase typed client (issue #15).
@@ -121,8 +123,8 @@ jobs:
             echo "::notice::lint improved — $n < $LINT_BASELINE; ratchet LINT_BASELINE down in .github/workflows/ci.yml"
           fi
 
-      - name: Migrate (integration DB)
-        run: pnpm --filter @toodooh/api migrate
+      # No separate migrate step: apps/api's vitest globalSetup builds a fresh migrated template
+      # database and clones one copy per worker (apps/api/tests/helpers/parallel-db.ts, 2026-09-11).
 
       # MinIO can't be a `services:` block — it needs the `server /data` command and
       # GHA service syntax has no command/args key. A docker-run step keeps the same
