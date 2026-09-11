@@ -128,13 +128,15 @@ jobs:
 
       # MinIO can't be a `services:` block — it needs the `server /data` command and
       # GHA service syntax has no command/args key. A docker-run step keeps the same
-      # pinned image as docker-compose, reachable at localhost:9000 like a service.
+      # pinned RELEASE as docker-compose, reachable at localhost:9000 like a service.
+      # Pulled from quay.io since 2026-09-12: Docker Hub started answering « pull access
+      # denied » for minio/minio (the 04/09 run still pulled it) — same tag, MinIO's own registry.
       - name: Start MinIO (S3-compatible storage for integration tests)
         run: |
           docker run -d --name minio -p 9000:9000 \
             -e MINIO_ROOT_USER=ci-minio-root \
             -e MINIO_ROOT_PASSWORD=ci-minio-secret \
-            minio/minio:RELEASE.2025-09-07T16-13-09Z server /data
+            quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z server /data
           for i in $(seq 1 30); do
             if curl -fs http://localhost:9000/minio/health/live; then echo "minio ready"; break; fi
             sleep 1
