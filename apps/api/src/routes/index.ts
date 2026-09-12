@@ -14,6 +14,7 @@ import { adminScreenhostsRoutes } from './admin-screenhosts.js';
 import { adminTestingRoutes } from './admin-testing.js';
 import { adminWalletRoutes } from './admin-wallet.js';
 import { adminRoutes } from './admin.js';
+import { advertiserPerformancesRoutes } from './advertiser-performances.js';
 import { agentCodeAvailabilityRoute } from './agent-code-availability.js';
 import { agentRoutes } from './agent.js';
 import { campaignBoostRoutes } from './campaign-boost.js';
@@ -96,6 +97,9 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   // FCT2 — the screencaster's money documents: monthly consolidated invoices (list + stored PDF)
   // + the wallet-adjustment history (the third ledger row type).
   await app.register(walletDocumentsRoutes);
+  // SC-P — the screencaster's « Mes performances » reads (closed campaigns, live counters,
+  // footprint, analysis sections 01–04, per-campaign report PDF).
+  await app.register(advertiserPerformancesRoutes);
   // FCT2 — the owner's « Relevés de reversement »: monthly per-venue statements (list + stored PDF).
   await app.register(ownerStatementsRoutes);
   await app.register(profileRoutes);

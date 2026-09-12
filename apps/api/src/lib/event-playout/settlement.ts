@@ -15,6 +15,7 @@ import {
   reversementLines,
   screenhosts,
 } from '../../db/schema.js';
+import { campaignReportReadyNotification } from '../campaign-report-notification.js';
 import { getDispatchConfig } from '../dispatch/config.js';
 import { fenetreDiffusion } from '../fenetre-diffusion.js';
 import { computeReversement, millimesToTnd, tndToMillimes } from '../reversement/split.js';
@@ -354,13 +355,21 @@ export const settleEventPositioning = async (
     );
   }
 
-  await db.insert(notifications).values({
-    userId: row.campaign.advertiserId,
-    type: 'event_settled',
-    title: EVENT_SETTLED_TITLE,
-    body: eventSettledBody(row.campaign.name, refundTnd),
-    campaignId: positioningId,
-  });
+  await db.insert(notifications).values([
+    {
+      userId: row.campaign.advertiserId,
+      type: 'event_settled',
+      title: EVENT_SETTLED_TITLE,
+      body: eventSettledBody(row.campaign.name, refundTnd),
+      campaignId: positioningId,
+    },
+    // SC-P epic 2 — a positioning's clôture is a clôture: its report is ready too.
+    campaignReportReadyNotification({
+      id: positioningId,
+      name: row.campaign.name,
+      advertiserId: row.campaign.advertiserId,
+    }),
+  ]);
 
   // The positioning's lifecycle ends here (the classic completed flip is date-driven; an event's
   // window closes intra-day, so the settlement owns the flip).
