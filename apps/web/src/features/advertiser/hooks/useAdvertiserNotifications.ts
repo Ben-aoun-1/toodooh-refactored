@@ -60,6 +60,17 @@ export const actionFor = (n: ApiNotification): AdvertiserNotificationItem['actio
   if (n.type === 'wallet_adjustment') {
     return { label: 'Consulter', path: '/my-recharges' };
   }
+  // SC-P epic 2 (US-2.1) — the clôture report: IDENTICAL behaviour to Consulter (US-4.2) —
+  // « Mes performances » in Campaign mode on that campaign, scrolled to the detail block. A
+  // report row without its campaign (deleted since) still opens the page, in its default scope.
+  if (n.type === 'campaign_report_ready') {
+    return {
+      label: 'Consulter',
+      path: n.campaign_id
+        ? `/my-performance?campaign=${encodeURIComponent(n.campaign_id)}`
+        : '/my-performance',
+    };
+  }
   return null;
 };
 
