@@ -1,9 +1,17 @@
-import { and, asc, eq, gte, lte } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, lte } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
 import { db } from '../db/client.js';
-import { screenhostUnavailability, screenhosts } from '../db/schema.js';
+import {
+  campaignDispatchAllocation,
+  campaignDispatchPlan,
+  campaignRedispatchRounds,
+  campaigns,
+  screenhostUnavailability,
+  screenhosts,
+} from '../db/schema.js';
+import { campaignsOnVenue, hourStatuses } from '../lib/admin-testing-status.js';
 import { isCalendarDate } from '../lib/calendar-date.js';
 import { tunisDateOf } from '../lib/campaign-dates.js';
 import { getDispatchConfig } from '../lib/dispatch/config.js';
@@ -11,6 +19,7 @@ import { broadcastableHours } from '../lib/dispatch/eligibility.js';
 import { computeAmax } from '../lib/event-pricing/pricing.js';
 import { estimationFloor, loadPeriodAudienceInput } from '../lib/period-audience-source.js';
 import { periodAudience, weekGridFromCells } from '../lib/period-audience.js';
+import { loadDeliveredSlots } from '../lib/reconcile/delivered-slots.js';
 import {
   ACCEPTATION_WINDOW_DAYS,
   ACTIVITE_WINDOW_DAYS,
@@ -32,8 +41,9 @@ import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
 // min and median (over days AND over cells), the SPS evidence and weights side by side, the
 // pricing inputs, and the raw cells. Nothing is written.
 //
-// Deliberately NOT here (slice B): the per-hour 4-state status and the per-campaign
-// delivered/disrupted/redispatched/money-lost view — the loss rule needs Kais first.
+// Slice B (2026-09-12, money-lost rule ruled the same day): the per-hour FOUR-STATE status and the
+// per-campaign delivered / disrupted / redispatched / money-lost view — pure derivations in
+// lib/admin-testing-status.ts over the engine's own rows (allocations, proofs, redispatch rounds).
 
 const ISO_DAY = z
   .string()
@@ -140,6 +150,66 @@ export const adminTestingRoutes: FastifyPluginAsync = async (app) => {
 
     const merged = periodAudience(input);
     const week = weekGridFromCells(merged.cells);
+
+    // Slice B — the venue's allocations whose créneaux can touch the période, the proofs that
+    // delivered them, and the redispatch rounds that moved shares from or to this venue.
+    const allocationRows = await db
+      .select({
+        campaignId: campaigns.id,
+        campaignName: campaigns.name,
+        campaignStatus: campaigns.status,
+        statutAcceptation: campaignDispatchAllocation.statutAcceptation,
+        rI: campaignDispatchAllocation.rI,
+        creneaux: campaignDispatchAllocation.creneaux,
+        sSpotSeconds: campaignDispatchPlan.sSpotSeconds,
+        fMaxSeconds: campaignDispatchPlan.fMaxSeconds,
+        cpm: campaignDispatchPlan.cpm,
+        t: campaignDispatchPlan.tTierCoef,
+      })
+      .from(campaignDispatchAllocation)
+      .innerJoin(
+        campaignDispatchPlan,
+        eq(campaignDispatchAllocation.planId, campaignDispatchPlan.id),
+      )
+      .innerJoin(campaigns, eq(campaignDispatchPlan.campaignId, campaigns.id))
+      .where(eq(campaignDispatchAllocation.screenhostId, id));
+    const allocations = allocationRows.map((r) => ({
+      ...r,
+      cpm: Number(r.cpm),
+      t: Number(r.t),
+    }));
+    const campaignIds = [...new Set(allocations.map((a) => a.campaignId))];
+    const deliveredKeys = new Map<string, ReadonlySet<string>>();
+    for (const campaignId of campaignIds) {
+      const bySh = await loadDeliveredSlots(campaignId);
+      deliveredKeys.set(campaignId, bySh.get(id) ?? new Set<string>());
+    }
+    const roundRows = campaignIds.length
+      ? await db
+          .select({
+            campaignId: campaignRedispatchRounds.campaignId,
+            missedFrom: campaignRedispatchRounds.missedFrom,
+            placedTo: campaignRedispatchRounds.placedTo,
+          })
+          .from(campaignRedispatchRounds)
+          .where(inArray(campaignRedispatchRounds.campaignId, campaignIds))
+      : [];
+    const currentHour = Number(
+      new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Africa/Tunis',
+        hour: '2-digit',
+        hour12: false,
+      }).format(now),
+    );
+    const unavailableSet = new Set(unavailable.map((u) => u.day));
+    const periodDays: string[] = [];
+    for (let d = from; d <= to; ) {
+      periodDays.push(d);
+      const next = new Date(`${d}T12:00:00Z`);
+      next.setUTCDate(next.getUTCDate() + 1);
+      d = next.toISOString().slice(0, 10);
+      if (periodDays.length > 400) break;
+    }
     const measuredCells = merged.cells.filter((c) => c.source === 'measured');
     const backupCells = merged.cells.filter((c) => c.source === 'backup');
     const hours = broadcastableHours(venue.openingHour, venue.closingHour);
@@ -202,6 +272,23 @@ export const adminTestingRoutes: FastifyPluginAsync = async (app) => {
           respect_evenements: RESPECT_WINDOW_DAYS,
         },
       },
+      // Slice B — status per open hour and the campaigns on this venue over the période.
+      status_hours: hourStatuses(
+        periodDays,
+        broadcastableHours(venue.openingHour, venue.closingHour),
+        unavailableSet,
+        allocations,
+      ),
+      campaigns: campaignsOnVenue(
+        id,
+        allocations,
+        from,
+        to,
+        todayIso,
+        currentHour,
+        deliveredKeys,
+        roundRows,
+      ),
       pricing: {
         a_max: aMax,
         cpm_standard_tnd: config.standardCpmTnd,

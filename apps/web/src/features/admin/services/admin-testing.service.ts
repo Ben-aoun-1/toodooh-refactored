@@ -49,6 +49,34 @@ export interface TestingReport {
     weights: Record<string, number>;
     windows_days: Record<string, number>;
   };
+  /** Slice B — the four-state status of every open hour of the période. */
+  status_hours: {
+    date: string;
+    hour: number;
+    state: 'libre' | 'partiel' | 'plein' | 'indisponible';
+    engaged_seconds: number;
+    minutes_free: number | null;
+    campaigns: number;
+  }[];
+  /** Slice B — the campaigns on this venue over the période (ran fully / disrupted / redispatched / money lost). */
+  campaigns: {
+    campaign_id: string;
+    campaign_name: string;
+    campaign_status: string;
+    statut_acceptation: string;
+    slots_in_period: number;
+    slots_elapsed: number;
+    slots_delivered: number;
+    slots_missed: number;
+    impressions_planned_physical: number;
+    impressions_missed_physical: number;
+    impressions_missed_fact: number;
+    ran_fully: boolean;
+    disrupted: boolean;
+    received_redispatch: boolean;
+    money_lost_tnd: number;
+    redirected_to: { screenhost_id: string; added_fact: number }[];
+  }[];
   pricing: {
     a_max: number;
     cpm_standard_tnd: number;
