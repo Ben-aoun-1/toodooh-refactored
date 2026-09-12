@@ -74,6 +74,8 @@ interface Report {
     cpm_standard_tnd: number;
   };
   config: Record<string, unknown>;
+  status_hours: { date: string; hour: number; state: string; minutes_free: number | null }[];
+  campaigns: unknown[];
 }
 
 describe('ADM-OBS1 — GET /api/admin/testing/screenhosts[/:id] (real Postgres)', () => {
@@ -194,6 +196,18 @@ describe('ADM-OBS1 — GET /api/admin/testing/screenhosts[/:id] (real Postgres)'
     expect(r.pricing.unavailable_days).toEqual([d2]);
     expect(r.pricing.cpm_standard_tnd).toBeGreaterThan(0);
     expect(r.config).toHaveProperty('spsWeightAcceptation');
+
+    // Slice B: one status row per (day, open hour); the unavailable day is « indisponible », a day
+    // without any accepted share is « libre » with the full F free; no campaign → no rows.
+    expect(r.status_hours).toHaveLength(2 * 12);
+    expect(
+      r.status_hours.filter((h) => h.date === d2).every((h) => h.state === 'indisponible'),
+    ).toBe(true);
+    expect(r.status_hours.find((h) => h.date === d1 && h.hour === 8)).toMatchObject({
+      state: 'libre',
+      minutes_free: 5,
+    });
+    expect(r.campaigns).toEqual([]);
   });
 
   it('rejects a malformed or inverted période', async () => {

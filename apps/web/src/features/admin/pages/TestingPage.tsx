@@ -19,6 +19,23 @@ const isoDaysAgo = (days: number): string => {
   return d.toISOString().slice(0, 10);
 };
 
+const STATE_LABEL: Record<string, string> = {
+  libre: 'libre',
+  partiel: 'partiel',
+  plein: 'plein',
+  indisponible: 'indisponible (choix du host)',
+};
+const STATE_CLASS: Record<string, string> = {
+  libre: 'text-gray-500',
+  partiel: 'text-amber-700',
+  plein: 'text-red-700',
+  indisponible: 'text-blue-700',
+};
+const statusCounts = (rows: TestingReport['status_hours']): string => {
+  const n = (state: string) => rows.filter((h) => h.state === state).length;
+  return `${rows.length} heures : ${n('libre')} libres, ${n('partiel')} partielles, ${n('plein')} pleines, ${n('indisponible')} indisponibles`;
+};
+
 const fmt = (v: number | null | undefined): string =>
   v === null || v === undefined ? '—' : Number.isInteger(v) ? String(v) : v.toFixed(2);
 
@@ -146,6 +163,106 @@ function Report({ r }: { r: TestingReport }) {
           ]}
         />
       </div>
+
+      {/* Slice B — the four-state status per open hour, and the campaigns on this venue. */}
+      <section className="rounded-xl border bg-white p-4">
+        <h2 className="mb-2 text-sm font-semibold text-gray-700">
+          Statut par heure d’ouverture — libre / partiel (minutes libres) / plein / indisponible
+        </h2>
+        <p className="mb-2 text-xs text-gray-500">
+          {statusCounts(r.status_hours)} — engagé = Σ (reps × durée du spot) des parts ACCEPTÉES ;
+          libre = F − engagé.
+        </p>
+        <div className="max-h-72 overflow-auto">
+          <table className="text-sm">
+            <thead>
+              <tr className="text-left text-gray-500">
+                <th className="pr-4">date</th>
+                <th className="pr-4">heure</th>
+                <th className="pr-4">état</th>
+                <th className="pr-4">engagé (s)</th>
+                <th className="pr-4">libre (min)</th>
+                <th className="pr-4">campagnes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {r.status_hours.map((h) => (
+                <tr key={`${h.date}-${h.hour}`} className="border-t">
+                  <td className="py-0.5 pr-4 font-mono">{h.date}</td>
+                  <td className="py-0.5 pr-4 tabular-nums">{String(h.hour).padStart(2, '0')}h</td>
+                  <td className={`py-0.5 pr-4 ${STATE_CLASS[h.state]}`}>{STATE_LABEL[h.state]}</td>
+                  <td className="py-0.5 pr-4 tabular-nums">{h.engaged_seconds}</td>
+                  <td className="py-0.5 pr-4 tabular-nums">{fmt(h.minutes_free)}</td>
+                  <td className="py-0.5 pr-4 tabular-nums">{h.campaigns}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="rounded-xl border bg-white p-4">
+        <h2 className="mb-2 text-sm font-semibold text-gray-700">
+          Campagnes sur cet établissement — diffusée en entier / perturbée / reçue en redispatch /
+          argent perdu
+        </h2>
+        <p className="mb-2 text-xs text-gray-500">
+          Argent perdu (règle du 12/09) = ce qui aurait été payé à cet établissement pour les
+          créneaux non diffusés = impressions manquées facturables × CPM / 1000, redirigé vers les
+          établissements du redispatch.
+        </p>
+        {r.campaigns.length === 0 ? (
+          <p className="text-sm text-gray-400">Aucune campagne avec des créneaux sur la période.</p>
+        ) : (
+          <div className="overflow-auto">
+            <table className="text-sm">
+              <thead>
+                <tr className="text-left text-gray-500">
+                  <th className="pr-4">campagne</th>
+                  <th className="pr-4">statut</th>
+                  <th className="pr-4">acceptation</th>
+                  <th className="pr-4">créneaux période</th>
+                  <th className="pr-4">écoulés</th>
+                  <th className="pr-4">diffusés</th>
+                  <th className="pr-4">manqués</th>
+                  <th className="pr-4">impr. manquées (phys / fact)</th>
+                  <th className="pr-4">verdict</th>
+                  <th className="pr-4">argent perdu (TND)</th>
+                  <th className="pr-4">redirigé vers</th>
+                </tr>
+              </thead>
+              <tbody>
+                {r.campaigns.map((c) => (
+                  <tr key={c.campaign_id} className="border-t">
+                    <td className="py-0.5 pr-4">{c.campaign_name}</td>
+                    <td className="py-0.5 pr-4">{c.campaign_status}</td>
+                    <td className="py-0.5 pr-4">{c.statut_acceptation}</td>
+                    <td className="py-0.5 pr-4 tabular-nums">{c.slots_in_period}</td>
+                    <td className="py-0.5 pr-4 tabular-nums">{c.slots_elapsed}</td>
+                    <td className="py-0.5 pr-4 tabular-nums">{c.slots_delivered}</td>
+                    <td className="py-0.5 pr-4 tabular-nums">{c.slots_missed}</td>
+                    <td className="py-0.5 pr-4 tabular-nums">
+                      {c.impressions_missed_physical} / {c.impressions_missed_fact}
+                    </td>
+                    <td className="py-0.5 pr-4">
+                      {c.ran_fully ? 'diffusée en entier' : c.disrupted ? 'perturbée' : 'à venir'}
+                      {c.received_redispatch ? ' · reçue en redispatch' : ''}
+                    </td>
+                    <td className="py-0.5 pr-4 tabular-nums">{fmt(c.money_lost_tnd)}</td>
+                    <td className="py-0.5 pr-4 font-mono text-xs">
+                      {c.redirected_to.length === 0
+                        ? '—'
+                        : c.redirected_to
+                            .map((t) => `${t.screenhost_id.slice(0, 8)} (+${t.added_fact})`)
+                            .join(', ')}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       <section className="rounded-xl border bg-white p-4">
         <h2 className="mb-2 text-sm font-semibold text-gray-700">Jours de la période</h2>
