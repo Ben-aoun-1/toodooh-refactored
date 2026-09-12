@@ -10,8 +10,14 @@ import {
  * « Voir le spot », so the short-TTL presigned url (GET /allocations/:id/creative-url) is fetched
  * lazily on demand. Reuses the wizard's CreativePreviewTile: a video plays inline with native
  * controls, a photo fills the 16:9 tile — the same per-kind behavior the advertiser already sees.
+ * CAMP-E1 — takes the structural minimum so the « Mes campagnes » drawer can mount it from an
+ * OwnerCampaign row (the presign route is per allocation; the spot is per campaign).
  */
-export default function AllocationSpotViewer({ allocation }: { allocation: PendingAllocation }) {
+export default function AllocationSpotViewer({
+  allocation,
+}: {
+  allocation: Pick<PendingAllocation, 'id' | 'campaign_name' | 'creative'>;
+}) {
   const tileProps = spotViewerProps(allocation);
   const { url, isLoading, isError } = useAllocationCreativeUrl(allocation.id, tileProps !== null);
 

@@ -202,6 +202,71 @@ const adminGuard = { preHandler: [requireAuth, requireAdmin] };
 // in-review carve-out). The admin route keeps adminGuard. Recovery routes live on other routers.
 const ownerGuard = { preHandler: [requireAuth, requireActiveAccount] };
 
+/**
+ * CF-O1 / CAMP-E1 — the owner-facing proposal criteria of a set of campaigns, batched: ONE query
+ * for the targeting category NAMES and ONE for the zone NAMES over already-owner-scoped campaign
+ * ids, grouped in JS (the campaigns.ts no-N+1 idiom). Categories collapse to NAMES: a NULL
+ * category_id line means « toutes les catégories », so any such line (or no targeting at all)
+ * yields [] — the same "empty = whole network" convention the zones use (CF-Z1). Classes are
+ * engine-internal and never leave this helper. Shared by GET /allocations and GET /campaigns.
+ */
+const loadCampaignCriteriaNames = async (
+  campaignIds: readonly string[],
+): Promise<{ categoriesOf: (id: string) => string[]; zonesOf: (id: string) => string[] }> => {
+  const categoriesByCampaign = new Map<string, string[]>();
+  const allCategoriesCampaigns = new Set<string>();
+  const zonesByCampaign = new Map<string, string[]>();
+  if (campaignIds.length > 0) {
+    const targetingLines = await db
+      .select({
+        campaignId: campaignTargeting.campaignId,
+        categoryName: businessSectors.name,
+      })
+      .from(campaignTargeting)
+      .leftJoin(businessSectors, eq(campaignTargeting.categoryId, businessSectors.id))
+      .where(inArray(campaignTargeting.campaignId, [...campaignIds]))
+      .orderBy(asc(businessSectors.name));
+    for (const line of targetingLines) {
+      if (line.categoryName === null) {
+        allCategoriesCampaigns.add(line.campaignId);
+        continue;
+      }
+      const list = categoriesByCampaign.get(line.campaignId) ?? [];
+      if (!list.includes(line.categoryName)) list.push(line.categoryName);
+      categoriesByCampaign.set(line.campaignId, list);
+    }
+    const zoneRows = await db
+      .select({ campaignId: campaignZones.campaignId, name: zones.name })
+      .from(campaignZones)
+      .innerJoin(zones, eq(campaignZones.zoneId, zones.id))
+      .where(inArray(campaignZones.campaignId, [...campaignIds]))
+      .orderBy(asc(zones.name));
+    for (const row of zoneRows) {
+      const list = zonesByCampaign.get(row.campaignId) ?? [];
+      list.push(row.name);
+      zonesByCampaign.set(row.campaignId, list);
+    }
+  }
+  return {
+    categoriesOf: (id) =>
+      allCategoriesCampaigns.has(id) ? [] : (categoriesByCampaign.get(id) ?? []),
+    zonesOf: (id) => zonesByCampaign.get(id) ?? [],
+  };
+};
+
+/**
+ * CAMP-E1 — the owner's ONE decision over a campaign, derived from their allocations' statuses:
+ * unanimous → that status; any disagreement (e.g. accepted on one venue, refused on another) →
+ * MIXTE. A campaign never reaches this with zero allocations (the list is built FROM them).
+ */
+export const deriveOwnerDecision = (
+  statuts: readonly DispatchAcceptation[],
+): DispatchAcceptation | 'MIXTE' => {
+  const first = statuts[0];
+  if (first === undefined) return 'EN_ATTENTE';
+  return statuts.every((s) => s === first) ? first : 'MIXTE';
+};
+
 export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/screenhosts/mine — the caller's screenhosts, password-redacted.
   // H2 — the venue's opening hours ride along so the owner settings' « Horaires d'ouverture »
@@ -1756,45 +1821,8 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
       )
       .orderBy(desc(campaignDispatchAllocation.createdAt));
 
-    // Category/zone names are 1:many — ONE batched query each over the already-owner-scoped
-    // campaign ids, grouped in JS (the campaigns.ts no-N+1 idiom). Categories collapse to NAMES:
-    // a NULL category_id line means « toutes les catégories », so any such line (or no targeting
-    // at all) yields [] — same "empty = whole network" convention the zones already use.
-    const campaignIds = [...new Set(rows.map((r) => r.campaignId))];
-    const categoriesByCampaign = new Map<string, string[]>();
-    const allCategoriesCampaigns = new Set<string>();
-    const zonesByCampaign = new Map<string, string[]>();
-    if (campaignIds.length > 0) {
-      const targetingLines = await db
-        .select({
-          campaignId: campaignTargeting.campaignId,
-          categoryName: businessSectors.name,
-        })
-        .from(campaignTargeting)
-        .leftJoin(businessSectors, eq(campaignTargeting.categoryId, businessSectors.id))
-        .where(inArray(campaignTargeting.campaignId, campaignIds))
-        .orderBy(asc(businessSectors.name));
-      for (const line of targetingLines) {
-        if (line.categoryName === null) {
-          allCategoriesCampaigns.add(line.campaignId);
-          continue;
-        }
-        const list = categoriesByCampaign.get(line.campaignId) ?? [];
-        if (!list.includes(line.categoryName)) list.push(line.categoryName);
-        categoriesByCampaign.set(line.campaignId, list);
-      }
-      const zoneRows = await db
-        .select({ campaignId: campaignZones.campaignId, name: zones.name })
-        .from(campaignZones)
-        .innerJoin(zones, eq(campaignZones.zoneId, zones.id))
-        .where(inArray(campaignZones.campaignId, campaignIds))
-        .orderBy(asc(zones.name));
-      for (const row of zoneRows) {
-        const list = zonesByCampaign.get(row.campaignId) ?? [];
-        list.push(row.name);
-        zonesByCampaign.set(row.campaignId, list);
-      }
-    }
+    // Category/zone names are 1:many — batched over the owner-scoped campaign ids (no N+1).
+    const criteria = await loadCampaignCriteriaNames([...new Set(rows.map((r) => r.campaignId))]);
 
     return reply.status(200).send(
       rows.map((r) => ({
@@ -1810,14 +1838,121 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         r_i: r.rI,
         revenu_previsionnel: Number(r.revenuPrevisionnel),
         created_at: r.createdAt.toISOString(),
-        categories: allCategoriesCampaigns.has(r.campaignId)
-          ? []
-          : (categoriesByCampaign.get(r.campaignId) ?? []),
-        zones: zonesByCampaign.get(r.campaignId) ?? [],
+        categories: criteria.categoriesOf(r.campaignId),
+        zones: criteria.zonesOf(r.campaignId),
         creative:
           r.creativeKind === null
             ? null
             : { kind: r.creativeKind, duration_seconds: r.creativeDuration },
+      })),
+    );
+  });
+
+  // CAMP-E1 / SUPA-1 — GET /api/screenhosts/campaigns: the owner's « Mes campagnes » read, on the
+  // api. Every campaign with at least one dispatch allocation on one of the caller's venues, ANY
+  // statut_acceptation (the /allocations list above is the EN_ATTENTE decision queue; this is the
+  // whole history), grouped PER CAMPAIGN with the owner's allocation rows nested, their totals
+  // summed, and the owner's decision derived over them (EN_ATTENTE | ACCEPTE | REFUSE | MIXTE).
+  // Owner scoping is IN the WHERE (screenhosts.ownerId = caller) so a foreign venue's allocation
+  // never contributes — not even to a campaign the owner also carries elsewhere. Newest campaign
+  // first; venues alphabetical within a campaign. Replaces the page's retired Supabase composite
+  // (locations/campaign_owner_approvals/business_profiles), which threw in production and left
+  // every owner with an error toast instead of an empty state.
+  app.get('/api/screenhosts/campaigns', ownerGuard, async (request, reply) => {
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply
+        .status(401)
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+    }
+    const rows = await db
+      .select({
+        allocationId: campaignDispatchAllocation.id,
+        statut: campaignDispatchAllocation.statutAcceptation,
+        iiPotentiel: campaignDispatchAllocation.iiPotentiel,
+        rI: campaignDispatchAllocation.rI,
+        revenuPrevisionnel: campaignDispatchAllocation.revenuPrevisionnel,
+        screenhostId: screenhosts.id,
+        screenhostName: screenhosts.name,
+        campaignId: campaigns.id,
+        campaignName: campaigns.name,
+        campaignType: campaigns.campaignType,
+        campaignStatus: campaigns.status,
+        startDate: campaigns.startDate,
+        endDate: campaigns.endDate,
+        campaignCreatedAt: campaigns.createdAt,
+        advertiserBusinessName: users.businessName,
+        advertiserContactName: users.contactName,
+        creativeKind: creatives.creativeType,
+        creativeDuration: creatives.durationSeconds,
+      })
+      .from(campaignDispatchAllocation)
+      .innerJoin(screenhosts, eq(campaignDispatchAllocation.screenhostId, screenhosts.id))
+      .innerJoin(
+        campaignDispatchPlan,
+        eq(campaignDispatchAllocation.planId, campaignDispatchPlan.id),
+      )
+      .innerJoin(campaigns, eq(campaignDispatchPlan.campaignId, campaigns.id))
+      .innerJoin(users, eq(campaigns.advertiserId, users.id))
+      .leftJoin(creatives, eq(campaigns.creativeId, creatives.id))
+      .where(eq(screenhosts.ownerId, userId))
+      .orderBy(desc(campaigns.createdAt), desc(campaigns.id), asc(screenhosts.name));
+
+    // Group per campaign, first-seen order (= newest campaign first, per the ORDER BY).
+    type OwnerAllocationRow = {
+      id: string;
+      screenhost_id: string;
+      screenhost_name: string;
+      statut_acceptation: DispatchAcceptation;
+      ii_potentiel: number;
+      r_i: number;
+      revenu_previsionnel: number;
+    };
+    type Grouped = {
+      head: (typeof rows)[number];
+      allocations: OwnerAllocationRow[];
+    };
+    const byCampaign = new Map<string, Grouped>();
+    for (const r of rows) {
+      const group = byCampaign.get(r.campaignId) ?? { head: r, allocations: [] };
+      group.allocations.push({
+        id: r.allocationId,
+        screenhost_id: r.screenhostId,
+        screenhost_name: r.screenhostName,
+        statut_acceptation: r.statut,
+        ii_potentiel: r.iiPotentiel,
+        r_i: r.rI,
+        revenu_previsionnel: Number(r.revenuPrevisionnel),
+      });
+      byCampaign.set(r.campaignId, group);
+    }
+    const criteria = await loadCampaignCriteriaNames([...byCampaign.keys()]);
+
+    return reply.status(200).send(
+      [...byCampaign.values()].map(({ head, allocations }) => ({
+        id: head.campaignId,
+        name: head.campaignName,
+        campaign_type: head.campaignType,
+        status: head.campaignStatus,
+        start_date: head.startDate,
+        end_date: head.endDate,
+        advertiser_name: head.advertiserBusinessName ?? head.advertiserContactName,
+        categories: criteria.categoriesOf(head.campaignId),
+        zones: criteria.zonesOf(head.campaignId),
+        creative:
+          head.creativeKind === null
+            ? null
+            : { kind: head.creativeKind, duration_seconds: head.creativeDuration },
+        allocations,
+        totals: {
+          ii_potentiel: allocations.reduce((sum, a) => sum + a.ii_potentiel, 0),
+          // Sum in the numeric's 4-decimal grain, then round: no float drift on the wire.
+          revenu_previsionnel:
+            Math.round(allocations.reduce((sum, a) => sum + a.revenu_previsionnel * 10000, 0)) /
+            10000,
+        },
+        owner_decision: deriveOwnerDecision(allocations.map((a) => a.statut_acceptation)),
+        created_at: head.campaignCreatedAt.toISOString(),
       })),
     );
   });
