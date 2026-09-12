@@ -1,7 +1,6 @@
 import BalanceCard from '@/features/advertiser/components/dashboard/BalanceCard';
 import EventsEntryCard from '@/features/advertiser/components/dashboard/EventsEntryCard';
 import GettingStartedSection from '@/features/advertiser/components/dashboard/GettingStartedSection';
-import InsightsCard from '@/features/advertiser/components/dashboard/InsightsCard';
 import LastCampaignsGrid from '@/features/advertiser/components/dashboard/LastCampaignsGrid';
 import StatsGrid from '@/features/advertiser/components/dashboard/StatsGrid';
 import { useDashboardStats } from '@/features/advertiser/hooks/useDashboardStats';
@@ -78,7 +77,6 @@ export default function AdvertiserDashboard() {
           canLaunchCampaign={canLaunchCampaign}
         />
       )}
-      <InsightsCard />
     </div>
   );
 }

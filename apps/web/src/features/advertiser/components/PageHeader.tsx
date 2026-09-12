@@ -104,6 +104,15 @@ export default function PageHeader({
                 </h1>
               </div>
             </>
+          ) : pathname === '/my-performance' ? (
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">
+                Mes performances
+              </h1>
+              <p className="text-xs text-gray-500 truncate hidden sm:block">
+                Suivez l&apos;impact de vos campagnes, campagne par campagne ou sur une période
+              </p>
+            </div>
           ) : pathname === '/profile' ? (
             <>
               <img
