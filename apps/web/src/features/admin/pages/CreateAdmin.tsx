@@ -18,7 +18,9 @@ import { useNavigate } from 'react-router-dom';
 import AdminLayout from '@/features/admin/components/AdminLayout';
 import { useAdminMutations } from '@/features/admin/hooks/useAdmins';
 import type { InternalAccount, InternalAccountRole } from '@/features/admin/types/admin';
+import { apiErrorMessage } from '@/features/auth/services/auth-errors';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
+import { ApiError } from '@/lib/api-client';
 import { getErrorMessage } from '@/lib/errors';
 
 interface AdminFormData {
@@ -167,7 +169,13 @@ export default function CreateAdmin() {
         role: 'admin',
       });
     } catch (error) {
-      toast.error(getErrorMessage(error) || 'Erreur lors de la création');
+      // EMAIL-AG1 (2026-09-12): a duplicate address is a 409 EMAIL_TAKEN — say so in French
+      // instead of the raw api text.
+      toast.error(
+        error instanceof ApiError
+          ? apiErrorMessage(error)
+          : getErrorMessage(error) || 'Erreur lors de la création',
+      );
     } finally {
       setLoading(false);
     }

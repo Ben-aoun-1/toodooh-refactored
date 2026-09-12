@@ -715,7 +715,7 @@ export default function OwnerRevenue() {
                     value={bankFullName}
                     onChange={(e) => setBankFullName(e.target.value)}
                     className="w-full bg-transparent border-0 p-0 text-sm text-gray-900 placeholder:text-gray-400 focus:ring-0"
-                    placeholder="Nom et prénom du titulaire"
+                    placeholder="Nom du titulaire"
                     autoComplete="name"
                   />
                 </div>
