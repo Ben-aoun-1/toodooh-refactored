@@ -154,7 +154,7 @@ export default function OwnerSettings() {
                 />
               }
               fields={{
-                companySize: isFleetOwner,
+                companySize: isFleetOwner ? 'parc' : false,
                 numberOfScreens: true,
                 numberOfRooms: true,
                 zone: true,

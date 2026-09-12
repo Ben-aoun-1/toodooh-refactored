@@ -61,17 +61,13 @@ import {
   type StepErrorCtx,
   type StepErrors,
 } from '@/features/auth/utils/signup-step-errors';
+import { companySizeLabel, companySizeOptions } from '@/lib/company-size';
 import { getErrorMessage } from '@/lib/errors';
 
 import SignupDocumentSlots from './SignupDocumentSlots';
 import SignupOwnerDocuments from './SignupOwnerDocuments';
 
 type ProfileType = 'advertiser' | 'agency' | 'individual_owner' | 'fleet_owner';
-
-// Advertiser/agency company-size options — hardcoded (Phase-1f D8): the legacy `company_size_options`
-// seed; `company_size` is backend-stripped, so only the display/value string matters (owners use
-// `parcCountOptions`).
-const COMPANY_SIZE_OPTIONS = ['0 - 10', '10 - 50', '50 - 100', '100 - 500', '500 et plus'];
 
 interface Props {
   currentStep: number;
@@ -1221,7 +1217,6 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
   );
 
   /* ═══════ Step 2: Entreprise (champs capture uniquement) ═══════ */
-  const parcCountOptions = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '12+'];
   const renderStep2 = () => (
     <div className="max-w-3xl mx-auto w-full space-y-5">
       {selectedProfileType === 'individual_owner' ? (
@@ -1529,7 +1524,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             </div>
             <div>
               <label className={labelClass} htmlFor="company-size">
-                {isOwner ? "Nombre d'établissements de votre parc" : "Taille de l'entreprise"}{' '}
+                {companySizeLabel(isOwner ? 'parc' : 'company')}{' '}
                 <span className="text-red-500">*</span>
               </label>
               <select
@@ -1543,7 +1538,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
                 id="company-size"
               >
                 <option value="">{isOwner ? '12' : 'Sélectionnez la taille'}</option>
-                {(isOwner ? parcCountOptions : COMPANY_SIZE_OPTIONS).map((v) => (
+                {companySizeOptions(isOwner ? 'parc' : 'company').map((v) => (
                   <option key={v} value={v}>
                     {v}
                   </option>
