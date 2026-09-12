@@ -354,9 +354,10 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     const zoneMap = await zonesByCampaign(ids);
 
     // CF-HF3 (Mejri item 3) — « Impressions prévues »: the FROZEN plan's placed facturable
-    // (Σ allocations.ii_potentiel over the campaign's unique plan), null when no plan exists yet
-    // (the web falls back to the budget-derived estimate). A pure READ of the plan — the display
-    // rule never recomputes engine numbers.
+    // (Σ allocations.ii_potentiel over the campaign's unique plan) — or, for an event positioning,
+    // Σ event_allocations.impressions_total (ADV-DSH1) — null when neither exists yet (the web
+    // falls back to the budget-derived estimate). A pure READ of the plan — the display rule
+    // never recomputes engine numbers.
     const plannedByCampaign = new Map<string, number>();
     if (ids.length > 0) {
       const planned = await db
@@ -372,6 +373,25 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         .where(inArray(campaignDispatchPlan.campaignId, ids))
         .groupBy(campaignDispatchPlan.campaignId);
       for (const p of planned) plannedByCampaign.set(p.campaignId, Number(p.placedFact));
+      // ADV-DSH1 (Mejri/Kais QA) — an EVENT POSITIONING has no dispatch plan (EV3): its placed
+      // impressions live in event_allocations.impressions_total (EV4). They were null here, so
+      // « Impressions prévues » on the dashboard counted 0 for a positioning the Consulter drawer
+      // showed at 38 400. Same figure, same rows, as GET /:id/event-allocations (Σ over every
+      // allocation row, whatever its statut — the drawer's own total), so the two never disagree.
+      // A campaign has EITHER a plan OR event allocations, never both; the plan wins if it ever did.
+      const eventPlanned = await db
+        .select({
+          campaignId: eventAllocations.campaignId,
+          total: sql<string>`coalesce(sum(${eventAllocations.impressionsTotal}), 0)`,
+        })
+        .from(eventAllocations)
+        .where(inArray(eventAllocations.campaignId, ids))
+        .groupBy(eventAllocations.campaignId);
+      for (const e of eventPlanned) {
+        if (!plannedByCampaign.has(e.campaignId)) {
+          plannedByCampaign.set(e.campaignId, Number(e.total));
+        }
+      }
     }
 
     return reply.status(200).send(

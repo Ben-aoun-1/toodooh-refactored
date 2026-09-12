@@ -12,6 +12,8 @@ import {
   campaignTargeting,
   campaigns,
   creatives,
+  eventAllocations,
+  events,
   recharges,
   screenhostAffluence,
   screenhosts,
@@ -357,5 +359,67 @@ describe('CF-HF3 (real Postgres)', () => {
     const rows = res.json() as { name: string; planned_impressions: number | null }[];
     expect(rows.find((r) => r.name === 'Sans plan')?.planned_impressions).toBeNull();
     expect(rows.find((r) => r.name === 'Avec plan')?.planned_impressions).toBe(20000);
+  });
+
+  // ADV-DSH1 (Mejri/Kais QA) — an event positioning has NO dispatch plan; its placed impressions
+  // live in event_allocations. /mine must expose them as planned_impressions (the dashboard's
+  // « Impressions prévues » reads that field and counted 0 for the +38 400 positioning).
+  it("ADV-DSH1: /mine exposes an event positioning's Σ event_allocations.impressions_total", async () => {
+    const advertiser = await seedUser({ role: 'advertiser' });
+    const owner = await seedUser({ role: 'individual_owner' });
+    const [sh] = await db
+      .insert(screenhosts)
+      .values({ name: 'Venue E1', ownerId: owner })
+      .returning();
+    const [sh2] = await db
+      .insert(screenhosts)
+      .values({ name: 'Venue E2', ownerId: owner })
+      .returning();
+    const [event] = await db
+      .insert(events)
+      .values({
+        name: 'Derby',
+        kickoffAt: new Date('2026-10-01T18:00:00Z'),
+        endsAt: new Date('2026-10-01T20:00:00Z'),
+      })
+      .returning();
+    const [positioning] = await db
+      .insert(campaigns)
+      .values({
+        advertiserId: advertiser,
+        name: 'Positionnement',
+        campaignType: 'event',
+        status: 'active',
+        eventId: event?.id ?? null,
+        startDate: '2026-10-01',
+        endDate: '2026-10-01',
+        requestedBudget: '500',
+      })
+      .returning();
+    await db.insert(eventAllocations).values([
+      {
+        campaignId: positioning?.id ?? '',
+        screenhostId: sh?.id ?? '',
+        blocs: [{ start: '2026-10-01T18:00:00Z', end: '2026-10-01T18:30:00Z', impressions: 30000 }],
+        impressionsTotal: 30000,
+        montantTnd: '300.000',
+        statut: 'ACCEPTE',
+      },
+      {
+        campaignId: positioning?.id ?? '',
+        screenhostId: sh2?.id ?? '',
+        blocs: [{ start: '2026-10-01T18:00:00Z', end: '2026-10-01T18:30:00Z', impressions: 8400 }],
+        impressionsTotal: 8400,
+        montantTnd: '84.000',
+        statut: 'EN_ATTENTE',
+      },
+    ]);
+
+    mockSession(advertiser, 'advertiser');
+    const res = await app.inject({ method: 'GET', url: '/api/campaigns/mine' });
+    expect(res.statusCode).toBe(200);
+    const rows = res.json() as { name: string; planned_impressions: number | null }[];
+    // 30 000 + 8 400 = the same Σ GET /:id/event-allocations reports as impressions_total.
+    expect(rows.find((r) => r.name === 'Positionnement')?.planned_impressions).toBe(38400);
   });
 });
