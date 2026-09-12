@@ -13,7 +13,9 @@ import {
   tunisTodayIso,
   DEFAULT_PERIOD_SELECTION,
   parsePeriodSelection,
+  parseVenueSelection,
   writePeriodSelection,
+  writeVenueSelection,
   PERIOD_PILLS,
 } from './performance-period';
 
@@ -211,6 +213,38 @@ describe('writePeriodSelection — a shareable link, other params untouched', ()
 // encore. Pour pouvoir poursuivre les tests, ce point est primordial. » Ce dépôt n'a pas de harnais
 // de rendu (vitest tourne en environnement node, un .test.tsx n'exécute AUCUN test), donc ce qui
 // peut être épinglé ici l'est ici ; le composant ne fait plus que rendre le libellé nu.
+describe('PERF-URL1 — le lieu vit dans l’URL à côté de la période', () => {
+  const mine = ['sh-a', 'sh-b'];
+
+  it('reads `lieu` back when it names one of the owner’s venues', () => {
+    expect(parseVenueSelection(new URLSearchParams('periode=7d&lieu=sh-b'), mine)).toBe('sh-b');
+  });
+
+  it('ignores a foreign or stale `lieu` (null → the page falls back to its first venue)', () => {
+    expect(parseVenueSelection(new URLSearchParams('lieu=sh-zzz'), mine)).toBeNull();
+    expect(parseVenueSelection(new URLSearchParams('periode=7d'), mine)).toBeNull();
+    expect(parseVenueSelection(new URLSearchParams('lieu=sh-a'), [])).toBeNull();
+  });
+
+  it('writes `lieu` beside the période, preserving every other param; null drops it', () => {
+    const base = new URLSearchParams('periode=custom&du=2026-08-01&au=2026-08-31&x=1');
+    const written = writeVenueSelection(base, 'sh-a');
+    expect(written.get('lieu')).toBe('sh-a');
+    expect(written.get('periode')).toBe('custom');
+    expect(written.get('du')).toBe('2026-08-01');
+    expect(written.get('x')).toBe('1');
+    expect(writeVenueSelection(written, null).has('lieu')).toBe(false);
+  });
+
+  it('the période serializer keeps `lieu` (a shared link carries BOTH)', () => {
+    const withVenue = writeVenueSelection(new URLSearchParams(), 'sh-b');
+    const both = writePeriodSelection(withVenue, { period: '7d' });
+    expect(both.get('lieu')).toBe('sh-b');
+    expect(parseVenueSelection(both, mine)).toBe('sh-b');
+    expect(parsePeriodSelection(both)).toEqual({ period: '7d' });
+  });
+});
+
 describe('PERF-CUSTOM1 — la pastille « Personnalisé » est DÉPARQUÉE', () => {
   it('les six pastilles sont utilisables, dans leur ordre', () => {
     expect(PERIOD_PILLS.map((p) => p.key)).toEqual(['7d', '28d', '3m', '12m', 'all', 'custom']);
