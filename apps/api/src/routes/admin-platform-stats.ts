@@ -3,6 +3,7 @@ import type { FastifyPluginAsync } from 'fastify';
 
 import { db } from '../db/client.js';
 import { campaigns, creatives, recharges, screens, users } from '../db/schema.js';
+import { submittedCreativeGate } from '../lib/creatives.js';
 import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
 
 // Admin platform-stats — the dashboard's headline numbers, DERIVED from the new-engine Postgres
@@ -17,7 +18,8 @@ import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
 //  - campaigns: total + per-status + requested-budget sum/avg (the indicative budget; real pricing
 //               is L-price). "views"/impressions are NOT modelled yet → omitted.
 //  - creatives: total/pending/approved (validation_status) — the new media-review counters that
-//               replace the legacy `videos` table.
+//               replace the legacy `videos` table. ADM-DSH2: counted through the queue's CF-HF4
+//               « submitted » gate, so the tile and GET /api/admin/creatives agree row for row.
 //  - revenue:   total = SUM(confirmed recharges); monthly = confirmed THIS calendar month.
 //  - FLAGGED (no new-engine source, NOT returned): events, occupancy/uptime, per-screen revenue
 //    (top screens), revenue growth-rate, daily-revenue projection, average-revenue-per-screen.
@@ -58,9 +60,14 @@ export const adminPlatformStatsRoutes: FastifyPluginAsync = async (app) => {
           avg: sql<string>`coalesce(avg(${campaigns.requestedBudget}), 0)`,
         })
         .from(campaigns),
+      // ADM-DSH2 — the SAME « submitted » predicate as GET /api/admin/creatives (lib/creatives.ts):
+      // the tile « Créatives à valider » links to that queue, so it must count exactly the rows
+      // the queue lists. Counting every `pending` row read 4 over an empty queue — those four
+      // were uploads never carted (CF-HF4 keeps them out of the queue until PANIER-ADD).
       db
         .select({ status: creatives.validationStatus, c: count() })
         .from(creatives)
+        .where(submittedCreativeGate)
         .groupBy(creatives.validationStatus),
       db
         .select({ total: sql<string>`coalesce(sum(${recharges.amountTnd}), 0)` })
