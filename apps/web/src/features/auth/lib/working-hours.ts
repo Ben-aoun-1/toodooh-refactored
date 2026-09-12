@@ -1,8 +1,8 @@
 // H1 (Mejri item 5) — working hours captured at screenhost signup: ONE daily window
 // [open, close), hour-granular ints 0–23, mirroring the screenhosts.opening_hour/closing_hour
 // columns (the platform's single-window model; per-day + overnight stay deferred to L-disp).
-// The « préciser plus tard » skip sends nothing: NULL columns keep the 14h report fallback,
-// the full heatmap hachure and the dispatch-ineligible semantics until an admin sets hours.
+// HOURS-M1 (Mejri 09/09, operator ruling 2026-09-12): the pair is MANDATORY — the former
+// « préciser plus tard » skip is gone from the wizard and refused by the api for owners.
 
 export const DEFAULT_OPENING_HOUR = 8;
 export const DEFAULT_CLOSING_HOUR = 22;
@@ -24,10 +24,12 @@ export const isValidHoursWindow = (opening: number, closing: number): boolean =>
   opening < closing;
 
 export interface HoursPayload {
-  opening_hour?: number;
-  closing_hour?: number;
+  opening_hour: number;
+  closing_hour: number;
 }
 
-/** Skip ("préciser plus tard") → send NOTHING (both columns stay NULL); else the full pair. */
-export const hoursPayload = (later: boolean, opening: number, closing: number): HoursPayload =>
-  later ? {} : { opening_hour: opening, closing_hour: closing };
+/** Always the full pair (HOURS-M1 — there is no skip any more). */
+export const hoursPayload = (opening: number, closing: number): HoursPayload => ({
+  opening_hour: opening,
+  closing_hour: closing,
+});

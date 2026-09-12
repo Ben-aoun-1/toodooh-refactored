@@ -29,7 +29,7 @@ import {
   hoursPayload,
   isValidHoursWindow,
 } from '@/features/auth/lib/working-hours';
-import { authService } from '@/features/auth/services/auth.service';
+import { authService, type AgentCodeVerdict } from '@/features/auth/services/auth.service';
 import type {
   BusinessSector,
   Governorate,
@@ -226,10 +226,8 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
   // report fallback + dispatch-ineligible until set). Individual = one pair; fleet = per draft.
   const [ownerOpeningHour, setOwnerOpeningHour] = useState(DEFAULT_OPENING_HOUR);
   const [ownerClosingHour, setOwnerClosingHour] = useState(DEFAULT_CLOSING_HOUR);
-  const [ownerHoursLater, setOwnerHoursLater] = useState(false);
   const [fleetDraftOpeningHour, setFleetDraftOpeningHour] = useState(DEFAULT_OPENING_HOUR);
   const [fleetDraftClosingHour, setFleetDraftClosingHour] = useState(DEFAULT_CLOSING_HOUR);
-  const [fleetDraftHoursLater, setFleetDraftHoursLater] = useState(false);
   const [companyLogo, setCompanyLogo] = useState<File | null>(null);
   const [companyLogoPreview, setCompanyLogoPreview] = useState<string | null>(null);
   const [lastName, setLastName] = useState('');
@@ -244,7 +242,13 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
   const [postalCodeError, setPostalCodeError] = useState<string | null>(null);
   // F5: agent-code FORMAT error (Kais QA ruling 2026-06-11 — numeric, no fixed length). Format
   // only: resolution stays server-side (unmatched codes are accepted and stored unlinked).
-  const [agentCodeError, setAgentCodeError] = useState<string | null>(null);
+  const [agentCodeError, setAgentCodeErrorState] = useState<string | null>(null);
+  // Mirror for the Suivant toast: state is async, the probe's verdict must be readable at once.
+  const agentCodeErrorRef = useRef<string | null>(null);
+  const setAgentCodeError = (v: string | null) => {
+    agentCodeErrorRef.current = v;
+    setAgentCodeErrorState(v);
+  };
   // Prod-blocker lane — the always-clickable Suivant's per-field messages (fields WITHOUT a
   // dedicated error state above; email/phone/agent/tax/postal keep theirs). Set on click from
   // utils/signup-step-errors; each field's onChange clears its own key.
@@ -456,6 +460,43 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
     return available;
   };
 
+  // AGENT-V1 (Mejri 09/09 point 2, ruling 2026-09-12) — the agent code must name an EXISTING
+  // agent of the right type. Format is the step gate's job; this is the availability layer,
+  // mirroring checkTaxAvailable (cached per code+type, fail-open on 429/network — the signup
+  // submit's 409 AGENT_CODE_UNKNOWN / AGENT_CODE_INCOMPATIBLE stays the server-side authority).
+  const AGENT_CODE_UNKNOWN_ERROR =
+    'Aucun agent ne correspond à ce code. Vérifiez le code reçu de votre agent.';
+  const AGENT_CODE_INCOMPATIBLE_ERROR = isOwner
+    ? "Ce code appartient à un agent Screencast. Il vous faut un code d'agent Screenhost."
+    : "Ce code appartient à un agent Screenhost. Il vous faut un code d'agent Screencast.";
+  const lastAgentAvailability = useRef<{ key: string; verdict: AgentCodeVerdict } | null>(null);
+
+  const checkAgentCodeAvailable = async (
+    codeRaw: string = String(formData.agent_toodooh || ''),
+  ): Promise<boolean> => {
+    const code = normalizeAgentCode(codeRaw);
+    if (!code || !isValidAgentCode(code)) return true; // the format gate owns these
+    const key = `${code}|${selectedProfileType ?? ''}`;
+    let verdict: AgentCodeVerdict | null;
+    if (lastAgentAvailability.current?.key === key) {
+      verdict = lastAgentAvailability.current.verdict;
+    } else {
+      verdict = await probeWithTimeout(
+        authService.checkAgentCodeAvailability(code, selectedProfileType ?? undefined),
+      );
+      if (verdict === null) return true; // unknown → don't block; server decides at submit
+      lastAgentAvailability.current = { key, verdict };
+    }
+    setAgentCodeError(
+      verdict === 'ok'
+        ? null
+        : verdict === 'unknown'
+          ? AGENT_CODE_UNKNOWN_ERROR
+          : AGENT_CODE_INCOMPATIBLE_ERROR,
+    );
+    return verdict === 'ok';
+  };
+
   /* ── navigation helpers (prod-blocker lane) ──
      The old boolean canGoNext() fed `disabled=` on Suivant — a silently-held gate. It is replaced
      by utils/signup-step-errors.stepFieldErrors (SAME conditions, per-field French messages): the
@@ -477,7 +518,6 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
     businessSectorId: String(formData.business_sector_id || ''),
     etablissementScreens,
     etablissementRooms,
-    hoursLater: ownerHoursLater,
     hoursValid: isValidHoursWindow(ownerOpeningHour, ownerClosingHour),
     businessName: String(formData.business_name || ''),
     companySize: String(formData.company_size || ''),
@@ -630,6 +670,11 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
         toast.error(EMAIL_TAKEN_ERROR);
         return;
       }
+      // AGENT-V1 — refuse an unknown / wrong-type agent code before leaving step 1.
+      if (!(await checkAgentCodeAvailable(ctx.agentCode))) {
+        toast.error(agentCodeErrorRef.current ?? AGENT_CODE_UNKNOWN_ERROR);
+        return;
+      }
       onStepChange(currentStep + 1);
       return;
     }
@@ -686,8 +731,8 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
       fleetDraftCity &&
       fleetDraftZone.trim() &&
       fleetDraftGovernorate &&
-      // H1 — per-establishment hours: valid window unless « préciser plus tard » is checked.
-      (fleetDraftHoursLater || isValidHoursWindow(fleetDraftOpeningHour, fleetDraftClosingHour)),
+      // H1 — per-establishment hours: a valid window is required (HOURS-M1: no skip).
+      isValidHoursWindow(fleetDraftOpeningHour, fleetDraftClosingHour),
     );
   };
 
@@ -730,8 +775,8 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
       longitude: parseCoord(fleetDraftLongitude),
       wifi_ssid: fleetDraftWifiSsid.trim() || undefined,
       wifi_password: fleetDraftWifiPassword.trim() || undefined,
-      // H1 — the establishment's working hours; skipped = omitted (NULL columns server-side).
-      ...hoursPayload(fleetDraftHoursLater, fleetDraftOpeningHour, fleetDraftClosingHour),
+      // H1 — the establishment's working hours (HOURS-M1: always sent).
+      ...hoursPayload(fleetDraftOpeningHour, fleetDraftClosingHour),
     };
     clearFieldError('fleet');
     setFleetEstablishments((prev) => [...prev, row]);
@@ -748,7 +793,6 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
     setFleetDraftWifiPassword('');
     setFleetDraftOpeningHour(DEFAULT_OPENING_HOUR);
     setFleetDraftClosingHour(DEFAULT_CLOSING_HOUR);
-    setFleetDraftHoursLater(false);
     toast.success('Établissement ajouté au réseau');
   };
 
@@ -808,9 +852,9 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
           selectedProfileType === 'individual_owner'
             ? ownerWifiPassword.trim() || undefined
             : undefined,
-        // H1 — the individual_owner's working-hours window; skipped or non-owner = omitted.
+        // H1 — the individual_owner's working-hours window (HOURS-M1: always sent for owners).
         ...(selectedProfileType === 'individual_owner'
-          ? hoursPayload(ownerHoursLater, ownerOpeningHour, ownerClosingHour)
+          ? hoursPayload(ownerOpeningHour, ownerClosingHour)
           : {}),
         fleet_establishments:
           selectedProfileType === 'fleet_owner' && fleetEstablishments.length > 0
@@ -1385,11 +1429,6 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             setClosing: (v) => {
               clearFieldError('hours');
               setOwnerClosingHour(v);
-            },
-            later: ownerHoursLater,
-            setLater: (v) => {
-              clearFieldError('hours');
-              setOwnerHoursLater(v);
             },
           })}
           {fieldError('hours')}
@@ -1993,8 +2032,6 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
           setOpening: setFleetDraftOpeningHour,
           closing: fleetDraftClosingHour,
           setClosing: setFleetDraftClosingHour,
-          later: fleetDraftHoursLater,
-          setLater: setFleetDraftHoursLater,
         })}
         {renderLocationWifiFields({
           idPrefix: 'fleet-draft',
@@ -2127,8 +2164,6 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
     setOpening: (v: number) => void;
     closing: number;
     setClosing: (v: number) => void;
-    later: boolean;
-    setLater: (v: boolean) => void;
   }) => (
     <div className="rounded-2xl border border-gray-200 bg-gray-50 p-5 space-y-4">
       <div>
@@ -2147,7 +2182,6 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             value={opts.opening}
             onChange={(e) => opts.setOpening(parseInt(e.target.value, 10))}
             className={inputClass}
-            disabled={opts.later}
             id={`${opts.idPrefix}-opening-hour`}
           >
             {HOUR_OPTIONS.map((o) => (
@@ -2165,7 +2199,6 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             value={opts.closing}
             onChange={(e) => opts.setClosing(parseInt(e.target.value, 10))}
             className={inputClass}
-            disabled={opts.later}
             id={`${opts.idPrefix}-closing-hour`}
           >
             {HOUR_OPTIONS.map((o) => (
@@ -2176,24 +2209,12 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
           </select>
         </div>
       </div>
-      {!opts.later && !isValidHoursWindow(opts.opening, opts.closing) && (
+      {/* HOURS-M1 (Mejri 09/09): the « Préciser plus tard » skip is gone — hours are mandatory. */}
+      {!isValidHoursWindow(opts.opening, opts.closing) && (
         <p className="text-xs text-red-600">
           L&apos;heure d&apos;ouverture doit précéder l&apos;heure de fermeture.
         </p>
       )}
-      <label
-        className="flex items-center cursor-pointer gap-2"
-        htmlFor={`${opts.idPrefix}-hours-later`}
-      >
-        <input
-          type="checkbox"
-          checked={opts.later}
-          onChange={(e) => opts.setLater(e.target.checked)}
-          className="w-4 h-4 rounded border-gray-300 text-brand-primary focus:ring-brand-primary/30"
-          id={`${opts.idPrefix}-hours-later`}
-        />
-        <span className="text-sm text-gray-700">Préciser plus tard</span>
-      </label>
     </div>
   );
 

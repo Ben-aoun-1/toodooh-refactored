@@ -34,7 +34,6 @@ const baseCtx = (over: Partial<StepErrorCtx> = {}): StepErrorCtx => ({
   businessSectorId: 'sector-1',
   etablissementScreens: '2',
   etablissementRooms: '3',
-  hoursLater: false,
   hoursValid: true,
   businessName: 'Société Horizon',
   companySize: '0 - 10',
@@ -133,8 +132,10 @@ describe('step 2 — individual_owner établissement', () => {
     });
   });
 
-  it('« Préciser plus tard » bypasses the hours window (H1 untouched)', () => {
-    expect(stepFieldErrors(2, ownerCtx({ hoursLater: true, hoursValid: false }))).toEqual({});
+  it('HOURS-M1: the hours window is always required — the former « préciser plus tard » bypass is gone', () => {
+    expect(stepFieldErrors(2, ownerCtx({ hoursValid: false }))).toEqual({
+      hours: HOURS_WINDOW_ERROR,
+    });
   });
 });
 

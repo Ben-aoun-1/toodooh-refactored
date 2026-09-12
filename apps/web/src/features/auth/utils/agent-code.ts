@@ -3,8 +3,8 @@
  * the issued format — a 2-char TYPE prefix ('SH' screenhost_agent | 'SC' screencast_agent)
  * followed by exactly 6 digits, case-insensitive. This SUPERSEDES the F5 "any 1–16 digits"
  * gate (F5 numeric ruling, 2026-06-11): Kais's GTM format is now the contract. FORMAT only —
- * resolution stays server-side, where an unmatched code is still ACCEPTED and stored unlinked
- * (apps/api/src/routes/signup.ts). Generation lives in apps/api/src/lib/agent-code.ts and mints
+ * resolution is server-side: since AGENT-V1 (2026-09-12) an unmatched or wrong-type code is
+ * REFUSED (409 at /api/signup, pre-checked by /api/signup/agent-code-availability). Generation lives in apps/api/src/lib/agent-code.ts and mints
  * the same shape; a cross-check test keeps the two in sync (the two apps don't share a package).
  * Pure: no I/O, no state.
  *

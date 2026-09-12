@@ -8,15 +8,9 @@ import { z } from 'zod';
 
 import { auth } from '../auth/auth.js';
 import { db } from '../db/client.js';
-import {
-  accounts,
-  agentReferrals,
-  agents,
-  screenhosts,
-  userDocuments,
-  users,
-} from '../db/schema.js';
+import { accounts, agentReferrals, screenhosts, userDocuments, users } from '../db/schema.js';
 import { env } from '../env.js';
+import { agentCodeVerdict, agentCompatibleWith, resolveAgentByCode } from '../lib/agent-lookup.js';
 import { PROFILE_TYPES, fromProfileType } from '../lib/profile-type.js';
 import { ALLOWED_DOCUMENT_MIME, MAX_DOCUMENT_BYTES } from '../lib/user-documents.js';
 import { encryptWifiPassword } from '../lib/wifi-crypto.js';
@@ -52,6 +46,7 @@ const hoursAreOrdered = (b: HoursPair): boolean =>
   b.opening_hour === undefined || b.closing_hour === undefined || b.opening_hour < b.closing_hour;
 const PAIR_MESSAGE = 'opening_hour and closing_hour must be provided together';
 const ORDER_MESSAGE = 'opening_hour must be strictly before closing_hour';
+const HOURS_REQUIRED_MESSAGE = 'opening_hour and closing_hour are required for a screenhost signup';
 
 const fleetEstablishmentSchema = z
   .object({
@@ -69,8 +64,10 @@ const fleetEstablishmentSchema = z
     longitude: z.number().min(-180).max(180).optional(),
     wifi_ssid: z.string().min(1).optional(),
     wifi_password: z.string().min(1).optional(),
-    opening_hour: hourField.optional(),
-    closing_hour: hourField.optional(),
+    // HOURS-M1 (Mejri 09/09, operator 2026-09-12): the pair is REQUIRED per establishment —
+    // « préciser plus tard » is gone from the wizard and refused on the wire.
+    opening_hour: hourField,
+    closing_hour: hourField,
   })
   .refine(hoursArePaired, { message: PAIR_MESSAGE, path: ['closing_hour'] })
   .refine(hoursAreOrdered, { message: ORDER_MESSAGE, path: ['closing_hour'] });
@@ -107,12 +104,18 @@ const signupBodySchema = z
     wifi_password: z.string().min(1).optional(),
     // H1 — the individual_owner's working-hours window (fleet owners carry a pair per
     // fleet_establishments entry instead). Advertisers/agencies never persist these.
+    // HOURS-M1 (Mejri 09/09, operator 2026-09-12): REQUIRED for an individual_owner — the
+    // « préciser plus tard » skip is gone; NULL hours now only exist on legacy rows.
     opening_hour: hourField.optional(),
     closing_hour: hourField.optional(),
     fleet_establishments: z.array(fleetEstablishmentSchema).optional(),
   })
   .refine(hoursArePaired, { message: PAIR_MESSAGE, path: ['closing_hour'] })
-  .refine(hoursAreOrdered, { message: ORDER_MESSAGE, path: ['closing_hour'] });
+  .refine(hoursAreOrdered, { message: ORDER_MESSAGE, path: ['closing_hour'] })
+  .refine((b) => b.profile_type !== 'individual_owner' || b.opening_hour !== undefined, {
+    message: HOURS_REQUIRED_MESSAGE,
+    path: ['opening_hour'],
+  });
 
 // Q4 — better-auth's signup is sequential, not atomic (createUser → linkAccount
 // → verification are separate calls; no injectable tx). If linkAccount throws
@@ -324,6 +327,25 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
       }
     }
 
+    // AGENT-V1 (Mejri 09/09, operator 2026-09-12): a typed agent code must name an EXISTING agent
+    // of the right type, checked BEFORE the account is created (like the matricule pre-check
+    // below) — refusing after signUpEmail would 4xx an account that already exists. This reverses
+    // the 2026-06-06 A2 rule (accept unknown, store unlinked, flag for admin). Absent → no check:
+    // the field is required by the wizard, not by the wire (admin-created accounts carry none).
+    if (agent_toodooh !== undefined && agent_toodooh.trim() !== '') {
+      const verdict = await agentCodeVerdict(agent_toodooh, profile_type);
+      if (verdict !== 'ok') {
+        return reply.status(409).send({
+          error: verdict === 'unknown' ? 'AGENT_CODE_UNKNOWN' : 'AGENT_CODE_INCOMPATIBLE',
+          message:
+            verdict === 'unknown'
+              ? 'No agent matches this code.'
+              : 'This agent code belongs to an agent of another type.',
+          fields: [{ field: 'agent_toodooh', reason: verdict }],
+        });
+      }
+    }
+
     // tax_number is ours (UNIQUE) — pre-check for a clean 409, but ONLY when provided: it is
     // optional now (owners have no matricule at signup) and the nullable UNIQUE column allows many
     // nulls. (Email dupes are masked by anti-enumeration → generic 201, no EMAIL_TAKEN.)
@@ -444,37 +466,20 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
           );
         }
 
-        // Agent referral linkage (P1 Commit 3). Resolve the entered code (trim+uppercase) against
-        // agents.code; on a ROLE-COMPATIBLE match, normalize the link into agent_referrals. The
-        // raw `users.agent_code` write above still happens regardless — agent_referrals is the
-        // structured attribution, agent_code is the raw audit field. A non-match or an
-        // incompatible role links NOTHING (signup still 201). Absent agent_toodooh → no lookup.
-        // This sits INSIDE the synthetic-id guard, so a duplicate-email signup never links.
-        if (agent_toodooh !== undefined) {
-          const resolvedCode = agent_toodooh.trim().toUpperCase();
-          const [agent] = await db
-            .select({ agentUserId: agents.userId, agentRole: users.role })
-            .from(agents)
-            .innerJoin(users, eq(users.id, agents.userId))
-            .where(eq(agents.code, resolvedCode))
-            .limit(1);
-          if (agent) {
-            // The referred user's MAPPED role (server-controlled): profile_type maps via
-            // fromProfileType; absent profile_type defaults to advertiser (the DB default applied
-            // above). screenhost_agent ↔ individual_owner/fleet_owner; screencast_agent ↔
-            // advertiser (which subsumes 'agency' = advertiser + business_type='agency').
-            const referredRole = profile_type ? fromProfileType(profile_type).role : 'advertiser';
-            const compatible =
-              (agent.agentRole === 'screenhost_agent' &&
-                (referredRole === 'individual_owner' || referredRole === 'fleet_owner')) ||
-              (agent.agentRole === 'screencast_agent' && referredRole === 'advertiser');
-            if (compatible) {
-              await db.insert(agentReferrals).values({
-                agentUserId: agent.agentUserId,
-                referredUserId: persisted.id,
-                agentCodeUsed: agent_toodooh, // raw entered value (audit trail, pre-normalization)
-              });
-            }
+        // Agent referral linkage (P1 Commit 3, resolver shared since AGENT-V1). The pre-check
+        // above already refused an unknown or role-incompatible code with 409, so a present code
+        // resolves to a compatible agent here — same resolver, same normalisation (uppercase,
+        // whitespace stripped), so the two verdicts cannot drift. The raw `users.agent_code` write
+        // above still happens (audit field); agent_referrals is the structured attribution. This
+        // sits INSIDE the synthetic-id guard, so a duplicate-email signup never links.
+        if (agent_toodooh !== undefined && agent_toodooh.trim() !== '') {
+          const agent = await resolveAgentByCode(agent_toodooh);
+          if (agent && agentCompatibleWith(agent.agentRole, profile_type)) {
+            await db.insert(agentReferrals).values({
+              agentUserId: agent.agentUserId,
+              referredUserId: persisted.id,
+              agentCodeUsed: agent_toodooh, // raw entered value (audit trail, pre-normalization)
+            });
           }
         }
 
