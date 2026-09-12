@@ -6,6 +6,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import NotFoundPage from '@/components/NotFoundPage';
 import PageLoadingFallback from '@/components/PageLoadingFallback';
 import AdminRoute from '@/features/admin/components/AdminRoute';
+import { isAdminRole } from '@/features/admin/utils/admin-roles';
 import AgentRoute from '@/features/agent/components/AgentRoute';
 import { isAgentRole } from '@/features/agent/utils/agent-roles';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
@@ -112,6 +113,11 @@ function AdvertiserRoute({ children }: { children: React.ReactNode }) {
   // Slice-2 E / P2 — an agent (profile_type null) must not sit on the advertiser dashboard.
   if (isAgentRole(role)) {
     return <Navigate to="/agent" />;
+  }
+  // MINOR-1/30 — nor must an admin (also profile_type null): /dashboard used to render the
+  // advertiser shell for them. Their home is the admin dashboard.
+  if (isAdminRole(role)) {
+    return <Navigate to="/admin-dashboard" />;
   }
   // Utiliser le profileType du store au lieu de localStorage
   if (profileType === 'individual_owner' || profileType === 'fleet_owner') {

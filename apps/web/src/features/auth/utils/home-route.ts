@@ -1,12 +1,18 @@
+import { isAdminRole } from '@/features/admin/utils/admin-roles';
+
 // The single post-auth landing resolver. Login (LoginForm) and post-verify auto-login (VerifyEmail)
-// both route through this so a verified user lands exactly where a normal login lands — agents in the
-// agent workspace, owners on the owner dashboard, everyone else on the advertiser dashboard. Mirrors
-// the guard redirects in App.tsx (PublicRoute/OwnerRoute/AdvertiserRoute/AgentRoute); keep them in step.
+// both route through this so a verified user lands exactly where a normal login lands — admins on
+// the admin dashboard, agents in the agent workspace, owners on the owner dashboard, everyone else
+// on the advertiser dashboard. Mirrors the guard redirects in App.tsx
+// (PublicRoute/OwnerRoute/AdvertiserRoute/AgentRoute); keep them in step.
 export function resolveHomeRoute(
   profileType: string | null,
   role?: string | null,
   status?: string | null,
 ): string {
+  // MINOR-1/30 — an admin (profile_type null, like an agent) used to fall through to /dashboard
+  // and get the advertiser shell. Admins route by ROLE to their own home.
+  if (isAdminRole(role)) return '/admin-dashboard';
   // Both agent roles (Slice-2 E screenhost_agent; P2 screencast_agent) land in the agent
   // referred-clients workspace. Agents have profile_type=null, so they must route by ROLE here.
   // (Agents are admin-created, never moderation-rejected, so the status gate below is end-user only.)
