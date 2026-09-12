@@ -48,8 +48,22 @@ export const summarize = (grid: readonly number[][]): AffluenceSummary => {
     }
     return sum;
   });
+  // DATA1 — « Audience hebdomadaire » IS Σ of the 7 day tiles, by construction: one pass over the
+  // same rows feeds both, so the week can never disagree with the tiles it stands beside.
   const weeklyTotal = dayTotals.reduce((a, b) => a + b, 0);
-  const hourTotals = HOURS.map((h) => grid.reduce((acc, row) => acc + (row[h] ?? 0), 0));
+  // Slice C — the api serves SLOT columns (7×48, two per hour) since the half-hour grid; the hub's
+  // legacy wire was 7×24. « Heure de pointe » is an HOUR either way: on a slot grid the two halves
+  // fold into their hour before the argmax, otherwise slot 9 (04h30) printed as « 09h » and no
+  // afternoon peak could ever be seen (the scan stopped at column 23 = 11h30).
+  const columns = grid[0]?.length ?? 0;
+  const perHour = columns > HOURS.length ? Math.ceil(columns / HOURS.length) : 1;
+  const hourTotals = HOURS.map((h) =>
+    grid.reduce((acc, row) => {
+      let sum = 0;
+      for (let k = 0; k < perHour; k += 1) sum += row[h * perHour + k] ?? 0;
+      return acc + sum;
+    }, 0),
+  );
 
   const hasData = weeklyTotal > 0;
   const peakDay = argmax(dayTotals);
