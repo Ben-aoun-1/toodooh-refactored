@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { db } from '../db/client.js';
 import { businessSectors, governorates, users } from '../db/schema.js';
+import { accountLabel, notifyAdmins } from '../lib/admin-notifications.js';
 import { snapshotBankState, writeBankAudit } from '../lib/bank-audit.js';
 import { IBAN_ERROR, RIB_ERROR, validateIbanTn, validateRib } from '../lib/bank-validation.js';
 import { requireAuth } from '../middleware/require-auth.js';
@@ -345,6 +346,12 @@ export const profileRoutes: FastifyPluginAsync = async (app) => {
       })
       .where(eq(users.id, userId))
       .returning();
+    // ADM-BELL1 — a corrected file is back in the admin's queue.
+    await notifyAdmins(db, {
+      type: 'admin_account_pending',
+      title: 'Compte re-soumis à validation',
+      body: `Le compte « ${await accountLabel(userId)} » a corrigé ses documents et attend votre validation.`,
+    }).catch((err: unknown) => request.log.warn({ err }, 'admin notice failed (resubmit)'));
     return reply.status(200).send({ status: updated?.status ?? 'pending' });
   });
 };

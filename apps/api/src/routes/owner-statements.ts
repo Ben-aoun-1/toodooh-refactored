@@ -10,6 +10,7 @@ import {
   screenhostVersements,
   screenhosts,
 } from '../db/schema.js';
+import { accountLabel, notifyAdmins } from '../lib/admin-notifications.js';
 import { MAX_JUSTIFICATIF_BYTES, signedFactureKey } from '../lib/facture-deposit.js';
 import { factureLinesFor } from '../lib/facture-lines.js';
 import { declaredMatchesSniffed, sniffContainer } from '../lib/media-probe.js';
@@ -294,6 +295,12 @@ export const ownerStatementsRoutes: FastifyPluginAsync = async (app) => {
       title: 'Facture signée reçue',
       body: `Votre facture de ${monthLabelFr(row.month)} pour « ${row.venueName} » a bien été reçue.`,
     });
+    // ADM-BELL1 — the admin verifies the deposited facture (the recharge bon_returned symmetry).
+    await notifyAdmins(db, {
+      type: 'admin_facture_deposited',
+      title: 'Facture signée déposée',
+      body: `La facture de ${monthLabelFr(row.month)} pour « ${row.venueName} » (${await accountLabel(userId)}) attend votre vérification.`,
+    }).catch((err: unknown) => request.log.warn({ err }, 'admin notice failed (facture)'));
 
     return reply.status(200).send({ id: row.id, deposited: true });
   });

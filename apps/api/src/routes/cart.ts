@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { db } from '../db/client.js';
 import { type Campaign, cartItems, campaigns, creatives, events } from '../db/schema.js';
 import { finalizeActivation, prepareActivation } from '../lib/activation-service.js';
+import { accountLabel, notifyAdmins } from '../lib/admin-notifications.js';
 import { MIN_CAMPAIGN_BUDGET_TND } from '../lib/campaign-budget.js';
 import { computeCampaignCmax } from '../lib/campaign-cmax.js';
 import { startDateViolation } from '../lib/campaign-dates.js';
@@ -378,6 +379,19 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
         message: 'One or more cart items changed during the confirm. Nothing was launched.',
         items: [],
       });
+    }
+    // ADM-BELL1 — ONE aggregated notice for the batch that landed in the validation queue.
+    if (result.updated.length > 0) {
+      const n = result.updated.length;
+      await notifyAdmins(db, {
+        type: 'admin_campaign_pending',
+        title: n === 1 ? 'Nouvelle campagne à valider' : `${n} campagnes à valider`,
+        body:
+          n === 1
+            ? `La campagne « ${result.updated[0]?.name ?? ''} » de ${await accountLabel(userId)} attend votre validation.`
+            : `${n} campagnes de ${await accountLabel(userId)} attendent votre validation.`,
+        campaignId: n === 1 ? (result.updated[0]?.id ?? null) : null,
+      }).catch((err: unknown) => request.log.warn({ err }, 'admin notice failed (cart)'));
     }
     // The response splits the two outcomes so the FE can word the mixed toast (CF-SK1).
     return reply.status(200).send({

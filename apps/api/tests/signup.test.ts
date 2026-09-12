@@ -11,6 +11,7 @@ import {
   agents,
   businessSectors,
   governorates,
+  notifications,
   userDocuments,
   users,
 } from '../src/db/schema.js';
@@ -319,6 +320,30 @@ describe('POST /api/signup', () => {
     expect(u?.governorateId).toBeTruthy();
     expect(u?.agentCode).toBe('AGENT-42'); // wire agent_toodooh → column agent_code
     expect(u?.termsAcceptedAt).toBeInstanceOf(Date); // server-stamped
+  });
+
+  it('ADM-BELL1: a new signup notifies every admin (admin_account_pending)', async () => {
+    const [admin] = await db
+      .insert(users)
+      .values({
+        email: 'admin-bell@example.com',
+        contactName: 'Admin',
+        role: 'admin',
+        status: 'approved',
+      })
+      .returning({ id: users.id });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      payload: await fullProfile(),
+    });
+    expect(res.statusCode).toBe(201);
+    const rows = await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.userId, admin?.id ?? ''));
+    expect(rows.map((r) => r.type)).toEqual(['admin_account_pending']);
+    expect(rows[0]?.body).toContain('attend votre validation');
   });
 
   it('full agency signup → role=advertiser + business_type=agency (the MAP override)', async () => {
