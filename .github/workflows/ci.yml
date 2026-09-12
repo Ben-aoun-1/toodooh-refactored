@@ -15,6 +15,10 @@
 name: CI
 
 on:
+  # NIGHT-1 (2026-09-12): three suites went red only at an unusual hour (Tunis-day and same-instant
+  # ordering assumptions). A 03:00 UTC run catches the next one before a human does.
+  schedule:
+    - cron: '0 3 * * *'
   push:
     branches: [main]
   pull_request:

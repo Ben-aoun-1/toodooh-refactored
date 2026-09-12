@@ -2084,3 +2084,41 @@ export const eventAttestations = pgTable(
 );
 
 export type EventAttestation = typeof eventAttestations.$inferSelect;
+
+// ── support_messages (SUP-1, Mejri 11/09 point 8) ──────────────────────────
+// The « Support » and « Prendre rendez-vous » forms used to toast « envoyé » and store NOTHING.
+// One row per submission, any authenticated role; an admin handles it from /admin-support. The
+// enums stay English per the *_status convention; French labels live web-side.
+export const supportKind = pgEnum('support_kind', ['support', 'appointment']);
+export const supportStatus = pgEnum('support_status', ['new', 'handled']);
+
+export const supportMessages = pgTable(
+  'support_messages',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    kind: supportKind('kind').notNull(),
+    objective: text('objective').notNull(),
+    otherDetail: text('other_detail'),
+    message: text('message'),
+    // ISO date (YYYY-MM-DD) — an appointment WISH, not a booking; NULL for a support message.
+    appointmentDate: date('appointment_date'),
+    status: supportStatus('status').notNull().default('new'),
+    handledBy: uuid('handled_by').references(() => users.id, { onDelete: 'set null' }),
+    handledAt: timestamp('handled_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('support_messages_status_idx').on(table.status),
+    index('support_messages_user_id_idx').on(table.userId),
+    check(
+      'support_messages_appointment_date_kind',
+      sql`(${table.kind} = 'appointment') = (${table.appointmentDate} IS NOT NULL)`,
+    ),
+  ],
+);
+
+export type SupportMessage = typeof supportMessages.$inferSelect;
+export type NewSupportMessage = typeof supportMessages.$inferInsert;

@@ -61,6 +61,7 @@ const ScreenhostFactureManagement = lazy(
   () => import('@/features/admin/pages/ScreenhostFactureManagement'),
 );
 const RechargeManagement = lazy(() => import('@/features/admin/pages/RechargeManagement'));
+const SupportManagement = lazy(() => import('@/features/admin/pages/SupportManagement'));
 const GeographicZonesManagement = lazy(
   () => import('@/features/admin/pages/GeographicZonesManagement'),
 );
@@ -599,6 +600,14 @@ export default function App() {
               element={
                 <AdminRoute requiredRoles={['superadmin', 'admin']}>
                   <ScreenhostFactureManagement />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin-support"
+              element={
+                <AdminRoute requiredRoles={['superadmin', 'admin']}>
+                  <SupportManagement />
                 </AdminRoute>
               }
             />

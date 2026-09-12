@@ -34,6 +34,8 @@ const EnvSchema = z.object({
   SMTP_USER: z.email(),
   SMTP_PASSWORD: z.string().min(8),
   SMTP_FROM: z.email(),
+  // SUP-1 — where a copy of each support message goes once ops create the mailbox; unset = no copy.
+  SUPPORT_MAILBOX: z.email().optional(),
   // MinIO / S3-compatible object storage (Commit 2). ENDPOINT/ACCESS_KEY/SECRET_KEY
   // required (fast-fail at boot); BUCKET/REGION default. forcePathStyle is set in code.
   // STORAGE_ENDPOINT is the INTERNAL endpoint for ALL server-side SDK calls (upload,

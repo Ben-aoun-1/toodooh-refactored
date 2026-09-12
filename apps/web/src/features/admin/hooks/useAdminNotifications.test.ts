@@ -24,6 +24,7 @@ describe('actionFor (admin bell CTA)', () => {
     ['admin_creative_pending', '/admin-creatives', 'Traiter'],
     ['admin_facture_deposited', '/admin-screenhost-factures', 'Traiter'],
     ['admin_allocation_refused', '/admin-campaigns', 'Consulter'],
+    ['admin_support_message', '/admin-support', 'Traiter'],
   ])('%s → %s', (type, path, label) => {
     expect(actionFor(notif({ type }))).toEqual({ label, path });
   });
