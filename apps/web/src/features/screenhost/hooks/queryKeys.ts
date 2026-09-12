@@ -48,6 +48,10 @@ export const screenhostKeys = {
   allocationCreativeUrl: (allocationId: string) =>
     [...screenhostKeys.all, 'allocationCreativeUrl', allocationId] as const,
 
+  /** E2 — a venue's declared days in a month window (GET /:id/unavailability?from&to). */
+  unavailability: (screenhostId: string, from: string, to: string) =>
+    [...screenhostKeys.all, 'unavailability', screenhostId, from, to] as const,
+
   /** The owner's ACCEPTE allocations + créneaux for the diffusion calendar (GET /calendar). */
   calendar: (userId: string) => [...screenhostKeys.all, 'calendar', userId] as const,
 

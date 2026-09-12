@@ -8,8 +8,7 @@ import { screenhostKeys } from './queryKeys';
 // refused write (PAST_OR_TODAY, network) rolls the cache back and surfaces the error to the
 // caller's onError (the page toasts in French).
 
-const unavailabilityKey = (screenhostId: string, from: string, to: string) =>
-  [...screenhostKeys.all, 'unavailability', screenhostId, from, to] as const;
+const unavailabilityKey = screenhostKeys.unavailability;
 
 /** The optimistic cache step, pure: declare inserts (deduped, sorted); undeclare removes. */
 export const applyOptimisticToggle = (
@@ -34,6 +33,7 @@ export function useToggleUnavailability(
   screenhostId: string | undefined,
   from: string,
   to: string,
+  userId?: string,
 ) {
   const queryClient = useQueryClient();
   const key = unavailabilityKey(screenhostId ?? '', from, to);
@@ -50,6 +50,15 @@ export function useToggleUnavailability(
     },
     onError: (_err, _vars, context) => {
       if (context?.previous !== undefined) queryClient.setQueryData(key, context.previous);
+    },
+    // CAL-1 — a declaration that moved a share changed the diffusion layer, the pending queue
+    // (the re-placed venues must re-accept) and possibly this owner's bell.
+    onSuccess: (result) => {
+      if (result.redispatched.length > 0 && userId) {
+        void queryClient.invalidateQueries({ queryKey: screenhostKeys.calendar(userId) });
+        void queryClient.invalidateQueries({ queryKey: screenhostKeys.pendingAllocations(userId) });
+        void queryClient.invalidateQueries({ queryKey: screenhostKeys.notifications(userId) });
+      }
     },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: key });

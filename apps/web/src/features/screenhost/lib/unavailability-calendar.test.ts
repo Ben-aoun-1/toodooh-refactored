@@ -36,9 +36,9 @@ describe('monthGrid — Monday-first, full weeks, neighbour padding', () => {
 });
 
 describe('the consequence copy — the ruled wording, verbatim', () => {
-  it('states the exclusion AND the frozen-plan immunity', () => {
+  it('CAL-1: states the exclusion AND that an accepted diffusion on that day is redistributed', () => {
     expect(UNAVAILABILITY_CONSEQUENCE_COPY).toBe(
-      'Les jours indisponibles sont exclus des prochaines campagnes. Les campagnes déjà planifiées ne sont pas affectées.',
+      "Les jours indisponibles sont exclus des prochaines campagnes. Si une campagne acceptée y diffuse, sa part sur ce jour est automatiquement redistribuée à d'autres établissements.",
     );
   });
 });

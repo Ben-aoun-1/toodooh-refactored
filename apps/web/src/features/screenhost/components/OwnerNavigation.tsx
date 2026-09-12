@@ -5,7 +5,6 @@ import {
   Home,
   Banknote,
   Calendar,
-  CalendarDays,
   ChevronLeft,
   ChevronRight,
   Megaphone,
@@ -66,13 +65,10 @@ const navigation = [
     iconSrc: campagneIcon,
     iconSrcActive: campagneIconActive,
   },
+  // CAL-1 — ONE calendar: diffusions + indisponibilités + dispositifs (the former « Calendrier de
+  // diffusion » entry merged here; its URL redirects).
   {
-    name: 'Calendrier de diffusion',
-    href: '/owner-campaign-calendar',
-    icon: CalendarDays,
-  },
-  {
-    name: 'Mon calendrier et Mes dispositifs de diffusion',
+    name: 'Mon calendrier de diffusion',
     href: '/owner-calendar-devices',
     icon: Calendar,
     iconSrc: parcTvIcon,
