@@ -6,19 +6,14 @@ import {
   GroupedProfileDocuments,
   ProfileDocument,
   SignupResponse,
-  SupportObjectiveOption,
   SessionUser,
   MeUser,
 } from '@/features/auth/types/auth';
 import { apiClient, ApiError } from '@/lib/api-client';
-import { logger } from '@/lib/logger';
-import { supabase } from '@/lib/supabase';
 
 import { apiErrorMessage } from './auth-errors';
 
 export type AgentCodeVerdict = 'ok' | 'unknown' | 'incompatible';
-
-const log = logger.child({ module: 'auth.service' });
 
 export const authService = {
   /**
@@ -237,32 +232,6 @@ export const authService = {
     } catch (error) {
       throw new Error(apiErrorMessage(error));
     }
-  },
-
-  async updateBusinessProfile(updateData: Partial<BusinessProfile>) {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      throw new Error('Utilisateur non connecté');
-    }
-
-    const { data, error } = await supabase
-      .from('business_profiles')
-      .update(updateData)
-      .eq('user_id', user.id)
-      .select();
-
-    if (error) {
-      log.error({ error }, '❌ Erreur Supabase');
-      log.error(
-        { message: error.message, details: error.details, hint: error.hint, code: error.code },
-        "Détails de l'erreur",
-      );
-      throw new Error(`Erreur lors de la mise à jour du profil: ${error.message}`);
-    }
-
-    return data;
   },
 
   // Phase-1f F6 — authenticated change: the backend re-auths the current password + revokes other
@@ -508,28 +477,6 @@ export const authService = {
     } catch (error) {
       throw new Error(apiErrorMessage(error));
     }
-  },
-
-  async getAppointmentObjectives(): Promise<SupportObjectiveOption[]> {
-    // Compatibilité multi-environnements: certaines bases n'ont pas appointment_objectives.
-    const preferredTables = [
-      'support_objectives_owner',
-      'support_objectives_advertiser_agency',
-    ] as const;
-
-    for (const table of preferredTables) {
-      const { data, error } = await supabase
-        .from(table)
-        .select('*')
-        .order('display_order', { ascending: true });
-
-      if (!error) return data ?? [];
-      if (error.code === 'PGRST205') continue;
-      // Ne pas bloquer l'UI pour les objectifs; fallback local côté pages.
-      return [];
-    }
-
-    return [];
   },
 
   async getGovernorates(): Promise<Governorate[]> {

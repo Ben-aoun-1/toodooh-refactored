@@ -28,8 +28,5 @@ export const authKeys = {
   /** Owner-side business-sector reference list (`authService.getOwnerBusinessSectors`). */
   ownerBusinessSectors: () => [...authKeys.all, 'ownerBusinessSectors'] as const,
 
-  /** Support-appointment objective options (`authService.getAppointmentObjectives`). */
-  appointmentObjectives: () => [...authKeys.all, 'appointmentObjectives'] as const,
-
   profile: (userId: string) => [...authKeys.all, 'profile', userId] as const,
 };

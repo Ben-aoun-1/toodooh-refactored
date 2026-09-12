@@ -6,7 +6,6 @@ import { authService } from './auth.service';
 
 // Stub the Supabase module so importing authService (which still imports it for the deferred,
 // later-slice methods) doesn't pull in the missing ./database.types at runtime.
-vi.mock('@/lib/supabase', () => ({ supabase: {} }));
 
 // Mock apiClient.get; keep ApiError real (via importActual) for the error-path assertion.
 vi.mock('@/lib/api-client', async (importActual) => {

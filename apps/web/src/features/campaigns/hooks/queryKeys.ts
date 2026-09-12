@@ -44,9 +44,6 @@ export const campaignsKeys = {
   screenIds: (locationIds: readonly string[]) =>
     [...campaignsKeys.all, 'screenIds', stableIdsSegment(locationIds)] as const,
 
-  /** A single `videos` row by id (Commit 7b — `useVideoById`, 4-consumer read). */
-  video: (videoId: string) => [...campaignsKeys.all, 'video', videoId] as const,
-
   /** The signed-in advertiser's approved videos (`Step5` picker source). */
   myApprovedVideos: (userId: string) => [...campaignsKeys.all, 'myApprovedVideos', userId] as const,
 
