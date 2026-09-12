@@ -51,6 +51,15 @@ export interface RecommendationInput {
     moyenneParJour: number | null;
     moyenneParHeure: number | null;
     pic: { valeur: number; date: string } | null;
+    /**
+     * AI-PROV1 — the ONLY merged-grid field that still crossed the wire without provenance. The
+     * KPIs are the merged période audience (PAX day first, the admin's grid otherwise) and the page
+     * discloses « dont N % estimés »; the payload did not, so a 100 %-estimated « globale » read to
+     * the model as counted footfall. The share of DATA POINTS that are estimations (0–100), null
+     * when there is no audience data at all. `pic` needs no flag: MEJ-R2 makes it eligible only on
+     * a day holding at least one measured cell.
+     */
+    partEstimeePct: number | null;
   };
   /**
    * Busiest / quietest open slots from the heatmap, e.g. "Ven 18h" — the SAME ranking S02 colours,
@@ -83,7 +92,8 @@ Règles strictes :
 - Rédige en français, en vouvoiement (« vous », « votre lieu »), dans le ton de conseil concret du rapport.
 - Si une donnée est absente ou nulle, ne la mentionne pas.
 - Chaque créneau nommé couvre 30 minutes (« 13h30 » = 13h30–14h00). Ne fusionne pas plusieurs créneaux en une plage horaire et ne cite jamais une heure absente des données fournies : le lieu est fermé en dehors des créneaux listés.
-- Un créneau suivi de « (estimation) » n'a PAS été mesuré par le capteur : c'est la grille type saisie pour ce lieu. Tu peux le citer, mais dis alors qu'il est estimé — ne le présente jamais comme une fréquentation constatée.`;
+- Un créneau suivi de « (estimation) » n'a PAS été mesuré par le capteur : c'est la grille type saisie pour ce lieu. Tu peux le citer, mais dis alors qu'il est estimé — ne le présente jamais comme une fréquentation constatée.
+- « partEstimeePct » est la part (en %) des chiffres d'audience qui sont des estimations plutôt que des mesures du capteur. Si elle est supérieure à 0, toute audience que tu cites (globale, moyenne, profil) est à présenter comme estimée dans cette proportion — jamais comme un constat.`;
 
 // Lazy singleton — constructed on first use and ONLY when the key is provisioned (explicit
 // apiKey from env.ts, never the SDK's ambient env resolution: the no-key path stays
@@ -329,8 +339,15 @@ export function buildRecommendationInput(data: ReportData): RecommendationInput 
           moyenneParJour: data.kpis.perDay,
           moyenneParHeure: data.kpis.perHour,
           pic: data.kpis.peak ? { valeur: data.kpis.peak.value, date: data.kpis.peak.date } : null,
+          partEstimeePct: data.kpis.estimatedPct, // AI-PROV1
         }
-      : { globale: null, moyenneParJour: null, moyenneParHeure: null, pic: null },
+      : {
+          globale: null,
+          moyenneParJour: null,
+          moyenneParHeure: null,
+          pic: null,
+          partEstimeePct: null,
+        },
     creneaux: heatmapSlots(data.heatLevels, data.heatKinds, data.heatValues, data.heatSlots),
     campagnes: {
       nombre: data.castHasData ? data.campaignsBlock.count : 0,

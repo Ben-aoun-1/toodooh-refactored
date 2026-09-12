@@ -71,6 +71,7 @@ const input = (): RecommendationInput => ({
     moyenneParJour: 764,
     moyenneParHeure: 76.4,
     pic: { valeur: 1180, date: '2026-06-14' },
+    partEstimeePct: 0,
   },
   creneaux: { plusForts: ['Ven 18h', 'Sam 17h', 'Ven 19h'], plusFaibles: ['Mar 9h', 'Jeu 15h'] },
   campagnes: { nombre: 3, revenuTotalTnd: '1 065' },
@@ -409,6 +410,7 @@ describe('buildRecommendationInput (ReportData → minimized payload)', () => {
       moyenneParJour: 764,
       moyenneParHeure: 76.4,
       pic: { valeur: 1180, date: '2026-06-14' },
+      partEstimeePct: 0,
     });
     expect(built.creneaux.plusForts[0]).toBe('Ven 18h'); // the level-5 cell leads
     // R3.1 — only 3 open cells: all are forts, and faibles stays EMPTY rather than echoing them
@@ -531,6 +533,24 @@ describe('buildRecommendationInput (ReportData → minimized payload)', () => {
       expect(built.plusForts).toEqual(['Mer 11h (estimation)']);
     });
 
+    // AI-PROV1 — the audience KPIs are the merged période read; their estimated share crosses
+    // the wire like the créneaux' « (estimation) » does, and the prompt says what it means.
+    it('AI-PROV1: the audience block carries its estimated share (page: « dont N % estimés »)', () => {
+      const mostlyGrid = buildRecommendationInput(
+        reportData({ kpis: { ...reportData().kpis, estimatedPct: 83 } }),
+      );
+      expect(mostlyGrid.audience.partEstimeePct).toBe(83);
+      const noHost = buildRecommendationInput(reportData({ hostHasData: false }));
+      expect(noHost.audience).toEqual({
+        globale: null,
+        moyenneParJour: null,
+        moyenneParHeure: null,
+        pic: null,
+        partEstimeePct: null,
+      });
+      expect(SYSTEM_PROMPT).toContain('partEstimeePct');
+    });
+
     it('MEJ-12: the system prompt tells the model what « (estimation) » means', () => {
       expect(SYSTEM_PROMPT).toContain('(estimation)');
       expect(SYSTEM_PROMPT).toContain('capteur');
@@ -650,6 +670,7 @@ describe('buildRecommendationInput (ReportData → minimized payload)', () => {
       moyenneParJour: null,
       moyenneParHeure: null,
       pic: null,
+      partEstimeePct: null, // AI-PROV1 — nothing to disclose when there is no audience at all
     });
     expect(built.demographie).toBeNull();
   });
