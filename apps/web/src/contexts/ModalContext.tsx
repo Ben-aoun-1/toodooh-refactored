@@ -3,32 +3,27 @@ import { createContext, useCallback, useContext, useState, type ReactNode } from
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
-import supportIcon from '@/assets/support.png';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
+import SupportModal from '@/features/support/components/SupportModal';
+import {
+  APPOINTMENT_SENT_TOAST,
+  SUPPORT_FAILED_TOAST,
+  SUPPORT_OBJECTIVES,
+  isAutreObjective,
+  supportPayloadError,
+} from '@/features/support/lib/support-form';
+import { supportService } from '@/features/support/services/support.service';
 import { getErrorMessage } from '@/lib/errors';
 import { MONTHS_FR, WEEKDAYS_FR } from '@/lib/locale';
 import { getCalendarDays, isDatePast } from '@/lib/ui-dates';
 
-const APPOINTMENT_OBJECTIVES_FALLBACK = [
-  'Renseignements',
-  'Inscription',
-  'Diffusion',
-  'Ciblage',
-  'Budget',
-  'Accompagnement',
-  'Support',
-  'Facturation',
-  'Autre',
-];
-
-function isAutreObjective(value: string): boolean {
-  return value.trim().toLowerCase() === 'autre';
+/** SUP-1 — the day-of-month stub (6/10/17/22 blocked every month) is gone: a wish, not a booking. */
+function isDateUnavailable(_date: Date): boolean {
+  return false;
 }
 
-function isDateUnavailable(date: Date): boolean {
-  const d = date.getDate();
-  return [6, 10, 17, 22].includes(d);
-}
+const toIsoDate = (d: Date): string =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 interface ModalContextValue {
   isLogoutOpen: boolean;
@@ -58,12 +53,7 @@ export function ModalProvider({ children }: { children: ReactNode }) {
   const [isSupportOpen, setSupportOpen] = useState(false);
   const [isAppointmentOpen, setAppointmentOpen] = useState(false);
 
-  const appointmentObjectives = APPOINTMENT_OBJECTIVES_FALLBACK;
-
-  // Support form
-  const [supportObjective, setSupportObjective] = useState('');
-  const [supportOtherDetail, setSupportOtherDetail] = useState('');
-  const [supportMessage, setSupportMessage] = useState('');
+  const appointmentObjectives = SUPPORT_OBJECTIVES;
 
   // Appointment form
   const [appointmentObjective, setAppointmentObjective] = useState('');
@@ -71,8 +61,7 @@ export function ModalProvider({ children }: { children: ReactNode }) {
   const [appointmentDate, setAppointmentDate] = useState<Date | null>(null);
   const [appointmentMessage, setAppointmentMessage] = useState('');
   const [appointmentCalendarMonth, setAppointmentCalendarMonth] = useState(() => new Date());
-
-  // SUPA-2 — the objectives list is the local one (the Supabase table is gone with the client).
+  const [appointmentSending, setAppointmentSending] = useState(false);
 
   const openLogout = useCallback(() => setLogoutOpen(true), []);
   const openSupport = useCallback(() => setSupportOpen(true), []);
@@ -155,130 +144,8 @@ export function ModalProvider({ children }: { children: ReactNode }) {
         </div>
       )}
 
-      {/* Support modal */}
-      {isSupportOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl border border-gray-200 max-w-md w-full overflow-hidden">
-            <div className="p-4 pb-3 border-b border-dashed border-sky-200">
-              <div className="flex justify-between items-start gap-4">
-                <div className="flex items-start gap-3 min-w-0">
-                  <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gray-100 border border-gray-300 flex items-center justify-center p-1.5">
-                    <img src={supportIcon} alt="" className="w-full h-full object-contain" />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="text-lg font-bold text-gray-900">Support</h3>
-                    <p className="text-sm text-gray-500 mt-0.5">
-                      Prendre rendez-vous avec un agent toodooh
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={closeSupport}
-                  className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 flex-shrink-0"
-                  aria-label="Fermer"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-            </div>
-            <form
-              className="p-4 space-y-4"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (isAutreObjective(supportObjective) && !supportOtherDetail.trim()) {
-                  toast.error('Veuillez préciser dans la description');
-                  return;
-                }
-                toast.success('Message envoyé');
-                closeSupport();
-                setSupportObjective('');
-                setSupportOtherDetail('');
-                setSupportMessage('');
-              }}
-            >
-              <div>
-                <label
-                  className="block text-sm font-bold text-gray-900 mb-1.5"
-                  htmlFor="support-objective"
-                >
-                  Choisissez vos objectifs *
-                </label>
-                <select
-                  value={supportObjective}
-                  onChange={(e) => setSupportObjective(e.target.value)}
-                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 focus:ring-2 focus:ring-brand-primary focus:border-brand-primary appearance-none cursor-pointer"
-                  style={{
-                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
-                    backgroundRepeat: 'no-repeat',
-                    backgroundPosition: 'right 0.75rem center',
-                    backgroundSize: '1.25rem',
-                    paddingRight: '2.5rem',
-                  }}
-                  id="support-objective"
-                >
-                  <option value="">Choisissez vos objectifs</option>
-                  {appointmentObjectives.map((obj) => (
-                    <option key={obj} value={obj}>
-                      {obj}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {isAutreObjective(supportObjective) && (
-                <div>
-                  <label
-                    className="block text-sm font-bold text-gray-900 mb-1.5"
-                    htmlFor="support-other-detail"
-                  >
-                    Précision *
-                  </label>
-                  <input
-                    type="text"
-                    value={supportOtherDetail}
-                    onChange={(e) => setSupportOtherDetail(e.target.value)}
-                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
-                    placeholder="Veuillez préciser dans la description"
-                    id="support-other-detail"
-                  />
-                </div>
-              )}
-              <div>
-                <label
-                  className="block text-sm font-bold text-gray-900 mb-1.5"
-                  htmlFor="support-message"
-                >
-                  Commentaire additionnels
-                </label>
-                <textarea
-                  rows={3}
-                  value={supportMessage}
-                  onChange={(e) => setSupportMessage(e.target.value)}
-                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-brand-primary focus:border-brand-primary resize-none"
-                  placeholder="Votre Message ici.."
-                  id="support-message"
-                />
-              </div>
-              <div className="pt-1 border-t border-dashed border-sky-200 flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={closeSupport}
-                  className="px-5 py-2.5 rounded-xl font-medium text-gray-900 border border-gray-300 bg-white hover:bg-gray-50"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 px-4 py-2.5 rounded-xl font-medium text-black transition-opacity hover:opacity-90"
-                  style={{ background: '#76E6AB' }}
-                >
-                  Envoyer
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Support modal — SUP-1: the shared component, one for every role. */}
+      {isSupportOpen && <SupportModal onClose={closeSupport} />}
 
       {/* Appointment modal */}
       {isAppointmentOpen && (
@@ -313,16 +180,34 @@ export function ModalProvider({ children }: { children: ReactNode }) {
               className="px-4 pb-4 space-y-3 flex-1 min-h-0 flex flex-col"
               onSubmit={(e) => {
                 e.preventDefault();
-                if (isAutreObjective(appointmentObjective) && !appointmentOtherDetail.trim()) {
-                  toast.error('Veuillez préciser dans la description');
+                const payload = {
+                  kind: 'appointment' as const,
+                  objective: appointmentObjective,
+                  other_detail: appointmentOtherDetail.trim() || undefined,
+                  message: appointmentMessage.trim() || undefined,
+                  appointment_date: appointmentDate ? toIsoDate(appointmentDate) : undefined,
+                };
+                const error = supportPayloadError(payload);
+                if (error) {
+                  toast.error(error);
                   return;
                 }
-                toast.success('Rendez-vous demandé');
-                closeAppointment();
-                setAppointmentObjective('');
-                setAppointmentOtherDetail('');
-                setAppointmentDate(null);
-                setAppointmentMessage('');
+                // SUP-1 — « demandé » only once the api has the row.
+                setAppointmentSending(true);
+                supportService
+                  .send(payload)
+                  .then(() => {
+                    toast.success(APPOINTMENT_SENT_TOAST);
+                    closeAppointment();
+                    setAppointmentObjective('');
+                    setAppointmentOtherDetail('');
+                    setAppointmentDate(null);
+                    setAppointmentMessage('');
+                  })
+                  .catch((err: unknown) =>
+                    toast.error(getErrorMessage(err) || SUPPORT_FAILED_TOAST),
+                  )
+                  .finally(() => setAppointmentSending(false));
               }}
             >
               <div className="flex-shrink-0">
@@ -479,10 +364,11 @@ export function ModalProvider({ children }: { children: ReactNode }) {
                 </button>
                 <button
                   type="submit"
+                  disabled={appointmentSending}
                   className="flex-1 px-4 py-2.5 rounded-xl font-medium text-black transition-opacity hover:opacity-90"
                   style={{ background: '#76E6AB' }}
                 >
-                  Prendre rendez-vous
+                  {appointmentSending ? 'Envoi…' : 'Prendre rendez-vous'}
                 </button>
               </div>
             </form>

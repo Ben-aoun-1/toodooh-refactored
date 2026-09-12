@@ -9,7 +9,7 @@ import {
   ChevronRight,
   Megaphone,
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -32,22 +32,7 @@ import supportIcon from '@/assets/support.png';
 import supportIconActive from '@/assets/supports.png';
 import { useBusinessProfile } from '@/features/auth/hooks/useBusinessProfile';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
-
-const APPOINTMENT_OBJECTIVES_FALLBACK = [
-  'Renseignements',
-  'Inscription',
-  'Diffusion',
-  'Ciblage',
-  'Budget',
-  'Accompagnement',
-  'Support',
-  'Facturation',
-  'Autre',
-];
-
-function isAutreObjective(value: string): boolean {
-  return value.trim().toLowerCase() === 'autre';
-}
+import SupportModal from '@/features/support/components/SupportModal';
 
 const navigation = [
   {
@@ -104,29 +89,11 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
   const [sidebarExpanded, setSidebarExpanded] = useState(true); // desktop: true = 272px, false = 80px
   const [_showUserMenu, _setShowUserMenu] = useState(false);
   const [showSupportModal, setShowSupportModal] = useState(false);
-  const [supportObjective, setSupportObjective] = useState('');
-  const [supportOtherDetail, setSupportOtherDetail] = useState('');
-  const [supportMessage, setSupportMessage] = useState('');
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const { profile } = useBusinessProfile(user?.id);
 
   const displayName = profile?.contact_name || user?.email || 'Non connecté';
-
-  // SUPA-2 — the server list lived in a Supabase table the prod client never reached; the local
-  // list is the only source (an api endpoint can replace it when support objectives get a home).
-  const appointmentObjectives = APPOINTMENT_OBJECTIVES_FALLBACK;
-
-  useEffect(() => {
-    const handleOpenSupportModal = () => {
-      setShowSupportModal(true);
-    };
-
-    window.addEventListener('owner-open-support-modal', handleOpenSupportModal);
-    return () => {
-      window.removeEventListener('owner-open-support-modal', handleOpenSupportModal);
-    };
-  }, []);
 
   const handleLogout = async () => {
     try {
@@ -482,130 +449,8 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
         </div>
       )}
 
-      {/* Support Modal (identique annonceur) */}
-      {showSupportModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl border border-gray-200 max-w-md w-full overflow-hidden">
-            <div className="p-4 pb-3 border-b border-dashed border-sky-200">
-              <div className="flex justify-between items-start gap-4">
-                <div className="flex items-start gap-3 min-w-0">
-                  <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gray-100 border border-gray-300 flex items-center justify-center p-1.5">
-                    <img src={supportIcon} alt="" className="w-full h-full object-contain" />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="text-lg font-bold text-gray-900">Support</h3>
-                    <p className="text-sm text-gray-500 mt-0.5">
-                      Prendre rendez-vous avec un agent toodooh
-                    </p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowSupportModal(false)}
-                  className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 flex-shrink-0"
-                  aria-label="Fermer"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-            </div>
-            <form
-              className="p-4 space-y-4"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (isAutreObjective(supportObjective) && !supportOtherDetail.trim()) {
-                  toast.error('Veuillez préciser dans la description');
-                  return;
-                }
-                toast.success('Message envoyé');
-                setShowSupportModal(false);
-                setSupportObjective('');
-                setSupportOtherDetail('');
-                setSupportMessage('');
-              }}
-            >
-              <div>
-                <label
-                  className="block text-sm font-bold text-gray-900 mb-1.5"
-                  htmlFor="support-objective"
-                >
-                  Choisissez vos objectifs *
-                </label>
-                <select
-                  value={supportObjective}
-                  onChange={(e) => setSupportObjective(e.target.value)}
-                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 focus:ring-2 focus:ring-brand-primary focus:border-brand-primary appearance-none cursor-pointer"
-                  style={{
-                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
-                    backgroundRepeat: 'no-repeat',
-                    backgroundPosition: 'right 0.75rem center',
-                    backgroundSize: '1.25rem',
-                    paddingRight: '2.5rem',
-                  }}
-                  id="support-objective"
-                >
-                  <option value="">Choisissez vos objectifs</option>
-                  {appointmentObjectives.map((obj) => (
-                    <option key={obj} value={obj}>
-                      {obj}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {isAutreObjective(supportObjective) && (
-                <div>
-                  <label
-                    className="block text-sm font-bold text-gray-900 mb-1.5"
-                    htmlFor="support-other-detail"
-                  >
-                    Précision *
-                  </label>
-                  <input
-                    type="text"
-                    value={supportOtherDetail}
-                    onChange={(e) => setSupportOtherDetail(e.target.value)}
-                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
-                    placeholder="Veuillez préciser dans la description"
-                    id="support-other-detail"
-                  />
-                </div>
-              )}
-              <div>
-                <label
-                  className="block text-sm font-bold text-gray-900 mb-1.5"
-                  htmlFor="support-message"
-                >
-                  Commentaire additionnels
-                </label>
-                <textarea
-                  rows={3}
-                  value={supportMessage}
-                  onChange={(e) => setSupportMessage(e.target.value)}
-                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-brand-primary focus:border-brand-primary resize-none"
-                  placeholder="Votre Message ici.."
-                  id="support-message"
-                />
-              </div>
-              <div className="pt-1 border-t border-dashed border-sky-200 flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowSupportModal(false)}
-                  className="px-5 py-2.5 rounded-xl font-medium text-gray-900 border border-gray-300 bg-white hover:bg-gray-50"
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 px-4 py-2.5 rounded-xl font-medium text-black transition-opacity hover:opacity-90"
-                  style={{ background: '#76E6AB' }}
-                >
-                  Envoyer
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* SUP-1 — the shared support modal (the owner copy was a hand-written twin that sent nothing). */}
+      {showSupportModal && <SupportModal onClose={() => setShowSupportModal(false)} />}
     </>
   );
 }
