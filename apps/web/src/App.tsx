@@ -70,6 +70,7 @@ const GeographicZonesManagement = lazy(
 const DispatchConfigManagement = lazy(
   () => import('@/features/admin/pages/DispatchConfigManagement'),
 );
+const TestingPage = lazy(() => import('@/features/admin/pages/TestingPage'));
 
 // Client React Query unique pour toute l'application (config : voir D-Q).
 const queryClient = createQueryClient();
@@ -616,6 +617,14 @@ export default function App() {
               element={
                 <AdminRoute requiredRoles={['superadmin', 'admin']}>
                   <DispatchConfigManagement />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin-testing"
+              element={
+                <AdminRoute requiredRoles={['superadmin', 'admin']}>
+                  <TestingPage />
                 </AdminRoute>
               }
             />

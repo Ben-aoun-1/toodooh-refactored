@@ -11,6 +11,7 @@ import { adminPlatformStatsRoutes } from './admin-platform-stats.js';
 import { adminRechargesRoutes } from './admin-recharges.js';
 import { adminReconcileRoutes } from './admin-reconcile.js';
 import { adminScreenhostsRoutes } from './admin-screenhosts.js';
+import { adminTestingRoutes } from './admin-testing.js';
 import { adminWalletRoutes } from './admin-wallet.js';
 import { adminRoutes } from './admin.js';
 import { agentRoutes } from './agent.js';
@@ -120,6 +121,7 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   await app.register(adminPlatformStatsRoutes);
   // ADM-SCR1 — the admin venue listing (« Localités et écrans »), off the new-engine tables.
   await app.register(adminScreenhostsRoutes);
+  await app.register(adminTestingRoutes);
   // L-redisp — admin reconciliation: value plan-promised vs proof-aired at clôture, settle the
   // screencaster wallet (the spend) + record screenhost earnings. Idempotent per campaign.
   await app.register(adminReconcileRoutes);

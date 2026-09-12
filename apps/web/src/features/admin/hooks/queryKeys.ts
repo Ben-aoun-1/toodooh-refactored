@@ -13,6 +13,11 @@
 export const adminKeys = {
   all: ['admin'] as const,
 
+  /** ADM-OBS1 — the « Tests » page picker and one screenhost's report for a période. */
+  testingScreenhosts: () => [...adminKeys.all, 'testing', 'screenhosts'] as const,
+  testingReport: (id: string, from: string, to: string) =>
+    [...adminKeys.all, 'testing', 'report', id, from, to] as const,
+
   /** Paginated, filtered recharge list (`adminRechargesService.getRecharges`). */
   recharges: (status: string, search: string, page: number, perPage: number) =>
     [...adminKeys.all, 'recharges', status, search, page, perPage] as const,

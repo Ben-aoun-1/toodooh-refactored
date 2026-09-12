@@ -1,0 +1,217 @@
+import { and, asc, eq, gte, lte } from 'drizzle-orm';
+import type { FastifyPluginAsync } from 'fastify';
+import { z } from 'zod';
+
+import { db } from '../db/client.js';
+import { screenhostUnavailability, screenhosts } from '../db/schema.js';
+import { isCalendarDate } from '../lib/calendar-date.js';
+import { tunisDateOf } from '../lib/campaign-dates.js';
+import { getDispatchConfig } from '../lib/dispatch/config.js';
+import { broadcastableHours } from '../lib/dispatch/eligibility.js';
+import { computeAmax } from '../lib/event-pricing/pricing.js';
+import { estimationFloor, loadPeriodAudienceInput } from '../lib/period-audience-source.js';
+import { periodAudience, weekGridFromCells } from '../lib/period-audience.js';
+import {
+  ACCEPTATION_WINDOW_DAYS,
+  ACTIVITE_WINDOW_DAYS,
+  RESPECT_WINDOW_DAYS,
+  SPS_NEUTRAL,
+  computeSps,
+  spsComputable,
+} from '../lib/sps-score.js';
+import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
+
+// ADM-OBS1 slice A — the admin « Tests » page (operator, 2026-09-11/12; Mejri 08/09 « j'ai besoin de
+// l'ensemble des informations historiques … pour tester le pricing »).
+//
+// ONE read-only endpoint that exposes, per screenhost and for ANY période, every variable the
+// engines compute — by CALLING THE ENGINES, never by re-deriving: the same `periodAudience` the
+// owner page and the PDF use, the same `computeSps` dispatch reads, the same `computeAmax` event
+// pricing reads, the same resolved dispatch config. If a number here disagrees with a product
+// surface, the product surface is wrong, not this page. Adds only what the surfaces do not show:
+// min and median (over days AND over cells), the SPS evidence and weights side by side, the
+// pricing inputs, and the raw cells. Nothing is written.
+//
+// Deliberately NOT here (slice B): the per-hour 4-state status and the per-campaign
+// delivered/disrupted/redispatched/money-lost view — the loss rule needs Kais first.
+
+const ISO_DAY = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine(isCalendarDate, 'must be a real YYYY-MM-DD calendar day');
+
+const reportQuerySchema = z
+  .object({ from: ISO_DAY, to: ISO_DAY })
+  .refine((q) => q.from <= q.to, { message: 'from must be on or before to' });
+
+const idParamSchema = z.object({ id: z.uuid() });
+
+const median = (values: readonly number[]): number | null => {
+  if (values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 1 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
+};
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+
+const stats = (values: readonly number[]) =>
+  values.length === 0
+    ? { n: 0, min: null, max: null, mean: null, median: null }
+    : {
+        n: values.length,
+        min: Math.min(...values),
+        max: Math.max(...values),
+        mean: round2(values.reduce((a, b) => a + b, 0) / values.length),
+        median: median(values),
+      };
+
+export const adminTestingRoutes: FastifyPluginAsync = async (app) => {
+  const adminGuard = { preHandler: [requireAuth, requireAdmin] };
+
+  // The picker: every screenhost, lightest possible row.
+  app.get('/api/admin/testing/screenhosts', adminGuard, async (_request, reply) => {
+    const rows = await db
+      .select({
+        id: screenhosts.id,
+        name: screenhosts.name,
+        openingHour: screenhosts.openingHour,
+        closingHour: screenhosts.closingHour,
+        sps: screenhosts.sps,
+        createdAt: screenhosts.createdAt,
+      })
+      .from(screenhosts)
+      .orderBy(asc(screenhosts.name));
+    return reply.status(200).send({
+      screenhosts: rows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        opening_hour: r.openingHour,
+        closing_hour: r.closingHour,
+        sps_stored: Number(r.sps),
+        created_at: r.createdAt,
+      })),
+    });
+  });
+
+  app.get('/api/admin/testing/screenhosts/:id', adminGuard, async (request, reply) => {
+    const params = idParamSchema.safeParse(request.params);
+    if (!params.success) return reply.status(400).send({ error: 'Invalid screenhost id' });
+    const query = reportQuerySchema.safeParse(request.query);
+    if (!query.success) {
+      return reply.status(400).send({ error: 'Invalid période', details: query.error.issues });
+    }
+    const { id } = params.data;
+    const { from, to } = query.data;
+
+    const [venue] = await db
+      .select({
+        id: screenhosts.id,
+        name: screenhosts.name,
+        openingHour: screenhosts.openingHour,
+        closingHour: screenhosts.closingHour,
+        sps: screenhosts.sps,
+        createdAt: screenhosts.createdAt,
+      })
+      .from(screenhosts)
+      .where(eq(screenhosts.id, id));
+    if (!venue) return reply.status(404).send({ error: 'Screenhost not found' });
+
+    const now = new Date();
+    const todayIso = tunisDateOf(now);
+
+    const [input, floor, sps, aMax, config, unavailable] = await Promise.all([
+      loadPeriodAudienceInput({ venueId: id, range: { from, to }, todayIso }),
+      estimationFloor(id),
+      computeSps(id, now),
+      computeAmax(id),
+      getDispatchConfig(),
+      db
+        .select({ day: screenhostUnavailability.day })
+        .from(screenhostUnavailability)
+        .where(
+          and(
+            eq(screenhostUnavailability.screenhostId, id),
+            gte(screenhostUnavailability.day, from),
+            lte(screenhostUnavailability.day, to),
+          ),
+        )
+        .orderBy(asc(screenhostUnavailability.day)),
+    ]);
+
+    const merged = periodAudience(input);
+    const week = weekGridFromCells(merged.cells);
+    const measuredCells = merged.cells.filter((c) => c.source === 'measured');
+    const backupCells = merged.cells.filter((c) => c.source === 'backup');
+    const hours = broadcastableHours(venue.openingHour, venue.closingHour);
+    const openDays = merged.days.length;
+    const openHours = openDays * hours.length;
+
+    return reply.status(200).send({
+      screenhost: {
+        id: venue.id,
+        name: venue.name,
+        opening_hour: venue.openingHour,
+        closing_hour: venue.closingHour,
+        created_at: venue.createdAt,
+        sps_stored: Number(venue.sps),
+      },
+      periode: { from, to, today: todayIso, estimation_floor: floor },
+      audience: {
+        total: merged.total,
+        measured_days: merged.measuredDays,
+        estimated_days: merged.estimatedDays,
+        estimated_pct: merged.estimatedPct,
+        // The same denominators « Mes performances » uses: days with data, opening hours per day.
+        mean_per_day: openDays > 0 ? round2(merged.total / openDays) : null,
+        mean_per_hour: openHours > 0 ? round2(merged.total / openHours) : null,
+        days: stats(merged.days.map((d) => d.audience)),
+        cells: stats(merged.cells.map((c) => c.value)),
+        measured_cells: stats(measuredCells.map((c) => c.value)),
+        backup_cells: stats(backupCells.map((c) => c.value)),
+        day_rows: merged.days.map((d) => ({
+          date: d.date,
+          audience: d.audience,
+          source: d.source,
+          has_measured: d.hasMeasured,
+        })),
+        cell_rows: merged.cells.map((c) => ({
+          date: c.date,
+          slot: c.slot,
+          value: c.value,
+          source: c.source,
+        })),
+        // PEAK-MAX1 grid, weekday (Mon=0) × slot (0–47): the S02 « Vos peak hours » cell.
+        week,
+      },
+      sps: {
+        live: sps.sps,
+        stored: Number(venue.sps),
+        computable: spsComputable(sps.observations),
+        neutral: SPS_NEUTRAL,
+        variables: sps.variables,
+        observations: sps.observations,
+        weights: {
+          acceptation: config.spsWeightAcceptation,
+          respect_evenements: config.spsWeightRespectEvenements,
+          activite: config.spsWeightActivite,
+          remplissage: config.spsWeightRemplissage,
+        },
+        windows_days: {
+          acceptation: ACCEPTATION_WINDOW_DAYS,
+          activite: ACTIVITE_WINDOW_DAYS,
+          respect_evenements: RESPECT_WINDOW_DAYS,
+        },
+      },
+      pricing: {
+        a_max: aMax,
+        cpm_standard_tnd: config.standardCpmTnd,
+        cpm_event_tnd: config.eventCpmTnd,
+        t: { t10s: config.t10s, t20s: config.t20s, t30s: config.t30s },
+        campaign_lead_working_days: config.campaignLeadWorkingDays,
+        broadcastable_hours: hours,
+        unavailable_days: unavailable.map((u) => u.day),
+      },
+      config,
+    });
+  });
+};
