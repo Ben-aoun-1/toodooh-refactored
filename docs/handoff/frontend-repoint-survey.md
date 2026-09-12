@@ -1,3 +1,8 @@
+> **Superseded 2026-09-12 (SUPA-2):** every remaining `@/lib/supabase` importer was traced — 11 source files, of
+> which ONE was reachable in prod (the owner dashboard's pending-campaign list, permanently empty since the client
+> throws without env). All were deleted or repointed and `src/lib/supabase.ts` + `@supabase/supabase-js` are gone.
+> §2.3 / §2.4 below describe the June state and no longer apply.
+
 # Frontend repoint survey — Phase 1e reconnaissance
 
 **Source:** `apps/web` React frontend + `apps/api` Fastify backend (read directly, CF-23 —

@@ -88,17 +88,10 @@ describe('the Supabase-era events tree is DEAD', () => {
       '../admin/components/EventFormModal.tsx',
       '../admin/services/admin-events.service.ts',
       '../admin/hooks/useAdminEvents.ts',
-      '../campaigns/hooks/useCampaignMutations.ts',
     ]) {
       expect(read(rel), `${rel} still touches supabase`).not.toMatch(
         /supabase\.rpc|special_events/,
       );
     }
-  });
-
-  it('the linkToEvent RPC mutation died with the tree', () => {
-    expect(read('../campaigns/hooks/useCampaignMutations.ts')).not.toContain(
-      'link_campaign_to_event',
-    );
   });
 });

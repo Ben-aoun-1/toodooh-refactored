@@ -40,10 +40,4 @@ export const screensKeys = {
       'unavailabilityForScreens',
       [...new Set(screenIds)].sort().join(','),
     ] as const,
-
-  /**
-   * Owners exposing active screens, as TV-park options for the campaign
-   * wizard's `parc_tv` diffusion mode (Commit 7b — `useAvailableParcs`).
-   */
-  availableParcs: () => [...screensKeys.all, 'availableParcs'] as const,
 };

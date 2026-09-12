@@ -6,7 +6,6 @@ import { authService } from './auth.service';
 
 // Stub supabase (authService imports it for the remaining deferred methods) + clean apiClient mock
 // (F1 carry-forward — no real-module spread).
-vi.mock('@/lib/supabase', () => ({ supabase: {} }));
 vi.mock('@/lib/api-client', async (importActual) => {
   const actual = await importActual<typeof import('@/lib/api-client')>();
   return {

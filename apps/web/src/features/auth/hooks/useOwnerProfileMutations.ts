@@ -4,9 +4,6 @@ import { authService } from '@/features/auth/services/auth.service';
 
 import { authKeys } from './queryKeys';
 
-/** The partial patch accepted by `authService.updateBusinessProfile`. */
-type BusinessProfileUpdate = Parameters<typeof authService.updateBusinessProfile>[0];
-
 interface UpdatePasswordInput {
   currentPassword: string;
   newPassword: string;
@@ -19,7 +16,7 @@ interface UpdatePasswordInput {
  * Phase-1f F7b — the generic `updateProfile` mutation + `uploadLogo` +
  * `removeDocument` + `deactivateAccount` mutations were removed (the
  * D-F4-4 / D-F5-3 / D-F7-2 defers wired). The section-scoped saves + the
- * password-change + `updateBusinessProfile` (kept for the wallet's
+ * password-change (the generic business-profile write left with the Supabase client, SUPA-2 —
  * later-slice bank-details edit) remain; the F5 single-slot `uploadDocument`
  * moved to `ProfileDocumentsManager`'s slot mutations (F-docs Commit 2) —
  * `invalidateProfile` is exported so the manager's writes can refresh the
@@ -55,13 +52,6 @@ export function useOwnerProfileMutations(userId: string | undefined) {
     onSuccess: invalidateProfile,
   });
 
-  // Generic business-profile write — kept only for the deferred bank sub-form
-  // (handleSaveBankDetails — wallet/later-slice). Entreprise/adresse route to the section methods.
-  const updateBusinessProfile = useMutation({
-    mutationFn: (patch: BusinessProfileUpdate) => authService.updateBusinessProfile(patch),
-    onSuccess: invalidateProfile,
-  });
-
   // handleUpdatePassword — no profile-row write, so no invalidation.
   const updatePasswordWithOld = useMutation({
     mutationFn: ({ currentPassword, newPassword }: UpdatePasswordInput) =>
@@ -73,7 +63,6 @@ export function useOwnerProfileMutations(userId: string | undefined) {
     updateBusiness,
     updateAddress,
     updateNotifications,
-    updateBusinessProfile,
     updatePasswordWithOld,
     invalidateProfile,
   };

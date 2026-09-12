@@ -1,9 +1,26 @@
-import type { CampaignLocation } from '@/features/campaigns/services/campaign-screens.service';
 import type {
   CampaignView,
   CreateCampaignInput,
   UpdateCampaignInput,
 } from '@/features/campaigns/services/campaigns.api';
+import type { LocationAffluenceSlot } from '@/features/screens/types/location';
+
+/** SUPA-2 — the wizard's location row, formerly typed by the retired Supabase campaign-screens
+ * service; the shape is kept verbatim (the wizard state still carries `locations`). */
+export interface CampaignLocation {
+  id: string;
+  name: string;
+  address?: string;
+  coordinates?: { lat: number; lng: number };
+  owner_id: string;
+  owner_category?: string | null;
+  owner_name?: string;
+  screen_count: number;
+  /** Grille affluence (créneaux jour × heure) pour calcul CPM */
+  affluence_schedule?: LocationAffluenceSlot[];
+  /** Somme des impressions sur la grille (7j × 24h) pour affichage */
+  total_impressions_per_week?: number;
+}
 
 // GeographicZone + ParcTV are RETAINED (not part of the new model): they are shared types consumed
 // outside the wizard — features/screens (useAvailableParcs / usePredefinedZones), the admin

@@ -9,7 +9,7 @@ import {
   ChevronRight,
   Megaphone,
 } from 'lucide-react';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate, useLocation } from 'react-router-dom';
 
@@ -30,7 +30,6 @@ import financeIcon from '@/assets/sidebar/portefeuille.png';
 import financeIconActive from '@/assets/sidebar/portefeuilles.png';
 import supportIcon from '@/assets/support.png';
 import supportIconActive from '@/assets/supports.png';
-import { useAppointmentObjectives } from '@/features/auth/hooks/useAppointmentObjectives';
 import { useBusinessProfile } from '@/features/auth/hooks/useBusinessProfile';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 
@@ -111,18 +110,12 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const { profile } = useBusinessProfile(user?.id);
-  const { data: objectiveRows } = useAppointmentObjectives();
 
   const displayName = profile?.contact_name || user?.email || 'Non connecté';
 
-  // Liste serveur si non vide, sinon repli local.
-  const appointmentObjectives = useMemo(
-    () =>
-      objectiveRows && objectiveRows.length > 0
-        ? objectiveRows.map((r) => r.label)
-        : APPOINTMENT_OBJECTIVES_FALLBACK,
-    [objectiveRows],
-  );
+  // SUPA-2 — the server list lived in a Supabase table the prod client never reached; the local
+  // list is the only source (an api endpoint can replace it when support objectives get a home).
+  const appointmentObjectives = APPOINTMENT_OBJECTIVES_FALLBACK;
 
   useEffect(() => {
     const handleOpenSupportModal = () => {

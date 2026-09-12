@@ -1,10 +1,9 @@
 import { ChevronLeft, ChevronRight, Users, X } from 'lucide-react';
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
 import supportIcon from '@/assets/support.png';
-import { authService } from '@/features/auth/services/auth.service';
 import { useAuthStore } from '@/features/auth/stores/auth.store';
 import { getErrorMessage } from '@/lib/errors';
 import { MONTHS_FR, WEEKDAYS_FR } from '@/lib/locale';
@@ -59,9 +58,7 @@ export function ModalProvider({ children }: { children: ReactNode }) {
   const [isSupportOpen, setSupportOpen] = useState(false);
   const [isAppointmentOpen, setAppointmentOpen] = useState(false);
 
-  const [appointmentObjectives, setAppointmentObjectives] = useState<string[]>(
-    APPOINTMENT_OBJECTIVES_FALLBACK,
-  );
+  const appointmentObjectives = APPOINTMENT_OBJECTIVES_FALLBACK;
 
   // Support form
   const [supportObjective, setSupportObjective] = useState('');
@@ -75,21 +72,7 @@ export function ModalProvider({ children }: { children: ReactNode }) {
   const [appointmentMessage, setAppointmentMessage] = useState('');
   const [appointmentCalendarMonth, setAppointmentCalendarMonth] = useState(() => new Date());
 
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        const rows = await authService.getAppointmentObjectives();
-        if (!active || rows.length === 0) return;
-        setAppointmentObjectives(rows.map((r) => r.label));
-      } catch {
-        // fallback local conservé
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, []);
+  // SUPA-2 — the objectives list is the local one (the Supabase table is gone with the client).
 
   const openLogout = useCallback(() => setLogoutOpen(true), []);
   const openSupport = useCallback(() => setSupportOpen(true), []);
