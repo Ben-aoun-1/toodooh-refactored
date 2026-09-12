@@ -70,3 +70,40 @@ describe('the signup ↔ Paramètres pin (SIZE-MISM1)', () => {
     }
   });
 });
+
+// SIZE-PERSIST1 — the api validates `company_size` against a TWIN of these two arrays
+// (apps/api/src/validation/company-size.ts). A band added on one side and not the other would
+// let signup offer a value the api refuses with a 400, so the literals are pinned equal here.
+describe('the api twin (SIZE-PERSIST1)', () => {
+  const apiSrc = readFileSync(
+    join(__dirname, '../../../api/src/validation/company-size.ts'),
+    'utf8',
+  );
+  const literals = (name: string): string[] => {
+    const m = apiSrc.match(new RegExp(`export const ${name}[^=]*=\\s*\\[([^\\]]*)\\]`));
+    if (!m) throw new Error(`${name} not found in the api twin`);
+    return [...m[1]!.matchAll(/'([^']*)'/g)].map((x) => x[1]!);
+  };
+
+  it('the api accepts exactly the employee bands the signup offers', () => {
+    expect(literals('COMPANY_SIZE_OPTIONS')).toEqual([...COMPANY_SIZE_OPTIONS]);
+  });
+
+  it('the api accepts exactly the parc counts the fleet owner picks', () => {
+    expect(literals('PARC_COUNT_OPTIONS')).toEqual([...PARC_COUNT_OPTIONS]);
+  });
+
+  it('signup SENDS company_size and the advertiser Paramètres HYDRATES it from the profile', () => {
+    const service = readFileSync(
+      join(__dirname, '../features/auth/services/auth.service.ts'),
+      'utf8',
+    );
+    expect(service).toMatch(/company_size: t\(data\.company_size\)/);
+    const page = readFileSync(
+      join(__dirname, '../features/advertiser/pages/UserProfile.tsx'),
+      'utf8',
+    );
+    expect(page).toMatch(/company_size: profile\.company_size \?\? ''/);
+    expect(page).not.toMatch(/company_size: '',/);
+  });
+});

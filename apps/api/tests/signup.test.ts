@@ -99,6 +99,24 @@ describe('POST /api/signup', () => {
     expect(a[0]?.providerId).toBe('credential');
   });
 
+  it('company_size is STORED at signup (SIZE-PERSIST1) and an off-scale value is refused', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      payload: { ...validPayload, company_size: '50 - 100' },
+    });
+    expect(res.statusCode).toBe(201);
+    // Mejri 07/09 — the value she typed at signup must exist where Paramètres reads it.
+    const [created] = await db.select().from(users).where(eq(users.email, 'owner@example.com'));
+    expect(created?.companySize).toBe('50 - 100');
+    const bad = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      payload: { ...validPayload, email: 'other@example.com', company_size: '51-200' },
+    });
+    expect(bad.statusCode).toBe(400);
+  });
+
   it('(Q8) attempts a verification email with the well-formed JWT link', async () => {
     const sendSpy = vi.spyOn(emailSender, 'send');
     await app.inject({ method: 'POST', url: '/api/signup', payload: validPayload });
@@ -323,20 +341,21 @@ describe('POST /api/signup', () => {
     expect(u?.role).toBe('fleet_owner');
   });
 
-  it('owner-extras in the body are stripped (no column, no error) → 201', async () => {
+  it('owner-extras in the body are stripped (no column, no error) → 201; company_size is kept (SIZE-PERSIST1)', async () => {
     const body = await fullProfile({
       profile_type: 'individual_owner',
       cin: '12345678',
       formule: 'revenue_share',
       number_of_screens: 5,
       number_of_rooms: 3,
-      company_size: '10-50',
+      company_size: '10 - 50',
       fleet_establishments: [{ name: 'X' }],
     });
     const res = await app.inject({ method: 'POST', url: '/api/signup', ...signupMultipart(body) });
     expect(res.statusCode).toBe(201);
     const [u] = await db.select().from(users).where(eq(users.email, 'owner@example.com'));
     expect(u?.role).toBe('individual_owner'); // the known fields still applied
+    expect(u?.companySize).toBe('10 - 50'); // no longer stripped
   });
 
   it('tax_number omitted (owner) → 201 (now optional)', async () => {

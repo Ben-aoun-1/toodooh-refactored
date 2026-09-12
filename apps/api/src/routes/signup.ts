@@ -21,6 +21,7 @@ import { PROFILE_TYPES, fromProfileType } from '../lib/profile-type.js';
 import { ALLOWED_DOCUMENT_MIME, MAX_DOCUMENT_BYTES } from '../lib/user-documents.js';
 import { encryptWifiPassword } from '../lib/wifi-crypto.js';
 import { storage } from '../storage/s3-storage.js';
+import { companySizeSchema } from '../validation/company-size.js';
 import { validatePhone } from '../validation/phone.js';
 import { normalizeTaxNumber, validateTaxNumber } from '../validation/tax-number.js';
 
@@ -86,6 +87,7 @@ const signupBodySchema = z
     profile_type: z.enum(PROFILE_TYPES).optional(),
     business_type: z.string().min(1).optional(),
     business_sector_id: z.uuid().optional(),
+    company_size: companySizeSchema.optional(),
     street_address: z.string().min(1).optional(),
     city: z.string().min(1).optional(),
     postal_code: z
@@ -286,6 +288,7 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
       profile_type,
       business_type,
       business_sector_id,
+      company_size,
       street_address,
       city,
       postal_code,
@@ -380,6 +383,7 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
         if (business_type && updates.businessType === undefined)
           updates.businessType = business_type;
         if (business_sector_id !== undefined) updates.businessSectorId = business_sector_id;
+        if (company_size !== undefined) updates.companySize = company_size;
         if (street_address !== undefined) updates.streetAddress = street_address;
         if (city !== undefined) updates.city = city;
         if (postal_code !== undefined) updates.postalCode = postal_code;

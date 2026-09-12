@@ -7,14 +7,15 @@ import { businessSectors, governorates, users } from '../db/schema.js';
 import { snapshotBankState, writeBankAudit } from '../lib/bank-audit.js';
 import { IBAN_ERROR, RIB_ERROR, validateIbanTn, validateRib } from '../lib/bank-validation.js';
 import { requireAuth } from '../middleware/require-auth.js';
+import { companySizeSchema } from '../validation/company-size.js';
 import { validatePhone } from '../validation/phone.js';
 import { normalizeTaxNumber, validateTaxNumber } from '../validation/tax-number.js';
 
 // Section-scoped partial update of the authenticated user's business fields. All fields
 // optional; at least one required (empty PATCH → 400). Deferred owner-extras
-// (number_of_screens/number_of_rooms/company_size) are stripped by zod (.strip default) —
-// the frontend sends them; we ignore, not error. role/status are NOT in this schema
-// (admin-controlled, Phase 1f).
+// (number_of_screens/number_of_rooms) are stripped by zod (.strip default) — the frontend sends
+// them; we ignore, not error. `company_size` is STORED since SIZE-PERSIST1 (0069): one of the two
+// scales' literals, or null to clear. role/status are NOT in this schema (admin-controlled).
 const businessPatchSchema = z
   .object({
     business_name: z.string().min(1).max(200).optional(),
@@ -27,6 +28,7 @@ const businessPatchSchema = z
       .optional(),
     business_sector_id: z.uuid().optional(),
     business_type: z.enum(['local', 'national', 'agency', 'event_organizer']).optional(),
+    company_size: companySizeSchema.nullable().optional(),
   })
   .refine((b) => Object.keys(b).length > 0, { message: 'At least one field is required' });
 
@@ -129,6 +131,7 @@ export const profileRoutes: FastifyPluginAsync = async (app) => {
     }
     if (data.business_sector_id !== undefined) patch.businessSectorId = data.business_sector_id;
     if (data.business_type !== undefined) patch.businessType = data.business_type;
+    if (data.company_size !== undefined) patch.companySize = data.company_size;
 
     const [updated] = await db.update(users).set(patch).where(eq(users.id, userId)).returning();
     return reply.status(200).send({
@@ -136,6 +139,7 @@ export const profileRoutes: FastifyPluginAsync = async (app) => {
       taxNumber: updated?.taxNumber ?? null,
       businessSectorId: updated?.businessSectorId ?? null,
       businessType: updated?.businessType ?? null,
+      companySize: updated?.companySize ?? null,
     });
   });
 

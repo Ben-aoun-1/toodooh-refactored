@@ -136,7 +136,7 @@ describe('PATCH /api/profile/business', () => {
     expect((await patch({ tax_number: 'ab' })).statusCode).toBe(400);
   });
 
-  it('deferred owner-extras → ignored (stripped), not errored, not stored', async () => {
+  it('deferred owner-extras (screens/rooms) → ignored; company_size → STORED (SIZE-PERSIST1)', async () => {
     mockSession(userId);
     const res = await patch({
       business_name: 'Owner Biz',
@@ -145,8 +145,19 @@ describe('PATCH /api/profile/business', () => {
       company_size: '10 - 50',
     });
     expect(res.statusCode).toBe(200);
+    expect(res.json<{ companySize: string | null }>().companySize).toBe('10 - 50');
     const [row] = await db.select().from(users).where(eq(users.id, userId));
     expect(row?.businessName).toBe('Owner Biz');
+    expect(row?.companySize).toBe('10 - 50');
+  });
+
+  it('company_size: a parc count is a valid literal, null clears, an off-scale value → 400', async () => {
+    mockSession(userId);
+    expect((await patch({ company_size: '12+' })).statusCode).toBe(200);
+    expect((await db.select().from(users).where(eq(users.id, userId)))[0]?.companySize).toBe('12+');
+    expect((await patch({ company_size: null })).statusCode).toBe(200);
+    expect((await db.select().from(users).where(eq(users.id, userId)))[0]?.companySize).toBeNull();
+    expect((await patch({ company_size: '51-200' })).statusCode).toBe(400);
   });
 
   it('role/status in body → not applied (not in schema)', async () => {

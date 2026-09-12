@@ -484,6 +484,13 @@
       "when": 1788431538672,
       "tag": "0068_three_age_bands",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1789204288042,
+      "tag": "0069_company_size",
+      "breakpoints": true
     }
   ]
 }
