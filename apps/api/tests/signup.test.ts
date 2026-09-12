@@ -625,7 +625,7 @@ describe('POST /api/signup', () => {
     });
     expect(res.statusCode).toBe(201);
     const docs = await docsFor(res.json<{ userId: string }>().userId);
-    expect(docs).toHaveLength(1); // SIGN-2 — the RIB alone
+    expect(docs).toHaveLength(2); // CIN-2b — RNE + RIB for every owner
     for (const row of docs) {
       expect(row.storageKey).toBe(`${row.category}/${row.userId}/${row.id}`);
       expect(isRowOwnedKey(row)).toBe(true);
@@ -649,6 +649,17 @@ describe('POST /api/signup', () => {
     const del = await app.inject({ method: 'DELETE', url: `/api/profile/documents/${doc?.id}` });
     expect(del.statusCode).toBe(200);
     expect(delSpy).toHaveBeenCalledWith({ key: doc?.storageKey }); // no orphan: the gate fired
+  });
+
+  it('CIN-2b: an individual_owner may attach its RNE at signup too → rne row persisted', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      ...signupMultipart(await fullProfile({ profile_type: 'individual_owner' })),
+    });
+    expect(res.statusCode).toBe(201);
+    const docs = await docsFor(res.json<{ userId: string }>().userId);
+    expect(docs.some((d) => d.category === 'rne' && d.position === 1)).toBe(true);
   });
 
   it('valid fleet_owner (RNE + bank) → 201 + user_documents rows', async () => {
@@ -702,9 +713,9 @@ describe('POST /api/signup', () => {
     });
     expect(res.statusCode).toBe(201);
     const docs = await docsFor(res.json<{ userId: string }>().userId);
-    // SIGN-2 — an individual owner's only signup volet is the RIB, and omitting it is allowed:
+    // CIN-2b — an individual owner attaches RNE + RIB; omitting the RIB leaves the RNE row:
     // the account is created with NO document at all and finishes provide-later.
-    expect(docs).toEqual([]);
+    expect(docs.map((d) => d.category)).toEqual(['rne']);
   });
 
   it('individual_owner with NO volet at all → 201, provide-later from an empty set', async () => {
@@ -712,11 +723,11 @@ describe('POST /api/signup', () => {
       method: 'POST',
       url: '/api/signup',
       ...signupMultipart(await fullProfile({ profile_type: 'individual_owner' }), {
-        omit: ['bank'],
+        omit: ['rne', 'bank'],
       }),
     });
     expect(res.statusCode).toBe(201);
-    expect(await docsFor(res.json<{ userId: string }>().userId)).toEqual([]);
+    expect(await docsFor(res.json<{ userId: string }>().userId)).toEqual([]); // both omitted
   });
 
   it('advertiser JSON signup (no docs) → still 201, unchanged', async () => {

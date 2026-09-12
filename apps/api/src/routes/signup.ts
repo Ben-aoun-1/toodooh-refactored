@@ -491,9 +491,9 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
         // a missing one simply leaves onboarding incomplete (C1). Degraded + never thrown: a storage/db
         // failure also leaves a volet absent, not a failed signup.
         if (isMultipart && isOwnerType(profile_type)) {
-          // SIGN-2 — only fleet_owner carries a legal volet at signup; an individual owner's CIN is
-          // provide-later. Both types may attach the RIB below.
-          if (profile_type !== 'individual_owner' && voletFiles.rne) {
+          // SIGN-2 removed the CIN from signup; CIN-2b (2026-09-12) — EVERY owner may attach its
+          // RNE (individual owners included). Both types may attach the RIB below.
+          if (voletFiles.rne) {
             await persistVolet(persisted.id, 'rne', 1, voletFiles.rne, request.log);
           }
           if (voletFiles.bank)

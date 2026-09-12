@@ -9,11 +9,10 @@ import type { BusinessProfile } from '@/features/auth/types/auth';
 // Reads /api/me's `documents` booleans (OwnerSettings precedent). The legacy
 // cin_doc_url/registration_doc_* fields are never set by the /api/me bridge — reading them kept
 // the block permanently visible for owners whose documents were already on file.
-// CIN-2 (Mejri 09/09, operator 2026-09-12): the CIN is removed — an individual owner has NO legal
-// document to file, so the predicate holds for them outright; companies still need the RNE.
+// CIN-2 (Mejri 09/09, operator 2026-09-12): the CIN is removed. CIN-2b (same evening): EVERY owner
+// files an RNE, individual owners included — the registration flag is the one legal document.
 export function hasOwnerLegalDocument(profile: BusinessProfile | null): boolean {
   if (!profile) return false;
-  if (profile.profile_type === 'individual_owner') return true;
   return Boolean(profile.documents?.registration);
 }
 

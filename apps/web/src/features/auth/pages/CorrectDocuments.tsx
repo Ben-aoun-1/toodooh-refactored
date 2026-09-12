@@ -33,12 +33,10 @@ export default function CorrectDocuments() {
 
   const isOwner = profileType === 'individual_owner' || profileType === 'fleet_owner';
   // Same categories /profile (advertiser) and /owner-settings (owner) pass. CIN-2 (2026-09-12):
-  // the CIN is removed — individual owners only have the optional "complémentaires"; everyone
-  // else files an RNE plus the optional "complémentaires".
+  // the CIN is removed. CIN-2b: every profile files an RNE (individual owners included) plus the
+  // optional "complémentaires".
   const docCategories: DocumentCategoryConfig[] = [
-    ...(profileType === 'individual_owner'
-      ? []
-      : [{ category: 'rne', title: 'Registre de commerce (RNE)' } as DocumentCategoryConfig]),
+    { category: 'rne', title: 'Registre de commerce (RNE)' },
     { category: 'complementaire', title: 'Documents complémentaires' },
   ];
 
