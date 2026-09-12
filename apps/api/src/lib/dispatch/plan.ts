@@ -1,4 +1,5 @@
 import { type DispatchCreneau } from '../../db/schema.js';
+import { addIsoDays } from '../opening-hours.js';
 
 import { computeR, computeRi, physicalFromFacturable } from './eligibility.js';
 import { type EligibleScreenhost, selection } from './selection.js';
@@ -22,7 +23,9 @@ export interface PoolEntry {
   // after the cross-campaign F-second cap. computeRi clamps r_i to this (not the global F-based R), so
   // Σ over all campaigns of r_i×S ≤ F on every screen even when campaigns have different spot durations.
   repsCap: number;
-  slots: { dayOfWeek: number; hour: number; affluence: number }[]; // broadcastable (weekday,hour)→Ai
+  // broadcastable (weekday,hour)→Ai; dayOffset 1 = a post-midnight hour of an overnight window
+  // (HOURS-X1), which lives on the NEXT calendar day. Absent = 0 (rows stored before HOURS-X1).
+  slots: { dayOfWeek: number; hour: number; affluence: number; dayOffset?: number }[];
   // E2 (jours_dispo_i) — THIS venue's available window days (the global window minus its declared
   // unavailability). The ONE day source: capacity was computed over these, and every créneaux
   // builder MUST iterate these (never the global windowDays) so placements and capacity agree.
@@ -93,20 +96,22 @@ export const computeBounds = (
 // impressions = affluence × R_i. (Calendar dates expand from the window × the weekly slot pattern.)
 export const buildCreneaux = (
   windowDays: readonly WindowDay[],
-  slots: readonly { dayOfWeek: number; hour: number; affluence: number }[],
+  slots: readonly { dayOfWeek: number; hour: number; affluence: number; dayOffset?: number }[],
   rI: number,
 ): DispatchCreneau[] => {
-  const byDow = new Map<number, { hour: number; affluence: number }[]>();
+  const byDow = new Map<number, { hour: number; affluence: number; dayOffset: number }[]>();
   for (const slot of slots) {
     const list = byDow.get(slot.dayOfWeek) ?? [];
-    list.push({ hour: slot.hour, affluence: slot.affluence });
+    list.push({ hour: slot.hour, affluence: slot.affluence, dayOffset: slot.dayOffset ?? 0 });
     byDow.set(slot.dayOfWeek, list);
   }
   const creneaux: DispatchCreneau[] = [];
   for (const day of windowDays) {
     for (const slot of byDow.get(day.dayOfWeek) ?? []) {
       creneaux.push({
-        date: day.date,
+        // HOURS-X1 — a post-midnight hour of an overnight window is dated on the NEXT day, the
+        // day the proofs will actually be bucketed on (reconcile/delivered-slots proofSlotKey).
+        date: slot.dayOffset ? addIsoDays(day.date, slot.dayOffset) : day.date,
         hour: slot.hour,
         reps: rI,
         impressions: Math.round(slot.affluence * rI), // whole impressions

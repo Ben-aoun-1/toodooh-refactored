@@ -41,10 +41,15 @@ describe('heatmapHours (R7 — real venue hours, 14h window only as fallback)', 
     expect(heatmapHours(0, 24)).toHaveLength(24);
   });
 
-  it('falls back to the 8h–21h mockup window ONLY when hours are unknown or degenerate', () => {
+  it('HOURS-X1: an overnight window runs in clock order past midnight', () => {
+    expect(heatmapHours(21, 8)).toEqual([21, 22, 23, 0, 1, 2, 3, 4, 5, 6, 7]);
+    expect(heatmapHours(8, 1)).toHaveLength(17);
+  });
+
+  it('falls back to the 8h–21h mockup window ONLY when hours are unknown or zero-width', () => {
     expect(heatmapHours(null, 21)).toEqual([...FALLBACK_HEATMAP_HOURS]);
     expect(heatmapHours(8, null)).toEqual([...FALLBACK_HEATMAP_HOURS]);
-    expect(heatmapHours(21, 8)).toEqual([...FALLBACK_HEATMAP_HOURS]); // overnight deferred
+    expect(heatmapHours(9, 9)).toEqual([...FALLBACK_HEATMAP_HOURS]);
     expect(FALLBACK_HEATMAP_HOURS).toEqual([8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]);
   });
 

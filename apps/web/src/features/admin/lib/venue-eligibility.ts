@@ -72,7 +72,7 @@ export const validateEligibilityForm = (form: EligibilityFormState): Eligibility
   } else if (
     form.openingHour !== null &&
     form.closingHour !== null &&
-    form.openingHour >= form.closingHour
+    form.openingHour === form.closingHour // HOURS-X1: inverted = overnight, only equal is refused
   ) {
     errors.closing_hour = HOURS_ORDER_HINT;
   }
@@ -152,7 +152,7 @@ export const eligibilityReadiness = (
   const hasWindow =
     view.opening_hour !== null &&
     view.closing_hour !== null &&
-    view.opening_hour < view.closing_hour;
+    view.opening_hour !== view.closing_hour; // HOURS-X1: an overnight window counts
   if (!hasWindow) missing.push('horaires');
   if (view.broadcast_capacity === null) missing.push('capacité');
   return { eligible: missing.length === 0, missing };

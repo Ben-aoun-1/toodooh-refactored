@@ -15,6 +15,7 @@ import {
 import { getDispatchConfig } from '../dispatch/config.js';
 import { SLOTS_PER_DAY, hourOfSlot } from '../half-hour-slots.js';
 import { displayImpressionsSettled } from '../impressions-display.js';
+import { broadcastableHours, isOpenAt } from '../opening-hours.js';
 import { loadBackupGrid, loadPeriodAudienceInput } from '../period-audience-source.js';
 import { periodAudience, weekGridFromCells } from '../period-audience.js';
 import { computeSps, spsComputable } from '../sps-score.js';
@@ -70,6 +71,19 @@ export const HEATMAP_HOURS = Array.from({ length: 14 }, (_, i) => i + 8);
 export const HEATMAP_SLOTS = HEATMAP_HOURS.flatMap((hour) => [hour * 2, hour * 2 + 1]);
 
 /**
+ * HOURS-X1 — the PDF's columns follow the VENUE'S hours like the page does (web heatmapHours):
+ * the venue's open hours in clock order, wrap included (08 → 01 = 17 hours = 34 columns), each
+ * hour as its two halves. The 8h–21h mockup window is only the null / zero-width fallback.
+ */
+export const heatmapSlotsFor = (
+  openingHour: number | null,
+  closingHour: number | null,
+): number[] => {
+  const hours = broadcastableHours(openingHour, closingHour);
+  return (hours.length > 0 ? hours : HEATMAP_HOURS).flatMap((hour) => [hour * 2, hour * 2 + 1]);
+};
+
+/**
  * PERF-QA2 — the Piste 01 teaser window: events kicking off within this many days of the render
  * day (Tunis calendar, inclusive of today). RULED 14 days on 2026-08-20: long enough that a venue
  * with one match a fortnight still sees a teaser, short enough that « cette semaine / ces
@@ -106,7 +120,10 @@ export interface ReportData {
   hostHasData: boolean;
   castHasData: boolean;
   kpis: AudienceKpis;
-  /** 7×14 levels for the 8h–21h grid; 0 = hachure (closed hour OR no data). */
+  /** HOURS-X1 — the column → half-hour slot map the three grids below share (the venue's open
+   * hours in clock order, two columns per hour; the 8h–21h window only as fallback). */
+  heatSlots: number[];
+  /** 7×N levels over heatSlots; 0 = hachure (closed hour OR no data). */
   heatLevels: number[][];
   /** AFF1 — 7×14 provenance per cell (measured / backup = estimation / none); closed hours read
    * as none. The template layers the estimation treatment over the level from this. */
@@ -141,11 +158,12 @@ const numOrNull = (value: string | null): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
+// HOURS-X1 — the window may wrap past midnight. No hours set → nothing is closed (legacy rows).
 const closedAt =
   (openingHour: number | null, closingHour: number | null) =>
   (hour: number): boolean => {
     if (openingHour === null || closingHour === null) return false;
-    return hour < openingHour || hour >= closingHour;
+    return !isOpenAt(hour, openingHour, closingHour);
   };
 
 /**
@@ -161,20 +179,19 @@ export function heatmapLevels(
   closingHour: number | null,
 ): number[][] {
   const closed = closedAt(openingHour, closingHour);
+  const columns = heatmapSlotsFor(openingHour, closingHour);
   const kinds = provenanceGrid(grid, sources);
   const valueAt = (day: number, slot: number): number | null =>
     kinds[day]?.[slot] === 'none' ? null : (grid[day]?.[slot] ?? null);
   const visible: (number | null)[] = [];
   for (let day = 0; day < 7; day += 1) {
-    for (const slot of HEATMAP_SLOTS) {
+    for (const slot of columns) {
       if (!closed(hourOfSlot(slot))) visible.push(valueAt(day, slot));
     }
   }
   const scale = heatmapScale(visible);
   return Array.from({ length: 7 }, (_, day) =>
-    HEATMAP_SLOTS.map((slot) =>
-      closed(hourOfSlot(slot)) ? 0 : heatmapLevel(valueAt(day, slot), scale),
-    ),
+    columns.map((slot) => (closed(hourOfSlot(slot)) ? 0 : heatmapLevel(valueAt(day, slot), scale))),
   );
 }
 
@@ -186,11 +203,10 @@ export function heatmapKinds(
   closingHour: number | null,
 ): ProvenanceKind[][] {
   const closed = closedAt(openingHour, closingHour);
+  const columns = heatmapSlotsFor(openingHour, closingHour);
   const kinds = provenanceGrid(grid, sources);
   return Array.from({ length: 7 }, (_, day) =>
-    HEATMAP_SLOTS.map((slot) =>
-      closed(hourOfSlot(slot)) ? 'none' : (kinds[day]?.[slot] ?? 'none'),
-    ),
+    columns.map((slot) => (closed(hourOfSlot(slot)) ? 'none' : (kinds[day]?.[slot] ?? 'none'))),
   );
 }
 
@@ -206,9 +222,10 @@ export function heatmapValues(
   closingHour: number | null,
 ): number[][] {
   const closed = closedAt(openingHour, closingHour);
+  const columns = heatmapSlotsFor(openingHour, closingHour);
   const kinds = provenanceGrid(grid, sources);
   return Array.from({ length: 7 }, (_, day) =>
-    HEATMAP_SLOTS.map((slot) =>
+    columns.map((slot) =>
       closed(hourOfSlot(slot)) || kinds[day]?.[slot] === 'none' ? 0 : (grid[day]?.[slot] ?? 0),
     ),
   );
@@ -498,6 +515,7 @@ export async function assembleReportData(
     hostHasData: hostFlag,
     castHasData: castFlag,
     kpis,
+    heatSlots: heatmapSlotsFor(venue.openingHour, venue.closingHour),
     heatLevels: heatmapLevels(heatGrid, heatSources, venue.openingHour, venue.closingHour),
     heatKinds: heatmapKinds(heatGrid, heatSources, venue.openingHour, venue.closingHour),
     heatValues: heatmapValues(heatGrid, heatSources, venue.openingHour, venue.closingHour),

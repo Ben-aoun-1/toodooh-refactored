@@ -1,6 +1,7 @@
 import { addDays, format, parseISO } from 'date-fns';
 
 import { sectorDisplayName } from '@/features/advertiser/constants/sector-display-name';
+import { hoursSpan } from '@/features/auth/lib/working-hours';
 
 import { type DateRange, inRange } from './performance-period';
 
@@ -109,14 +110,13 @@ export interface OpenHoursInfo {
 }
 
 /**
- * Daily open-hours span from the venue profile, `[opening, closing)`. Falls back to 14 (the
- * mockup's 8h–21h span) ONLY when either bound is null or the window is degenerate/overnight
- * (overnight semantics are deferred engine-side) — and says so, instead of passing the guess
- * off as measured.
+ * Daily open-hours span from the venue profile, wrap included (HOURS-X1: 21 → 8 is 11 hours).
+ * Falls back to 14 (the mockup's 8h–21h span) ONLY when either bound is null or the pair is
+ * zero-width — and says so, instead of passing the guess off as measured.
  */
 export function openHours(opening: number | null, closing: number | null): OpenHoursInfo {
   if (opening === null || closing === null) return { hours: 14, estimated: true };
-  const span = closing - opening;
+  const span = hoursSpan(opening, closing);
   return span > 0 ? { hours: span, estimated: false } : { hours: 14, estimated: true };
 }
 

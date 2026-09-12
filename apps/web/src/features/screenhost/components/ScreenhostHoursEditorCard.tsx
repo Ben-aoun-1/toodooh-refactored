@@ -9,6 +9,7 @@ import {
   HOURS_CLEARED_TOAST,
   HOURS_ERROR_TOAST,
   HOURS_ORDER_HINT,
+  nextDayHint,
   HOURS_SAVED_TOAST,
   NO_HOURS_EXPLANATION,
   NO_HOURS_LABEL,
@@ -146,6 +147,9 @@ export default function ScreenhostHoursEditorCard({
       </div>
 
       {!valid && <p className="text-sm text-[#FB3748]">{HOURS_ORDER_HINT}</p>}
+      {nextDayHint(opening, closing) && (
+        <p className="text-sm text-[#5C5C5C]">{nextDayHint(opening, closing)}</p>
+      )}
 
       <div className="flex items-center justify-between gap-3">
         <button

@@ -76,9 +76,9 @@ describe('validateEligibilityForm — the client-side mirror of the PATCH rules'
     expect(validateEligibilityForm(form)).toEqual({ opening_hour: HOURS_PAIR_ERROR });
   });
 
-  it('rejects ouverture ≥ fermeture with the H2 order hint (strict <, same copy)', () => {
+  it('HOURS-X1: accepts an inverted pair (overnight) and rejects only the equal one (same copy as H2)', () => {
     const inverted = { ...formStateFromView(emptyView), openingHour: 22, closingHour: 8 };
-    expect(validateEligibilityForm(inverted)).toEqual({ closing_hour: HOURS_ORDER_HINT });
+    expect(validateEligibilityForm(inverted)).toEqual({});
     const equal = { ...formStateFromView(emptyView), openingHour: 8, closingHour: 8 };
     expect(validateEligibilityForm(equal)).toEqual({ closing_hour: HOURS_ORDER_HINT });
   });
@@ -205,11 +205,21 @@ describe('eligibilityReadiness — the badge matrix (catégorie × horaires × c
     });
   });
 
-  it('counts a set-but-empty window (ouverture ≥ fermeture) as missing horaires — mirrors the pool gate', () => {
+  it('HOURS-X1: an inverted window (22 → 8) is an overnight window and COUNTS as horaires', () => {
     expect(
       eligibilityReadiness({
         ...withFields(true, false, true),
         opening_hour: 22,
+        closing_hour: 8,
+      }),
+    ).toEqual({ eligible: true, missing: [] });
+  });
+
+  it('counts a zero-width window (ouverture = fermeture) as missing horaires — mirrors the pool gate', () => {
+    expect(
+      eligibilityReadiness({
+        ...withFields(true, false, true),
+        opening_hour: 8,
         closing_hour: 8,
       }),
     ).toEqual({ eligible: false, missing: ['horaires'] });

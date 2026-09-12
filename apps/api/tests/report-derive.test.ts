@@ -42,11 +42,13 @@ const line = (over: Partial<ReportEarningsLine> = {}): ReportEarningsLine => ({
 });
 
 describe('openHoursPerDay (web parity)', () => {
-  it('is closing − opening, with the 14h mockup fallback on null/degenerate windows', () => {
+  it('is the clock span, wrap included (HOURS-X1); the 14h mockup fallback only on null/zero-width', () => {
     expect(openHoursPerDay(8, 21)).toBe(13);
     expect(openHoursPerDay(null, 21)).toBe(14);
     expect(openHoursPerDay(8, null)).toBe(14);
-    expect(openHoursPerDay(21, 8)).toBe(14);
+    expect(openHoursPerDay(21, 8)).toBe(11); // overnight — was the 14 h fallback
+    expect(openHoursPerDay(8, 1)).toBe(17);
+    expect(openHoursPerDay(9, 9)).toBe(14);
   });
 });
 

@@ -1,5 +1,7 @@
 import { addDays, format, parseISO } from 'date-fns';
 
+import { hoursSpan } from '../opening-hours.js';
+
 import { sectorDisplayName } from './sector-display-name.js';
 
 /**
@@ -73,10 +75,13 @@ export function hasCastData(lines: ReportEarningsLine[], days: DailyImpressionsP
   return lines.length > 0 || days.length > 0;
 }
 
-/** Daily open-hours span, `[opening, closing)`; 14h fallback (the mockups' 8h–21h span). */
+/**
+ * Daily open-hours span, wrap included (HOURS-X1: 21 → 8 is 11 hours, not a fallback); the 14h
+ * mockup fallback only when a bound is null or the pair is zero-width.
+ */
 export function openHoursPerDay(opening: number | null, closing: number | null): number {
   if (opening === null || closing === null) return 14;
-  const span = closing - opening;
+  const span = hoursSpan(opening, closing);
   return span > 0 ? span : 14;
 }
 

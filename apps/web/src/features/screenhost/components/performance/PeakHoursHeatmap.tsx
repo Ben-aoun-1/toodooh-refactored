@@ -1,6 +1,8 @@
 import { CalendarClock } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 
+import { isOpenAt } from '@/features/auth/lib/working-hours';
+
 import { DAY_LABELS_SHORT } from '../../lib/affluence-grid';
 import {
   type AffluenceSource,
@@ -30,13 +32,14 @@ import {
 } from './chart-colors';
 import { SectionHeading } from './SectionHeading';
 
+// HOURS-X1 — the window may wrap past midnight; no hours set → nothing is closed (legacy rows).
 const closedHour = (
   hour: number,
   openingHour: number | null,
   closingHour: number | null,
 ): boolean => {
   if (openingHour === null || closingHour === null) return false;
-  return hour < openingHour || hour >= closingHour;
+  return !isOpenAt(hour, openingHour, closingHour);
 };
 
 interface PeakHoursHeatmapProps {

@@ -37,15 +37,19 @@ export const FALLBACK_HEATMAP_HOURS: readonly number[] = Array.from(
 
 /**
  * R7 — the heatmap's hour columns come from the venue's REAL hours (`[opening, closing)`); the
- * 8h–21h mockup window is only the null / degenerate fallback (overnight semantics are deferred
- * engine-side, mirroring openHours).
+ * 8h–21h mockup window is only the null / zero-width fallback. HOURS-X1: an inverted pair is an
+ * overnight window — the columns run in clock order past midnight (21 → 8 = 21h … 23h, 0h … 7h).
  */
 export function heatmapHours(openingHour: number | null, closingHour: number | null): number[] {
   if (openingHour === null || closingHour === null) return [...FALLBACK_HEATMAP_HOURS];
   const from = Math.max(0, Math.min(23, openingHour));
   const to = Math.max(0, Math.min(24, closingHour));
-  if (to - from <= 0) return [...FALLBACK_HEATMAP_HOURS];
-  return Array.from({ length: to - from }, (_, i) => from + i);
+  if (to === from) return [...FALLBACK_HEATMAP_HOURS];
+  if (to > from) return Array.from({ length: to - from }, (_, i) => from + i);
+  return [
+    ...Array.from({ length: 24 - from }, (_, i) => from + i),
+    ...Array.from({ length: to }, (_, i) => i),
+  ];
 }
 
 /** The grid's own observed min/max over cells that CARRY data (measured or estimated; null =
