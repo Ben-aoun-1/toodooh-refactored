@@ -517,6 +517,10 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
       };
     }
     if (step === 2) {
+      // SIGN-DUP1 — the four address ids now only exist for a fleet_owner (step 2 is the only
+      // address it is ever asked for). For every other profile they are unmounted, and
+      // reconcileAutofill skips an undefined read, so the entries stay harmless rather than
+      // clobbering an address the user has already given on the « Adresse » step.
       return {
         etablissementName: readDom('etablissement-name'),
         taxNumber: readDom('tax-number', 'tax-number-2'),
@@ -529,6 +533,8 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
       };
     }
     if (step === 3) {
+      // `zone-3` is the owner's <select> (readDom ignores it — selects fire real change events)
+      // or, since SIGN-DUP1, the advertiser/agency free-text input, which it does read.
       return {
         streetAddress: readDom('street-address-3'),
         city: readDom('city-3'),
@@ -1547,112 +1553,121 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             </div>
           </div>
 
-          <div>
-            <label className={labelClass} htmlFor="street-address">
-              Adresse du siège <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              required
-              value={formData.street_address}
-              onChange={(e) => {
-                clearFieldError('streetAddress');
-                setFormData({ ...formData, street_address: e.target.value });
-              }}
-              className={inputClass}
-              placeholder="Adresse"
-              id="street-address"
-            />
-            {fieldError('streetAddress')}
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div>
-              <label className={labelClass} htmlFor="city">
-                Ville <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.city}
-                onChange={(e) => {
-                  clearFieldError('city');
-                  setFormData({ ...formData, city: e.target.value });
-                }}
-                className={inputClass}
-                placeholder="Ville"
-                id="city"
-              />
-              {fieldError('city')}
-            </div>
-            <div>
-              <label className={labelClass} htmlFor="zone">
-                Zone <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.zone}
-                onChange={(e) => {
-                  clearFieldError('zone');
-                  setFormData({ ...formData, zone: e.target.value });
-                }}
-                className={inputClass}
-                placeholder="1000"
-                id="zone"
-              />
-              {fieldError('zone')}
-            </div>
-          </div>
+          {/* SIGN-DUP1 — the address is asked ONCE, on the « Adresse » step. A fleet_owner is
+              the exception: its step 3 is the parc list (renderEtablissement), never renderStep3,
+              so this is the ONLY place it ever gives an address and the block stays for it. */}
           {selectedProfileType === 'fleet_owner' && (
-            <div>
-              <label className={labelClass} htmlFor="postal-code">
-                Code postal <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                pattern="\d{4}"
-                value={formData.postal_code}
-                onChange={(e) => {
-                  setPostalCodeError(null);
-                  setFormData({ ...formData, postal_code: e.target.value });
-                }}
-                onBlur={() => {
-                  const v = String(formData.postal_code || '').trim();
-                  if (v) setPostalCodeError(isValidPostalCode(v) ? null : POSTAL_CODE_ERROR);
-                }}
-                className={inputClass}
-                placeholder="1000"
-                id="postal-code"
-              />
-              {postalCodeError && <p className="text-xs text-red-600 mt-1">{postalCodeError}</p>}
-            </div>
-          )}
+            <>
+              <div>
+                <label className={labelClass} htmlFor="street-address">
+                  Adresse du siège <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.street_address}
+                  onChange={(e) => {
+                    clearFieldError('streetAddress');
+                    setFormData({ ...formData, street_address: e.target.value });
+                  }}
+                  className={inputClass}
+                  placeholder="Adresse"
+                  id="street-address"
+                />
+                {fieldError('streetAddress')}
+              </div>
 
-          <div>
-            <label className={labelClass} htmlFor="governorate-id">
-              Gouvernorat <span className="text-red-500">*</span>
-            </label>
-            <select
-              required
-              value={formData.governorate_id}
-              onChange={(e) => {
-                clearFieldError('governorate');
-                setFormData({ ...formData, governorate_id: e.target.value });
-              }}
-              className={inputClass}
-              id="governorate-id"
-            >
-              <option value="">Gouvernorat</option>
-              {governorates.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.name}
-                </option>
-              ))}
-            </select>
-            {fieldError('governorate')}
-          </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <label className={labelClass} htmlFor="city">
+                    Ville <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.city}
+                    onChange={(e) => {
+                      clearFieldError('city');
+                      setFormData({ ...formData, city: e.target.value });
+                    }}
+                    className={inputClass}
+                    placeholder="Ville"
+                    id="city"
+                  />
+                  {fieldError('city')}
+                </div>
+                <div>
+                  <label className={labelClass} htmlFor="zone">
+                    Zone <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.zone}
+                    onChange={(e) => {
+                      clearFieldError('zone');
+                      setFormData({ ...formData, zone: e.target.value });
+                    }}
+                    className={inputClass}
+                    placeholder="1000"
+                    id="zone"
+                  />
+                  {fieldError('zone')}
+                </div>
+              </div>
+              {selectedProfileType === 'fleet_owner' && (
+                <div>
+                  <label className={labelClass} htmlFor="postal-code">
+                    Code postal <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    pattern="\d{4}"
+                    value={formData.postal_code}
+                    onChange={(e) => {
+                      setPostalCodeError(null);
+                      setFormData({ ...formData, postal_code: e.target.value });
+                    }}
+                    onBlur={() => {
+                      const v = String(formData.postal_code || '').trim();
+                      if (v) setPostalCodeError(isValidPostalCode(v) ? null : POSTAL_CODE_ERROR);
+                    }}
+                    className={inputClass}
+                    placeholder="1000"
+                    id="postal-code"
+                  />
+                  {postalCodeError && (
+                    <p className="text-xs text-red-600 mt-1">{postalCodeError}</p>
+                  )}
+                </div>
+              )}
+
+              <div>
+                <label className={labelClass} htmlFor="governorate-id">
+                  Gouvernorat <span className="text-red-500">*</span>
+                </label>
+                <select
+                  required
+                  value={formData.governorate_id}
+                  onChange={(e) => {
+                    clearFieldError('governorate');
+                    setFormData({ ...formData, governorate_id: e.target.value });
+                  }}
+                  className={inputClass}
+                  id="governorate-id"
+                >
+                  <option value="">Gouvernorat</option>
+                  {governorates.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))}
+                </select>
+                {fieldError('governorate')}
+              </div>
+            </>
+          )}
         </>
       )}
     </div>
@@ -2351,11 +2366,16 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
           />
           {postalCodeError && <p className="text-xs text-red-600 mt-1">{postalCodeError}</p>}
         </div>
-        {(selectedProfileType === 'fleet_owner' || selectedProfileType === 'individual_owner') && (
-          <div className="md:col-span-2">
-            <label className={labelClass} htmlFor="zone-3">
-              Secteur/Zone <span className="text-red-500">*</span>
-            </label>
+        {/* SIGN-DUP1 — Zone is asked here for EVERY profile now. An owner picks from the
+            catalogue (`ownerZones`); an advertiser/agency types it free-text, which is exactly
+            the input it used to have on step 2 — moving the address without this would have cost
+            those profiles the field entirely. Both carry id="zone-3" so the autofill-sync seam
+            (domReadsForStep) reads whichever one is on screen. */}
+        <div className="md:col-span-2">
+          <label className={labelClass} htmlFor="zone-3">
+            Secteur/Zone <span className="text-red-500">*</span>
+          </label>
+          {selectedProfileType === 'fleet_owner' || selectedProfileType === 'individual_owner' ? (
             <select
               required
               value={formData.zone}
@@ -2373,9 +2393,22 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
                 </option>
               ))}
             </select>
-            {fieldError('zone')}
-          </div>
-        )}
+          ) : (
+            <input
+              type="text"
+              required
+              value={formData.zone}
+              onChange={(e) => {
+                clearFieldError('zone');
+                setFormData({ ...formData, zone: e.target.value });
+              }}
+              className={inputClass}
+              placeholder="Lac 2"
+              id="zone-3"
+            />
+          )}
+          {fieldError('zone')}
+        </div>
         <div className="md:col-span-2">
           <label className={labelClass} htmlFor="governorate-id-3">
             Gouvernorat <span className="text-red-500">*</span>
