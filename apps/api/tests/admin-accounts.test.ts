@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 
 import { auth, emailSender } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
-import { accounts, agents, type NewUser, users } from '../src/db/schema.js';
+import { accounts, agents, type NewUser, users, verifications } from '../src/db/schema.js';
 import { adminAccountsRoutes } from '../src/routes/admin-accounts.js';
 import { signinRoutes } from '../src/routes/signin.js';
 
@@ -100,6 +100,60 @@ describe('POST /api/admin/accounts (real Postgres)', () => {
     expect(body.account.status).toBe('approved');
     expect(body.account.email_verified).toBe(true);
     expect(body.account.email).toBe('agent1@example.com');
+  });
+
+  // SET-PW1 (Mejri 07/09 — her SECOND report of this). The « Définir mon mot de passe » button
+  // used to point at a bare `${WEB_ORIGIN}/reset-password` with NO token: the invited agent had to
+  // re-enter their email, and the creating admin clicking it in their own signed-in browser was
+  // bounced by PublicRoute to the admin dashboard. It must now carry a real minted token whose
+  // verification row belongs to the INVITED agent, and land on the token page.
+  it('the welcome email carries a real reset token for the INVITED agent', async () => {
+    sendMailMock.mockClear();
+    mockSession(superId);
+    await create(VALID);
+
+    const sent = sendMailMock.mock.calls
+      .map((call) => call[0] as { to: string; subject: string; html: string })
+      .filter((mail) => mail.to === VALID.email);
+    expect(sent).toHaveLength(1);
+    const welcome = sent[0];
+    if (!welcome) throw new Error('no welcome email captured');
+
+    // The tokenized better-auth link, whose callback lands on the token page.
+    const link = /\/auth\/reset-password\/([^"?\s]+)\?callbackURL=([^"\s]+)/.exec(welcome.html);
+    if (!link) throw new Error(`no tokenized reset link in: ${welcome.html.slice(0, 400)}`);
+    const [, token = '', callback = ''] = link;
+    expect(token.length).toBeGreaterThan(16);
+    expect(decodeURIComponent(callback)).toContain('/update-password');
+
+    // The token resolves to the AGENT, never to the admin who created the account.
+    const [agentRow] = await db.select().from(users).where(eq(users.email, VALID.email));
+    const [row] = await db
+      .select({ value: verifications.value })
+      .from(verifications)
+      .where(eq(verifications.identifier, `reset-password:${token}`));
+    expect(row?.value).toBe(agentRow?.id);
+    expect(row?.value).not.toBe(superId);
+
+    // The tokenless link that caused the bounce cannot come back.
+    expect(welcome.html).not.toContain('/reset-password"');
+  });
+
+  it('stays ONE email — the token rides the welcome template, code and temp password intact', async () => {
+    sendMailMock.mockClear();
+    mockSession(superId);
+    const res = await create(VALID);
+    const body = res.json<{ account: { code: string; temp_password: string } }>();
+
+    const sent = sendMailMock.mock.calls
+      .map((call) => call[0] as { to: string; subject: string; html: string })
+      .filter((mail) => mail.to === VALID.email);
+    expect(sent).toHaveLength(1);
+    const welcome = sent[0];
+    if (!welcome) throw new Error('no welcome email captured');
+    expect(welcome.subject).toContain('Bienvenue');
+    expect(welcome.html).toContain(body.account.code);
+    expect(welcome.html).toContain(body.account.temp_password);
   });
 
   it('created account is verified + approved + has a credential account', async () => {

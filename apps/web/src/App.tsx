@@ -270,22 +270,14 @@ export default function App() {
             {/* Post-signup validation screen (slice-1 auth-bug-1). Standalone — reached right after
                 signup with the email in router state; the just-registered user is logged out. */}
             <Route path="/signup-success" element={<SignUpSuccess />} />
-            <Route
-              path="/reset-password"
-              element={
-                <PublicRoute>
-                  <ResetPassword />
-                </PublicRoute>
-              }
-            />
-            <Route
-              path="/update-password"
-              element={
-                <PublicRoute>
-                  <UpdatePassword />
-                </PublicRoute>
-              }
-            />
+            {/* SET-PW1 — both password routes are standalone on purpose (the /verify-email
+                idiom): PublicRoute bounces ANY authenticated visitor to resolveHomeRoute, which
+                sent an admin clicking a new agent's « Définir mon mot de passe » link in their
+                own signed-in browser straight back to the admin dashboard. A reset link is
+                addressed to whoever holds the TOKEN, never to whoever is signed in on the
+                device — so these must render for a session-bearing browser too. */}
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/update-password" element={<UpdatePassword />} />
             {/* Verify-email result (Phase-1f F3): the better-auth callbackURL target. Standalone —
                 the just-verified user is logged out and must always see the result. */}
             <Route path="/verify-email" element={<VerifyEmail />} />

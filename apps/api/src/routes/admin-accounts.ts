@@ -1,18 +1,17 @@
+import type { IncomingHttpHeaders } from 'node:http';
+
 import { hashPassword } from 'better-auth/crypto';
+import { fromNodeHeaders } from 'better-auth/node';
 import { desc, eq, inArray } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
-import { emailSender } from '../auth/auth.js';
+import { auth } from '../auth/auth.js';
 import { db } from '../db/client.js';
 import { accounts, agents, users } from '../db/schema.js';
-import {
-  agentWelcomeEmailPlainText,
-  agentWelcomeEmailSubject,
-  agentWelcomeEmailTemplate,
-} from '../email/welcome-agent-template.js';
 import { env } from '../env.js';
 import { generateUniqueAgentCode, type AgentCodePrefix } from '../lib/agent-code.js';
+import { parkAgentInvite, takeAgentInvite } from '../lib/agent-invite.js';
 import { generateTempPassword } from '../lib/generate-password.js';
 import { pushAgentToHub } from '../lib/wedooh-sync.js';
 import { logger } from '../logger.js';
@@ -117,38 +116,41 @@ const toAdminAccountView = (row: {
 };
 
 // Non-blocking welcome email for a newly-created AGENT (Kais GTM). Mirrors auth.ts's never-throw
-// pattern (Decision 8): emailSender.send returns a result union and never throws, and we ALWAYS
-// resolve — so a send failure is logged but can never fail account creation (which has already
-// committed by the time this runs). The admin-UI panel that echoes the code + temp password is the
-// reliable fallback when delivery is delayed or spam-filtered. resetUrl is the FE reset-request
-// entry (no token needed — the agent enters their email there to set their own password); the temp
-// password lets them sign in meanwhile.
+// pattern (Decision 8): we ALWAYS resolve, so a send failure is logged but can never fail account
+// creation (which has already committed by the time this runs). The admin-UI panel that echoes the
+// code + temp password is the reliable fallback when delivery is delayed or spam-filtered.
+//
+// SET-PW1 — the « Définir mon mot de passe » button now carries a REAL reset token. It used to
+// point at `${env.WEB_ORIGIN}/reset-password` with NO token, so the invited agent had to re-enter
+// their email, and the creating admin clicking it in their own signed-in browser was bounced by
+// PublicRoute back to the admin dashboard. Only better-auth can mint the token, and it surfaces it
+// solely to the sendResetPassword hook — so the welcome payload is parked (lib/agent-invite) and
+// that hook renders THIS template with the tokenized url. One email, real token, landing straight
+// on /update-password. The reset is minted for the address in the body, never for the caller's
+// session, so it always belongs to the invited agent.
 const sendAgentWelcomeEmail = async (params: {
   to: string;
   name: string;
   agentCode: string;
   tempPassword: string;
+  headers: IncomingHttpHeaders;
 }): Promise<void> => {
-  const fields = {
-    name: params.name,
+  parkAgentInvite(params.to, {
     agentCode: params.agentCode,
-    loginEmail: params.to,
     tempPassword: params.tempPassword,
-    resetUrl: `${env.WEB_ORIGIN}/reset-password`,
-  };
+    name: params.name,
+  });
   try {
-    const result = await emailSender.send({
-      to: params.to,
-      subject: agentWelcomeEmailSubject,
-      html: agentWelcomeEmailTemplate(fields),
-      text: agentWelcomeEmailPlainText(fields),
+    await auth.api.requestPasswordReset({
+      // Absolute + WEB_ORIGIN → passes better-auth's originCheck, same as /api/password/reset-request.
+      body: { email: params.to, redirectTo: `${env.WEB_ORIGIN}/update-password` },
+      headers: fromNodeHeaders(params.headers),
     });
-    if ('error' in result) {
-      logger.error({ to: params.to, error: result.error }, 'agent welcome email failed');
-    } else {
-      logger.info({ to: params.to, messageId: result.messageId }, 'agent welcome email sent');
-    }
+    logger.info({ to: params.to }, 'agent welcome email requested');
   } catch (err) {
+    // Nothing will render the parked payload now — drop it rather than leave it to expire into
+    // an unrelated reset email for the same address.
+    takeAgentInvite(params.to);
     logger.error({ to: params.to, err }, 'agent welcome email threw (swallowed)');
   }
 };
@@ -286,6 +288,7 @@ export const adminAccountsRoutes: FastifyPluginAsync = async (app) => {
         name: created.user.contactName,
         agentCode: created.agentCode,
         tempPassword: plainPassword,
+        headers: request.headers,
       });
     }
 
