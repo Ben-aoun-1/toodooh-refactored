@@ -32,4 +32,13 @@ export const advertiserKeys = {
 
   /** The advertiser notification-bell feed (Commit 8 — D5). */
   notifications: (userId: string) => [...advertiserKeys.all, 'notifications', userId] as const,
+  // SC-P — « Mes performances » (Screencaster): four reads, session-scoped, keyed per user.
+  performancesClosed: (userId: string) =>
+    [...advertiserKeys.all, 'performances', 'closed', userId] as const,
+  performancesLive: (userId: string) =>
+    [...advertiserKeys.all, 'performances', 'live', userId] as const,
+  performancesFootprint: (userId: string) =>
+    [...advertiserKeys.all, 'performances', 'footprint', userId] as const,
+  performancesAnalysis: (userId: string, path: string) =>
+    [...advertiserKeys.all, 'performances', 'analysis', userId, path] as const,
 };

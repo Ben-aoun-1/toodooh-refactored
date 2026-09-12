@@ -11,9 +11,11 @@ import {
   campaignReconciliation,
   campaignScreenhostPayout,
   campaigns,
+  notifications,
   reversementLines,
   screenhosts,
 } from '../../db/schema.js';
+import { campaignReportReadyNotification } from '../campaign-report-notification.js';
 import { getDispatchConfig } from '../dispatch/config.js';
 import { createEngineTrace } from '../engine-journal/trace.js';
 import {
@@ -148,7 +150,7 @@ export const reconcileCampaignById = async (
   // Agent attribution (read-only): the venue owner's / the advertiser's referring agent, NULL when
   // no referral exists (the 3 % amounts are recorded regardless — payout mechanics are later).
   const [campaignRow] = await db
-    .select({ advertiserId: campaigns.advertiserId })
+    .select({ advertiserId: campaigns.advertiserId, name: campaigns.name })
     .from(campaigns)
     .where(eq(campaigns.id, campaignId))
     .limit(1);
@@ -263,6 +265,19 @@ export const reconcileCampaignById = async (
       throw err;
     });
   if (persisted === null) return { status: 'ALREADY_RECONCILED' }; // race loser: no run journaled
+
+  // SC-P epic 2 — the clôture IS the reconciliation row: the report is ready the instant it
+  // commits, so notify the screencaster here (both the auto-tick and the admin trigger pass
+  // through). Outside the settlement tx on purpose: a notification failure must never unsettle.
+  if (campaignRow) {
+    await db.insert(notifications).values(
+      campaignReportReadyNotification({
+        id: campaignId,
+        name: campaignRow.name,
+        advertiserId: campaignRow.advertiserId,
+      }),
+    );
+  }
 
   // LOG1 — flush post-commit.
   await trace.finish('committed', {

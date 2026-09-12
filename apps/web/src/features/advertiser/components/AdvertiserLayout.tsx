@@ -158,7 +158,7 @@ function AdvertiserLayoutChrome({ children, userName }: AdvertiserLayoutProps) {
             onNavigate={() => setIsMenuOpen(false)}
           />
           <SidebarNavItem
-            path="/perfor"
+            path="/my-performance"
             label="Mes performances"
             activeIcon={performanceIconActive}
             inactiveIcon={performanceIcon}

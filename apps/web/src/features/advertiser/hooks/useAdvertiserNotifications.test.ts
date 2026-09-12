@@ -47,6 +47,18 @@ describe('actionFor (advertiser bell CTA routing by type)', () => {
     });
   });
 
+  it('SC-P epic 2 — routes campaign_report_ready to « Mes performances » in Campaign mode (= Consulter)', () => {
+    expect(actionFor(notif({ type: 'campaign_report_ready', campaign_id: 'c42' }))).toEqual({
+      label: 'Consulter',
+      path: '/my-performance?campaign=c42',
+    });
+    // The campaign is gone (FK set null): the page still opens, in its default scope.
+    expect(actionFor(notif({ type: 'campaign_report_ready', campaign_id: null }))).toEqual({
+      label: 'Consulter',
+      path: '/my-performance',
+    });
+  });
+
   it('gives every unknown type NO CTA (rendered plainly, forward-compatible)', () => {
     for (const type of ['account_approved', 'video_approved', 'some_future_type']) {
       expect(actionFor(notif({ type }))).toBeNull();

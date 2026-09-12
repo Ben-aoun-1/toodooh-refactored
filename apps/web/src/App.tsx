@@ -22,8 +22,8 @@ const EventPositioning = lazy(() => import('@/features/events/pages/EventPositio
 const MyRecharges = lazy(() => import('@/features/wallet/pages/MyRecharges'));
 const MyInvoices = lazy(() => import('@/features/wallet/pages/MyInvoices'));
 const MyCart = lazy(() => import('@/features/cart/pages/MyCart'));
-const AdvertiserPerformancePlaceholder = lazy(
-  () => import('@/features/performances/pages/AdvertiserPerformancePlaceholder'),
+const AdvertiserPerformances = lazy(
+  () => import('@/features/advertiser/pages/AdvertiserPerformances'),
 );
 const OwnerDashboard = lazy(() => import('@/features/screenhost/pages/OwnerDashboard'));
 const Login = lazy(() => import('@/features/auth/pages/Login'));
@@ -409,16 +409,19 @@ export default function App() {
                 </AdvertiserRoute>
               }
             />
+            {/* SC-P — « Mes performances » (Screencaster). /perfor was the placeholder's path;
+                the bell's deep link (US-2.1) and the sidebar now speak /my-performance. */}
             <Route
-              path="/perfor"
+              path="/my-performance"
               element={
                 <AdvertiserRoute>
                   <AdvertiserLayout>
-                    <AdvertiserPerformancePlaceholder />
+                    <AdvertiserPerformances />
                   </AdvertiserLayout>
                 </AdvertiserRoute>
               }
             />
+            <Route path="/perfor" element={<Navigate to="/my-performance" replace />} />
             {/* Routes protégées - Dashboard Propriétaire */}
             <Route
               path="/owner-dashboard"
