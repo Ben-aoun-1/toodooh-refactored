@@ -78,7 +78,7 @@ export default function GettingStartedSection({
           </div>
           <div className="flex-1 min-w-0">
             <h3 className="text-xl font-semibold text-gray-900">Lancez une campagne</h3>
-            <p className="text-sm text-gray-600 mt-1">Creez votre premiere campagne</p>
+            <p className="text-sm text-gray-600 mt-1">Créez votre première campagne</p>
             <button
               type="button"
               onClick={() => navigate('/new-campaign')}

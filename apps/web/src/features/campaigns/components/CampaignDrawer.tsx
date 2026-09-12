@@ -310,7 +310,7 @@ export default function CampaignDrawer({
           </div>
 
           <div className="border-b border-[#EFEFEF] pb-3">
-            <p className="text-xs uppercase text-[#A3A3A3] mb-2">Etablissements</p>
+            <p className="text-xs uppercase text-[#A3A3A3] mb-2">Établissements</p>
             <div className="inline-flex items-center justify-center h-7 min-w-7 px-2 rounded border border-brand-primary bg-[#E8F8EE] text-[#1FC16B] text-sm font-semibold">
               {campaign.ownerLocationsCount}
             </div>

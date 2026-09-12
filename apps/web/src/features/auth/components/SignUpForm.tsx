@@ -983,7 +983,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
         </p>
         <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-2 gap-6">
           {renderGroup('+ de visibilité', visibilityCards, 'visibility')}
-          {renderGroup('+ de revenue', revenueCards, 'revenue')}
+          {renderGroup('+ de revenus', revenueCards, 'revenue')}
         </div>
       </div>
     );
@@ -1267,7 +1267,7 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
             <div className="w-16 h-16 rounded-full bg-[#e8f8ee] flex items-center justify-center mx-auto mb-3">
               <Building2 className="w-8 h-8 text-gray-700" />
             </div>
-            <h2 className="text-xl font-bold text-gray-900">Etablissement</h2>
+            <h2 className="text-xl font-bold text-gray-900">Établissement</h2>
             <p className="text-sm text-gray-500">
               Renseignez les informations de votre établissement
             </p>
