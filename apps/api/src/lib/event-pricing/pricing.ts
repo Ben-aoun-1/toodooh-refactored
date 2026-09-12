@@ -11,6 +11,7 @@ import {
 } from '../../db/schema.js';
 import { type BlocDiffusion, fenetreDiffusion } from '../fenetre-diffusion.js';
 import { collapseHalvesSql, inEffectSql } from '../half-hour-slots.js';
+import { isOpenAt } from '../opening-hours.js';
 
 // EV2 — the EVENT pricing engine (D51: its OWN module). The campaign engine is untouched and
 // UNIMPORTED — no lib/dispatch, no campaign-* libs (boundary-pinned like E7's rail). The event
@@ -140,11 +141,11 @@ export const availableBlocs = (
   if (venue.openingHour === null || venue.closingHour === null) return [];
   const { openingHour, closingHour } = venue;
   const { blocs } = fenetreDiffusion(event.kickoffAt, event.endsAt);
+  // HOURS-X1 — the window may wrap past midnight; isOpenAt handles both shapes.
   return blocs.filter((bloc) =>
     blocCells(bloc.start, bloc.end).every(
       (c) =>
-        c.hour >= openingHour &&
-        c.hour < closingHour &&
+        isOpenAt(c.hour, openingHour, closingHour) &&
         !ctx.unavailableDates.has(c.date) &&
         !ctx.foreignReservedCells.has(`${c.date}:${c.hour}`),
     ),

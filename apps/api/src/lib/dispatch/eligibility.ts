@@ -36,20 +36,11 @@ export const screenhostMatchesTargeting = (
   );
 
 /**
- * The screenhost's broadcastable hours [opening, closing) — the intra-day horaires window. V1: a
- * window needs both bounds and closing > opening (no overnight). Empty ⇒ horaires not set / invalid
- * ⇒ not eligible.
+ * The screenhost's broadcastable hours — the horaires window, WRAP INCLUDED since HOURS-X1
+ * (08 → 01 = 17 hours). Lives in lib/opening-hours.ts; re-exported here for the engine importers.
+ * Empty ⇒ horaires not set / zero-width ⇒ not eligible.
  */
-export const broadcastableHours = (
-  openingHour: number | null,
-  closingHour: number | null,
-): number[] => {
-  if (openingHour === null || closingHour === null) return [];
-  if (closingHour <= openingHour) return [];
-  const hours: number[] = [];
-  for (let h = openingHour; h < closingHour; h += 1) hours.push(h);
-  return hours;
-};
+export { broadcastableHours } from '../opening-hours.js';
 
 /**
  * R = MIN[3600/S, F/S] — the PHYSICAL max reps/hour (floored to whole spots). E1 (VF): the

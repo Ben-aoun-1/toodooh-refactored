@@ -106,6 +106,15 @@ describe('owner opening-hours PATCH (H2, real Postgres)', () => {
     await sql.end();
   });
 
+  it('HOURS-X1: an inverted pair is an overnight window — 22 → 8 is accepted and stored as typed', async () => {
+    const owner = await seedUser();
+    const id = await seedVenue(owner);
+    mockSession(owner);
+    const res = await patchHours(app, id, { opening_hour: 22, closing_hour: 8 });
+    expect(res.statusCode).toBe(200);
+    expect(await hoursOf(id)).toEqual({ open: 22, close: 8 });
+  });
+
   // ── validation matrix ────────────────────────────────────────────────────────
   it('sets a valid pair (200) — the same columns every other writer uses', async () => {
     const owner = await seedUser();
@@ -132,8 +141,7 @@ describe('owner opening-hours PATCH (H2, real Postgres)', () => {
     [{ closing_hour: 22 }, 'one-sided (missing opening)'],
     [{ opening_hour: 8, closing_hour: null }, 'int + null'],
     [{ opening_hour: null, closing_hour: 22 }, 'null + int'],
-    [{ opening_hour: 22, closing_hour: 8 }, 'unordered'],
-    [{ opening_hour: 8, closing_hour: 8 }, 'equal (open < close is strict)'],
+    [{ opening_hour: 8, closing_hour: 8 }, 'equal (zero-width — the only refused order)'],
     [{ opening_hour: -1, closing_hour: 22 }, 'below range'],
     [{ opening_hour: 8, closing_hour: 24 }, 'above range'],
     [{ opening_hour: 8.5, closing_hour: 22 }, 'non-integer'],

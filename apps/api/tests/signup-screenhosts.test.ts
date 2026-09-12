@@ -269,10 +269,27 @@ describe('POST /api/signup — screenhost location persistence (P3)', () => {
     expect(res.statusCode).toBe(201);
   });
 
-  it('rejects an unordered, out-of-range or one-sided hours pair — 400, no user, no row (H1)', async () => {
+  it('HOURS-X1: an inverted pair (22 → 8) is an overnight window — accepted and stored as typed', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      ...signupMultipart({
+        ...ownerBaseNoHours,
+        profile_type: 'individual_owner',
+        opening_hour: 22,
+        closing_hour: 8,
+      }),
+    });
+    expect(res.statusCode).toBe(201);
+    const ownerId = await userIdByEmail(ownerBase.email);
+    const rows = await db.select().from(screenhosts).where(eq(screenhosts.ownerId, ownerId));
+    expect(rows[0]?.openingHour).toBe(22);
+    expect(rows[0]?.closingHour).toBe(8);
+  });
+
+  it('rejects a zero-width, out-of-range or one-sided hours pair — 400, no user, no row (H1)', async () => {
     const badPayloads = [
-      { opening_hour: 22, closing_hour: 8 }, // unordered (open < close required)
-      { opening_hour: 9, closing_hour: 9 }, // zero-width window
+      { opening_hour: 9, closing_hour: 9 }, // zero-width window (the only refused order, HOURS-X1)
       { opening_hour: 8, closing_hour: 24 }, // out of the 0–23 range
       { opening_hour: 8 }, // one-sided pair
     ];
@@ -331,14 +348,14 @@ describe('POST /api/signup — screenhost location persistence (P3)', () => {
     expect(await userIdByEmail('host2@example.com')).toBe('');
   });
 
-  it('rejects an invalid pair inside fleet_establishments — 400, nothing persisted (H1)', async () => {
+  it('rejects a zero-width pair inside fleet_establishments — 400, nothing persisted (H1; overnight is legal since HOURS-X1)', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/signup',
       ...signupMultipart({
         ...ownerBase,
         profile_type: 'fleet_owner',
-        fleet_establishments: [{ name: 'Café du Lac', opening_hour: 23, closing_hour: 6 }],
+        fleet_establishments: [{ name: 'Café du Lac', opening_hour: 6, closing_hour: 6 }],
       }),
     });
     expect(res.statusCode).toBe(400);

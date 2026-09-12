@@ -63,14 +63,18 @@ describe('screenhostMatchesTargeting — category × class with NULL = "toutes"'
   });
 });
 
-describe('broadcastableHours — intra-day horaires window [opening, closing)', () => {
+describe('broadcastableHours — horaires window, wrap included (HOURS-X1)', () => {
   it('expands a valid window', () => {
     expect(broadcastableHours(8, 12)).toEqual([8, 9, 10, 11]);
   });
-  it('is empty when unset or non-positive (V1: no overnight)', () => {
+  it('HOURS-X1: an inverted pair is an overnight window — 20 → 8 is 12 hours in clock order', () => {
+    expect(broadcastableHours(20, 8)).toEqual([20, 21, 22, 23, 0, 1, 2, 3, 4, 5, 6, 7]);
+    expect(broadcastableHours(8, 1)).toHaveLength(17); // Mejri's example: 08h00 → 01h00
+    expect(broadcastableHours(23, 0)).toEqual([23]);
+  });
+  it('is empty when unset or zero-width', () => {
     expect(broadcastableHours(null, 12)).toEqual([]);
     expect(broadcastableHours(8, null)).toEqual([]);
-    expect(broadcastableHours(20, 8)).toEqual([]);
     expect(broadcastableHours(10, 10)).toEqual([]);
   });
 });

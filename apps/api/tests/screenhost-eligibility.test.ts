@@ -178,21 +178,28 @@ describe('admin screenhost eligibility (L-inv, real Postgres)', () => {
       expect(res.statusCode).toBe(400);
     });
 
-    it('rejects a result with ouverture ≥ fermeture (strict order, body × stored)', async () => {
+    it('HOURS-X1: accepts an inverted pair (overnight) and rejects only the zero-width one (body × stored)', async () => {
       const admin = await seedUser({ role: 'admin' });
       const sh = await seedScreenhost();
       mockSession(admin);
-      // Both in the body, inverted.
+      // Both in the body, inverted = overnight window → accepted (was 400 before HOURS-X1).
       const both = await patch(sh, { opening_hour: 22, closing_hour: 8 });
-      expect(both.statusCode).toBe(400);
-      expect(both.json().fields).toEqual([
-        { field: 'closing_hour', reason: 'opening_hour must be strictly before closing_hour' },
-      ]);
+      expect(both.statusCode).toBe(200);
       // Equal pair.
-      expect((await patch(sh, { opening_hour: 8, closing_hour: 8 })).statusCode).toBe(400);
-      // One-sided against the STORED other bound.
+      const equal = await patch(sh, { opening_hour: 8, closing_hour: 8 });
+      expect(equal.statusCode).toBe(400);
+      expect(equal.json().fields).toEqual([
+        {
+          field: 'closing_hour',
+          reason:
+            'opening_hour and closing_hour must differ (closing before opening = closes the next day)',
+        },
+      ]);
+      // One-sided against the STORED other bound: 20 → stored 18 is now an overnight window
+      // (accepted); only a body value EQUAL to the stored other bound is refused.
       await patch(sh, { opening_hour: 8, closing_hour: 18 });
-      expect((await patch(sh, { opening_hour: 20 })).statusCode).toBe(400);
+      expect((await patch(sh, { opening_hour: 20 })).statusCode).toBe(200);
+      expect((await patch(sh, { opening_hour: 18 })).statusCode).toBe(400);
     });
 
     it('accepts a one-sided patch whose RESULT is coherent (the EL1 dirty-fields case)', async () => {

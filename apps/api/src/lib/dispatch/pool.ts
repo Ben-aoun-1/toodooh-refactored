@@ -14,6 +14,7 @@ import {
 } from '../../db/schema.js';
 import { NOOP_TRACE, type EngineTrace } from '../engine-journal/trace.js';
 import { collapseHalvesSql, inEffectSql } from '../half-hour-slots.js';
+import { addIsoDays, openingHours, shiftDayOfWeek } from '../opening-hours.js';
 import { SPS_NEUTRAL, spsComputable, spsObservationsFor } from '../sps-score.js';
 
 import {
@@ -356,24 +357,30 @@ export const assemblePool = async (
       continue;
     }
     const venueWeekdays = [...new Set(days.map((d) => d.dayOfWeek))];
-    const bHours = broadcastableHours(sh.openingHour, sh.closingHour);
+    // HOURS-X1 — an overnight window's post-midnight hours belong to the NEXT weekday / calendar
+    // day: their affluence cell and their reservation cell are read there (a proof at 00:30 on
+    // Tuesday is Tuesday's cell, even though it is Monday's opening day).
+    const oHours = openingHours(sh.openingHour, sh.closingHour);
     const slots = venueWeekdays.flatMap((dow) =>
-      bHours.map((hour) => ({
+      oHours.map(({ hour, dayOffset }) => ({
         dayOfWeek: dow,
         hour,
-        affluence: affByKey.get(`${sh.id}:${dow}:${hour}`) ?? 0,
+        dayOffset,
+        affluence: affByKey.get(`${sh.id}:${shiftDayOfWeek(dow, dayOffset)}:${hour}`) ?? 0,
       })),
     );
     // Hi — broadcastable slots over the AVAILABLE days, minus any reserved (day, hour) cells
-    // (EV1 seam — with no reservations this counts exactly days.length × bHours.length as before).
+    // (EV1 seam — with no reservations this counts exactly days.length × oHours.length as before).
     const reserved = reservedBySh.get(sh.id);
     let hours = 0;
     let totalAffluence = 0;
     for (const day of days) {
-      for (const hour of bHours) {
-        if (reserved?.has(`${day.date}:${hour}`)) continue;
+      for (const { hour, dayOffset } of oHours) {
+        const cellDate = dayOffset ? addIsoDays(day.date, dayOffset) : day.date;
+        if (reserved?.has(`${cellDate}:${hour}`)) continue;
         hours += 1;
-        totalAffluence += affByKey.get(`${sh.id}:${day.dayOfWeek}:${hour}`) ?? 0;
+        totalAffluence +=
+          affByKey.get(`${sh.id}:${shiftDayOfWeek(day.dayOfWeek, dayOffset)}:${hour}`) ?? 0;
       }
     }
     const avgAffluence = hours > 0 ? totalAffluence / hours : 0;

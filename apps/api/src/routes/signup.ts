@@ -42,10 +42,12 @@ interface HoursPair {
 }
 const hoursArePaired = (b: HoursPair): boolean =>
   (b.opening_hour === undefined) === (b.closing_hour === undefined);
+// HOURS-X1: closing ≤ opening is legal (« closes the next day »); only an EQUAL pair is refused.
 const hoursAreOrdered = (b: HoursPair): boolean =>
-  b.opening_hour === undefined || b.closing_hour === undefined || b.opening_hour < b.closing_hour;
+  b.opening_hour === undefined || b.closing_hour === undefined || b.opening_hour !== b.closing_hour;
 const PAIR_MESSAGE = 'opening_hour and closing_hour must be provided together';
-const ORDER_MESSAGE = 'opening_hour must be strictly before closing_hour';
+const ORDER_MESSAGE =
+  'opening_hour and closing_hour must differ (closing before opening = closes the next day)';
 const HOURS_REQUIRED_MESSAGE = 'opening_hour and closing_hour are required for a screenhost signup';
 
 const fleetEstablishmentSchema = z

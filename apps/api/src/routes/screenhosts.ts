@@ -53,6 +53,10 @@ import { decryptWifiPassword, encryptWifiPassword } from '../lib/wifi-crypto.js'
 import { requireActiveAccount, requireAdmin, requireAuth } from '../middleware/require-auth.js';
 import { storage } from '../storage/s3-storage.js';
 
+// HOURS-X1 — the one wording every hours writer uses for the zero-width pair.
+const HOURS_DIFFER_MESSAGE =
+  'opening_hour and closing_hour must differ (closing before opening = closes the next day)';
+
 /** AFF1 — a slot's provenance as the hub reports it (see schema affluenceSource). */
 type AffluenceSource = (typeof affluenceSource.enumValues)[number];
 
@@ -556,9 +560,11 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
     .refine((b) => (b.opening_hour === null) === (b.closing_hour === null), {
       message: 'opening_hour and closing_hour must be set together or both null',
     })
+    // HOURS-X1: closing ≤ opening = « closes the next day »; only an equal pair is refused.
     .refine(
-      (b) => b.opening_hour === null || b.closing_hour === null || b.opening_hour < b.closing_hour,
-      { message: 'opening_hour must be strictly before closing_hour' },
+      (b) =>
+        b.opening_hour === null || b.closing_hour === null || b.opening_hour !== b.closing_hour,
+      { message: HOURS_DIFFER_MESSAGE },
     );
 
   app.patch('/api/screenhosts/:id/hours', ownerGuard, async (request, reply) => {
@@ -1653,17 +1659,16 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         ],
       });
     }
+    // HOURS-X1: an inverted pair is an overnight window; only an EQUAL pair is refused.
     if (
       effectiveOpening !== null &&
       effectiveClosing !== null &&
-      effectiveOpening >= effectiveClosing
+      effectiveOpening === effectiveClosing
     ) {
       return reply.status(400).send({
         error: 'INVALID_INPUT',
         message: 'Validation failed',
-        fields: [
-          { field: 'closing_hour', reason: 'opening_hour must be strictly before closing_hour' },
-        ],
+        fields: [{ field: 'closing_hour', reason: HOURS_DIFFER_MESSAGE }],
       });
     }
 

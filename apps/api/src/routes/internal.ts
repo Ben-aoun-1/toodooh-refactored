@@ -246,15 +246,27 @@ const age46Plus = (r: z.infer<typeof eligibilityRatiosSchema>): number =>
 const eligibilityBodySchema = z.object({
   items: z
     .array(
-      z.object({
-        location_id: z.uuid(),
-        business_sector: z.string().min(1).nullable().optional(),
-        class: z.enum(['populaire', 'moyen', 'premium']).nullable().optional(),
-        opening_hour: z.number().int().min(0).max(23).nullable().optional(),
-        closing_hour: z.number().int().min(0).max(23).nullable().optional(),
-        broadcast_capacity: z.number().int().positive().nullable().optional(),
-        ratios: eligibilityRatiosSchema.nullable().optional(),
-      }),
+      z
+        .object({
+          location_id: z.uuid(),
+          business_sector: z.string().min(1).nullable().optional(),
+          class: z.enum(['populaire', 'moyen', 'premium']).nullable().optional(),
+          opening_hour: z.number().int().min(0).max(23).nullable().optional(),
+          closing_hour: z.number().int().min(0).max(23).nullable().optional(),
+          broadcast_capacity: z.number().int().positive().nullable().optional(),
+          ratios: eligibilityRatiosSchema.nullable().optional(),
+        })
+        // HOURS-X1 — the same rule as every app writer: a pair given together, never zero-width
+        // (an inverted pair is an overnight window). Before this the ingest had no rule at all.
+        .refine(
+          (i) =>
+            i.opening_hour === undefined ||
+            i.closing_hour === undefined ||
+            i.opening_hour === null ||
+            i.closing_hour === null ||
+            i.opening_hour !== i.closing_hour,
+          { message: 'opening_hour and closing_hour must differ', path: ['closing_hour'] },
+        ),
     )
     .max(64 * 4), // generous ceiling — one eligibility row per screenhost (small fleet)
 });

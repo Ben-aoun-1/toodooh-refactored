@@ -15,6 +15,7 @@ import {
 import { getDispatchConfig } from '../dispatch/config.js';
 import { SLOTS_PER_DAY, hourOfSlot } from '../half-hour-slots.js';
 import { displayImpressionsSettled } from '../impressions-display.js';
+import { isOpenAt } from '../opening-hours.js';
 import { loadBackupGrid, loadPeriodAudienceInput } from '../period-audience-source.js';
 import { periodAudience, weekGridFromCells } from '../period-audience.js';
 import { computeSps, spsComputable } from '../sps-score.js';
@@ -141,11 +142,12 @@ const numOrNull = (value: string | null): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
+// HOURS-X1 — the window may wrap past midnight. No hours set → nothing is closed (legacy rows).
 const closedAt =
   (openingHour: number | null, closingHour: number | null) =>
   (hour: number): boolean => {
     if (openingHour === null || closingHour === null) return false;
-    return hour < openingHour || hour >= closingHour;
+    return !isOpenAt(hour, openingHour, closingHour);
   };
 
 /**
