@@ -27,6 +27,7 @@ import {
   zones,
   screenhostUnavailability,
 } from '../db/schema.js';
+import { notifyAdmins } from '../lib/admin-notifications.js';
 import { CALENDAR_DAY_MSG, ISO_DATE_RE, isCalendarDate } from '../lib/calendar-date.js';
 import { tunisDateOf } from '../lib/campaign-dates.js';
 import { runRefusalCascade } from '../lib/dispatch/cascade.js';
@@ -2211,7 +2212,7 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
           // LOG1 — the cascade runs on THIS tx, so the collector (constructed here, where the
           // campaign id is first known) only buffers; the flush is below, after the tx resolves.
           cascadeTrace.current = createEngineTrace('cascade', row.campaignId);
-          await runRefusalCascade(
+          const cascade = await runRefusalCascade(
             tx,
             {
               plan: row.plan,
@@ -2229,6 +2230,18 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
             },
             cascadeTrace.current,
           );
+          // ADM-BELL1 — a refusal is admin-actionable only when the share could NOT be fully
+          // re-placed (a plan partiel or a stored reliquat); a clean cascade needs nobody.
+          if (cascade.absorbed < cascade.v) {
+            await notifyAdmins(tx, {
+              type: 'admin_allocation_refused',
+              title: 'Diffusion refusée non replacée',
+              body: `Un établissement a refusé la campagne « ${row.campaignName} » et ${
+                cascade.v - cascade.absorbed
+              } impressions n'ont pas pu être replacées.`,
+              campaignId: row.campaignId,
+            });
+          }
         }
         return {
           kind: 'ok' as const,

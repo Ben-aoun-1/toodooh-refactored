@@ -6,7 +6,6 @@ import {
   LogOut,
   Menu,
   X,
-  Bell,
   Search,
   Film,
   Calendar,
@@ -21,6 +20,7 @@ import {
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 
+import AdminNotificationsBell from '@/features/admin/components/AdminNotificationsBell';
 import { usePlatformStats } from '@/features/admin/hooks/usePlatformStats';
 import {
   pendingBadgeLabel,
@@ -50,6 +50,7 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
   const user = useAuthStore((s) => s.user);
   const role = useAuthStore((s) => s.role);
   const contactName = useAuthStore((s) => s.contactName);
+  const adminUserId = useAuthStore((s) => s.user?.id);
   const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
   const location = useLocation();
@@ -101,9 +102,9 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
               <button className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg">
                 <Search className="h-5 w-5" />
               </button>
-              <button className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg">
-                <Bell className="h-5 w-5" />
-              </button>
+              {/* ADM-BELL1 — the bell is live: the admin feed (recharge actions, accounts, campaigns,
+                  creatives, factures, refusals not re-placed). Was a decorative button. */}
+              <AdminNotificationsBell userId={adminUserId} emphasized />
 
               {/* Profil admin */}
               <div className="flex items-center space-x-3">

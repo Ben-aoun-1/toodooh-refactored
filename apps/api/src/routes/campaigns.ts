@@ -17,6 +17,7 @@ import {
   screenhosts,
   zones,
 } from '../db/schema.js';
+import { accountLabel, notifyAdmins } from '../lib/admin-notifications.js';
 import { MIN_CAMPAIGN_BUDGET_TND } from '../lib/campaign-budget.js';
 import { computeCampaignCmax } from '../lib/campaign-cmax.js';
 import {
@@ -841,6 +842,13 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         statusCode: 409,
       });
     }
+    // ADM-BELL1 — the campaign waits for the admin's validation.
+    await notifyAdmins(db, {
+      type: 'admin_campaign_pending',
+      title: 'Nouvelle campagne à valider',
+      body: `La campagne « ${updated.name} » de ${await accountLabel(userId)} attend votre validation.`,
+      campaignId: updated.id,
+    }).catch((err: unknown) => request.log.warn({ err }, 'admin notice failed (submit)'));
     return reply.status(200).send(campaignView(updated as CampaignRow));
   });
 

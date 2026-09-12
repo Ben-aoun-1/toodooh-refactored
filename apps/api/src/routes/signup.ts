@@ -10,6 +10,7 @@ import { auth } from '../auth/auth.js';
 import { db } from '../db/client.js';
 import { accounts, agentReferrals, screenhosts, userDocuments, users } from '../db/schema.js';
 import { env } from '../env.js';
+import { ROLE_LABELS_FR, notifyAdmins } from '../lib/admin-notifications.js';
 import { agentCodeVerdict, agentCompatibleWith, resolveAgentByCode } from '../lib/agent-lookup.js';
 import { PROFILE_TYPES, fromProfileType } from '../lib/profile-type.js';
 import { ALLOWED_DOCUMENT_MIME, MAX_DOCUMENT_BYTES } from '../lib/user-documents.js';
@@ -499,6 +500,17 @@ export const signupRoute: FastifyPluginAsync = async (app) => {
           if (voletFiles.bank)
             await persistVolet(persisted.id, 'bank', 1, voletFiles.bank, request.log);
         }
+      }
+
+      // ADM-BELL1 — a new account waits for the admin's validation: tell every admin (a duplicate
+      // signup never reaches here with a real persisted id — the guard above).
+      if (persisted && persisted.id === result.user.id) {
+        const role = fromProfileType(profile_type ?? 'advertiser').role;
+        await notifyAdmins(db, {
+          type: 'admin_account_pending',
+          title: 'Nouveau compte à valider',
+          body: `Le compte « ${business_name} » (${ROLE_LABELS_FR[role] ?? role}) attend votre validation.`,
+        }).catch((err: unknown) => request.log.warn({ err }, 'admin notice failed (signup)'));
       }
 
       return reply.status(201).send({

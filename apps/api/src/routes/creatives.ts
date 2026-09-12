@@ -7,6 +7,7 @@ import { z } from 'zod';
 
 import { db } from '../db/client.js';
 import { creatives } from '../db/schema.js';
+import { accountLabel, notifyAdmins } from '../lib/admin-notifications.js';
 import {
   findInheritableApproval,
   hashCreativeBytes,
@@ -254,6 +255,16 @@ export const creativesRoutes: FastifyPluginAsync = async (app) => {
       return reply
         .status(500)
         .send({ error: 'INTERNAL_ERROR', message: "L'enregistrement de la créative a échoué." });
+    }
+    // ADM-BELL1 — a fresh (non-inherited) creative waits for moderation.
+    if (!inherited) {
+      await notifyAdmins(db, {
+        type: 'admin_creative_pending',
+        title: 'Nouveau contenu à modérer',
+        body: `Un contenu ${type === 'video' ? 'vidéo' : 'photo'} de ${await accountLabel(userId)}${
+          storedDurationSeconds ? ` (${storedDurationSeconds} s)` : ''
+        } attend votre modération.`,
+      }).catch((err: unknown) => request.log.warn({ err }, 'admin notice failed (creative)'));
     }
     return reply.status(201).send(creativeView(row));
   });
