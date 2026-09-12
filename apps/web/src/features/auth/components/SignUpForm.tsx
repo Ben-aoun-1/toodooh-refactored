@@ -27,7 +27,9 @@ import {
   DEFAULT_OPENING_HOUR,
   HOUR_OPTIONS,
   hoursPayload,
+  HOURS_DIFFER_ERROR,
   isValidHoursWindow,
+  nextDayHint,
 } from '@/features/auth/lib/working-hours';
 import { authService, type AgentCodeVerdict } from '@/features/auth/services/auth.service';
 import type {
@@ -2209,11 +2211,13 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
           </select>
         </div>
       </div>
-      {/* HOURS-M1 (Mejri 09/09): the « Préciser plus tard » skip is gone — hours are mandatory. */}
+      {/* HOURS-M1 (Mejri 09/09): the « Préciser plus tard » skip is gone — hours are mandatory.
+          HOURS-X1: an inverted pair closes the next day — said so, not refused. */}
       {!isValidHoursWindow(opts.opening, opts.closing) && (
-        <p className="text-xs text-red-600">
-          L&apos;heure d&apos;ouverture doit précéder l&apos;heure de fermeture.
-        </p>
+        <p className="text-xs text-red-600">{HOURS_DIFFER_ERROR}</p>
+      )}
+      {nextDayHint(opts.opening, opts.closing) && (
+        <p className="text-xs text-gray-600">{nextDayHint(opts.opening, opts.closing)}</p>
       )}
     </div>
   );

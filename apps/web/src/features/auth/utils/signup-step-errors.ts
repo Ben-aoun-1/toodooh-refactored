@@ -1,3 +1,4 @@
+import { HOURS_DIFFER_ERROR } from '@/features/auth/lib/working-hours';
 import { isValidAgentCode, AGENT_CODE_ERROR } from '@/features/auth/utils/agent-code';
 import { isValidPassword } from '@/features/auth/utils/password';
 import { PHONE_FORMAT_ERROR, isValidTunisiaPhone } from '@/features/auth/utils/phone';
@@ -27,7 +28,8 @@ export const EMAIL_FORMAT_ERROR = 'Format email invalide';
 export const PASSWORD_POLICY_ERROR =
   'Mot de passe invalide — 10 caractères minimum, avec majuscule, minuscule et chiffre.';
 export const PASSWORD_MATCH_ERROR = 'Les mots de passe ne correspondent pas.';
-export const HOURS_WINDOW_ERROR = "Horaires invalides — la fermeture doit être après l'ouverture.";
+// HOURS-X1: an inverted pair is legal (closes the next day); only an equal pair is refused.
+export const HOURS_WINDOW_ERROR = HOURS_DIFFER_ERROR;
 export const FLEET_MIN_ERROR = 'Ajoutez au moins un établissement pour continuer.';
 // Moved verbatim from SignUpForm (C5 #8a) — the backend matricule/postal mirrors keep one home.
 // SIGN-3 — the matricule definition now lives in ONE place (`./tax-number`, byte-mirrored from

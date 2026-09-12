@@ -42,11 +42,12 @@ const line = (over: Partial<PerformanceEarningsLine> = {}): PerformanceEarningsL
 });
 
 describe('openHours (R9)', () => {
-  it('is closing − opening, with the 14h fallback FLAGGED on null/degenerate windows', () => {
+  it('is the clock span (wrap included, HOURS-X1), with the 14h fallback FLAGGED on null/zero-width', () => {
     expect(openHours(8, 21)).toEqual({ hours: 13, estimated: false });
     expect(openHours(null, 21)).toEqual({ hours: 14, estimated: true });
     expect(openHours(8, null)).toEqual({ hours: 14, estimated: true });
-    expect(openHours(21, 8)).toEqual({ hours: 14, estimated: true }); // overnight deferred
+    expect(openHours(21, 8)).toEqual({ hours: 11, estimated: false }); // overnight — was the fallback
+    expect(openHours(9, 9)).toEqual({ hours: 14, estimated: true });
   });
 });
 

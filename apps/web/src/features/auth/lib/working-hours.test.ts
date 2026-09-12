@@ -5,7 +5,11 @@ import {
   DEFAULT_OPENING_HOUR,
   HOUR_OPTIONS,
   hoursPayload,
+  hoursSpan,
+  isOpenAt,
   isValidHoursWindow,
+  nextDayHint,
+  openingHoursList,
 } from './working-hours';
 
 // H1 (Mejri item 5) — the signup working-hours helpers: hour-granular single window
@@ -26,20 +30,58 @@ describe('working-hours defaults + options', () => {
   });
 });
 
-describe('isValidHoursWindow (mirrors the API rule: ints 0–23, open < close)', () => {
+describe('isValidHoursWindow (mirrors the API rule: ints 0–23, opening ≠ closing)', () => {
   it('accepts ordered in-range windows, including the 0-open edge', () => {
     expect(isValidHoursWindow(0, 23)).toBe(true);
     expect(isValidHoursWindow(0, 1)).toBe(true);
     expect(isValidHoursWindow(22, 23)).toBe(true);
   });
 
-  it('rejects unordered, zero-width, out-of-range and non-integer windows', () => {
-    expect(isValidHoursWindow(22, 8)).toBe(false); // unordered (overnight deferred to L-disp)
+  it('HOURS-X1: accepts an inverted pair — it closes the next day', () => {
+    expect(isValidHoursWindow(22, 8)).toBe(true);
+    expect(isValidHoursWindow(8, 1)).toBe(true);
+  });
+
+  it('rejects zero-width, out-of-range and non-integer windows', () => {
     expect(isValidHoursWindow(9, 9)).toBe(false); // zero-width
     expect(isValidHoursWindow(-1, 22)).toBe(false);
     expect(isValidHoursWindow(8, 24)).toBe(false);
     expect(isValidHoursWindow(8.5, 22)).toBe(false);
     expect(isValidHoursWindow(Number.NaN, 22)).toBe(false);
+  });
+});
+
+// The SAME fixtures as apps/api/tests/opening-hours.test.ts — the api twin.
+describe('wrap helpers (HOURS-X1 — twin of api lib/opening-hours.ts)', () => {
+  it('hoursSpan is the clock distance, 0 for an equal pair', () => {
+    expect(hoursSpan(8, 22)).toBe(14);
+    expect(hoursSpan(8, 1)).toBe(17);
+    expect(hoursSpan(23, 0)).toBe(1);
+    expect(hoursSpan(9, 9)).toBe(0);
+    expect(hoursSpan(0, 23)).toBe(23);
+  });
+
+  it('openingHoursList is in clock order across midnight', () => {
+    expect(openingHoursList(22, 2)).toEqual([22, 23, 0, 1]);
+    expect(openingHoursList(8, 12)).toEqual([8, 9, 10, 11]);
+    expect(openingHoursList(null, 12)).toEqual([]);
+    expect(openingHoursList(0, 23)).toHaveLength(23);
+  });
+
+  it('isOpenAt handles both shapes and refuses null / zero-width', () => {
+    expect(isOpenAt(10, 8, 22)).toBe(true);
+    expect(isOpenAt(22, 8, 22)).toBe(false);
+    expect(isOpenAt(0, 8, 1)).toBe(true);
+    expect(isOpenAt(1, 8, 1)).toBe(false);
+    expect(isOpenAt(5, 8, 1)).toBe(false);
+    expect(isOpenAt(23, 8, 1)).toBe(true);
+    expect(isOpenAt(10, null, 22)).toBe(false);
+    expect(isOpenAt(9, 9, 9)).toBe(false);
+  });
+
+  it('nextDayHint names the overnight case and stays silent otherwise', () => {
+    expect(nextDayHint(8, 1)).toBe("Fermeture le lendemain — 17 h d'ouverture.");
+    expect(nextDayHint(8, 22)).toBeNull();
   });
 });
 

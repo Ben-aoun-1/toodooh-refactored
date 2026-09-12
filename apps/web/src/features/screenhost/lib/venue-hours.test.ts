@@ -24,6 +24,7 @@ describe('hoursSummary (the card render states)', () => {
   it('a set window renders « HH:00 – HH:00 »', () => {
     expect(hoursSummary(8, 22)).toBe('08:00 – 22:00');
     expect(hoursSummary(0, 23)).toBe('00:00 – 23:00');
+    expect(hoursSummary(8, 1)).toBe('08:00 – 01:00 (lendemain)'); // HOURS-X1
   });
 
   it('no hours (either null) renders the null state', () => {
@@ -44,9 +45,9 @@ describe('save + clear flows (the PATCH bodies)', () => {
 });
 
 describe('validation surfacing (H1 rule, re-exported)', () => {
-  it('accepts a valid window, rejects unordered/equal/out-of-range', () => {
+  it('accepts a valid window (inverted = overnight since HOURS-X1), rejects equal/out-of-range', () => {
     expect(isValidHoursWindow(8, 22)).toBe(true);
-    expect(isValidHoursWindow(22, 8)).toBe(false);
+    expect(isValidHoursWindow(22, 8)).toBe(true);
     expect(isValidHoursWindow(8, 8)).toBe(false);
     expect(isValidHoursWindow(-1, 22)).toBe(false);
     expect(isValidHoursWindow(8, 24)).toBe(false);
@@ -74,7 +75,9 @@ describe('pinned French copy', () => {
   });
 
   it('the order hint mirrors the API rule; the toasts', () => {
-    expect(HOURS_ORDER_HINT).toBe("L'heure d'ouverture doit précéder l'heure de fermeture.");
+    expect(HOURS_ORDER_HINT).toBe(
+      "L'heure d'ouverture et l'heure de fermeture doivent être différentes.",
+    );
     expect(HOURS_SAVED_TOAST).toBe('Horaires enregistrés');
     expect(HOURS_CLEARED_TOAST).toBe('Horaires supprimés');
   });
