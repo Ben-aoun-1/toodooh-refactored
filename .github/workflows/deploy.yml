@@ -113,28 +113,33 @@ jobs:
             package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/srv/toodooh/"
 
-      - name: Deploy (compose up)
+      - name: Deploy (compose up, then restart nginx so it re-resolves the upstreams)
         if: ${{ env.DRY_RUN != '1' }}
         run: |
+          # NGINX-DNS1 (2026-09-12): nginx resolves `proxy_pass http://api:4000` ONCE at its own
+          # startup. When `up -d --build` recreates containers, the api can come back on a new IP
+          # and nginx keeps proxying the old one → 502 on every /api route (2-min outage on the
+          # first deploy that also recreated minio). A restart costs ~3 s and re-resolves.
           ssh "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
-            'cd /srv/toodooh && docker compose -f docker-compose.prod.yml up -d --build'
+            'cd /srv/toodooh && docker compose -f docker-compose.prod.yml up -d --build && docker compose -f docker-compose.prod.yml restart nginx'
 
-      - name: Smoke check (retry up to 60s for api boot)
+      - name: Smoke check — end to end over HTTPS (retry up to 90 s for api boot)
         if: ${{ env.DRY_RUN != '1' }}
         run: |
-          # `compose up -d` returns before the api finishes migrate-on-start + boot (~10-30s), so a
-          # single immediate curl false-fails (the stack is healthy, the timing is wrong). Retry up
-          # to 30×2s; on exhaustion emit the full response (headers + body) for diagnosis instead of
-          # a bare non-zero exit.
-          for i in $(seq 1 30); do
-            if ssh "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
-                 'curl -fsS -H "Host: too-dooh.com" http://127.0.0.1/api/health' >/dev/null 2>&1; then
-              echo "Smoke OK (attempt $i, $(( (i - 1) * 2 ))s elapsed)"
+          # SMOKE-1 (2026-09-12): the old check curled http://127.0.0.1 ON the box with -f; the HTTP
+          # vhost answers 301 → https and curl -f accepts 3xx, so it passed during a 502 and had
+          # never reached the api. This one goes the way a user does — public HTTPS, no redirects
+          # followed — and requires the api's own body, plus a hub canary since both share nginx.
+          for i in $(seq 1 45); do
+            body=$(curl -sS --max-redirs 0 --max-time 10 https://too-dooh.com/api/health || true)
+            if echo "$body" | grep -q '"status":"ok"'; then
+              echo "Smoke OK (attempt $i, $(( (i - 1) * 2 ))s): $body"
+              hub=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 https://hub.too-dooh.com/api/health/ping || true)
+              echo "hub canary: $hub"; [ "$hub" = "200" ] || { echo "::error::hub canary $hub after the toodooh deploy (shared nginx)"; exit 1; }
               exit 0
             fi
             sleep 2
           done
-          echo "Smoke FAILED after 60s — full response for diagnosis:"
-          ssh "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
-            'curl -i -H "Host: too-dooh.com" http://127.0.0.1/api/health' || true
+          echo "::error::Smoke FAILED after 90 s — last response:"; echo "$body"
+          curl -sSi --max-redirs 0 --max-time 10 https://too-dooh.com/api/health || true
           exit 1
