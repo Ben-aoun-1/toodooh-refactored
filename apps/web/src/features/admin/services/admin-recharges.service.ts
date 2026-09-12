@@ -65,27 +65,35 @@ export interface RechargeStats {
   pending_count: number;
   confirmed_count: number;
   rejected_count: number;
+  /** ADM-RCH1 — Σ of every row that is NOT rejected (« Annulée » money never entered the platform). */
   total_amount: number;
   pending_amount: number;
   confirmed_amount: number;
+  /** ADM-RCH1 — the rejected (« Annulée ») money, kept countable but OUT of total_amount. */
+  rejected_amount: number;
 }
 
 // Counters for the stat cards, DERIVED client-side from the full list (the endpoint returns every
 // row when unfiltered, so this mirrors the old Supabase select-then-reduce — no stats endpoint
 // needed). FCT1: « En attente » counts the ACTIONABLE rows — pending AND bon_returned (a returned
 // signed bon awaits the same Valider).
+// ADM-RCH1 (Mejri/Kais QA) — « Montant Total » summed EVERY row, rejected ones included, so an
+// admin who cancelled a 4 000 TND recharge still saw it in the total. A rejected (« Annulée »)
+// recharge never credited anything: it is excluded from total_amount and carried separately as
+// rejected_amount (still countable, never added).
 export function computeRechargeStats(rows: AdminRecharge[]): RechargeStats {
   const awaiting = (r: AdminRecharge) => r.status === 'pending' || r.status === 'bon_returned';
+  const rejected = (r: AdminRecharge) => r.status === 'rejected';
+  const sum = (list: AdminRecharge[]) => list.reduce((acc, r) => acc + r.amount_tnd, 0);
   return {
     total_recharges: rows.length,
     pending_count: rows.filter(awaiting).length,
     confirmed_count: rows.filter((r) => r.status === 'confirmed').length,
-    rejected_count: rows.filter((r) => r.status === 'rejected').length,
-    total_amount: rows.reduce((acc, r) => acc + r.amount_tnd, 0),
-    pending_amount: rows.filter(awaiting).reduce((acc, r) => acc + r.amount_tnd, 0),
-    confirmed_amount: rows
-      .filter((r) => r.status === 'confirmed')
-      .reduce((acc, r) => acc + r.amount_tnd, 0),
+    rejected_count: rows.filter(rejected).length,
+    total_amount: sum(rows.filter((r) => !rejected(r))),
+    pending_amount: sum(rows.filter(awaiting)),
+    confirmed_amount: sum(rows.filter((r) => r.status === 'confirmed')),
+    rejected_amount: sum(rows.filter(rejected)),
   };
 }
 
