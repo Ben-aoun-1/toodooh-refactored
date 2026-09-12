@@ -19,7 +19,12 @@ import {
 } from '../src/db/schema.js';
 import { loadPeriodAudienceInput } from '../src/lib/period-audience-source.js';
 import { periodAudience } from '../src/lib/period-audience.js';
-import { assembleReportData, heatmapKinds, heatmapLevels } from '../src/lib/report/assemble.js';
+import {
+  assembleReportData,
+  heatmapKinds,
+  heatmapLevels,
+  heatmapSlotsFor,
+} from '../src/lib/report/assemble.js';
 
 import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 
@@ -511,17 +516,23 @@ describe('heatmapLevels / heatmapKinds', () => {
   const emptySources = (): ('measured' | 'backup' | null)[][] =>
     Array.from({ length: 7 }, () => Array.from({ length: 48 }, () => null));
 
-  it('closed hours are level 0 regardless of value; null hours mean nothing is closed', () => {
+  it("HOURS-X1: the columns ARE the venue's open hours (9 → 20 = 22 half-hour columns, none closed); null hours = the 8h–21h fallback with nothing closed", () => {
     const grid = Array.from({ length: 7 }, () => Array.from({ length: 48 }, () => 10));
     const withHours = heatmapLevels(grid, measuredAll, 9, 20);
-    expect(withHours[0]?.[0]).toBe(0); // 8h00 < opening 9h → closed
-    expect(withHours[0]?.[1]).toBe(0); // 8h30 too — BOTH halves of a closed hour are closed
-    expect(withHours[0]?.[2]).toBeGreaterThan(0); // 9h00 open
-    expect(withHours[0]?.[3]).toBeGreaterThan(0); // 9h30 open
-    expect(withHours[0]?.[24]).toBe(0); // 20h00 ≥ closing → closed
+    expect(withHours[0]).toHaveLength(22); // 9h00 … 19h30 — closed hours have no column any more
+    expect(heatmapSlotsFor(9, 20)[0]).toBe(18); // first column = slot 18 = 9h00
+    expect(withHours.flat().every((lvl) => lvl > 0)).toBe(true);
     const noHours = heatmapLevels(grid, measuredAll, null, null);
     expect(noHours.flat().every((lvl) => lvl > 0)).toBe(true);
     expect(noHours[0]).toHaveLength(28);
+  });
+
+  it('HOURS-X1: an overnight venue (22 → 2) gets its 8 columns in clock order past midnight', () => {
+    const grid = Array.from({ length: 7 }, () => Array.from({ length: 48 }, () => 10));
+    expect(heatmapSlotsFor(22, 2)).toEqual([44, 45, 46, 47, 0, 1, 2, 3]);
+    const levels = heatmapLevels(grid, measuredAll, 22, 2);
+    expect(levels[0]).toHaveLength(8);
+    expect(levels.flat().every((lvl) => lvl > 0)).toBe(true);
   });
 
   it('a backup cell keeps its ramp level (same scale) and is flagged by heatmapKinds', () => {

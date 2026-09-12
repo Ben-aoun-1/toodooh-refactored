@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ReportData } from '../src/lib/report/assemble.js';
+import { HEATMAP_SLOTS, type ReportData } from '../src/lib/report/assemble.js';
 import {
   type RecommendationInput,
   buildRecommendationInput,
@@ -366,6 +366,7 @@ const reportData = (over: Partial<ReportData> = {}): ReportData => ({
     measuredDays: 28,
     estimatedPct: 0,
   },
+  heatSlots: HEATMAP_SLOTS,
   heatKinds: Array.from({ length: 7 }, () => Array.from({ length: 28 }, () => 'measured' as const)),
   heatValues: Array.from({ length: 7 }, () => Array.from({ length: 28 }, () => 0)),
   heatEmpty: false,

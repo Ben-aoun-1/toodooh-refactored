@@ -9,7 +9,7 @@ import { logger } from '../../logger.js';
 import { hourOfSlot } from '../half-hour-slots.js';
 
 import type { ProvenanceKind } from './affluence-provenance.js';
-import { HEATMAP_SLOTS, type ReportData } from './assemble.js';
+import { type ReportData } from './assemble.js';
 
 const log = logger.child({ module: 'report-recommendations' });
 
@@ -251,8 +251,9 @@ const DAY_LABELS_FR = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'] as const
  * ONE source for what column N means, and a future change to the window or the granularity moves
  * the labels with it instead of leaving them behind.
  */
-const slotColumnLabel = (columnIndex: number): string | null => {
-  const slot = HEATMAP_SLOTS[columnIndex];
+const slotColumnLabel = (columnIndex: number, heatSlots: readonly number[]): string | null => {
+  // HOURS-X1 — the column list is the venue's own (data.heatSlots), no longer a module constant.
+  const slot = heatSlots[columnIndex];
   if (slot === undefined) return null; // a column the window does not have is not a créneau
   const hour = hourOfSlot(slot);
   return slot % 2 === 0 ? `${hour}h` : `${hour}h30`;
@@ -276,6 +277,7 @@ const heatmapSlots = (
   levels: number[][],
   kinds: ProvenanceKind[][],
   values: number[][],
+  heatSlots: readonly number[],
 ): { plusForts: string[]; plusFaibles: string[] } => {
   const open: { label: string; level: number; value: number }[] = [];
   levels.forEach((row, day) => {
@@ -285,7 +287,7 @@ const heatmapSlots = (
       // columns before this ever sees them. Pinned, because Mejri's second sentence (« recommend
       // only within opening hours ») was this same bug read from the other side.
       if (level <= 0) return;
-      const clock = slotColumnLabel(columnIndex);
+      const clock = slotColumnLabel(columnIndex, heatSlots);
       if (clock === null) return;
       const estimated = kinds[day]?.[columnIndex] !== 'measured';
       open.push({
@@ -329,7 +331,7 @@ export function buildRecommendationInput(data: ReportData): RecommendationInput 
           pic: data.kpis.peak ? { valeur: data.kpis.peak.value, date: data.kpis.peak.date } : null,
         }
       : { globale: null, moyenneParJour: null, moyenneParHeure: null, pic: null },
-    creneaux: heatmapSlots(data.heatLevels, data.heatKinds, data.heatValues),
+    creneaux: heatmapSlots(data.heatLevels, data.heatKinds, data.heatValues, data.heatSlots),
     campagnes: {
       nombre: data.castHasData ? data.campaignsBlock.count : 0,
       revenuTotalTnd: data.castHasData ? data.revenue.totalLabel : '0',
