@@ -57,6 +57,8 @@ export default function StepZones({
     >
       <ZonesCoverageMap
         venues={coverage.data?.screenhosts ?? []}
+        coveredCount={coverage.data?.covered_count ?? 0}
+        withoutCoordinates={coverage.data?.without_coordinates ?? 0}
         isLoading={Boolean(draftCampaignId) && coverage.isLoading}
         isError={coverage.isError}
         expanded={mapExpanded}

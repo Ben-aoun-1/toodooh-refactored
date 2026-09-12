@@ -32,11 +32,26 @@ type DateField = 'start' | 'end';
 // EV1 rider (CF-HF3 watch-item, ruled): a ONE-DAY campaign is legal — start = end passes. The
 // old strict < here was the only blocker in the whole chain (the server never mirrored it and the
 // engine's day window is inclusive), so the comparisons and the messages carry the « ou égale ».
-function validateDate(dateType: DateField, date: Date | null, otherDate: Date | null): string {
+// CAMP-D1 (Mejri 08/09 point 1): the SERVER floor (J+2 jours ouvrés, ruling 2026-07-14 #10) is
+// re-checked here too — a typed or resumed start below it surfaces the French line instead of a
+// generic save failure at Suivant.
+function validateDate(
+  dateType: DateField,
+  date: Date | null,
+  otherDate: Date | null,
+  floor: Date | null = null,
+): string {
   if (!date) {
     return dateType === 'start'
       ? 'La date de début est obligatoire'
       : 'La date de fin est obligatoire';
+  }
+  if (dateType === 'start' && floor && date < floor) {
+    return `Lancement possible à partir du ${floor.toLocaleDateString('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    })}.`;
   }
   if (dateType === 'start' && otherDate && date > otherDate) {
     return 'La date de début doit être antérieure ou égale à la date de fin';
@@ -65,12 +80,6 @@ export default function StepDates({
   const [dateErrors, setDateErrors] = useState<{ start?: string; end?: string }>({});
   const [dateTouched, setDateTouched] = useState<{ start?: boolean; end?: boolean }>({});
 
-  const today = useMemo(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d;
-  }, []);
-
   // INCLUSIVE like the engine + the recap (`inclusiveDayCount`): 30→30 is 1 jour, 30→31 is 2.
   const durationDays = useMemo(() => {
     if (!startDate || !endDate) return 0;
@@ -83,17 +92,25 @@ export default function StepDates({
     if (dateType === 'start') setStartDate(date);
     else setEndDate(date);
     setDateTouched((prev) => ({ ...prev, [dateType]: true }));
-    const thisError = validateDate(dateType, date, dateType === 'start' ? endDate : startDate);
+    const thisError = validateDate(
+      dateType,
+      date,
+      dateType === 'start' ? endDate : startDate,
+      minStartDate,
+    );
     setDateErrors((prev) => ({ ...prev, [dateType]: thisError }));
     if (dateType === 'start' && endDate) {
       setDateErrors((prev) => ({ ...prev, end: validateDate('end', endDate, date) }));
     } else if (dateType === 'end' && startDate) {
-      setDateErrors((prev) => ({ ...prev, start: validateDate('start', startDate, date) }));
+      setDateErrors((prev) => ({
+        ...prev,
+        start: validateDate('start', startDate, date, minStartDate),
+      }));
     }
   };
 
   const validateAndSurface = (): boolean => {
-    const sErr = validateDate('start', startDate, endDate);
+    const sErr = validateDate('start', startDate, endDate, minStartDate);
     const eErr = validateDate('end', endDate, startDate);
     setDateTouched({ start: true, end: true });
     setDateErrors({ start: sErr, end: eErr });
@@ -105,7 +122,12 @@ export default function StepDates({
     void onNext();
   };
 
-  const nextDisabled = !startDate || !endDate || startDate > endDate || saving;
+  // CAMP-D1 — no floor yet (config loading / failed) = nothing to validate against: hold Suivant
+  // and the pickers rather than silently degrading the floor to today.
+  const floorReady = minStartDate !== null;
+  const belowFloor = Boolean(startDate && minStartDate && startDate < minStartDate);
+  const nextDisabled =
+    !startDate || !endDate || startDate > endDate || saving || !floorReady || belowFloor;
 
   return (
     <div className="space-y-6">
@@ -135,7 +157,10 @@ export default function StepDates({
                 selectsStart
                 startDate={startDate}
                 endDate={endDate}
-                minDate={minStartDate ?? today}
+                // CAMP-D1 — the floor is the SERVER's; while it has not arrived the field waits
+                // instead of falling back to today (the 08/09 « today is selectable » report).
+                minDate={minStartDate ?? undefined}
+                disabled={!floorReady}
                 className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-transparent transition-all ${
                   dateTouched.start && dateErrors.start
                     ? 'border-red-300 bg-red-50'
@@ -144,6 +169,9 @@ export default function StepDates({
                 placeholderText="Sélectionnez une date"
                 dateFormat="dd/MM/yyyy"
               />
+              {!floorReady && (
+                <p className="mt-1 text-xs text-gray-500">Chargement des dates disponibles…</p>
+              )}
               {/* CF-W1 — the floor comes from the SERVER; any start day is legal (ruling #10) */}
               {startFloorHelperText(firstAvailableStartDate) && (
                 <p className="mt-1 text-xs text-gray-500">
@@ -173,7 +201,8 @@ export default function StepDates({
                 selectsEnd
                 startDate={startDate}
                 endDate={endDate}
-                minDate={startDate || minStartDate || today}
+                minDate={startDate || minStartDate || undefined}
+                disabled={!floorReady}
                 className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-transparent transition-all ${
                   dateTouched.end && dateErrors.end ? 'border-red-300 bg-red-50' : 'border-gray-300'
                 }`}

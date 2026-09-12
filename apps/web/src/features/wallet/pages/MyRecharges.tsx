@@ -37,7 +37,8 @@ const QUICK_AMOUNTS = [
   { value: 10000, label: '10 000 TND', tag: 'Recommandé' },
 ];
 
-type TabFilter = 'all' | 'recharges' | 'expenses';
+// RECH-F1 (Mejri 07/09 point 3): ajustements exist in the list, so they get their filter.
+type TabFilter = 'all' | 'recharges' | 'expenses' | 'adjustments';
 
 export default function MyRecharges() {
   const user = useAuthStore((state) => state.user);
@@ -68,6 +69,7 @@ export default function MyRecharges() {
     return transactions.filter((t) => {
       if (activeTab === 'recharges' && t.type !== 'recharge') return false;
       if (activeTab === 'expenses' && !isExpenseView(t)) return false;
+      if (activeTab === 'adjustments' && t.type !== 'adjustment') return false;
       if (searchQuery) {
         return t.designation.toLowerCase().includes(searchQuery.toLowerCase());
       }
@@ -239,7 +241,7 @@ export default function MyRecharges() {
               />
             </div>
             <div className="flex rounded-lg border border-gray-200 overflow-hidden text-sm">
-              {(['all', 'recharges', 'expenses'] as TabFilter[]).map((tab) => (
+              {(['all', 'recharges', 'expenses', 'adjustments'] as TabFilter[]).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
@@ -247,7 +249,13 @@ export default function MyRecharges() {
                     activeTab === tab ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50'
                   }`}
                 >
-                  {tab === 'all' ? 'Tous' : tab === 'recharges' ? 'Recharges' : 'Dépenses'}
+                  {tab === 'all'
+                    ? 'Tous'
+                    : tab === 'recharges'
+                      ? 'Recharges'
+                      : tab === 'expenses'
+                        ? 'Dépenses'
+                        : 'Ajustements'}
                 </button>
               ))}
             </div>

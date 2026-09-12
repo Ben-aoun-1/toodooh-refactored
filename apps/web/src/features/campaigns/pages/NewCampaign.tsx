@@ -54,6 +54,7 @@ import StepTargeting from '@/features/campaigns/pages/new-campaign/StepTargeting
 import StepZones from '@/features/campaigns/pages/new-campaign/StepZones';
 import { useWizardResumeStore } from '@/features/campaigns/stores/wizard-resume.store';
 import { useCartMutations } from '@/features/cart/hooks/useCart';
+import { ApiError } from '@/lib/api-client';
 import { getErrorMessage } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 
@@ -175,7 +176,13 @@ export default function NewCampaign() {
     });
     setSavingDates(false);
     if (!result.ok) {
-      toast.error("Échec de l'enregistrement des dates");
+      // CAMP-D1 — the api's own French line (400 INVALID_START_DATE: « … au moins N jour(s)
+      // ouvré(s) plus tard ») beats the generic failure; other errors keep the generic voice.
+      toast.error(
+        result.error instanceof ApiError && result.error.code === 'INVALID_START_DATE'
+          ? result.error.message
+          : "Échec de l'enregistrement des dates",
+      );
       log.error({ err: result.error }, 'dates persist-on-advance failed');
       return;
     }
