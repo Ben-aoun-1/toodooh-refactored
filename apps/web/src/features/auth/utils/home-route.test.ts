@@ -12,6 +12,14 @@ describe('resolveHomeRoute', () => {
     expect(resolveHomeRoute(null, 'screencast_agent')).toBe('/agent');
   });
 
+  // MINOR-1/30 — admins have profile_type null like agents; they route by role to their own home,
+  // never to the advertiser shell.
+  it('routes admin and superadmin to the admin dashboard', () => {
+    expect(resolveHomeRoute(null, 'admin')).toBe('/admin-dashboard');
+    expect(resolveHomeRoute(null, 'superadmin')).toBe('/admin-dashboard');
+    expect(resolveHomeRoute(null, 'admin', 'approved')).toBe('/admin-dashboard');
+  });
+
   it('routes owners to the owner dashboard', () => {
     expect(resolveHomeRoute('individual_owner', 'screen_owner')).toBe('/owner-dashboard');
     expect(resolveHomeRoute('fleet_owner', 'screen_owner')).toBe('/owner-dashboard');

@@ -129,7 +129,7 @@ export interface SignUpData {
   formule?: string; // Formule choisie par le propriétaire (abonnement, revenue_share) - loyer retiré pour les nouvelles inscriptions
   agent_toodooh?: string; // Agent Toodooh - champ de saisie libre pour les propriétaires
   number_of_screens?: number; // Nombre d'écrans pour les propriétaires
-  number_of_rooms?: number; // Nombre de salles (étape Etablissement)
+  number_of_rooms?: number; // Nombre de salles (étape Établissement)
   company_size?: string; // Nombre d'établissements du parc / taille entreprise
   registration_doc?: File; // RNE — non-owner picker AND the fleet_owner legal volet (sent as `rne`, R7/N4)
   company_logo?: File; // Logo entreprise/établissement

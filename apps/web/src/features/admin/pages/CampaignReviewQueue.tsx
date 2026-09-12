@@ -42,15 +42,17 @@ import { getErrorMessage } from '@/lib/errors';
 const TND = (n: number | null): string =>
   n === null ? '—' : `${n.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} TND`;
 
+// MINOR-1/29 — the Période bounds are DATE-ONLY ('YYYY-MM-DD'). They used to be formatted as a
+// datetime, so a day parsed at UTC midnight rendered « 12 septembre 2026 à 01:00 » in Tunis — a
+// timezone echo, not a time. A plain day is parsed as a LOCAL day and rendered without a time.
 const formatDate = (dateString: string | null): string => {
   if (!dateString) return '—';
-  return new Date(dateString).toLocaleDateString('fr-FR', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const ymd = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateString);
+  const d = ymd
+    ? new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]))
+    : new Date(dateString);
+  if (Number.isNaN(d.getTime())) return dateString;
+  return d.toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' });
 };
 
 const contentBadge = (status: string | null) => {

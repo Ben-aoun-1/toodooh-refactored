@@ -26,14 +26,14 @@ const stepsOwner = [
   { id: 1, title: 'Profil', icon: profilIcon, iconSelected: profilIcon },
   { id: 2, title: 'Responsable', icon: responsableIcon, iconSelected: responsableIconS },
   { id: 3, title: 'Entreprise', icon: entrepriseIcon, iconSelected: entrepriseIconS },
-  { id: 4, title: 'Etablissement', icon: adresseIcon, iconSelected: adresseIconS },
+  { id: 4, title: 'Établissement', icon: adresseIcon, iconSelected: adresseIconS },
   { id: 5, title: 'Coordonnées bancaires', icon: documentIcon, iconSelected: documentIconS },
 ];
 
 const stepsIndividualOwner = [
   { id: 1, title: 'Profil', icon: profilIcon, iconSelected: profilIcon },
   { id: 2, title: 'Responsable', icon: responsableIcon, iconSelected: responsableIconS },
-  { id: 3, title: 'Etablissement', icon: entrepriseIcon, iconSelected: entrepriseIconS },
+  { id: 3, title: 'Établissement', icon: entrepriseIcon, iconSelected: entrepriseIconS },
   { id: 4, title: 'Adresse', icon: adresseIcon, iconSelected: adresseIconS },
   { id: 5, title: 'Coordonnées bancaires', icon: documentIcon, iconSelected: documentIconS },
 ];

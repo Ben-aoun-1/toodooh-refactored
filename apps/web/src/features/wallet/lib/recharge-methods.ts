@@ -3,6 +3,8 @@
 // ONE home shared by the screencaster surfaces (MyRecharges) AND the admin queue (RechargeManagement
 // imports from here — the walletKeys precedent), so the label matrix can't drift between the two.
 
+import { htTtcLabel } from '@/lib/money';
+
 export type RechargeMethod = 'virement' | 'bon_de_commande';
 
 export type RechargeStatus = 'pending' | 'confirmed' | 'rejected' | 'bon_issued' | 'bon_returned';
@@ -10,7 +12,8 @@ export type RechargeStatus = 'pending' | 'confirmed' | 'rejected' | 'bon_issued'
 /** Mirrors the server's MIN_RECHARGE_TND (lib/recharges.ts) — a client pre-check, never the authority. */
 export const MIN_RECHARGE_TND = 500;
 
-export const AMOUNT_MIN_ERROR = 'Le montant minimum est de 500 TND';
+// MINOR-1/27 — quoted HT with its TTC, like every other advertiser montant (CF-U1).
+export const AMOUNT_MIN_ERROR = `Le montant minimum est de ${htTtcLabel(MIN_RECHARGE_TND)}`;
 export const JUSTIFICATIF_REQUIRED_ERROR = 'Le justificatif de virement est obligatoire.';
 
 /**

@@ -285,7 +285,7 @@ export default function UserManagement() {
     profileType === 'individual_owner' || profileType === 'fleet_owner';
 
   const getAgentCodeLabel = (profileType: AdminUser['profile_type']) => {
-    if (isOwnerProfile(profileType)) return "Code agent ScreenHost'";
+    if (isOwnerProfile(profileType)) return 'Code agent ScreenHost';
     if (profileType === 'advertiser') return 'Code agent ScreenCast';
     return '';
   };
@@ -660,7 +660,7 @@ export default function UserManagement() {
                               </span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-gray-600">SIRET/TVA:</span>
+                              <span className="text-gray-600">Matricule fiscal:</span>
                               <span className="font-medium text-gray-900">
                                 {selectedUser.tax_number || 'Non fourni'}
                               </span>
