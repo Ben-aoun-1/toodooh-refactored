@@ -61,6 +61,48 @@ describe('summarize', () => {
   });
 });
 
+// Slice C — the api's REAL wire: 7×48 SLOT columns (two per hour), overrides at [day][slot].
+const slotGrid = (overrides: { day: number; slot: number; value: number }[] = []): number[][] => {
+  const g = Array.from({ length: 7 }, () => Array.from({ length: 48 }, () => 0));
+  for (const o of overrides) {
+    const row = g[o.day];
+    if (row) row[o.slot] = o.value;
+  }
+  return g;
+};
+
+describe('DATA1 — « Votre audience »: Σ day tiles == « Audience hebdomadaire »', () => {
+  it('on the served 7×48 slot grid, the week is exactly the sum of the 7 per-day tiles', () => {
+    const s = summarize(
+      slotGrid([
+        { day: 0, slot: 18, value: 101 }, // Lun 09h00
+        { day: 0, slot: 19, value: 33 }, // Lun 09h30
+        { day: 2, slot: 36, value: 250 }, // Mer 18h00
+        { day: 4, slot: 47, value: 7 }, // Ven 23h30 — the last slot counts too
+        { day: 6, slot: 0, value: 12 }, // Dim 00h00
+      ]),
+    );
+    expect(s.dayTotals).toEqual([134, 0, 250, 0, 7, 0, 12]);
+    expect(s.dayTotals.reduce((a, b) => a + b, 0)).toBe(s.weeklyTotal);
+    expect(s.weeklyTotal).toBe(403);
+    expect(s.dailyAverage).toBe(Math.round(403 / 7));
+  });
+
+  it('rider — « Heure de pointe » folds the two half-hour slots into their HOUR on a slot grid', () => {
+    const s = summarize(
+      slotGrid([
+        { day: 0, slot: 36, value: 100 }, // Lun 18h00
+        { day: 1, slot: 37, value: 120 }, // Mar 18h30 → hour 18 across days = 220 → peak
+        { day: 2, slot: 18, value: 200 }, // Mer 09h00 → hour 9 = 200
+        { day: 3, slot: 9, value: 150 }, // Jeu 04h30 — the old scan would have named « 09h »
+      ]),
+    );
+    expect(s.peakHourIndex).toBe(18);
+    expect(s.peakHourTotal).toBe(220);
+    expect(formatHour(s.peakHourIndex ?? 0)).toBe('18h');
+  });
+});
+
 describe('formatHour', () => {
   it('zero-pads to NNh', () => {
     expect(formatHour(0)).toBe('00h');

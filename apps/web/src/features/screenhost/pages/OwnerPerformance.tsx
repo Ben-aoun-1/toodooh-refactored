@@ -70,9 +70,11 @@ import {
   inRange,
   isoDate,
   parsePeriodSelection,
+  parseVenueSelection,
   resolvePeriodRange,
   tunisToday,
   writePeriodSelection,
+  writeVenueSelection,
 } from '../lib/performance-period';
 import {
   OUT_OF_WINDOW,
@@ -107,10 +109,27 @@ export default function OwnerPerformance() {
 
   const screenhosts = useScreenhostsMine(user?.id);
   const venues = useMemo(() => screenhosts.data ?? [], [screenhosts.data]);
+  // MEJ-4 / PERF-URL1 — the période AND the venue live in the URL (?periode=&du=&au=&lieu=), so a
+  // refresh keeps the view the owner chose and a shared link lands on the SAME établissement.
+  // `replace` keeps the back button pointing at the previous PAGE rather than at every pill tried.
+  const [searchParams, setSearchParams] = useSearchParams();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   useEffect(() => {
-    if (selectedId === null && venues.length > 0) setSelectedId(venues[0]?.id ?? null);
-  }, [venues, selectedId]);
+    if (selectedId !== null || venues.length === 0) return;
+    // PERF-URL1 — honour `lieu` only when it is one of the owner's venues; otherwise the first.
+    const fromUrl = parseVenueSelection(
+      searchParams,
+      venues.map((v) => v.id),
+    );
+    setSelectedId(fromUrl ?? venues[0]?.id ?? null);
+  }, [venues, selectedId, searchParams]);
+  const selectVenue = useCallback(
+    (id: string) => {
+      setSelectedId(id);
+      setSearchParams((prev) => writeVenueSelection(prev, id), { replace: true });
+    },
+    [setSearchParams],
+  );
 
   const profile = useVenueProfile(selectedId);
   const monthlyStats = useVenueMonthlyStats(selectedId);
@@ -121,12 +140,9 @@ export default function OwnerPerformance() {
   const reports = useVenueReports(selectedId);
   const sps = useVenueSps(selectedId);
 
-  // MEJ-4 — the période lives in the URL (?periode=&du=&au=), so a refresh keeps the view the
-  // owner chose and a link carries it. It used to be component state alone: every reload snapped
+  // MEJ-4 — the période in the URL. It used to be component state alone: every reload snapped
   // silently back to « 28 derniers jours », which is how a coherent « aujourd'hui » reading
-  // turned into an estimated 28-day one nobody had asked for. `replace` keeps the back button
-  // pointing at the previous PAGE rather than at every pill the owner tried.
-  const [searchParams, setSearchParams] = useSearchParams();
+  // turned into an estimated 28-day one nobody had asked for.
   const { period, custom: appliedCustom } = useMemo(
     () => parsePeriodSelection(searchParams),
     [searchParams],
@@ -452,7 +468,7 @@ export default function OwnerPerformance() {
                           <button
                             key={v.id}
                             type="button"
-                            onClick={() => setSelectedId(v.id)}
+                            onClick={() => selectVenue(v.id)}
                             aria-pressed={active}
                             className={`rounded-full px-[17px] py-[9px] text-[13px] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary ${
                               active

@@ -984,7 +984,11 @@ body{
 .piste-k{ font-family:var(--mono); font-size:7pt; letter-spacing:.2em; text-transform:uppercase; color:var(--mint); margin-bottom:5px; display:flex; align-items:center; gap:7px; }
 .piste-k .b{ width:5px; height:5px; border-radius:50%; background:var(--mint); }
 .piste-t{ font-size:11pt; font-weight:600; color:var(--ink); margin-bottom:3px; }
-.piste-body{ font-size:9pt; color:var(--muted); line-height:1.42; }
+/* PDF-P4-1 — a body that wraps to a THIRD line overflows page 4 by ~16px (measured 2→3-line break
+   between 225c and 253c). The 210-char cap on AI bodies is the first guard; this is the width-safe
+   one: whatever the text, the block renders AT MOST two lines and ellipsises the rest, so the fixed
+   page can never be pushed. Chromium (the renderer) honours -webkit-line-clamp on a -webkit-box. */
+.piste-body{ font-size:9pt; color:var(--muted); line-height:1.42; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }
 .piste-body.wait{ font-family:var(--serif); font-style:italic; color:var(--faint); }
 
 /* ============ SPS SCORE (Section 08) ============ */

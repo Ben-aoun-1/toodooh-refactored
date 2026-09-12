@@ -1,4 +1,6 @@
-import type { Creative } from '../db/schema.js';
+import { sql } from 'drizzle-orm';
+
+import { type Creative, creatives } from '../db/schema.js';
 
 // Creative upload helpers (L-spot) shared by the advertiser upload route (routes/creatives.ts) and
 // the admin moderation surface (routes/admin-creatives.ts). A creative is VIDEO or PHOTO; the
@@ -53,3 +55,22 @@ export const creativeView = (row: Creative) => ({
 });
 
 export type CreativeView = ReturnType<typeof creativeView>;
+
+/**
+ * CF-HF4 — the moderation queue's « submitted » predicate, ONE home (ADM-DSH2). Validation
+ * happens at PANIER-ADD, not upload: a `pending` creative is in the queue only once SOME campaign
+ * linking it has reached the cart (or gone beyond draft — a submitted campaign's spot stays
+ * reviewable after the cart clears). Approved/rejected rows list unconditionally (history stays
+ * visible). The dashboard tile « Créatives à valider » COUNTS through this same predicate: it used
+ * to count every `pending` row, so it read 4 while the queue it links to was empty — the four
+ * were uploads nobody had carted yet, exactly the rows this gate keeps out of the queue.
+ */
+export const submittedCreativeGate = sql`(
+  ${creatives.validationStatus} <> 'pending'
+  OR EXISTS (
+    SELECT 1 FROM campaigns c
+    LEFT JOIN cart_items ci ON ci.campaign_id = c.id
+    WHERE c.creative_id = ${creatives.id}
+      AND (ci.id IS NOT NULL OR c.status <> 'draft')
+  )
+)`;

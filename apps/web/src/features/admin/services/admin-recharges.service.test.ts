@@ -106,9 +106,24 @@ describe('computeRechargeStats (FCT1 — « En attente » counts the ACTIONABLE 
       pending_count: 2,
       confirmed_count: 1,
       rejected_count: 1,
-      total_amount: 7500,
+      // ADM-RCH1 — the rejected 4 000 is NOT in the total (it never credited anything)…
+      total_amount: 3500,
       pending_amount: 1500,
       confirmed_amount: 2000,
+      // …but stays countable on its own.
+      rejected_amount: 4000,
     });
+  });
+
+  it('ADM-RCH1: « Montant Total » never sums a rejected (Annulée) recharge', () => {
+    const stats = computeRechargeStats([
+      row({ id: 'r1', status: 'confirmed', amount_tnd: 100 }),
+      row({ id: 'r2', status: 'rejected', amount_tnd: 999 }),
+      row({ id: 'r3', status: 'rejected', amount_tnd: 1 }),
+    ]);
+    expect(stats.total_amount).toBe(100);
+    expect(stats.rejected_amount).toBe(1000);
+    expect(stats.rejected_count).toBe(2);
+    expect(stats.total_recharges).toBe(3); // the COUNT still lists them — only the money is out
   });
 });

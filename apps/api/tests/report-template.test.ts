@@ -524,6 +524,21 @@ describe('renderReportHtml — S07 renders the pistes generator (PERF-QA2)', () 
     }
   });
 
+  // PDF-P4-1 (Mejri/Kais QA) — a piste body wrapping to 3 lines overflowed page 4 by ~16px. The
+  // stylesheet clamps every body to TWO lines with an ellipsis, whatever the text length: a source
+  // pin, since the fixed-page frame (overflow hidden) would otherwise clip silently.
+  it('PDF-P4-1: the piste body is width-safe — clamped to 2 lines in the stylesheet', () => {
+    for (const html of bothBranches) {
+      expect(html).toContain(
+        '.piste-body{ font-size:9pt; color:var(--muted); line-height:1.42; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }',
+      );
+    }
+    // A pathological 3-line body still renders inside the same clamped block (no layout branch).
+    const longBody = 'Mot '.repeat(80).trim();
+    const html = renderReportHtml(fullData(), { aiPistes: longBody });
+    expect(html).toContain(`<div class="piste-body">${longBody}</div>`);
+  });
+
   it('escapes the AI body (no raw HTML injection through the model)', () => {
     const html = renderReportHtml(baseData(), {
       aiPistes: '<img src=x> & <script>alert(1)</script>',

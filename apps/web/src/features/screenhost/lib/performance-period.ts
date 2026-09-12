@@ -165,6 +165,36 @@ export function writePeriodSelection(
   return next;
 }
 
+/**
+ * PERF-URL1 (Mejri/Kais QA) — THE VENUE lives in the URL too, beside `periode`.
+ *
+ * The link carried the période but not the lieu, so a shared « Mes performances » URL opened on
+ * the receiver's FIRST venue — a different établissement with the sender's dates. `lieu` holds
+ * the screenhost id; it is honoured ONLY when it names one of the owner's own venues (a foreign
+ * or stale id is ignored and the first venue applies, never an error, never a leak).
+ */
+export const VENUE_PARAM = 'lieu';
+
+/** The venue a query string names, or null when absent / not one of `ownedIds`. */
+export function parseVenueSelection(
+  params: URLSearchParams,
+  ownedIds: readonly string[],
+): string | null {
+  const id = params.get(VENUE_PARAM);
+  return id !== null && ownedIds.includes(id) ? id : null;
+}
+
+/** The query string with `lieu` set (or dropped for null), every other param preserved. */
+export function writeVenueSelection(
+  params: URLSearchParams,
+  screenhostId: string | null,
+): URLSearchParams {
+  const next = new URLSearchParams(params);
+  if (screenhostId) next.set(VENUE_PARAM, screenhostId);
+  else next.delete(VENUE_PARAM);
+  return next;
+}
+
 /** Inclusive containment — ISO date strings compare lexicographically. */
 export function inRange(dateIso: string, range: DateRange): boolean {
   return dateIso >= range.from && dateIso <= range.to;

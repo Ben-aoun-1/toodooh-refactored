@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import Fastify from 'fastify';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -6,6 +7,7 @@ import { db, sql } from '../src/db/client.js';
 import {
   type NewUser,
   campaigns,
+  cartItems,
   creatives,
   recharges,
   screenhosts,
@@ -101,6 +103,64 @@ describe('GET /api/admin/platform-stats (real Postgres)', () => {
     expect(body.users.pending_owners).toBe(2); // …of which two are Hosts
   });
 
+  // ADM-DSH2 (Mejri/Kais QA) — the tile « Créatives à valider » read 4 while /admin/creatives?status=
+  // pending listed nothing. The tile must count EXACTLY what the queue lists: the CF-HF4 gate
+  // (a pending creative counts once a campaign linking it is carted or past draft).
+  it('ADM-DSH2: creatives.pending counts exactly the rows the moderation queue lists', async () => {
+    const adminId = await seedUser({ role: 'admin' });
+    mockSession(adminId);
+    const advertiserId = await seedUser({ role: 'advertiser', status: 'approved' });
+    const seedCreative = async (key: string, status: 'pending' | 'approved' | 'rejected') => {
+      const [row] = await db
+        .insert(creatives)
+        .values({ advertiserId, storageKey: key, validationStatus: status })
+        .returning();
+      return row?.id ?? '';
+    };
+    // Four uploads nobody carted: pending, but NOT in the queue (Mejri's « 4 »).
+    for (let i = 0; i < 4; i += 1) await seedCreative(`creatives/u/${i}`, 'pending');
+    // One pending creative on a DRAFT campaign that IS in the cart → in the queue.
+    const carted = await seedCreative('creatives/c/1', 'pending');
+    const [draft] = await db
+      .insert(campaigns)
+      .values({
+        advertiserId,
+        name: 'Draft carted',
+        campaignType: 'standard',
+        status: 'draft',
+        creativeId: carted,
+      })
+      .returning();
+    await db.insert(cartItems).values({ userId: advertiserId, campaignId: draft?.id ?? '' });
+    // One pending creative on a SUBMITTED (pending) campaign, cart cleared → in the queue.
+    const submitted = await seedCreative('creatives/s/1', 'pending');
+    await db.insert(campaigns).values({
+      advertiserId,
+      name: 'Submitted',
+      campaignType: 'standard',
+      status: 'pending',
+      creativeId: submitted,
+    });
+    // One pending creative on a DRAFT campaign NOT carted → not in the queue.
+    const draftOnly = await seedCreative('creatives/d/1', 'pending');
+    await db.insert(campaigns).values({
+      advertiserId,
+      name: 'Draft only',
+      campaignType: 'standard',
+      status: 'draft',
+      creativeId: draftOnly,
+    });
+    // Decided rows list unconditionally.
+    await seedCreative('creatives/a/1', 'approved');
+    await seedCreative('creatives/r/1', 'rejected');
+
+    const body = (await get()).json() as StatsBody;
+    expect(body.creatives.pending).toBe(2);
+    expect(body.creatives.approved).toBe(1);
+    // total = what GET /api/admin/creatives (unfiltered) lists: 2 pending + approved + rejected.
+    expect(body.creatives.total).toBe(4);
+  });
+
   it('403 for a non-admin', async () => {
     mockSession(await seedUser({ role: 'advertiser' }), 'advertiser');
     expect((await get()).statusCode).toBe(403);
@@ -145,11 +205,21 @@ describe('GET /api/admin/platform-stats (real Postgres)', () => {
       },
     ]);
 
-    // Creatives: 1 pending, 1 approved.
+    // Creatives: 1 pending SUBMITTED (linked to the pending campaign), 1 approved, and 1 pending
+    // UNCARTED upload (no campaign links it) — ADM-DSH2: the last one is invisible to the queue,
+    // so it must be invisible to the tile too (it is what made the tile read 4 over an empty queue).
+    const [submitted] = await db
+      .insert(creatives)
+      .values({ advertiserId, storageKey: 'creatives/a/1', validationStatus: 'pending' })
+      .returning();
     await db.insert(creatives).values([
-      { advertiserId, storageKey: 'creatives/a/1', validationStatus: 'pending' },
       { advertiserId, storageKey: 'creatives/a/2', validationStatus: 'approved' },
+      { advertiserId, storageKey: 'creatives/a/3', validationStatus: 'pending' },
     ]);
+    await db
+      .update(campaigns)
+      .set({ creativeId: submitted?.id ?? null })
+      .where(eq(campaigns.name, 'C-pending'));
 
     // Recharges: 1 confirmed (100, this month → counts for total + monthly), 1 pending (50, ignored).
     await db.insert(recharges).values([
@@ -184,7 +254,7 @@ describe('GET /api/admin/platform-stats (real Postgres)', () => {
     expect(body.campaigns.active).toBe(1);
     expect(body.campaigns.total_budget_tnd).toBe(300);
     expect(body.campaigns.average_budget_tnd).toBe(150); // avg over the 2 non-null budgets
-    expect(body.creatives).toEqual({ total: 2, pending: 1, approved: 1 });
+    expect(body.creatives).toEqual({ total: 2, pending: 1, approved: 1 }); // the uncarted upload is NOT counted
     expect(body.revenue).toEqual({ total_tnd: 100, monthly_tnd: 100 });
   });
 });

@@ -173,6 +173,13 @@ export default function RechargeManagement() {
               <p className="text-2xl font-bold text-gray-900">
                 {adminRechargesService.formatAmount(stats.total_amount)}
               </p>
+              {/* ADM-RCH1 — the cancelled money is named, never summed. */}
+              {stats.rejected_count > 0 && (
+                <p className="text-xs text-gray-500 mt-1">
+                  hors {stats.rejected_count} annulée{stats.rejected_count > 1 ? 's' : ''} ·{' '}
+                  {adminRechargesService.formatAmount(stats.rejected_amount)}
+                </p>
+              )}
             </div>
             <TrendingUp className="h-10 w-10 text-brand-primary" />
           </div>
