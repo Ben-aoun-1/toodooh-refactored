@@ -13,6 +13,9 @@
 export const adminKeys = {
   all: ['admin'] as const,
 
+  /** ADM-BELL1 — the admin notification-bell feed (GET /api/notifications, session-scoped). */
+  notifications: (userId: string) => [...adminKeys.all, 'notifications', userId] as const,
+
   /** ADM-OBS1 — the « Tests » page picker and one screenhost's report for a période. */
   testingScreenhosts: () => [...adminKeys.all, 'testing', 'screenhosts'] as const,
   testingReport: (id: string, from: string, to: string) =>
