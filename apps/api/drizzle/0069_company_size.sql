@@ -1,0 +1,12 @@
+-- SIZE-PERSIST1 — « Taille de l'entreprise » becomes a stored field (operator ruling 2026-09-12,
+-- option a, on Mejri's 07/09 point 3b « Non renseigné alors qu'il avait été renseigné »).
+--
+-- The screencast signup has asked for it since Phase 1 (required, bands 0-10 / 10-50 / 50-100 /
+-- 100-500 / 500+) and the API discarded it: no column, `businessPatchSchema` stripped it. The
+-- fleet_owner's « nombre d'établissements de votre parc » rides the same wire key with its own
+-- scale (1…12, 12+) and was discarded the same way.
+--
+-- Nullable, no backfill: nothing was ever stored, so every existing user is « non renseigné » until
+-- they save Paramètres once. Validated at the route (the two scales' literal bands), not by a CHECK,
+-- mirroring the business_type « text column + zod-at-route » convention.
+ALTER TABLE "users" ADD COLUMN "company_size" text;

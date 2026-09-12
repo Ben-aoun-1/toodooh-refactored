@@ -54,7 +54,8 @@ export const authService = {
     // Accepted-fields JSON (snake wire, Phase-1f F2). F5 is REVERSED for owners (R7/N4): owner volet
     // files (registration_doc=RNE/bank_doc) ARE sent at signup via multipart (see
     // below). Still NOT sent: company_logo (no signup home) and the owner-extras
-    // (cin/formule/number_of_screens/number_of_rooms/company_size — backend-stripped). Advertisers/
+    // (cin/formule/number_of_screens/number_of_rooms — backend-stripped; company_size IS sent and
+    // stored since SIZE-PERSIST1). Advertisers/
     // agencies stay JSON, no documents (F5 stands for them).
     // SENT (P3): screenhost geo + WiFi — top-level latitude/longitude/wifi_ssid/wifi_password build
     // the individual_owner's single location; `fleet_establishments` (one per fleet_owner location)
@@ -92,6 +93,8 @@ export const authService = {
       ...(data.profile_type ? { profile_type: data.profile_type } : {}),
       ...(t(data.business_type) ? { business_type: t(data.business_type) } : {}),
       ...(t(data.business_sector_id) ? { business_sector_id: t(data.business_sector_id) } : {}),
+      // SIZE-PERSIST1 — stored since migration 0069 (employee bands or the fleet parc count).
+      ...(t(data.company_size) ? { company_size: t(data.company_size) } : {}),
       ...(t(data.street_address) ? { street_address: t(data.street_address) } : {}),
       ...(t(data.city) ? { city: t(data.city) } : {}),
       ...(t(data.postal_code) ? { postal_code: t(data.postal_code) } : {}),
@@ -258,8 +261,8 @@ export const authService = {
   // Phase-1f F4 — section-scoped profile saves (the forms already save per-section → 1:1 to the
   // PATCH endpoints). apiClient JSON.stringify DROPS `undefined` keys (so an empty uuid optional is
   // omitted → unchanged, not a null-400) and SENDS `null` (clears the nullable fonction/zone).
-  // Owner-extras (number_of_screens/rooms/company_size) are accepted here and STRIPPED by the
-  // backend (truthful, like signup).
+  // Owner-extras (number_of_screens/rooms) are accepted here and STRIPPED by the backend;
+  // company_size is STORED (SIZE-PERSIST1), null clears it.
   async updateProfileContact(patch: {
     contact_name?: string;
     contact_phone?: string;

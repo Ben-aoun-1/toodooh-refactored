@@ -57,9 +57,8 @@ export default function UserProfile() {
       business_name: profile.business_name ?? '',
       tax_number: profile.tax_number ?? '',
       business_sector_id,
-      // Advertiser company_size was never hydrated pre-B4a (the prior setState
-      // omitted it in favour of dead screens/rooms keys) — preserved as ''.
-      company_size: '',
+      // SIZE-PERSIST1 — hydrated from GET /api/me since the column exists (was hard-coded '').
+      company_size: profile.company_size ?? '',
       number_of_screens: '',
       number_of_rooms: '',
       street_address: profile.street_address ?? '',

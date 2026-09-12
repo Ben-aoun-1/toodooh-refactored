@@ -66,6 +66,7 @@ interface MeUser {
   contact_name: string | null;
   agent_code: string | null;
   business_name: string | null;
+  company_size: string | null;
   tax_number: string | null;
   contact_phone: string | null;
   bank_account_holder: string | null;
@@ -122,6 +123,7 @@ describe('GET /api/me (real Postgres)', () => {
     expect(user.business_name).toBe('Me Biz');
     expect(user.contact_phone).toBe('+21612345678');
     expect(typeof user.tax_number).toBe('string');
+    expect(user.company_size).toBeNull(); // SIZE-PERSIST1 — on the wire, null until saved
     // bank details (none at signup)
     expect(user.bank_account_holder).toBeNull();
     expect(user.bank_rib).toBeNull();

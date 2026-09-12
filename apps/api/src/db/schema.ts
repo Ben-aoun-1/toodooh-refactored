@@ -84,6 +84,10 @@ export const users = pgTable(
     }),
     // text + zod enum at Commit 3 (local/national/agency/event_organizer)
     businessType: text('business_type'),
+    // SIZE-PERSIST1 (0069) — « Taille de l'entreprise » for advertiser/agency (employee bands) and the
+    // fleet_owner parc count, one wire key `company_size`; the allowed literals live in
+    // validation/company-size.ts (a twin of apps/web/src/lib/company-size.ts).
+    companySize: text('company_size'),
     streetAddress: text('street_address'),
     city: text('city'),
     postalCode: text('postal_code'),
