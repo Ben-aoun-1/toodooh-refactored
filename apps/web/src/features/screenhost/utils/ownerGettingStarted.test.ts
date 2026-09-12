@@ -25,7 +25,7 @@ const makeProfile = (overrides: Partial<BusinessProfile> = {}): BusinessProfile 
   city: 'Tunis',
   postal_code: '1000',
   governorate_id: 'g1',
-  documents: { registration: false, cin: true, bank: true },
+  documents: { registration: true, cin: false, bank: true },
   bank_account_holder: 'Kais',
   bank_rib: '12345678901234567890',
   bank_iban: 'TN5912345678901234567890',
@@ -44,7 +44,7 @@ describe('"Pour bien commencer" dismissal (F5 — Kais QA 2026-06-11)', () => {
     expect(hideOwnerGettingStarted(makeProfile(), 'approved')).toBe(true);
   });
 
-  it('the regression: documents booleans drive the legal check — a cin on file hides the block even with every legacy *_doc_url unset', () => {
+  it('the regression: documents booleans drive the legal check — an RNE on file hides the block even with every legacy *_doc_url unset', () => {
     // Pre-fix the predicate read cin_doc_url/registration_doc_*, which /api/me never sets, so
     // the block stayed visible for owners whose documents were already uploaded.
     const profile = makeProfile();
@@ -54,10 +54,13 @@ describe('"Pour bien commencer" dismissal (F5 — Kais QA 2026-06-11)', () => {
     expect(hasOwnerLegalDocument(profile)).toBe(true);
   });
 
-  it('CIN-2: an individual owner has no legal document to file — the check holds with cin=false', () => {
-    const profile = makeProfile({ documents: { registration: false, cin: false, bank: true } });
-    expect(hasOwnerLegalDocument(profile)).toBe(true);
-    expect(hideOwnerGettingStarted(profile, 'approved')).toBe(true);
+  it('CIN-2b: an individual owner needs the RNE too — a legacy CIN alone no longer satisfies the check', () => {
+    const cinOnly = makeProfile({ documents: { registration: false, cin: true, bank: true } });
+    expect(hasOwnerLegalDocument(cinOnly)).toBe(false);
+    expect(hideOwnerGettingStarted(cinOnly, 'approved')).toBe(false);
+    const rne = makeProfile({ documents: { registration: true, cin: false, bank: true } });
+    expect(hasOwnerLegalDocument(rne)).toBe(true);
+    expect(hideOwnerGettingStarted(rne, 'approved')).toBe(true);
   });
 
   it('a fleet owner still needs the RNE (registration) — shows without it, hides with it', () => {

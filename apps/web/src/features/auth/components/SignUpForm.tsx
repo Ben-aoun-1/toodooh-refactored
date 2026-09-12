@@ -830,12 +830,8 @@ export default function SignUpForm({ currentStep, onStepChange, onProfileTypeCha
         // existing RNE pick (JSON, dropped server-side). bank_doc is the owner RIB volet. SIGN-2 —
         // individual_owner sends NO legal volet at signup: CIN moved to provide-later. All optional —
         // any blank volet is omitted by the service (|| undefined), so an owner can finalize with none.
-        registration_doc:
-          selectedProfileType === 'fleet_owner'
-            ? ownerVolets.rne || undefined
-            : !isOwner
-              ? rneFiles[0] || undefined
-              : undefined,
+        // CIN-2b (2026-09-12): every owner sends its RNE volet (individual owners included).
+        registration_doc: isOwner ? ownerVolets.rne || undefined : rneFiles[0] || undefined,
         company_logo: companyLogo || undefined,
         bank_doc: isOwner ? ownerVolets.bank || undefined : undefined,
         // F6 — individual_owner's single screenhost location/WiFi (optional). The service omits any

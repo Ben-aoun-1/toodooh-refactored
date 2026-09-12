@@ -30,7 +30,6 @@ export default function OwnerSettings() {
   const { user, profileType, needsApproval, validationStatus } = useAuthStore();
   const isDisabled = needsApproval && validationStatus === 'pending';
   const isFleetOwner = profileType === 'fleet_owner';
-  const isIndividualOwner = profileType === 'individual_owner';
 
   const { profile, loading } = useBusinessProfile(user?.id);
   const { data: sectors = [] } = useSectors();
@@ -102,12 +101,11 @@ export default function OwnerSettings() {
   }
 
   // F-docs Commit 2 — the owner's registry category plus the shared complémentaires group. Bank
-  // keeps its slot. CIN-2 (Mejri 09/09, operator 2026-09-12): the CIN is REMOVED everywhere —
-  // an individual owner no longer files an identity document (admins still see legacy CIN files).
+  // keeps its slot. CIN-2 (Mejri 09/09, operator 2026-09-12): the CIN is REMOVED everywhere
+  // (admins still see legacy CIN files). CIN-2b (operator, same evening): EVERY owner files an
+  // RNE — individual owners included (« even screenhosts file their RNE »).
   const documentCategories: DocumentCategoryConfig[] = [
-    ...(isIndividualOwner
-      ? []
-      : [{ category: 'rne', title: 'Registre de commerce (RNE)' } as DocumentCategoryConfig]),
+    { category: 'rne', title: 'Registre de commerce (RNE)' },
     { category: 'complementaire', title: 'Documents complémentaires' },
   ];
 

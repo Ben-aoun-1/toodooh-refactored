@@ -26,9 +26,8 @@ export const missingOwnerVolets = (
   files: OwnerVoletFiles,
 ): string[] => {
   const missing: string[] = [];
-  if (profileType === 'individual_owner') {
-    if (!files.bank) missing.push('bank'); // SIGN-2 — the RIB is all signup asks of an individual
-  } else if (profileType === 'fleet_owner') {
+  // CIN-2b (2026-09-12): every owner type files RNE + RIB (individual owners included).
+  if (profileType === 'individual_owner' || profileType === 'fleet_owner') {
     if (!files.rne) missing.push('rne');
     if (!files.bank) missing.push('bank');
   }

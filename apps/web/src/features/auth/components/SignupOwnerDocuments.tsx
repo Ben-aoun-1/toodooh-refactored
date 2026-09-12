@@ -10,7 +10,8 @@ import {
 } from '@/features/profile/lib/document-caps';
 
 // R7/N4 — the OWNER signup document volets (reverses F5 for owners). SIGN-2 (2026-08-31): the CIN
-// faces are GONE from signup — individual_owner shows the RIB only, fleet_owner shows RNE + RIB.
+// faces are GONE from signup. CIN-2b (2026-09-12): EVERY owner shows RNE + RIB — individual owners
+// file their RNE too (operator: « even screenhosts file their RNE »).
 // CIN becomes provide-later (admin request / post-signin upload), not abolished. Each slot is one file;
 // caps/MIME/size mirror the server via document-caps. Picks live in SignUpForm state and are sent as
 // multipart by authService.signUp. Complementaire stays an OPTIONAL post-signin add (not a volet here).
@@ -77,21 +78,16 @@ interface SignupOwnerDocumentsProps {
   onChange: (patch: Partial<OwnerVoletFiles>) => void;
 }
 
-export default function SignupOwnerDocuments({
-  profileType,
-  files,
-  onChange,
-}: SignupOwnerDocumentsProps) {
+// `profileType` stays on the props (callers pass it) but no slot depends on it since CIN-2b.
+export default function SignupOwnerDocuments({ files, onChange }: SignupOwnerDocumentsProps) {
   return (
     <div className="space-y-6">
-      {profileType !== 'individual_owner' && (
-        <SingleFileSlot
-          label="Registre de commerce (RNE)"
-          file={files.rne}
-          onPick={(f) => onChange({ rne: f })}
-          onClear={() => onChange({ rne: null })}
-        />
-      )}
+      <SingleFileSlot
+        label="Registre de commerce (RNE)"
+        file={files.rne}
+        onPick={(f) => onChange({ rne: f })}
+        onClear={() => onChange({ rne: null })}
+      />
       <SingleFileSlot
         label="Relevé d'identité bancaire (RIB)"
         file={files.bank}
