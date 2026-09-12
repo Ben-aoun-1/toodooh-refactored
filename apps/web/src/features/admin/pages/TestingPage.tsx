@@ -1,0 +1,334 @@
+import { FlaskConical, Loader2 } from 'lucide-react';
+import { useMemo, useState } from 'react';
+
+import AdminLayout from '@/features/admin/components/AdminLayout';
+import { useTestingReport, useTestingScreenhosts } from '@/features/admin/hooks/useAdminTesting';
+import type { Stats, TestingReport } from '@/features/admin/services/admin-testing.service';
+
+// ADM-OBS1 slice A — « Tests »: every variable the engines compute for ONE screenhost over ANY
+// période, side by side, plus the raw cells and the raw JSON. Read-only. The numbers are the api's
+// own (periodAudience / computeSps / computeAmax / dispatch config) — if this page and « Mes
+// performances » disagree, the product page is the bug. No product copy here; it is a bench.
+
+const SLOT_LABEL = (slot: number): string =>
+  `${String(Math.floor(slot / 2)).padStart(2, '0')}h${slot % 2 ? '30' : '00'}`;
+const DOW = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+
+const isoDaysAgo = (days: number): string => {
+  const d = new Date(Date.now() + 60 * 60 * 1000 - days * 86_400_000); // Tunis day (UTC+1)
+  return d.toISOString().slice(0, 10);
+};
+
+const fmt = (v: number | null | undefined): string =>
+  v === null || v === undefined ? '—' : Number.isInteger(v) ? String(v) : v.toFixed(2);
+
+function StatsRow({ label, s }: { label: string; s: Stats }) {
+  return (
+    <tr className="border-t">
+      <td className="py-1 pr-4 font-medium">{label}</td>
+      <td className="py-1 pr-4 tabular-nums">{s.n}</td>
+      <td className="py-1 pr-4 tabular-nums">{fmt(s.min)}</td>
+      <td className="py-1 pr-4 tabular-nums">{fmt(s.median)}</td>
+      <td className="py-1 pr-4 tabular-nums">{fmt(s.mean)}</td>
+      <td className="py-1 pr-4 tabular-nums">{fmt(s.max)}</td>
+    </tr>
+  );
+}
+
+function KeyValues({ title, rows }: { title: string; rows: [string, string][] }) {
+  return (
+    <section className="rounded-xl border bg-white p-4">
+      <h2 className="mb-2 text-sm font-semibold text-gray-700">{title}</h2>
+      <table className="text-sm">
+        <tbody>
+          {rows.map(([k, v]) => (
+            <tr key={k} className="border-t">
+              <td className="py-1 pr-6 text-gray-600">{k}</td>
+              <td className="py-1 font-mono tabular-nums">{v}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
+function Report({ r }: { r: TestingReport }) {
+  const a = r.audience;
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4 md:grid-cols-2">
+        <KeyValues
+          title="Période"
+          rows={[
+            ['du → au', `${r.periode.from} → ${r.periode.to}`],
+            ["aujourd'hui (Tunis)", r.periode.today],
+            ['plancher estimation (MEJ-7b)', r.periode.estimation_floor ?? '—'],
+            [
+              'heures d’ouverture',
+              r.screenhost.opening_hour === null
+                ? '—'
+                : `${r.screenhost.opening_hour}h → ${r.screenhost.closing_hour}h (${r.pricing.broadcastable_hours.length} h)`,
+            ],
+            ['jours indisponibles (E2)', r.pricing.unavailable_days.join(', ') || '—'],
+          ]}
+        />
+        <KeyValues
+          title="Audience — les KPI de « Mes performances »"
+          rows={[
+            ['Audience globale (Σ cases, FLOW-1)', fmt(a.total)],
+            ['Audience moyenne / jour', fmt(a.mean_per_day)],
+            ['Audience moyenne / heure d’ouverture', fmt(a.mean_per_hour)],
+            ['jours mesurés / estimés', `${a.measured_days} / ${a.estimated_days}`],
+            ['dont estimés (valeur, %)', a.estimated_pct === null ? '—' : `${a.estimated_pct} %`],
+          ]}
+        />
+      </div>
+
+      <section className="rounded-xl border bg-white p-4">
+        <h2 className="mb-2 text-sm font-semibold text-gray-700">
+          Audience — min / médiane / moyenne / max
+        </h2>
+        <table className="text-sm">
+          <thead>
+            <tr className="text-left text-gray-500">
+              <th className="pr-4">série</th>
+              <th className="pr-4">n</th>
+              <th className="pr-4">min</th>
+              <th className="pr-4">médiane</th>
+              <th className="pr-4">moyenne</th>
+              <th className="pr-4">max</th>
+            </tr>
+          </thead>
+          <tbody>
+            <StatsRow label="jours (Σ des cases du jour)" s={a.days} />
+            <StatsRow label="cases (demi-heures), toutes" s={a.cells} />
+            <StatsRow label="cases mesurées" s={a.measured_cells} />
+            <StatsRow label="cases estimées (grille)" s={a.backup_cells} />
+          </tbody>
+        </table>
+      </section>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <KeyValues
+          title="SPS — score, variables, preuves, poids"
+          rows={[
+            ['score live (computeSps)', fmt(r.sps.live)],
+            ['score stocké (screenhosts.sps)', fmt(r.sps.stored)],
+            [
+              'calculable ? (sinon neutre en dispatch)',
+              r.sps.computable ? 'oui' : `non → ${r.sps.neutral}`,
+            ],
+            ...Object.entries(r.sps.variables).map(
+              ([k, v]) =>
+                [`variable ${k} (poids ${r.sps.weights[k] ?? '?'})`, fmt(v)] as [string, string],
+            ),
+            ...Object.entries(r.sps.observations).map(
+              ([k, v]) => [`preuve ${k}`, fmt(v)] as [string, string],
+            ),
+            ...Object.entries(r.sps.windows_days).map(
+              ([k, v]) => [`fenêtre ${k}`, `${v} j`] as [string, string],
+            ),
+          ]}
+        />
+        <KeyValues
+          title="Pricing / dispatch — entrées en vigueur"
+          rows={[
+            ['A_max (heure la plus chargée, pers.)', fmt(r.pricing.a_max)],
+            ['CPM standard (TND / 1000)', fmt(r.pricing.cpm_standard_tnd)],
+            ['CPM événement', fmt(r.pricing.cpm_event_tnd)],
+            [
+              'T (10 s / 20 s / 30 s)',
+              `${r.pricing.t.t10s} / ${r.pricing.t.t20s} / ${r.pricing.t.t30s}`,
+            ],
+            ['délai de lancement (jours ouvrés)', String(r.pricing.campaign_lead_working_days)],
+            ['heures diffusables', r.pricing.broadcastable_hours.join(' ') || '—'],
+          ]}
+        />
+      </div>
+
+      <section className="rounded-xl border bg-white p-4">
+        <h2 className="mb-2 text-sm font-semibold text-gray-700">Jours de la période</h2>
+        <div className="max-h-72 overflow-auto">
+          <table className="text-sm">
+            <thead>
+              <tr className="text-left text-gray-500">
+                <th className="pr-4">date</th>
+                <th className="pr-4">audience</th>
+                <th className="pr-4">source</th>
+                <th className="pr-4">≥ 1 case mesurée</th>
+              </tr>
+            </thead>
+            <tbody>
+              {a.day_rows.map((d) => (
+                <tr key={d.date} className="border-t">
+                  <td className="py-0.5 pr-4 font-mono">{d.date}</td>
+                  <td className="py-0.5 pr-4 tabular-nums">{d.audience}</td>
+                  <td className="py-0.5 pr-4">{d.source}</td>
+                  <td className="py-0.5 pr-4">{d.has_measured ? 'oui' : 'non'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="rounded-xl border bg-white p-4">
+        <h2 className="mb-2 text-sm font-semibold text-gray-700">
+          « Vos peak hours » — max par (jour, créneau) sur la période (PEAK-MAX1)
+        </h2>
+        <div className="overflow-auto">
+          <table className="text-[11px]">
+            <thead>
+              <tr>
+                <th className="pr-2" />
+                {Array.from({ length: 48 }, (_, s) => (
+                  <th key={s} className="px-0.5 font-normal text-gray-500">
+                    {s % 2 === 0 ? SLOT_LABEL(s) : ''}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {a.week.map((row, dow) => (
+                <tr key={dow}>
+                  <td className="pr-2 font-medium">{DOW[dow]}</td>
+                  {row.map((c, s) => (
+                    <td
+                      key={s}
+                      title={c.value === null ? 'aucune donnée' : `${c.value} (${c.source})`}
+                      className={`px-0.5 text-center tabular-nums ${
+                        c.value === null
+                          ? 'text-gray-300'
+                          : c.source === 'backup'
+                            ? 'bg-amber-50 text-amber-800'
+                            : 'bg-emerald-50 text-emerald-900'
+                      }`}
+                    >
+                      {c.value === null ? '·' : c.value}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-1 text-xs text-gray-500">
+          vert = mesuré · ambre = grille (estimation) · point = aucune donnée
+        </p>
+      </section>
+
+      <section className="rounded-xl border bg-white p-4">
+        <h2 className="mb-2 text-sm font-semibold text-gray-700">
+          Cases brutes de la période ({a.cell_rows.length})
+        </h2>
+        <div className="max-h-80 overflow-auto">
+          <table className="text-sm">
+            <thead>
+              <tr className="text-left text-gray-500">
+                <th className="pr-4">date</th>
+                <th className="pr-4">créneau</th>
+                <th className="pr-4">valeur</th>
+                <th className="pr-4">source</th>
+              </tr>
+            </thead>
+            <tbody>
+              {a.cell_rows.map((c) => (
+                <tr key={`${c.date}-${c.slot}`} className="border-t">
+                  <td className="py-0.5 pr-4 font-mono">{c.date}</td>
+                  <td className="py-0.5 pr-4 font-mono">{SLOT_LABEL(c.slot)}</td>
+                  <td className="py-0.5 pr-4 tabular-nums">{c.value}</td>
+                  <td className="py-0.5 pr-4">{c.source}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <details className="rounded-xl border bg-white p-4">
+        <summary className="cursor-pointer text-sm font-semibold text-gray-700">
+          JSON brut (tout ce que l’API renvoie, config de dispatch incluse)
+        </summary>
+        <pre className="mt-2 max-h-96 overflow-auto text-xs">{JSON.stringify(r, null, 2)}</pre>
+      </details>
+    </div>
+  );
+}
+
+export default function TestingPage() {
+  const list = useTestingScreenhosts();
+  const [venueId, setVenueId] = useState<string | null>(null);
+  const [from, setFrom] = useState(isoDaysAgo(27));
+  const [to, setTo] = useState(isoDaysAgo(0));
+  const report = useTestingReport(venueId, from, to);
+  const venues = useMemo(() => list.data?.screenhosts ?? [], [list.data]);
+
+  return (
+    <AdminLayout title="Tests">
+      <div className="mx-auto max-w-7xl space-y-4 p-4">
+        <header className="flex items-center gap-3">
+          <FlaskConical className="h-6 w-6 text-brand-primary" />
+          <div>
+            <h1 className="text-xl font-semibold">Tests — variables par screenhost</h1>
+            <p className="text-sm text-gray-500">
+              Lecture seule. Les chiffres viennent des moteurs de la plateforme (audience, SPS,
+              pricing) pour la période choisie, sans recalcul côté page.
+            </p>
+          </div>
+        </header>
+
+        <div className="flex flex-wrap items-end gap-3 rounded-xl border bg-white p-4">
+          <label className="text-sm">
+            <span className="block text-gray-600">Screenhost</span>
+            <select
+              className="mt-1 rounded-lg border px-3 py-2"
+              value={venueId ?? ''}
+              onChange={(e) => setVenueId(e.target.value || null)}
+            >
+              <option value="">— choisir —</option>
+              {venues.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-sm">
+            <span className="block text-gray-600">Du</span>
+            <input
+              type="date"
+              className="mt-1 rounded-lg border px-3 py-2"
+              value={from}
+              onChange={(e) => setFrom(e.target.value)}
+            />
+          </label>
+          <label className="text-sm">
+            <span className="block text-gray-600">Au</span>
+            <input
+              type="date"
+              className="mt-1 rounded-lg border px-3 py-2"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+            />
+          </label>
+          {from > to && <span className="text-sm text-red-600">« Du » doit précéder « Au »</span>}
+          {report.isFetching && <Loader2 className="h-5 w-5 animate-spin text-gray-400" />}
+        </div>
+
+        {list.isError && (
+          <p className="text-sm text-red-600">Impossible de charger la liste des screenhosts.</p>
+        )}
+        {report.isError && (
+          <p className="text-sm text-red-600">Impossible de charger le rapport.</p>
+        )}
+        {!venueId && (
+          <p className="text-sm text-gray-500">
+            Choisis un screenhost pour afficher ses variables.
+          </p>
+        )}
+        {report.data && <Report r={report.data} />}
+      </div>
+    </AdminLayout>
+  );
+}
