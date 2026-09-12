@@ -3,6 +3,7 @@ import React, { lazy, Suspense, useEffect } from 'react';
 import { Toaster } from 'react-hot-toast';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
+import NotFoundPage from '@/components/NotFoundPage';
 import PageLoadingFallback from '@/components/PageLoadingFallback';
 import AdminRoute from '@/features/admin/components/AdminRoute';
 import AgentRoute from '@/features/agent/components/AgentRoute';
@@ -636,8 +637,10 @@ export default function App() {
               }
             />
 
-            {/* Redirection par défaut */}
-            <Route path="*" element={<Navigate to="/login" replace />} />
+            {/* MINOR-1/29 — an unknown URL is a 404, not a silent bounce to /login (which then
+                bounced a signed-in visitor to their dashboard, so a typo looked like a refresh).
+                The protected routes keep their own guards; only the catch-all changes. */}
+            <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </Suspense>
       </Router>
