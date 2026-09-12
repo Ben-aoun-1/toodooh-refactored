@@ -90,7 +90,7 @@ describe('authService.signUp → POST /signup (Phase-1f F2)', () => {
     });
   });
 
-  it('drops files + owner-extras (never in the payload)', async () => {
+  it('drops files + owner-extras (never in the payload) — company_size is SENT since SIZE-PERSIST1', async () => {
     post.mockResolvedValue(ok);
     await authService.signUp(advertiser);
     for (const k of [
@@ -99,13 +99,14 @@ describe('authService.signUp → POST /signup (Phase-1f F2)', () => {
       'bank_doc',
       'cin',
       'formule',
-      'company_size',
       'number_of_screens',
       'number_of_rooms',
       'fleet_establishments',
     ]) {
       expect(body()).not.toHaveProperty(k);
     }
+    // Mejri 07/09 — the band chosen at signup must reach the api, which now stores it (0069).
+    expect(body()).toHaveProperty('company_size', advertiser.company_size);
   });
 
   it('omits blank optionals (not sent as empty strings)', async () => {
