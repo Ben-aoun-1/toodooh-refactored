@@ -12,7 +12,7 @@ import { getErrorMessage } from '@/lib/errors';
 // N3 Scenario 1 — French labels for the deficient document areas the admin flagged (mirrors the
 // rejection email's REJECTION_TOPIC_LABELS_FR on the API side).
 const TOPIC_LABELS_FR: Record<string, string> = {
-  legal: 'Documents légaux (RNE / CIN)',
+  legal: 'Documents légaux (RNE)',
   bank: 'Coordonnées bancaires (RIB)',
 };
 

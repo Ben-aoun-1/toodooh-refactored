@@ -101,12 +101,13 @@ export default function OwnerSettings() {
     );
   }
 
-  // F-docs Commit 2 — the owner's identity/registry category by type (individual → CIN
-  // recto/verso, fleet → RNE), plus the shared complémentaires group. Bank keeps its slot.
+  // F-docs Commit 2 — the owner's registry category plus the shared complémentaires group. Bank
+  // keeps its slot. CIN-2 (Mejri 09/09, operator 2026-09-12): the CIN is REMOVED everywhere —
+  // an individual owner no longer files an identity document (admins still see legacy CIN files).
   const documentCategories: DocumentCategoryConfig[] = [
-    isIndividualOwner
-      ? { category: 'cin', title: "Carte d'identité nationale (CIN)" }
-      : { category: 'rne', title: 'Registre de commerce (RNE)' },
+    ...(isIndividualOwner
+      ? []
+      : [{ category: 'rne', title: 'Registre de commerce (RNE)' } as DocumentCategoryConfig]),
     { category: 'complementaire', title: 'Documents complémentaires' },
   ];
 

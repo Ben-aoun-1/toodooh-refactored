@@ -54,15 +54,24 @@ describe('"Pour bien commencer" dismissal (F5 — Kais QA 2026-06-11)', () => {
     expect(hasOwnerLegalDocument(profile)).toBe(true);
   });
 
-  it('shows when no legal document is on file (documents.cin=false) even with bank complete', () => {
+  it('CIN-2: an individual owner has no legal document to file — the check holds with cin=false', () => {
     const profile = makeProfile({ documents: { registration: false, cin: false, bank: true } });
-    expect(hasOwnerBankDetails(profile)).toBe(true);
-    expect(hideOwnerGettingStarted(profile, 'approved')).toBe(false);
+    expect(hasOwnerLegalDocument(profile)).toBe(true);
+    expect(hideOwnerGettingStarted(profile, 'approved')).toBe(true);
   });
 
-  it('registration alone also satisfies the legal check (company owners)', () => {
-    const profile = makeProfile({ documents: { registration: true, cin: false, bank: true } });
-    expect(hasOwnerLegalDocument(profile)).toBe(true);
+  it('a fleet owner still needs the RNE (registration) — shows without it, hides with it', () => {
+    const missing = makeProfile({
+      profile_type: 'fleet_owner',
+      documents: { registration: false, cin: false, bank: true },
+    });
+    expect(hasOwnerLegalDocument(missing)).toBe(false);
+    expect(hideOwnerGettingStarted(missing, 'approved')).toBe(false);
+    const filed = makeProfile({
+      profile_type: 'fleet_owner',
+      documents: { registration: true, cin: false, bank: true },
+    });
+    expect(hasOwnerLegalDocument(filed)).toBe(true);
   });
 
   it('shows when the bank document is missing', () => {
