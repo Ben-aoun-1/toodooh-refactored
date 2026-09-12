@@ -595,9 +595,10 @@ export type NewScreenhostAffluenceHourly = typeof screenhostAffluenceHourly.$inf
 // Owner-declared per-day unavailability, VENUE-level (never per-screen). The engine's day source:
 // assemblePool filters each venue's window days by this set — capacity (Hi), créneaux and the
 // C_max ceiling all shrink together (ONE day source); a venue unavailable across the ENTIRE
-// window drops from the pool (US-2.1). FROZEN PLANS ARE NEVER REWRITTEN by a later declaration
-// (ruling 2, the H2 precedent): a declared day with frozen créneaux still counts manquements and
-// rides E6's rattrapage. One row per declared day; undeclaring deletes the row.
+// window drops from the pool (US-2.1). CAL-1 (operator ruling 2026-09-12) REVERSED ruling 2 for
+// declarations: a declared day that carries live créneaux loses them and the day's share is
+// re-placed (E3 cascade pre-diffusion, E6 reliquat mid-flight) in the same transaction as the
+// row. One row per declared day; undeclaring deletes the row and moves nothing back.
 export const screenhostUnavailability = pgTable(
   'screenhost_unavailability',
   {

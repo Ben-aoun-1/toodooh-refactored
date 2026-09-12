@@ -34,6 +34,13 @@ export interface CascadeInput {
   plan: CampaignDispatchPlan;
   campaign: { id: string; name: string; startDate: string; endDate: string };
   refused: { id: string; screenhostId: string; iiPotentiel: number };
+  /**
+   * CAL-1 — PARTIAL re-placement: only part of the source allocation moves (one declared day), the
+   * allocation itself stays. The source venue is excluded from the cascade pool (its share must land
+   * elsewhere) but its allocation is NOT dropped from the engagement netting — it still airs the
+   * other days. Default false = the refusal case (the whole allocation is dead).
+   */
+  partial?: boolean;
 }
 
 export interface CascadeOutcome {
@@ -75,15 +82,23 @@ export const runRefusalCascade = async (
         eq(campaignDispatchAllocation.statutAcceptation, 'REFUSE'),
       ),
     );
-  const excludeScreenhostIds = [...new Set(refusedRows.map((r) => r.screenhostId))];
+  const excludeScreenhostIds = [
+    ...new Set([...refusedRows.map((r) => r.screenhostId), refused.screenhostId]),
+  ];
 
   // E5.1 — the pool always assembles (zero targeting lines = the whole network); the defensive
-  // NO_TARGETING fallback is gone with the retired status.
+  // NO_TARGETING fallback is gone with the retired status. CAL-1: a partial move keeps the source
+  // allocation engaged (it airs the other days), so it is not un-netted.
   const { pool } = await assemblePool(
     tx,
     campaign,
     { s, t, fMaxSeconds: plan.fMaxSeconds },
-    { excludeScreenhostIds, excludeAllocationId: refused.id, lockOccupancy: true, trace },
+    {
+      excludeScreenhostIds,
+      ...(input.partial ? {} : { excludeAllocationId: refused.id }),
+      lockOccupancy: true,
+      trace,
+    },
   );
 
   // THE SAME remplissage as dispatch — selection() verbatim, over the residual pool, for V.

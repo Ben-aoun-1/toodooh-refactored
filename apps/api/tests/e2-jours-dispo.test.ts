@@ -1,22 +1,23 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import Fastify from 'fastify';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { auth } from '../src/auth/auth.js';
 import { db, sql } from '../src/db/client.js';
 import {
-  type DispatchCreneau,
-  type NewUser,
   businessSectors,
   campaignDispatchAllocation,
   campaignDispatchPlan,
   campaignTargeting,
   campaigns,
   creatives,
+  notifications,
   screenhostAffluence,
   screenhostUnavailability,
   screenhosts,
   screens,
+  type DispatchCreneau,
+  type NewUser,
   users,
 } from '../src/db/schema.js';
 import { runBoost } from '../src/lib/boost.js';
@@ -25,10 +26,7 @@ import { plusCalendarDays, premiereDateDisponible } from '../src/lib/campaign-da
 import { getDispatchConfig } from '../src/lib/dispatch/config.js';
 import { runDispatch } from '../src/lib/dispatch/dispatch-service.js';
 import { assemblePool } from '../src/lib/dispatch/pool.js';
-import {
-  REDISPATCH_HEARTBEAT_TOLERANCE_MS,
-  runRedispatchRound,
-} from '../src/lib/dispatch/redispatch.js';
+import { REDISPATCH_HEARTBEAT_TOLERANCE_MS } from '../src/lib/dispatch/redispatch.js';
 import { screenhostsRoutes } from '../src/routes/screenhosts.js';
 
 import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
@@ -387,22 +385,24 @@ describe('E2 — jours_dispo_i (real Postgres)', () => {
       expect(closed.cMaxBoostTnd).toBeLessThan(open.cMaxBoostTnd);
     });
 
-    it('RULING 2 CHAIN: declare-after-freeze rewrites NOTHING, manquements still count, and the rattrapage skips the replacement venue’s OWN declared days', async () => {
+    it('CAL-1 CHAIN (reverses ruling 2): declaring a day with frozen créneaux MOVES that day’s share — the cascade places it elsewhere, the allocation keeps the other days', async () => {
       const cat = await ownerSectorId();
-      // A (dead, sps 90) carries the frozen plan on MON+TUE; B (alive, sps 80) is the target —
-      // and B has ITSELF declared TUE, so the rattrapage may only place its delta on MON.
-      const A = await seedVenue(cat, { sps: 90, liveness: 'dead' });
+      // A carries the frozen plan on MON+TUE (UPCOMING campaign); B is alive and free.
+      const A = await seedVenue(cat, { sps: 90, liveness: 'alive' });
       const B = await seedVenue(cat, { sps: 80, liveness: 'alive' });
       const advertiserId = await seedUser({ role: 'advertiser' });
+      const today = new Date().toISOString().slice(0, 10);
+      const D1 = plusCalendarDays(today, 10);
+      const D2 = plusCalendarDays(today, 11);
       const [c] = await db
         .insert(campaigns)
         .values({
           advertiserId,
-          name: 'E2 Chain',
+          name: 'CAL-1 Chain',
           campaignType: 'standard',
-          status: 'active',
-          startDate: MON,
-          endDate: TUE,
+          status: 'upcoming',
+          startDate: D1,
+          endDate: D2,
         })
         .returning();
       const campaignId = c?.id ?? '';
@@ -426,7 +426,7 @@ describe('E2 — jours_dispo_i (real Postgres)', () => {
           nRetenus: 1,
         })
         .returning();
-      const frozen = creneauxFor([MON, TUE], 1600, 16);
+      const frozen = creneauxFor([D1, D2], 1600, 16);
       const [alloc] = await db
         .insert(campaignDispatchAllocation)
         .values({
@@ -440,31 +440,45 @@ describe('E2 — jours_dispo_i (real Postgres)', () => {
         })
         .returning();
 
-      // The owner declares TUE on A AFTER the freeze — and B has its own TUE declaration.
-      await declare(A.shId, TUE);
-      await declare(B.shId, TUE);
+      // The owner of A declares D2 through the ROUTE (the CAL-1 path), after the freeze.
+      mockSession(A.ownerId);
+      const res = await app.inject({
+        method: 'PUT',
+        url: `/api/screenhosts/${A.shId}/unavailability`,
+        payload: { day: D2, unavailable: true },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = res.json<{
+        redispatched: {
+          campaign_id: string;
+          mode: string;
+          slots_moved: number;
+          v_fact: number;
+          absorbed: number;
+        }[];
+      }>();
+      expect(body.redispatched).toHaveLength(1);
+      const d2Slots = frozen.filter((cr) => cr.date === D2);
+      expect(body.redispatched[0]).toMatchObject({
+        campaign_id: campaignId,
+        mode: 'cascade',
+        slots_moved: d2Slots.length,
+        v_fact: Math.floor(d2Slots.reduce((sum, cr) => sum + cr.impressions, 0) * 0.6),
+      });
+      expect(body.redispatched[0]?.absorbed).toBeGreaterThan(0);
 
-      // Ruling 2: the frozen créneaux are byte-identical after the declaration.
+      // A keeps D1 only, with the day’s facturable value gone from its share.
       const [after] = await db
-        .select({ creneaux: campaignDispatchAllocation.creneaux })
+        .select()
         .from(campaignDispatchAllocation)
         .where(eq(campaignDispatchAllocation.id, alloc?.id ?? ''));
-      expect(after?.creneaux).toEqual(frozen);
+      expect(after?.creneaux.every((cr) => cr.date === D1)).toBe(true);
+      expect(after?.creneaux).toHaveLength(frozen.length - d2Slots.length);
+      expect(after?.iiPotentiel).toBe(20_000 - (body.redispatched[0]?.v_fact ?? 0));
+      expect(after?.statutAcceptation).toBe('ACCEPTE'); // the kept days need no re-consent
 
-      // A delivered nothing: at Tunis 13:30 the elapsed MON hours 8..12 are ALL manquements —
-      // the declaration did not erase them (5 × 1 600 phys × 0.6 = 4 800 fact).
-      const outcome = await runRedispatchRound(
-        { id: campaignId, name: 'E2 Chain', startDate: MON, endDate: TUE },
-        NOW,
-      );
-      expect(outcome.status).toBe('PLACED');
-      if (outcome.status !== 'PLACED') return;
-      expect(outcome.vFact).toBe(4800);
-      expect(outcome.placedTo).toEqual([
-        { screenhost_id: B.shId, added_fact: expect.any(Number) as number, merged: false },
-      ]);
-
-      // The replacement's créneaux skip B's OWN declared TUE: future-only MON slots only.
+      // B received the moved share, EN_ATTENTE, never on A’s declared day is irrelevant for B —
+      // but B’s créneaux are inside the window and B was notified.
       const allocs = await db
         .select()
         .from(campaignDispatchAllocation)
@@ -472,10 +486,105 @@ describe('E2 — jours_dispo_i (real Postgres)', () => {
       const placed = allocs.find((a) => a.screenhostId === B.shId);
       expect(placed?.statutAcceptation).toBe('EN_ATTENTE');
       expect(placed?.creneaux.length).toBeGreaterThan(0);
-      for (const cr of placed?.creneaux ?? []) {
-        expect(cr.date).toBe(MON); // never TUE — B's own declaration holds for NEW placements
-        expect(cr.hour).toBeGreaterThan(13); // and future-only (Tunis 13:30)
-      }
+      expect(placed?.creneaux.every((cr) => cr.date === D1 || cr.date === D2)).toBe(true);
+      const [note] = await db
+        .select()
+        .from(notifications)
+        .where(and(eq(notifications.userId, B.ownerId), eq(notifications.campaignId, campaignId)));
+      expect(note?.type).toBe('dispatch_pending_acceptance');
+
+      // The declared row exists; undeclaring moves nothing back (the share stays where it went).
+      const undo = await app.inject({
+        method: 'PUT',
+        url: `/api/screenhosts/${A.shId}/unavailability`,
+        payload: { day: D2, unavailable: false },
+      });
+      expect(undo.statusCode).toBe(200);
+      expect(undo.json<{ redispatched: unknown[] }>().redispatched).toEqual([]);
+      const [still] = await db
+        .select()
+        .from(campaignDispatchAllocation)
+        .where(eq(campaignDispatchAllocation.id, alloc?.id ?? ''));
+      expect(still?.creneaux).toHaveLength(frozen.length - d2Slots.length);
+    });
+
+    it('CAL-1 mid-flight: on an ACTIVE campaign the day’s share joins the plan reliquat for E6 (no immediate cascade)', async () => {
+      const cat = await ownerSectorId();
+      const A = await seedVenue(cat, { sps: 90, liveness: 'alive' });
+      const advertiserId = await seedUser({ role: 'advertiser' });
+      const today = new Date().toISOString().slice(0, 10);
+      const D1 = plusCalendarDays(today, -1);
+      const D2 = plusCalendarDays(today, 3);
+      const [c] = await db
+        .insert(campaigns)
+        .values({
+          advertiserId,
+          name: 'CAL-1 Active',
+          campaignType: 'standard',
+          status: 'active',
+          startDate: D1,
+          endDate: D2,
+        })
+        .returning();
+      const campaignId = c?.id ?? '';
+      await db.insert(campaignTargeting).values({ campaignId, categoryId: cat, class: null });
+      const [plan] = await db
+        .insert(campaignDispatchPlan)
+        .values({
+          campaignId,
+          iCible: 20_000,
+          cpm: '10',
+          sSpotSeconds: 10,
+          tTierCoef: '0.6',
+          seuilDiffusable: 2000,
+          sMin: '20',
+          gJour: '3.3333',
+          fMaxSeconds: 300,
+          rMinEfficace: 2,
+          couvert: 20_000,
+          nMin: 1,
+          nMax: 10,
+          nRetenus: 1,
+        })
+        .returning();
+      const frozen = creneauxFor([D1, D2], 1600, 16);
+      await db.insert(campaignDispatchAllocation).values({
+        planId: plan?.id ?? '',
+        screenhostId: A.shId,
+        iiPotentiel: 20_000,
+        rI: 16,
+        revenuPrevisionnel: '200',
+        creneaux: frozen,
+        statutAcceptation: 'ACCEPTE',
+      });
+      mockSession(A.ownerId);
+      const res = await app.inject({
+        method: 'PUT',
+        url: `/api/screenhosts/${A.shId}/unavailability`,
+        payload: { day: D2, unavailable: true },
+      });
+      expect(res.statusCode).toBe(200);
+      const [moved] = res.json<{ redispatched: { mode: string; v_fact: number }[] }>().redispatched;
+      expect(moved?.mode).toBe('reliquat');
+      const [p] = await db
+        .select({ reliquatStocke: campaignDispatchPlan.reliquatStocke })
+        .from(campaignDispatchPlan)
+        .where(eq(campaignDispatchPlan.id, plan?.id ?? ''));
+      expect(p?.reliquatStocke).toBe(moved?.v_fact);
+    });
+
+    it('a declaration on a day with NO créneaux moves nothing (redispatched: [])', async () => {
+      const cat = await ownerSectorId();
+      const venue = await seedVenue(cat);
+      mockSession(venue.ownerId);
+      const today = new Date().toISOString().slice(0, 10);
+      const res = await app.inject({
+        method: 'PUT',
+        url: `/api/screenhosts/${venue.shId}/unavailability`,
+        payload: { day: plusCalendarDays(today, 4), unavailable: true },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json<{ redispatched: unknown[] }>().redispatched).toEqual([]);
     });
   });
 });

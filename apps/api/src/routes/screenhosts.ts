@@ -541,10 +541,28 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
   // FUTURE-only (Tunis calendar): today and the past are history — frozen créneaux there are the
   // E6 detector's business, not the owner's eraser. Idempotent both directions (re-declare = the
   // UNIQUE no-op; un-declare an available day = delete 0 rows, still 200).
+  //
+  // CAL-1 (Mejri 11/09 point 6, operator ruling 2026-09-12: « it gets redispatched ») — REVERSES
+  // ruling 2 for declarations: a declared day that carries ACCEPTE/EN_ATTENTE créneaux of a live
+  // campaign now MOVES that day's share. In ONE transaction: the day row → the colliding allocations
+  // (plan locked FOR UPDATE, like E6) → each loses the day's créneaux and the day's facturable value
+  // (⌊Σ impressions × T⌋) → the value is re-placed: pre-diffusion (pending/upcoming) through the E3
+  // cascade at once (partial mode, the source venue excluded, allocation kept), mid-flight (active)
+  // into the plan's reliquat_stocke so E6's next round re-places it future-only. Any failure rolls
+  // the declaration back — a share is never left half-moved. Undeclaring moves nothing back.
   const unavailabilityPutSchema = z.object({
     day: z.iso.date(),
     unavailable: z.boolean(),
   });
+  interface RedispatchedShare {
+    campaign_id: string;
+    campaign_name: string;
+    mode: 'cascade' | 'reliquat';
+    slots_moved: number;
+    v_fact: number;
+    absorbed: number;
+    residual: number;
+  }
   app.put('/api/screenhosts/:id/unavailability', ownerGuard, async (request, reply) => {
     const parsedParams = idParamSchema.safeParse(request.params);
     if (!parsedParams.success) {
@@ -586,26 +604,166 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
     if (!owned) {
       return reply.status(404).send({ error: 'NOT_FOUND', message: 'No such screenhost.' });
     }
-    if (parsed.data.unavailable) {
-      await db
-        .insert(screenhostUnavailability)
-        .values({ screenhostId: owned.id, day: parsed.data.day })
-        .onConflictDoNothing();
-    } else {
+    const day = parsed.data.day;
+    if (!parsed.data.unavailable) {
       await db
         .delete(screenhostUnavailability)
         .where(
           and(
             eq(screenhostUnavailability.screenhostId, owned.id),
-            eq(screenhostUnavailability.day, parsed.data.day),
+            eq(screenhostUnavailability.day, day),
           ),
         );
+      return reply
+        .status(200)
+        .send({ screenhost_id: owned.id, day, unavailable: false, redispatched: [] });
     }
-    return reply.status(200).send({
-      screenhost_id: owned.id,
-      day: parsed.data.day,
-      unavailable: parsed.data.unavailable,
-    });
+
+    // LOG1 — one cascade trace per re-placed campaign, flushed after the tx on both outcomes.
+    const traces: EngineTrace[] = [];
+    const redispatched = await db
+      .transaction(async (tx) => {
+        // The day row FIRST, so the cascade's pool assembly already excludes this venue/day.
+        await tx
+          .insert(screenhostUnavailability)
+          .values({ screenhostId: owned.id, day })
+          .onConflictDoNothing();
+
+        // The colliding shares: this venue's live allocations whose campaign window covers the day
+        // and whose frozen créneaux touch it. Plans locked FOR UPDATE — E6 rounds and cascades
+        // serialize on the plan row (redispatch.ts idiom).
+        const rows = await tx
+          .select({
+            allocation: campaignDispatchAllocation,
+            plan: campaignDispatchPlan,
+            campaignId: campaigns.id,
+            campaignName: campaigns.name,
+            campaignStatus: campaigns.status,
+            campaignStart: campaigns.startDate,
+            campaignEnd: campaigns.endDate,
+          })
+          .from(campaignDispatchAllocation)
+          .innerJoin(
+            campaignDispatchPlan,
+            eq(campaignDispatchAllocation.planId, campaignDispatchPlan.id),
+          )
+          .innerJoin(campaigns, eq(campaignDispatchPlan.campaignId, campaigns.id))
+          .where(
+            and(
+              eq(campaignDispatchAllocation.screenhostId, owned.id),
+              inArray(campaignDispatchAllocation.statutAcceptation, ['ACCEPTE', 'EN_ATTENTE']),
+              inArray(campaigns.status, ['pending', 'upcoming', 'active']),
+              lte(campaigns.startDate, day),
+              gte(campaigns.endDate, day),
+            ),
+          )
+          .for('update', { of: campaignDispatchPlan });
+
+        const moved: RedispatchedShare[] = [];
+        for (const row of rows) {
+          const removed = row.allocation.creneaux.filter((c) => c.date === day);
+          if (removed.length === 0) continue;
+          const kept = row.allocation.creneaux.filter((c) => c.date !== day);
+          const t = Number(row.plan.tTierCoef);
+          const cpm = Number(row.plan.cpm);
+          const vFact = Math.min(
+            row.allocation.iiPotentiel,
+            Math.floor(removed.reduce((sum, c) => sum + c.impressions, 0) * t),
+          );
+          const iiPotentiel = row.allocation.iiPotentiel - vFact;
+          await tx
+            .update(campaignDispatchAllocation)
+            .set({
+              creneaux: kept,
+              iiPotentiel,
+              revenuPrevisionnel: String((iiPotentiel * cpm) / 1000),
+            })
+            .where(eq(campaignDispatchAllocation.id, row.allocation.id));
+
+          if (vFact === 0) {
+            moved.push({
+              campaign_id: row.campaignId,
+              campaign_name: row.campaignName,
+              mode: 'cascade',
+              slots_moved: removed.length,
+              v_fact: 0,
+              absorbed: 0,
+              residual: 0,
+            });
+            continue;
+          }
+          if (
+            (row.campaignStatus === 'pending' || row.campaignStatus === 'upcoming') &&
+            row.campaignStart !== null &&
+            row.campaignEnd !== null
+          ) {
+            const trace = createEngineTrace('cascade', row.campaignId);
+            traces.push(trace);
+            const outcome = await runRefusalCascade(
+              tx,
+              {
+                plan: row.plan,
+                campaign: {
+                  id: row.campaignId,
+                  name: row.campaignName,
+                  startDate: row.campaignStart,
+                  endDate: row.campaignEnd,
+                },
+                refused: {
+                  id: row.allocation.id,
+                  screenhostId: owned.id,
+                  iiPotentiel: vFact,
+                },
+                partial: true,
+              },
+              trace,
+            );
+            moved.push({
+              campaign_id: row.campaignId,
+              campaign_name: row.campaignName,
+              mode: 'cascade',
+              slots_moved: removed.length,
+              v_fact: vFact,
+              absorbed: outcome.absorbed,
+              residual: vFact - outcome.absorbed,
+            });
+          } else {
+            // Mid-flight: E6 owns re-placement (future-only, hourly). The day's value joins the
+            // stored reliquat, which the next round validates on the TOTAL and places.
+            await tx
+              .update(campaignDispatchPlan)
+              .set({ reliquatStocke: sql`${campaignDispatchPlan.reliquatStocke} + ${vFact}` })
+              .where(eq(campaignDispatchPlan.id, row.plan.id));
+            moved.push({
+              campaign_id: row.campaignId,
+              campaign_name: row.campaignName,
+              mode: 'reliquat',
+              slots_moved: removed.length,
+              v_fact: vFact,
+              absorbed: 0,
+              residual: vFact,
+            });
+          }
+        }
+        return moved;
+      })
+      .catch(async (err: unknown) => {
+        await Promise.all(traces.map((tr) => tr.finish('rolled_back', { reason: 'ERROR' })));
+        throw err;
+      });
+    await Promise.all(traces.map((tr) => tr.finish('committed', {})));
+
+    // E4 — a moved share changes this venue's engagement; recompute its SPS, failure-tolerated.
+    if (redispatched.length > 0) {
+      try {
+        await recomputeVenueSps(owned.id);
+      } catch (err) {
+        request.log.warn({ err, screenhostId: owned.id }, 'SPS on-declaration recompute failed');
+      }
+    }
+    return reply
+      .status(200)
+      .send({ screenhost_id: owned.id, day, unavailable: true, redispatched });
   });
 
   // PATCH /api/screenhosts/:id/hours — the OWNER edits their venue's single-window hours

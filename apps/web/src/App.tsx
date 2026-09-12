@@ -39,9 +39,6 @@ const OwnerScreens = lazy(() => import('@/features/screenhost/pages/OwnerScreens
 const OwnerRevenue = lazy(() => import('@/features/screenhost/pages/OwnerRevenue'));
 const OwnerCampaigns = lazy(() => import('@/features/screenhost/pages/OwnerCampaigns'));
 const OwnerAllocations = lazy(() => import('@/features/screenhost/pages/OwnerAllocations'));
-const OwnerCampaignCalendar = lazy(
-  () => import('@/features/screenhost/pages/OwnerCampaignCalendar'),
-);
 const OwnerPerformance = lazy(() => import('@/features/screenhost/pages/OwnerPerformance'));
 const OwnerCalendarDevices = lazy(() => import('@/features/screenhost/pages/OwnerCalendarDevices'));
 const OwnerFacturesPage = lazy(() => import('@/features/screenhost/pages/OwnerFacturesPage'));
@@ -455,13 +452,11 @@ export default function App() {
                 </OwnerRoute>
               }
             />
+            {/* CAL-1 — the diffusion calendar merged into « Mon calendrier de diffusion »; the old
+                URL keeps resolving. */}
             <Route
               path="/owner-campaign-calendar"
-              element={
-                <OwnerRoute>
-                  <OwnerCampaignCalendar />
-                </OwnerRoute>
-              }
+              element={<Navigate to="/owner-calendar-devices" replace />}
             />
             <Route
               path="/owner-revenue"
