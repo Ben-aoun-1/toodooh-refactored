@@ -68,7 +68,11 @@ const seedScreenhost = async (opts: {
   lat?: string | null;
   lng?: string | null;
   zoneId?: string | null;
+  /** MAP-2 — coverage = the dispatch-eligible set, so a venue needs hours + capacity to count. */
+  hours?: { open: number; close: number } | null;
+  capacity?: number | null;
 }): Promise<string> => {
+  const hours = opts.hours === undefined ? { open: 8, close: 22 } : opts.hours;
   const [sh] = await db
     .insert(screenhosts)
     .values({
@@ -79,6 +83,9 @@ const seedScreenhost = async (opts: {
       latitude: opts.lat === undefined ? '36.80000000' : opts.lat,
       longitude: opts.lng === undefined ? '10.18000000' : opts.lng,
       zoneId: opts.zoneId ?? null,
+      openingHour: hours?.open ?? null,
+      closingHour: hours?.close ?? null,
+      broadcastCapacity: opts.capacity === undefined ? 1 : opts.capacity,
     })
     .returning();
   return sh?.id ?? '';
@@ -399,7 +406,44 @@ describe('campaign targeting (advertiser, real Postgres)', () => {
     expect(dots[0]?.id).toBe(inZone);
   });
 
-  it('the no-targeting default still excludes inactive and unlocated venues', async () => {
+  it('MAP-2: coverage is the DISPATCH-ELIGIBLE set — no hours or no capacity = not covered; no coordinates = covered but not plotted', async () => {
+    const me = await seedUser();
+    const id = await seedCampaign(me);
+    const [catA] = await ownerCategoryIds();
+    const plotted = await seedScreenhost({ categoryId: catA ?? null, cls: 'premium', name: 'Ok' });
+    await seedScreenhost({
+      categoryId: catA ?? null,
+      cls: 'premium',
+      name: 'NoHours',
+      hours: null,
+    });
+    await seedScreenhost({
+      categoryId: catA ?? null,
+      cls: 'premium',
+      name: 'NoCap',
+      capacity: null,
+    });
+    await seedScreenhost({
+      categoryId: catA ?? null,
+      cls: 'premium',
+      name: 'NoCoords',
+      lat: null,
+      lng: null,
+    });
+    mockSession(me);
+    const res = await coverage(id);
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      screenhosts: CoverageDot[];
+      covered_count: number;
+      without_coordinates: number;
+    };
+    expect(body.screenhosts.map((d) => d.id)).toEqual([plotted]);
+    expect(body.covered_count).toBe(2); // Ok + NoCoords — the caption's number
+    expect(body.without_coordinates).toBe(1);
+  });
+
+  it('the no-targeting default still excludes inactive venues; an unlocated one is counted, not plotted', async () => {
     const me = await seedUser();
     const id = await seedCampaign(me);
     const [catA] = await ownerCategoryIds();

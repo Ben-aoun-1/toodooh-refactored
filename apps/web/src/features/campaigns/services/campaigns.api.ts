@@ -58,6 +58,13 @@ export interface UpdateCampaignInput {
   creative_id?: string | null;
 }
 
+/** MAP-2 — GET /:id/coverage: one definition for the pins and the caption. */
+export interface CoverageRead {
+  screenhosts: CoverageVenue[];
+  covered_count: number;
+  without_coordinates: number;
+}
+
 /** CF-U1 — one plottable venue of the coverage preview (GET /:id/coverage, kept at CF-Z1). */
 export interface CoverageVenue {
   id: string;
@@ -90,9 +97,10 @@ export const campaignsApi = {
   cmax(id: string): Promise<CampaignCmaxRead> {
     return apiClient.get<CampaignCmaxRead>(`/campaigns/${id}/cmax`);
   },
-  /** The active, coordinate-bearing venues matching the campaign's targeting (map preview). */
-  coverage(id: string): Promise<{ screenhosts: CoverageVenue[] }> {
-    return apiClient.get<{ screenhosts: CoverageVenue[] }>(`/campaigns/${id}/coverage`);
+  /** MAP-2 — the campaign's COVERED établissements (the dispatch-eligible set): the plottable
+   * ones as `screenhosts`, the total as `covered_count`, the unplottable remainder counted. */
+  coverage(id: string): Promise<CoverageRead> {
+    return apiClient.get<CoverageRead>(`/campaigns/${id}/coverage`);
   },
   mine(): Promise<CampaignView[]> {
     return apiClient.get<CampaignView[]>('/campaigns/mine');

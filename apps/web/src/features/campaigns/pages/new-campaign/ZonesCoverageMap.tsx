@@ -16,6 +16,11 @@ import 'leaflet/dist/leaflet.css';
 
 interface ZonesCoverageMapProps {
   venues: CoverageVenue[];
+  /** MAP-2 — the SERVER's count of covered établissements (the dispatch-eligible set); the dots
+   * are the subset with coordinates, so the badge reads this, never `venues.length`. */
+  coveredCount: number;
+  /** MAP-2 — covered établissements that cannot be plotted (no coordinates). */
+  withoutCoordinates: number;
   isLoading: boolean;
   isError: boolean;
   /** CF-U2 — collapsed corner square vs full-width view; state lives in StepZones. */
@@ -62,6 +67,28 @@ const buildPopupContent = (venue: CoverageVenue): HTMLElement => {
   return root;
 };
 
+/**
+ * MAP-2 — établissements sharing one coordinate (same building, same typed address) painted as
+ * ONE dot, so the map showed fewer dots than the caption counted. Spread coincident venues on a
+ * small ring (~15 m) so every covered venue has its own visible dot; tooltips keep the names.
+ */
+export const spreadCoincident = (venues: CoverageVenue[]): CoverageVenue[] => {
+  const seen = new Map<string, number>();
+  return venues.map((v) => {
+    const key = `${v.latitude.toFixed(5)}:${v.longitude.toFixed(5)}`;
+    const n = seen.get(key) ?? 0;
+    seen.set(key, n + 1);
+    if (n === 0) return v;
+    const angle = (n * 2 * Math.PI) / 6;
+    const delta = 0.00014; // ≈ 15 m
+    return {
+      ...v,
+      latitude: v.latitude + delta * Math.sin(angle),
+      longitude: v.longitude + delta * Math.cos(angle),
+    };
+  });
+};
+
 const fitToVenues = (map: L.Map, venues: CoverageVenue[]): void => {
   if (venues.length === 0) return;
   map.fitBounds(L.latLngBounds(venues.map((v) => [v.latitude, v.longitude])), {
@@ -81,6 +108,8 @@ const fitToVenues = (map: L.Map, venues: CoverageVenue[]): void => {
  */
 export default function ZonesCoverageMap({
   venues,
+  coveredCount,
+  withoutCoordinates,
   isLoading,
   isError,
   expanded,
@@ -101,24 +130,43 @@ export default function ZonesCoverageMap({
     L.tileLayer(TILE_URL, { attribution: TILE_ATTRIBUTION, maxZoom: 19 }).addTo(map);
     markersRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
+    // MAP-1 (Mejri 08/09 point 2): leaflet measures its container ONCE and only re-measures on
+    // WINDOW resize. The box here changes in-flow after mount (the cart dock column appearing,
+    // the sidebar collapsing, the wrapper's own size transition), so the map stayed laid out
+    // against a stale size until the expand click fired the one invalidateSize path. Observe the
+    // container itself and re-measure + re-frame on every change.
+    const observer =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(() => {
+            map.invalidateSize();
+            fitToVenues(map, latestVenuesRef.current);
+          });
+    observer?.observe(containerRef.current);
     return () => {
+      observer?.disconnect();
       map.remove();
       mapRef.current = null;
       markersRef.current = null;
     };
   }, []);
 
+  const latestVenuesRef = useRef<CoverageVenue[]>(venues);
+  latestVenuesRef.current = venues;
+
   useEffect(() => {
     const map = mapRef.current;
     const markers = markersRef.current;
     if (!map || !markers) return;
     markers.clearLayers();
-    for (const venue of venues) {
+    for (const venue of spreadCoincident(venues)) {
       L.circleMarker([venue.latitude, venue.longitude], MARKER_STYLE)
         .bindTooltip(venue.name)
         .bindPopup(buildPopupContent(venue), { closeButton: false })
         .addTo(markers);
     }
+    // MAP-1 — data can arrive after a layout change: re-measure before framing the dots.
+    map.invalidateSize();
     fitToVenues(map, venues);
   }, [venues]);
 
@@ -138,11 +186,14 @@ export default function ZonesCoverageMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expanded]);
 
-  const count = venues.length;
+  // MAP-2 (Mejri 08/09 point 3): ONE definition for the pins and the caption — the server's
+  // covered set; the dots are its plottable subset, and the remainder is said out loud.
+  const count = coveredCount;
   const plural = count > 1 ? 's' : '';
+  const unplotted = withoutCoordinates > 0 ? `, dont ${withoutCoordinates} sans coordonnées` : '';
   const badgeLabel = wholeNetwork
-    ? `Tout le réseau — ${count} établissement${plural}`
-    : `${count} établissement${plural} couvert${plural}`;
+    ? `Tout le réseau — ${count} établissement${plural}${unplotted}`
+    : `${count} établissement${plural} couvert${plural}${unplotted}`;
 
   return (
     <div
