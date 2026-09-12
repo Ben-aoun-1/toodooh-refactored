@@ -39,8 +39,10 @@ export default function AdvertiserNotificationsBell({ userId, emphasized = false
     () => items.filter((item) => !readIdSet.has(item.id)).length,
     [items, readIdSet],
   );
+  // NOTIF-H1 (Mejri 11/09 point 4): a consulted notification STAYS listed — read state, muted,
+  // unread first. Before this the list hid read rows, so « Consulter » made the row vanish.
   const visibleItems = useMemo(
-    () => items.filter((item) => !readIdSet.has(item.id)),
+    () => [...items].sort((a, b) => Number(readIdSet.has(a.id)) - Number(readIdSet.has(b.id))),
     [items, readIdSet],
   );
 
@@ -112,7 +114,10 @@ export default function AdvertiserNotificationsBell({ userId, emphasized = false
                 // Captured so the narrowing survives into the onClick closure (TS strict).
                 const action = item.action;
                 return (
-                  <div key={item.id} className="px-5 py-4 border-b border-gray-100">
+                  <div
+                    key={item.id}
+                    className={`px-5 py-4 border-b border-gray-100${isRead ? ' opacity-60' : ''}`}
+                  >
                     <div className="flex items-start gap-3">
                       <div className="relative mt-0.5 h-10 w-10 rounded-full border border-brand-primary text-[#2A7A47] flex items-center justify-center">
                         {item.kind === 'campaign_draft_reminder' ? (

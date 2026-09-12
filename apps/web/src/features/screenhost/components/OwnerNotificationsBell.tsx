@@ -33,7 +33,12 @@ export default function OwnerNotificationsBell({ userId }: { userId?: string }) 
     () => items.filter((n) => !readIdSet.has(n.id)).length,
     [items, readIdSet],
   );
-  const visibleItems = useMemo(() => items.filter((n) => !readIdSet.has(n.id)), [items, readIdSet]);
+  // NOTIF-H1 (Mejri 11/09 point 4): a consulted notification STAYS listed — read state, muted,
+  // unread first. Before this the list hid read rows, so « Consulter » made the row vanish.
+  const visibleItems = useMemo(
+    () => [...items].sort((a, b) => Number(readIdSet.has(a.id)) - Number(readIdSet.has(b.id))),
+    [items, readIdSet],
+  );
 
   useEffect(() => {
     const onClickOutside = (e: MouseEvent) => {
@@ -101,7 +106,10 @@ export default function OwnerNotificationsBell({ userId }: { userId?: string }) 
               visibleItems.map((item) => {
                 const isRead = readIdSet.has(item.id);
                 return (
-                  <div key={item.id} className="px-5 py-4 border-b border-gray-100">
+                  <div
+                    key={item.id}
+                    className={`px-5 py-4 border-b border-gray-100${isRead ? ' opacity-60' : ''}`}
+                  >
                     <div className="flex items-start gap-3">
                       <div className="relative mt-0.5 h-10 w-10 rounded-full border border-brand-primary text-[#2A7A47] flex items-center justify-center">
                         {item.kind === 'bank_coordinates_validated' ? (
