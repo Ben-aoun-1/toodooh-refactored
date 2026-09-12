@@ -294,16 +294,18 @@ describe('POST /api/signup', () => {
       postal_code: '1000',
       governorate_id: governorateId,
       fonction: 'Gérant',
-      agent_toodooh: 'AGENT-42',
+      // HOURS-M1: an individual_owner must carry its hours pair (advertisers never do).
+      ...(over['profile_type'] === 'individual_owner' ? { opening_hour: 8, closing_hour: 22 } : {}),
       ...over,
     };
   };
 
   it('full advertiser signup → 201; profile + agent_code + terms_accepted_at stored', async () => {
+    await seedAgent('screencast_agent', 'AGENT-42'); // AGENT-V1: the code must exist now
     const res = await app.inject({
       method: 'POST',
       url: '/api/signup',
-      payload: await fullProfile(),
+      payload: await fullProfile({ agent_toodooh: 'AGENT-42' }),
     });
     expect(res.statusCode).toBe(201);
     const [u] = await db.select().from(users).where(eq(users.email, 'owner@example.com'));
@@ -349,7 +351,7 @@ describe('POST /api/signup', () => {
       number_of_screens: 5,
       number_of_rooms: 3,
       company_size: '10 - 50',
-      fleet_establishments: [{ name: 'X' }],
+      fleet_establishments: [{ name: 'X', opening_hour: 8, closing_hour: 22 }],
     });
     const res = await app.inject({ method: 'POST', url: '/api/signup', ...signupMultipart(body) });
     expect(res.statusCode).toBe(201);
@@ -388,6 +390,8 @@ describe('POST /api/signup', () => {
 
   it('duplicate email → 201 generic AND the existing user role/profile is UNCHANGED (synthetic-id no-op)', async () => {
     // First: a real owner signup that sets role=individual_owner + agent_code.
+    await seedAgent('screenhost_agent', 'FIRST'); // AGENT-V1: both codes must exist
+    await seedAgent('screenhost_agent', 'ATTACKER');
     await app.inject({
       method: 'POST',
       url: '/api/signup',
@@ -496,20 +500,21 @@ describe('POST /api/signup', () => {
     expect(refs[0]?.agentUserId).toBe(agentId);
   });
 
-  it('incompatible role (screenhost_agent ↔ advertiser) → 201, no link, agent_code stored', async () => {
+  it('AGENT-V1: incompatible role (screenhost_agent ↔ advertiser) → 409, NO account created', async () => {
     await seedAgent('screenhost_agent', 'HOSTONLY');
     const res = await app.inject({
       method: 'POST',
       url: '/api/signup',
       payload: await fullProfile({ profile_type: 'advertiser', agent_toodooh: 'HOSTONLY' }),
     });
-    expect(res.statusCode).toBe(201);
-    expect(await referralsFor('owner@example.com')).toHaveLength(0);
-    const [u] = await db.select().from(users).where(eq(users.email, 'owner@example.com'));
-    expect(u?.agentCode).toBe('HOSTONLY'); // raw entry still stored for admin follow-up
+    expect(res.statusCode).toBe(409);
+    expect(res.json<{ error: string }>().error).toBe('AGENT_CODE_INCOMPATIBLE');
+    expect(await db.select().from(users).where(eq(users.email, 'owner@example.com'))).toHaveLength(
+      0,
+    );
   });
 
-  it('unknown code → 201, no link, agent_code stored', async () => {
+  it('AGENT-V1: unknown code → 409 AGENT_CODE_UNKNOWN, NO account created (was: 201, stored unlinked)', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/signup',
@@ -517,10 +522,24 @@ describe('POST /api/signup', () => {
         await fullProfile({ profile_type: 'individual_owner', agent_toodooh: 'NOSUCH99' }),
       ),
     });
+    expect(res.statusCode).toBe(409);
+    expect(res.json<{ error: string }>().error).toBe('AGENT_CODE_UNKNOWN');
+    expect(await db.select().from(users).where(eq(users.email, 'owner@example.com'))).toHaveLength(
+      0,
+    );
+  });
+
+  it('AGENT-V1: the code is matched case- and space-insensitively, like the web normalises it', async () => {
+    await seedAgent('screenhost_agent', 'SH123456');
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      ...signupMultipart(
+        await fullProfile({ profile_type: 'individual_owner', agent_toodooh: ' sh 123456 ' }),
+      ),
+    });
     expect(res.statusCode).toBe(201);
-    expect(await referralsFor('owner@example.com')).toHaveLength(0);
-    const [u] = await db.select().from(users).where(eq(users.email, 'owner@example.com'));
-    expect(u?.agentCode).toBe('NOSUCH99');
+    expect(await referralsFor('owner@example.com')).toHaveLength(1);
   });
 
   it('absent agent_toodooh → no lookup, no link', async () => {

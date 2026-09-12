@@ -1017,7 +1017,7 @@ export default function UserManagement() {
                       onChange={() => toggleRejectTopic('legal')}
                       className="h-4 w-4 rounded border-gray-300 text-brand-primary focus:ring-brand-primary"
                     />
-                    Documents légaux (RNE / CIN)
+                    Documents légaux (RNE)
                   </label>
                   <label className="flex items-center gap-2 text-sm text-gray-700">
                     <input

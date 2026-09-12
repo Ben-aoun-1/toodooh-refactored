@@ -14,6 +14,7 @@ import { adminScreenhostsRoutes } from './admin-screenhosts.js';
 import { adminTestingRoutes } from './admin-testing.js';
 import { adminWalletRoutes } from './admin-wallet.js';
 import { adminRoutes } from './admin.js';
+import { agentCodeAvailabilityRoute } from './agent-code-availability.js';
 import { agentRoutes } from './agent.js';
 import { campaignBoostRoutes } from './campaign-boost.js';
 import { campaignDispatchRoutes } from './campaign-dispatch.js';
@@ -51,6 +52,7 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   // Public, rate-limited signup-wizard email pre-check (QA-fix lane) — the limiter is
   // registered inside the plugin, so it scopes to that route only.
   await app.register(emailAvailabilityRoute);
+  await app.register(agentCodeAvailabilityRoute);
   // Public, rate-limited signup-wizard matricule-fiscal pre-check (Kais QA3) — same
   // encapsulated-limiter pattern; lets the wizard surface a duplicate tax number before the
   // last step instead of as a transient toast at submit.

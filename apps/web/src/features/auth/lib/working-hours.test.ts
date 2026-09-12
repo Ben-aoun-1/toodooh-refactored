@@ -9,7 +9,7 @@ import {
 } from './working-hours';
 
 // H1 (Mejri item 5) — the signup working-hours helpers: hour-granular single window
-// [open, close) mirroring the API pair rule; skip = empty payload (NULL columns server-side).
+// [open, close) mirroring the API pair rule. HOURS-M1: the pair is mandatory (no skip).
 
 describe('working-hours defaults + options', () => {
   it('prefills the ruled 08:00–22:00 default window', () => {
@@ -43,13 +43,9 @@ describe('isValidHoursWindow (mirrors the API rule: ints 0–23, open < close)',
   });
 });
 
-describe('hoursPayload (the « préciser plus tard » seam)', () => {
-  it('skip → an EMPTY payload (both columns stay NULL server-side)', () => {
-    expect(hoursPayload(true, 8, 22)).toEqual({});
-  });
-
-  it('captured → the full pair, 0 included', () => {
-    expect(hoursPayload(false, 8, 22)).toEqual({ opening_hour: 8, closing_hour: 22 });
-    expect(hoursPayload(false, 0, 23)).toEqual({ opening_hour: 0, closing_hour: 23 });
+describe('hoursPayload (HOURS-M1 — always the pair, no skip)', () => {
+  it('always sends the full pair, 0 included', () => {
+    expect(hoursPayload(8, 22)).toEqual({ opening_hour: 8, closing_hour: 22 });
+    expect(hoursPayload(0, 23)).toEqual({ opening_hour: 0, closing_hour: 23 });
   });
 });

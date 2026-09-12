@@ -153,14 +153,14 @@ export default function OwnerBankDetailsSlot({
           className="block text-sm font-medium text-gray-700 mb-1"
           htmlFor="bank-account-holder"
         >
-          Nom et prénom du titulaire <span className="text-red-500">*</span>
+          Nom du titulaire <span className="text-red-500">*</span>
         </label>
         <input
           type="text"
           value={bankForm.bank_account_holder}
           onChange={(e) => setBankForm((p) => ({ ...p, bank_account_holder: e.target.value }))}
           className={INPUT_CLASS}
-          placeholder="Nom et prénom"
+          placeholder="Nom du titulaire"
           id="bank-account-holder"
         />
       </div>

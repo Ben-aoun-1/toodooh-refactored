@@ -25,7 +25,7 @@ vi.mock('nodemailer', () => ({
 
 const buildApp = () => Fastify({ logger: false });
 
-const ownerBase = {
+const ownerBaseNoHours = {
   email: 'host@example.com',
   password: 'a-strong-passw0rd',
   contact_name: 'Test Host',
@@ -33,6 +33,9 @@ const ownerBase = {
   contact_phone: '+21612345678',
   terms_accepted: true as const,
 };
+// HOURS-M1: hours are mandatory for an individual_owner (fleet entries carry their own pair).
+const HOURS = { opening_hour: 8, closing_hour: 22 };
+const ownerBase = { ...ownerBaseNoHours, ...HOURS };
 
 describe('POST /api/signup — screenhost location persistence (P3)', () => {
   let app: ReturnType<typeof buildApp>;
@@ -158,6 +161,7 @@ describe('POST /api/signup — screenhost location persistence (P3)', () => {
         fleet_establishments: [
           {
             name: 'Café du Lac',
+            ...HOURS,
             screen_count: 3,
             address: '1 Av. du Lac',
             city: 'Tunis',
@@ -172,6 +176,7 @@ describe('POST /api/signup — screenhost location persistence (P3)', () => {
           },
           {
             name: 'Resto Centre',
+            ...HOURS,
             screen_count: 1,
             city: 'Sousse',
             // no coordinates / WiFi → "add later" → NULLs
@@ -243,17 +248,25 @@ describe('POST /api/signup — screenhost location persistence (P3)', () => {
     expect(rows[0]?.closingHour).toBe(22);
   });
 
-  it('individual_owner WITHOUT hours → both columns NULL (14h-fallback semantics preserved) (H1)', async () => {
+  it('HOURS-M1: individual_owner WITHOUT hours → 400, no user, no row (was: 201 with NULL columns)', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/signup',
-      ...signupMultipart({ ...ownerBase, profile_type: 'individual_owner' }),
+      ...signupMultipart({ ...ownerBaseNoHours, profile_type: 'individual_owner' }),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ error: string }>().error).toBe('INVALID_INPUT');
+    expect(await userIdByEmail(ownerBase.email)).toBe('');
+    expect(await db.select().from(screenhosts)).toHaveLength(0);
+  });
+
+  it('advertiser signup still needs no hours (the rule is owner-only)', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      payload: { ...ownerBaseNoHours, profile_type: 'advertiser' },
     });
     expect(res.statusCode).toBe(201);
-    const ownerId = await userIdByEmail(ownerBase.email);
-    const rows = await db.select().from(screenhosts).where(eq(screenhosts.ownerId, ownerId));
-    expect(rows[0]?.openingHour).toBeNull();
-    expect(rows[0]?.closingHour).toBeNull();
   });
 
   it('rejects an unordered, out-of-range or one-sided hours pair — 400, no user, no row (H1)', async () => {
@@ -267,7 +280,7 @@ describe('POST /api/signup — screenhost location persistence (P3)', () => {
       const res = await app.inject({
         method: 'POST',
         url: '/api/signup',
-        ...signupMultipart({ ...ownerBase, profile_type: 'individual_owner', ...hours }),
+        ...signupMultipart({ ...ownerBaseNoHours, profile_type: 'individual_owner', ...hours }),
       });
       expect(res.statusCode).toBe(400);
       expect(res.json<{ error: string }>().error).toBe('INVALID_INPUT');
@@ -276,7 +289,7 @@ describe('POST /api/signup — screenhost location persistence (P3)', () => {
     expect(await userIdByEmail(ownerBase.email)).toBe('');
   });
 
-  it('fleet_owner → hours are PER establishment; an entry without them stays NULL (H1)', async () => {
+  it('HOURS-M1: fleet_owner → hours are PER establishment and every entry must carry its pair', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/signup',
@@ -285,7 +298,7 @@ describe('POST /api/signup — screenhost location persistence (P3)', () => {
         profile_type: 'fleet_owner',
         fleet_establishments: [
           { name: 'Café du Lac', opening_hour: 6, closing_hour: 23 },
-          { name: 'Resto Centre' },
+          { name: 'Resto Centre', opening_hour: 10, closing_hour: 22 },
         ],
       }),
     });
@@ -297,8 +310,25 @@ describe('POST /api/signup — screenhost location persistence (P3)', () => {
     expect(cafe?.openingHour).toBe(6);
     expect(cafe?.closingHour).toBe(23);
     const resto = rows.find((r) => r.name === 'Resto Centre');
-    expect(resto?.openingHour).toBeNull();
-    expect(resto?.closingHour).toBeNull();
+    expect(resto?.openingHour).toBe(10);
+    expect(resto?.closingHour).toBe(22);
+
+    // An entry WITHOUT its pair → 400, nothing persisted (was: 201 with NULL columns).
+    const bad = await app.inject({
+      method: 'POST',
+      url: '/api/signup',
+      ...signupMultipart({
+        ...ownerBase,
+        email: 'host2@example.com',
+        profile_type: 'fleet_owner',
+        fleet_establishments: [
+          { name: 'Café du Lac', opening_hour: 6, closing_hour: 23 },
+          { name: 'Resto Centre' },
+        ],
+      }),
+    });
+    expect(bad.statusCode).toBe(400);
+    expect(await userIdByEmail('host2@example.com')).toBe('');
   });
 
   it('rejects an invalid pair inside fleet_establishments — 400, nothing persisted (H1)', async () => {
@@ -335,7 +365,7 @@ describe('POST /api/signup — screenhost location persistence (P3)', () => {
       ...signupMultipart({
         ...ownerBase,
         profile_type: 'fleet_owner',
-        fleet_establishments: [{ name: 'Sneaky Location' }],
+        fleet_establishments: [{ name: 'Sneaky Location', ...HOURS }],
       }),
     });
     expect(res2.statusCode).toBe(201); // generic, anti-enumeration

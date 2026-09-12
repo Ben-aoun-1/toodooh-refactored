@@ -16,6 +16,8 @@ import { supabase } from '@/lib/supabase';
 
 import { apiErrorMessage } from './auth-errors';
 
+export type AgentCodeVerdict = 'ok' | 'unknown' | 'incompatible';
+
 const log = logger.child({ module: 'auth.service' });
 
 export const authService = {
@@ -163,6 +165,25 @@ export const authService = {
         { tax_number: taxNumber },
       );
       return available;
+    } catch {
+      return null;
+    }
+  },
+
+  // AGENT-V1 (Mejri 09/09 point 2) — the wizard's step-1 agent-code pre-check, mirroring the two
+  // probes above. The verdict distinguishes « no such agent » from « agent of the other type » so
+  // the wizard can word the hint; `null` (429/network) fails OPEN — the signup submit's 409 is the
+  // server-side authority.
+  async checkAgentCodeAvailability(
+    agentCode: string,
+    profileType?: string,
+  ): Promise<AgentCodeVerdict | null> {
+    try {
+      const { verdict } = await apiClient.post<{ available: boolean; verdict: AgentCodeVerdict }>(
+        '/signup/agent-code-availability',
+        { agent_code: agentCode, ...(profileType ? { profile_type: profileType } : {}) },
+      );
+      return verdict;
     } catch {
       return null;
     }

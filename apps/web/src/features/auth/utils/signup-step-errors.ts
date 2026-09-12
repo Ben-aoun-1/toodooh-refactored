@@ -57,7 +57,6 @@ export interface StepErrorCtx {
   businessSectorId: string;
   etablissementScreens: string;
   etablissementRooms: string;
-  hoursLater: boolean;
   hoursValid: boolean;
   businessName: string;
   companySize: string;
@@ -108,8 +107,8 @@ export const stepFieldErrors = (step: number, ctx: StepErrorCtx): StepErrors => 
       if (!ctx.businessSectorId) errors['businessSector'] = REQUIRED_FIELD_ERROR;
       if (!ctx.etablissementScreens) errors['screens'] = REQUIRED_FIELD_ERROR;
       requireText(errors, 'rooms', ctx.etablissementRooms);
-      // H1 — the hour selects only misvalidate on fermeture ≤ ouverture; « plus tard » bypasses.
-      if (!ctx.hoursLater && !ctx.hoursValid) errors['hours'] = HOURS_WINDOW_ERROR;
+      // H1 — the hour selects only misvalidate on fermeture ≤ ouverture. HOURS-M1: no bypass.
+      if (!ctx.hoursValid) errors['hours'] = HOURS_WINDOW_ERROR;
       return errors;
     }
     requireText(errors, 'businessName', ctx.businessName);

@@ -98,6 +98,9 @@ interface OwnerNavigationProps {
   isDisabled?: boolean;
 }
 
+// NAV-1 (Mejri 09/09, operator 2026-09-12): while the account is pending, every entry is disabled
+// EXCEPT the Dashboard — the owner must always be able to get back to the page that shows the
+// status and the « pour bien commencer » block.
 export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationProps = {}) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -219,11 +222,11 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
                       navigate(item.href);
                       setSidebarOpen(false);
                     }}
-                    disabled={isDisabled}
+                    disabled={isDisabled && item.href !== '/owner-dashboard'}
                     className={`w-full min-h-9 h-auto flex items-start px-3 py-2 gap-3 rounded-lg text-sm font-medium transition-colors tracking-[-0.006em] ${
                       active
                         ? 'bg-[#E4F9EB] text-[#132B1B]'
-                        : isDisabled
+                        : isDisabled && item.href !== '/owner-dashboard'
                           ? 'text-[#5C5C5C] opacity-50 cursor-not-allowed'
                           : 'text-[#5C5C5C] hover:bg-gray-100/80'
                     }`}
@@ -347,7 +350,7 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
                 <button
                   key={item.name}
                   onClick={() => navigate(item.href)}
-                  disabled={isDisabled}
+                  disabled={isDisabled && item.href !== '/owner-dashboard'}
                   title={!sidebarExpanded ? item.name : undefined}
                   className={`min-h-9 h-auto flex rounded-lg text-sm font-medium transition-colors tracking-[-0.006em] ${
                     sidebarExpanded
@@ -356,7 +359,7 @@ export default function OwnerNavigation({ isDisabled = false }: OwnerNavigationP
                   } ${
                     active
                       ? 'bg-[#E4F9EB] text-[#132B1B]'
-                      : isDisabled
+                      : isDisabled && item.href !== '/owner-dashboard'
                         ? 'text-[#5C5C5C] opacity-50 cursor-not-allowed'
                         : 'text-[#5C5C5C] hover:bg-gray-100/80'
                   }`}

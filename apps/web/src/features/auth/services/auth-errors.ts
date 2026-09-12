@@ -25,6 +25,12 @@ export function apiErrorMessage(err: unknown): string {
       return 'Veuillez vérifier votre adresse email avant de vous connecter. Consultez votre boîte mail (et le dossier spam).';
     case 'TAX_NUMBER_TAKEN':
       return 'Ce numéro de matricule fiscal est déjà enregistré.';
+    case 'EMAIL_TAKEN':
+      return 'Cette adresse e-mail a déjà un compte.';
+    case 'AGENT_CODE_UNKNOWN':
+      return 'Aucun agent ne correspond à ce code.';
+    case 'AGENT_CODE_INCOMPATIBLE':
+      return "Ce code appartient à un agent d'un autre type.";
     case 'INVALID_TOKEN':
       return 'Ce lien est invalide ou a expiré. Veuillez recommencer.';
     case 'PAYLOAD_TOO_LARGE':
