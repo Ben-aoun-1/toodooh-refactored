@@ -20,7 +20,8 @@ export type AdminNotificationType =
   | 'admin_campaign_pending'
   | 'admin_creative_pending'
   | 'admin_facture_deposited'
-  | 'admin_allocation_refused';
+  | 'admin_allocation_refused'
+  | 'admin_support_message';
 
 export interface AdminNotice {
   type: AdminNotificationType;

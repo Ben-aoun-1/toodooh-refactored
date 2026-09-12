@@ -11,6 +11,7 @@ import { adminPlatformStatsRoutes } from './admin-platform-stats.js';
 import { adminRechargesRoutes } from './admin-recharges.js';
 import { adminReconcileRoutes } from './admin-reconcile.js';
 import { adminScreenhostsRoutes } from './admin-screenhosts.js';
+import { adminSupportRoutes } from './admin-support.js';
 import { adminTestingRoutes } from './admin-testing.js';
 import { adminWalletRoutes } from './admin-wallet.js';
 import { adminRoutes } from './admin.js';
@@ -42,6 +43,7 @@ import { screenhostsRoutes } from './screenhosts.js';
 import { screensRoutes } from './screens.js';
 import { signinRoutes } from './signin.js';
 import { signupRoute } from './signup.js';
+import { supportRoutes } from './support.js';
 import { taxAvailabilityRoute } from './tax-availability.js';
 import { walletDocumentsRoutes } from './wallet-documents.js';
 import { zonesRoutes } from './zones.js';
@@ -112,6 +114,9 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   // L-wallet — admin recharge moderation: the manual-payment queue + confirm (credits the balance,
   // idempotent) / reject (with a reason). The money-confirmation step of the offline top-up flow.
   await app.register(adminFacturesRoutes);
+  // SUP-1 — le support enfin enregistré : POST /api/support (tout rôle) + la file admin.
+  await app.register(supportRoutes);
+  await app.register(adminSupportRoutes);
   await app.register(adminRechargesRoutes);
   // FCT2 — the admin wallet adjustment (signed, audited, reason-required) + its audit trail.
   await app.register(adminWalletRoutes);
