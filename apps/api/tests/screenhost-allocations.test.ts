@@ -76,6 +76,12 @@ const CRENEAUX: DispatchCreneau[] = [{ date: '2024-01-01', hour: 12, reps: 100, 
 // zones survive resetAuthTables (no users FK), and db.test/reference.test pin EXACT seed counts —
 // so seeded rows are tracked and deleted in afterEach (links first, FK order), and names carry a
 // per-run random tag so a crashed run can never collide with the canonical seeds.
+// B-ACC1 — Tunis calendar days for the live/expired windows (the route compares on Tunis « today »).
+const tunisIso = (d: Date): string =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Tunis' }).format(d);
+const daysFromNow = (days: number): string => tunisIso(new Date(Date.now() + days * 86_400_000));
+const LIVE_WINDOW = { start: daysFromNow(0), end: daysFromNow(30) };
+
 const seededSectorIds: string[] = [];
 const seededZoneIds: string[] = [];
 const seedAllocation = async (
@@ -83,7 +89,7 @@ const seedAllocation = async (
   opts: {
     statut?: 'EN_ATTENTE' | 'ACCEPTE' | 'REFUSE';
     campaignName?: string;
-    campaignStatus?: 'upcoming' | 'active';
+    campaignStatus?: 'pending' | 'upcoming' | 'active' | 'completed' | 'rejected' | 'draft';
     window?: { start: string; end: string };
     creative?: { kind: 'video' | 'photo'; duration: number | null; bytes?: Buffer };
     categoryNames?: string[];
@@ -105,8 +111,10 @@ const seedAllocation = async (
       name: opts.campaignName ?? 'Campagne Alloc',
       campaignType: 'standard',
       status: opts.campaignStatus ?? 'active',
-      startDate: opts.window?.start ?? '2024-01-01',
-      endDate: opts.window?.end ?? '2024-01-31',
+      // B-ACC1 — the default window is LIVE (Tunis today → +30 days): the decision queue no longer
+      // lists proposals whose campaign has already ended, so a fixed 2024 window would vanish.
+      startDate: opts.window?.start ?? LIVE_WINDOW.start,
+      endDate: opts.window?.end ?? LIVE_WINDOW.end,
     })
     .returning();
   const [plan] = await db
@@ -261,6 +269,39 @@ describe('screenhost dispatch allocation accept/reject (owner-scoped, real Postg
     expect(body).toHaveLength(1);
     expect(body[0]?.id).toBe(pending.allocationId);
     expect(body[0]?.campaign_name).toBe('Pending Mine');
+  });
+
+  // B-ACC1 (Mejri/Kais QA) — « Campagnes à valider » still offered proposals whose campaign was
+  // expired (end_date < today) or settled: the queue filtered on statut_acceptation alone.
+  it('B-ACC1: an EN_ATTENTE proposal on an EXPIRED or SETTLED campaign leaves the queue; a live one stays', async () => {
+    const me = await seedUser();
+    const live = await seedAllocation(me, { campaignName: 'Live active' });
+    const upcoming = await seedAllocation(me, {
+      campaignName: 'Live upcoming',
+      campaignStatus: 'upcoming',
+      window: { start: daysFromNow(3), end: daysFromNow(10) },
+    });
+    const endsToday = await seedAllocation(me, {
+      campaignName: 'Ends today',
+      window: { start: daysFromNow(-5), end: daysFromNow(0) },
+    });
+    await seedAllocation(me, {
+      campaignName: 'Expired yesterday',
+      window: { start: daysFromNow(-20), end: daysFromNow(-1) },
+    });
+    await seedAllocation(me, { campaignName: 'Completed', campaignStatus: 'completed' });
+    await seedAllocation(me, { campaignName: 'Rejected', campaignStatus: 'rejected' });
+    await seedAllocation(me, { campaignName: 'Draft', campaignStatus: 'draft' });
+    mockSession(me);
+
+    const res = await app.inject({ method: 'GET', url: '/api/screenhosts/allocations' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as Array<{ id: string; campaign_name: string }>;
+    expect(body.map((r) => r.id).sort()).toEqual(
+      [live.allocationId, upcoming.allocationId, endsToday.allocationId].sort(),
+    );
+    expect(body.map((r) => r.campaign_name)).not.toContain('Expired yesterday');
+    expect(body.map((r) => r.campaign_name)).not.toContain('Completed');
   });
 
   it('list requires authentication (401)', async () => {

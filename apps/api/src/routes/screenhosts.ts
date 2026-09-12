@@ -1932,6 +1932,9 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
   // a subselect of the caller's screenhosts, so a cross-owner allocation id can never be written —
   // a foreign/missing id is an indistinguishable 404. The list read mirrors the same scoping.
 
+  // B-ACC1 — the campaign statuses whose EN_ATTENTE proposals are still worth a decision.
+  const DECIDABLE_CAMPAIGN_STATUSES = ['pending', 'upcoming', 'active'] as const;
+
   // GET /api/screenhosts/allocations — the owner's EN_ATTENTE allocations awaiting their decision,
   // joined to campaign (name/window) + screenhost (name) for the accept/reject surface. Newest first.
   // CF-O1 (spec §2.2) — the owner decides on the FULL proposal, so each row also carries
@@ -1976,6 +1979,13 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         and(
           eq(screenhosts.ownerId, userId),
           eq(campaignDispatchAllocation.statutAcceptation, 'EN_ATTENTE'),
+          // B-ACC1 (Mejri/Kais QA) — a proposal is DECIDABLE only while its campaign can still
+          // air: status in the live set AND not yet past its end date (Tunis calendar day). An
+          // EN_ATTENTE row on an expired, completed or rejected campaign stayed listed forever, so
+          // « Campagnes à valider » offered acceptances nobody could honour. The row itself is left
+          // as is (no state change here): it simply leaves the decision queue.
+          inArray(campaigns.status, DECIDABLE_CAMPAIGN_STATUSES),
+          gte(campaigns.endDate, tunisDateOf(new Date())),
         ),
       )
       .orderBy(desc(campaignDispatchAllocation.createdAt));
