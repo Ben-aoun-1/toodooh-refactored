@@ -353,7 +353,8 @@ export default function MyRecharges() {
                                 : 'text-gray-900'
                         }`}
                       >
-                        {tx.amountTnd < 0 ? '-' : '+'}
+                        {/* MINOR-1/27 — a fully-refunded settlement is 0: no sign on 0. */}
+                        {tx.amountTnd < 0 ? '-' : tx.amountTnd > 0 ? '+' : ''}
                         {htTtcLabel(Math.abs(tx.amountTnd))}
                       </span>
                     </td>

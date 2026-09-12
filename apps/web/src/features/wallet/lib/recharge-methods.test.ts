@@ -92,7 +92,7 @@ describe('parseRechargeAmount (the 500 TND floor + centime precision)', () => {
 
   it('pins the French copy + the floor value', () => {
     expect(MIN_RECHARGE_TND).toBe(500);
-    expect(AMOUNT_MIN_ERROR).toBe('Le montant minimum est de 500 TND');
+    expect(AMOUNT_MIN_ERROR).toBe('Le montant minimum est de 500 TND HT (595 TND TTC)');
     expect(JUSTIFICATIF_REQUIRED_ERROR).toBe('Le justificatif de virement est obligatoire.');
   });
 });

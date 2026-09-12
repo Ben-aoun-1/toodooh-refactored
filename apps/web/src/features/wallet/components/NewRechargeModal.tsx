@@ -17,6 +17,7 @@ import {
   bankCoordsProvided,
   parseRechargeAmount,
 } from '@/features/wallet/lib/recharge-methods';
+import { htTtcLabel } from '@/lib/money';
 
 interface NewRechargeModalProps {
   /** Preset by the quick-recharge buttons; '' for a blank form. */
@@ -145,7 +146,9 @@ export default function NewRechargeModal({
                 required
                 id="amount"
               />
-              <p className="text-xs text-gray-400 mt-1">Montant minimum : {MIN_RECHARGE_TND} TND</p>
+              <p className="text-xs text-gray-400 mt-1">
+                Montant minimum : {htTtcLabel(MIN_RECHARGE_TND)}
+              </p>
             </div>
             <div className="flex gap-3">
               <button
@@ -168,7 +171,9 @@ export default function NewRechargeModal({
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
               <span className="text-sm font-medium text-gray-700">Montant</span>
-              <span className="text-sm font-semibold text-gray-900">{amount} TND</span>
+              <span className="text-sm font-semibold text-gray-900">
+                {parsedAmount === null ? `${amount} TND` : htTtcLabel(parsedAmount)}
+              </span>
             </div>
 
             {/* The TWO methods — virement bancaire and bon de commande, nothing else. */}

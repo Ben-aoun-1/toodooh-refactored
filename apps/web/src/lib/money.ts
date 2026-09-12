@@ -2,7 +2,8 @@
  * CF-U1 — the ONE home of advertiser-facing money formatting (Mejri item 6): every displayed
  * montant carries its TTC in parentheses — « 1 000 TND HT (1 190 TND TTC) » — and the 19% TVA
  * lives HERE and nowhere else. fr-FR grouping (narrow no-break spaces), at most 2 decimals,
- * TTC rounded to the centime. Owner-side revenue surfaces are out of scope (they stay plain).
+ * TTC rounded to the centime. Owner-side revenue surfaces stay plain (facture-view's formatTnd),
+ * except the « Revenu actuel » banner, which marks its HT figure with the TTC (MINOR-1/27).
  */
 
 /** TVA (Tunisie) — the ONLY place the 19% rate lives. */
