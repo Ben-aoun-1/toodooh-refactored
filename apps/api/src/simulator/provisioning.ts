@@ -32,9 +32,35 @@ const withMaintenance = async <T>(fn: (admin: postgres.Sql) => Promise<T>): Prom
   }
 };
 
+// CREATE DATABASE copies template1 and refuses (55006 object_in_use, « is being accessed by
+// other users ») while another backend is mid-copy from the same template. Two admins clicking
+// « Créer » at once — or two vitest workers — must not turn that race into a « failed » row: the
+// creates serialise behind ONE server-wide advisory lock, and the object_in_use case retries.
+const CREATE_DB_LOCK_KEY = 7400710;
+const CREATE_RETRIES = 5;
+const CREATE_RETRY_MS = 250;
+
+const isObjectInUse = (err: unknown): boolean =>
+  err instanceof Error && 'code' in err && err.code === '55006';
+
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
 export const createSandboxDatabase = (dbName: string): Promise<void> =>
   withMaintenance(async (admin) => {
-    await admin.unsafe(`CREATE DATABASE ${quoteIdent(dbName)}`);
+    await admin`SELECT pg_advisory_lock(${CREATE_DB_LOCK_KEY})`;
+    try {
+      for (let attempt = 1; ; attempt += 1) {
+        try {
+          await admin.unsafe(`CREATE DATABASE ${quoteIdent(dbName)}`);
+          return;
+        } catch (err) {
+          if (!isObjectInUse(err) || attempt >= CREATE_RETRIES) throw err;
+          await sleep(CREATE_RETRY_MS * attempt);
+        }
+      }
+    } finally {
+      await admin`SELECT pg_advisory_unlock(${CREATE_DB_LOCK_KEY})`;
+    }
   });
 
 export const dropSandboxDatabase = (dbName: string): Promise<void> =>

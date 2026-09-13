@@ -1,5 +1,4 @@
 import { sql } from 'drizzle-orm';
-import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { db } from '../src/db/client.js';
@@ -7,17 +6,12 @@ import { applyMigrations } from '../src/db/migrate-runner.js';
 import { screenhosts } from '../src/db/schema.js';
 import { env } from '../src/env.js';
 import { currentSandbox, runInSandbox } from '../src/simulator/context.js';
-import {
-  mainDatabaseName,
-  maintenanceUrl,
-  quoteIdent,
-  sandboxDatabaseName,
-  sandboxUrl,
-} from '../src/simulator/naming.js';
+import { mainDatabaseName, sandboxDatabaseName, sandboxUrl } from '../src/simulator/naming.js';
 import { closeAllSandboxes, sandboxHandleFor } from '../src/simulator/pools.js';
+import { createSandboxDatabase, dropSandboxDatabase } from '../src/simulator/provisioning.js';
 
-// SIM-0 — the routed `db` handle. The sandbox database is built BY HAND here (naming +
-// applyMigrations) so this file pins routing alone, independent of the provisioning module.
+// SIM-0 — the routed `db` handle. The sandbox database is built from the primitives here
+// (create + applyMigrations) so this file pins routing alone, independent of provisionSimulation.
 
 const SIM_ID = '00000000-0000-4000-8000-000000000001';
 const dbName = sandboxDatabaseName(mainDatabaseName(env.DATABASE_URL));
@@ -37,23 +31,13 @@ const currentDatabase = async (): Promise<string | undefined> => {
 
 describe('routed db handle (SIM-0)', () => {
   beforeAll(async () => {
-    const admin = postgres(maintenanceUrl(env.DATABASE_URL), { max: 1 });
-    try {
-      await admin.unsafe(`CREATE DATABASE ${quoteIdent(dbName)}`);
-    } finally {
-      await admin.end();
-    }
+    await createSandboxDatabase(dbName);
     await applyMigrations(sandboxUrl(env.DATABASE_URL, dbName));
   }, 120_000);
 
   afterAll(async () => {
     await closeAllSandboxes();
-    const admin = postgres(maintenanceUrl(env.DATABASE_URL), { max: 1 });
-    try {
-      await admin.unsafe(`DROP DATABASE IF EXISTS ${quoteIdent(dbName)} WITH (FORCE)`);
-    } finally {
-      await admin.end();
-    }
+    await dropSandboxDatabase(dbName);
   }, 60_000);
 
   it('resolves to main outside any context', async () => {

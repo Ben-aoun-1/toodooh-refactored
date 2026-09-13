@@ -52,6 +52,9 @@ const rowById = async (id: string) => {
   return row;
 };
 
+// Timeouts are 120 s on purpose: DROP DATABASE forces a checkpoint, and under the full parallel
+// suite a checkpoint on the docker volume can stall for tens of seconds (measured 2026-09-13 via
+// pg_stat_activity: IPC / CheckpointDone). Alone, the whole file runs in a few seconds.
 describe('sandbox provisioning + orphan sweep (SIM-0)', () => {
   beforeAll(async () => {
     adminId = await seedAdmin();
@@ -91,7 +94,7 @@ describe('sandbox provisioning + orphan sweep (SIM-0)', () => {
     expect(after?.error).toMatch(/already exists/);
     // The failure path drops best-effort — the pre-existing database is gone too.
     expect(await listSandboxDatabases()).not.toContain(dbName);
-  }, 60_000);
+  }, 120_000);
 
   it('sweepOrphans drops a prefixed database with no row and fails a row with no database', async () => {
     const orphan = sandboxDatabaseName(main);
@@ -127,5 +130,5 @@ describe('sandbox provisioning + orphan sweep (SIM-0)', () => {
     expect(after?.error).toBe('database missing');
     // A row still creating is the background task's — never touched by the sweep.
     expect((await rowById(creating?.id ?? ''))?.status).toBe('creating');
-  }, 60_000);
+  }, 120_000);
 });

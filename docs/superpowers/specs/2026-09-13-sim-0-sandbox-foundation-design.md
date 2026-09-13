@@ -123,8 +123,9 @@ registry row, and mark registry rows whose database does not exist as `failed` w
 New module `apps/api/src/simulator/context.ts`:
 
 - `const sandboxContext = new AsyncLocalStorage<{ simulationId: string; db: DrizzleDb; sql: Sql }>()`
-- `runInSandbox(store, fn)` (wraps `als.run`) and `enterSandbox(store)` (wraps `als.enterWith`,
-  used by the Fastify hook).
+- `runInSandbox(store, fn)` (wraps `als.run`). **Amendment (build, 2026-09-13):** no `enterWith`
+  helper — from an async Fastify preHandler it does not reach the handler (measured: the probe
+  counted main). The routing preHandler is CALLBACK-style and calls `done()` inside `runInSandbox`.
 - `sandboxHandleFor(simulation)`: a cache `Map<simulationId, { sql, db, lastUsed }>`; pools are
   `postgres(url, { max: 3, idle_timeout: 60, connect_timeout: 10 })`, url = `DATABASE_URL` with
   the pathname replaced by `db_name`. `evictSandbox(simulationId)` ends the pool and drops the
@@ -143,8 +144,9 @@ Fastify wiring, in `apps/api/src/routes/admin-simulations.ts`: routes under
 requireSimulator, enterSimulation]`. `enterSimulation` is LAST, so an unauthenticated or
 non-admin request never resolves a pool. It (a) loads the registry row from MAIN (no context
 exists yet), (b) 404 when absent, 409 `SIMULATION_NOT_READY` unless `status = ready`, (c)
-resolves the pool via `sandboxHandleFor`, (d) `enterSandbox(...)`, (e) touches `last_used_at`
-on main via `mainDb` explicitly (the only place that must bypass the proxy on purpose).
+resolves the pool via `sandboxHandleFor`, (d) touches `last_used_at` on main via `mainDb`
+explicitly (the one place that must bypass the proxy on purpose), (e) calls `done()` inside
+`runInSandbox(store, …)` so the handler runs within the store.
 Propagation from a preHandler into the handler is the pattern `@fastify/request-context` relies
 on, and it gets a dedicated test (§9) rather than trust.
 

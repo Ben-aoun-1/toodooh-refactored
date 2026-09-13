@@ -1,5 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 
+import { env } from '../env.js';
+
 import { adminAccountsRoutes } from './admin-accounts.js';
 import { adminCampaignsRoutes } from './admin-campaigns.js';
 import { adminCreativesRoutes } from './admin-creatives.js';
@@ -11,6 +13,7 @@ import { adminPlatformStatsRoutes } from './admin-platform-stats.js';
 import { adminRechargesRoutes } from './admin-recharges.js';
 import { adminReconcileRoutes } from './admin-reconcile.js';
 import { adminScreenhostsRoutes } from './admin-screenhosts.js';
+import { adminSimulationsRoutes } from './admin-simulations.js';
 import { adminSupportRoutes } from './admin-support.js';
 import { adminTestingRoutes } from './admin-testing.js';
 import { adminWalletRoutes } from './admin-wallet.js';
@@ -133,6 +136,11 @@ export const apiRoutes: FastifyPluginAsync = async (app) => {
   // ADM-SCR1 — the admin venue listing (« Localités et écrans »), off the new-engine tables.
   await app.register(adminScreenhostsRoutes);
   await app.register(adminTestingRoutes);
+  // SIM-0 — the admin « Simulateur » registry (sandbox databases + context-routed engines).
+  await app.register(adminSimulationsRoutes, {
+    enabled: env.SIMULATOR_ENABLED,
+    maxSandboxes: env.SIMULATOR_MAX_SANDBOXES,
+  });
   // L-redisp — admin reconciliation: value plan-promised vs proof-aired at clôture, settle the
   // screencaster wallet (the spend) + record screenhost earnings. Idempotent per campaign.
   await app.register(adminReconcileRoutes);
