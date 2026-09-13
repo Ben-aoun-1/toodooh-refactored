@@ -80,6 +80,12 @@ const EnvSchema = z.object({
   // WEDOOH_* pattern: unset, the feature is OFF — every report keeps the generic pistes and boot
   // logs ONE warning. The operator provisions the real key in /srv/toodooh/.env at switch-on.
   ANTHROPIC_API_KEY: z.string().min(16).optional(),
+  // SIM-0 — the admin « Simulateur ». OPTIONAL by design (the WEDOOH_* posture: eager parse must
+  // never fail-fast an entrypoint). Off → every /api/admin/simulations/* answers 503
+  // SIMULATOR_DISABLED and the boot orphan sweep does not run. MAX bounds the number of sandbox
+  // DATABASES on the server (each holds a small pool; see simulator/pools.ts).
+  SIMULATOR_ENABLED: z.stringbool().default(false),
+  SIMULATOR_MAX_SANDBOXES: z.coerce.number().int().min(1).max(20).default(5),
 });
 
 export type Env = z.infer<typeof EnvSchema> & {

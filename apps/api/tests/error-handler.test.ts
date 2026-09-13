@@ -27,6 +27,8 @@ const buildApp = (nodeEnv: 'development' | 'production') => {
       STORAGE_SECRET_KEY: 'minioadmin',
       STORAGE_BUCKET: 'toodooh-documents',
       STORAGE_REGION: 'us-east-1',
+      SIMULATOR_ENABLED: false,
+      SIMULATOR_MAX_SANDBOXES: 5,
     }),
   );
   app.setNotFoundHandler(buildNotFoundHandler());

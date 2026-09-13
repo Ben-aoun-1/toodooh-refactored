@@ -130,20 +130,13 @@ New module `apps/api/src/simulator/context.ts`:
   the pathname replaced by `db_name`. `evictSandbox(simulationId)` ends the pool and drops the
   entry. A `setInterval(…).unref()` every 5 minutes evicts entries idle for more than 15 minutes.
 
-`apps/api/src/db/client.ts` keeps building the real main handle (`mainSql`, `mainDb`) exactly as
-today, then exports:
-
-```ts
-export const db: DrizzleDb = routed(() => sandboxContext.getStore()?.db ?? mainDb);
-export const sql: Sql = routed(() => sandboxContext.getStore()?.sql ?? mainSql);
-```
-
-`routed(resolve)` is a `Proxy` whose `get` trap reads the property from `resolve()` and binds
-functions to that target; `apply`/`construct` are not needed because nothing calls `db` itself.
-The tagged-template form of `sql` (`` sql`select 1` ``) IS a call on the object — the `sql` proxy
-therefore uses an `apply` trap that forwards to `resolve()(...args)`, and `get` for `sql.unsafe`,
-`sql.end`, etc. Outside any context the resolved target is always `mainDb`/`mainSql`, so every
-existing import behaves as before; the `DrizzleDb` type is unchanged.
+`apps/api/src/db/client.ts` keeps building the real main handle (`sql`, `mainDb`) exactly as
+today, then exports `db` as a Proxy over `mainDb` whose `get` trap reads the property from
+`currentSandbox()?.db ?? mainDb` and binds functions to that target. Outside any context the
+resolved target is always `mainDb`, so every existing import behaves as before; the `DrizzleDb`
+type is unchanged. **Amendment (plan, 2026-09-13):** the raw `sql` export is NOT routed — its only
+consumer is `server.ts`'s `sql.end()` at shutdown; every raw statement in the codebase goes through
+drizzle's `sql` tag on `db.execute(...)`, which the routed `db` already covers.
 
 Fastify wiring, in `apps/api/src/routes/admin-simulations.ts`: routes under
 `/api/admin/simulations/:id/*` carry the preHandler chain `[requireAuth, requireAdmin,
@@ -203,7 +196,7 @@ Api (`apps/api/tests/`, real Postgres, per-worker database):
    second delete → 404; delete while `creating` → 409.
 2. `simulations-isolation.test.ts` — inside `runInSandbox` insert a screenhost via the routed
    `db`; outside, main counts 0 and inside counts 1; `db.transaction` opened inside the context
-   writes to the sandbox; a raw `` sql`…` `` inside the context hits the sandbox; the proxy
+   writes to the sandbox; a `db.execute(sql`…`)` inside the context hits the sandbox; the proxy
    outside any context resolves to the same target as `mainDb` (identity check on `$client`).
 3. `simulations-propagation.test.ts` — an `app.inject` on `:id/probe` proves the context set by
    the `enterSimulation` preHandler reaches the handler and its awaited queries (the probe
