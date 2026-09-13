@@ -12,7 +12,7 @@ vi.mock('@/lib/api-client', async () => {
 
 import { ApiError } from '@/lib/api-client';
 
-import { adminSimulatorService, isSimulatorDisabled } from './admin-simulator.service';
+import { adminSimulatorService, isNoWorld, isSimulatorDisabled } from './admin-simulator.service';
 
 describe('adminSimulatorService', () => {
   beforeEach(() => {
@@ -69,5 +69,34 @@ describe('adminSimulatorService', () => {
       isSimulatorDisabled(new ApiError({ status: 200, code: 'SIMULATOR_DISABLED', message: '' })),
     ).toBe(false);
     expect(isSimulatorDisabled(new Error('x'))).toBe(false);
+  });
+});
+
+// ── SIM-1 — the generated world ────────────────────────────────────────────────
+
+describe('adminSimulatorService — world (SIM-1)', () => {
+  beforeEach(() => {
+    getMock.mockReset();
+    postMock.mockReset();
+  });
+
+  it('world / venues / generateWorld hit the world routes', async () => {
+    getMock.mockResolvedValue({});
+    postMock.mockResolvedValue({});
+    await adminSimulatorService.world('s1');
+    await adminSimulatorService.venues('s1');
+    await adminSimulatorService.generateWorld('s1', { venues: 5, seed: 'abc' });
+    expect(getMock).toHaveBeenNthCalledWith(1, '/admin/simulations/s1/world');
+    expect(getMock).toHaveBeenNthCalledWith(2, '/admin/simulations/s1/world/venues');
+    expect(postMock).toHaveBeenCalledWith('/admin/simulations/s1/world', {
+      venues: 5,
+      seed: 'abc',
+    });
+  });
+
+  it('isNoWorld recognises the 404 NO_WORLD refusal only', () => {
+    expect(isNoWorld(new ApiError({ status: 404, code: 'NO_WORLD', message: '' }))).toBe(true);
+    expect(isNoWorld(new ApiError({ status: 404, code: 'NOT_FOUND', message: '' }))).toBe(false);
+    expect(isNoWorld(new Error('x'))).toBe(false);
   });
 });

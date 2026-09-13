@@ -4,12 +4,21 @@ import { Loader2 } from 'lucide-react';
 import { useState } from 'react';
 
 import {
+  useBoard,
   useDeleteSimulation,
   useSimulation,
   useSimulationProbe,
+  useWorld,
+  useWorldVenues,
 } from '@/features/admin/hooks/useAdminSimulator';
 
+import { CampaignsPanel } from './CampaignsPanel';
+import { ClockBar } from './ClockBar';
+import { GenerateWorldForm } from './GenerateWorldForm';
 import { SimulationStatusBadge } from './SimulationStatusBadge';
+import { SimulatorBoard } from './SimulatorBoard';
+import { VenuesTable } from './VenuesTable';
+import { WorldCard } from './WorldCard';
 
 interface Props {
   id: string;
@@ -20,8 +29,14 @@ export function SimulationDetail({ id, onDeleted }: Props) {
   const sim = useSimulation(id);
   const ready = sim.data?.status === 'ready';
   const probe = useSimulationProbe(id, ready);
+  const world = useWorld(id, ready);
+  const hasWorld = Boolean(world.data);
+  const venues = useWorldVenues(id, hasWorld);
+  const [live, setLive] = useState(false);
+  const board = useBoard(id, hasWorld, live);
   const del = useDeleteSimulation();
   const [confirming, setConfirming] = useState(false);
+  const [showVenues, setShowVenues] = useState(false);
 
   if (sim.isLoading) return <Loader2 className="h-5 w-5 animate-spin text-gray-400" />;
   if (!sim.data) return <p className="text-sm text-red-600">Simulation introuvable.</p>;
@@ -76,6 +91,8 @@ export function SimulationDetail({ id, onDeleted }: Props) {
       {ready && probe.isError && (
         <p className="text-sm text-red-600">Impossible de lire la base de la simulation.</p>
       )}
+      {ready && !hasWorld && !world.isLoading && <GenerateWorldForm simulationId={id} />}
+
       <div className="flex flex-wrap items-center gap-2">
         {!confirming ? (
           <button
@@ -108,6 +125,29 @@ export function SimulationDetail({ id, onDeleted }: Props) {
         )}
         {del.isError && <span className="text-sm text-red-600">Suppression impossible.</span>}
       </div>
+
+      {world.data && <WorldCard world={world.data} />}
+
+      {hasWorld && (
+        <>
+          <ClockBar simulationId={id} board={board.data} live={live} onLiveChange={setLive} />
+          {board.data && <SimulatorBoard simulationId={id} board={board.data} />}
+          {board.data && <CampaignsPanel simulationId={id} campaigns={board.data.campaigns} />}
+        </>
+      )}
+
+      {venues.data && venues.data.venues.length > 0 && (
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => setShowVenues((v) => !v)}
+            className="text-sm text-gray-600 underline"
+          >
+            {showVenues ? 'Masquer' : 'Voir'} la fiche des établissements
+          </button>
+          {showVenues && <VenuesTable venues={venues.data.venues} />}
+        </div>
+      )}
     </section>
   );
 }

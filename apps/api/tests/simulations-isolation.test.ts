@@ -35,12 +35,12 @@ describe('routed db handle (SIM-0)', () => {
   beforeAll(async () => {
     await createSandboxDatabase(dbName);
     await applyMigrations(sandboxUrl(env.DATABASE_URL, dbName));
-  }, 180_000);
+  }, 300_000);
 
   afterAll(async () => {
     await closeAllSandboxes();
     await dropSandboxDatabase(dbName);
-  }, 180_000);
+  }, 300_000);
 
   it('resolves to main outside any context', async () => {
     expect(currentSandbox()).toBeUndefined();
