@@ -123,7 +123,7 @@ describe('admin simulations lifecycle (SIM-0)', () => {
       url: `/api/admin/simulations/${created.id}`,
     });
     expect(again.statusCode).toBe(404);
-  }, 120_000);
+  }, 300_000);
 
   it('refuses to delete a simulation still creating (409 SIMULATION_BUSY)', async () => {
     mockSession(adminId);

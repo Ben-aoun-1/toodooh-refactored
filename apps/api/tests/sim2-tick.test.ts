@@ -198,10 +198,8 @@ describe('SIM-2 the tick (real engines on virtual time)', () => {
     expect(state.campaigns).toHaveLength(1);
     expect(state.campaigns[0]?.accepted).toBeGreaterThan(0);
     expect(state.clock.date).toBe('2026-04-10');
-    const airing = state.venues.filter((v) => v.airing.length > 0);
-    expect(airing.length + state.venues.filter((v) => v.proofs_today > 0).length).toBeGreaterThan(
-      0,
-    );
+    // The campaign's total diffusions since launch — a stable fact, unlike « this very hour ».
+    expect(state.campaigns[0]?.proofs).toBeGreaterThan(0);
   }, 120_000);
 
   it('when the window closes the campaign completes and the REAL reconciliation settles it', async () => {

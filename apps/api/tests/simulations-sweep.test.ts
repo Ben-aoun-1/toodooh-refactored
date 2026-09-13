@@ -52,9 +52,11 @@ const rowById = async (id: string) => {
   return row;
 };
 
-// Timeouts are 120 s on purpose: DROP DATABASE forces a checkpoint, and under the full parallel
-// suite a checkpoint on the docker volume can stall for tens of seconds (measured 2026-09-13 via
-// pg_stat_activity: IPC / CheckpointDone). Alone, the whole file runs in a few seconds.
+// Timeouts are 300 s on purpose. Alone this file runs in a few seconds; under the FULL parallel
+// suite it competes with every other simulator file for the same server, where CREATE DATABASE
+// serialises behind one advisory lock and DROP DATABASE forces a checkpoint that can stall for
+// tens of seconds (measured 2026-09-13 via pg_stat_activity: IPC / CheckpointDone). The budget
+// buys contention, never correctness — a real failure still fails, just later.
 describe('sandbox provisioning + orphan sweep (SIM-0)', () => {
   beforeAll(async () => {
     adminId = await seedAdmin();
@@ -76,7 +78,7 @@ describe('sandbox provisioning + orphan sweep (SIM-0)', () => {
     expect(after?.status).toBe('ready');
     expect(after?.error).toBeNull();
     expect(await listSandboxDatabases()).toContain(dbName);
-  }, 120_000);
+  }, 300_000);
 
   it('provisionSimulation marks failed (and leaves no database) when creation fails', async () => {
     // Deterministic failure: the database already exists, so CREATE DATABASE refuses. (An
@@ -94,7 +96,7 @@ describe('sandbox provisioning + orphan sweep (SIM-0)', () => {
     expect(after?.error).toMatch(/already exists/);
     // The failure path drops best-effort — the pre-existing database is gone too.
     expect(await listSandboxDatabases()).not.toContain(dbName);
-  }, 120_000);
+  }, 300_000);
 
   it('sweepOrphans drops a prefixed database with no row and fails a row with no database', async () => {
     const orphan = sandboxDatabaseName(main);
@@ -130,5 +132,5 @@ describe('sandbox provisioning + orphan sweep (SIM-0)', () => {
     expect(after?.error).toBe('database missing');
     // A row still creating is the background task's — never touched by the sweep.
     expect((await rowById(creating?.id ?? ''))?.status).toBe('creating');
-  }, 120_000);
+  }, 300_000);
 });

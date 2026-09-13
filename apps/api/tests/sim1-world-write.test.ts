@@ -82,13 +82,13 @@ describe('SIM-1 writeWorld (real sandbox)', () => {
       virtualToday: VIRTUAL_TODAY,
     });
     counts = await inSandbox(() => writeWorld(spec, { simulationId }));
-  }, 180_000);
+  }, 300_000);
 
   afterAll(async () => {
     await closeAllSandboxes();
     await dropSandboxDatabase(dbName);
     await mainDb.delete(simulations).where(eq(simulations.id, simulationId));
-  }, 180_000);
+  }, 300_000);
 
   it('reports the sandbox non-empty afterwards (the generator refuses to run twice)', async () => {
     expect(await inSandbox(() => sandboxIsEmpty())).toBe(false);

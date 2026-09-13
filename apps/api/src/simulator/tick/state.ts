@@ -1,3 +1,4 @@
+import { fromZonedTime } from 'date-fns-tz';
 import { and, eq, gte, inArray, sql } from 'drizzle-orm';
 
 import { db } from '../../db/client.js';
@@ -14,7 +15,7 @@ import {
 } from '../../db/schema.js';
 import { isOpenAt } from '../../lib/opening-hours.js';
 
-import { type VirtualMoment, advance, momentOf } from './clock.js';
+import { TZ, type VirtualMoment, advance, momentOf } from './clock.js';
 
 // SIM-3 — everything the living-world board renders, in ONE read: where the clock is, which
 // screens are lit, what each venue is playing this very hour, what its sensors just measured,
@@ -137,22 +138,20 @@ export const simulationState = async (moment: VirtualMoment): Promise<Simulation
     .innerJoin(campaignDispatchPlan, eq(campaignDispatchPlan.id, campaignDispatchAllocation.planId))
     .innerJoin(campaigns, eq(campaigns.id, campaignDispatchPlan.campaignId));
 
-  const dayStart = new Date(`${moment.date}T00:00:00Z`);
-  const proofRows = await db
-    .select({
-      screenhostId: proofOfPlay.screenhostId,
-      campaignId: proofOfPlay.campaignId,
-      n: sql<number>`count(*)::int`,
-    })
+  // Two different questions: a venue shows TODAY's diffusions (the Tunis day, not a UTC one — an
+  // 01h spot belongs to the night that is still running), a campaign shows its total since launch.
+  const dayStart = fromZonedTime(`${moment.date}T00:00:00`, TZ);
+  const venueProofRows = await db
+    .select({ screenhostId: proofOfPlay.screenhostId, n: sql<number>`count(*)::int` })
     .from(proofOfPlay)
     .where(gte(proofOfPlay.receivedAt, dayStart))
-    .groupBy(proofOfPlay.screenhostId, proofOfPlay.campaignId);
-  const proofsByVenue = new Map<string, number>();
-  const proofsByCampaign = new Map<string, number>();
-  for (const row of proofRows) {
-    proofsByVenue.set(row.screenhostId, (proofsByVenue.get(row.screenhostId) ?? 0) + row.n);
-    proofsByCampaign.set(row.campaignId, (proofsByCampaign.get(row.campaignId) ?? 0) + row.n);
-  }
+    .groupBy(proofOfPlay.screenhostId);
+  const campaignProofRows = await db
+    .select({ campaignId: proofOfPlay.campaignId, n: sql<number>`count(*)::int` })
+    .from(proofOfPlay)
+    .groupBy(proofOfPlay.campaignId);
+  const proofsByVenue = new Map(venueProofRows.map((r) => [r.screenhostId, r.n]));
+  const proofsByCampaign = new Map(campaignProofRows.map((r) => [r.campaignId, r.n]));
 
   const venues: VenueState[] = venueRows.map((venue) => {
     const mine = allocationRows.filter((a) => a.screenhostId === venue.id);

@@ -83,14 +83,14 @@ describe('SIM-1 world endpoints', () => {
       .where(eq(simulations.id, simulationId));
     dbName = row?.dbName ?? '';
     vi.restoreAllMocks();
-  }, 180_000);
+  }, 300_000);
 
   afterEach(() => vi.restoreAllMocks());
   afterAll(async () => {
     await closeAllSandboxes();
     if (dbName) await dropSandboxDatabase(dbName);
     await mainDb.delete(simulations).where(eq(simulations.id, simulationId));
-  }, 180_000);
+  }, 300_000);
 
   it('404 NO_WORLD before anything is generated', async () => {
     mockSession(adminId);
@@ -142,7 +142,7 @@ describe('SIM-1 world endpoints', () => {
     expect(Object.values(world.by_class).reduce((a, b) => a + b, 0)).toBe(5);
     expect(Object.values(world.by_sector).reduce((a, b) => a + b, 0)).toBe(5);
     expect(world.wallet_total_tnd).toBeGreaterThan(0);
-  }, 120_000);
+  }, 300_000);
 
   it('the probe now counts the generated rows THROUGH the sandbox', async () => {
     mockSession(adminId);

@@ -65,14 +65,19 @@ export const runOwnerAnswers = async (input: {
         eq(campaignDispatchAllocation.statutAcceptation, 'EN_ATTENTE'),
         inArray(campaigns.status, ['pending', 'upcoming', 'active']),
       ),
-    );
+    )
+    .orderBy(campaignDispatchAllocation.screenhostId, campaignDispatchAllocation.id);
 
   const result: OwnerAnswers = { answered: 0, accepted: 0, refused: 0 };
+  let index = 0;
   for (const row of rows) {
+    index += 1;
     if (!row.ownerId) continue;
     const behaviour = input.behaviours.get(row.ownerId);
     if (!behaviour) continue;
-    const rng = createRng(`${input.seed}:${input.moment.at.toISOString()}:${row.allocationId}`);
+    // Seeded by POSITION, never by the allocation's id: ids are database-generated and random,
+    // and a world whose owners answer differently on a replay is not reproducible.
+    const rng = createRng(`${input.seed}:${input.moment.at.toISOString()}:${index}`);
     const answersNow = rng.next() < 1 / Math.max(1, behaviour.responseDelayHours);
     if (!answersNow) continue;
     const statut = rng.next() < behaviour.acceptanceRate ? 'ACCEPTE' : 'REFUSE';
@@ -104,14 +109,17 @@ export const runEventOwnerAnswers = async (input: {
     .select({ allocationId: eventAllocations.id, ownerId: screenhosts.ownerId })
     .from(eventAllocations)
     .innerJoin(screenhosts, eq(screenhosts.id, eventAllocations.screenhostId))
-    .where(eq(eventAllocations.statut, 'EN_ATTENTE'));
+    .where(eq(eventAllocations.statut, 'EN_ATTENTE'))
+    .orderBy(eventAllocations.screenhostId, eventAllocations.id);
 
   const result: OwnerAnswers = { answered: 0, accepted: 0, refused: 0 };
+  let index = 0;
   for (const row of rows) {
+    index += 1;
     if (!row.ownerId) continue;
     const behaviour = input.behaviours.get(row.ownerId);
     if (!behaviour) continue;
-    const rng = createRng(`${input.seed}:${input.moment.at.toISOString()}:evt:${row.allocationId}`);
+    const rng = createRng(`${input.seed}:${input.moment.at.toISOString()}:evt:${index}`);
     if (rng.next() >= 1 / Math.max(1, behaviour.responseDelayHours)) continue;
     const statut = rng.next() < behaviour.acceptanceRate ? 'ACCEPTE' : 'REFUSE';
     const outcome = await decideEventAllocation({
