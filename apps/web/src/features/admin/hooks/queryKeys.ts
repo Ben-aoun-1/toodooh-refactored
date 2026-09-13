@@ -24,6 +24,10 @@ export const adminKeys = {
   testingScreenhosts: () => [...adminKeys.all, 'testing', 'screenhosts'] as const,
   testingReport: (id: string, from: string, to: string) =>
     [...adminKeys.all, 'testing', 'report', id, from, to] as const,
+  // SIM-0 — the admin « Simulateur » registry.
+  simulations: () => [...adminKeys.all, 'simulations'] as const,
+  simulation: (id: string) => [...adminKeys.all, 'simulations', id] as const,
+  simulationProbe: (id: string) => [...adminKeys.all, 'simulations', id, 'probe'] as const,
 
   /** Paginated, filtered recharge list (`adminRechargesService.getRecharges`). */
   recharges: (status: string, search: string, page: number, perPage: number) =>
