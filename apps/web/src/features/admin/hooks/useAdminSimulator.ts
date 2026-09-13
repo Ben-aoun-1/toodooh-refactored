@@ -2,7 +2,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
   type CreateSimulationInput,
+  type GenerateWorldInput,
   adminSimulatorService,
+  isNoWorld,
 } from '@/features/admin/services/admin-simulator.service';
 
 import { adminKeys } from './queryKeys';
@@ -45,5 +47,37 @@ export function useDeleteSimulation() {
   return useMutation({
     mutationFn: (id: string) => adminSimulatorService.remove(id),
     onSuccess: () => void qc.invalidateQueries({ queryKey: adminKeys.simulations() }),
+  });
+}
+
+// ── SIM-1 — the generated world ────────────────────────────────────────────────
+
+export function useWorld(id: string | null, ready: boolean) {
+  return useQuery({
+    queryKey: adminKeys.world(id ?? ''),
+    queryFn: () => adminSimulatorService.world(id ?? ''),
+    enabled: Boolean(id) && ready,
+    // « pas encore de monde » is the normal first state, not a failure to retry.
+    retry: (count, error) => !isNoWorld(error) && count < 1,
+  });
+}
+
+export function useWorldVenues(id: string | null, hasWorld: boolean) {
+  return useQuery({
+    queryKey: adminKeys.worldVenues(id ?? ''),
+    queryFn: () => adminSimulatorService.venues(id ?? ''),
+    enabled: Boolean(id) && hasWorld,
+  });
+}
+
+export function useGenerateWorld(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: GenerateWorldInput) => adminSimulatorService.generateWorld(id, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: adminKeys.world(id) });
+      void qc.invalidateQueries({ queryKey: adminKeys.worldVenues(id) });
+      void qc.invalidateQueries({ queryKey: adminKeys.simulationProbe(id) });
+    },
   });
 }

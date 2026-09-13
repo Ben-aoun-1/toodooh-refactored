@@ -7,9 +7,14 @@ import {
   useDeleteSimulation,
   useSimulation,
   useSimulationProbe,
+  useWorld,
+  useWorldVenues,
 } from '@/features/admin/hooks/useAdminSimulator';
 
+import { GenerateWorldForm } from './GenerateWorldForm';
 import { SimulationStatusBadge } from './SimulationStatusBadge';
+import { VenuesTable } from './VenuesTable';
+import { WorldCard } from './WorldCard';
 
 interface Props {
   id: string;
@@ -20,6 +25,9 @@ export function SimulationDetail({ id, onDeleted }: Props) {
   const sim = useSimulation(id);
   const ready = sim.data?.status === 'ready';
   const probe = useSimulationProbe(id, ready);
+  const world = useWorld(id, ready);
+  const hasWorld = Boolean(world.data);
+  const venues = useWorldVenues(id, hasWorld);
   const del = useDeleteSimulation();
   const [confirming, setConfirming] = useState(false);
 
@@ -76,6 +84,8 @@ export function SimulationDetail({ id, onDeleted }: Props) {
       {ready && probe.isError && (
         <p className="text-sm text-red-600">Impossible de lire la base de la simulation.</p>
       )}
+      {ready && !hasWorld && !world.isLoading && <GenerateWorldForm simulationId={id} />}
+
       <div className="flex flex-wrap items-center gap-2">
         {!confirming ? (
           <button
@@ -108,6 +118,9 @@ export function SimulationDetail({ id, onDeleted }: Props) {
         )}
         {del.isError && <span className="text-sm text-red-600">Suppression impossible.</span>}
       </div>
+
+      {world.data && <WorldCard world={world.data} />}
+      {venues.data && venues.data.venues.length > 0 && <VenuesTable venues={venues.data.venues} />}
     </section>
   );
 }
