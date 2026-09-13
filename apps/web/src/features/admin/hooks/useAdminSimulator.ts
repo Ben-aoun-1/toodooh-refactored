@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
+  type ActorParams,
   type CreateSimulationInput,
   type GenerateWorldInput,
+  type LaunchCampaignInput,
   adminSimulatorService,
   isNoWorld,
 } from '@/features/admin/services/admin-simulator.service';
@@ -79,5 +81,47 @@ export function useGenerateWorld(id: string) {
       void qc.invalidateQueries({ queryKey: adminKeys.worldVenues(id) });
       void qc.invalidateQueries({ queryKey: adminKeys.simulationProbe(id) });
     },
+  });
+}
+
+// ── SIM-2 / SIM-3 — the living world ──────────────────────────────────────────
+
+/** The board. Refetched after every tick; `live` also polls, so a running clock animates. */
+export function useBoard(id: string | null, enabled: boolean, live: boolean) {
+  return useQuery({
+    queryKey: adminKeys.simulationBoard(id ?? ''),
+    queryFn: () => adminSimulatorService.state(id ?? ''),
+    enabled: Boolean(id) && enabled,
+    refetchInterval: live ? 2000 : false,
+  });
+}
+
+/** One click of the clock. Everything the hour touched is invalidated on the way back. */
+export function useTick(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (hours: number) => adminSimulatorService.tick(id, hours),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: adminKeys.simulationBoard(id) });
+      void qc.invalidateQueries({ queryKey: adminKeys.simulation(id) });
+      void qc.invalidateQueries({ queryKey: adminKeys.worldVenues(id) });
+    },
+  });
+}
+
+export function useLaunchCampaign(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: LaunchCampaignInput) => adminSimulatorService.launch(id, input),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: adminKeys.simulationBoard(id) }),
+  });
+}
+
+export function usePokeActor(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ entityId, params }: { entityId: string; params: ActorParams }) =>
+      adminSimulatorService.poke(id, entityId, params),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: adminKeys.simulationBoard(id) }),
   });
 }

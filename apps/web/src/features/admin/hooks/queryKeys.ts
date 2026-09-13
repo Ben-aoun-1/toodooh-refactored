@@ -30,6 +30,7 @@ export const adminKeys = {
   simulationProbe: (id: string) => [...adminKeys.all, 'simulations', id, 'probe'] as const,
   world: (id: string) => [...adminKeys.all, 'simulations', id, 'world'] as const,
   worldVenues: (id: string) => [...adminKeys.all, 'simulations', id, 'world', 'venues'] as const,
+  simulationBoard: (id: string) => [...adminKeys.all, 'simulations', id, 'board'] as const,
 
   /** Paginated, filtered recharge list (`adminRechargesService.getRecharges`). */
   recharges: (status: string, search: string, page: number, perPage: number) =>

@@ -67,7 +67,7 @@ export function WorldCard({ world }: { world: World }) {
       </div>
       <p className="text-xs text-gray-500">
         Historique mesuré : {c['history_days'] ?? 0} jours (
-        {(c['history_cells'] ?? 0).toLocaleString('fr-FR')} relevés).
+        {(c['history_cells'] ?? 0).toLocaleString('fr-FR')} mesures).
       </p>
     </section>
   );

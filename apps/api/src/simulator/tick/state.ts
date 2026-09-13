@@ -14,7 +14,7 @@ import {
 } from '../../db/schema.js';
 import { isOpenAt } from '../../lib/opening-hours.js';
 
-import { type VirtualMoment } from './clock.js';
+import { type VirtualMoment, advance, momentOf } from './clock.js';
 
 // SIM-3 — everything the living-world board renders, in ONE read: where the clock is, which
 // screens are lit, what each venue is playing this very hour, what its sensors just measured,
@@ -106,6 +106,9 @@ export const simulationState = async (moment: VirtualMoment): Promise<Simulation
     .from(screens)
     .where(inArray(screens.screenhostId, venueIds));
 
+  // The clock stands at the hour ABOUT to be simulated, which no sensor has measured yet — the
+  // board therefore shows the last COMPLETED hour's footfall, the only one that exists.
+  const measured = momentOf(advance(moment.at, -1));
   const audienceRows = await db
     .select({
       screenhostId: screenhostAffluenceHourly.screenhostId,
@@ -114,8 +117,8 @@ export const simulationState = async (moment: VirtualMoment): Promise<Simulation
     .from(screenhostAffluenceHourly)
     .where(
       and(
-        eq(screenhostAffluenceHourly.date, moment.date),
-        eq(screenhostAffluenceHourly.slot, moment.hour * 2),
+        eq(screenhostAffluenceHourly.date, measured.date),
+        eq(screenhostAffluenceHourly.slot, measured.hour * 2),
         inArray(screenhostAffluenceHourly.screenhostId, venueIds),
       ),
     );
