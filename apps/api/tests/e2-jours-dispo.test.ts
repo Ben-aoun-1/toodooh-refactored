@@ -153,6 +153,20 @@ const seedCampaign = async (opts: {
   return { campaignId, advertiserId, creativeId: creative?.id ?? '' };
 };
 
+/**
+ * TEST-TIME1 — seedVenue only carries affluence on MONDAY and TUESDAY by default, so any test
+ * whose window must land on a venue with capacity has to ASK for those weekdays instead of
+ * trusting that « today + 10 » happens to be a Monday. It did when this file was written; on
+ * 2026-09-13 it was a Wednesday, the cascade found a partner with zero capacity, and a green
+ * suite started arguing that the CAL-1 chain was broken. The invariant is « the window is a
+ * MON+TUE pair at least `minDays` away », never a particular offset.
+ */
+const nextMondayAtLeast = (isoDate: string, minDays: number): string => {
+  let day = plusCalendarDays(isoDate, minDays);
+  while (new Date(`${day}T00:00:00Z`).getUTCDay() !== 1) day = plusCalendarDays(day, 1);
+  return day;
+};
+
 const creneauxFor = (dates: string[], impPerSlot: number, reps: number): DispatchCreneau[] => {
   const out: DispatchCreneau[] = [];
   for (const date of dates)
@@ -392,8 +406,8 @@ describe('E2 — jours_dispo_i (real Postgres)', () => {
       const B = await seedVenue(cat, { sps: 80, liveness: 'alive' });
       const advertiserId = await seedUser({ role: 'advertiser' });
       const today = new Date().toISOString().slice(0, 10);
-      const D1 = plusCalendarDays(today, 10);
-      const D2 = plusCalendarDays(today, 11);
+      const D1 = nextMondayAtLeast(today, 10);
+      const D2 = plusCalendarDays(D1, 1);
       const [c] = await db
         .insert(campaigns)
         .values({

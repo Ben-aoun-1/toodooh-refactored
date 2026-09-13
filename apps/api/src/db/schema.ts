@@ -2122,3 +2122,37 @@ export const supportMessages = pgTable(
 
 export type SupportMessage = typeof supportMessages.$inferSelect;
 export type NewSupportMessage = typeof supportMessages.$inferInsert;
+
+// ── simulations (SIM-0, 2026-09-13) ─────────────────────────────────────────
+// The admin « Simulateur » registry: one row per SANDBOX DATABASE on the same server, cloned
+// from the migrations, on which the real engines run unchanged (db/client.ts routes `db` per
+// async context). Lives in MAIN — a sandbox never knows it is one. `db_name` is derived
+// (`<main>_sim_<8 hex>`), never user-supplied; `virtual_now` is the simulation clock (SIM-2
+// advances it; SIM-0 only stores it).
+export const simulationStatus = pgEnum('simulation_status', [
+  'creating',
+  'ready',
+  'failed',
+  'deleting',
+]);
+
+export const simulations = pgTable(
+  'simulations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull(),
+    dbName: text('db_name').notNull().unique(),
+    status: simulationStatus('status').notNull().default('creating'),
+    virtualNow: timestamp('virtual_now', { withTimezone: true }).notNull(),
+    error: text('error'),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('simulations_status_idx').on(table.status)],
+);
+
+export type Simulation = typeof simulations.$inferSelect;
+export type NewSimulation = typeof simulations.$inferInsert;

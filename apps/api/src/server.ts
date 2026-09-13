@@ -21,6 +21,8 @@ import { buildLoggerConfig } from './logger.js';
 import { healthRoute } from './routes/health.js';
 import { apiRoutes } from './routes/index.js';
 import { screenWsRoutes } from './routes/screen-ws.js';
+import { closeAllSandboxes, evictIdleSandboxes } from './simulator/pools.js';
+import { sweepOrphans } from './simulator/provisioning.js';
 import { storage } from './storage/s3-storage.js';
 
 const app: FastifyInstance = Fastify({
@@ -32,6 +34,7 @@ const app: FastifyInstance = Fastify({
 
 app.decorate('db', db);
 app.addHook('onClose', async () => {
+  await closeAllSandboxes();
   await sql.end();
 });
 
@@ -117,6 +120,26 @@ const start = async (): Promise<void> => {
     // every (venue, bloc) on the dual proof and refund the undelivered chargeable value. AFTER
     // the pusher so a window that closed during downtime settles in the same boot sequence.
     startEventSettlementJob(app.log);
+
+    // SIM-0 — the admin Simulateur. Enabled: drop orphan sandbox databases once at boot and
+    // evict idle sandbox pools every 5 min (unref'd). Disabled: ONE boot line, nothing else.
+    if (env.SIMULATOR_ENABLED) {
+      app.log.info({ max: env.SIMULATOR_MAX_SANDBOXES }, 'simulator enabled');
+      void sweepOrphans(app.log).catch((err: unknown) =>
+        app.log.warn({ err }, 'simulator: boot orphan sweep failed'),
+      );
+      const evictTimer = setInterval(
+        () => {
+          void evictIdleSandboxes().catch((err: unknown) =>
+            app.log.warn({ err }, 'simulator: idle eviction failed'),
+          );
+        },
+        5 * 60 * 1000,
+      );
+      evictTimer.unref();
+    } else {
+      app.log.info('simulator disabled (SIMULATOR_ENABLED unset)');
+    }
 
     // R2 — AI report recommendations: ONE boot warning when the key is unprovisioned (the
     // wedooh-sync degradation pattern); every report gracefully keeps the generic pistes.

@@ -5,6 +5,7 @@ import {
   FileText,
   Film,
   FlaskConical,
+  Gamepad2,
   LayoutDashboard,
   LifeBuoy,
   LogOut,
@@ -349,6 +350,17 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
                   >
                     <FlaskConical className="mr-3 h-5 w-5" />
                     Tests
+                  </button>
+                  <button
+                    onClick={() => navigate('/admin-simulator')}
+                    className={`group flex items-center w-full px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
+                      location.pathname === '/admin-simulator'
+                        ? 'bg-brand-primary text-brand-deep shadow-lg shadow-brand-primary/25'
+                        : 'text-gray-700 hover:bg-gray-100 hover:text-brand-primary'
+                    }`}
+                  >
+                    <Gamepad2 className="mr-3 h-5 w-5" />
+                    Simulateur
                   </button>
                 </>
               )}
