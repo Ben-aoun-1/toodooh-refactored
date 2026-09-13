@@ -66,8 +66,9 @@ Footfall: a per-sector hourly curve (persons/hour, e.g. Café peaks 8–10 and 1
 and 19–22, Salle de sport 7–9 and 18–21) × a per-venue scale by class (populaire 0.8–1.4,
 moyen 1.0–1.8, premium 1.3–2.5) → the weekly grid `grid[dow 1..7][hour 0..23]` with a weekend
 factor, written as BOTH half-hour slots equal (`bothHalves` semantics, `in_effect` NULL,
-`source` `'backup'`). Measured history: for each of the last `history_days` calendar days
-before the simulation's `virtual_now` (Tunis), cell = grid × day-noise (0.7–1.3) × hour-noise
+`source` `'backup'`). Measured history: for each of the `history_days` Tunis calendar days
+STRICTLY BEFORE the virtual day of `virtual_now` (the virtual day itself has no rows — SIM-2's
+PAX fills it), cell = grid × day-noise (0.7–1.3) × hour-noise
 (0.85–1.15), rounded, `deviceOnline = true`, only within opening hours (closed hours = no row).
 
 People: owners (`individual_owner` for one venue, `fleet_owner` for 2–4 venues — the venue→owner
@@ -94,7 +95,8 @@ the advertisers by the screencast agent (when the agent exists).
 5. `recharges` — one confirmed recharge per advertiser, `amountTnd` in range, `reference`
    `SIM-<seed>-<n>` (unique).
 
-Then, OUTSIDE the sandbox context, on `mainDb`: insert the `simulation_actors` rows and set
+Then, through the explicit `mainDb` handle (the route handler is still inside the sandbox
+context; `mainDb` bypasses routing by design): insert the `simulation_actors` rows and set
 `simulations.world` = `{ seed, params, counts, generated_at }`. Writer failure inside the
 sandbox transaction rolls back and nothing is written to main; a main-side failure after a
 committed sandbox write is logged and answered 500 — the sandbox is then non-empty, so the
