@@ -1,4 +1,7 @@
-import { desc, eq, ne, sql } from 'drizzle-orm';
+import { randomBytes } from 'node:crypto';
+
+import { formatInTimeZone } from 'date-fns-tz';
+import { desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import type {
   FastifyPluginAsync,
   FastifyReply,
@@ -10,9 +13,12 @@ import { z } from 'zod';
 import { db, mainDb } from '../db/client.js';
 import {
   type Simulation,
+  businessSectors,
   campaigns,
   dispatchConfig,
+  recharges,
   screenhosts,
+  screens,
   simulations,
   users,
 } from '../db/schema.js';
@@ -23,6 +29,8 @@ import { runInSandbox } from '../simulator/context.js';
 import { mainDatabaseName, sandboxDatabaseName } from '../simulator/naming.js';
 import { sandboxHandleFor } from '../simulator/pools.js';
 import { deleteSimulation, provisionSimulation } from '../simulator/provisioning.js';
+import { type WorldParams, generateWorld } from '../simulator/world/spec.js';
+import { actorParams, sandboxIsEmpty, writeWorld } from '../simulator/world/write.js';
 
 // SIM-0 — the admin « Simulateur » registry endpoints. A simulation is a sandbox DATABASE on the
 // same server; the routes under /:id/* enter its async context in the LAST preHandler (after the
@@ -67,6 +75,71 @@ const notFound = (reply: FastifyReply) =>
 const loadSimulation = async (id: string): Promise<Simulation | undefined> => {
   const [row] = await mainDb.select().from(simulations).where(eq(simulations.id, id)).limit(1);
   return row;
+};
+
+const TZ = 'Africa/Tunis';
+
+const worldBodySchema = z.object({
+  seed: z.string().trim().min(1).max(32).optional(),
+  venues: z.int().min(1).max(60).optional(),
+  owners: z.int().min(1).max(60).optional(),
+  advertisers: z.int().min(0).max(40).optional(),
+  agents: z.int().min(0).max(10).optional(),
+  history_days: z.int().min(0).max(90).optional(),
+  wallet_min_tnd: z.int().min(0).max(100_000).optional(),
+  wallet_max_tnd: z.int().min(0).max(100_000).optional(),
+});
+
+const randomSeed = (): string => randomBytes(4).toString('hex');
+
+/** The world card: the stored seed/knobs/counts + counts recomputed live through the sandbox. */
+const worldView = async (simulationId: string) => {
+  const simulation = await loadSimulation(simulationId);
+  const stored = simulation?.world as
+    | { seed: string; params: WorldParams; counts: Record<string, number>; generated_at: string }
+    | null
+    | undefined;
+  if (!stored) return null;
+
+  const venues = await db
+    .select({
+      id: screenhosts.id,
+      class: screenhosts.class,
+      sectorId: screenhosts.businessSectorId,
+    })
+    .from(screenhosts);
+  const sectorRows = await db
+    .select({ id: businessSectors.id, name: businessSectors.name })
+    .from(businessSectors)
+    .where(
+      inArray(
+        businessSectors.id,
+        venues.map((v) => v.sectorId).filter((id): id is string => id !== null),
+      ),
+    );
+  const sectorName = new Map(sectorRows.map((r) => [r.id, r.name]));
+  const bySector: Record<string, number> = {};
+  const byClass: Record<string, number> = { populaire: 0, moyen: 0, premium: 0 };
+  for (const v of venues) {
+    const name = (v.sectorId && sectorName.get(v.sectorId)) || 'inconnu';
+    bySector[name] = (bySector[name] ?? 0) + 1;
+    if (v.class) byClass[v.class] = (byClass[v.class] ?? 0) + 1;
+  }
+  const [wallet] = await db
+    .select({ total: sql<string>`coalesce(sum(${recharges.amountTnd}), 0)` })
+    .from(recharges)
+    .where(eq(recharges.status, 'confirmed'));
+  const [screenCount] = await db.select({ n: sql<number>`count(*)::int` }).from(screens);
+
+  return {
+    seed: stored.seed,
+    params: stored.params,
+    generated_at: stored.generated_at,
+    counts: { ...stored.counts, venues: venues.length, screens: screenCount?.n ?? 0 },
+    by_sector: bySector,
+    by_class: byClass,
+    wallet_total_tnd: Number(wallet?.total ?? 0),
+  };
 };
 
 export const adminSimulationsRoutes: FastifyPluginAsync<AdminSimulationsOptions> = async (
@@ -203,4 +276,110 @@ export const adminSimulationsRoutes: FastifyPluginAsync<AdminSimulationsOptions>
       };
     },
   );
+
+  // ── SIM-1 — the world generator ──────────────────────────────────────────────
+  const routed = { preHandler: [...guards, enterSimulation] };
+
+  app.post('/api/admin/simulations/:id/world', routed, async (request, reply) => {
+    const parsedBody = worldBodySchema.safeParse(request.body ?? {});
+    if (!parsedBody.success) {
+      const issue = parsedBody.error.issues[0];
+      return invalid(reply, String(issue?.path[0] ?? 'body'), issue?.message ?? 'invalid');
+    }
+    const simulationId = (request.params as { id: string }).id;
+    const simulation = await loadSimulation(simulationId);
+    if (!simulation) return notFound(reply);
+    if (simulation.world !== null || !(await sandboxIsEmpty())) {
+      return reply.status(409).send({
+        error: 'WORLD_EXISTS',
+        message: 'Cette simulation a déjà un monde. Supprime-la et crées-en une autre.',
+        statusCode: 409,
+      });
+    }
+
+    const body = parsedBody.data;
+    const venues = body.venues ?? 12;
+    const params: WorldParams = {
+      seed: body.seed ?? randomSeed(),
+      venues,
+      owners: Math.min(body.owners ?? Math.ceil((venues * 2) / 3), venues),
+      advertisers: body.advertisers ?? 6,
+      agents: body.agents ?? 2,
+      historyDays: body.history_days ?? 28,
+      walletMinTnd: body.wallet_min_tnd ?? 500,
+      walletMaxTnd: body.wallet_max_tnd ?? 5000,
+      virtualToday: formatInTimeZone(simulation.virtualNow, TZ, 'yyyy-MM-dd'),
+    };
+    if (params.walletMinTnd > params.walletMaxTnd) {
+      return invalid(reply, 'wallet_min_tnd', 'must be ≤ wallet_max_tnd');
+    }
+
+    const counts = await writeWorld(generateWorld(params), { simulationId });
+    request.log.info({ simulationId, seed: params.seed, counts }, 'simulator: world generated');
+    return reply.status(201).send(await worldView(simulationId));
+  });
+
+  app.get('/api/admin/simulations/:id/world', routed, async (request, reply) => {
+    const view = await worldView((request.params as { id: string }).id);
+    if (!view) {
+      return reply
+        .status(404)
+        .send({ error: 'NO_WORLD', message: 'Aucun monde généré.', statusCode: 404 });
+    }
+    return view;
+  });
+
+  app.get('/api/admin/simulations/:id/world/venues', routed, async (request) => {
+    const simulationId = (request.params as { id: string }).id;
+    const rows = await db
+      .select({
+        id: screenhosts.id,
+        name: screenhosts.name,
+        sector: businessSectors.name,
+        venueClass: screenhosts.class,
+        openingHour: screenhosts.openingHour,
+        closingHour: screenhosts.closingHour,
+        sps: screenhosts.sps,
+        latitude: screenhosts.latitude,
+        longitude: screenhosts.longitude,
+        ownerId: screenhosts.ownerId,
+        ownerName: users.contactName,
+        ownerRole: users.role,
+      })
+      .from(screenhosts)
+      .leftJoin(businessSectors, eq(businessSectors.id, screenhosts.businessSectorId))
+      .leftJoin(users, eq(users.id, screenhosts.ownerId))
+      .orderBy(screenhosts.name);
+    const screenRows = await db
+      .select({ id: screens.id, screenhostId: screens.screenhostId })
+      .from(screens);
+    const screensByVenue = new Map<string, number>();
+    for (const s of screenRows) {
+      screensByVenue.set(s.screenhostId, (screensByVenue.get(s.screenhostId) ?? 0) + 1);
+    }
+    // Behaviours live in MAIN, keyed by the sandbox entity id — joined here in code, never in SQL.
+    const owners = await actorParams(simulationId, 'owner');
+    return {
+      venues: rows.map((v) => {
+        const behaviour = v.ownerId ? owners.get(v.ownerId) : undefined;
+        const rate = behaviour?.['acceptance_rate'];
+        const delay = behaviour?.['response_delay_hours'];
+        return {
+          id: v.id,
+          name: v.name,
+          sector: v.sector,
+          class: v.venueClass,
+          opening_hour: v.openingHour,
+          closing_hour: v.closingHour,
+          screens: screensByVenue.get(v.id) ?? 0,
+          sps: Number(v.sps),
+          lat: v.latitude === null ? null : Number(v.latitude),
+          lng: v.longitude === null ? null : Number(v.longitude),
+          owner: { id: v.ownerId, name: v.ownerName, role: v.ownerRole },
+          acceptance_rate: typeof rate === 'number' ? rate : null,
+          response_delay_hours: typeof delay === 'number' ? delay : null,
+        };
+      }),
+    };
+  });
 };
