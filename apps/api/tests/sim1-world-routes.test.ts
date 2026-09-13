@@ -183,6 +183,91 @@ describe('SIM-1 world endpoints', () => {
     expect(res.json()).toMatchObject({ error: 'WORLD_EXISTS' });
   });
 
+  it('SIM-2 — tick, state, launch and the actor poke ride the same routed guard', async () => {
+    mockSession(adminId);
+
+    // the clock moves one hour and reports what happened
+    const tick = await app.inject({
+      method: 'POST',
+      url: `/api/admin/simulations/${simulationId}/tick`,
+      payload: { hours: 1 },
+    });
+    expect(tick.statusCode).toBe(200);
+    const ticked = tick.json<{
+      hours: number;
+      counters: Record<string, number>;
+      moment: { date: string };
+    }>();
+    expect(ticked.hours).toBe(1);
+    expect(ticked.moment.date).toBe('2026-03-02');
+    expect(ticked.counters['screens_online']).toBeGreaterThan(0);
+
+    // the board
+    const state = await app.inject({
+      method: 'GET',
+      url: `/api/admin/simulations/${simulationId}/state`,
+    });
+    expect(state.statusCode).toBe(200);
+    const board = state.json<{
+      clock: { hour: number };
+      venues: unknown[];
+      totals: Record<string, number>;
+    }>();
+    expect(board.venues).toHaveLength(5);
+    expect(board.totals['screens_online']).toBeGreaterThan(0);
+
+    // an advertiser launches a campaign through the real activation path
+    const launch = await app.inject({
+      method: 'POST',
+      url: `/api/admin/simulations/${simulationId}/campaigns`,
+      payload: {
+        name: 'Campagne HTTP',
+        duration_days: 3,
+        spot_seconds: 10,
+        start_in_days: 2,
+        budget_share: 0.3,
+      },
+    });
+    expect(launch.statusCode).toBe(201);
+    const launched = launch.json<{ outcome: string; allocations: number; status: string }>();
+    expect(launched.outcome).toBe('OK');
+    expect(launched.allocations).toBeGreaterThan(0);
+    expect(launched.status).toBe('upcoming');
+
+    // a poke: this screen goes dark
+    const board2 = await app.inject({
+      method: 'GET',
+      url: `/api/admin/simulations/${simulationId}/state`,
+    });
+    const screenId = board2
+      .json<{ venues: { screens: { id: string }[] }[] }>()
+      .venues.flatMap((v) => v.screens)
+      .map((s) => s.id)[0];
+    const poke = await app.inject({
+      method: 'PATCH',
+      url: `/api/admin/simulations/${simulationId}/actors/${screenId}`,
+      payload: { offline_probability: 1 },
+    });
+    expect(poke.statusCode).toBe(200);
+    expect(poke.json()).toMatchObject({ kind: 'screen', params: { offline_probability: 1 } });
+
+    const afterPoke = await app.inject({
+      method: 'POST',
+      url: `/api/admin/simulations/${simulationId}/tick`,
+      payload: { hours: 1 },
+    });
+    expect(
+      afterPoke.json<{ counters: Record<string, number> }>().counters['screens_offline'],
+    ).toBeGreaterThanOrEqual(1);
+
+    const unknownActor = await app.inject({
+      method: 'PATCH',
+      url: `/api/admin/simulations/${simulationId}/actors/00000000-0000-4000-8000-0000000000ee`,
+      payload: { offline_probability: 0 },
+    });
+    expect(unknownActor.statusCode).toBe(404);
+  }, 300_000);
+
   it('the same seed reproduces the same venue names', async () => {
     mockSession(adminId);
     const res = await app.inject({

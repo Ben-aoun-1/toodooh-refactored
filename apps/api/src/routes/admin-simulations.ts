@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 
 import { formatInTimeZone } from 'date-fns-tz';
-import { desc, eq, inArray, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import type {
   FastifyPluginAsync,
   FastifyReply,
@@ -19,6 +19,7 @@ import {
   recharges,
   screenhosts,
   screens,
+  simulationActors,
   simulations,
   users,
 } from '../db/schema.js';
@@ -29,6 +30,10 @@ import { runInSandbox } from '../simulator/context.js';
 import { mainDatabaseName, sandboxDatabaseName } from '../simulator/naming.js';
 import { sandboxHandleFor } from '../simulator/pools.js';
 import { deleteSimulation, provisionSimulation } from '../simulator/provisioning.js';
+import { momentOf } from '../simulator/tick/clock.js';
+import { launchCampaign } from '../simulator/tick/launch.js';
+import { runTick } from '../simulator/tick/run.js';
+import { simulationState } from '../simulator/tick/state.js';
 import { type WorldParams, generateWorld } from '../simulator/world/spec.js';
 import { actorParams, sandboxIsEmpty, writeWorld } from '../simulator/world/write.js';
 
@@ -91,6 +96,26 @@ const worldBodySchema = z.object({
 });
 
 const randomSeed = (): string => randomBytes(4).toString('hex');
+
+// SIM-2/3 — a tick is bounded so one click can never run the box out of time: 336 hours is two
+// virtual weeks, which is the longest jump the page offers (« + 1 semaine » twice).
+const tickBodySchema = z.object({ hours: z.int().min(1).max(336).optional() });
+
+const launchBodySchema = z.object({
+  advertiser_id: z.uuid().optional(),
+  name: z.string().trim().min(1).max(120).optional(),
+  duration_days: z.int().min(1).max(90).optional(),
+  spot_seconds: z.int().min(5).max(30).optional(),
+  start_in_days: z.int().min(2).max(60).optional(),
+  budget_tnd: z.int().min(1).max(1_000_000).optional(),
+  budget_share: z.number().min(0.01).max(1).optional(),
+});
+
+const actorBodySchema = z.object({
+  acceptance_rate: z.number().min(0).max(1).optional(),
+  response_delay_hours: z.int().min(1).max(72).optional(),
+  offline_probability: z.number().min(0).max(1).optional(),
+});
 
 /** The world card: the stored seed/knobs/counts + counts recomputed live through the sandbox. */
 const worldView = async (simulationId: string) => {
@@ -327,6 +352,102 @@ export const adminSimulationsRoutes: FastifyPluginAsync<AdminSimulationsOptions>
         .send({ error: 'NO_WORLD', message: 'Aucun monde généré.', statusCode: 404 });
     }
     return view;
+  });
+
+  // ── SIM-2 / SIM-3 — the clock, the board and the pokes ───────────────────────
+
+  app.post('/api/admin/simulations/:id/tick', routed, async (request, reply) => {
+    const parsed = tickBodySchema.safeParse(request.body ?? {});
+    if (!parsed.success) return invalid(reply, 'hours', 'must be 1–336');
+    const simulationId = (request.params as { id: string }).id;
+    const simulation = await loadSimulation(simulationId);
+    if (!simulation) return notFound(reply);
+    if (simulation.world === null) {
+      return reply.status(409).send({
+        error: 'NO_WORLD',
+        message: 'Génère un monde avant de lancer l\u2019horloge.',
+        statusCode: 409,
+      });
+    }
+    const result = await runTick({
+      simulation,
+      hours: parsed.data.hours ?? 1,
+      log: request.log,
+    });
+    request.log.info({ simulationId, ...result.counters }, 'simulator: tick');
+    return result;
+  });
+
+  app.get('/api/admin/simulations/:id/state', routed, async (request, reply) => {
+    const simulation = await loadSimulation((request.params as { id: string }).id);
+    if (!simulation) return notFound(reply);
+    return simulationState(momentOf(simulation.virtualNow));
+  });
+
+  app.post('/api/admin/simulations/:id/campaigns', routed, async (request, reply) => {
+    const parsed = launchBodySchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      return invalid(reply, String(issue?.path[0] ?? 'body'), issue?.message ?? 'invalid');
+    }
+    const simulationId = (request.params as { id: string }).id;
+    const simulation = await loadSimulation(simulationId);
+    if (!simulation) return notFound(reply);
+    const world = simulation.world as { seed?: string } | null;
+    const body = parsed.data;
+    const result = await launchCampaign({
+      moment: momentOf(simulation.virtualNow),
+      seed: world?.seed ?? simulation.id,
+      ...(body.advertiser_id ? { advertiserId: body.advertiser_id } : {}),
+      ...(body.name ? { name: body.name } : {}),
+      ...(body.duration_days ? { durationDays: body.duration_days } : {}),
+      ...(body.spot_seconds ? { spotSeconds: body.spot_seconds } : {}),
+      ...(body.start_in_days ? { startInDays: body.start_in_days } : {}),
+      ...(body.budget_tnd ? { budgetTnd: body.budget_tnd } : {}),
+      ...(body.budget_share ? { budgetShare: body.budget_share } : {}),
+    });
+    if ('error' in result) {
+      return reply.status(409).send({
+        error: result.error,
+        message:
+          result.error === 'CMAX_TOO_LOW'
+            ? 'Le réseau ne peut pas porter une campagne au plancher de 100 TND sur cette fenêtre.'
+            : result.error === 'NOT_FUNDED'
+              ? 'Aucun annonceur ne dispose du solde minimum.'
+              : 'Lancement impossible.',
+        statusCode: 409,
+      });
+    }
+    request.log.info(
+      { simulationId, campaignId: result.campaign_id, outcome: result.outcome },
+      'simulator: campaign launched',
+    );
+    return reply.status(201).send(result);
+  });
+
+  // A poke: make a screen go dark (offline_probability 1), bring it back, or change how an owner
+  // answers. The behaviours live in MAIN, so this never touches the sandbox.
+  app.patch('/api/admin/simulations/:id/actors/:entityId', routed, async (request, reply) => {
+    const parsed = actorBodySchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      return invalid(reply, String(issue?.path[0] ?? 'body'), issue?.message ?? 'invalid');
+    }
+    const { id, entityId } = request.params as { id: string; entityId: string };
+    if (!z.uuid().safeParse(entityId).success) return invalid(reply, 'entityId', 'must be a uuid');
+    const [row] = await mainDb
+      .select()
+      .from(simulationActors)
+      .where(and(eq(simulationActors.simulationId, id), eq(simulationActors.entityId, entityId)))
+      .limit(1);
+    if (!row) return notFound(reply);
+    const current = (row.params ?? {}) as Record<string, unknown>;
+    const next = { ...current, ...parsed.data };
+    await mainDb
+      .update(simulationActors)
+      .set({ params: next })
+      .where(eq(simulationActors.id, row.id));
+    return { kind: row.kind, entity_id: entityId, params: next };
   });
 
   app.get('/api/admin/simulations/:id/world/venues', routed, async (request) => {
