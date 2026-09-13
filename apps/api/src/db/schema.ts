@@ -2150,9 +2150,43 @@ export const simulations = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     lastUsedAt: timestamp('last_used_at', { withTimezone: true }).notNull().defaultNow(),
+    /** SIM-1 — the generated world's seed, knobs and counts; NULL until a world is generated. */
+    world: jsonb('world'),
   },
   (table) => [index('simulations_status_idx').on(table.status)],
 );
 
 export type Simulation = typeof simulations.$inferSelect;
 export type NewSimulation = typeof simulations.$inferInsert;
+
+// SIM-1 — the BEHAVIOURS of a generated world's actors. They live in MAIN, never in the sandbox:
+// a sandbox must stay a prod-shaped database (an owner row there is exactly an owner row), so
+// « this owner accepts 70 % of proposals » is simulator metadata keyed by the sandbox entity id.
+// SIM-2's tick reads these; nothing in the engines ever sees them.
+export const simulationActorKind = pgEnum('simulation_actor_kind', [
+  'owner',
+  'screen',
+  'advertiser',
+]);
+
+export const simulationActors = pgTable(
+  'simulation_actors',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    simulationId: uuid('simulation_id')
+      .notNull()
+      .references(() => simulations.id, { onDelete: 'cascade' }),
+    kind: simulationActorKind('kind').notNull(),
+    /** The row's id INSIDE the sandbox (users.id / screens.id) — no FK, another database. */
+    entityId: uuid('entity_id').notNull(),
+    params: jsonb('params').notNull().default({}),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique('simulation_actors_entity_unique').on(table.simulationId, table.entityId),
+    index('simulation_actors_simulation_idx').on(table.simulationId),
+  ],
+);
+
+export type SimulationActor = typeof simulationActors.$inferSelect;
+export type NewSimulationActor = typeof simulationActors.$inferInsert;
