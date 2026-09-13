@@ -180,6 +180,26 @@ export interface LaunchedCampaign {
   allocations: number;
 }
 
+export interface LaunchEventInput {
+  name?: string;
+  in_days?: number;
+  duration_hours?: number;
+  spot_seconds?: number;
+  budget_share?: number;
+}
+
+export interface BookedEvent {
+  event_id: string;
+  campaign_id: string;
+  name: string;
+  kickoff_at: string;
+  ends_at: string;
+  budget_tnd: number;
+  c_max_tnd: number;
+  outcome: string;
+  allocations: number;
+}
+
 export interface ActorParams {
   acceptance_rate?: number;
   response_delay_hours?: number;
@@ -208,6 +228,8 @@ export const adminSimulatorService = {
     apiClient.post<TickResult>(`/admin/simulations/${id}/tick`, { hours }),
   launch: (id: string, input: LaunchCampaignInput) =>
     apiClient.post<LaunchedCampaign>(`/admin/simulations/${id}/campaigns`, input),
+  launchEvent: (id: string, input: LaunchEventInput) =>
+    apiClient.post<BookedEvent>(`/admin/simulations/${id}/events`, input),
   poke: (id: string, entityId: string, params: ActorParams) =>
     apiClient.patch<{ kind: string; entity_id: string; params: ActorParams }>(
       `/admin/simulations/${id}/actors/${entityId}`,

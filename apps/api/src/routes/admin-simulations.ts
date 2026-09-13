@@ -31,7 +31,7 @@ import { mainDatabaseName, sandboxDatabaseName } from '../simulator/naming.js';
 import { sandboxHandleFor } from '../simulator/pools.js';
 import { deleteSimulation, provisionSimulation } from '../simulator/provisioning.js';
 import { momentOf } from '../simulator/tick/clock.js';
-import { launchCampaign } from '../simulator/tick/launch.js';
+import { launchCampaign, launchEvent } from '../simulator/tick/launch.js';
 import { runTick } from '../simulator/tick/run.js';
 import { simulationState } from '../simulator/tick/state.js';
 import { type WorldParams, generateWorld } from '../simulator/world/spec.js';
@@ -107,6 +107,15 @@ const launchBodySchema = z.object({
   duration_days: z.int().min(1).max(90).optional(),
   spot_seconds: z.int().min(5).max(30).optional(),
   start_in_days: z.int().min(2).max(60).optional(),
+  budget_tnd: z.int().min(1).max(1_000_000).optional(),
+  budget_share: z.number().min(0.01).max(1).optional(),
+});
+
+const eventBodySchema = z.object({
+  name: z.string().trim().min(1).max(120).optional(),
+  in_days: z.int().min(1).max(60).optional(),
+  duration_hours: z.int().min(1).max(6).optional(),
+  spot_seconds: z.int().min(5).max(30).optional(),
   budget_tnd: z.int().min(1).max(1_000_000).optional(),
   budget_share: z.number().min(0.01).max(1).optional(),
 });
@@ -422,6 +431,39 @@ export const adminSimulationsRoutes: FastifyPluginAsync<AdminSimulationsOptions>
       { simulationId, campaignId: result.campaign_id, outcome: result.outcome },
       'simulator: campaign launched',
     );
+    return reply.status(201).send(result);
+  });
+
+  app.post('/api/admin/simulations/:id/events', routed, async (request, reply) => {
+    const parsed = eventBodySchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      return invalid(reply, String(issue?.path[0] ?? 'body'), issue?.message ?? 'invalid');
+    }
+    const simulation = await loadSimulation((request.params as { id: string }).id);
+    if (!simulation) return notFound(reply);
+    const world = simulation.world as { seed?: string } | null;
+    const body = parsed.data;
+    const result = await launchEvent({
+      moment: momentOf(simulation.virtualNow),
+      seed: world?.seed ?? simulation.id,
+      ...(body.name ? { name: body.name } : {}),
+      ...(body.in_days ? { inDays: body.in_days } : {}),
+      ...(body.duration_hours ? { durationHours: body.duration_hours } : {}),
+      ...(body.spot_seconds ? { spotSeconds: body.spot_seconds } : {}),
+      ...(body.budget_tnd ? { budgetTnd: body.budget_tnd } : {}),
+      ...(body.budget_share ? { budgetShare: body.budget_share } : {}),
+    });
+    if ('error' in result) {
+      return reply.status(409).send({
+        error: result.error,
+        message:
+          result.error === 'CMAX_TOO_LOW'
+            ? 'Aucun établissement éligible aux événements ne peut porter ce match.'
+            : 'Réservation impossible.',
+        statusCode: 409,
+      });
+    }
     return reply.status(201).send(result);
   });
 

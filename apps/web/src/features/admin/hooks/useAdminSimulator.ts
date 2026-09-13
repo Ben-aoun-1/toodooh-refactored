@@ -5,6 +5,7 @@ import {
   type CreateSimulationInput,
   type GenerateWorldInput,
   type LaunchCampaignInput,
+  type LaunchEventInput,
   adminSimulatorService,
   isNoWorld,
 } from '@/features/admin/services/admin-simulator.service';
@@ -122,6 +123,14 @@ export function usePokeActor(id: string) {
   return useMutation({
     mutationFn: ({ entityId, params }: { entityId: string; params: ActorParams }) =>
       adminSimulatorService.poke(id, entityId, params),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: adminKeys.simulationBoard(id) }),
+  });
+}
+
+export function useLaunchEvent(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: LaunchEventInput) => adminSimulatorService.launchEvent(id, input),
     onSuccess: () => void qc.invalidateQueries({ queryKey: adminKeys.simulationBoard(id) }),
   });
 }

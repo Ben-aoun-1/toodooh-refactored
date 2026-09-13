@@ -6,6 +6,7 @@ import {
   campaignDispatchPlan,
   campaigns,
   creatives,
+  eventAllocations,
   proofOfPlay,
   screenhostAffluence,
   screenhostAffluenceHourly,
@@ -13,6 +14,7 @@ import {
   screens,
 } from '../../db/schema.js';
 import { decideAllocation } from '../../lib/allocation-decision.js';
+import { decideEventAllocation } from '../../lib/event-allocation-decision.js';
 import { isOpenAt } from '../../lib/opening-hours.js';
 import { activeAllocationsForScreenhost } from '../../lib/playout/active-allocations.js';
 import { createRng } from '../world/rng.js';
@@ -78,6 +80,45 @@ export const runOwnerAnswers = async (input: {
       allocationId: row.allocationId,
       ownerId: row.ownerId,
       statut,
+    });
+    if (outcome.kind === 'ok' && outcome.changed) {
+      result.answered += 1;
+      if (statut === 'ACCEPTE') result.accepted += 1;
+      else result.refused += 1;
+    }
+  }
+  return result;
+};
+
+/**
+ * The same owners, answering their EVENT proposals — the event module keeps its own allocation
+ * table and its own cascade (a refusal releases the venue's reserved bloc hours before the share
+ * is re-placed), so it gets its own pass through the product's own decision path.
+ */
+export const runEventOwnerAnswers = async (input: {
+  moment: VirtualMoment;
+  seed: string;
+  behaviours: Map<string, OwnerBehaviour>;
+}): Promise<OwnerAnswers> => {
+  const rows = await db
+    .select({ allocationId: eventAllocations.id, ownerId: screenhosts.ownerId })
+    .from(eventAllocations)
+    .innerJoin(screenhosts, eq(screenhosts.id, eventAllocations.screenhostId))
+    .where(eq(eventAllocations.statut, 'EN_ATTENTE'));
+
+  const result: OwnerAnswers = { answered: 0, accepted: 0, refused: 0 };
+  for (const row of rows) {
+    if (!row.ownerId) continue;
+    const behaviour = input.behaviours.get(row.ownerId);
+    if (!behaviour) continue;
+    const rng = createRng(`${input.seed}:${input.moment.at.toISOString()}:evt:${row.allocationId}`);
+    if (rng.next() >= 1 / Math.max(1, behaviour.responseDelayHours)) continue;
+    const statut = rng.next() < behaviour.acceptanceRate ? 'ACCEPTE' : 'REFUSE';
+    const outcome = await decideEventAllocation({
+      allocationId: row.allocationId,
+      ownerId: row.ownerId,
+      statut,
+      now: input.moment.at,
     });
     if (outcome.kind === 'ok' && outcome.changed) {
       result.answered += 1;

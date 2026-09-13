@@ -1,11 +1,20 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 
 import { db } from '../../db/client.js';
-import { type Campaign, campaigns, creatives, users } from '../../db/schema.js';
+import {
+  type Campaign,
+  campaigns,
+  creatives,
+  eventAllocations,
+  events,
+  users,
+} from '../../db/schema.js';
 import { activateCampaign } from '../../lib/activation-service.js';
 import { MIN_CAMPAIGN_BUDGET_TND } from '../../lib/campaign-budget.js';
 import { computeCampaignCmax } from '../../lib/campaign-cmax.js';
 import { plusCalendarDays } from '../../lib/campaign-dates.js';
+import { getDispatchConfig } from '../../lib/dispatch/config.js';
+import { computeEventCmax } from '../../lib/event-pricing/pricing.js';
 import { walletSpendable } from '../../lib/recharges.js';
 import { createRng } from '../world/rng.js';
 
@@ -187,3 +196,156 @@ export const recentCampaigns = async (limit = 20) =>
     .from(campaigns)
     .orderBy(desc(campaigns.createdAt))
     .limit(limit);
+
+// ── SIM-4 — « an advertiser books an event » ──────────────────────────────────
+
+export interface LaunchEventInput {
+  moment: VirtualMoment;
+  seed: string;
+  advertiserId?: string;
+  name?: string;
+  /** Days after the virtual day the match kicks off. */
+  inDays?: number;
+  /** Match length in hours (the diffusion window adds an hour on each side). */
+  durationHours?: number;
+  spotSeconds?: number;
+  budgetTnd?: number;
+  budgetShare?: number;
+}
+
+export interface LaunchEventResult {
+  event_id: string;
+  campaign_id: string;
+  name: string;
+  kickoff_at: string;
+  ends_at: string;
+  budget_tnd: number;
+  c_max_tnd: number;
+  outcome: string;
+  allocations: number;
+}
+
+export const launchEvent = async (
+  input: LaunchEventInput,
+): Promise<LaunchEventResult | { error: string }> => {
+  const rng = createRng(`${input.seed}:${input.moment.at.toISOString()}:event`);
+  const inDays = input.inDays ?? rng.int(3, 10);
+  const durationHours = input.durationHours ?? 2;
+  const spotSeconds = input.spotSeconds ?? rng.pick([10, 15, 20]);
+
+  // Kickoff at 20h Tunis on the chosen day — the hour a match actually starts here.
+  const kickoffDate = plusCalendarDays(input.moment.date, inDays);
+  const kickoffAt = new Date(`${kickoffDate}T19:00:00Z`);
+  const endsAt = new Date(kickoffAt.getTime() + durationHours * 3600 * 1000);
+
+  const [event] = await db
+    .insert(events)
+    .values({
+      name:
+        input.name ??
+        `Match ${rng.pick(['Espérance', 'Club Africain', 'Étoile', 'CSS'])} — ${kickoffDate}`,
+      kickoffAt,
+      endsAt,
+      type: 'sport',
+      source: 'official',
+    })
+    .returning();
+  if (!event) return { error: 'EVENT_FAILED' };
+
+  let advertiserId = input.advertiserId;
+  if (!advertiserId) {
+    const candidates = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.role, 'advertiser'));
+    let best: { id: string; spendable: number } | null = null;
+    for (const candidate of candidates) {
+      const wallet = await walletSpendable(candidate.id);
+      if (!best || wallet.spendable_tnd > best.spendable) {
+        best = { id: candidate.id, spendable: wallet.spendable_tnd };
+      }
+    }
+    if (!best) return { error: 'NO_ADVERTISER' };
+    advertiserId = best.id;
+  }
+
+  const config = await getDispatchConfig();
+  const ceiling = await computeEventCmax({ id: event.id, kickoffAt, endsAt }, config.eventCpmTnd);
+  const wallet = await walletSpendable(advertiserId);
+  const wanted =
+    input.budgetTnd ?? Math.floor(ceiling.cMaxEvtTnd * (input.budgetShare ?? rng.float(0.3, 0.7)));
+  const budget = Math.max(
+    MIN_CAMPAIGN_BUDGET_TND,
+    Math.min(wanted, ceiling.cMaxEvtTnd, Math.floor(wallet.spendable_tnd)),
+  );
+  if (
+    ceiling.cMaxEvtTnd < MIN_CAMPAIGN_BUDGET_TND ||
+    wallet.spendable_tnd < MIN_CAMPAIGN_BUDGET_TND
+  ) {
+    await db.delete(events).where(eq(events.id, event.id));
+    return { error: ceiling.cMaxEvtTnd < MIN_CAMPAIGN_BUDGET_TND ? 'CMAX_TOO_LOW' : 'NOT_FUNDED' };
+  }
+
+  const [creative] = await db
+    .insert(creatives)
+    .values({
+      advertiserId,
+      creativeType: 'video',
+      title: `${event.name} — spot ${spotSeconds}s`,
+      storageKey: `sim/creatives/${rng.uuid()}.mp4`,
+      durationSeconds: spotSeconds,
+      validationStatus: 'approved',
+      validatedAt: input.moment.at,
+    })
+    .returning();
+
+  const [positioning] = await db
+    .insert(campaigns)
+    .values({
+      advertiserId,
+      name: `Positionnement — ${event.name}`,
+      campaignType: 'event',
+      status: 'draft',
+      startDate: kickoffDate,
+      endDate: kickoffDate,
+      requestedBudget: budget.toFixed(2),
+      eventId: event.id,
+      creativeId: creative?.id ?? null,
+    })
+    .returning();
+  if (!positioning) return { error: 'POSITIONING_FAILED' };
+
+  // The activation fork: an eventId sends prepareActivation to runEventDispatch, never to the
+  // standard pool — the event module's own pricing and bloc filling.
+  const outcome = await activateCampaign({
+    campaign: positioning,
+    contentValidationStatus: 'approved',
+    creativeDurationSeconds: spotSeconds,
+    activatedBy: null,
+    fromStatus: 'draft',
+  });
+
+  const [allocated] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(eventAllocations)
+    .where(eq(eventAllocations.campaignId, positioning.id));
+
+  if (outcome.status === 'OK' && kickoffDate > input.moment.date) {
+    await db
+      .update(campaigns)
+      .set({ status: 'upcoming' })
+      .where(and(eq(campaigns.id, positioning.id), eq(campaigns.status, 'active')));
+  }
+
+  return {
+    event_id: event.id,
+    campaign_id: positioning.id,
+    name: event.name,
+    kickoff_at: kickoffAt.toISOString(),
+    ends_at: endsAt.toISOString(),
+    budget_tnd: budget,
+    c_max_tnd: ceiling.cMaxEvtTnd,
+    outcome: outcome.status,
+    allocations: allocated?.n ?? 0,
+  };
+};

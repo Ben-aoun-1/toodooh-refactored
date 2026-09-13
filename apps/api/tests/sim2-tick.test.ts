@@ -8,6 +8,7 @@ import {
   campaignDispatchAllocation,
   campaignReconciliation,
   campaigns,
+  eventAllocations,
   proofOfPlay,
   screenhostAffluenceHourly,
   screenhosts,
@@ -20,7 +21,7 @@ import { mainDatabaseName, sandboxDatabaseName, sandboxUrl } from '../src/simula
 import { closeAllSandboxes, sandboxHandleFor } from '../src/simulator/pools.js';
 import { createSandboxDatabase, dropSandboxDatabase } from '../src/simulator/provisioning.js';
 import { momentOf } from '../src/simulator/tick/clock.js';
-import { launchCampaign } from '../src/simulator/tick/launch.js';
+import { launchCampaign, launchEvent } from '../src/simulator/tick/launch.js';
 import { runTick } from '../src/simulator/tick/run.js';
 import { simulationState } from '../src/simulator/tick/state.js';
 import { generateWorld } from '../src/simulator/world/spec.js';
@@ -229,6 +230,39 @@ describe('SIM-2 the tick (real engines on virtual time)', () => {
     expect(settlement).toBeDefined();
     expect(settlement?.expected).toBeGreaterThan(0);
     expect(Number(settlement?.spend)).toBeGreaterThanOrEqual(0);
+  }, 600_000);
+
+  it('an event is booked: the REAL event pricing fills blocs and owners answer it too', async () => {
+    const sim = await simulation();
+    const booked = await inSandbox(() =>
+      launchEvent({
+        moment: momentOf(sim.virtualNow),
+        seed: SEED,
+        name: 'Derby simulé',
+        inDays: 3,
+        durationHours: 2,
+        spotSeconds: 10,
+        budgetShare: 0.5,
+      }),
+    );
+    expect('error' in booked).toBe(false);
+    if ('error' in booked) throw new Error(booked.error);
+    expect(booked.outcome).toBe('OK');
+    expect(booked.c_max_tnd).toBeGreaterThan(0);
+    expect(booked.allocations).toBeGreaterThan(0);
+
+    const before = await simulation();
+    const result = await inSandbox(() => runTick({ simulation: before, hours: 36, log }));
+    expect(result.counters.owners_answered).toBeGreaterThan(0);
+
+    const decided = await inSandbox(() =>
+      db
+        .select({ statut: eventAllocations.statut })
+        .from(eventAllocations)
+        .where(eq(eventAllocations.campaignId, booked.campaign_id)),
+    );
+    expect(decided.length).toBeGreaterThan(0);
+    expect(decided.some((a) => a.statut !== 'EN_ATTENTE')).toBe(true);
   }, 600_000);
 
   it('SPS moved off its seeded value for at least one venue (the real score, on real evidence)', async () => {

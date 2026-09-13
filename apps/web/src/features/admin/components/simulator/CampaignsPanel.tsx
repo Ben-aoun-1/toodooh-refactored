@@ -1,7 +1,7 @@
-import { Megaphone, Plus } from 'lucide-react';
+import { CalendarClock, Megaphone, Plus } from 'lucide-react';
 import { useState } from 'react';
 
-import { useLaunchCampaign } from '@/features/admin/hooks/useAdminSimulator';
+import { useLaunchCampaign, useLaunchEvent } from '@/features/admin/hooks/useAdminSimulator';
 import type { BoardCampaign } from '@/features/admin/services/admin-simulator.service';
 
 const STATUS_CLASS: Record<string, string> = {
@@ -21,6 +21,7 @@ export function CampaignsPanel({
   campaigns: BoardCampaign[];
 }) {
   const launch = useLaunchCampaign(simulationId);
+  const bookEvent = useLaunchEvent(simulationId);
   const [days, setDays] = useState(7);
   const [spot, setSpot] = useState(10);
   const [share, setShare] = useState(40);
@@ -77,11 +78,32 @@ export function CampaignsPanel({
           <Plus className="h-4 w-4" />
           {launch.isPending ? 'Lancement…' : 'Lancer une campagne'}
         </button>
+        <button
+          type="button"
+          disabled={bookEvent.isPending}
+          onClick={() => bookEvent.mutate({ spot_seconds: spot, budget_share: share / 100 })}
+          className="flex items-center gap-1 rounded-lg border border-brand-deep px-3 py-2 text-sm font-medium text-brand-deep disabled:opacity-50"
+        >
+          <CalendarClock className="h-4 w-4" />
+          {bookEvent.isPending ? 'Réservation…' : 'Réserver un match'}
+        </button>
       </div>
 
       {launch.isError && (
         <p className="text-sm text-red-600">
           {launch.error instanceof Error ? launch.error.message : 'Lancement impossible.'}
+        </p>
+      )}
+      {bookEvent.isError && (
+        <p className="text-sm text-red-600">
+          {bookEvent.error instanceof Error ? bookEvent.error.message : 'Réservation impossible.'}
+        </p>
+      )}
+      {bookEvent.data && (
+        <p className="text-sm text-gray-600">
+          « {bookEvent.data.name} » — {bookEvent.data.allocations} établissements réservés, budget{' '}
+          {bookEvent.data.budget_tnd} TND sur un plafond événement de {bookEvent.data.c_max_tnd}{' '}
+          TND.
         </p>
       )}
       {launch.data && (

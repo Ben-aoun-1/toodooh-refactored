@@ -35,7 +35,7 @@ import { getDispatchConfig } from '../lib/dispatch/config.js';
 import { REDISPATCH_HEARTBEAT_TOLERANCE_MS } from '../lib/dispatch/redispatch.js';
 import { buildEligibilityPatch } from '../lib/eligibility-patch.js';
 import { createEngineTrace, type EngineTrace } from '../lib/engine-journal/trace.js';
-import { releaseBlocHours, runEventRefusalCascade } from '../lib/event-dispatch/dispatch.js';
+import { decideEventAllocation } from '../lib/event-allocation-decision.js';
 import { SLOTS_PER_DAY } from '../lib/half-hour-slots.js';
 import { displayImpressionsSettled } from '../lib/impressions-display.js';
 import { measuredDays, measuredTotal } from '../lib/monthly-audience.js';
@@ -2425,7 +2425,9 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
   const EVENT_ACCEPT_REMINDER =
     'Merci de maintenir vos écrans actifs pendant la fenêtre de diffusion.';
 
-  const decideEventAllocation = async (
+  // The decision itself lives in lib/event-allocation-decision.ts (ONE home, shared with the
+  // simulator's owner emulator); this wrapper owns the HTTP mapping.
+  const decideEventAllocationRoute = async (
     request: FastifyRequest,
     reply: FastifyReply,
     statut: 'ACCEPTE' | 'REFUSE',
@@ -2444,74 +2446,11 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         .status(401)
         .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
     }
-    const outcome = await db.transaction(async (tx) => {
-      const [row] = await tx
-        .select({
-          allocation: eventAllocations,
-          campaignId: campaigns.id,
-          matchName: campaigns.name,
-          eventId: events.id,
-          kickoffAt: events.kickoffAt,
-          endsAt: events.endsAt,
-        })
-        .from(eventAllocations)
-        .innerJoin(campaigns, eq(eventAllocations.campaignId, campaigns.id))
-        .innerJoin(events, eq(campaigns.eventId, events.id))
-        .where(
-          and(
-            eq(eventAllocations.id, parsedParams.data.id),
-            inArray(
-              eventAllocations.screenhostId,
-              tx
-                .select({ id: screenhosts.id })
-                .from(screenhosts)
-                .where(eq(screenhosts.ownerId, userId)),
-            ),
-          ),
-        )
-        .limit(1)
-        .for('update', { of: eventAllocations });
-      if (!row) return { kind: 'not_found' as const };
-      const current = row.allocation.statut;
-      if (current === statut)
-        return {
-          kind: 'ok' as const,
-          id: row.allocation.id,
-          statut,
-          screenhostId: row.allocation.screenhostId,
-          changed: false,
-        };
-      // A refusal is final — its reservations are gone and the cascade may have re-placed.
-      if (current === 'REFUSE') return { kind: 'refused_final' as const };
 
-      await tx
-        .update(eventAllocations)
-        .set({ statut, decidedAt: new Date() })
-        .where(eq(eventAllocations.id, row.allocation.id));
-
-      if (statut === 'REFUSE') {
-        // Release the venue's holds (its blocs will never air), then re-place the refused
-        // impressions over the remaining pool — same tx, all-or-nothing. D6 partial (or an
-        // empty repair) is accepted: the cascade never blocks a refusal.
-        await releaseBlocHours(tx, row.eventId, row.allocation.screenhostId);
-        await runEventRefusalCascade(
-          tx,
-          { id: row.campaignId, name: row.matchName },
-          { id: row.eventId, kickoffAt: row.kickoffAt, endsAt: row.endsAt },
-          {
-            screenhostId: row.allocation.screenhostId,
-            impressionsTotal: row.allocation.impressionsTotal,
-          },
-          (await getDispatchConfig()).eventCpmTnd,
-        );
-      }
-      return {
-        kind: 'ok' as const,
-        id: row.allocation.id,
-        statut,
-        screenhostId: row.allocation.screenhostId,
-        changed: true,
-      };
+    const outcome = await decideEventAllocation({
+      allocationId: parsedParams.data.id,
+      ownerId: userId,
+      statut,
     });
 
     if (outcome.kind === 'not_found') {
@@ -2524,20 +2463,6 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         statusCode: 409,
       });
     }
-    // E4/EV4 — a genuine decision flip recomputes THIS venue's SPS (the acceptation variable
-    // now reads event decisions too). Failure-tolerated, the decision stands.
-    if (outcome.changed) {
-      try {
-        await recomputeVenueSps(outcome.screenhostId);
-      } catch (err) {
-        request.log.warn(
-          { err, screenhostId: outcome.screenhostId },
-          'SPS on-event-decision recompute failed',
-        );
-      }
-    }
-    // THE PLAYOUT PIN — deliberately NO playlist re-push here: an accepted event allocation
-    // airs nothing until EV5 wires the bloc playout.
     return reply.status(200).send({
       id: outcome.id,
       statut,
@@ -2545,12 +2470,11 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
     });
   };
 
-  // POST /api/screenhosts/event-allocations/:id/accept — ACCEPTE + the antenne reminder.
   app.post('/api/screenhosts/event-allocations/:id/accept', ownerGuard, (request, reply) =>
-    decideEventAllocation(request, reply, 'ACCEPTE'),
+    decideEventAllocationRoute(request, reply, 'ACCEPTE'),
   );
   // POST /api/screenhosts/event-allocations/:id/refuse — REFUSE (final) + release + cascade.
   app.post('/api/screenhosts/event-allocations/:id/refuse', ownerGuard, (request, reply) =>
-    decideEventAllocation(request, reply, 'REFUSE'),
+    decideEventAllocationRoute(request, reply, 'REFUSE'),
   );
 };

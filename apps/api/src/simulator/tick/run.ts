@@ -12,6 +12,7 @@ import { actorParams } from '../world/write.js';
 
 import {
   type OwnerBehaviour,
+  runEventOwnerAnswers,
   runOwnerAnswers,
   runPax,
   runPlayout,
@@ -121,6 +122,15 @@ export const runOneHour = async (input: {
   counters.owners_answered += answers.answered;
   counters.accepted += answers.accepted;
   counters.refused += answers.refused;
+
+  const eventAnswers = await runEventOwnerAnswers({
+    moment,
+    seed: input.seed,
+    behaviours: input.behaviours.owners,
+  });
+  counters.owners_answered += eventAnswers.answered;
+  counters.accepted += eventAnswers.accepted;
+  counters.refused += eventAnswers.refused;
 
   const liveness = await runScreenLiveness({
     moment,
