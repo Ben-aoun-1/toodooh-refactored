@@ -71,6 +71,7 @@ const DispatchConfigManagement = lazy(
   () => import('@/features/admin/pages/DispatchConfigManagement'),
 );
 const TestingPage = lazy(() => import('@/features/admin/pages/TestingPage'));
+const SimulatorPage = lazy(() => import('@/features/admin/pages/SimulatorPage'));
 
 // Client React Query unique pour toute l'application (config : voir D-Q).
 const queryClient = createQueryClient();
@@ -639,6 +640,14 @@ export default function App() {
               element={
                 <AdminRoute requiredRoles={['superadmin', 'admin']}>
                   <TestingPage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin-simulator"
+              element={
+                <AdminRoute requiredRoles={['superadmin', 'admin']}>
+                  <SimulatorPage />
                 </AdminRoute>
               }
             />
