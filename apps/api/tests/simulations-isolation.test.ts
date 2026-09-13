@@ -30,15 +30,17 @@ const currentDatabase = async (): Promise<string | undefined> => {
 };
 
 describe('routed db handle (SIM-0)', () => {
+  // 180 s budgets: under the full parallel suite CREATE DATABASE waits behind the advisory lock
+  // and DROP DATABASE waits on a forced checkpoint (measured 2026-09-13). Alone: a few seconds.
   beforeAll(async () => {
     await createSandboxDatabase(dbName);
     await applyMigrations(sandboxUrl(env.DATABASE_URL, dbName));
-  }, 120_000);
+  }, 180_000);
 
   afterAll(async () => {
     await closeAllSandboxes();
     await dropSandboxDatabase(dbName);
-  }, 60_000);
+  }, 180_000);
 
   it('resolves to main outside any context', async () => {
     expect(currentSandbox()).toBeUndefined();
