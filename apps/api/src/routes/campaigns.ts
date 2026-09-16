@@ -22,6 +22,7 @@ import { MIN_CAMPAIGN_BUDGET_TND } from '../lib/campaign-budget.js';
 import { computeCampaignCmax } from '../lib/campaign-cmax.js';
 import {
   type StartDateViolation,
+  effectiveLeadWorkingDays,
   premiereDateDisponible,
   startDateViolation,
 } from '../lib/campaign-dates.js';
@@ -47,7 +48,7 @@ import { requireAuth } from '../middleware/require-auth.js';
 const startDateRejection = (violation: StartDateViolation, leadWorkingDays: number) => ({
   error: 'INVALID_START_DATE',
   reason: violation,
-  message: `La date de début doit être au moins ${leadWorkingDays} jour(s) ouvré(s) plus tard.`,
+  message: `La date de début doit être au moins ${effectiveLeadWorkingDays(leadWorkingDays)} jour(s) ouvré(s) plus tard.`,
   first_available_start_date: premiereDateDisponible(new Date(), leadWorkingDays),
 });
 

@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { db } from '../db/client.js';
 import { dispatchConfig } from '../db/schema.js';
+import { MIN_CAMPAIGN_LEAD_WORKING_DAYS } from '../lib/campaign-dates.js';
 import { type ResolvedDispatchConfig, getDispatchConfig } from '../lib/dispatch/config.js';
 import { DISPATCH_CONFIG_DEFAULTS } from '../lib/dispatch/thresholds.js';
 import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
@@ -54,9 +55,14 @@ const patchBodySchema = z
     t_10s: tField,
     t_20s: tField,
     t_30s: tField,
-    // CF-D1 — the campaign start-date lead (working days). 0 is legal (floor = today, field-test
-    // calibration only); 30 caps runaway values. Integer: the lead counts whole jours ouvrés.
-    campaign_lead_working_days: z.number().int().min(0).max(30).optional(),
+    // CF-D1 — the campaign start-date lead (working days). LEAD-1: at least 1 — a campaign never
+    // starts the day it is created; 30 caps runaway values. Integer: whole jours ouvrés.
+    campaign_lead_working_days: z
+      .number()
+      .int()
+      .min(MIN_CAMPAIGN_LEAD_WORKING_DAYS)
+      .max(30)
+      .optional(),
     // E4 — each weight ∈ [0, 100]; the Σ = 100 rule is judged on the MERGED result in the handler.
     sps_weight_acceptation: z.number().min(0).max(100).optional(),
     sps_weight_respect_evenements: z.number().min(0).max(100).optional(),

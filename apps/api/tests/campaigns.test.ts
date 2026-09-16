@@ -461,14 +461,17 @@ describe('campaigns draft lifecycle (advertiser, real Postgres)', () => {
     expect((await readCampaign(id))?.submittedAt).toBeNull();
   });
 
-  it('CF-D1 — at lead 0 TODAY is selectable and submits; yesterday stays TOO_SOON', async () => {
-    // The lead is the calibratable dispatch_config value; 0 collapses the floor to TODAY (tests
-    // only). The singleton is seeded (migration 0026) — flip it, exercise, restore.
+  it('LEAD-1 — a stored lead 0 still refuses TODAY; the floor is the next working day', async () => {
+    // Prod carried campaign_lead_working_days = 0 (a field-test calibration) and « today » was
+    // selectable (Mejri 15/09). The admin PATCH now refuses 0, so write it straight to the
+    // singleton (migration 0026 seeds it) — exercise the legacy value, restore.
     await db.update(dispatchConfig).set({ campaignLeadWorkingDays: 0 });
     try {
       const me = await seedUser();
       mockSession(me);
       const today = tunisDateOf(new Date());
+      const floor = premiereDateDisponible(new Date(), 1);
+      expect(floor > today).toBe(true);
       const res = await app.inject({
         method: 'POST',
         url: '/api/campaigns',
@@ -480,24 +483,30 @@ describe('campaigns draft lifecycle (advertiser, real Postgres)', () => {
           requested_budget: 500,
         },
       });
-      expect(res.statusCode).toBe(201);
-      const id = (res.json() as { id: string }).id;
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({
+        reason: 'TOO_SOON',
+        message: 'La date de début doit être au moins 1 jour(s) ouvré(s) plus tard.',
+        first_available_start_date: floor,
+      });
+
+      // The floor itself is accepted and submits.
+      const ok = await app.inject({
+        method: 'POST',
+        url: '/api/campaigns',
+        payload: {
+          name: 'Premier jour possible',
+          campaign_type: 'standard',
+          start_date: floor,
+          end_date: plusDays(floor, 30),
+          requested_budget: 500,
+        },
+      });
+      expect(ok.statusCode).toBe(201);
+      const id = (ok.json() as { id: string }).id;
       const submitted = await app.inject({ method: 'POST', url: `/api/campaigns/${id}/submit` });
       expect(submitted.statusCode).toBe(200);
       expect((submitted.json() as { status: string }).status).toBe('pending');
-
-      // The floor is TODAY, not gone: the past is still refused, and the payload says lead 0.
-      const past = await app.inject({
-        method: 'POST',
-        url: '/api/campaigns',
-        payload: { name: 'Hier', campaign_type: 'standard', start_date: plusDays(today, -1) },
-      });
-      expect(past.statusCode).toBe(400);
-      expect(past.json()).toMatchObject({
-        reason: 'TOO_SOON',
-        message: 'La date de début doit être au moins 0 jour(s) ouvré(s) plus tard.',
-        first_available_start_date: today,
-      });
     } finally {
       await db.update(dispatchConfig).set({ campaignLeadWorkingDays: 2 });
     }

@@ -226,7 +226,7 @@ describe('admin dispatch-config — CPM read/edit (real Postgres)', () => {
   });
 
   // ── CF-D1 — the campaign start-date lead (campaign_lead_working_days) ───────────
-  it('GET exposes the lead at its migration default (2); PATCH edits it — 0 included', async () => {
+  it('GET exposes the lead at its migration default (2); PATCH edits it down to 1', async () => {
     mockSession(await seedUser({ role: 'admin' }));
     const before = (await get()).json() as { campaign_lead_working_days: number };
     expect(before.campaign_lead_working_days).toBe(2);
@@ -234,12 +234,14 @@ describe('admin dispatch-config — CPM read/edit (real Postgres)', () => {
     expect((await patch({ campaign_lead_working_days: 5 })).statusCode).toBe(200);
     expect((await get()).json()).toMatchObject({ campaign_lead_working_days: 5 });
 
-    // 0 is a LEGAL value (floor = today, field tests) — the min bound is inclusive.
-    expect((await patch({ campaign_lead_working_days: 0 })).statusCode).toBe(200);
-    expect((await get()).json()).toMatchObject({ campaign_lead_working_days: 0 });
+    // LEAD-1 — 1 is the inclusive floor; 0 (a same-day start) is refused and changes nothing.
+    expect((await patch({ campaign_lead_working_days: 1 })).statusCode).toBe(200);
+    expect((await get()).json()).toMatchObject({ campaign_lead_working_days: 1 });
+    expect((await patch({ campaign_lead_working_days: 0 })).statusCode).toBe(400);
+    expect((await get()).json()).toMatchObject({ campaign_lead_working_days: 1 });
   });
 
-  it('rejects a lead out of [0, 30] or non-integer (400); 30 is the inclusive ceiling', async () => {
+  it('rejects a lead out of [1, 30] or non-integer (400); 30 is the inclusive ceiling', async () => {
     mockSession(await seedUser({ role: 'admin' }));
     expect((await patch({ campaign_lead_working_days: -1 })).statusCode).toBe(400);
     expect((await patch({ campaign_lead_working_days: 31 })).statusCode).toBe(400);

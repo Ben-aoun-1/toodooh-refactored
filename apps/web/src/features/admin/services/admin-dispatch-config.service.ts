@@ -92,7 +92,7 @@ export function composeLeadPatch(
 ): BlockPatchResult {
   const lead = parseCampaignLead(raw.lead);
   if (lead === null) {
-    return { ok: false, error: 'Le délai de lancement doit être un entier entre 0 et 30' };
+    return { ok: false, error: 'Le délai de lancement doit être un entier entre 1 et 30' };
   }
   const patch: CpmPatch = {};
   if (lead !== config.campaign_lead_working_days) patch.campaign_lead_working_days = lead;
@@ -165,11 +165,12 @@ export function parseAttention(raw: string): number | null {
 export const attentionOrderingValid = (t10: number, t20: number, t30: number): boolean =>
   t10 <= t20 && t20 <= t30;
 
-/** CF-D1 — the campaign lead: an integer count of jours ouvrés in [0, 30] (server bounds). */
+/** CF-D1 — the campaign lead: an integer count of jours ouvrés in [1, 30] (server bounds —
+ * LEAD-1: a campaign never starts the day it is created). */
 export function parseCampaignLead(raw: string): number | null {
   if (raw.trim() === '') return null; // Number('') is 0 — an empty field is NOT a zero lead
   const n = Number(raw);
-  return Number.isInteger(n) && n >= 0 && n <= 30 ? n : null;
+  return Number.isInteger(n) && n >= 1 && n <= 30 ? n : null;
 }
 
 export const adminDispatchConfigService = {

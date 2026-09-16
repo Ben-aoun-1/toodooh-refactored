@@ -153,8 +153,8 @@ function ConfigForm({ config }: { config: DispatchConfigView }) {
           <h3 className="text-lg font-semibold text-gray-900">Délai de lancement</h3>
         </div>
         <p className="text-sm text-gray-600 mb-4">
-          Nombre de jours ouvrés minimum entre aujourd'hui et le début d'une campagne. Attention : 0
-          autorise un démarrage le jour même — réservé aux tests terrain.
+          Nombre de jours ouvrés minimum entre aujourd'hui et le début d'une campagne (au moins 1 :
+          une campagne ne démarre jamais le jour même).
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
@@ -165,7 +165,7 @@ function ConfigForm({ config }: { config: DispatchConfigView }) {
               id="campaign-lead"
               type="number"
               step="1"
-              min="0"
+              min="1"
               max="30"
               value={lead}
               onChange={(e) => setLead(e.target.value)}
