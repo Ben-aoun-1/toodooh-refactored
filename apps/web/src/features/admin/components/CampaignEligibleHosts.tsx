@@ -2,6 +2,7 @@ import { ChevronDown, ChevronRight, Loader2, MapPin } from 'lucide-react';
 import { useState } from 'react';
 
 import { useCampaignEligibleHosts } from '@/features/admin/hooks/useAdminCampaigns';
+import { useSimulationCampaignEligibleHosts } from '@/features/admin/hooks/useAdminSimulator';
 import {
   ALLOCATION_STATUT_LABEL,
   columnLabels,
@@ -11,14 +12,27 @@ import {
 import { ApiError } from '@/lib/api-client';
 
 // ELIG-1 — « Hosts éligibles » inside the campaign examen, at any status. Collapsed by default:
-// the report runs the real pool assembly, so it is fetched only when the admin opens it.
+// the report runs the real pool assembly, so it is fetched only when the admin opens it. With a
+// `simulationId` the same panel reads a sandbox campaign (SIM-5) — same api code, other database.
 
 const nf = (n: number): string => n.toLocaleString('fr-FR');
 
-export function CampaignEligibleHosts({ campaignId }: { campaignId: string }) {
-  const [open, setOpen] = useState(false);
+export function CampaignEligibleHosts({
+  campaignId,
+  simulationId = null,
+  title = 'Hosts éligibles',
+  defaultOpen = false,
+}: {
+  campaignId: string;
+  simulationId?: string | null;
+  title?: string;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
   const [showExcluded, setShowExcluded] = useState(false);
-  const query = useCampaignEligibleHosts(campaignId, open);
+  const real = useCampaignEligibleHosts(campaignId, open && simulationId === null);
+  const sandbox = useSimulationCampaignEligibleHosts(simulationId, campaignId, open);
+  const query = simulationId === null ? real : sandbox;
   const report = query.data;
   const noDates = query.error instanceof ApiError && query.error.code === 'NO_DATES';
   const cols = report ? columnLabels(report.kind) : null;
@@ -32,7 +46,7 @@ export function CampaignEligibleHosts({ campaignId }: { campaignId: string }) {
       >
         {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         <MapPin className="h-4 w-4 text-brand-primary" />
-        Hosts éligibles
+        {title}
         {report && (
           <span className="ml-auto text-xs font-normal text-gray-500">
             {report.totals.eligible} éligibles · {report.totals.excluded} exclus

@@ -1,4 +1,4 @@
-import { Monitor, MonitorOff, Radio, Users } from 'lucide-react';
+import { Monitor, MonitorOff, Radio, Search, Users } from 'lucide-react';
 
 import { usePokeActor } from '@/features/admin/hooks/useAdminSimulator';
 import type { BoardState, BoardVenue } from '@/features/admin/services/admin-simulator.service';
@@ -12,9 +12,11 @@ const CLASS_DOT: Record<string, string> = {
 function VenueCard({
   venue,
   onToggleScreen,
+  onInspect,
 }: {
   venue: BoardVenue;
   onToggleScreen: (screenId: string, online: boolean) => void;
+  onInspect: () => void;
 }) {
   const airing = venue.airing.length > 0;
   return (
@@ -79,6 +81,14 @@ function VenueCard({
         </div>
       </dl>
 
+      <button
+        type="button"
+        onClick={onInspect}
+        className="mt-2 flex items-center gap-1 text-xs text-brand-deep underline"
+      >
+        <Search className="h-3 w-3" /> Inspecter les variables
+      </button>
+
       {airing && (
         <p className="mt-2 truncate rounded bg-brand-primary/20 px-2 py-1 text-xs">
           ▶ {venue.airing.map((a) => `${a.name} ×${a.reps}`).join(' · ')}
@@ -91,9 +101,11 @@ function VenueCard({
 export function SimulatorBoard({
   simulationId,
   board,
+  onInspect,
 }: {
   simulationId: string;
   board: BoardState;
+  onInspect: (venue: { id: string; name: string }) => void;
 }) {
   const poke = usePokeActor(simulationId);
   const toggle = (screenId: string, online: boolean) =>
@@ -119,7 +131,12 @@ export function SimulatorBoard({
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {board.venues.map((venue) => (
-          <VenueCard key={venue.id} venue={venue} onToggleScreen={toggle} />
+          <VenueCard
+            key={venue.id}
+            venue={venue}
+            onToggleScreen={toggle}
+            onInspect={() => onInspect({ id: venue.id, name: venue.name })}
+          />
         ))}
       </div>
     </section>

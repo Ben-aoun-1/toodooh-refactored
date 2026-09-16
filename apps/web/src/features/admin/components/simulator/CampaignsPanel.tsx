@@ -1,6 +1,7 @@
 import { CalendarClock, Megaphone, Plus } from 'lucide-react';
 import { useState } from 'react';
 
+import { CampaignEligibleHosts } from '@/features/admin/components/CampaignEligibleHosts';
 import { useLaunchCampaign, useLaunchEvent } from '@/features/admin/hooks/useAdminSimulator';
 import type { BoardCampaign } from '@/features/admin/services/admin-simulator.service';
 
@@ -25,6 +26,7 @@ export function CampaignsPanel({
   const [days, setDays] = useState(7);
   const [spot, setSpot] = useState(10);
   const [share, setShare] = useState(40);
+  const [eligibleFor, setEligibleFor] = useState<{ id: string; name: string } | null>(null);
 
   return (
     <section className="space-y-3 rounded-xl border bg-white p-4">
@@ -126,6 +128,7 @@ export function CampaignsPanel({
                 <th className="px-2 py-2 text-left font-medium">Budget</th>
                 <th className="px-2 py-2 text-left font-medium">Réponses</th>
                 <th className="px-2 py-2 text-left font-medium">Diffusions</th>
+                <th className="px-2 py-2 text-left font-medium" />
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -151,11 +154,30 @@ export function CampaignsPanel({
                     <span className="text-amber-600">{c.pending}</span>
                   </td>
                   <td className="px-2 py-2 font-semibold">{c.proofs}</td>
+                  <td className="px-2 py-2">
+                    <button
+                      type="button"
+                      onClick={() => setEligibleFor({ id: c.id, name: c.name })}
+                      className="whitespace-nowrap text-xs text-brand-deep underline"
+                    >
+                      Hosts éligibles
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      )}
+
+      {eligibleFor && (
+        <CampaignEligibleHosts
+          key={eligibleFor.id}
+          campaignId={eligibleFor.id}
+          simulationId={simulationId}
+          title={`Hosts éligibles — ${eligibleFor.name}`}
+          defaultOpen
+        />
       )}
     </section>
   );
