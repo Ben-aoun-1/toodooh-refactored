@@ -10,6 +10,8 @@ import {
   campaigns,
   events,
   screenhostAffluence,
+  screenhostAffluenceHourly,
+  screenhostUnavailability,
   screenhosts,
   users,
 } from '../src/db/schema.js';
@@ -26,11 +28,14 @@ import { bothHalves, resetAuthTables } from './helpers/db-test-setup.js';
 // ELIG-2 (operator ruling 2026-09-16) — ONLY APPROVED OWNERS COUNT, everywhere a venue is put to
 // work: the standard pool (journaled 'owner_not_approved' before any other reason), the event
 // ceiling and the event pool, the advertiser coverage map and the admin « Hosts éligibles » view.
+// MAP-4 (same day) — the coverage map also needs ONE available day in the campaign window and ONE
+// affluence value (manual in effect, or live).
 //
 // Every date is FIXED and named: the standard window is Monday 2024-01-01 → Wednesday 2024-01-03,
 // the match is Thursday 2027-06-10 at 20:00 Tunis. Nothing depends on the day the suite runs.
 
 const MONDAY = '2024-01-01';
+const TUESDAY = '2024-01-02';
 const WEDNESDAY = '2024-01-03';
 const MATCH_KICKOFF = new Date('2027-06-10T20:00:00+01:00'); // Thursday, Tunis
 const MATCH_ENDS = new Date('2027-06-10T22:00:00+01:00');
@@ -340,7 +345,7 @@ describe('ELIG-2 — only approved owners count (real Postgres)', () => {
     });
   });
 
-  describe('GET /api/campaigns/:id/coverage', () => {
+  describe('GET /api/campaigns/:id/coverage — MAP-4', () => {
     let app: ReturnType<typeof buildApp>;
     beforeEach(async () => {
       app = buildApp();
@@ -377,6 +382,179 @@ describe('ELIG-2 — only approved owners count (real Postgres)', () => {
       expect(idsOf(body)).toEqual([v.approved]);
       expect(body.covered_count).toBe(1);
       expect(body.without_coordinates).toBe(0);
+    });
+
+    it('hides a venue unavailable on EVERY window day; one free day is enough to show it', async () => {
+      const sector = await eventSector();
+      const advertiser = await seedUser({ role: 'advertiser' });
+      const campaignId = await seedCampaign(advertiser); // Monday → Wednesday
+      const owner = await seedApprovedOwner();
+      const allBlocked = await seedVenue({
+        name: 'Fermé 3 jours',
+        ownerId: owner,
+        sectorId: sector,
+      });
+      const oneFree = await seedVenue({ name: 'Libre mercredi', ownerId: owner, sectorId: sector });
+      await db.insert(screenhostUnavailability).values([
+        { screenhostId: allBlocked, day: MONDAY },
+        { screenhostId: allBlocked, day: TUESDAY },
+        { screenhostId: allBlocked, day: WEDNESDAY },
+        { screenhostId: oneFree, day: MONDAY },
+        { screenhostId: oneFree, day: TUESDAY },
+        // a declaration OUTSIDE the window changes nothing
+        { screenhostId: oneFree, day: '2024-01-04' }, // Thursday
+      ]);
+
+      const body = await coverage(advertiser, campaignId);
+      expect(idsOf(body)).toEqual([oneFree]);
+      expect(body.covered_count).toBe(1);
+    });
+
+    it('a draft without dates is NOT filtered by availability (no window to test yet)', async () => {
+      const sector = await eventSector();
+      const advertiser = await seedUser({ role: 'advertiser' });
+      const undated = await seedCampaign(advertiser, { start: null, end: null });
+      const halfDated = await seedCampaign(advertiser, { start: MONDAY, end: null });
+      const venue = await seedVenue({
+        name: 'Déclaré indisponible',
+        ownerId: await seedApprovedOwner(),
+        sectorId: sector,
+      });
+      await db.insert(screenhostUnavailability).values([
+        { screenhostId: venue, day: MONDAY },
+        { screenhostId: venue, day: TUESDAY },
+        { screenhostId: venue, day: WEDNESDAY },
+      ]);
+
+      expect(idsOf(await coverage(advertiser, undated))).toEqual([venue]);
+      expect(idsOf(await coverage(advertiser, halfDated))).toEqual([venue]);
+    });
+
+    it('hides a venue with no affluence: none, all zero, or only a suspended cell', async () => {
+      const sector = await eventSector();
+      const advertiser = await seedUser({ role: 'advertiser' });
+      const campaignId = await seedCampaign(advertiser);
+      const owner = await seedApprovedOwner();
+
+      const none = await seedVenue({
+        name: 'Aucune affluence',
+        ownerId: owner,
+        sectorId: sector,
+        affluence: 'none',
+      });
+      const allZero = await seedVenue({
+        name: 'Affluence nulle',
+        ownerId: owner,
+        sectorId: sector,
+        affluence: 'none',
+      });
+      await db.insert(screenhostAffluence).values(
+        bothHalves([
+          { screenhostId: allZero, dayOfWeek: 1, hour: 10, estimatedImpressions: 0 },
+          { screenhostId: allZero, dayOfWeek: 2, hour: 11, estimatedImpressions: 0 },
+        ]),
+      );
+      await db.insert(screenhostAffluenceHourly).values([
+        { screenhostId: allZero, date: MONDAY, hour: 10, slot: 20, value: 0 },
+        { screenhostId: allZero, date: MONDAY, hour: 10, slot: 21, value: null },
+      ]);
+      const suspendedOnly = await seedVenue({
+        name: 'Cellule suspendue',
+        ownerId: owner,
+        sectorId: sector,
+        affluence: 'none',
+      });
+      await db.insert(screenhostAffluence).values(
+        bothHalves({
+          screenhostId: suspendedOnly,
+          dayOfWeek: 1,
+          hour: 10,
+          estimatedImpressions: 80,
+          inEffect: false,
+        }),
+      );
+
+      // Controls in the SAME request: a venue with the full grid and a venue with only one live
+      // value. Both must show, so the probe is proven to look at EACH venue's own rows (a
+      // subquery that lost its venue correlation would show or hide all five together).
+      const withGrid = await seedVenue({
+        name: 'Grille complète',
+        ownerId: owner,
+        sectorId: sector,
+      });
+      const liveOnly = await seedVenue({
+        name: 'Mesure seule',
+        ownerId: owner,
+        sectorId: sector,
+        affluence: 'none',
+      });
+      await db.insert(screenhostAffluenceHourly).values({
+        screenhostId: liveOnly,
+        date: TUESDAY,
+        hour: 15,
+        slot: 30,
+        value: 5,
+      });
+
+      const body = await coverage(advertiser, campaignId);
+      expect(idsOf(body)).toEqual([withGrid, liveOnly].sort());
+      for (const hidden of [none, allZero, suspendedOnly]) {
+        expect(idsOf(body)).not.toContain(hidden);
+      }
+      expect(body.covered_count).toBe(2);
+    });
+
+    it('shows a venue with a SINGLE manual value, or a SINGLE live value', async () => {
+      const sector = await eventSector();
+      const advertiser = await seedUser({ role: 'advertiser' });
+      const campaignId = await seedCampaign(advertiser);
+      const owner = await seedApprovedOwner();
+
+      const oneManual = await seedVenue({
+        name: 'Une valeur manuelle',
+        ownerId: owner,
+        sectorId: sector,
+        affluence: 'none',
+      });
+      // one half-hour cell, flag unknown (NULL) = in effect
+      await db.insert(screenhostAffluence).values({
+        screenhostId: oneManual,
+        dayOfWeek: 6, // Saturday — outside the Monday→Wednesday window: presence is enough
+        hour: 12,
+        slot: 24,
+        estimatedImpressions: 7,
+      });
+      const oneRestored = await seedVenue({
+        name: 'Cellule rétablie',
+        ownerId: owner,
+        sectorId: sector,
+        affluence: 'none',
+      });
+      await db.insert(screenhostAffluence).values({
+        screenhostId: oneRestored,
+        dayOfWeek: 1,
+        hour: 9,
+        slot: 18,
+        estimatedImpressions: 3,
+        inEffect: true,
+      });
+      const oneLive = await seedVenue({
+        name: 'Une valeur mesurée',
+        ownerId: owner,
+        sectorId: sector,
+        affluence: 'none',
+      });
+      await db.insert(screenhostAffluenceHourly).values({
+        screenhostId: oneLive,
+        date: '2023-12-29', // a Friday before the window: any live value counts
+        hour: 18,
+        slot: 37,
+        value: 12,
+      });
+
+      const body = await coverage(advertiser, campaignId);
+      expect(idsOf(body)).toEqual([oneManual, oneRestored, oneLive].sort());
+      expect(body.covered_count).toBe(3);
     });
   });
 });

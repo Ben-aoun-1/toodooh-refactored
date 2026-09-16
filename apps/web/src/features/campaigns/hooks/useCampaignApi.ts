@@ -59,6 +59,10 @@ export function useUpdateCampaign(userId: string | undefined) {
     onSuccess: (campaign: CampaignView) => {
       queryClient.setQueryData(campaignsKeys.detail(campaign.id), campaign);
       void queryClient.invalidateQueries({ queryKey: campaignsKeys.list(userId ?? '') });
+      // MAP-4 — the coverage map depends on the saved dates (a venue needs one available day in
+      // the window) and on zone_ids; its key carries neither, so a PATCH must drop the cached map
+      // or a quick Période → Zones round trip would show the OLD window's venues.
+      void queryClient.invalidateQueries({ queryKey: campaignsKeys.coverage(campaign.id) });
     },
   });
 }
