@@ -117,7 +117,9 @@ export type RedispatchRoundOutcome =
 const round4 = (n: number): number => Math.round(n * 1e4) / 1e4;
 
 // Screenhosts with NO screen seen within the tolerance (or no screens at all) — they cannot air,
-// so the rattrapage must not place onto them.
+// so the rattrapage must not place onto them. ELIG-2 — this list only EXCLUDES; it never admits a
+// venue. The rattrapage places onto assemblePool's output alone, and the pool already drops every
+// venue whose owner is not approved (lib/approved-owner.ts), so no owner clause is needed here.
 const deadScreenhostIds = async (tx: DbExecutor, cutoff: Date): Promise<string[]> => {
   const rows = await tx
     .select({ screenhostId: screenhosts.id, lastSeen: max(screens.lastSeenAt) })

@@ -10,6 +10,7 @@ import {
   campaigns,
   screenhosts,
 } from '../db/schema.js';
+import { ownerApprovedSql } from '../lib/approved-owner.js';
 import {
   broadcastableHours,
   screenhostMatchesTargeting,
@@ -106,6 +107,9 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
   // applies on EVERY path — the engine's eligibility does, so a targeted+zoned campaign's map
   // must not show venues dispatch will exclude. Coordinates are numeric in the DB → coerced to
   // numbers for the map.
+  // ELIG-2 (operator ruling 2026-09-16) — APPROVED OWNER: the venue's owner exists and is
+  // validated; ownerless, pending, rejected and banned owners are out, exactly as they are out of
+  // the pool (lib/approved-owner.ts, the one predicate). Counted like every other gate.
   app.get('/api/campaigns/:id/coverage', advertiserGuard, async (request, reply) => {
     const parsedParams = idParamSchema.safeParse(request.params);
     if (!parsedParams.success) return reply.status(400).send(invalidId);
@@ -122,8 +126,8 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
       .from(campaignTargeting)
       .where(eq(campaignTargeting.campaignId, campaign.id));
 
-    // Pull the active venues, then apply the pool's gates + matchers in memory (the matchers are
-    // the shared dispatch primitives; the SQL only narrows to active).
+    // Pull the active venues of approved owners (the shared SQL predicate), then apply the pool's
+    // gates + matchers in memory (the matchers are the shared dispatch primitives).
     const venues = await db
       .select({
         id: screenhosts.id,
@@ -142,7 +146,7 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
       })
       .from(screenhosts)
       .leftJoin(businessSectors, eq(screenhosts.businessSectorId, businessSectors.id))
-      .where(eq(screenhosts.isActive, true));
+      .where(and(eq(screenhosts.isActive, true), ownerApprovedSql()));
 
     const zoneRows = await db
       .select({ zoneId: campaignZones.zoneId })

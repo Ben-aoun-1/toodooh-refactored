@@ -9,6 +9,7 @@ import {
   screenhostUnavailability,
   screenhosts,
 } from '../../db/schema.js';
+import { ownerApprovedSql } from '../approved-owner.js';
 import { type BlocDiffusion, fenetreDiffusion } from '../fenetre-diffusion.js';
 import { collapseHalvesSql, inEffectSql } from '../half-hour-slots.js';
 import { isOpenAt } from '../opening-hours.js';
@@ -27,7 +28,9 @@ import { isOpenAt } from '../opening-hours.js';
 // Eligibility (D1), PER BLOC on the bloc's OWN Tunis date (late kickoffs cross midnight):
 // the venue is open for the FULL 20 minutes, the date is not owner-declared unavailable (E2),
 // and no OTHER event holds a reservation on any hour the bloc touches. A venue with ≥ 1
-// available bloc, an event-eligible sector and is_active participates.
+// available bloc, an event-eligible sector, is_active and an APPROVED owner participates (ELIG-2,
+// operator ruling 2026-09-16 — the shared predicate lives in lib/approved-owner.ts, outside
+// dispatch/ so this boundary stays clean).
 
 export const AMAX_FALLBACK_PPH = 50;
 export const ANTENNE_SECONDS_PER_BLOC = 300;
@@ -175,9 +178,9 @@ export interface EventCmaxResult {
 }
 
 /**
- * The event ceiling: every active venue of an event-eligible sector with ≥ 1 available bloc
- * contributes blocs × A_max × 20. CPM_evt arrives resolved from the caller (the config read
- * stays out of this module — D51).
+ * The event ceiling: every active venue of an event-eligible sector, owned by an approved owner,
+ * with ≥ 1 available bloc contributes blocs × A_max × 20. CPM_evt arrives resolved from the
+ * caller (the config read stays out of this module — D51).
  */
 export const computeEventCmax = async (
   event: EventRef,
@@ -193,7 +196,7 @@ export const computeEventCmax = async (
     })
     .from(screenhosts)
     .innerJoin(businessSectors, eq(screenhosts.businessSectorId, businessSectors.id))
-    .where(eq(screenhosts.isActive, true));
+    .where(and(eq(screenhosts.isActive, true), ownerApprovedSql()));
   const eligibleSector = candidates.filter((c) => c.eventEligible);
   const ids = eligibleSector.map((c) => c.id);
 

@@ -22,11 +22,27 @@ describe('ELIG-1 — eligible-hosts labels', () => {
       'not_event_eligible',
       'no_bloc_available',
       'no_sector',
+      'owner_not_approved',
     ];
     for (const code of apiCodes) {
       expect(EXCLUSION_REASON_LABEL).toHaveProperty(code);
       expect(exclusionLabel(code)).not.toBe(code);
     }
+  });
+
+  it('ELIG-2 — a venue whose owner is not validated says so in French', () => {
+    expect(EXCLUSION_REASON_LABEL.owner_not_approved).toBe('Propriétaire non validé');
+    expect(exclusionLabel('owner_not_approved')).toBe('Propriétaire non validé');
+    const summary = exclusionSummary([
+      { id: '1', name: 'A', reason: 'owner_not_approved' },
+      { id: '2', name: 'B', reason: 'owner_not_approved' },
+      { id: '3', name: 'C', reason: 'inactive' },
+    ]);
+    expect(summary[0]).toEqual({
+      reason: 'owner_not_approved',
+      label: 'Propriétaire non validé',
+      count: 2,
+    });
   });
 
   it('an unknown code is shown as is rather than hidden', () => {

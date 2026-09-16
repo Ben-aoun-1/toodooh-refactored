@@ -15,7 +15,8 @@ export type ExclusionReason =
   | 'no_residual_capacity'
   | 'not_event_eligible'
   | 'no_bloc_available'
-  | 'no_sector';
+  | 'no_sector'
+  | 'owner_not_approved';
 
 export interface EligibleHost {
   id: string;
@@ -66,6 +67,8 @@ export const EXCLUSION_REASON_LABEL: Record<ExclusionReason, string> = {
   not_event_eligible: 'Catégorie non éligible aux événements',
   no_bloc_available: 'Aucun bloc disponible pendant le match',
   no_sector: 'Catégorie non renseignée',
+  // ELIG-2 (operator ruling 2026-09-16) — only a venue whose owner is validated counts anywhere.
+  owner_not_approved: 'Propriétaire non validé',
 };
 
 export const exclusionLabel = (reason: string): string =>

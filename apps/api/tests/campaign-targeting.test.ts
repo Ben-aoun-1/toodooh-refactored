@@ -15,6 +15,7 @@ import {
 } from '../src/db/schema.js';
 import { campaignTargetingRoutes } from '../src/routes/campaign-targeting.js';
 
+import { seedApprovedOwner } from './helpers/approved-owner.js';
 import { resetAuthTables } from './helpers/db-test-setup.js';
 
 // Integration suite — real Postgres. getSession is mocked to drive the advertiser identity. Owner
@@ -73,10 +74,14 @@ const seedScreenhost = async (opts: {
   capacity?: number | null;
 }): Promise<string> => {
   const hours = opts.hours === undefined ? { open: 8, close: 22 } : opts.hours;
+  // ELIG-2 (2026-09-16) — a covered venue also needs an APPROVED owner; every venue here gets
+  // one, so each test still isolates the gate it is about.
+  const ownerId = await seedApprovedOwner();
   const [sh] = await db
     .insert(screenhosts)
     .values({
       name: opts.name ?? 'Venue',
+      ownerId,
       businessSectorId: opts.categoryId,
       class: opts.cls,
       isActive: opts.active ?? true,

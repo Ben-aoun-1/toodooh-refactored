@@ -9,8 +9,9 @@ import { tForDuration } from './dispatch/thresholds.js';
 
 // E5 (VF US-1.3/1.4) — the C_max ceiling the budget cursor is bounded by:
 //
-//   I_max = Σ Ii over the campaign's ELIGIBLE pool     (targeting ∩ zones ∩ active ∩ hours ∩
-//                                                       capacity, engagement-netted, T-weighted)
+//   I_max = Σ Ii over the campaign's ELIGIBLE pool     (targeting ∩ zones ∩ active ∩ approved
+//                                                       owner ∩ hours ∩ capacity,
+//                                                       engagement-netted, T-weighted)
 //   C_max = ⌊ (CPM × I_max) ÷ 1000 ⌋                    (FLOOR to whole TND — the promise must
 //                                                       be deliverable)
 //
