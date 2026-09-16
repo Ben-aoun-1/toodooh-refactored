@@ -12,6 +12,7 @@ import { creativesRoutes } from '../src/routes/creatives.js';
 import { storage } from '../src/storage/s3-storage.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
+import { minimalPng } from './helpers/media-bytes.js';
 
 // UPL-1 (operator 2026-09-16) — the measured VIDEO rules at the route, in EVERY environment. The
 // real-ffprobe block of creative-validation.test.ts only runs where FFPROBE_PATH exists (the
@@ -227,5 +228,28 @@ describe('measured video rules at the upload route (probe mocked — every envir
     const ok = await uploadVideo(app, 'duration_seconds=10&for_event=1');
     expect(ok.statusCode).toBe(201);
     expect((ok.json() as { duration_seconds: number }).duration_seconds).toBe(15);
+  });
+
+  // ── the probe only ever sees accepted video bytes ────────────────────────────
+  it('never probes a photo, nor bytes the sniff already refused', async () => {
+    mockSession(await seedUser());
+    const photo = await app.inject({
+      method: 'POST',
+      url: '/api/creatives?type=photo&duration_seconds=10',
+      ...multipartBody({ filename: 'shot.png', contentType: 'image/png', content: minimalPng() }),
+    });
+    expect(photo.statusCode).toBe(201);
+    const webm = await app.inject({
+      method: 'POST',
+      url: '/api/creatives?type=video&duration_seconds=10',
+      ...multipartBody({
+        filename: 'clip.mp4',
+        contentType: 'video/mp4',
+        content: fixture('vp8-169.webm'),
+      }),
+    });
+    expect(webm.statusCode).toBe(400);
+    expect((webm.json() as { error: string }).error).toBe('MEDIA_KIND_UNSUPPORTED');
+    expect(probeSpy).not.toHaveBeenCalled();
   });
 });

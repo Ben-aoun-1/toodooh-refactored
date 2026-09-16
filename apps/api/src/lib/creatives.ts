@@ -2,6 +2,8 @@ import { sql } from 'drizzle-orm';
 
 import { type Creative, creatives } from '../db/schema.js';
 
+import type { SniffedContainer } from './media-probe.js';
+
 // Creative upload helpers (L-spot) shared by the advertiser upload route (routes/creatives.ts) and
 // the admin moderation surface (routes/admin-creatives.ts). A creative is VIDEO or PHOTO; the
 // duration rule comes from the screencaster WF spec: a VIDEO's length ≤ 30s, a PHOTO's chosen
@@ -9,15 +11,29 @@ import { type Creative, creatives } from '../db/schema.js';
 
 export type CreativeKind = 'video' | 'photo';
 
-// MIME allowlists per kind — the uploaded file's content type must match the asserted creative_type.
-// CF-SH1 (spec §1.6) — SPEC-STRICT for new uploads: video is MP4/MOV only (webm out), image is
-// JPEG/PNG only (webp out). Existing rows with the old types are GRANDFATHERED — these lists gate
-// the UPLOAD route only; reads/linking/moderation/playout of stored creatives never re-validate.
-export const ALLOWED_VIDEO_MIME = new Set(['video/mp4', 'video/quicktime']);
-export const ALLOWED_IMAGE_MIME = new Set(['image/jpeg', 'image/png']);
+// Container allowlists per kind — CF-SH1 (spec §1.6) SPEC-STRICT for new uploads: video is MP4/MOV
+// only (webm out), image is JPEG/PNG only (webp out). UPL-2 (operator 2026-09-16): the decision is
+// read from the SNIFFED BYTES, never from the declared mimetype — prod refused real photos whose
+// browser sent application/octet-stream, and « .png » files that were JPEG bytes. The stored mime
+// is the one these bytes imply (the declared one is advisory and never persisted). Existing rows
+// are GRANDFATHERED — this gates the UPLOAD route only; reads/linking/moderation/playout of stored
+// creatives never re-validate.
+const CREATIVE_CONTAINER_MIME: Record<
+  CreativeKind,
+  Partial<Record<NonNullable<SniffedContainer>, string>>
+> = {
+  video: { mp4: 'video/mp4', mov: 'video/quicktime' },
+  photo: { jpeg: 'image/jpeg', png: 'image/png' },
+};
 
-export const mimeAllowedForKind = (kind: CreativeKind, mime: string): boolean =>
-  kind === 'video' ? ALLOWED_VIDEO_MIME.has(mime) : ALLOWED_IMAGE_MIME.has(mime);
+/**
+ * The mime to store for bytes sniffed as `sniffed` under a `kind` creative, or null when that
+ * container is not accepted for the kind (a WebP photo, a WebM video, a photo sent as a video…).
+ */
+export const creativeMimeForContainer = (
+  kind: CreativeKind,
+  sniffed: SniffedContainer,
+): string | null => (sniffed === null ? null : (CREATIVE_CONTAINER_MIME[kind][sniffed] ?? null));
 
 // Size cap (multipart fileSize limit). 50 MB covers a ≤30s clip at a modest bitrate; photos sit far
 // under it. One cap for both kinds (judgment call — flag if video needs a higher ceiling).

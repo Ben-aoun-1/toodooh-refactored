@@ -69,8 +69,8 @@ export function sniffContainer(bytes: Buffer): SniffedContainer {
   ) {
     return 'png';
   }
-  // PDF: '%PDF-' (CF-M2 — the recharge justificatif accepts PDFs; creatives never do, their
-  // declared-mime gate rejects application/pdf before this sniff is consulted).
+  // PDF: '%PDF-' (CF-M2 — the recharge justificatif accepts PDFs; creatives never do: UPL-2
+  // refuses PDF bytes by the sniffed kind, whatever the declared type).
   if (bytes.length >= 5 && bytes.toString('latin1', 0, 5) === '%PDF-') return 'pdf';
   return null;
 }

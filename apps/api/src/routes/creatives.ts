@@ -16,15 +16,15 @@ import {
 import {
   MAX_CREATIVE_BYTES,
   MAX_VIDEO_DURATION_SECONDS,
+  creativeMimeForContainer,
   creativeView,
   isValidDuration,
-  mimeAllowedForKind,
 } from '../lib/creatives.js';
 import { validateEventSpot } from '../lib/event-pricing/spot.js';
 import {
   MediaProbeError,
   REQUIRED_VIDEO_CODEC,
-  declaredMatchesSniffed,
+  type SniffedContainer,
   isMediaProbeEnabled,
   probeMedia,
   sniffContainer,
@@ -55,6 +55,18 @@ const uploadQuerySchema = z.object({
 
 const sendUnauthenticated = (reply: FastifyReply) =>
   reply.status(401).send({ error: 'UNAUTHENTICATED', message: 'Authentification requise.' });
+
+// UPL-2 — how a refused-but-recognised container is named in the French refusal. The web maps
+// `detected` to its own per-case copy (creative-media.ts); this message is the fallback.
+const CONTAINER_LABEL: Record<NonNullable<SniffedContainer>, string> = {
+  mp4: 'MP4',
+  mov: 'MOV',
+  webm: 'WebM',
+  jpeg: 'JPEG',
+  png: 'PNG',
+  webp: 'WebP',
+  pdf: 'PDF',
+};
 
 const invalidField = (reply: FastifyReply, field: string, reason: string) =>
   reply
@@ -119,25 +131,44 @@ export const creativesRoutes: FastifyPluginAsync = async (app) => {
         message: `Le fichier dépasse la limite de ${MAX_CREATIVE_BYTES} octets.`,
       });
     }
-    if (!mimeAllowedForKind(type, data.mimetype)) {
-      return invalidField(
-        reply,
-        'file',
-        `unsupported content type for a ${type} creative: ${data.mimetype}`,
-      );
-    }
 
     // ── CF-SH1 (spec §1.6) — authoritative validation for NEW uploads only ──────────────────────
     // Existing rows are GRANDFATHERED: none of this runs anywhere but here.
-    // Layer 1 (always on): the declared mimetype must match what the bytes actually are.
+    // Layer 1 (always on): the BYTES decide the format. UPL-2 (operator 2026-09-16): the declared
+    // mimetype is advisory only — prod refused real photos whose browser sent no usable type
+    // (application/octet-stream, or none → busboy's text/plain) and « .png » files carrying JPEG
+    // bytes. Accepted bytes pass whatever was declared, and the STORED mime is the one the bytes
+    // imply. A declared type can never make bad bytes pass: the sniff alone decides.
     const sniffed = sniffContainer(body);
-    if (!declaredMatchesSniffed(data.mimetype, sniffed)) {
+    const storedMime = creativeMimeForContainer(type, sniffed);
+    if (sniffed === null) {
       return reply.status(400).send({
         error: 'MEDIA_TYPE_MISMATCH',
-        message: `The file's bytes do not match the declared content type (declared ${data.mimetype}, detected ${sniffed ?? 'unrecognized'}).`,
+        message:
+          type === 'video'
+            ? 'Format de fichier non reconnu. Envoyez une vidéo MP4 ou MOV (H.264).'
+            : 'Format de fichier non reconnu. Envoyez une image PNG ou JPEG.',
+        creative_type: type,
+        declared: data.mimetype,
+        detected: null,
+      });
+    }
+    if (storedMime === null) {
+      // Recognised bytes this creative type refuses — WebP / WebM (spec-strict), a PDF, a video
+      // sent as a photo or a photo sent as a video. `detected` lets the web name the exact case.
+      return reply.status(400).send({
+        error: 'MEDIA_KIND_UNSUPPORTED',
+        message: `Ce fichier est au format ${CONTAINER_LABEL[sniffed]} : il ne peut pas être téléversé comme ${type === 'video' ? 'vidéo' : 'photo'}.`,
+        creative_type: type,
         declared: data.mimetype,
         detected: sniffed,
       });
+    }
+    if (storedMime !== data.mimetype) {
+      request.log.info(
+        { declared: data.mimetype, detected: sniffed, stored: storedMime },
+        'creative upload: declared type differs from the bytes — the bytes win',
+      );
     }
     // Layer 2 (FFPROBE_PATH-gated, the chromium-smoke posture): measured codec/duration. UPL-1
     // (operator 2026-09-16): NO aspect-ratio rule — any ratio uploads; display letterboxes it.
@@ -197,7 +228,7 @@ export const creativesRoutes: FastifyPluginAsync = async (app) => {
     const creativeId = randomUUID();
     const key = `creatives/${userId}/${creativeId}`;
 
-    const result = await storage.upload({ key, body, contentType: data.mimetype });
+    const result = await storage.upload({ key, body, contentType: storedMime });
     if ('error' in result) {
       // Storage failed → do NOT touch the table. Advertiser retries; no orphan key reference.
       return reply.status(502).send({
@@ -221,7 +252,7 @@ export const creativesRoutes: FastifyPluginAsync = async (app) => {
         title: title ?? null,
         storageKey: key,
         durationSeconds: storedDurationSeconds,
-        mimeType: data.mimetype,
+        mimeType: storedMime,
         originalFilename: data.filename,
         sizeBytes: body.length,
         fileHash,
