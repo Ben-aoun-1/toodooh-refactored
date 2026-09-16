@@ -10,11 +10,15 @@ import {
   campaigns,
   screenhosts,
 } from '../db/schema.js';
+import { ownerApprovedSql } from '../lib/approved-owner.js';
 import {
   broadcastableHours,
   screenhostMatchesTargeting,
   screenhostMatchesZones,
 } from '../lib/dispatch/eligibility.js';
+import { loadUnavailableDays } from '../lib/dispatch/pool.js';
+import { availableWindowDays, buildWindowDays } from '../lib/dispatch/window.js';
+import { venueHasAffluenceSql } from '../lib/venue-has-affluence.js';
 import { requireAdvertiser } from '../middleware/require-advertiser.js';
 import { requireAuth } from '../middleware/require-auth.js';
 
@@ -66,10 +70,16 @@ const readLines = async (campaignId: string) => {
 export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
   const advertiserGuard = { preHandler: [requireAuth, requireAdvertiser] };
 
-  // Owner-scoped campaign lookup (id + status); null when foreign/missing (→ caller sends 404).
+  // Owner-scoped campaign lookup (id + status + window); null when foreign/missing (→ caller
+  // sends 404).
   const findOwnedCampaign = async (campaignId: string, advertiserId: string) => {
     const [row] = await db
-      .select({ id: campaigns.id, status: campaigns.status })
+      .select({
+        id: campaigns.id,
+        status: campaigns.status,
+        startDate: campaigns.startDate,
+        endDate: campaigns.endDate,
+      })
       .from(campaigns)
       .where(and(eq(campaigns.id, campaignId), eq(campaigns.advertiserId, advertiserId)))
       .limit(1);
@@ -106,6 +116,21 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
   // applies on EVERY path — the engine's eligibility does, so a targeted+zoned campaign's map
   // must not show venues dispatch will exclude. Coordinates are numeric in the DB → coerced to
   // numbers for the map.
+  // MAP-4 (Mejri/operator 2026-09-16) — three more gates, all counted (covered_count and
+  // without_coordinates move with them):
+  //   • APPROVED OWNER (ELIG-2) — the venue's owner exists and is validated; ownerless, pending,
+  //     rejected and banned owners are out, exactly as they are out of the pool
+  //     (lib/approved-owner.ts, the one predicate).
+  //   • AVAILABLE IN THE WINDOW — at least ONE day of [start_date, end_date] (inclusive, Tunis
+  //     calendar dates) that the owner has not declared unavailable. One free day is enough. The
+  //     days are the pool's own (buildWindowDays → loadUnavailableDays → availableWindowDays), so
+  //     the map and dispatch agree on it. A campaign without both dates yet (an early draft) skips
+  //     this gate: there is no window to test, and hiding the whole network would say « nothing
+  //     reachable » when the truth is « not asked yet ».
+  //   • AT LEAST ONE AFFLUENCE VALUE — one manual grid cell > 0 still in effect, or one live
+  //     measured value > 0 (lib/venue-has-affluence.ts). Zero or NULL everywhere = no audience =
+  //     no dot.
+  // The response shape (screenhosts / covered_count / without_coordinates) is unchanged.
   app.get('/api/campaigns/:id/coverage', advertiserGuard, async (request, reply) => {
     const parsedParams = idParamSchema.safeParse(request.params);
     if (!parsedParams.success) return reply.status(400).send(invalidId);
@@ -122,8 +147,9 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
       .from(campaignTargeting)
       .where(eq(campaignTargeting.campaignId, campaign.id));
 
-    // Pull the active venues, then apply the pool's gates + matchers in memory (the matchers are
-    // the shared dispatch primitives; the SQL only narrows to active).
+    // Pull the active venues of approved owners that carry an affluence value (MAP-4 — the two
+    // shared SQL predicates), then apply the pool's gates + matchers in memory (the matchers are
+    // the shared dispatch primitives).
     const venues = await db
       .select({
         id: screenhosts.id,
@@ -142,7 +168,7 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
       })
       .from(screenhosts)
       .leftJoin(businessSectors, eq(screenhosts.businessSectorId, businessSectors.id))
-      .where(eq(screenhosts.isActive, true));
+      .where(and(eq(screenhosts.isActive, true), ownerApprovedSql(), venueHasAffluenceSql()));
 
     const zoneRows = await db
       .select({ zoneId: campaignZones.zoneId })
@@ -152,7 +178,7 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
 
     // The zone clause gates every path; the matcher owns the empty-set semantics (E5.1 —
     // zero lines = whole network), so the preview provably mirrors dispatch with no local guard.
-    const eligible = venues
+    const matched = venues
       .filter(
         (v) =>
           v.broadcastCapacity !== null &&
@@ -162,6 +188,22 @@ export const campaignTargetingRoutes: FastifyPluginAsync = async (app) => {
       .filter((v) =>
         screenhostMatchesTargeting({ businessSectorId: v.businessSectorId, class: v.class }, lines),
       );
+
+    // MAP-4 — available on at least one window day (skipped while the draft has no window).
+    const { startDate, endDate } = campaign;
+    let eligible = matched;
+    if (startDate !== null && endDate !== null) {
+      const windowDays = buildWindowDays(startDate, endDate);
+      const unavailable = await loadUnavailableDays(
+        db,
+        matched.map((v) => v.id),
+        startDate,
+        endDate,
+      );
+      eligible = matched.filter(
+        (v) => availableWindowDays(windowDays, unavailable.get(v.id)).length > 0,
+      );
+    }
 
     const plottable = eligible.filter((v) => v.latitude !== null && v.longitude !== null);
     const matching = plottable.map((v) => ({

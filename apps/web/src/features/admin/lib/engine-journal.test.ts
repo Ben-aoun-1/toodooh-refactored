@@ -52,6 +52,7 @@ describe('label coverage — every emitted event_type has a French label', () =>
       'excluded',
       'no_available_days',
       'no_residual_capacity',
+      'owner_not_approved',
     ]) {
       expect(EXCLUSION_REASON_LABELS[reason]).toBeTruthy();
     }
@@ -68,6 +69,17 @@ describe('eventLabel', () => {
         payload: { reason: 'hours_missing' },
       }),
     ).toBe('Établissement exclu — horaires manquants');
+  });
+
+  it('ELIG-2 — names a venue left out because its owner is not validated', () => {
+    expect(
+      eventLabel({
+        event_type: 'venue_excluded',
+        screenhost_id: 'x',
+        screenhost_name: 'Café',
+        payload: { reason: 'owner_not_approved' },
+      }),
+    ).toBe('Établissement exclu — propriétaire non validé');
   });
 
   it('labels the plain events', () => {

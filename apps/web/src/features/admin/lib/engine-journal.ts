@@ -74,6 +74,8 @@ export const EXCLUSION_REASON_LABELS: Record<string, string> = {
   excluded: 'exclu de ce calcul',
   no_available_days: 'aucun jour disponible',
   no_residual_capacity: 'aucune capacité résiduelle',
+  // ELIG-2 (operator ruling 2026-09-16) — the pool's first reason: the owner is not validated.
+  owner_not_approved: 'propriétaire non validé',
 };
 
 /** The refusal reasons a rolled-back run can carry (fallback: the raw reason). */

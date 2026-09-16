@@ -12,6 +12,7 @@ import {
   screenhosts,
 } from '../db/schema.js';
 
+import { ownerApprovedSql } from './approved-owner.js';
 import { cpmForCampaign, getDispatchConfig } from './dispatch/config.js';
 import { assemblePool } from './dispatch/pool.js';
 import { tForDuration } from './dispatch/thresholds.js';
@@ -27,6 +28,11 @@ import { computeEventCmax } from './event-pricing/pricing.js';
 // `venue_excluded` event per rejected venue for the engine journal, so a collecting trace simply
 // listens to them. An event positioning runs the REAL event ceiling. So this view cannot
 // disagree with what dispatch would do at this instant.
+//
+// ELIG-2 (operator ruling 2026-09-16) — a venue whose owner is not approved (pending, rejected,
+// banned, or no owner) is out of both engines, and BOTH branches name it 'owner_not_approved'
+// before any other reason: the standard branch hears it from the pool's journal, the event branch
+// reads the same shared predicate (lib/approved-owner.ts) on the label row.
 
 /** A draft without a spot yet is priced like the most common spot length. */
 export const DEFAULT_SPOT_SECONDS = 10;
@@ -42,7 +48,8 @@ export type ExclusionReason =
   | 'no_residual_capacity'
   | 'not_event_eligible'
   | 'no_bloc_available'
-  | 'no_sector';
+  | 'no_sector'
+  | 'owner_not_approved';
 
 export interface EligibleHost {
   id: string;
@@ -98,6 +105,7 @@ const KNOWN_REASONS = new Set<string>([
   'inactive',
   'no_available_days',
   'no_residual_capacity',
+  'owner_not_approved',
 ]);
 
 /** An in-memory journal: listens to the pool's own `venue_excluded` events, writes nothing. */
@@ -130,6 +138,7 @@ interface VenueLabel {
   class: string | null;
   sps: number;
   isActive: boolean;
+  ownerApproved: boolean;
   eventEligible: boolean | null;
 }
 
@@ -143,6 +152,7 @@ const loadVenueLabels = async (): Promise<Map<string, VenueLabel>> => {
       class: screenhosts.class,
       sps: screenhosts.sps,
       isActive: screenhosts.isActive,
+      ownerApproved: ownerApprovedSql(),
     })
     .from(screenhosts)
     .leftJoin(businessSectors, eq(businessSectors.id, screenhosts.businessSectorId));
@@ -156,6 +166,7 @@ const loadVenueLabels = async (): Promise<Map<string, VenueLabel>> => {
         class: r.class,
         sps: Number(r.sps),
         isActive: r.isActive,
+        ownerApproved: r.ownerApproved,
         eventEligible: r.eventEligible,
       },
     ]),
@@ -234,13 +245,15 @@ export const campaignEligibleHosts = async (campaignId: string): Promise<Eligibl
       .map((v) => ({
         id: v.id,
         name: v.name,
-        reason: !v.isActive
-          ? 'inactive'
-          : v.eventEligible === null
-            ? 'no_sector'
-            : !v.eventEligible
-              ? 'not_event_eligible'
-              : 'no_bloc_available',
+        reason: !v.ownerApproved
+          ? 'owner_not_approved'
+          : !v.isActive
+            ? 'inactive'
+            : v.eventEligible === null
+              ? 'no_sector'
+              : !v.eventEligible
+                ? 'not_event_eligible'
+                : 'no_bloc_available',
       }));
     return {
       status: 'OK',
@@ -324,8 +337,10 @@ export const campaignEligibleHosts = async (campaignId: string): Promise<Eligibl
       id: v.id,
       name: v.name,
       // The engine's own reason; a venue the pool never looked at (inactive and outside the
-      // targeting) keeps the plainest truthful label.
-      reason: reasons.get(v.id) ?? (v.isActive ? 'targeting_mismatch' : 'inactive'),
+      // targeting) keeps the plainest truthful label — its owner's status first (ELIG-2).
+      reason:
+        reasons.get(v.id) ??
+        (!v.ownerApproved ? 'owner_not_approved' : v.isActive ? 'targeting_mismatch' : 'inactive'),
     }));
   const capacity = pool.reduce((sum, p) => sum + p.residualCapacity, 0);
 
