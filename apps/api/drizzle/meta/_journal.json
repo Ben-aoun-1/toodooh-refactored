@@ -512,6 +512,13 @@
       "when": 1789320000000,
       "tag": "0072_simulation_world",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1789560000000,
+      "tag": "0073_campaign_lead_floor",
+      "breakpoints": true
     }
   ]
 }

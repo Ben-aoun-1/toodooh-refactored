@@ -115,25 +115,26 @@ describe('advertiser pricing-config — GET /api/campaigns/pricing-config (real 
     expect(body.first_available_start_date > new Date().toISOString().slice(0, 10)).toBe(true);
   });
 
-  it('CF-D1 — first_available_start_date follows the configured lead (2 → floor; 0 → TODAY)', async () => {
+  it('CF-D1 — first_available_start_date follows the configured lead (2 → floor; 1 → next working day)', async () => {
     // Default lead 2: the wire floor equals the lib's default computation (pinned exactly above).
     mockSession(await seedUser({ role: 'advertiser' }), 'advertiser');
     let body = (await getPricing()).json() as { first_available_start_date: string };
     expect(body.first_available_start_date).toBe(premiereDateDisponible(new Date(), 2));
 
-    // Admin drops the lead to 0 (tests-only calibration)…
+    // Admin drops the lead to its floor, 1 (LEAD-1: 0 is refused)…
     mockSession(await seedUser({ role: 'admin' }), 'admin');
     const patched = await app.inject({
       method: 'PATCH',
       url: '/api/admin/dispatch-config',
-      payload: { campaign_lead_working_days: 0 },
+      payload: { campaign_lead_working_days: 1 },
     });
     expect(patched.statusCode).toBe(200);
 
-    // …and the advertiser floor collapses to TODAY (the wizard consumes this, no wizard change).
+    // …and the advertiser floor is the next working day — never TODAY (the wizard consumes this).
     mockSession(await seedUser({ role: 'advertiser' }), 'advertiser');
     body = (await getPricing()).json() as { first_available_start_date: string };
-    expect(body.first_available_start_date).toBe(tunisDateOf(new Date()));
+    expect(body.first_available_start_date).toBe(premiereDateDisponible(new Date(), 1));
+    expect(body.first_available_start_date > tunisDateOf(new Date())).toBe(true);
   });
 
   it('reflects an admin CPM edit — admin PATCH then advertiser GET sees the new value', async () => {

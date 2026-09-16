@@ -38,19 +38,31 @@ export const plusCalendarDays = (isoDate: string, n: number): string => {
 export const DEFAULT_CAMPAIGN_LEAD_WORKING_DAYS = 2;
 
 /**
+ * LEAD-1 (Mejri 15/09 point 1) — the lowest lead the platform honours. A campaign never starts
+ * the day it is created: a stored 0 (the old field-test calibration) is read as 1, so today is
+ * never selectable whatever dispatch_config says. The simulator starts its own campaigns at J+2.
+ */
+export const MIN_CAMPAIGN_LEAD_WORKING_DAYS = 1;
+
+/** The lead actually applied for a configured one (LEAD-1 floor). */
+export const effectiveLeadWorkingDays = (configured: number): number =>
+  Math.max(configured, MIN_CAMPAIGN_LEAD_WORKING_DAYS);
+
+/**
  * The first selectable campaign start: `today` advanced by `leadWorkingDays` working days
  * (default 2 — the spec's floor). CF-D1: the lead is calibratable (dispatch_config feeds it at
- * the routes); 0 → the floor is TODAY. A positive lead lands on a working day by construction
- * (the last day counted is itself ouvré); lead 0 returns today whatever the weekday — weekend
- * START legality is ruling #10's and unchanged.
+ * the routes), never below MIN_CAMPAIGN_LEAD_WORKING_DAYS. The result lands on a working day by
+ * construction (the last day counted is itself ouvré) — weekend START legality is ruling #10's
+ * and unchanged.
  */
 export function premiereDateDisponible(
   today: Date = new Date(),
   leadWorkingDays: number = DEFAULT_CAMPAIGN_LEAD_WORKING_DAYS,
 ): string {
+  const lead = effectiveLeadWorkingDays(leadWorkingDays);
   let d = tunisDateOf(today);
   let ouvres = 0;
-  while (ouvres < leadWorkingDays) {
+  while (ouvres < lead) {
     d = plusCalendarDays(d, 1);
     if (isJourOuvre(d)) ouvres += 1;
   }
