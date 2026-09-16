@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { defaultZoneSelection, toggleZone, zonesRecapLabel } from './zones-selection';
+import {
+  COVERAGE_MAP_NOTE,
+  defaultZoneSelection,
+  toggleZone,
+  zonesRecapLabel,
+} from './zones-selection';
 
 // CF-Z1 — the Zones step's pinned selection logic.
 
@@ -45,5 +50,13 @@ describe('defaultZoneSelection (fresh wizard → Grand Tunis preselected)', () =
     expect(
       defaultZoneSelection(['gt', 'sfax'], { isEdit: false, touched: false, current: ['sfax'] }),
     ).toEqual(['sfax']);
+  });
+});
+
+describe('COVERAGE_MAP_NOTE (MAP-5)', () => {
+  it('says the map shows the eligible screenhosts, not where the campaign will play', () => {
+    expect(COVERAGE_MAP_NOTE).toBe(
+      "La carte montre les screenhosts éligibles à votre campagne. C'est une visualisation : votre campagne ne sera pas forcément diffusée sur chacun d'eux.",
+    );
   });
 });
