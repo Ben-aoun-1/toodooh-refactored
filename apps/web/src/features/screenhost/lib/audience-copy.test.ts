@@ -23,7 +23,9 @@ describe('S01 copy (byte-equality contract with the PDF)', () => {
   // removed. Pinned here for the first time: it lived inline in BOTH packages, twins by convention
   // with nothing to catch a one-sided reword.
   it('pins the per-hour description (byte-twin of the api PER_HOUR_DESC)', () => {
-    expect(PER_HOUR_DESC).toBe("Personnes détectées par heure d'ouverture, en moyenne");
+    expect(PER_HOUR_DESC).toBe(
+      "Personnes détectées par heure d'ouverture, moyenne des deux demi-heures",
+    );
     expect(PER_HOUR_DESC).not.toContain('Densité');
   });
 });

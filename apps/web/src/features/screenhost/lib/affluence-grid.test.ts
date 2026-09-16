@@ -91,15 +91,28 @@ describe('DATA1 — « Votre audience »: Σ day tiles == « Audience hebdomadai
   it('rider — « Heure de pointe » folds the two half-hour slots into their HOUR on a slot grid', () => {
     const s = summarize(
       slotGrid([
-        { day: 0, slot: 36, value: 100 }, // Lun 18h00
-        { day: 1, slot: 37, value: 120 }, // Mar 18h30 → hour 18 across days = 220 → peak
-        { day: 2, slot: 18, value: 200 }, // Mer 09h00 → hour 9 = 200
+        { day: 0, slot: 36, value: 100 }, // Lun 18h00 → Lun 18h = (100 + 0) / 2 = 50
+        { day: 1, slot: 37, value: 120 }, // Mar 18h30 → Mar 18h = 60; hour 18 across days = 110
+        { day: 2, slot: 18, value: 200 }, // Mer 09h00 → hour 9 = 100
         { day: 3, slot: 9, value: 150 }, // Jeu 04h30 — the old scan would have named « 09h »
       ]),
     );
     expect(s.peakHourIndex).toBe(18);
-    expect(s.peakHourTotal).toBe(220);
+    expect(s.peakHourTotal).toBe(110);
     expect(formatHour(s.peakHourIndex ?? 0)).toBe('18h');
+  });
+
+  it('HOUR-AVG1 — an hour is the AVERAGE of its two half-hours, never their sum (Mejri 15/09)', () => {
+    const s = summarize(
+      slotGrid([
+        { day: 0, slot: 20, value: 80 }, // Lun 10h00
+        { day: 0, slot: 21, value: 80 }, // Lun 10h30 → 10h = 80, not 160
+      ]),
+    );
+    expect(s.peakHourIndex).toBe(10);
+    expect(s.peakHourTotal).toBe(80);
+    // The day still counts both readings (FLOW-1).
+    expect(s.dayTotals[0]).toBe(160);
   });
 });
 

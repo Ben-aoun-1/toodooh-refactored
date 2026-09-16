@@ -233,7 +233,7 @@ describe('assembleReportData (real Postgres)', () => {
     // granularity from monthly_stats and are untouched by this lane: 2 100 + 1 600 = 3 700.
     expect(data?.kpis.global).toBe(3700);
     expect(data?.kpis.perDay).toBe(264); // 3700 / 14
-    expect(data?.kpis.perHour).toBe(18.9); // 264.28… / 14 h, one decimal
+    expect(data?.kpis.perHour).toBe(9.4); // 264.28… / (14 h × 2 half-hours), one decimal
     expect(data?.kpis.peak).toEqual({ value: 900, date: '2026-06-14' });
     expect(data?.kpis.measuredDays).toBe(3);
     // Slice C — the caption is VALUE-WEIGHTED: Σ estimated audience / Σ all audience, so it is

@@ -666,7 +666,9 @@ describe('S01 (PERF-R1 — merged période, provenance in the caption)', () => {
   // old « Densité moyenne d'audience » described a LEVEL held over time, the reading this lane
   // removed. First time this sentence is pinned: it lived inline in both packages.
   it('pins the per-hour description (byte-equality contract with apps/web)', () => {
-    expect(PER_HOUR_DESC).toBe("Personnes détectées par heure d'ouverture, en moyenne");
+    expect(PER_HOUR_DESC).toBe(
+      "Personnes détectées par heure d'ouverture, moyenne des deux demi-heures",
+    );
     const html = renderReportHtml(fullData());
     expect(html).toContain(PER_HOUR_DESC);
     expect(html).not.toContain('Densité moyenne');

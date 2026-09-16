@@ -13,6 +13,7 @@ import {
   screenhosts,
   screens,
 } from '../../db/schema.js';
+import { collapseHalvesSql } from '../../lib/half-hour-slots.js';
 import { isOpenAt } from '../../lib/opening-hours.js';
 
 import { TZ, type VirtualMoment, advance, momentOf } from './clock.js';
@@ -109,20 +110,23 @@ export const simulationState = async (moment: VirtualMoment): Promise<Simulation
 
   // The clock stands at the hour ABOUT to be simulated, which no sensor has measured yet — the
   // board therefore shows the last COMPLETED hour's footfall, the only one that exists.
+  // HOUR-AVG1 — the hour is the AVERAGE of its two half-hour readings (null only when neither
+  // half holds a value — an offline hour).
   const measured = momentOf(advance(moment.at, -1));
   const audienceRows = await db
     .select({
       screenhostId: screenhostAffluenceHourly.screenhostId,
-      value: screenhostAffluenceHourly.value,
+      value: collapseHalvesSql(screenhostAffluenceHourly.value),
     })
     .from(screenhostAffluenceHourly)
     .where(
       and(
         eq(screenhostAffluenceHourly.date, measured.date),
-        eq(screenhostAffluenceHourly.slot, measured.hour * 2),
+        eq(screenhostAffluenceHourly.hour, measured.hour),
         inArray(screenhostAffluenceHourly.screenhostId, venueIds),
       ),
-    );
+    )
+    .groupBy(screenhostAffluenceHourly.screenhostId);
   const audienceOf = new Map(audienceRows.map((r) => [r.screenhostId, r.value]));
 
   const allocationRows = await db

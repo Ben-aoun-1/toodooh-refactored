@@ -27,7 +27,7 @@ export interface AffluenceSummary {
   peakDayIndex: number | null; // 0..6 (Monday-first); null when there is no data
   peakDayTotal: number;
   peakHourIndex: number | null; // 0..23; null when there is no data
-  peakHourTotal: number;
+  peakHourTotal: number; // Σ over the 7 days of the hour's value (the mean of its two halves)
   dayTotals: number[]; // the 7 per-day totals (Monday-first) — the per-day readout
   maxCell: number; // the single busiest slot (peak audience in one hour)
 }
@@ -55,13 +55,15 @@ export const summarize = (grid: readonly number[][]): AffluenceSummary => {
   // legacy wire was 7×24. « Heure de pointe » is an HOUR either way: on a slot grid the two halves
   // fold into their hour before the argmax, otherwise slot 9 (04h30) printed as « 09h » and no
   // afternoon peak could ever be seen (the scan stopped at column 23 = 11h30).
+  // HOUR-AVG1 (Mejri 15/09) — an hour's value is the AVERAGE of its two half-hours, never their
+  // sum: each half-hour cell is a reading of who is present, and the hour is their mean.
   const columns = grid[0]?.length ?? 0;
   const perHour = columns > HOURS.length ? Math.ceil(columns / HOURS.length) : 1;
   const hourTotals = HOURS.map((h) =>
     grid.reduce((acc, row) => {
       let sum = 0;
       for (let k = 0; k < perHour; k += 1) sum += row[h * perHour + k] ?? 0;
-      return acc + sum;
+      return acc + sum / perHour;
     }, 0),
   );
 

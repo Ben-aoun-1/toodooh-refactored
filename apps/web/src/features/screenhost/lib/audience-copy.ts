@@ -19,12 +19,13 @@ export const NO_MEASURE_NOTE =
 
 /**
  * FLOW-1 (Mejri, ruled 2026-09-04) — the « Audience moyenne / heure » description, in HER terms:
- * moyenne/heure = Pers_atteintes ÷ heures d'ouverture réelles, and Pers_atteintes is « le nombre de
- * personnes détectées par le capteur sur la période ». « Densité moyenne d'audience » described a
- * LEVEL held over time, which is the reading this lane removed.
+ * Pers_atteintes is « le nombre de personnes détectées par le capteur sur la période » (the day adds
+ * its half-hour readings). HOUR-AVG1 (Mejri 15/09) — an hour is the AVERAGE of its two half-hour
+ * readings, never their sum, so moyenne/heure = Pers_atteintes ÷ (heures d'ouverture × 2).
  *
  * No trailing period: the page appends « (estimation 14 h). » when the opening hours are inferred.
  * This sentence lived INLINE in both packages until now — twins by convention, agreeing only by
  * coincidence, with nothing to catch a one-sided reword. It is pinned on both sides from here.
  */
-export const PER_HOUR_DESC = "Personnes détectées par heure d'ouverture, en moyenne";
+export const PER_HOUR_DESC =
+  "Personnes détectées par heure d'ouverture, moyenne des deux demi-heures";

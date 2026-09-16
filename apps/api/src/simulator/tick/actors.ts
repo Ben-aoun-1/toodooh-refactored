@@ -15,6 +15,7 @@ import {
 } from '../../db/schema.js';
 import { decideAllocation } from '../../lib/allocation-decision.js';
 import { decideEventAllocation } from '../../lib/event-allocation-decision.js';
+import { collapseHalvesSql, inEffectSql } from '../../lib/half-hour-slots.js';
 import { isOpenAt } from '../../lib/opening-hours.js';
 import { activeAllocationsForScreenhost } from '../../lib/playout/active-allocations.js';
 import { createRng } from '../world/rng.js';
@@ -204,23 +205,25 @@ export const runPax = async (input: {
   const open = venues.filter((v) => isOpenAt(input.moment.hour, v.openingHour, v.closingHour));
   if (open.length === 0) return 0;
 
+  // HOUR-AVG1 — the hour's base is the AVERAGE of its two half-hour grid cells.
   const grid = await db
     .select({
       screenhostId: screenhostAffluence.screenhostId,
-      value: screenhostAffluence.estimatedImpressions,
+      value: collapseHalvesSql(screenhostAffluence.estimatedImpressions),
     })
     .from(screenhostAffluence)
     .where(
       and(
         eq(screenhostAffluence.dayOfWeek, input.moment.dayOfWeek),
         eq(screenhostAffluence.hour, input.moment.hour),
-        eq(screenhostAffluence.slot, input.moment.hour * 2),
+        inEffectSql(screenhostAffluence.inEffect),
         inArray(
           screenhostAffluence.screenhostId,
           open.map((v) => v.id),
         ),
       ),
-    );
+    )
+    .groupBy(screenhostAffluence.screenhostId);
   const baseOf = new Map(grid.map((g) => [g.screenhostId, g.value]));
 
   const rows = open.flatMap((venue) => {
