@@ -38,6 +38,17 @@ export function useCampaignReversements(campaignId: string | null) {
   });
 }
 
+/** ELIG-1 — the examen modal's « Hosts éligibles » (fetched on demand: the panel opens it). */
+export function useCampaignEligibleHosts(campaignId: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: adminKeys.campaignEligibleHosts(campaignId ?? ''),
+    queryFn: () => adminCampaignsService.getEligibleHosts(campaignId ?? ''),
+    enabled: campaignId !== null && enabled,
+    // « pas encore de dates » is an answer, not a failure worth retrying.
+    retry: false,
+  });
+}
+
 /**
  * LOG1 — the engine journal for the examen modal, keyed by the phase filter ('all' = no filter).
  */

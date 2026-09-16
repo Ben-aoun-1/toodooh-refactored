@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
+import { CampaignEligibleHosts } from '@/features/admin/components/CampaignEligibleHosts';
 import { adminKeys } from '@/features/admin/hooks/queryKeys';
 import {
   useAdminCampaigns,
@@ -453,6 +454,8 @@ export default function CampaignReviewQueue() {
                       {formatDate(selected.start_date)} → {formatDate(selected.end_date)}
                     </p>
                   </div>
+                  {/* ELIG-1 — the venues this campaign can reach, at any status. */}
+                  <CampaignEligibleHosts campaignId={selected.id} />
                   {selected.reject_reason && (
                     <div>
                       <p className="text-sm font-medium text-gray-700">Motif de rejet:</p>
