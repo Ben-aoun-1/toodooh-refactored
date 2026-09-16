@@ -12,6 +12,7 @@ import {
   screenhosts,
 } from '../db/schema.js';
 import { activateCampaign } from '../lib/activation-service.js';
+import { campaignEligibleHosts } from '../lib/campaign-eligible-hosts.js';
 import { cpmForCampaign, getDispatchConfig } from '../lib/dispatch/config.js';
 import { measureEventDelivery } from '../lib/event-playout/settlement.js';
 import { pushPlaylistToCampaignVenues } from '../lib/playout/push.js';
@@ -313,6 +314,27 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
         ? { plan: null, allocations: [] }
         : planView(outcome.plan, outcome.allocations)),
     });
+  });
+
+  // GET /api/admin/campaigns/:id/eligible-hosts — ELIG-1 (Meriam 15/09, blocking for testing):
+  // the venues this campaign can reach AT ANY STATUS and why the others are out, from the REAL
+  // pool assembly (standard) or the REAL event ceiling (positioning). Read-only.
+  app.get('/api/admin/campaigns/:id/eligible-hosts', adminGuard, async (request, reply) => {
+    const parsedParams = idParamSchema.safeParse(request.params);
+    if (!parsedParams.success) return invalidField(reply, 'id', 'must be a uuid');
+    const result = await campaignEligibleHosts(parsedParams.data.id);
+    if (result.status === 'NOT_FOUND') {
+      return reply.status(404).send({ error: 'NOT_FOUND', message: 'Campagne introuvable.' });
+    }
+    if (result.status === 'NO_DATES') {
+      return reply.status(409).send({
+        error: 'NO_DATES',
+        message:
+          "La campagne n'a pas encore de période : les établissements éligibles dépendent des dates.",
+        statusCode: 409,
+      });
+    }
+    return reply.status(200).send(result.report);
   });
 
   // GET /api/admin/campaigns/:id/event-allocations — EV4: the examen's allocation table for an
