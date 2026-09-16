@@ -1,3 +1,5 @@
+import type { EligibleHostsReport } from '@/features/admin/lib/eligible-hosts';
+import type { TestingReport } from '@/features/admin/services/admin-testing.service';
 import { ApiError, apiClient } from '@/lib/api-client';
 
 // SIM-0 — the admin « Simulateur » registry client. apiClient prepends '/api'. Every route is
@@ -230,6 +232,16 @@ export const adminSimulatorService = {
     apiClient.post<LaunchedCampaign>(`/admin/simulations/${id}/campaigns`, input),
   launchEvent: (id: string, input: LaunchEventInput) =>
     apiClient.post<BookedEvent>(`/admin/simulations/${id}/events`, input),
+  /** SIM-5 — the « Tests » report of a sandbox venue, at the simulation's virtual instant. */
+  venueReport: (id: string, venueId: string, from: string, to: string) =>
+    apiClient.get<TestingReport>(
+      `/admin/simulations/${id}/testing/screenhosts/${venueId}?from=${from}&to=${to}`,
+    ),
+  /** SIM-5 — the ELIG-1 eligible hosts of a sandbox campaign. */
+  campaignEligibleHosts: (id: string, campaignId: string) =>
+    apiClient.get<EligibleHostsReport>(
+      `/admin/simulations/${id}/campaigns/${campaignId}/eligible-hosts`,
+    ),
   poke: (id: string, entityId: string, params: ActorParams) =>
     apiClient.patch<{ kind: string; entity_id: string; params: ActorParams }>(
       `/admin/simulations/${id}/actors/${entityId}`,

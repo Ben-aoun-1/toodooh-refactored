@@ -134,3 +134,31 @@ export function useLaunchEvent(id: string) {
     onSuccess: () => void qc.invalidateQueries({ queryKey: adminKeys.simulationBoard(id) }),
   });
 }
+
+// ── SIM-5 — inspectors ────────────────────────────────────────────────────────
+
+export function useSimulationVenueReport(
+  id: string,
+  venueId: string | null,
+  from: string,
+  to: string,
+) {
+  return useQuery({
+    queryKey: adminKeys.simulationVenueReport(id, venueId ?? '', from, to),
+    queryFn: () => adminSimulatorService.venueReport(id, venueId ?? '', from, to),
+    enabled: Boolean(venueId) && from <= to,
+  });
+}
+
+export function useSimulationCampaignEligibleHosts(
+  id: string | null,
+  campaignId: string,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: adminKeys.simulationEligibleHosts(id ?? '', campaignId),
+    queryFn: () => adminSimulatorService.campaignEligibleHosts(id ?? '', campaignId),
+    enabled: Boolean(id) && enabled,
+    retry: false,
+  });
+}

@@ -100,3 +100,25 @@ describe('adminSimulatorService — world (SIM-1)', () => {
     expect(isNoWorld(new Error('x'))).toBe(false);
   });
 });
+
+// ── SIM-5 — inspectors ────────────────────────────────────────────────────────
+
+describe('adminSimulatorService — inspectors (SIM-5)', () => {
+  beforeEach(() => {
+    getMock.mockReset();
+  });
+
+  it('venueReport hits the sandbox Tests route with the période', async () => {
+    getMock.mockResolvedValue({});
+    await adminSimulatorService.venueReport('s1', 'v1', '2026-03-01', '2026-03-07');
+    expect(getMock).toHaveBeenCalledWith(
+      '/admin/simulations/s1/testing/screenhosts/v1?from=2026-03-01&to=2026-03-07',
+    );
+  });
+
+  it('campaignEligibleHosts hits the sandbox campaign route', async () => {
+    getMock.mockResolvedValue({});
+    await adminSimulatorService.campaignEligibleHosts('s1', 'c1');
+    expect(getMock).toHaveBeenCalledWith('/admin/simulations/s1/campaigns/c1/eligible-hosts');
+  });
+});

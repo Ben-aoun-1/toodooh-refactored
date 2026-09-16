@@ -16,6 +16,7 @@ import { CampaignsPanel } from './CampaignsPanel';
 import { ClockBar } from './ClockBar';
 import { GenerateWorldForm } from './GenerateWorldForm';
 import { SimulationStatusBadge } from './SimulationStatusBadge';
+import { SimulationVenueInspector } from './SimulationVenueInspector';
 import { SimulatorBoard } from './SimulatorBoard';
 import { VenuesTable } from './VenuesTable';
 import { WorldCard } from './WorldCard';
@@ -37,6 +38,7 @@ export function SimulationDetail({ id, onDeleted }: Props) {
   const del = useDeleteSimulation();
   const [confirming, setConfirming] = useState(false);
   const [showVenues, setShowVenues] = useState(false);
+  const [inspected, setInspected] = useState<{ id: string; name: string } | null>(null);
 
   if (sim.isLoading) return <Loader2 className="h-5 w-5 animate-spin text-gray-400" />;
   if (!sim.data) return <p className="text-sm text-red-600">Simulation introuvable.</p>;
@@ -131,7 +133,19 @@ export function SimulationDetail({ id, onDeleted }: Props) {
       {hasWorld && (
         <>
           <ClockBar simulationId={id} board={board.data} live={live} onLiveChange={setLive} />
-          {board.data && <SimulatorBoard simulationId={id} board={board.data} />}
+          {board.data && (
+            <SimulatorBoard simulationId={id} board={board.data} onInspect={setInspected} />
+          )}
+          {board.data && inspected && (
+            <SimulationVenueInspector
+              key={inspected.id}
+              simulationId={id}
+              venueId={inspected.id}
+              venueName={inspected.name}
+              virtualToday={board.data.clock.date}
+              onClose={() => setInspected(null)}
+            />
+          )}
           {board.data && <CampaignsPanel simulationId={id} campaigns={board.data.campaigns} />}
         </>
       )}
