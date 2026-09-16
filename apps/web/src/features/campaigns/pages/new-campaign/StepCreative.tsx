@@ -20,6 +20,7 @@ import {
   VIDEO_ACCEPT,
   creativeUploadErrorMessage,
   readVideoDurationSeconds,
+  unreadableVideoMessage,
 } from '@/features/campaigns/services/creative-media';
 import type { CreativeType, CreativeView } from '@/features/campaigns/services/creatives.api';
 import {
@@ -103,7 +104,9 @@ export default function StepCreative({
     if (uploadType === 'video') {
       const probed = await readVideoDurationSeconds(file);
       if (probed == null) {
-        toast.error('Impossible de lire la durée de la vidéo. Réessayez avec un fichier MP4.');
+        // UPL-2 — a photo or a PDF picked under « Vidéo » stops here, before any upload: its
+        // bytes name the kind (and the type to choose) instead of a duration error.
+        toast.error(await unreadableVideoMessage(file));
         return;
       }
       if (probed > maxVideoSeconds) {

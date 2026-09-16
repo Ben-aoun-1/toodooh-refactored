@@ -29,8 +29,10 @@ const UPLOAD_ERROR_MESSAGES: Record<string, string> = {
     'Format de fichier non reconnu. Envoyez une image PNG ou JPEG, ou une vidéo MP4 ou MOV (H.264).',
   MEDIA_KIND_UNSUPPORTED:
     'Format de fichier non accepté. Envoyez une image PNG ou JPEG, ou une vidéo MP4 ou MOV (H.264).',
+  // The server sends this code for the codec refusal only — the length rules have their own codes
+  // (MEDIA_DURATION_INVALID, EVENT_SPOT_TOO_LONG), so no length is named here (15 s in events).
   MEDIA_FORMAT_UNSUPPORTED:
-    'Format non conforme : la vidéo doit être encodée en H.264 (MP4 ou MOV, 30 secondes maximum).',
+    'Format non conforme : la vidéo doit être encodée en H.264 (MP4 ou MOV).',
   MEDIA_DURATION_INVALID: 'Format non conforme : la vidéo ne doit pas dépasser 30 secondes.',
   MEDIA_UNREADABLE: 'Fichier illisible — réessayez avec une vidéo MP4 (H.264).',
 };
@@ -72,6 +74,11 @@ function bodyField(error: object, key: string): unknown {
   return (body as Record<string, unknown>)[key];
 }
 
+/** UPL-2 — the copy for a recognised kind the creative type refuses, or null when none is mapped. */
+export function kindUnsupportedMessage(type: CreativeType, detected: string): string | null {
+  return KIND_UNSUPPORTED_BY_TYPE[type][detected] ?? null;
+}
+
 /** French toast for a CF-SH1 upload rejection, or null when the error carries no mapped code. */
 export function creativeUploadErrorMessage(error: unknown): string | null {
   if (typeof error !== 'object' || error === null) return null;
@@ -82,11 +89,64 @@ export function creativeUploadErrorMessage(error: unknown): string | null {
     if (code === 'MEDIA_TYPE_MISMATCH') return UNRECOGNISED_BY_TYPE[creativeType];
     const detected = bodyField(error, 'detected');
     if (code === 'MEDIA_KIND_UNSUPPORTED' && typeof detected === 'string') {
-      const perKind = KIND_UNSUPPORTED_BY_TYPE[creativeType][detected];
-      if (perKind !== undefined) return perKind;
+      const perKind = kindUnsupportedMessage(creativeType, detected);
+      if (perKind !== null) return perKind;
     }
   }
   return UPLOAD_ERROR_MESSAGES[code] ?? null;
+}
+
+/** The kinds a VIDEO creative refuses that the byte sniff below can name. */
+export type RefusedVideoKind = 'jpeg' | 'png' | 'webp' | 'webm' | 'pdf';
+
+// Magic numbers of the api's sniffContainer (apps/api/src/lib/media-probe.ts) — keep them in step.
+const FTYP = [0x66, 0x74, 0x79, 0x70]; // 'ftyp' at offset 4: ISO BMFF (MP4/MOV)
+const RIFF = [0x52, 0x49, 0x46, 0x46]; // 'RIFF' …
+const WEBP = [0x57, 0x45, 0x42, 0x50]; // … 'WEBP' at offset 8
+const EBML = [0x1a, 0x45, 0xdf, 0xa3]; // WebM / MKV
+const JPEG = [0xff, 0xd8, 0xff];
+const PNG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+const PDF = [0x25, 0x50, 0x44, 0x46, 0x2d]; // '%PDF-'
+
+const hasBytesAt = (head: Uint8Array, magic: readonly number[], offset = 0): boolean =>
+  head.length >= offset + magic.length && magic.every((byte, i) => head[offset + i] === byte);
+
+/**
+ * UPL-2 — the kind of a file's first bytes when the server would refuse them as a VIDEO (an image,
+ * a PDF, a WebM), read with the server's own magic numbers. An MP4/MOV container or unknown bytes
+ * give null: the server decides those.
+ */
+export function sniffRefusedVideoKind(head: Uint8Array): RefusedVideoKind | null {
+  if (head.length >= 12) {
+    if (hasBytesAt(head, FTYP, 4)) return null;
+    if (hasBytesAt(head, RIFF) && hasBytesAt(head, WEBP, 8)) return 'webp';
+  }
+  if (hasBytesAt(head, EBML)) return 'webm';
+  if (hasBytesAt(head, JPEG)) return 'jpeg';
+  if (hasBytesAt(head, PNG)) return 'png';
+  if (hasBytesAt(head, PDF)) return 'pdf';
+  return null;
+}
+
+const VIDEO_DURATION_UNREADABLE_MESSAGE =
+  'Impossible de lire la durée de la vidéo. Réessayez avec un fichier MP4.';
+
+/**
+ * UPL-2 — the toast when the video pre-check read no duration. An image or a PDF picked under
+ * « Vidéo » fails the browser probe and never reaches the server, so its first bytes pick the
+ * server's per-kind copy here (which type to choose, which format to export); anything else keeps
+ * the pre-check's own message.
+ */
+export async function unreadableVideoMessage(file: Blob): Promise<string> {
+  let head: Uint8Array;
+  try {
+    head = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+  } catch {
+    return VIDEO_DURATION_UNREADABLE_MESSAGE;
+  }
+  const kind = sniffRefusedVideoKind(head);
+  const perKind = kind === null ? null : kindUnsupportedMessage('video', kind);
+  return perKind ?? VIDEO_DURATION_UNREADABLE_MESSAGE;
 }
 
 function tryReadDuration(video: HTMLVideoElement): number | null {
