@@ -26,7 +26,6 @@ import {
   REQUIRED_VIDEO_CODEC,
   declaredMatchesSniffed,
   isMediaProbeEnabled,
-  isRatioConforming,
   probeMedia,
   sniffContainer,
 } from '../lib/media-probe.js';
@@ -140,7 +139,8 @@ export const creativesRoutes: FastifyPluginAsync = async (app) => {
         detected: sniffed,
       });
     }
-    // Layer 2 (FFPROBE_PATH-gated, the chromium-smoke posture): measured codec/ratio/duration.
+    // Layer 2 (FFPROBE_PATH-gated, the chromium-smoke posture): measured codec/duration. UPL-1
+    // (operator 2026-09-16): NO aspect-ratio rule — any ratio uploads; display letterboxes it.
     // The SERVER-measured duration becomes the stored value; the client param is advisory.
     let storedDurationSeconds = durationSeconds;
     if (type === 'video' && isMediaProbeEnabled()) {
@@ -161,23 +161,6 @@ export const creativesRoutes: FastifyPluginAsync = async (app) => {
           error: 'MEDIA_FORMAT_UNSUPPORTED',
           message: `A video creative must be H.264 (measured codec: ${probed.codec ?? 'none'}).`,
           measured_codec: probed.codec,
-        });
-      }
-      if (
-        probed.width === null ||
-        probed.height === null ||
-        !isRatioConforming(probed.width, probed.height)
-      ) {
-        const measured =
-          probed.width !== null && probed.height !== null && probed.height > 0
-            ? Number((probed.width / probed.height).toFixed(3))
-            : null;
-        return reply.status(400).send({
-          error: 'MEDIA_RATIO_INVALID',
-          message: `A video creative must be 16:9 within ±2% (measured: ${measured ?? 'unknown'}${probed.width !== null && probed.height !== null ? ` — ${probed.width}×${probed.height}` : ''}).`,
-          measured_ratio: measured,
-          width: probed.width,
-          height: probed.height,
         });
       }
       if (probed.durationSeconds === null) {

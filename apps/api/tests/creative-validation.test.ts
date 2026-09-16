@@ -17,7 +17,8 @@ import { resetAuthTables } from './helpers/db-test-setup.js';
 // CF-SH1 (spec §1.6) — upload hardening. Real Postgres + real MinIO, session mocked (the
 // creatives.test.ts harness). Fixtures are tiny ffmpeg-generated media (tests/fixtures, <200KB
 // each). Byte-sniffing tests run EVERYWHERE; the measured codec/ratio/duration tests are gated on
-// FFPROBE_PATH (the chromium-smoke posture) and are exercised for real inside the docker image.
+// FFPROBE_PATH (the chromium-smoke posture) and are exercised for real inside the docker image;
+// creative-probe-rules.test.ts pins the same rules everywhere with the probe mocked.
 // No business_sectors/zones fixtures anywhere (the exact-seed-count footgun).
 
 type GetSessionResult = Awaited<ReturnType<typeof auth.api.getSession>>;
@@ -272,18 +273,14 @@ describe('creative upload hardening (CF-SH1 — real Postgres + MinIO)', () => {
       });
     });
 
-    it('rejects a 4:3 video with the MEASURED ratio in the body (400 MEDIA_RATIO_INVALID)', async () => {
+    it('UPL-1 — accepts a 4:3 H.264 video: there is no aspect-ratio limit (201)', async () => {
       mockSession(await seedUser());
       const res = await upload(app, 'type=video&duration_seconds=2', {
         filename: 'clip.mp4',
         contentType: 'video/mp4',
         content: fixture('h264-43.mp4'),
       });
-      expect(res.statusCode).toBe(400);
-      const body = res.json() as { error: string; measured_ratio: number; message: string };
-      expect(body.error).toBe('MEDIA_RATIO_INVALID');
-      expect(body.measured_ratio).toBeCloseTo(320 / 240, 2);
-      expect(body.message).toContain('1.333');
+      expect(res.statusCode).toBe(201);
     });
 
     it('rejects an over-30s video by MEASURED duration — the client param lies (400 MEDIA_DURATION_INVALID)', async () => {

@@ -7,6 +7,7 @@
  *
  * CF-SH1 (spec §1.6) — the accept lists are SPEC-STRICT (MP4/MOV video, JPEG/PNG image; webm/webp
  * out) and the server's hardening error codes map to French toasts here, pinned by unit test.
+ * UPL-1 (operator 2026-09-16) — no aspect-ratio rule any more: every ratio uploads.
  */
 
 /** File-input accept lists — aligned with the server's spec-strict allowlists (CF-SH1). */
@@ -18,8 +19,8 @@ export const PHOTO_ACCEPT = 'image/jpeg,image/png';
 const UPLOAD_ERROR_MESSAGES: Record<string, string> = {
   MEDIA_TYPE_MISMATCH:
     'Le fichier ne correspond pas au format annoncé — vérifiez le type du fichier.',
-  MEDIA_FORMAT_UNSUPPORTED: 'Format non conforme : vidéo MP4/MOV en 16:9, H.264, 30 s max.',
-  MEDIA_RATIO_INVALID: 'Format non conforme : la vidéo doit être au ratio 16:9 (±2%).',
+  MEDIA_FORMAT_UNSUPPORTED:
+    'Format non conforme : la vidéo doit être encodée en H.264 (MP4 ou MOV, 30 secondes maximum).',
   MEDIA_DURATION_INVALID: 'Format non conforme : la vidéo ne doit pas dépasser 30 secondes.',
   MEDIA_UNREADABLE: 'Fichier illisible — réessayez avec une vidéo MP4 (H.264).',
 };
