@@ -75,8 +75,8 @@ const HALF_HOUR_CELL_MSG = 'each cell needs hour or slot';
 //   • Keep it equal to nginx: raise one without the other and the 413 just moves to the other hop.
 //   • Per ROUTE, never global — only the routes that carry a per-place series get it; the rest of
 //     /api/internal/* sends at most one small row a place and keeps Fastify's 1 MiB.
-//   • The guard is a preHandler, which runs AFTER the body is read: an unauthenticated caller can
-//     make these routes parse up to this many bytes before the 401. Unchanged here, on purpose.
+//   • The guard MUST stay an onRequest hook (see `guard` below): that is the phase before the body
+//     is read, so only a caller holding the key ever gets this many bytes buffered and parsed.
 const HUB_BATCH_BODY_LIMIT = 20 * 1024 * 1024;
 
 const affluenceBodySchema = z.object({
@@ -296,7 +296,9 @@ const agentBodySchema = z.object({
 // `syncKey` defaults to env.WEDOOH_SYNC_KEY in production (index.ts registers with no options);
 // tests pass it explicitly so they never depend on the eagerly-parsed env singleton.
 export const internalRoutes: FastifyPluginAsync<{ syncKey?: string }> = async (app, opts) => {
-  const guard = { preHandler: [requireSyncKey(opts.syncKey ?? env.WEDOOH_SYNC_KEY)] };
+  // HUB-413 — onRequest, not preHandler: the key is checked BEFORE Fastify reads the body, so a
+  // keyless call is a 401 without a byte of it parsed (a preHandler runs only after the parse).
+  const guard = { onRequest: [requireSyncKey(opts.syncKey ?? env.WEDOOH_SYNC_KEY)] };
   // HUB-413 — the SAME guard, plus the hub-batch body ceiling (see HUB_BATCH_BODY_LIMIT).
   const batchIngest = { ...guard, bodyLimit: HUB_BATCH_BODY_LIMIT };
 

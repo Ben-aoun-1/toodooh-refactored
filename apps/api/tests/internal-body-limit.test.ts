@@ -12,10 +12,12 @@ import { resetAuthTables } from './helpers/db-test-setup.js';
 // HUB-413 — the body ceiling of the hub's batch ingest routes. From 2026-09-12 every
 // affluence-hourly push died on 413 FST_ERR_CTP_BODY_TOO_LARGE: Fastify's default 1 MiB was the
 // real limit behind nginx's 20m, and the hub's boot push (every place, the whole 35-day window,
-// 48 cells a day, empty ones included) passed it at ~10 places. These tests pin three facts:
+// 48 cells a day, empty ones included) passed it at ~10 places. These tests pin four facts:
 //   1. an incident-sized push is ACCEPTED and UPSERTED — the fixture proves its own size;
-//   2. the raise did not open the door — no key is still a 401, and 20 MiB is still a ceiling;
-//   3. the raise is SCOPED — the one-row-a-place routes keep Fastify's 1 MiB.
+//   2. the ceiling is EXACTLY nginx's 20 MiB — a body of 20 MiB is a 200, one byte more a 413;
+//   3. the raise did not open the door — the key is checked BEFORE the body is read, so a keyless
+//      call is a 401 whatever its body (never the 400/413 that parsing it would produce);
+//   4. the raise is SCOPED — the one-row-a-place routes keep Fastify's 1 MiB.
 
 const SYNC_KEY = 'test-sync-key-0123456789';
 const MIB = 1024 * 1024;
@@ -65,6 +67,13 @@ const bootPush = (venueIds: readonly string[]): string =>
 const padded = (batchKey: string, bytes: number): string =>
   JSON.stringify({ [batchKey]: [], pad: 'x'.repeat(bytes) });
 
+/** The same schema-valid body, EXACTLY `total` bytes long (the pad fills what the envelope leaves). */
+const paddedTo = (batchKey: string, total: number): string =>
+  padded(batchKey, total - Buffer.byteLength(padded(batchKey, 0)));
+
+/** Over 1 MiB of INVALID JSON: parsing it could only ever be a 400. */
+const unparseable = (): string => '{' + 'x'.repeat(Math.ceil(1.5 * MIB));
+
 const seedVenues = async (n: number): Promise<string[]> => {
   const rows = await db
     .insert(screenhosts)
@@ -84,6 +93,9 @@ const RAISED = [
   { url: '/api/internal/affluence-hourly', batchKey: 'places' },
   { url: '/api/internal/monthly-stats', batchKey: 'stats' },
 ] as const;
+
+// The internal POST routes that send at most one small row a place: they keep Fastify's 1 MiB.
+const ONE_ROW_ROUTES = ['/api/internal/screenhost-eligibility', '/api/internal/agents'] as const;
 
 afterAll(async () => {
   await sql.end();
@@ -184,20 +196,67 @@ describe('HUB-413 — the hub batch ingest routes accept up to 20 MiB, like ngin
     },
   );
 
-  it("20 MiB is still a ceiling: a body just past nginx's limit is a 413 on every raised route", async () => {
-    const payload = padded('places', NGINX_LIMIT); // the envelope pushes it just past 20 MiB
-    expect(Buffer.byteLength(payload)).toBeGreaterThan(NGINX_LIMIT);
-    for (const route of RAISED) {
-      const res = await app!.inject({ method: 'POST', url: route.url, headers: authed, payload });
-      expect(res.statusCode, route.url).toBe(413);
-    }
+  it.each(RAISED)(
+    "$url — the ceiling is exactly nginx's 20 MiB: 20 MiB is a 200, one byte more a 413",
+    async (route) => {
+      const atLimit = paddedTo(route.batchKey, NGINX_LIMIT);
+      expect(Buffer.byteLength(atLimit)).toBe(NGINX_LIMIT);
+      const ok = await app!.inject({
+        method: 'POST',
+        url: route.url,
+        headers: authed,
+        payload: atLimit,
+      });
+      expect(ok.statusCode).toBe(200);
+      expect(ok.json<{ upserted: number }>().upserted).toBe(0);
+
+      const pastLimit = paddedTo(route.batchKey, NGINX_LIMIT + 1);
+      expect(Buffer.byteLength(pastLimit)).toBe(NGINX_LIMIT + 1);
+      const tooLarge = await app!.inject({
+        method: 'POST',
+        url: route.url,
+        headers: authed,
+        payload: pastLimit,
+      });
+      expect(tooLarge.statusCode).toBe(413);
+    },
+  );
+
+  // The ORDER pin. Each body below could only be refused by READING it (invalid JSON → 400, over
+  // the route's limit → 413); a 401 proves the key was checked first and the body never parsed.
+  it.each(RAISED)('$url — no key is a 401 BEFORE the body is read', async (route) => {
+    const invalid = await app!.inject({
+      method: 'POST',
+      url: route.url,
+      headers: json,
+      payload: unparseable(),
+    });
+    expect(invalid.statusCode).toBe(401);
+
+    const oversized = await app!.inject({
+      method: 'POST',
+      url: route.url,
+      headers: json,
+      payload: paddedTo(route.batchKey, NGINX_LIMIT + 1),
+    });
+    expect(oversized.statusCode).toBe(401);
   });
 
   it("the raise is scoped: the one-row-a-place routes keep Fastify's 1 MiB", async () => {
     const payload = padded('items', Math.ceil(1.5 * MIB));
-    for (const url of ['/api/internal/screenhost-eligibility', '/api/internal/agents']) {
+    for (const url of ONE_ROW_ROUTES) {
       const res = await app!.inject({ method: 'POST', url, headers: authed, payload });
       expect(res.statusCode, url).toBe(413);
+    }
+  });
+
+  it('the one-row-a-place routes share the guard: no key is a 401 before their body is read', async () => {
+    const oversized = padded('items', Math.ceil(1.5 * MIB));
+    for (const url of ONE_ROW_ROUTES) {
+      for (const payload of [unparseable(), oversized]) {
+        const res = await app!.inject({ method: 'POST', url, headers: json, payload });
+        expect(res.statusCode, url).toBe(401);
+      }
     }
   });
 });
