@@ -24,6 +24,9 @@ import {
   users,
 } from '../db/schema.js';
 import { env } from '../env.js';
+import { buildTestingReport, listTestingScreenhosts } from '../lib/admin-testing-report.js';
+import { isCalendarDate } from '../lib/calendar-date.js';
+import { campaignEligibleHosts } from '../lib/campaign-eligible-hosts.js';
 import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
 import { requireSimulator } from '../middleware/require-simulator.js';
 import { runInSandbox } from '../simulator/context.js';
@@ -119,6 +122,14 @@ const eventBodySchema = z.object({
   budget_tnd: z.int().min(1).max(1_000_000).optional(),
   budget_share: z.number().min(0.01).max(1).optional(),
 });
+
+const isoDay = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine(isCalendarDate, 'must be a real YYYY-MM-DD calendar day');
+const reportQuerySchema = z
+  .object({ from: isoDay, to: isoDay })
+  .refine((q) => q.from <= q.to, { message: 'from must be on or before to' });
 
 const actorBodySchema = z.object({
   acceptance_rate: z.number().min(0).max(1).optional(),
@@ -491,6 +502,57 @@ export const adminSimulationsRoutes: FastifyPluginAsync<AdminSimulationsOptions>
       .where(eq(simulationActors.id, row.id));
     return { kind: row.kind, entity_id: entityId, params: next };
   });
+
+  // ── SIM-5 — the inspectors: the product's own admin views, read inside the sandbox ──────────
+  // The « Tests » report of a sandbox venue, on the simulation's VIRTUAL clock (so « today »,
+  // the elapsed hours and the live SPS are the simulated ones), and the ELIG-1 eligible hosts of
+  // a sandbox campaign. Same code as the real admin pages — only the database and the clock move.
+
+  app.get('/api/admin/simulations/:id/testing/screenhosts', routed, async () =>
+    listTestingScreenhosts(),
+  );
+
+  app.get(
+    '/api/admin/simulations/:id/testing/screenhosts/:venueId',
+    routed,
+    async (request, reply) => {
+      const { id, venueId } = request.params as { id: string; venueId: string };
+      if (!z.uuid().safeParse(venueId).success) return invalid(reply, 'venueId', 'must be a uuid');
+      const query = reportQuerySchema.safeParse(request.query);
+      if (!query.success) return invalid(reply, 'from', 'invalid période');
+      const simulation = await loadSimulation(id);
+      if (!simulation) return notFound(reply);
+      const report = await buildTestingReport({
+        id: venueId,
+        from: query.data.from,
+        to: query.data.to,
+        now: simulation.virtualNow,
+      });
+      if (!report) return notFound(reply);
+      return report;
+    },
+  );
+
+  app.get(
+    '/api/admin/simulations/:id/campaigns/:campaignId/eligible-hosts',
+    routed,
+    async (request, reply) => {
+      const { campaignId } = request.params as { campaignId: string };
+      if (!z.uuid().safeParse(campaignId).success) {
+        return invalid(reply, 'campaignId', 'must be a uuid');
+      }
+      const result = await campaignEligibleHosts(campaignId);
+      if (result.status === 'NOT_FOUND') return notFound(reply);
+      if (result.status === 'NO_DATES') {
+        return reply.status(409).send({
+          error: 'NO_DATES',
+          message: "La campagne n'a pas encore de période.",
+          statusCode: 409,
+        });
+      }
+      return result.report;
+    },
+  );
 
   app.get('/api/admin/simulations/:id/world/venues', routed, async (request) => {
     const simulationId = (request.params as { id: string }).id;

@@ -42,6 +42,7 @@ interface VenuesView {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 let app: FastifyInstance;
+let launchedCampaignId = '';
 let adminId = '';
 let simulationId = '';
 let dbName = '';
@@ -229,7 +230,13 @@ describe('SIM-1 world endpoints', () => {
       },
     });
     expect(launch.statusCode).toBe(201);
-    const launched = launch.json<{ outcome: string; allocations: number; status: string }>();
+    const launched = launch.json<{
+      campaign_id: string;
+      outcome: string;
+      allocations: number;
+      status: string;
+    }>();
+    launchedCampaignId = launched.campaign_id;
     expect(launched.outcome).toBe('OK');
     expect(launched.allocations).toBeGreaterThan(0);
     expect(launched.status).toBe('upcoming');
@@ -267,6 +274,56 @@ describe('SIM-1 world endpoints', () => {
     });
     expect(unknownActor.statusCode).toBe(404);
   }, 300_000);
+
+  it('SIM-5 — the inspectors read the sandbox on the VIRTUAL clock', async () => {
+    mockSession(adminId);
+    const picker = await app.inject({
+      method: 'GET',
+      url: `/api/admin/simulations/${simulationId}/testing/screenhosts`,
+    });
+    expect(picker.statusCode).toBe(200);
+    const venues = picker.json<{ screenhosts: { id: string }[] }>().screenhosts;
+    expect(venues).toHaveLength(5);
+
+    const report = await app.inject({
+      method: 'GET',
+      url: `/api/admin/simulations/${simulationId}/testing/screenhosts/${venues[0]!.id}?from=2026-02-23&to=2026-03-02`,
+    });
+    expect(report.statusCode).toBe(200);
+    const body = report.json<{
+      periode: { today: string };
+      audience: { measured_days: number };
+      sps: { live: number };
+    }>();
+    // The simulation clock sits on 2026-03-02 — the wall clock is months away.
+    expect(body.periode.today).toBe('2026-03-02');
+    expect(body.audience.measured_days).toBeGreaterThan(0);
+    expect(typeof body.sps.live).toBe('number');
+
+    const eligible = await app.inject({
+      method: 'GET',
+      url: `/api/admin/simulations/${simulationId}/campaigns/${launchedCampaignId}/eligible-hosts`,
+    });
+    expect(eligible.statusCode).toBe(200);
+    const elig = eligible.json<{
+      kind: string;
+      eligible: unknown[];
+      totals: { eligible: number };
+    }>();
+    expect(elig.kind).toBe('standard');
+    expect(elig.totals.eligible).toBe(elig.eligible.length);
+
+    const badVenue = await app.inject({
+      method: 'GET',
+      url: `/api/admin/simulations/${simulationId}/testing/screenhosts/00000000-0000-4000-8000-0000000000cd?from=2026-02-23&to=2026-03-02`,
+    });
+    expect(badVenue.statusCode).toBe(404);
+    const badRange = await app.inject({
+      method: 'GET',
+      url: `/api/admin/simulations/${simulationId}/testing/screenhosts/${venues[0]!.id}?from=2026-03-05&to=2026-03-01`,
+    });
+    expect(badRange.statusCode).toBe(400);
+  }, 120_000);
 
   it('the same seed reproduces the same venue names', async () => {
     mockSession(adminId);
