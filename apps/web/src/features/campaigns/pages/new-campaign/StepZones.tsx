@@ -1,10 +1,10 @@
-import { ArrowRight, Check, Loader2, MapPin } from 'lucide-react';
+import { ArrowRight, Check, Info, Loader2, MapPin } from 'lucide-react';
 import { Suspense, lazy } from 'react';
 
 import PillButton from '@/components/PillButton';
 import { useCampaignCoverage } from '@/features/campaigns/hooks/useCampaignApi';
 import { useZones } from '@/features/campaigns/hooks/useZones';
-import { toggleZone } from '@/features/campaigns/lib/zones-selection';
+import { COVERAGE_MAP_NOTE, toggleZone } from '@/features/campaigns/lib/zones-selection';
 import StepSectionHeading from '@/features/campaigns/pages/new-campaign/StepSectionHeading';
 
 // CF-U1 (Mejri item 3) — the leaflet map is a lazy chunk: the wizard stays light until this step.
@@ -127,8 +127,16 @@ export default function StepZones({
                   </p>
                 </div>
 
-                {/* MAP-3 — the map fills the column beside the list, full size from the start. */}
-                <div className="min-h-[28rem]">{coverageMap}</div>
+                {/* MAP-3 — the map fills the column beside the list, full size from the start.
+                    MAP-5 — the note under it: the dots are the eligible screenhosts, not a
+                    promise that the campaign plays on each of them. */}
+                <div className="space-y-2">
+                  <div className="min-h-[28rem]">{coverageMap}</div>
+                  <p className="flex items-start gap-2 text-xs text-gray-500">
+                    <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-deep" />
+                    <span>{COVERAGE_MAP_NOTE}</span>
+                  </p>
+                </div>
               </div>
             )}
           </div>
