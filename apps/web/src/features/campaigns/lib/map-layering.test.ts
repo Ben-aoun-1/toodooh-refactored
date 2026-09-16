@@ -5,11 +5,11 @@ import { describe, expect, it } from 'vitest';
 
 import { EXIT_DIALOG_Z } from '@/features/campaigns/components/WizardExitDialog';
 
+import * as layering from './map-layering';
 import {
   MAP_BADGE_Z_CLASS,
-  MAP_COLLAPSED_CLASSES,
+  MAP_CANVAS_CLASSES,
   MAP_CONTROL_Z_CLASS,
-  MAP_EXPANDED_CLASSES,
   MAP_OVERLAY_Z_CLASS,
   MAP_STACK_CLASSES,
   MAP_STACK_Z,
@@ -43,16 +43,23 @@ describe('coverage-map layering', () => {
     expect(src).not.toMatch(/isolate/); // the contract lives in map-layering.ts only
   });
 
-  it('collapsed is the ~180px rounded corner square; expanded is the 28rem canvas (CF-U4)', () => {
-    expect(MAP_COLLAPSED_CLASSES).toContain('h-[180px]');
-    expect(MAP_COLLAPSED_CLASSES).toContain('w-[180px]');
-    expect(MAP_COLLAPSED_CLASSES).toContain('rounded-2xl');
-    expect(MAP_EXPANDED_CLASSES).toContain('h-[28rem]');
-    expect(MAP_EXPANDED_CLASSES).toContain('w-full');
+  it('MAP-3 — ONE state: a full canvas from the first render, no collapsed square left to export', () => {
+    expect(MAP_CANVAS_CLASSES).toContain('w-full');
+    expect(MAP_CANVAS_CLASSES).toContain('min-h-[28rem]');
+    expect(MAP_CANVAS_CLASSES).toContain('rounded-2xl');
+    expect(Object.keys(layering)).not.toContain('MAP_COLLAPSED_CLASSES');
+    expect(Object.keys(layering)).not.toContain('MAP_EXPANDED_CLASSES');
   });
 
-  it('CF-U4 — the wrapper animates the expand/collapse (the height transition lives in the contract)', () => {
-    expect(MAP_STACK_CLASSES).toContain('transition-[height,width]');
+  it('MAP-3 — the map offers no expand/collapse control (Mejri 08/09 point 2, 15/09)', () => {
+    const src = readFileSync(
+      join(__dirname, '..', 'pages', 'new-campaign', 'ZonesCoverageMap.tsx'),
+      'utf8',
+    );
+    expect(src).not.toContain('Agrandir la carte');
+    expect(src).not.toContain('Réduire la carte');
+    expect(src).not.toMatch(/\bexpanded\b/);
+    expect(src).not.toMatch(/\bonToggle\b/);
   });
 
   it('CF-U4 — the internal ladder stays inside the isolate (overlay < badge < controls)', () => {
@@ -78,23 +85,15 @@ describe('coverage-map layering', () => {
     expect(src).not.toMatch(/className=[^`]*z-\[\d+\]/);
   });
 
-  it('CF-U4 — StepZones renders ONE map mount (the transition needs no remount on toggle)', () => {
+  it('MAP-3 — StepZones lays the zone list beside a full-size map, with no local collapse state', () => {
     const src = readFileSync(
       join(__dirname, '..', 'pages', 'new-campaign', 'StepZones.tsx'),
       'utf8',
     );
-    // The single shared slot: a conditional CLASS, not conditional mounts.
-    expect(src).toContain("mapExpanded ? '' : 'flex justify-end'");
-    expect(src).not.toContain('{mapExpanded && coverageMap}');
-  });
-
-  it('StepZones starts collapsed and resets per entry (local useState(false))', () => {
-    const src = readFileSync(
-      join(__dirname, '..', 'pages', 'new-campaign', 'StepZones.tsx'),
-      'utf8',
-    );
-    expect(src).toContain('useState(false)');
-    expect(src).toContain('expanded={mapExpanded}');
+    expect(src).not.toContain('mapExpanded');
+    expect(src).not.toContain("'flex justify-end'");
+    expect(src).toContain('lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]');
+    expect(src).toContain('Ajoutez une ou plusieurs zones de diffusion');
     expect(src).toMatch(/lazy\(\(\) => import\('\.\/ZonesCoverageMap'\)\)/); // still a lazy chunk
   });
 });
