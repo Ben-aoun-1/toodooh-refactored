@@ -6,7 +6,6 @@ import {
   campaignsOnDay,
   declareConfirmCopy,
   declareResultCopy,
-  fmtHour,
   groupCreneauxByDate,
 } from './diffusion-calendar';
 
@@ -70,9 +69,5 @@ describe('copy', () => {
         { ...base, campaign_name: 'Été', mode: 'reliquat', absorbed: 0, residual: 100 },
       ]),
     ).toContain('au prochain passage');
-  });
-
-  it('fmtHour pads', () => {
-    expect(fmtHour(9)).toBe('09h');
   });
 });

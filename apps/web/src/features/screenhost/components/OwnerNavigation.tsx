@@ -49,10 +49,10 @@ const navigation = [
     iconSrc: campagneIcon,
     iconSrcActive: campagneIconActive,
   },
-  // CAL-1 — ONE calendar: diffusions + indisponibilités + dispositifs (the former « Calendrier de
-  // diffusion » entry merged here; its URL redirects).
+  // CAL-1 — ONE calendar page; CAL-2 — its Figma name (« Mon calendrier et mes dispositifs de
+  // diffusion »), wrapped on two lines by the nav item.
   {
-    name: 'Mon calendrier de diffusion',
+    name: 'Mon calendrier et mes dispositifs de diffusion',
     href: '/owner-calendar-devices',
     icon: Calendar,
     iconSrc: parcTvIcon,
