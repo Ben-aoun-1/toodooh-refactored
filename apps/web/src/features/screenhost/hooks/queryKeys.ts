@@ -57,6 +57,8 @@ export const screenhostKeys = {
 
   /** CF-D1 — the owner's devices with real liveness (GET /api/screenhosts/screens). */
   devices: (userId: string) => [...screenhostKeys.all, 'devices', userId] as const,
+  /** CAL-2 — the affluence sensor state per venue (GET /api/screenhosts/sensors). */
+  sensors: (userId: string) => [...screenhostKeys.all, 'sensors', userId] as const,
 
   /** Lane F — a venue's identity card (GET /:id/profile: sector, class, hours, sps, ratios). */
   profile: (screenhostId: string) => [...screenhostKeys.all, 'profile', screenhostId] as const,
