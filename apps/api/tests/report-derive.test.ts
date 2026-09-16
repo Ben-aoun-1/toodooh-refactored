@@ -65,7 +65,8 @@ describe('audienceKpis (web parity, S01)', () => {
     );
     expect(kpis.global).toBe(2100);
     expect(kpis.perDay).toBe(700);
-    expect(kpis.perHour).toBe(50);
+    // HOUR-AVG1 — 700 ÷ (14 h × 2 half-hours): an hour is the mean of its two readings.
+    expect(kpis.perHour).toBe(25);
     expect(kpis.peak).toEqual({ value: 900, date: '2026-06-02' });
     expect(kpis.measuredDays).toBe(3); // unmarked points count as measured (legacy wires)
     expect(kpis.estimatedPct).toBe(0);
@@ -93,7 +94,7 @@ describe('audienceKpis (web parity, S01)', () => {
   it('perHour keeps one decimal instead of rounding to a misleading 0 (Mejri prod-test #3)', () => {
     const kpis = audienceKpis([{ date: '2026-06-26', audience: 4 }], 14, 0);
     expect(kpis.perDay).toBe(4);
-    expect(kpis.perHour).toBe(0.3); // 4 ÷ 14 = 0,2857… → one decimal, not 0
+    expect(kpis.perHour).toBe(0.1); // 4 ÷ (14 × 2) = 0,142… → one decimal, not 0
   });
 
   it('empty input → the honest empty state', () => {

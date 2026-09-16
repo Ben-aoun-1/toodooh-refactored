@@ -15,7 +15,7 @@ import { tunisDateOf } from './campaign-dates.js';
 import { getDispatchConfig } from './dispatch/config.js';
 import { broadcastableHours } from './dispatch/eligibility.js';
 import { computeAmax } from './event-pricing/pricing.js';
-import { tunisSlotOf } from './half-hour-slots.js';
+import { HALVES_PER_HOUR, tunisSlotOf } from './half-hour-slots.js';
 import { estimationFloor, loadPeriodAudienceInput } from './period-audience-source.js';
 import { periodAudience, weekGridFromCells } from './period-audience.js';
 import { loadDeliveredSlots } from './reconcile/delivered-slots.js';
@@ -208,7 +208,8 @@ export const buildTestingReport = async ({ id, from, to, now }: TestingReportInp
       estimated_pct: merged.estimatedPct,
       // The same denominators « Mes performances » uses: days with data, opening hours per day.
       mean_per_day: openDays > 0 ? round2(merged.total / openDays) : null,
-      mean_per_hour: openHours > 0 ? round2(merged.total / openHours) : null,
+      // HOUR-AVG1 — an hour is the average of its two half-hours (the day is their sum).
+      mean_per_hour: openHours > 0 ? round2(merged.total / (openHours * HALVES_PER_HOUR)) : null,
       days: stats(merged.days.map((d) => d.audience)),
       cells: stats(merged.cells.map((c) => c.value)),
       measured_cells: stats(measuredCells.map((c) => c.value)),

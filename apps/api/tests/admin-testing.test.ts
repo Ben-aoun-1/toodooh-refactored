@@ -172,8 +172,9 @@ describe('ADM-OBS1 — GET /api/admin/testing/screenhosts[/:id] (real Postgres)'
       { date: d1, slot: 21, value: 20, source: 'measured' },
       { date: d2, slot: 22, value: 30, source: 'measured' },
     ]);
-    // 2 open days × 12 opening hours → 60 / 24 = 2.5 per opening hour.
-    expect(r.audience.mean_per_hour).toBe(2.5);
+    // 2 open days × 12 opening hours → 60 / (24 h × 2 half-hours) = 1.25 per opening hour
+    // (HOUR-AVG1: an hour is the mean of its two half-hour readings).
+    expect(r.audience.mean_per_hour).toBe(1.25);
     expect(r.audience.week).toHaveLength(7);
     expect(r.audience.week[0]).toHaveLength(48);
 

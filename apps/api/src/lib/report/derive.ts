@@ -1,5 +1,6 @@
 import { addDays, format, parseISO } from 'date-fns';
 
+import { HALVES_PER_HOUR } from '../half-hour-slots.js';
 import { hoursSpan } from '../opening-hours.js';
 
 import { sectorDisplayName } from './sector-display-name.js';
@@ -139,8 +140,11 @@ export function audienceKpis(
   // intermediate perDay round shifted the /h figure, and the PDF must never disagree).
   const perDayRaw = global / points.length;
   const perDay = Math.round(perDayRaw);
-  // One decimal (Mejri prod-test #3): 4 pers/day ÷ 14 h must read 0,3 — never a rounded 0.
-  const perHour = hoursPerDay > 0 ? Math.round((perDayRaw / hoursPerDay) * 10) / 10 : null;
+  // One decimal (Mejri prod-test #3): 4 pers/day over 14 h must read 0,1 — never a rounded 0.
+  // HOUR-AVG1 (Mejri 15/09) — the day adds its half-hour readings (FLOW-1), and an hour is the
+  // AVERAGE of its two halves, so the hourly mean divides by the half-hours, not the hours.
+  const perHour =
+    hoursPerDay > 0 ? Math.round((perDayRaw / (hoursPerDay * HALVES_PER_HOUR)) * 10) / 10 : null;
   const measuredDaysCount = points.filter((p) => p.source !== 'estimated').length;
   return { global, perDay, perHour, peak, measuredDays: measuredDaysCount, estimatedPct };
 }

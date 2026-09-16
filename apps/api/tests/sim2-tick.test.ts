@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { db, mainDb } from '../src/db/client.js';
@@ -20,7 +20,7 @@ import { runInSandbox } from '../src/simulator/context.js';
 import { mainDatabaseName, sandboxDatabaseName, sandboxUrl } from '../src/simulator/naming.js';
 import { closeAllSandboxes, sandboxHandleFor } from '../src/simulator/pools.js';
 import { createSandboxDatabase, dropSandboxDatabase } from '../src/simulator/provisioning.js';
-import { momentOf } from '../src/simulator/tick/clock.js';
+import { advance, momentOf } from '../src/simulator/tick/clock.js';
 import { launchCampaign, launchEvent } from '../src/simulator/tick/launch.js';
 import { runTick } from '../src/simulator/tick/run.js';
 import { simulationState } from '../src/simulator/tick/state.js';
@@ -200,6 +200,60 @@ describe('SIM-2 the tick (real engines on virtual time)', () => {
     expect(state.clock.date).toBe('2026-04-10');
     // The campaign's total diffusions since launch — a stable fact, unlike « this very hour ».
     expect(state.campaigns[0]?.proofs).toBeGreaterThan(0);
+  }, 120_000);
+
+  it("HOUR-AVG1 — « audience now » is the AVERAGE of the hour's two half-hour readings", async () => {
+    const sim = await simulation();
+    const last = momentOf(advance(sim.virtualNow, -1)); // the last completed hour
+    const measured = await inSandbox(() =>
+      db
+        .select({ screenhostId: screenhostAffluenceHourly.screenhostId })
+        .from(screenhostAffluenceHourly)
+        .where(
+          and(
+            eq(screenhostAffluenceHourly.date, last.date),
+            eq(screenhostAffluenceHourly.hour, last.hour),
+          ),
+        )
+        .groupBy(screenhostAffluenceHourly.screenhostId)
+        .having(sql`count(*) = 2`),
+    );
+    const venueId = measured[0]?.screenhostId;
+    expect(venueId).toBeDefined();
+    const before = await inSandbox(() =>
+      db
+        .select({ slot: screenhostAffluenceHourly.slot, value: screenhostAffluenceHourly.value })
+        .from(screenhostAffluenceHourly)
+        .where(
+          and(
+            eq(screenhostAffluenceHourly.screenhostId, venueId!),
+            eq(screenhostAffluenceHourly.date, last.date),
+            eq(screenhostAffluenceHourly.hour, last.hour),
+          ),
+        ),
+    );
+    const setHalf = (slot: number, value: number | null) =>
+      inSandbox(() =>
+        db
+          .update(screenhostAffluenceHourly)
+          .set({ value })
+          .where(
+            and(
+              eq(screenhostAffluenceHourly.screenhostId, venueId!),
+              eq(screenhostAffluenceHourly.date, last.date),
+              eq(screenhostAffluenceHourly.slot, slot),
+            ),
+          ),
+      );
+    await setHalf(last.hour * 2, 40);
+    await setHalf(last.hour * 2 + 1, 80);
+    try {
+      const state = await inSandbox(() => simulationState(momentOf(sim.virtualNow)));
+      expect(state.venues.find((v) => v.id === venueId)?.audience_now).toBe(60); // not 40, not 120
+    } finally {
+      // The later tests settle on these readings — put the measured values back.
+      for (const row of before) await setHalf(row.slot, row.value);
+    }
   }, 120_000);
 
   it('when the window closes the campaign completes and the REAL reconciliation settles it', async () => {
