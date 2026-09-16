@@ -11,17 +11,17 @@
  * below WizardExitDialog's EXIT_DIALOG_Z (the regression test asserts the ordering).
  */
 export const MAP_STACK_Z = 0;
-export const MAP_STACK_CLASSES =
-  'relative isolate z-0 overflow-hidden transition-[height,width] duration-300 ease-in-out';
+export const MAP_STACK_CLASSES = 'relative isolate z-0 overflow-hidden';
 
-/** The collapsed corner square (~180px, rounded — the CF-U3 in-flow anchoring). */
-export const MAP_COLLAPSED_CLASSES =
-  'h-[180px] w-[180px] rounded-2xl border border-gray-200 shadow-lg';
-/** CF-U4 — the expanded view grows to a real canvas (was h-72). */
-export const MAP_EXPANDED_CLASSES = 'h-[28rem] w-full rounded-2xl border border-gray-200';
+/**
+ * MAP-3 (Mejri 08/09 point 2, still open on 15/09; Figma « Lancer une campagne », Zone step) —
+ * ONE state: the map is a full canvas from the first render, filling the column beside the zone
+ * list. The CF-U2/U3/U4 collapsed corner square and its expand/collapse toggle are retired.
+ */
+export const MAP_CANVAS_CLASSES = 'h-full min-h-[28rem] w-full rounded-2xl border border-gray-200';
 
 // The INTERNAL ladder (inside the isolate — these never escape the stack): leaflet panes run
-// 200–800, so overlays sit at 500, the count badge at 600, the toggle/controls at 900.
+// 200–800, so overlays sit at 500, the count badge at 600, controls at 900.
 export const MAP_OVERLAY_Z_CLASS = 'z-[500]';
 export const MAP_BADGE_Z_CLASS = 'z-[600]';
 export const MAP_CONTROL_Z_CLASS = 'z-[900]';

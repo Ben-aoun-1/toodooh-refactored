@@ -1,5 +1,5 @@
 import { ArrowRight, Check, Loader2, MapPin } from 'lucide-react';
-import { Suspense, lazy, useState } from 'react';
+import { Suspense, lazy } from 'react';
 
 import PillButton from '@/components/PillButton';
 import { useCampaignCoverage } from '@/features/campaigns/hooks/useCampaignApi';
@@ -26,9 +26,9 @@ interface StepZonesProps {
  * « Zones géographiques » step (CF-Z1 slot). Chips from GET /api/zones (V1: exactly « Grand
  * Tunis », preselected for a fresh campaign by the orchestrator); deselecting everything =
  * whole-network semantics (VF US-2.1). CF-U1 (Mejri item 3): the read-only coverage map shows
- * where the campaign would land. CF-U2 — it starts COLLAPSED as a corner square floating over
- * the card's bottom-right edge and expands to the full-width view under the chips; the state is
- * component-local so every step entry resets to collapsed. Zone selection stays in the chips.
+ * where the campaign would land. MAP-3 (Mejri 08/09 point 2, reopened 15/09; Figma « Lancer une
+ * campagne », Zone step): the zone list on the left, the map at FULL size on the right from the
+ * first render — no collapsed square, no expand click. Zone selection stays in the list.
  */
 export default function StepZones({
   zoneIds,
@@ -40,17 +40,11 @@ export default function StepZones({
 }: StepZonesProps) {
   const zones = useZones();
   const coverage = useCampaignCoverage(draftCampaignId);
-  // CF-U2 — collapsed corner square by default; local state = reset on every step entry.
-  const [mapExpanded, setMapExpanded] = useState(false);
 
   const coverageMap = (
     <Suspense
       fallback={
-        <div
-          className={`flex items-center justify-center rounded-2xl border border-gray-200 bg-gray-50 ${
-            mapExpanded ? 'h-72' : 'h-[180px] w-[180px]'
-          }`}
-        >
+        <div className="flex h-full min-h-[28rem] w-full items-center justify-center rounded-2xl border border-gray-200 bg-gray-50">
           <Loader2 className="h-6 w-6 animate-spin text-brand-deep" />
         </div>
       }
@@ -61,8 +55,6 @@ export default function StepZones({
         withoutCoordinates={coverage.data?.without_coordinates ?? 0}
         isLoading={Boolean(draftCampaignId) && coverage.isLoading}
         isError={coverage.isError}
-        expanded={mapExpanded}
-        onToggle={() => setMapExpanded((v) => !v)}
         wholeNetwork={zoneIds.length === 0}
       />
     </Suspense>
@@ -77,7 +69,7 @@ export default function StepZones({
             <StepSectionHeading
               icon={MapPin}
               title="Zones géographiques"
-              subtitle="Choisissez les zones de diffusion de votre campagne"
+              subtitle="Ajoutez une ou plusieurs zones de diffusion"
             />
           </div>
 
@@ -92,41 +84,52 @@ export default function StepZones({
                 Impossible de charger les zones.
               </p>
             ) : (
-              <>
-                <div className="flex flex-wrap gap-3">
-                  {(zones.data ?? []).map((zone) => {
-                    const selected = zoneIds.includes(zone.id);
-                    return (
-                      <button
-                        key={zone.id}
-                        type="button"
-                        onClick={() => setZoneIds(toggleZone(zoneIds, zone.id))}
-                        aria-pressed={selected}
-                        className={`inline-flex items-center gap-2 rounded-xl border-2 px-5 py-3 text-sm font-medium transition-all ${
-                          selected
-                            ? 'border-brand-primary bg-brand-primary/10 text-brand-deep'
-                            : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
-                        }`}
-                      >
-                        {selected && <Check className="h-4 w-4 text-brand-deep" />}
-                        {zone.name}
-                      </button>
-                    );
-                  })}
+              <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+                <div className="space-y-3">
+                  <ul className="space-y-3">
+                    {(zones.data ?? []).map((zone) => {
+                      const selected = zoneIds.includes(zone.id);
+                      return (
+                        <li key={zone.id}>
+                          <button
+                            type="button"
+                            onClick={() => setZoneIds(toggleZone(zoneIds, zone.id))}
+                            aria-pressed={selected}
+                            className={`flex w-full items-center gap-3 rounded-xl border-2 px-4 py-3 text-left text-sm font-medium transition-all ${
+                              selected
+                                ? 'border-brand-primary bg-brand-primary/10 text-brand-deep'
+                                : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                            }`}
+                          >
+                            <span
+                              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
+                                selected
+                                  ? 'border-brand-deep bg-brand-primary'
+                                  : 'border-gray-300 bg-white'
+                              }`}
+                            >
+                              {selected && <Check className="h-3.5 w-3.5 text-brand-deep" />}
+                            </span>
+                            <MapPin className="h-4 w-4 shrink-0 text-brand-deep" />
+                            {zone.name}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <p className="text-sm text-gray-500">
+                    {zoneIds.length === 0
+                      ? 'Aucune zone sélectionnée : votre campagne sera diffusée sur tout le réseau.'
+                      : 'Votre campagne sera diffusée dans les zones sélectionnées.'}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    D’autres zones seront bientôt disponibles.
+                  </p>
                 </div>
-                <p className="text-sm text-gray-500">
-                  {zoneIds.length === 0
-                    ? 'Aucune zone sélectionnée : votre campagne sera diffusée sur tout le réseau.'
-                    : 'Votre campagne sera diffusée dans les zones sélectionnées.'}
-                </p>
 
-                <p className="text-xs text-gray-400">D’autres zones seront bientôt disponibles.</p>
-
-                {/* CF-U3 — anchored bottom-right INSIDE the card, in flow. CF-U4 — ONE mount for
-                    BOTH states (no remount on toggle), so the wrapper's height transition
-                    actually animates the expand/collapse. */}
-                <div className={mapExpanded ? '' : 'flex justify-end'}>{coverageMap}</div>
-              </>
+                {/* MAP-3 — the map fills the column beside the list, full size from the start. */}
+                <div className="min-h-[28rem]">{coverageMap}</div>
+              </div>
             )}
           </div>
         </div>
