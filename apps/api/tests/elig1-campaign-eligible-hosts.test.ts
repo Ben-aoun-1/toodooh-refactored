@@ -151,12 +151,14 @@ const seedCampaign = async (
   return c?.id ?? '';
 };
 
+const buildApp = () => Fastify({ logger: false });
+
 describe('ELIG-1 — GET /api/admin/campaigns/:id/eligible-hosts (real Postgres)', () => {
-  let app: ReturnType<typeof Fastify>;
+  let app: ReturnType<typeof buildApp>;
 
   beforeEach(async () => {
     await resetAuthTables();
-    app = Fastify({ logger: false });
+    app = buildApp();
     await app.register(adminCampaignsRoutes);
     await app.ready();
   });
