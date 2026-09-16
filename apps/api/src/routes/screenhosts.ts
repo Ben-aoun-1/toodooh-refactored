@@ -39,6 +39,7 @@ import { decideEventAllocation } from '../lib/event-allocation-decision.js';
 import { SLOTS_PER_DAY } from '../lib/half-hour-slots.js';
 import { displayImpressionsSettled } from '../lib/impressions-display.js';
 import { measuredDays, measuredTotal } from '../lib/monthly-audience.js';
+import { ownerSensorStatuses } from '../lib/owner-sensors.js';
 import { loadPeriodAudienceInput } from '../lib/period-audience-source.js';
 import { periodAudience, weekGridFromCells } from '../lib/period-audience.js';
 import { pushPlaylistToVenue } from '../lib/playout/push.js';
@@ -303,6 +304,19 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
   // connected; older or never-seen → not. Owner-scoped via the JOIN's WHERE (the WiFi-routes
   // idiom); static route, so it cannot collide with the deeper /:id/* param routes. NO secrets in
   // the payload — pairing codes/tokens never leave the device flow.
+  // CAL-2 — the affluence sensor's state per venue (the « ÉTAT DE MON DISPOSITIF » card), read
+  // from the measured cells the hub sends; see lib/owner-sensors.ts for why per venue and why not
+  // received_at.
+  app.get('/api/screenhosts/sensors', ownerGuard, async (request, reply) => {
+    const userId = request.user?.id;
+    if (!userId) {
+      return reply
+        .status(401)
+        .send({ error: 'UNAUTHENTICATED', message: 'Authentication required.' });
+    }
+    return reply.status(200).send(await ownerSensorStatuses(userId, new Date()));
+  });
+
   app.get('/api/screenhosts/screens', ownerGuard, async (request, reply) => {
     const userId = request.user?.id;
     if (!userId) {
