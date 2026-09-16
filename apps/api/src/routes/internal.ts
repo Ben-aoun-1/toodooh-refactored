@@ -65,6 +65,20 @@ const decryptWifi = (encrypted: string | null): string | null => {
 // what today's push produces, expanded, so the money path cannot move on unchanged input.
 const HALF_HOUR_CELL_MSG = 'each cell needs hour or slot';
 
+// HUB-413 — the body ceiling of the hub's BATCH ingest routes: 20 MiB, the same number nginx puts
+// in front of us (infra/nginx/*.conf `client_max_body_size 20m`; nginx's `m` is 1024²). Fastify's
+// own default is 1 MiB and nothing here overrode it, so the REAL ceiling was the hidden one: from
+// 2026-09-12 every affluence-hourly push died on 413 FST_ERR_CTP_BODY_TOO_LARGE. The hub sends
+// every place in ONE request, and a boot push carries the whole 35-day window (48 cells a day a
+// place, empty ones included) — past 1 MiB at ~10 places. A failed boot push is retried WHOLE
+// every cycle, so no measured cell reached us for any venue until this was raised.
+//   • Keep it equal to nginx: raise one without the other and the 413 just moves to the other hop.
+//   • Per ROUTE, never global — only the routes that carry a per-place series get it; the rest of
+//     /api/internal/* sends at most one small row a place and keeps Fastify's 1 MiB.
+//   • The guard MUST stay an onRequest hook (see `guard` below): that is the phase before the body
+//     is read, so only a caller holding the key ever gets this many bytes buffered and parsed.
+const HUB_BATCH_BODY_LIMIT = 20 * 1024 * 1024;
+
 const affluenceBodySchema = z.object({
   slots: z
     .array(
@@ -282,7 +296,11 @@ const agentBodySchema = z.object({
 // `syncKey` defaults to env.WEDOOH_SYNC_KEY in production (index.ts registers with no options);
 // tests pass it explicitly so they never depend on the eagerly-parsed env singleton.
 export const internalRoutes: FastifyPluginAsync<{ syncKey?: string }> = async (app, opts) => {
-  const guard = { preHandler: [requireSyncKey(opts.syncKey ?? env.WEDOOH_SYNC_KEY)] };
+  // HUB-413 — onRequest, not preHandler: the key is checked BEFORE Fastify reads the body, so a
+  // keyless call is a 401 without a byte of it parsed (a preHandler runs only after the parse).
+  const guard = { onRequest: [requireSyncKey(opts.syncKey ?? env.WEDOOH_SYNC_KEY)] };
+  // HUB-413 — the SAME guard, plus the hub-batch body ceiling (see HUB_BATCH_BODY_LIMIT).
+  const batchIngest = { ...guard, bodyLimit: HUB_BATCH_BODY_LIMIT };
 
   // ── B1: GET /api/internal/locations?email= ──────────────────────────────────
   // Owner + their screenhost locations (WiFi password DECRYPTED — this is the privileged transfer
@@ -385,7 +403,7 @@ export const internalRoutes: FastifyPluginAsync<{ syncKey?: string }> = async (a
   // upsert on (screenhost, day, hour) — the value AND its provenance (a provenance-less re-push
   // resets source to NULL: unknown, never stale). Unknown location_ids are SKIPPED and reported
   // (never fail the batch).
-  app.post('/api/internal/affluence', guard, async (request, reply) => {
+  app.post('/api/internal/affluence', batchIngest, async (request, reply) => {
     const parsed = affluenceBodySchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({
@@ -492,7 +510,7 @@ export const internalRoutes: FastifyPluginAsync<{ syncKey?: string }> = async (a
   // Same non-strict posture as its siblings: an unknown screenhost id is SKIPPED and reported,
   // never fatal — a hub holding a place toodooh does not (yet) know must not lose the whole batch.
   // Latest-value-wins on (screenhost, date, hour).
-  app.post('/api/internal/affluence-hourly', guard, async (request, reply) => {
+  app.post('/api/internal/affluence-hourly', batchIngest, async (request, reply) => {
     const parsed = affluenceHourlyBodySchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({
@@ -605,7 +623,7 @@ export const internalRoutes: FastifyPluginAsync<{ syncKey?: string }> = async (a
   // estimate actually CONTRIBUTES (a venue with no grid, or a fully measured month, is verbatim).
   // This path fills measurement holes; it does not re-derive the hub's arithmetic (the banked
   // DATA1 summarize-mismatch is a separate lane).
-  app.post('/api/internal/monthly-stats', guard, async (request, reply) => {
+  app.post('/api/internal/monthly-stats', batchIngest, async (request, reply) => {
     const parsed = monthlyStatsBodySchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({
