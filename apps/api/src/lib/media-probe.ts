@@ -69,8 +69,8 @@ export function sniffContainer(bytes: Buffer): SniffedContainer {
   ) {
     return 'png';
   }
-  // PDF: '%PDF-' (CF-M2 — the recharge justificatif accepts PDFs; creatives never do, their
-  // declared-mime gate rejects application/pdf before this sniff is consulted).
+  // PDF: '%PDF-' (CF-M2 — the recharge justificatif accepts PDFs; creatives never do: UPL-2
+  // refuses PDF bytes by the sniffed kind, whatever the declared type).
   if (bytes.length >= 5 && bytes.toString('latin1', 0, 5) === '%PDF-') return 'pdf';
   return null;
 }
@@ -144,11 +144,7 @@ export async function probeMedia(bytes: Buffer): Promise<ProbedMedia> {
   }
 }
 
-// Spec rules for a VIDEO stream (measured values, not declarations).
+// Spec rules for a VIDEO stream (measured values, not declarations). UPL-1 (operator 2026-09-16):
+// NO aspect-ratio rule — any ratio is accepted; the web preview tile and the TV player (resize_mode
+// fit) letterbox whatever they are given. The measured width/height above stay informational.
 export const REQUIRED_VIDEO_CODEC = 'h264';
-export const TARGET_RATIO = 16 / 9;
-export const RATIO_TOLERANCE = 0.02; // ±2%
-
-/** 16:9 within ±2%, from measured dimensions. */
-export const isRatioConforming = (width: number, height: number): boolean =>
-  height > 0 && Math.abs(width / height / TARGET_RATIO - 1) <= RATIO_TOLERANCE;

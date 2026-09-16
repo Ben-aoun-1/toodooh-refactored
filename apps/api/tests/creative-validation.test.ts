@@ -13,12 +13,15 @@ import { creativesRoutes } from '../src/routes/creatives.js';
 import { storage } from '../src/storage/s3-storage.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
+import { jpegBytes, minimalPng, pdfBytes, webpBytes } from './helpers/media-bytes.js';
 
 // CF-SH1 (spec §1.6) — upload hardening. Real Postgres + real MinIO, session mocked (the
 // creatives.test.ts harness). Fixtures are tiny ffmpeg-generated media (tests/fixtures, <200KB
 // each). Byte-sniffing tests run EVERYWHERE; the measured codec/ratio/duration tests are gated on
-// FFPROBE_PATH (the chromium-smoke posture) and are exercised for real inside the docker image.
-// No business_sectors/zones fixtures anywhere (the exact-seed-count footgun).
+// FFPROBE_PATH (the chromium-smoke posture) and are exercised for real inside the docker image;
+// creative-probe-rules.test.ts pins the same rules everywhere with the probe mocked.
+// UPL-2 (operator 2026-09-16) — the SNIFFED bytes decide; the declared type is advisory and never
+// stored. No business_sectors/zones fixtures anywhere (the exact-seed-count footgun).
 
 type GetSessionResult = Awaited<ReturnType<typeof auth.api.getSession>>;
 
@@ -49,12 +52,21 @@ const seedUser = async (values: Partial<NewUser> = {}): Promise<string> => {
 
 const fixture = (name: string): Buffer => readFileSync(join(import.meta.dirname, 'fixtures', name));
 
-const multipartBody = (file: { filename: string; contentType: string; content: Buffer }) => {
+// `contentType: null` omits the part's Content-Type header (busboy then reports text/plain) —
+// the « browser sent no usable type » case.
+interface UploadFile {
+  filename: string;
+  contentType: string | null;
+  content: Buffer;
+}
+
+const multipartBody = (file: UploadFile) => {
   const boundary = `----toodoohtest${Date.now()}${Math.random().toString(16).slice(2)}`;
   const head = Buffer.from(
     `--${boundary}\r\n` +
       `Content-Disposition: form-data; name="file"; filename="${file.filename}"\r\n` +
-      `Content-Type: ${file.contentType}\r\n\r\n`,
+      (file.contentType === null ? '' : `Content-Type: ${file.contentType}\r\n`) +
+      '\r\n',
   );
   const tail = Buffer.from(`\r\n--${boundary}--\r\n`);
   return {
@@ -63,11 +75,14 @@ const multipartBody = (file: { filename: string; contentType: string; content: B
   };
 };
 
-const upload = (
-  app: ReturnType<typeof buildApp>,
-  query: string,
-  file: { filename: string; contentType: string; content: Buffer },
-) => app.inject({ method: 'POST', url: `/api/creatives?${query}`, ...multipartBody(file) });
+const upload = (app: ReturnType<typeof buildApp>, query: string, file: UploadFile) =>
+  app.inject({ method: 'POST', url: `/api/creatives?${query}`, ...multipartBody(file) });
+
+/** The stored row for an upload response — the mime is asserted at the DB, not only the view. */
+const storedRow = async (id: string) => {
+  const [row] = await db.select().from(creatives).where(eq(creatives.id, id)).limit(1);
+  return row;
+};
 
 describe('creative upload hardening (CF-SH1 — real Postgres + MinIO)', () => {
   let app: ReturnType<typeof buildApp>;
@@ -91,8 +106,8 @@ describe('creative upload hardening (CF-SH1 — real Postgres + MinIO)', () => {
     await sql.end();
   });
 
-  // ── spec-strict declared types (webm/webp are out for NEW uploads) ───────────
-  it('rejects a DECLARED video/webm upload (400 — no longer an accepted type)', async () => {
+  // ── spec-strict kinds (webm/webp are out for NEW uploads — judged on the bytes) ──
+  it('refuses a WebM video, declared as such (400 MEDIA_KIND_UNSUPPORTED, detected webm)', async () => {
     mockSession(await seedUser());
     const res = await upload(app, 'type=video&duration_seconds=10', {
       filename: 'clip.webm',
@@ -100,11 +115,16 @@ describe('creative upload hardening (CF-SH1 — real Postgres + MinIO)', () => {
       content: fixture('vp8-169.webm'),
     });
     expect(res.statusCode).toBe(400);
-    expect((res.json() as { error: string }).error).toBe('INVALID_INPUT');
+    expect(res.json()).toMatchObject({
+      error: 'MEDIA_KIND_UNSUPPORTED',
+      creative_type: 'video',
+      declared: 'video/webm',
+      detected: 'webm',
+    });
     expect(await db.$count(creatives)).toBe(0);
   });
 
-  it('rejects a DECLARED image/webp upload (400 — no longer an accepted type)', async () => {
+  it('refuses a WebP photo, declared as such (400 MEDIA_KIND_UNSUPPORTED, detected webp)', async () => {
     mockSession(await seedUser());
     const res = await upload(app, 'type=photo&duration_seconds=10', {
       filename: 'shot.webp',
@@ -112,11 +132,16 @@ describe('creative upload hardening (CF-SH1 — real Postgres + MinIO)', () => {
       content: fixture('photo.webp'),
     });
     expect(res.statusCode).toBe(400);
-    expect((res.json() as { error: string }).error).toBe('INVALID_INPUT');
+    expect(res.json()).toMatchObject({
+      error: 'MEDIA_KIND_UNSUPPORTED',
+      creative_type: 'photo',
+      detected: 'webp',
+    });
+    expect(await db.$count(creatives)).toBe(0);
   });
 
-  // ── byte-sniffing: the declared type can no longer lie (every environment) ───
-  it('rejects JPEG bytes declared as video/mp4 (400 MEDIA_TYPE_MISMATCH)', async () => {
+  // ── byte-sniffing: a declared type can never make bad bytes pass (every environment) ──
+  it('refuses a photo (JPEG bytes) uploaded as a video, whatever was declared (400 MEDIA_KIND_UNSUPPORTED)', async () => {
     mockSession(await seedUser());
     const res = await upload(app, 'type=video&duration_seconds=10', {
       filename: 'clip.mp4',
@@ -125,14 +150,15 @@ describe('creative upload hardening (CF-SH1 — real Postgres + MinIO)', () => {
     });
     expect(res.statusCode).toBe(400);
     expect(res.json()).toMatchObject({
-      error: 'MEDIA_TYPE_MISMATCH',
+      error: 'MEDIA_KIND_UNSUPPORTED',
+      creative_type: 'video',
       declared: 'video/mp4',
       detected: 'jpeg',
     });
     expect(await db.$count(creatives)).toBe(0);
   });
 
-  it('rejects WEBM bytes smuggled as video/mp4 (400 MEDIA_TYPE_MISMATCH, detected webm)', async () => {
+  it('refuses WEBM bytes smuggled as video/mp4 (400 MEDIA_KIND_UNSUPPORTED, detected webm)', async () => {
     mockSession(await seedUser());
     const res = await upload(app, 'type=video&duration_seconds=10', {
       filename: 'clip.mp4',
@@ -140,10 +166,11 @@ describe('creative upload hardening (CF-SH1 — real Postgres + MinIO)', () => {
       content: fixture('vp8-169.webm'),
     });
     expect(res.statusCode).toBe(400);
-    expect(res.json()).toMatchObject({ error: 'MEDIA_TYPE_MISMATCH', detected: 'webm' });
+    expect(res.json()).toMatchObject({ error: 'MEDIA_KIND_UNSUPPORTED', detected: 'webm' });
+    expect(await db.$count(creatives)).toBe(0);
   });
 
-  it('rejects unrecognizable bytes declared as image/jpeg (400 MEDIA_TYPE_MISMATCH)', async () => {
+  it('refuses unrecognizable bytes declared as image/jpeg (400 MEDIA_TYPE_MISMATCH)', async () => {
     mockSession(await seedUser());
     const res = await upload(app, 'type=photo&duration_seconds=10', {
       filename: 'shot.jpg',
@@ -151,7 +178,222 @@ describe('creative upload hardening (CF-SH1 — real Postgres + MinIO)', () => {
       content: Buffer.from('definitely-not-a-jpeg'),
     });
     expect(res.statusCode).toBe(400);
-    expect(res.json()).toMatchObject({ error: 'MEDIA_TYPE_MISMATCH', detected: null });
+    expect(res.json()).toMatchObject({
+      error: 'MEDIA_TYPE_MISMATCH',
+      creative_type: 'photo',
+      declared: 'image/jpeg',
+      detected: null,
+    });
+    expect((res.json() as { message: string }).message).toBe(
+      'Format de fichier non reconnu. Envoyez une image PNG ou JPEG.',
+    );
+  });
+
+  it('refuses unrecognizable bytes declared as video/mp4 (400 MEDIA_TYPE_MISMATCH)', async () => {
+    mockSession(await seedUser());
+    const res = await upload(app, 'type=video&duration_seconds=10', {
+      filename: 'clip.mp4',
+      contentType: 'video/mp4',
+      content: Buffer.from('definitely-not-an-mp4-at-all'),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({
+      error: 'MEDIA_TYPE_MISMATCH',
+      creative_type: 'video',
+      detected: null,
+    });
+    expect(await db.$count(creatives)).toBe(0);
+  });
+
+  // ── UPL-2 — the bytes decide the format; the stored mime comes from the bytes ───
+  describe('UPL-2 — the format is read from the bytes (prod refused real « .png » photos)', () => {
+    it('a real PNG with an UPPER-CASE name, declared image/png → 201, stored image/png', async () => {
+      mockSession(await seedUser());
+      const put = vi.spyOn(storage, 'upload');
+      const res = await upload(app, 'type=photo&duration_seconds=10', {
+        filename: 'AFFICHE.PNG',
+        contentType: 'image/png',
+        content: minimalPng(),
+      });
+      expect(res.statusCode).toBe(201);
+      const body = res.json() as { id: string; mime_type: string; original_filename: string };
+      expect(body.mime_type).toBe('image/png');
+      expect(body.original_filename).toBe('AFFICHE.PNG');
+      expect((await storedRow(body.id))?.mimeType).toBe('image/png');
+      expect(put).toHaveBeenCalledWith(expect.objectContaining({ contentType: 'image/png' }));
+    });
+
+    it('a real PNG the browser declared application/octet-stream → 201, stored image/png', async () => {
+      mockSession(await seedUser());
+      const put = vi.spyOn(storage, 'upload');
+      const res = await upload(app, 'type=photo&duration_seconds=20', {
+        filename: 'photo.png',
+        contentType: 'application/octet-stream',
+        content: minimalPng(),
+      });
+      expect(res.statusCode).toBe(201);
+      const body = res.json() as { id: string; mime_type: string; duration_seconds: number };
+      expect(body.mime_type).toBe('image/png');
+      expect(body.duration_seconds).toBe(20);
+      expect((await storedRow(body.id))?.mimeType).toBe('image/png');
+      expect(put).toHaveBeenCalledWith(expect.objectContaining({ contentType: 'image/png' }));
+    });
+
+    it('a real PNG sent with NO part content type (busboy: text/plain) → 201, stored image/png', async () => {
+      mockSession(await seedUser());
+      const res = await upload(app, 'type=photo&duration_seconds=10', {
+        filename: 'photo.png',
+        contentType: null,
+        content: minimalPng(),
+      });
+      expect(res.statusCode).toBe(201);
+      const body = res.json() as { id: string; mime_type: string };
+      expect(body.mime_type).toBe('image/png');
+      expect((await storedRow(body.id))?.mimeType).toBe('image/png');
+    });
+
+    it('JPEG bytes named .png and declared image/png → 201, stored image/jpeg (never the declared type)', async () => {
+      mockSession(await seedUser());
+      const put = vi.spyOn(storage, 'upload');
+      const res = await upload(app, 'type=photo&duration_seconds=10', {
+        filename: 'photo.png',
+        contentType: 'image/png',
+        content: jpegBytes(),
+      });
+      expect(res.statusCode).toBe(201);
+      const body = res.json() as { id: string; mime_type: string; original_filename: string };
+      expect(body.mime_type).toBe('image/jpeg');
+      expect(body.original_filename).toBe('photo.png');
+      expect((await storedRow(body.id))?.mimeType).toBe('image/jpeg');
+      expect(put).toHaveBeenCalledWith(expect.objectContaining({ contentType: 'image/jpeg' }));
+    });
+
+    it('WebP bytes named .png and declared image/png → 400 MEDIA_KIND_UNSUPPORTED (detected webp), nothing stored', async () => {
+      mockSession(await seedUser());
+      const put = vi.spyOn(storage, 'upload');
+      const res = await upload(app, 'type=photo&duration_seconds=10', {
+        filename: 'photo.png',
+        contentType: 'image/png',
+        content: webpBytes(),
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({
+        error: 'MEDIA_KIND_UNSUPPORTED',
+        creative_type: 'photo',
+        declared: 'image/png',
+        detected: 'webp',
+      });
+      expect((res.json() as { message: string }).message).toBe(
+        'Ce fichier est au format WebP : il ne peut pas être téléversé comme photo.',
+      );
+      expect(put).not.toHaveBeenCalled();
+      expect(await db.$count(creatives)).toBe(0);
+    });
+
+    it('garbage bytes named .png and declared image/png → 400 MEDIA_TYPE_MISMATCH, nothing stored', async () => {
+      mockSession(await seedUser());
+      const put = vi.spyOn(storage, 'upload');
+      const res = await upload(app, 'type=photo&duration_seconds=10', {
+        filename: 'photo.png',
+        contentType: 'image/png',
+        content: Buffer.from('this is not an image, only some text bytes'),
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({ error: 'MEDIA_TYPE_MISMATCH', detected: null });
+      expect(put).not.toHaveBeenCalled();
+      expect(await db.$count(creatives)).toBe(0);
+    });
+
+    it('a PNG uploaded as type=video → 400 MEDIA_KIND_UNSUPPORTED (detected png)', async () => {
+      mockSession(await seedUser());
+      const res = await upload(app, 'type=video&duration_seconds=10', {
+        filename: 'photo.png',
+        contentType: 'image/png',
+        content: minimalPng(),
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({
+        error: 'MEDIA_KIND_UNSUPPORTED',
+        creative_type: 'video',
+        detected: 'png',
+      });
+      expect((res.json() as { message: string }).message).toBe(
+        'Ce fichier est au format PNG : il ne peut pas être téléversé comme vidéo.',
+      );
+      expect(await db.$count(creatives)).toBe(0);
+    });
+
+    it('an MP4 uploaded as type=photo → 400 MEDIA_KIND_UNSUPPORTED (detected mp4)', async () => {
+      mockSession(await seedUser());
+      const res = await upload(app, 'type=photo&duration_seconds=10', {
+        filename: 'clip.mp4',
+        contentType: 'video/mp4',
+        content: fixture('h264-169.mp4'),
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({
+        error: 'MEDIA_KIND_UNSUPPORTED',
+        creative_type: 'photo',
+        detected: 'mp4',
+      });
+      expect(await db.$count(creatives)).toBe(0);
+    });
+
+    it('PDF bytes declared image/jpeg → 400 MEDIA_KIND_UNSUPPORTED (detected pdf)', async () => {
+      mockSession(await seedUser());
+      const res = await upload(app, 'type=photo&duration_seconds=10', {
+        filename: 'visuel.jpg',
+        contentType: 'image/jpeg',
+        content: pdfBytes(),
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({ error: 'MEDIA_KIND_UNSUPPORTED', detected: 'pdf' });
+      expect(await db.$count(creatives)).toBe(0);
+    });
+
+    it('an MP4 the browser declared application/octet-stream → 201, stored video/mp4', async () => {
+      mockSession(await seedUser());
+      const res = await upload(app, 'type=video&duration_seconds=2', {
+        filename: 'CLIP.MP4',
+        contentType: 'application/octet-stream',
+        content: fixture('h264-169.mp4'),
+      });
+      expect(res.statusCode).toBe(201);
+      const body = res.json() as { id: string; mime_type: string };
+      expect(body.mime_type).toBe('video/mp4');
+      expect((await storedRow(body.id))?.mimeType).toBe('video/mp4');
+    });
+
+    it('MOV bytes declared video/mp4 → 201, stored video/quicktime', async () => {
+      mockSession(await seedUser());
+      const put = vi.spyOn(storage, 'upload');
+      const res = await upload(app, 'type=video&duration_seconds=2', {
+        filename: 'clip.mp4',
+        contentType: 'video/mp4',
+        content: fixture('h264-169.mov'),
+      });
+      expect(res.statusCode).toBe(201);
+      const body = res.json() as { id: string; mime_type: string };
+      expect(body.mime_type).toBe('video/quicktime');
+      expect((await storedRow(body.id))?.mimeType).toBe('video/quicktime');
+      expect(put).toHaveBeenCalledWith(expect.objectContaining({ contentType: 'video/quicktime' }));
+    });
+
+    it('a request with NO file part is the one INVALID_INPUT file case (400)', async () => {
+      mockSession(await seedUser());
+      const boundary = `----toodoohtest${Date.now()}`;
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/creatives?type=photo&duration_seconds=10',
+        payload: Buffer.from(`--${boundary}--\r\n`),
+        headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({
+        error: 'INVALID_INPUT',
+        fields: [{ field: 'file', reason: 'a file is required' }],
+      });
+    });
   });
 
   // ── conforming images still pass (jpeg/png) ──────────────────────────────────
@@ -163,6 +405,7 @@ describe('creative upload hardening (CF-SH1 — real Postgres + MinIO)', () => {
       content: fixture('photo.jpg'),
     });
     expect(jpeg.statusCode).toBe(201);
+    expect((jpeg.json() as { mime_type: string }).mime_type).toBe('image/jpeg');
     const png = await upload(app, 'type=photo&duration_seconds=20', {
       filename: 'shot.png',
       contentType: 'image/png',
@@ -170,6 +413,7 @@ describe('creative upload hardening (CF-SH1 — real Postgres + MinIO)', () => {
     });
     expect(png.statusCode).toBe(201);
     expect((png.json() as { duration_seconds: number }).duration_seconds).toBe(20);
+    expect((png.json() as { mime_type: string }).mime_type).toBe('image/png');
   });
 
   // ── grandfathering: pre-existing rows are untouched by the new rules ─────────
@@ -272,18 +516,15 @@ describe('creative upload hardening (CF-SH1 — real Postgres + MinIO)', () => {
       });
     });
 
-    it('rejects a 4:3 video with the MEASURED ratio in the body (400 MEDIA_RATIO_INVALID)', async () => {
+    it('UPL-1 — accepts a 4:3 H.264 video: there is no aspect-ratio limit (201)', async () => {
       mockSession(await seedUser());
       const res = await upload(app, 'type=video&duration_seconds=2', {
         filename: 'clip.mp4',
         contentType: 'video/mp4',
         content: fixture('h264-43.mp4'),
       });
-      expect(res.statusCode).toBe(400);
-      const body = res.json() as { error: string; measured_ratio: number; message: string };
-      expect(body.error).toBe('MEDIA_RATIO_INVALID');
-      expect(body.measured_ratio).toBeCloseTo(320 / 240, 2);
-      expect(body.message).toContain('1.333');
+      expect(res.statusCode).toBe(201);
+      expect((res.json() as { mime_type: string }).mime_type).toBe('video/mp4');
     });
 
     it('rejects an over-30s video by MEASURED duration — the client param lies (400 MEDIA_DURATION_INVALID)', async () => {

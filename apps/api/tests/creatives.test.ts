@@ -119,6 +119,8 @@ describe('creatives upload + library (advertiser, real Postgres + MinIO)', () =>
       duration_seconds: process.env['FFPROBE_PATH'] ? 2 : 25,
       validation_status: 'pending',
       title: 'Promo',
+      // UPL-2 — the stored mime is the one the BYTES imply.
+      mime_type: 'video/mp4',
     });
     expect(body['id']).toBeDefined();
     const [row] = await db
@@ -128,6 +130,7 @@ describe('creatives upload + library (advertiser, real Postgres + MinIO)', () =>
       .limit(1);
     expect(row?.advertiserId).toBe(me);
     expect(row?.storageKey).toBe(`creatives/${me}/${body['id'] as string}`);
+    expect(row?.mimeType).toBe('video/mp4');
   });
 
   it('rejects a video longer than 30s (400)', async () => {
@@ -158,6 +161,7 @@ describe('creatives upload + library (advertiser, real Postgres + MinIO)', () =>
         (res.json() as { creative_type: string; duration_seconds: number }).creative_type,
       ).toBe('photo');
       expect((res.json() as { duration_seconds: number }).duration_seconds).toBe(d);
+      expect((res.json() as { mime_type: string }).mime_type).toBe('image/jpeg');
     },
   );
 
@@ -174,7 +178,7 @@ describe('creatives upload + library (advertiser, real Postgres + MinIO)', () =>
   });
 
   // ── validation guards ────────────────────────────────────────────────────────
-  it('rejects a MIME that does not match the asserted type (photo bytes for a video) (400)', async () => {
+  it('rejects bytes that do not match the asserted type (photo bytes for a video) (400)', async () => {
     const me = await seedUser();
     mockSession(me);
     const res = await app.inject({
@@ -183,6 +187,29 @@ describe('creatives upload + library (advertiser, real Postgres + MinIO)', () =>
       ...photoFile(),
     });
     expect(res.statusCode).toBe(400);
+    // UPL-2 — judged on the BYTES: a recognised photo under a video upload names its kind.
+    expect(res.json()).toMatchObject({
+      error: 'MEDIA_KIND_UNSUPPORTED',
+      creative_type: 'video',
+      detected: 'jpeg',
+    });
+    expect(await db.$count(creatives)).toBe(0);
+  });
+
+  it('rejects video bytes asserted as a photo (400 MEDIA_KIND_UNSUPPORTED)', async () => {
+    const me = await seedUser();
+    mockSession(me);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/creatives?type=photo&duration_seconds=20',
+      ...videoFile(),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({
+      error: 'MEDIA_KIND_UNSUPPORTED',
+      creative_type: 'photo',
+      detected: 'mp4',
+    });
     expect(await db.$count(creatives)).toBe(0);
   });
 

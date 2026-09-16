@@ -20,6 +20,7 @@ import {
   VIDEO_ACCEPT,
   creativeUploadErrorMessage,
   readVideoDurationSeconds,
+  unreadableVideoMessage,
 } from '@/features/campaigns/services/creative-media';
 import type { CreativeType, CreativeView } from '@/features/campaigns/services/creatives.api';
 import {
@@ -103,7 +104,9 @@ export default function StepCreative({
     if (uploadType === 'video') {
       const probed = await readVideoDurationSeconds(file);
       if (probed == null) {
-        toast.error('Impossible de lire la durée de la vidéo. Réessayez avec un fichier MP4.');
+        // UPL-2 — a photo or a PDF picked under « Vidéo » stops here, before any upload: its
+        // bytes name the kind (and the type to choose) instead of a duration error.
+        toast.error(await unreadableVideoMessage(file));
         return;
       }
       if (probed > maxVideoSeconds) {
@@ -233,7 +236,7 @@ export default function StepCreative({
                 <p className="font-bold text-gray-900">Téléverser une nouvelle création</p>
                 <p className="text-sm text-gray-500">
                   {uploadType === 'video'
-                    ? `MP4 ou MOV (H.264, 16:9) · ${eventMode ? EVENT_SPOT_MAX_SECONDS : MAX_VIDEO_DURATION_SECONDS} secondes maximum`
+                    ? `MP4 ou MOV (H.264) · ${eventMode ? EVENT_SPOT_MAX_SECONDS : MAX_VIDEO_DURATION_SECONDS} secondes maximum`
                     : 'JPEG ou PNG'}
                 </p>
                 <span className="inline-flex items-center px-4 py-2.5 mt-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50">
@@ -329,7 +332,7 @@ export default function StepCreative({
                 <li>
                   {eventMode
                     ? `Vidéo : ${EVENT_SPOT_MAX_SECONDS} secondes maximum — la grille événementielle diffuse par blocs de 15 s`
-                    : 'Vidéo : 30 secondes maximum (MP4 / MOV, H.264, 16:9)'}
+                    : 'Vidéo : 30 secondes maximum (MP4 / MOV, H.264)'}
                 </li>
                 <li>Photo : durée de diffusion 10, 20 ou 30 secondes (JPEG / PNG)</li>
                 <li>Votre création sera validée par notre équipe avant diffusion</li>
