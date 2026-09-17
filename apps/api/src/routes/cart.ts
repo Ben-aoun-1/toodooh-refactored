@@ -9,7 +9,7 @@ import { accountLabel, notifyAdmins } from '../lib/admin-notifications.js';
 import { MIN_CAMPAIGN_BUDGET_TND } from '../lib/campaign-budget.js';
 import { computeCampaignCmax } from '../lib/campaign-cmax.js';
 import { startDateViolation } from '../lib/campaign-dates.js';
-import { getDispatchConfig } from '../lib/dispatch/config.js';
+import { campaignCpmRates, getDispatchConfig } from '../lib/dispatch/config.js';
 import { computeEventCmax } from '../lib/event-pricing/pricing.js';
 import { walletSpendable } from '../lib/recharges.js';
 import { requireAdvertiser } from '../middleware/require-advertiser.js';
@@ -69,11 +69,12 @@ const cartGateReason = async (row: GateRow, leadWorkingDays: number): Promise<st
   if (isEvent && c.eventId !== null) {
     // EV3 — the event ceiling (EV2 pricing, CPM_evt): the classic C_max never prices a
     // positioning (the engine boundary — computeCampaignCmax REFUSES bound rows outright).
+    // CPM-1 — priced at the positioning's OWN event CPM (in effect when it was created).
     const [ev] = await db.select().from(events).where(eq(events.id, c.eventId)).limit(1);
     if (!ev || ev.annule) return 'EVENT_ANNULE';
     const evCmax = await computeEventCmax(
       { id: ev.id, kickoffAt: ev.kickoffAt, endsAt: ev.endsAt },
-      (await getDispatchConfig()).eventCpmTnd,
+      campaignCpmRates(c).eventCpmTnd,
     );
     if (Number(c.requestedBudget) > evCmax.cMaxEvtTnd) return 'BUDGET_EXCEEDS_CMAX';
     return null;
@@ -85,6 +86,8 @@ const cartGateReason = async (row: GateRow, leadWorkingDays: number): Promise<st
       endDate: c.endDate,
       campaignType: c.campaignType,
       eventId: c.eventId,
+      standardCpmTnd: c.standardCpmTnd,
+      eventCpmTnd: c.eventCpmTnd,
     },
     row.creativeDurationSeconds,
   );

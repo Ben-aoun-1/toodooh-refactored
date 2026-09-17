@@ -11,6 +11,9 @@ import { requireAuth } from '../middleware/require-auth.js';
 // The CPMs are commercial-but-not-secret DISPLAY inputs (they price the advertiser's own estimate),
 // so any authenticated user may read them; requireAuth 401s an anonymous caller. Read-only: the
 // editable knobs stay admin-only. No schema change, no new table — a thin read over the same service.
+// CPM-1 — these are the rates a campaign CREATED NOW captures. An existing campaign carries its own
+// (the campaign projection's standard_cpm_tnd / event_cpm_tnd); the web falls back to this read
+// only for a campaign that does not exist yet.
 export const campaignsPricingRoutes: FastifyPluginAsync = async (app) => {
   app.get(
     '/api/campaigns/pricing-config',

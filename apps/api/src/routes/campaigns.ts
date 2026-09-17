@@ -26,7 +26,7 @@ import {
   premiereDateDisponible,
   startDateViolation,
 } from '../lib/campaign-dates.js';
-import { getDispatchConfig } from '../lib/dispatch/config.js';
+import { campaignCpmRates, getDispatchConfig } from '../lib/dispatch/config.js';
 import { measureEventDelivery } from '../lib/event-playout/settlement.js';
 import { computeEventCmax } from '../lib/event-pricing/pricing.js';
 import { validateEventSpot } from '../lib/event-pricing/spot.js';
@@ -148,6 +148,9 @@ export const campaignSelection = {
   endDate: campaigns.endDate,
   description: campaigns.description,
   requestedBudget: campaigns.requestedBudget,
+  // CPM-1 — the CPMs in effect when the campaign was created (the web prices its estimate at them).
+  standardCpmTnd: campaigns.standardCpmTnd,
+  eventCpmTnd: campaigns.eventCpmTnd,
   submittedAt: campaigns.submittedAt,
   rejectedAt: campaigns.rejectedAt,
   rejectReason: campaigns.rejectReason,
@@ -168,6 +171,8 @@ export type CampaignRow = Pick<
   | 'endDate'
   | 'description'
   | 'requestedBudget'
+  | 'standardCpmTnd'
+  | 'eventCpmTnd'
   | 'submittedAt'
   | 'rejectedAt'
   | 'rejectReason'
@@ -193,6 +198,9 @@ export const campaignView = (
   end_date: string | null;
   description: string | null;
   requested_budget: number | null;
+  /** CPM-1 — the campaign's own CPMs (TND/1000), captured at creation; its type picks one. */
+  standard_cpm_tnd: number;
+  event_cpm_tnd: number;
   content_validation_status: string | null;
   submitted_at: Date | null;
   rejected_at: Date | null;
@@ -211,6 +219,8 @@ export const campaignView = (
   end_date: row.endDate,
   description: row.description,
   requested_budget: row.requestedBudget === null ? null : Number(row.requestedBudget),
+  standard_cpm_tnd: Number(row.standardCpmTnd),
+  event_cpm_tnd: Number(row.eventCpmTnd),
   content_validation_status: contentValidationStatus,
   submitted_at: row.submittedAt,
   rejected_at: row.rejectedAt,
@@ -568,6 +578,8 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         endDate: campaigns.endDate,
         campaignType: campaigns.campaignType,
         eventId: campaigns.eventId,
+        standardCpmTnd: campaigns.standardCpmTnd,
+        eventCpmTnd: campaigns.eventCpmTnd,
         creativeId: campaigns.creativeId,
         creativeDurationSeconds: creatives.durationSeconds,
       })
@@ -590,9 +602,10 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
           .status(409)
           .send({ error: 'EVENT_ANNULE', message: 'Cet événement est annulé.' });
       }
+      // CPM-1 — the positioning's own event CPM (in effect when it was created).
       const evCmax = await computeEventCmax(
         { id: ev.id, kickoffAt: ev.kickoffAt, endsAt: ev.endsAt },
-        (await getDispatchConfig()).eventCpmTnd,
+        campaignCpmRates(row).eventCpmTnd,
       );
       return reply.status(200).send({
         c_max_tnd: evCmax.cMaxEvtTnd,
@@ -625,6 +638,8 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         endDate: row.endDate,
         campaignType: row.campaignType,
         eventId: row.eventId,
+        standardCpmTnd: row.standardCpmTnd,
+        eventCpmTnd: row.eventCpmTnd,
       },
       spotSeconds,
     );
@@ -738,6 +753,8 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         requestedBudget: campaigns.requestedBudget,
         campaignType: campaigns.campaignType,
         eventId: campaigns.eventId,
+        standardCpmTnd: campaigns.standardCpmTnd,
+        eventCpmTnd: campaigns.eventCpmTnd,
         creativeId: campaigns.creativeId,
         creativeDurationSeconds: creatives.durationSeconds,
       })
@@ -801,6 +818,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     // (clôture, renvoi curseur) or a genuine PARTIAL.
     // EV3 — the ceiling forks: event rows price via EV2's engine (the classic C_max throws on
     // them — the engine boundary); the event ceiling needs no creative duration (no T coef).
+    // CPM-1 — both ceilings price at the campaign's OWN CPM (in effect when it was created).
     if (isEventRow) {
       const [ev] = existing.eventId
         ? await db.select().from(events).where(eq(events.id, existing.eventId)).limit(1)
@@ -812,7 +830,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
       }
       const evCmax = await computeEventCmax(
         { id: ev.id, kickoffAt: ev.kickoffAt, endsAt: ev.endsAt },
-        (await getDispatchConfig()).eventCpmTnd,
+        campaignCpmRates(existing).eventCpmTnd,
       );
       if (Number(existing.requestedBudget) > evCmax.cMaxEvtTnd) {
         return reply.status(400).send({
@@ -833,6 +851,8 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
           endDate: existing.endDate,
           campaignType: existing.campaignType,
           eventId: existing.eventId,
+          standardCpmTnd: existing.standardCpmTnd,
+          eventCpmTnd: existing.eventCpmTnd,
         },
         existing.creativeDurationSeconds,
       );

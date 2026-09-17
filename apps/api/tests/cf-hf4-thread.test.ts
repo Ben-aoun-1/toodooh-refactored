@@ -277,16 +277,20 @@ describe('CF-HF4 — the thread batch (real Postgres)', () => {
     it('a September cmax is UNAFFECTED by July engagements (pinned)', async () => {
       const { shId } = await seedVenue();
       const sept = await seedCampaign({ ...SEPT, status: 'draft', creative: 'approved' });
-      const before = await computeCampaignCmax(
-        { id: sept.campaignId, startDate: SEPT.start, endDate: SEPT.end, campaignType: 'standard' },
-        10,
-      );
+      // CPM-1 — the ceiling prices at the campaign's own rates (captured at its insert).
+      const [septRow] = await db.select().from(campaigns).where(eq(campaigns.id, sept.campaignId));
+      const septCmaxInput = {
+        id: sept.campaignId,
+        startDate: SEPT.start,
+        endDate: SEPT.end,
+        campaignType: 'standard',
+        standardCpmTnd: septRow?.standardCpmTnd ?? '',
+        eventCpmTnd: septRow?.eventCpmTnd ?? '',
+      };
+      const before = await computeCampaignCmax(septCmaxInput, 10);
       const july = await seedCampaign({ ...JULY, status: 'active' });
       await seedEngagement(july.campaignId, shId, { rI: 30, s: 10 });
-      const after = await computeCampaignCmax(
-        { id: sept.campaignId, startDate: SEPT.start, endDate: SEPT.end, campaignType: 'standard' },
-        10,
-      );
+      const after = await computeCampaignCmax(septCmaxInput, 10);
       expect(after).toEqual(before);
       expect(after.cMaxTnd).toBeGreaterThan(0);
     });

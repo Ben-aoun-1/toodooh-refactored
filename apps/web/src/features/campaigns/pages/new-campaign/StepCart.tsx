@@ -17,9 +17,11 @@ import {
   CART_BUDGET_MIN_TND,
   CART_BUDGET_STEP_TND,
 } from '@/features/campaigns/hooks/new-campaign/cart-budget';
+import { useCampaign } from '@/features/campaigns/hooks/useCampaignApi';
 import { useCampaignCmax } from '@/features/campaigns/hooks/useCampaignCmax';
 import { useCreativePreviewUrl, useMyCreatives } from '@/features/campaigns/hooks/useCreativeApi';
 import { usePricingConfig } from '@/features/campaigns/hooks/usePricingConfig';
+import { campaignCpm } from '@/features/campaigns/lib/campaign-impressions';
 import { formatUiDate, inclusiveDayCount } from '@/features/campaigns/lib/campaign-summary';
 import {
   CAMPAIGN_BUDGET_FLOOR_TND,
@@ -90,6 +92,9 @@ export default function StepCart({
 }: StepCartProps) {
   const targeting = useCampaignTargeting(draftCampaignId);
   const pricing = usePricingConfig();
+  // CPM-1 — the create-early draft carries the CPM it captured at creation; the estimate prices at
+  // it (the live pricing-config only until the draft row is loaded).
+  const draft = useCampaign(draftCampaignId);
   const { data: creatives = [] } = useMyCreatives(userId);
   const previewUrl = useCreativePreviewUrl(creativeId);
   // E5 (VF US-1.3) — the live ceiling bounding the cursor (assemblePool's occupancy truth;
@@ -122,8 +127,8 @@ export default function StepCart({
 
   // Impressions estimate — null while the budget is unset or the CPM is loading/errored, so the
   // tile renders "—", never NaN.
-  const impressions =
-    value == null ? null : estimateImpressions(value, pricing.data?.standard_cpm_tnd ?? null);
+  const cpm = campaignCpm(draft.data?.campaign_type ?? 'standard', draft.data, pricing.data);
+  const impressions = value == null ? null : estimateImpressions(value, cpm);
 
   const chips = targeting.rows.length ? targeting.rows.map(toChipLabel) : ['Toutes catégories'];
 

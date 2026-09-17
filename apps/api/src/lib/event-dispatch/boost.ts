@@ -12,7 +12,7 @@ import {
   zones,
 } from '../../db/schema.js';
 import { MIN_CAMPAIGN_BUDGET_TND } from '../campaign-budget.js';
-import { getDispatchConfig } from '../dispatch/config.js';
+import { campaignCpmRates } from '../dispatch/config.js';
 import { computeEventCmax } from '../event-pricing/pricing.js';
 import { walletSpendable } from '../recharges.js';
 
@@ -144,19 +144,18 @@ const gate = async (
 /**
  * The complementary ceiling: EV2's event C_max with this positioning's OWN placed value already
  * engaged — what is still buyable on top of what it holds. (EV4's charge cap means the placed
- * montants ARE the engaged value.)
+ * montants ARE the engaged value.) CPM-1 — priced at the positioning's own event CPM.
  */
 const complementaryCeiling = async (
   loaded: LoadedPositioning,
 ): Promise<{ cMaxEvtTnd: number; eligibleCount: number }> => {
-  const cfg = await getDispatchConfig();
   const full = await computeEventCmax(
     {
       id: loaded.event.id,
       kickoffAt: loaded.event.kickoffAt,
       endsAt: loaded.event.endsAt,
     },
-    cfg.eventCpmTnd,
+    campaignCpmRates(loaded.campaign).eventCpmTnd,
   );
   const own = await db
     .select({ montantTnd: eventAllocations.montantTnd, statut: eventAllocations.statut })
@@ -250,10 +249,14 @@ export const applyEventBoost = async (
   const perimeter = await addedPerimeter(loaded, additions);
   if (perimeter.length === 0) return { status: 'NO_ELIGIBLE' };
 
-  const cfg = await getDispatchConfig();
   // The complementary fill: EV4's rules over the added perimeter, budgeted by the top-up alone.
   // N_max is derived from the COMPLEMENTARY budget (this is a new placement decision of its own).
-  const fill = fillEventBlocs(perimeter, input.amountTnd, cfg.eventCpmTnd);
+  // CPM-1 — a boost extends an EXISTING positioning: it prices at the positioning's own event CPM.
+  const fill = fillEventBlocs(
+    perimeter,
+    input.amountTnd,
+    campaignCpmRates(loaded.campaign).eventCpmTnd,
+  );
   if (fill.status === 'NMAX_EXCEEDED') return { status: 'NMAX_EXCEEDED', nMax: fill.nMax };
   if (fill.status === 'NO_POOL') return { status: 'NO_ELIGIBLE' };
 

@@ -21,6 +21,9 @@ export interface LastCampaign {
   /** NULL until the advertiser sets it (renders « — » — no phantom defaults). */
   budget: number | null;
   requested_budget: number | null;
+  /** CPM-1 — the campaign's own CPMs (captured at creation) — the « prévues » estimate's price. */
+  standard_cpm_tnd: number;
+  event_cpm_tnd: number;
   category: string | null;
   selected_categories: string[];
   selected_zones: string[];
@@ -37,6 +40,8 @@ const toLastCampaign = (c: CampaignView): LastCampaign => ({
   end_date: c.end_date ?? '',
   budget: c.requested_budget ?? null,
   requested_budget: c.requested_budget ?? null,
+  standard_cpm_tnd: c.standard_cpm_tnd,
+  event_cpm_tnd: c.event_cpm_tnd,
   category: null,
   selected_categories: (c.targeting ?? []).map(toChipLabel),
   selected_zones: (c.zones ?? []).map((z) => z.name),

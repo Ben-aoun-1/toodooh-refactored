@@ -922,6 +922,19 @@ export const campaigns = pgTable(
     // admin sees it in the review queue and derives i_cible/cpm/s/t at activation (the activation
     // endpoint is unchanged). Nullable; L-price replaces the manual cart with the real cursor.
     requestedBudget: numeric('requested_budget', { precision: 12, scale: 2 }),
+    // CPM-1 (user rule, 2026-09-17) — the CPMs (TND/1000) in effect WHEN THIS CAMPAIGN WAS
+    // CREATED. An admin CPM change prices only campaigns created after it; this row keeps these
+    // whatever its status and however its draft is edited (the PATCH contract never carries them).
+    // BOTH are kept because a draft's type is editable — read them through campaignCpmRates +
+    // cpmForCampaign (lib/dispatch/config.ts). The capture is the DATABASE default (migration
+    // 0074: current_*_cpm_tnd() reads the dispatch_config singleton at INSERT, 15 when none) —
+    // the ONE home for it: insert paths never pass these, so none of them can forget it.
+    standardCpmTnd: numeric('standard_cpm_tnd', { precision: 10, scale: 3 })
+      .notNull()
+      .default(sql`current_standard_cpm_tnd()`),
+    eventCpmTnd: numeric('event_cpm_tnd', { precision: 10, scale: 3 })
+      .notNull()
+      .default(sql`current_event_cpm_tnd()`),
     submittedAt: timestamp('submitted_at', { withTimezone: true }),
     // CF-S1 — the J-3 draft reminder stamp (one reminder per draft; NEVER an auto-delete).
     draftReminderSentAt: timestamp('draft_reminder_sent_at', { withTimezone: true }),
@@ -1124,10 +1137,11 @@ export const dispatchConfig = pgTable(
     joursActifs: integer('jours_actifs').notNull(), // divisor for G_jour = g_mois / jours_actifs
     rMinEfficace: integer('r_min_efficace').notNull(), // reps/hr floor (efficient cadence)
     fMaxSeconds: integer('f_max_seconds').notNull().default(300), // F — hourly broadcast cap (s)
-    // Admin-editable CPM (TND per 1000 impressions). Used to DERIVE a campaign's I_cible at
-    // activation (operator ruling: 15 standard / 30 events). Editable via PATCH
-    // /api/admin/dispatch-config; event campaigns price at event_cpm_tnd, all others at
-    // standard_cpm_tnd. NOT denormalized onto a plan until it freezes (each plan snapshots cpm).
+    // Admin-editable CPM (TND per 1000 impressions) for campaigns CREATED FROM NOW ON (operator
+    // ruling: 15 standard / 30 events). Editable via PATCH /api/admin/dispatch-config; event
+    // campaigns price at event_cpm_tnd, all others at standard_cpm_tnd. CPM-1 — a campaign
+    // snapshots both at INSERT (campaigns.standard_cpm_tnd / event_cpm_tnd, migration 0074) and
+    // prices at its own copy from then on; its plan snapshots the CPM again when it freezes.
     standardCpmTnd: numeric('standard_cpm_tnd', { precision: 10, scale: 3 })
       .notNull()
       .default('15.000'),

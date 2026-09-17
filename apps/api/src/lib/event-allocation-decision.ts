@@ -3,7 +3,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { campaigns, eventAllocations, events, screenhosts } from '../db/schema.js';
 
-import { getDispatchConfig } from './dispatch/config.js';
+import { campaignCpmRates } from './dispatch/config.js';
 import { releaseBlocHours, runEventRefusalCascade } from './event-dispatch/dispatch.js';
 
 // ONE home for « the owner answers an EVENT proposal » — extracted verbatim from
@@ -37,6 +37,9 @@ export const decideEventAllocation = async (input: {
         allocation: eventAllocations,
         campaignId: campaigns.id,
         matchName: campaigns.name,
+        // CPM-1 — the positioning's own rates, read in THIS transaction with the allocation.
+        standardCpmTnd: campaigns.standardCpmTnd,
+        eventCpmTnd: campaigns.eventCpmTnd,
         eventId: events.id,
         kickoffAt: events.kickoffAt,
         endsAt: events.endsAt,
@@ -87,7 +90,9 @@ export const decideEventAllocation = async (input: {
           screenhostId: row.allocation.screenhostId,
           impressionsTotal: row.allocation.impressionsTotal,
         },
-        (await getDispatchConfig()).eventCpmTnd,
+        // CPM-1 — the refused share's value and its re-placement price at the positioning's
+        // OWN event CPM (the one its blocs were placed at), never a CPM saved since.
+        campaignCpmRates(row).eventCpmTnd,
       );
     }
     return {

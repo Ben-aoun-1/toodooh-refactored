@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { campaignDispatchAllocation, campaignDispatchPlan } from '../db/schema.js';
 
-import { cpmForCampaign, getDispatchConfig } from './dispatch/config.js';
+import { campaignCpmRates, cpmForCampaign, getDispatchConfig } from './dispatch/config.js';
 import { assemblePool } from './dispatch/pool.js';
 import { tForDuration } from './dispatch/thresholds.js';
 
@@ -42,6 +42,9 @@ export const computeCampaignCmax = async (
     endDate: string;
     campaignType: string;
     eventId?: string | null;
+    /** CPM-1 — the campaign's own rates (captured at creation); the ceiling prices at them. */
+    standardCpmTnd: string;
+    eventCpmTnd: string;
   },
   spotSeconds: number,
 ): Promise<CampaignCmax> => {
@@ -54,9 +57,10 @@ export const computeCampaignCmax = async (
   if (campaign.eventId != null) {
     throw new Error('computeCampaignCmax received an event positioning (EV3 engine boundary)');
   }
+  // The live config still supplies T and F (not CPM-1's subject); the CPM is the campaign's own.
   const config = await getDispatchConfig();
   const t = tForDuration(spotSeconds, config);
-  const cpm = cpmForCampaign(campaign.campaignType, config);
+  const cpm = cpmForCampaign(campaign.campaignType, campaignCpmRates(campaign));
   // E5.1 (VF US-2.1) — zero targeting lines = the whole network: the pool assembles over every
   // eligible venue and the ceiling prices the full inventory (the old NO_TARGETING zero-fold
   // retired with the status).

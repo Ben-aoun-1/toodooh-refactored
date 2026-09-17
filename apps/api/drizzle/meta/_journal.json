@@ -519,6 +519,13 @@
       "when": 1789560000000,
       "tag": "0073_campaign_lead_floor",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1789640000000,
+      "tag": "0074_campaign_cpm_snapshot",
+      "breakpoints": true
     }
   ]
 }

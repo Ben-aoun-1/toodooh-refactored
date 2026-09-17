@@ -23,6 +23,7 @@ import { apiRoutes } from './routes/index.js';
 import { screenWsRoutes } from './routes/screen-ws.js';
 import { closeAllSandboxes, evictIdleSandboxes } from './simulator/pools.js';
 import { sweepOrphans } from './simulator/provisioning.js';
+import { upgradeReadySandboxes } from './simulator/upgrade.js';
 import { storage } from './storage/s3-storage.js';
 
 const app: FastifyInstance = Fastify({
@@ -123,11 +124,14 @@ const start = async (): Promise<void> => {
 
     // SIM-0 — the admin Simulateur. Enabled: drop orphan sandbox databases once at boot and
     // evict idle sandbox pools every 5 min (unref'd). Disabled: ONE boot line, nothing else.
+    // CPM-1 — after the sweep, migrate every ready sandbox to this deploy's schema (a sweep
+    // failure does not skip it; a route opening a sandbox first awaits the same upgrade).
     if (env.SIMULATOR_ENABLED) {
       app.log.info({ max: env.SIMULATOR_MAX_SANDBOXES }, 'simulator enabled');
-      void sweepOrphans(app.log).catch((err: unknown) =>
-        app.log.warn({ err }, 'simulator: boot orphan sweep failed'),
-      );
+      void sweepOrphans(app.log)
+        .catch((err: unknown) => app.log.warn({ err }, 'simulator: boot orphan sweep failed'))
+        .then(() => upgradeReadySandboxes(app.log))
+        .catch((err: unknown) => app.log.warn({ err }, 'simulator: boot sandbox upgrade failed'));
       const evictTimer = setInterval(
         () => {
           void evictIdleSandboxes().catch((err: unknown) =>

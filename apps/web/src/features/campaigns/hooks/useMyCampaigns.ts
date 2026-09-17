@@ -25,6 +25,9 @@ export interface MyCampaignRow {
   budget: number | null;
   /** CF-U1 — the wire field, riding the edit-mode record so Reprendre rehydrates the budget. */
   requested_budget: number | null;
+  /** CPM-1 — the campaign's own CPMs (captured at creation) — the « prévues » estimate's price. */
+  standard_cpm_tnd: number;
+  event_cpm_tnd: number;
   content_validation_status: string | null;
   submitted_at: string | null;
   /** CF-Q1 — « Motif du refus » shown on Non validé campaigns (null otherwise). */
@@ -63,6 +66,8 @@ function toRow(c: CampaignView): MyCampaignRow {
     end_date: c.end_date,
     budget: c.requested_budget ?? null,
     requested_budget: c.requested_budget ?? null,
+    standard_cpm_tnd: c.standard_cpm_tnd,
+    event_cpm_tnd: c.event_cpm_tnd,
     content_validation_status: c.content_validation_status,
     submitted_at: c.submitted_at,
     reject_reason: c.reject_reason,

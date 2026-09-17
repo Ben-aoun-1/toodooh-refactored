@@ -358,6 +358,8 @@ describe('CF-SK1 — the approved-spot skip at cart confirm (real Postgres)', ()
         startDate: firstRow?.startDate ?? '',
         endDate: firstRow?.endDate ?? '',
         campaignType: 'standard',
+        standardCpmTnd: firstRow?.standardCpmTnd ?? '',
+        eventCpmTnd: firstRow?.eventCpmTnd ?? '',
       },
       10,
     );

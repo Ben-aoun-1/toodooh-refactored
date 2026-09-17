@@ -341,18 +341,22 @@ describe('E2 — jours_dispo_i (real Postgres)', () => {
       const end = plusCalendarDays(start, 1);
       const venue = await seedVenue(cat, { dows: [1, 2, 3, 4, 5, 6, 7] });
       const f = await seedCampaign({ start, end, cat, status: 'draft' });
+      // CPM-1 — the ceiling prices at the campaign's own rates (captured at its insert).
+      const [row] = await db.select().from(campaigns).where(eq(campaigns.id, f.campaignId));
+      const cmaxInput = {
+        id: f.campaignId,
+        startDate: start,
+        endDate: end,
+        campaignType: 'standard',
+        standardCpmTnd: row?.standardCpmTnd ?? '',
+        eventCpmTnd: row?.eventCpmTnd ?? '',
+      };
 
-      const before = await computeCampaignCmax(
-        { id: f.campaignId, startDate: start, endDate: end, campaignType: 'standard' },
-        10,
-      );
+      const before = await computeCampaignCmax(cmaxInput, 10);
       expect(before.cMaxTnd).toBe(540); // 2 days × 18 000 fact at CPM 15
 
       await declare(venue.shId, end); // 1 of the 2 days
-      const after = await computeCampaignCmax(
-        { id: f.campaignId, startDate: start, endDate: end, campaignType: 'standard' },
-        10,
-      );
+      const after = await computeCampaignCmax(cmaxInput, 10);
       expect(after.cMaxTnd).toBe(270); // exactly half — the VF proportionality
       expect(after.eligibleCount).toBe(1); // still in the pool (partial, not excluded)
     });

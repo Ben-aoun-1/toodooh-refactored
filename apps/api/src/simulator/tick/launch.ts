@@ -116,9 +116,17 @@ export const launchCampaign = async (
     .returning();
   if (!draft) return { error: 'CAMPAIGN_FAILED' };
 
-  // The ceiling the wizard shows, from the real engine over the real (synthetic) inventory.
+  // The ceiling the wizard shows, from the real engine over the real (synthetic) inventory —
+  // priced at the CPM the draft captured at its insert (CPM-1).
   const cmax = await computeCampaignCmax(
-    { id: draft.id, startDate, endDate, campaignType: 'standard' },
+    {
+      id: draft.id,
+      startDate,
+      endDate,
+      campaignType: 'standard',
+      standardCpmTnd: draft.standardCpmTnd,
+      eventCpmTnd: draft.eventCpmTnd,
+    },
     spotSeconds,
   );
   const wallet = await walletSpendable(advertiserId);
@@ -269,6 +277,8 @@ export const launchEvent = async (
     advertiserId = best.id;
   }
 
+  // The ceiling is read BEFORE the positioning exists (the wizard's pre-creation cursor), so the
+  // live config is the right CPM here (CPM-1); the row inserted below captures the same value.
   const config = await getDispatchConfig();
   const ceiling = await computeEventCmax({ id: event.id, kickoffAt, endsAt }, config.eventCpmTnd);
   const wallet = await walletSpendable(advertiserId);

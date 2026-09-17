@@ -536,6 +536,8 @@ describe('EV3 — the positioning parcours API (real Postgres)', () => {
             endDate: '2027-06-10',
             campaignType: 'event',
             eventId: '00000000-0000-4000-8000-000000000001',
+            standardCpmTnd: '15.000',
+            eventCpmTnd: '15.000',
           },
           10,
         ),
