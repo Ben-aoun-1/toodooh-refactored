@@ -20,6 +20,15 @@ export const MAP_STACK_CLASSES = 'relative isolate z-0 overflow-hidden';
  */
 export const MAP_CANVAS_CLASSES = 'h-full min-h-[28rem] w-full rounded-2xl border border-gray-200';
 
+/**
+ * MAP-6 — the leaflet container fills the canvas by INSET, never by a percentage height. #222
+ * (MAP-5) wrapped the canvas in a box that only has a min-height, so the container's `h-full`
+ * resolved to auto and the map painted as a 0px-tall, empty bordered box. The stack is
+ * `relative`, so it is the containing block: the container no longer depends on any ancestor
+ * having a definite height (leaflet keeps an absolutely positioned container as is).
+ */
+export const MAP_CONTAINER_CLASSES = 'absolute inset-0';
+
 // The INTERNAL ladder (inside the isolate — these never escape the stack): leaflet panes run
 // 200–800, so overlays sit at 500, the count badge at 600, controls at 900.
 export const MAP_OVERLAY_Z_CLASS = 'z-[500]';
