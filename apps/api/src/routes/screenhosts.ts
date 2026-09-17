@@ -892,8 +892,10 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
   // "typical week" weekday × hour grid of estimated audience the hub pushes via POST
   // /api/internal/affluence (this is the first READER of screenhost_affluence — the ingest is
   // unchanged). Same owner-scoping as the WiFi routes: a foreign/missing id is a 404. Returns a
-  // zero-filled 7×48 grid (grid[0]=Monday … grid[6]=Sunday; SLOT index 0–47 since slice C;
-  // 1=Mon…7=Sun / 0–23 slots) + has_data, so the dashboard can show an empty state. Summaries
+  // 7×48 grid (grid[0]=Monday … grid[6]=Sunday; SLOT index 0–47 since slice C; 1=Mon…7=Sun /
+  // 0–23 slots) + has_data, so the dashboard can show an empty state. HOUR-AVG2 (operator 17/09):
+  // a slot with no cell is NULL, never 0 — the client folds an hour as the mean of the halves it
+  // HAS, so « no reading » must stay distinguishable from a measured 0. Summaries
   // (peak day/hour, daily average, weekly total) are derived client-side from the grid.
   // AFF1: `sources` mirrors the grid's shape with each slot's provenance ('measured' | 'backup' |
   // null = no row or unknown provenance) and `counts` tallies provenance ONLY — a measured 0 is a
@@ -956,12 +958,13 @@ export const screenhostsRoutes: FastifyPluginAsync = async (app) => {
         ? { from: parsedQuery.data.from, to: parsedQuery.data.to }
         : null;
 
-    // Slice C — zero-filled 7×48 grid (Monday-first), columns indexed by SLOT (0–47);
-    // day_of_week 1=Mon…7=Sun → row 0…6. `sources` is the same shape, null-filled. `counts`
+    // Slice C — 7×48 grid (Monday-first), columns indexed by SLOT (0–47); day_of_week
+    // 1=Mon…7=Sun → row 0…6. HOUR-AVG2 — null-filled: a slot is set only where a cell exists.
+    // `sources` is the same shape, null-filled. `counts`
     // tallies provenance only, now per SLOT — which is also why the MEJ-13-B hour-collapse is gone
     // from this read: the wire is slot-shaped, so nothing here needs to pretend it is hourly.
-    const grid: number[][] = Array.from({ length: 7 }, () =>
-      Array.from({ length: SLOTS_PER_DAY }, () => 0),
+    const grid: (number | null)[][] = Array.from({ length: 7 }, () =>
+      Array.from({ length: SLOTS_PER_DAY }, (): number | null => null),
     );
     const sources: (AffluenceSource | null)[][] = Array.from({ length: 7 }, () =>
       Array.from({ length: SLOTS_PER_DAY }, () => null),

@@ -43,8 +43,9 @@ const closedHour = (
 };
 
 interface PeakHoursHeatmapProps {
-  /** The api's 7×48 MERGED typical-week grid (grid[0]=Monday), values as served — SLOT columns. */
-  grid: number[][];
+  /** The api's 7×48 MERGED typical-week grid (grid[0]=Monday), values as served — SLOT columns;
+   * null = no cell (HOUR-AVG2). */
+  grid: (number | null)[][];
   /** AFF1 — the matching 7×24 provenance grid (null = unknown / no row). */
   sources: (AffluenceSource | null)[][];
   hasData: boolean;

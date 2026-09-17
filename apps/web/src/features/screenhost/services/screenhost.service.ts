@@ -44,13 +44,14 @@ export interface ScreenhostWifiReveal {
 }
 
 /**
- * Affluence response (L-aff-view). `grid` is a 7×24 weekday×hour matrix of the venue's MERGED
- * typical-week audience (grid[0]=Monday … grid[6]=Sunday, hour 0–23); `has_data` is false until
- * the hub has pushed any slots. AFF1: `sources` mirrors the grid's shape with each slot's
- * provenance (null = unknown / no row) and `counts` tallies provenance only (a measured 0 counts).
+ * Affluence response (L-aff-view). `grid` is a 7×48 weekday×half-hour-slot matrix of the venue's
+ * MERGED audience (grid[0]=Monday … grid[6]=Sunday, slot 0–47); HOUR-AVG2 — a slot with no cell
+ * is null, a measured 0 is 0. `has_data` is false until the hub has pushed any slots. AFF1:
+ * `sources` mirrors the grid's shape with each slot's provenance (null = unknown / no row) and
+ * `counts` tallies provenance only (a measured 0 counts).
  */
 export interface ScreenhostAffluence {
-  grid: number[][];
+  grid: (number | null)[][];
   has_data: boolean;
   sources: (AffluenceSource | null)[][];
   counts: { measured: number; backup: number };

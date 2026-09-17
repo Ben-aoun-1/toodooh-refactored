@@ -62,8 +62,12 @@ describe('summarize', () => {
 });
 
 // Slice C — the api's REAL wire: 7×48 SLOT columns (two per hour), overrides at [day][slot].
-const slotGrid = (overrides: { day: number; slot: number; value: number }[] = []): number[][] => {
-  const g = Array.from({ length: 7 }, () => Array.from({ length: 48 }, () => 0));
+// HOUR-AVG2 — a slot with no reading is served as null (a measured 0 is a 0), so the helper is
+// null-filled like the wire.
+const slotGrid = (
+  overrides: { day: number; slot: number; value: number | null }[] = [],
+): (number | null)[][] => {
+  const g = Array.from({ length: 7 }, () => Array.from({ length: 48 }, (): number | null => null));
   for (const o of overrides) {
     const row = g[o.day];
     if (row) row[o.slot] = o.value;
@@ -91,14 +95,14 @@ describe('DATA1 — « Votre audience »: Σ day tiles == « Audience hebdomadai
   it('rider — « Heure de pointe » folds the two half-hour slots into their HOUR on a slot grid', () => {
     const s = summarize(
       slotGrid([
-        { day: 0, slot: 36, value: 100 }, // Lun 18h00 → Lun 18h = (100 + 0) / 2 = 50
-        { day: 1, slot: 37, value: 120 }, // Mar 18h30 → Mar 18h = 60; hour 18 across days = 110
-        { day: 2, slot: 18, value: 200 }, // Mer 09h00 → hour 9 = 100
+        { day: 0, slot: 36, value: 100 }, // Lun 18h00 alone → Lun 18h = 100 (HOUR-AVG2)
+        { day: 1, slot: 37, value: 120 }, // Mar 18h30 alone → Mar 18h = 120; hour 18 = 220
+        { day: 2, slot: 18, value: 200 }, // Mer 09h00 alone → hour 9 = 200
         { day: 3, slot: 9, value: 150 }, // Jeu 04h30 — the old scan would have named « 09h »
       ]),
     );
     expect(s.peakHourIndex).toBe(18);
-    expect(s.peakHourTotal).toBe(110);
+    expect(s.peakHourTotal).toBe(220);
     expect(formatHour(s.peakHourIndex ?? 0)).toBe('18h');
   });
 
@@ -113,6 +117,75 @@ describe('DATA1 — « Votre audience »: Σ day tiles == « Audience hebdomadai
     expect(s.peakHourTotal).toBe(80);
     // The day still counts both readings (FLOW-1).
     expect(s.dayTotals[0]).toBe(160);
+  });
+});
+
+// HOUR-AVG2 (operator 17/09, the hub's #97 rule) — an hour's value is the EXACT mean of the
+// half-hour cells it HAS: a lone half is the hour, a measured 0 counts, two absent halves are no
+// data. Day and week totals still add the half-hour cells (FLOW-1).
+describe('HOUR-AVG2 — an hour is the exact mean of the half-hours it has', () => {
+  const peakOf = (first: number | null, second: number | null) =>
+    summarize(
+      slotGrid([
+        { day: 0, slot: 20, value: first }, // Lun 10h00
+        { day: 0, slot: 21, value: second }, // Lun 10h30
+      ]),
+    );
+
+  it('17 + 18 → 17.5, never rounded', () => {
+    const s = peakOf(17, 18);
+    expect(s.peakHourIndex).toBe(10);
+    expect(s.peakHourTotal).toBe(17.5);
+  });
+
+  it('10 + 20 → 15', () => {
+    expect(peakOf(10, 20).peakHourTotal).toBe(15);
+  });
+
+  it('a lone half IS the hour — 12 gives 12, whichever half it is', () => {
+    expect(peakOf(12, null).peakHourTotal).toBe(12);
+    expect(peakOf(null, 12).peakHourTotal).toBe(12);
+    expect(peakOf(12, null).dayTotals[0]).toBe(12);
+  });
+
+  it('a measured 0 is a value — 0 + 10 → 5 (Manaus, Sunday 1h: 10 and a measured 0)', () => {
+    expect(peakOf(0, 10).peakHourTotal).toBe(5);
+    expect(peakOf(10, 0).peakHourTotal).toBe(5);
+  });
+
+  it('two absent halves contribute nothing to the hour across the week', () => {
+    const s = summarize(
+      slotGrid([
+        { day: 0, slot: 20, value: null }, // Lun 10h — no data at all
+        { day: 0, slot: 21, value: null },
+        { day: 1, slot: 20, value: 6 }, // Mar 10h00 alone
+        { day: 2, slot: 30, value: 5 }, // Mer 15h00 alone
+      ]),
+    );
+    expect(s.peakHourIndex).toBe(10);
+    expect(s.peakHourTotal).toBe(6); // not 3: Monday's empty hour adds nothing, Tuesday's is 6
+    expect(s.dayTotals).toEqual([0, 6, 5, 0, 0, 0, 0]);
+
+    const empty = summarize(slotGrid());
+    expect(empty.weeklyTotal).toBe(0);
+    expect(empty.peakHourIndex).toBeNull();
+    expect(empty.peakDayIndex).toBeNull();
+    expect(empty.maxCell).toBe(0);
+    expect(empty.dayTotals).toEqual([0, 0, 0, 0, 0, 0, 0]);
+  });
+
+  it('the legacy 7×24 grid (one cell per hour) is unchanged; a null cell there adds nothing', () => {
+    const legacy: (number | null)[][] = grid([
+      { day: 0, hour: 18, value: 100 },
+      { day: 1, hour: 18, value: 120 },
+      { day: 2, hour: 9, value: 200 },
+    ]);
+    const row = legacy[3];
+    if (row) row[18] = null;
+    const s = summarize(legacy);
+    expect(s.peakHourIndex).toBe(18);
+    expect(s.peakHourTotal).toBe(220);
+    expect(s.weeklyTotal).toBe(420);
   });
 });
 

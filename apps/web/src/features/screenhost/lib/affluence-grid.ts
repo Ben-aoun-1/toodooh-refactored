@@ -1,10 +1,12 @@
 /**
  * Affluence grid — pure logic (L-aff-view).
  *
- * The API returns a 7×24 weekday×hour grid of the venue's estimated audience (grid[0]=Monday …
- * grid[6]=Sunday, hour 0–23). This module derives the dashboard summary (weekly total, daily
- * average, busiest day, peak hour, and the 7 per-day totals) shown as plain numbers. Framed as
- * AUDIENCE / affluence (the venue's foot traffic), never "impressions" (that's the ad side).
+ * The API returns a weekday grid of the venue's estimated audience (grid[0]=Monday …
+ * grid[6]=Sunday): 7×48 half-hour SLOTS since slice C, 7×24 hours on the legacy wire. A cell with
+ * no reading is null (HOUR-AVG2); a measured 0 is 0. This module derives the dashboard summary
+ * (weekly total, daily average, busiest day, peak hour, and the 7 per-day totals) shown as plain
+ * numbers. Framed as AUDIENCE / affluence (the venue's foot traffic), never "impressions" (that's
+ * the ad side).
  */
 
 export const DAY_LABELS = [
@@ -27,7 +29,7 @@ export interface AffluenceSummary {
   peakDayIndex: number | null; // 0..6 (Monday-first); null when there is no data
   peakDayTotal: number;
   peakHourIndex: number | null; // 0..23; null when there is no data
-  peakHourTotal: number; // Σ over the 7 days of the hour's value (the mean of its two halves)
+  peakHourTotal: number; // Σ over the 7 days of the hour's value (the exact mean of the halves it has)
   dayTotals: number[]; // the 7 per-day totals (Monday-first) — the per-day readout
   maxCell: number; // the single busiest slot (peak audience in one hour)
 }
@@ -38,11 +40,34 @@ const argmax = (values: readonly number[]): { index: number; value: number } =>
     value: -1,
   });
 
-export const summarize = (grid: readonly number[][]): AffluenceSummary => {
+/**
+ * HOUR-AVG2 (operator 17/09, the hub's #97 rule) — an hour's value is the EXACT mean of the
+ * half-hour cells it HAS: a lone half is the hour (12 → 12, never 6), a measured 0 is a value
+ * (0 and 10 → 5), and an hour with no cell is no data (null). Never rounded here. On the legacy
+ * 7×24 wire (`perHour` = 1) the cell is the hour.
+ */
+export const hourValue = (
+  row: readonly (number | null)[],
+  hour: number,
+  perHour: number,
+): number | null => {
+  let sum = 0;
+  let present = 0;
+  for (let k = 0; k < perHour; k += 1) {
+    const v = row[hour * perHour + k];
+    if (v === null || v === undefined) continue;
+    sum += v;
+    present += 1;
+  }
+  return present === 0 ? null : sum / present;
+};
+
+export const summarize = (grid: readonly (readonly (number | null)[])[]): AffluenceSummary => {
   let maxCell = 0;
   const dayTotals = grid.map((row) => {
     let sum = 0;
     for (const v of row) {
+      if (v === null) continue;
       sum += v;
       if (v > maxCell) maxCell = v;
     }
@@ -55,16 +80,13 @@ export const summarize = (grid: readonly number[][]): AffluenceSummary => {
   // legacy wire was 7×24. « Heure de pointe » is an HOUR either way: on a slot grid the two halves
   // fold into their hour before the argmax, otherwise slot 9 (04h30) printed as « 09h » and no
   // afternoon peak could ever be seen (the scan stopped at column 23 = 11h30).
-  // HOUR-AVG1 (Mejri 15/09) — an hour's value is the AVERAGE of its two half-hours, never their
-  // sum: each half-hour cell is a reading of who is present, and the hour is their mean.
+  // HOUR-AVG1 (Mejri 15/09) — an hour's value is the AVERAGE of its half-hours, never their sum:
+  // each half-hour cell is a reading of who is present, and the hour is their mean. HOUR-AVG2 —
+  // the mean of the halves it HAS (hourValue); a day with no cell in that hour adds nothing.
   const columns = grid[0]?.length ?? 0;
   const perHour = columns > HOURS.length ? Math.ceil(columns / HOURS.length) : 1;
   const hourTotals = HOURS.map((h) =>
-    grid.reduce((acc, row) => {
-      let sum = 0;
-      for (let k = 0; k < perHour; k += 1) sum += row[h * perHour + k] ?? 0;
-      return acc + sum / perHour;
-    }, 0),
+    grid.reduce((acc, row) => acc + (hourValue(row, h, perHour) ?? 0), 0),
   );
 
   const hasData = weeklyTotal > 0;
