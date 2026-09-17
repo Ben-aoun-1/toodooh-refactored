@@ -29,6 +29,14 @@ import {
   probeMedia,
   sniffContainer,
 } from '../lib/media-probe.js';
+import {
+  WebpConversionError,
+  convertWebpToPng,
+  isAnimatedWebp,
+  isWebpConversionEnabled,
+  isWebpWithinPixelBudget,
+  webpDimensions,
+} from '../lib/webp-to-png.js';
 import { requireAdvertiser } from '../middleware/require-advertiser.js';
 import { requireAuth } from '../middleware/require-auth.js';
 import { storage } from '../storage/s3-storage.js';
@@ -67,6 +75,12 @@ const CONTAINER_LABEL: Record<NonNullable<SniffedContainer>, string> = {
   webp: 'WebP',
   pdf: 'PDF',
 };
+
+const sendPayloadTooLarge = (reply: FastifyReply) =>
+  reply.status(413).send({
+    error: 'PAYLOAD_TOO_LARGE',
+    message: `Le fichier dépasse la limite de ${MAX_CREATIVE_BYTES} octets.`,
+  });
 
 const invalidField = (reply: FastifyReply, field: string, reason: string) =>
   reply
@@ -120,17 +134,9 @@ export const creativesRoutes: FastifyPluginAsync = async (app) => {
     try {
       body = await data.toBuffer();
     } catch {
-      return reply.status(413).send({
-        error: 'PAYLOAD_TOO_LARGE',
-        message: `Le fichier dépasse la limite de ${MAX_CREATIVE_BYTES} octets.`,
-      });
+      return sendPayloadTooLarge(reply);
     }
-    if (data.file.truncated) {
-      return reply.status(413).send({
-        error: 'PAYLOAD_TOO_LARGE',
-        message: `Le fichier dépasse la limite de ${MAX_CREATIVE_BYTES} octets.`,
-      });
-    }
+    if (data.file.truncated) return sendPayloadTooLarge(reply);
 
     // ── CF-SH1 (spec §1.6) — authoritative validation for NEW uploads only ──────────────────────
     // Existing rows are GRANDFATHERED: none of this runs anywhere but here.
@@ -139,7 +145,52 @@ export const creativesRoutes: FastifyPluginAsync = async (app) => {
     // (application/octet-stream, or none → busboy's text/plain) and « .png » files carrying JPEG
     // bytes. Accepted bytes pass whatever was declared, and the STORED mime is the one the bytes
     // imply. A declared type can never make bad bytes pass: the sniff alone decides.
-    const sniffed = sniffContainer(body);
+    let sniffed = sniffContainer(body);
+    // UPL-4 (operator 2026-09-17) — a static WebP PHOTO (often a « .png » saved from the web) is
+    // converted to PNG when FFMPEG_PATH is set. The PNG then REPLACES the upload for everything
+    // below — storage, size and the identity hash (moderators approve what is stored). No ffmpeg,
+    // an animated WebP, headers declaring more than 4K UHD worth of pixels (or unreadable — a
+    // 38-byte WebP can make ffmpeg hold gigabytes, so this is checked BEFORE it runs) or a failed
+    // conversion → the WebP refusal below, unchanged.
+    if (
+      type === 'photo' &&
+      sniffed === 'webp' &&
+      isWebpConversionEnabled() &&
+      !isAnimatedWebp(body)
+    ) {
+      let png: Buffer | null = null;
+      if (!isWebpWithinPixelBudget(body)) {
+        request.log.warn(
+          { declared: data.mimetype, detected: 'webp', dimensions: webpDimensions(body) },
+          'creative upload: WebP photo headers unreadable or over the pixel budget — refused',
+        );
+      } else {
+        try {
+          png = await convertWebpToPng(body);
+        } catch (err) {
+          if (!(err instanceof WebpConversionError)) throw err;
+          request.log.warn(
+            { err, declared: data.mimetype, detected: 'webp' },
+            'creative upload: WebP photo could not be converted to PNG — refused',
+          );
+        }
+      }
+      if (png !== null) {
+        if (png.length > MAX_CREATIVE_BYTES) return sendPayloadTooLarge(reply);
+        request.log.info(
+          {
+            declared: data.mimetype,
+            detected: 'webp',
+            stored: 'image/png',
+            bytes_in: body.length,
+            bytes_out: png.length,
+          },
+          'creative upload: WebP photo converted to PNG',
+        );
+        body = png;
+        sniffed = sniffContainer(body);
+      }
+    }
     const storedMime = creativeMimeForContainer(type, sniffed);
     if (sniffed === null) {
       return reply.status(400).send({
@@ -154,8 +205,10 @@ export const creativesRoutes: FastifyPluginAsync = async (app) => {
       });
     }
     if (storedMime === null) {
-      // Recognised bytes this creative type refuses — WebP / WebM (spec-strict), a PDF, a video
-      // sent as a photo or a photo sent as a video. `detected` lets the web name the exact case.
+      // Recognised bytes this creative type refuses — WebM (spec-strict), a WebP photo that was
+      // not converted (UPL-4: no FFMPEG_PATH, animated, over the pixel budget or unreadable, or
+      // ffmpeg busy or failing), WebP sent as a video, a PDF, a video sent as a photo or a photo
+      // sent as a video. `detected` lets the web name the exact case.
       return reply.status(400).send({
         error: 'MEDIA_KIND_UNSUPPORTED',
         message: `Ce fichier est au format ${CONTAINER_LABEL[sniffed]} : il ne peut pas être téléversé comme ${type === 'video' ? 'vidéo' : 'photo'}.`,

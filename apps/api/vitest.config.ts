@@ -40,6 +40,9 @@ export default defineConfig({
       // CF-SH1 media probe — same posture: the ffprobe-dependent upload tests run only where an
       // explicit FFPROBE_PATH exists (the docker image); dev/CI without ffmpeg skips them.
       ...(process.env['FFPROBE_PATH'] ? { FFPROBE_PATH: process.env['FFPROBE_PATH'] } : {}),
+      // UPL-4 WebP → PNG conversion — same posture: the real-ffmpeg test runs only where an
+      // explicit FFMPEG_PATH exists; every other upload test mocks or pins the converter.
+      ...(process.env['FFMPEG_PATH'] ? { FFMPEG_PATH: process.env['FFMPEG_PATH'] } : {}),
     },
   },
 });

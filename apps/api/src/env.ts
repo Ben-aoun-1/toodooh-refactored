@@ -76,6 +76,10 @@ const EnvSchema = z.object({
   // still applies but codec/ratio/duration checks SKIP with ONE boot warning — never block dev,
   // never silently skip in the real image.
   FFPROBE_PATH: z.string().min(1).optional(),
+  // ffmpeg executable for the WebP-photo → PNG conversion on upload (UPL-4). OPTIONAL, the same
+  // posture: the docker image sets it; unset, a WebP photo is REFUSED as before (UPL-2) with ONE
+  // boot warning — only PNG/JPEG is ever stored either way.
+  FFMPEG_PATH: z.string().min(1).optional(),
   // Claude API key for the report's AI recommendations (R2). OPTIONAL by design, mirroring the
   // WEDOOH_* pattern: unset, the feature is OFF — every report keeps the generic pistes and boot
   // logs ONE warning. The operator provisions the real key in /srv/toodooh/.env at switch-on.

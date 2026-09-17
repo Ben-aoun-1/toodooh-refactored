@@ -12,7 +12,9 @@ import type { SniffedContainer } from './media-probe.js';
 export type CreativeKind = 'video' | 'photo';
 
 // Container allowlists per kind — CF-SH1 (spec §1.6) SPEC-STRICT for new uploads: video is MP4/MOV
-// only (webm out), image is JPEG/PNG only (webp out). UPL-2 (operator 2026-09-16): the decision is
+// only (webm out), image is JPEG/PNG only (webp is never STORED — UPL-4: the upload route converts
+// a static WebP photo to PNG first when FFMPEG_PATH is set, lib/webp-to-png.ts, and refuses it
+// otherwise; so webp stays out of this map). UPL-2 (operator 2026-09-16): the decision is
 // read from the SNIFFED BYTES, never from the declared mimetype — prod refused real photos whose
 // browser sent application/octet-stream, and « .png » files that were JPEG bytes. The stored mime
 // is the one these bytes imply (the declared one is advisory and never persisted). Existing rows
@@ -28,7 +30,8 @@ const CREATIVE_CONTAINER_MIME: Record<
 
 /**
  * The mime to store for bytes sniffed as `sniffed` under a `kind` creative, or null when that
- * container is not accepted for the kind (a WebP photo, a WebM video, a photo sent as a video…).
+ * container is not accepted for the kind (an unconverted WebP photo, a WebM video, a photo sent as
+ * a video…).
  */
 export const creativeMimeForContainer = (
   kind: CreativeKind,

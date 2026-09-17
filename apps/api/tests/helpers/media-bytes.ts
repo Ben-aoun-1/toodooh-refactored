@@ -1,5 +1,7 @@
 import { crc32, deflateSync } from 'node:zlib';
 
+import { vp8lWebpBytes } from './webp-bytes.js';
+
 // UPL-2 — media bytes built in code for the upload-format tests: the sniffer reads magic bytes
 // only, so a minimal valid PNG and bare JPEG / WebP headers are exactly what prod saw (a « .png »
 // holding JPEG or WebP bytes) without another binary fixture in tests/fixtures.
@@ -38,9 +40,29 @@ export const jpegBytes = (): Buffer =>
     Buffer.from([0xff, 0xd9]),
   ]);
 
-/** A WebP's RIFF header (« RIFF » size « WEBP » + a VP8L chunk tag) then filler. */
-export const webpBytes = (): Buffer => {
-  const payload = Buffer.concat([Buffer.from('WEBPVP8L', 'latin1'), Buffer.alloc(32, 0)]);
+/**
+ * A WebP's RIFF header (« RIFF » size « WEBP ») holding one 1×1 VP8L chunk header, then filler
+ * image data. UPL-4: the chunk header is well formed, so the converter's pixel-budget gate lets it
+ * through to the (stand-in or mocked) ffmpeg.
+ */
+export const webpBytes = (): Buffer => vp8lWebpBytes(1, 1, Buffer.alloc(27, 0));
+
+/**
+ * UPL-4 — an extended-format WebP header: « RIFF » size « WEBP », a « VP8X » chunk (10-byte
+ * payload: the flags byte at file offset 20, then reserved bytes and the canvas size), then filler.
+ * Flag 0x02 = ANIMATION, 0x10 = ALPHA.
+ */
+export const vp8xWebpBytes = (flags: number): Buffer => {
+  const vp8x = Buffer.alloc(10);
+  vp8x.writeUInt8(flags, 0);
+  const vp8xSize = Buffer.alloc(4);
+  vp8xSize.writeUInt32LE(vp8x.length);
+  const payload = Buffer.concat([
+    Buffer.from('WEBPVP8X', 'latin1'),
+    vp8xSize,
+    vp8x,
+    Buffer.alloc(32, 0),
+  ]);
   const size = Buffer.alloc(4);
   size.writeUInt32LE(payload.length);
   return Buffer.concat([Buffer.from('RIFF', 'latin1'), size, payload]);
