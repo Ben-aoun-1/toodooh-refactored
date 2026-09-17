@@ -19,10 +19,10 @@ describe('summarize', () => {
     expect(s.dailyAverage).toBe(0);
     expect(s.peakDayIndex).toBeNull();
     expect(s.peakHourIndex).toBeNull();
-    expect(s.maxCell).toBe(0);
+    expect(s.maxHourValue).toBe(0);
   });
 
-  it('computes weekly total, daily average, the busiest cell and the 7 per-day totals', () => {
+  it('computes weekly total, daily average, the busiest HOUR and the 7 per-day totals', () => {
     const s = summarize(
       grid([
         { day: 0, hour: 9, value: 100 },
@@ -32,7 +32,8 @@ describe('summarize', () => {
     );
     expect(s.weeklyTotal).toBe(390);
     expect(s.dailyAverage).toBe(Math.round(390 / 7)); // 56
-    expect(s.maxCell).toBe(250);
+    // Legacy 7×24 wire: an hour IS its cell, so FLOW-4 moves nothing here.
+    expect(s.maxHourValue).toBe(250);
     expect(s.dayTotals).toEqual([140, 0, 250, 0, 0, 0, 0]); // Mon=140, Wed=250
   });
 
@@ -86,10 +87,12 @@ describe('DATA1 — « Votre audience »: Σ day tiles == « Audience hebdomadai
         { day: 6, slot: 0, value: 12 }, // Dim 00h00
       ]),
     );
-    expect(s.dayTotals).toEqual([134, 0, 250, 0, 7, 0, 12]);
+    // FLOW-4 — Lun 09h is the mean of 101 and 33 (67); every other hour holds a lone reading and
+    // IS that reading. The cell sums (134 / 403) were FLOW-1's.
+    expect(s.dayTotals).toEqual([67, 0, 250, 0, 7, 0, 12]);
     expect(s.dayTotals.reduce((a, b) => a + b, 0)).toBe(s.weeklyTotal);
-    expect(s.weeklyTotal).toBe(403);
-    expect(s.dailyAverage).toBe(Math.round(403 / 7));
+    expect(s.weeklyTotal).toBe(336);
+    expect(s.dailyAverage).toBe(Math.round(336 / 7));
   });
 
   it('rider — « Heure de pointe » folds the two half-hour slots into their HOUR on a slot grid', () => {
@@ -115,15 +118,17 @@ describe('DATA1 — « Votre audience »: Σ day tiles == « Audience hebdomadai
     );
     expect(s.peakHourIndex).toBe(10);
     expect(s.peakHourTotal).toBe(80);
-    // The day still counts both readings (FLOW-1).
-    expect(s.dayTotals[0]).toBe(160);
+    // FLOW-4 — and so does the DAY now: the two readings describe one hour worth 80, not 160.
+    expect(s.dayTotals[0]).toBe(80);
   });
 });
 
 // HOUR-AVG2 (operator 17/09, the hub's #97 rule) — an hour's value is the EXACT mean of the
 // half-hour cells it HAS: a lone half is the hour, a measured 0 counts, two absent halves are no
-// data. Day and week totals still add the half-hour cells (FLOW-1).
-describe('HOUR-AVG2 — an hour is the exact mean of the half-hours it has', () => {
+// data. FLOW-4 (same day) — day and week totals now add those HOUR values instead of the raw
+// half-hour cells, and the busiest figure is an HOUR value too. « everything works by the hour;
+// only the readings come each 30 min. » It supersedes FLOW-1 (Mejri 04/09), knowingly.
+describe('HOUR-AVG2 / FLOW-4 — an hour is the exact mean of the half-hours it has', () => {
   const peakOf = (first: number | null, second: number | null) =>
     summarize(
       slotGrid([
@@ -146,11 +151,29 @@ describe('HOUR-AVG2 — an hour is the exact mean of the half-hours it has', () 
     expect(peakOf(12, null).peakHourTotal).toBe(12);
     expect(peakOf(null, 12).peakHourTotal).toBe(12);
     expect(peakOf(12, null).dayTotals[0]).toBe(12);
+    expect(peakOf(null, 12).dayTotals[0]).toBe(12);
   });
 
   it('a measured 0 is a value — 0 + 10 → 5 (Manaus, Sunday 1h: 10 and a measured 0)', () => {
     expect(peakOf(0, 10).peakHourTotal).toBe(5);
     expect(peakOf(10, 0).peakHourTotal).toBe(5);
+    expect(peakOf(0, 10).dayTotals[0]).toBe(5); // and the day says 5 too (FLOW-4)
+  });
+
+  // The operator's own worked example, on the dashboard grid.
+  it('FLOW-4 THE EXAMPLE: 09h 15 and 30 → 22.5, 10h a lone 20 → 20, the day is 42.5', () => {
+    const s = summarize(
+      slotGrid([
+        { day: 0, slot: 18, value: 15 }, // Lun 09h00
+        { day: 0, slot: 19, value: 30 }, // Lun 09h30 → 09h = 22.5
+        { day: 0, slot: 20, value: 20 }, // Lun 10h00, no 10h30 at all → 10h = 20
+      ]),
+    );
+    expect(s.dayTotals[0]).toBe(42.5); // the cell sum said 65
+    expect(s.weeklyTotal).toBe(42.5);
+    expect(s.maxHourValue).toBe(22.5); // the busiest HOUR, not the busiest cell (30)
+    expect(s.peakDayIndex).toBe(0);
+    expect(s.peakDayTotal).toBe(42.5);
   });
 
   it('two absent halves contribute nothing to the hour across the week', () => {
@@ -170,7 +193,7 @@ describe('HOUR-AVG2 — an hour is the exact mean of the half-hours it has', () 
     expect(empty.weeklyTotal).toBe(0);
     expect(empty.peakHourIndex).toBeNull();
     expect(empty.peakDayIndex).toBeNull();
-    expect(empty.maxCell).toBe(0);
+    expect(empty.maxHourValue).toBe(0);
     expect(empty.dayTotals).toEqual([0, 0, 0, 0, 0, 0, 0]);
   });
 
@@ -185,7 +208,10 @@ describe('HOUR-AVG2 — an hour is the exact mean of the half-hours it has', () 
     const s = summarize(legacy);
     expect(s.peakHourIndex).toBe(18);
     expect(s.peakHourTotal).toBe(220);
+    // FLOW-4 leaves the legacy wire alone: with one cell per hour, the hour IS the cell.
     expect(s.weeklyTotal).toBe(420);
+    expect(s.dayTotals).toEqual([100, 120, 200, 0, 0, 0, 0]);
+    expect(s.maxHourValue).toBe(200);
   });
 });
 

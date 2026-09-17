@@ -64,8 +64,9 @@ describe('audienceKpis (S01)', () => {
     );
     expect(kpis.global).toBe(2100);
     expect(kpis.perDay).toBe(700);
-    // HOUR-AVG1 — 700 ÷ (14 h × 2 half-hours): an hour is the mean of its two readings.
-    expect(kpis.perHour).toBe(25);
+    // FLOW-4 — 700 ÷ 14 h. The day already IS a sum of hour values, so « / heure » divides by the
+    // opening hours; HOUR-AVG1's extra ÷ 2 corrected a day that summed half-hour readings.
+    expect(kpis.perHour).toBe(50);
     expect(kpis.peak).toEqual({ value: 900, date: '2026-06-02' });
     expect(kpis.measuredDays).toBe(3); // unmarked points count as measured (legacy wires)
     expect(kpis.estimatedPct).toBe(0);
@@ -91,13 +92,13 @@ describe('audienceKpis (S01)', () => {
   it('perHour keeps one decimal instead of rounding to a misleading 0 (Mejri prod-test #3)', () => {
     const kpis = audienceKpis([{ date: '2026-06-26', audience: 4 }], 14, 0);
     expect(kpis.perDay).toBe(4);
-    expect(kpis.perHour).toBe(0.1); // 4 ÷ (14 × 2) = 0,142… → one decimal, not 0
+    expect(kpis.perHour).toBe(0.3); // FLOW-4: 4 ÷ 14 = 0,285… → one decimal, not 0
   });
 
   it('R9 — divides FIRST, rounds ONCE: perHour never rides an already-rounded perDay', () => {
-    // 5 pers over 2 days = 2.5/day raw; 4 open hours = 8 half-hours (HOUR-AVG1). Honest:
-    // 2.5 ÷ 8 = 0.3125 → 0,3. Round-then-divide would read 3 ÷ 8 = 0.375 → 0,4 — a phantom
-    // +0,1 pers/h from display rounding.
+    // 5 pers over 2 days = 2.5/day raw; 4 open hours (FLOW-4 divides by the HOURS). Honest:
+    // 2.5 ÷ 4 = 0.625 → 0,6. Round-then-divide would read 3 ÷ 4 = 0.75 → 0,8 — a phantom
+    // +0,2 pers/h from display rounding.
     const kpis = audienceKpis(
       [
         { date: '2026-06-01', audience: 2 },
@@ -107,7 +108,7 @@ describe('audienceKpis (S01)', () => {
       0,
     );
     expect(kpis.perDay).toBe(3); // display rounding still applies to the day figure
-    expect(kpis.perHour).toBe(0.3); // 2.5 ÷ 8, NEVER 3 ÷ 8
+    expect(kpis.perHour).toBe(0.6); // 2.5 ÷ 4, NEVER 3 ÷ 4
   });
 
   it('empty input → the honest empty state', () => {

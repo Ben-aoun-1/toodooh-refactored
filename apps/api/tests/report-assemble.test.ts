@@ -228,41 +228,42 @@ describe('assembleReportData (real Postgres)', () => {
     // Wednesdays 03/10/17/24 → 4×30, Saturdays 06/13/27 → 3×120 (the 20th is measured). Days
     // with neither measure nor grid value are NOT data days — 14 data days in June.
     //
-    // FLOW-1 — a grid HOUR fills both halves, and a day is now the SUM of its cells, so each grid
-    // day is worth twice its hourly figure: 800 → 1 600. The three measured days arrive at DAY
-    // granularity from monthly_stats and are untouched by this lane: 2 100 + 1 600 = 3 700.
-    expect(data?.kpis.global).toBe(3700);
-    expect(data?.kpis.perDay).toBe(264); // 3700 / 14
-    expect(data?.kpis.perHour).toBe(9.4); // 264.28… / (14 h × 2 half-hours), one decimal
+    // FLOW-4 — a grid HOUR fills both halves, whose mean is that hour again, so a grid day is
+    // worth its hourly figure once: 4×80 + 4×30 + 3×120 = 800 (FLOW-1 read 1 600). The three
+    // measured days arrive at DAY granularity from monthly_stats and this lane does not refold
+    // them: 2 100 + 800 = 2 900 — the figure that stood before FLOW-1 doubled it.
+    expect(data?.kpis.global).toBe(2900);
+    expect(data?.kpis.perDay).toBe(207); // 2900 / 14 = 207.14…
+    expect(data?.kpis.perHour).toBe(14.8); // 207.14… / 14 h, one decimal (FLOW-4: no ÷ 2)
     expect(data?.kpis.peak).toEqual({ value: 900, date: '2026-06-14' });
     expect(data?.kpis.measuredDays).toBe(3);
     // Slice C — the caption is VALUE-WEIGHTED: Σ estimated audience / Σ all audience, so it is
     // granularity-independent (a day is a day whether it arrives as one point or forty-eight).
-    // Here: (4 Mondays × 80 + 4 Wednesdays × 30 + 3 Saturdays × 120) × 2 halves = 1 600 estimated,
-    // against 1 600 + 2 100 of measured day-granularity history = 3 700. A share of ROWS would have
-    // said 88 % of the same data — the number a reader would have taken to mean people.
+    // Here: 4 Mondays × 80 + 4 Wednesdays × 30 + 3 Saturdays × 120 = 800 estimated, against
+    // 800 + 2 100 of measured day-granularity history = 2 900. A share of ROWS would have said
+    // 88 % of the same data — the number a reader would have taken to mean people.
     //
-    // ⚠️ This share MOVES with FLOW-1 (28 % → 43 %) and that is correct, not a regression: the
-    // estimated side is cell-granular and doubles, while the measured side is day-granular history
-    // that never carried the 0.5. The ratio only cancelled when BOTH sides were cells.
-    expect(data?.kpis.estimatedPct).toBe(43); // 1 600 / 3 700
+    // ⚠️ This share moves BACK with FLOW-4 (43 % → 28 %, its pre-FLOW-1 value) for the same reason
+    // it moved then: the estimated side is hour-granular and halves, while the measured side is
+    // day-granular history that this lane does not refold.
+    expect(data?.kpis.estimatedPct).toBe(28); // 800 / 2 900
 
     // S03 — zero-filled June: 30 days, 2 impressions on the 10th, 0 elsewhere.
     expect(data?.days).toHaveLength(30);
     expect(data?.days.find((d) => d.date === '2026-06-10')?.impressions).toBe(2);
     expect(data?.days.find((d) => d.date === '2026-06-11')?.impressions).toBe(0);
 
-    // S04 — ratios × the MERGED global audience, which FLOW-1 moved from 2 900 to 3 700. The
+    // S04 — ratios × the MERGED global audience, which FLOW-4 moved from 3 700 back to 2 900. The
     // breakdown is a pure share of that total, so every figure scales with it; the RATIOS are
     // untouched. CLS-AGE1: the venue carries the THREE-band shape (46+ = 28 %, the old 18 + 10),
     // and `ratiosOrNull` gates on exactly those five columns — a fixture in the retired shape
     // would leave `breakdown` null and take every line below with it.
-    expect(data?.breakdown?.femmes).toBe(1924); // 52 % of 3 700
-    expect(data?.breakdown?.hommes).toBe(1776); // 48 %
+    expect(data?.breakdown?.femmes).toBe(1508); // 52 % of 2 900
+    expect(data?.breakdown?.hommes).toBe(1392); // 48 %
     expect(data?.breakdown?.ages.map((b) => [b.label, b.count])).toEqual([
-      ['17 – 30 ans', 1258], // 34 %
-      ['31 – 45 ans', 1073], // 29 %
-      ['46 ans et plus', 1036], // 28 %
+      ['17 – 30 ans', 986], // 34 %
+      ['31 – 45 ans', 841], // 29 %
+      ['46 ans et plus', 812], // 28 %
     ]);
 
     // S05/S06 — the reconciled line, period-overlapping, Passée by 2026-07-08.
@@ -319,8 +320,8 @@ describe('assembleReportData (real Postgres)', () => {
 
     const data = await assembleReportData(venue, RANGE, TODAY);
     expect(data?.hostHasData).toBe(true);
-    expect(data?.kpis.global).toBe(4800); // 30 June days × 80 × 2 halves — never zero because silent
-    expect(data?.kpis.perDay).toBe(160); // FLOW-1: the grid hour fills both halves and they sum
+    expect(data?.kpis.global).toBe(2400); // 30 June days × the 10h HOUR — never zero because silent
+    expect(data?.kpis.perDay).toBe(80); // FLOW-4: both halves hold 80, so the hour is 80
     expect(data?.kpis.measuredDays).toBe(0);
     expect(data?.kpis.estimatedPct).toBe(100);
     // MEJ-R1 — « Pic d'audience » is a MEASURED day or nothing: an all-estimated période has no
@@ -352,10 +353,10 @@ describe('assembleReportData (real Postgres)', () => {
     );
 
     const data = await assembleReportData(venue, RANGE, TODAY);
-    // 15→30 June inclusive = 16 days × 160, instead of the 30 an unfloored grid would claim. The
-    // FLOOR is what this pins; FLOW-1 only changes what one day is worth (80 per half, summed).
-    expect(data?.kpis.global).toBe(16 * 160);
-    expect(data?.kpis.perDay).toBe(160);
+    // 15→30 June inclusive = 16 days × 80, instead of the 30 an unfloored grid would claim. The
+    // FLOOR is what this pins; FLOW-4 only changes what one day is worth (the 10h hour, 80).
+    expect(data?.kpis.global).toBe(16 * 80);
+    expect(data?.kpis.perDay).toBe(80);
     expect(data?.kpis.measuredDays).toBe(0);
     expect(data?.kpis.peak).toBeNull();
   });
@@ -425,12 +426,12 @@ describe('assembleReportData (real Postgres)', () => {
     );
 
     const data = await assembleReportData(venue, { from: '2026-06-01', to: '2026-06-02' }, TODAY);
-    // 01/06 = (300 + 300) measured + (80 + 80) forced from the grid = 760, and it holds a
+    // 01/06 = 13h measured (300) + 12h forced from the grid (80) = 380, and it holds a
     // measurement. What this pins is the ORDERING — the mixed day still outranks the smaller
-    // all-measured Tuesday (50 + 50 = 100) — and FLOW-1 scales both sides alike, so MEJ-R2 holds
-    // for the same reason it did before.
-    expect(data?.kpis.peak).toEqual({ value: 760, date: '2026-06-01' });
-    expect(data?.kpis.global).toBe(860); // 760 + 100 — the tile can never exceed « Audience globale »
+    // all-measured Tuesday (13h = 50) — and FLOW-4 scales both sides alike, so MEJ-R2 holds for
+    // the same reason it did before.
+    expect(data?.kpis.peak).toEqual({ value: 380, date: '2026-06-01' });
+    expect(data?.kpis.global).toBe(430); // 380 + 50 — the tile can never exceed « Audience globale »
   });
 
   it('AUD-HOURLY1-C: a MEASURED hourly cell reaches the PDF S02 as measured', async () => {
@@ -455,9 +456,9 @@ describe('assembleReportData (real Postgres)', () => {
 
     const data = await assembleReportData(venue, { from: '2026-06-01', to: '2026-06-01' }, TODAY);
     expect(data?.heatKinds[0]?.[8]).toBe('measured');
-    // The MEASURE wins over the grid — that is what this pins, and it is untouched. FLOW-1 only
-    // changes the figure: 44 in each half sums to 88 (the grid would have given 80 × 2 = 160).
-    expect(data?.kpis.global).toBe(88);
+    // The MEASURE wins over the grid — that is what this pins, and it is untouched. FLOW-4 only
+    // changes the figure: two measured halves of 44 make an hour of 44 (the grid would say 80).
+    expect(data?.kpis.global).toBe(44);
     expect(data?.kpis.measuredDays).toBe(1);
   });
 });

@@ -11,9 +11,6 @@ import { type DateRange, inRange } from './performance-period';
  * earnings) so the maths are unit-testable without a render harness.
  */
 
-/** Two half-hour readings per hour (the api's lib/half-hour-slots HALVES_PER_HOUR). */
-const HALVES_PER_HOUR = 2;
-
 export interface DailyAudiencePoint {
   date: string; // YYYY-MM-DD
   audience: number;
@@ -185,10 +182,11 @@ export function audienceKpis(
   const perDayRaw = global / points.length;
   const perDay = Math.round(perDayRaw);
   // One decimal (Mejri prod-test #3): 4 pers/day over 14 h must read 0,1 — never a rounded 0.
-  // HOUR-AVG1 (Mejri 15/09) — the day adds its half-hour readings (FLOW-1), and an hour is the
-  // AVERAGE of its two halves, so the hourly mean divides by the half-hours, not the hours.
-  const perHour =
-    hoursPerDay > 0 ? Math.round((perDayRaw / (hoursPerDay * HALVES_PER_HOUR)) * 10) / 10 : null;
+  // FLOW-4 (operator 17/09) — the day is now Σ of its HOUR values, so it is already expressed in
+  // hours: « moyenne / heure » divides by the opening HOURS. It used to divide by the half-hours
+  // (HOUR-AVG1) only because FLOW-1 summed the half-hour readings themselves, and that correction
+  // is now built into the day. Divide FIRST, round ONCE — the page and the PDF must not disagree.
+  const perHour = hoursPerDay > 0 ? Math.round((perDayRaw / hoursPerDay) * 10) / 10 : null;
   const measuredCount = points.filter((p) => p.source !== 'estimated').length;
   return { global, perDay, perHour, peak, measuredDays: measuredCount, estimatedPct };
 }

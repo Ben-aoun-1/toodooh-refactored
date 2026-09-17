@@ -25,6 +25,7 @@ import {
   provenanceGrid,
 } from '../lib/affluence-provenance';
 import { downloadMonthlyReport, reportSelectState } from '../lib/monthly-report';
+import { formatIntFr } from '../lib/performance-derive';
 import { monthLabelFr } from '../lib/performance-period';
 import { ReportDownloadError, reportErrorMessageFr } from '../lib/period-report';
 import { venuePickerVisible } from '../lib/venue-picker';
@@ -275,12 +276,12 @@ export function OwnerAffluenceSection() {
                   <StatCard
                     icon={<Users className="h-4 w-4" />}
                     label="Audience moyenne / jour"
-                    value={summary.dailyAverage.toLocaleString('fr-FR')}
+                    value={formatIntFr(summary.dailyAverage)}
                   />
                   <StatCard
                     icon={<TrendingUp className="h-4 w-4" />}
                     label="Audience hebdomadaire"
-                    value={summary.weeklyTotal.toLocaleString('fr-FR')}
+                    value={formatIntFr(summary.weeklyTotal)}
                   />
                 </div>
                 {allEstimated && (
@@ -292,6 +293,9 @@ export function OwnerAffluenceSection() {
                   <h3 className="mb-3 text-sm font-semibold text-gray-500">Affluence par jour</h3>
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
                     {DAY_LABELS_SHORT.map((label, day) => {
+                      // FLOW-4 — a day tile is Σ of its HOUR values and may be fractional (an hour
+                      // of 15 and 30 is 22.5); the tile is a person count, so it rounds ONCE here
+                      // rather than letting toLocaleString print « 22,5 ».
                       const total = summary.dayTotals[day] ?? 0;
                       const isPeak = day === summary.peakDayIndex && total > 0;
                       const estimated = dayKinds[day] === 'backup';
@@ -320,7 +324,7 @@ export function OwnerAffluenceSection() {
                               estimated ? 'opacity-70' : ''
                             }`}
                           >
-                            {total.toLocaleString('fr-FR')}
+                            {formatIntFr(total)}
                           </p>
                           {estimated && (
                             <p className="text-[10px] uppercase tracking-wide text-gray-400">
