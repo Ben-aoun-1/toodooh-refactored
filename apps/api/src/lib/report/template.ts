@@ -75,17 +75,22 @@ export const NO_MEASURE_NOTE =
   "Aucune mesure du capteur d'audience sur la période — les impressions proviennent de la preuve de diffusion, une source indépendante.";
 
 /**
- * FLOW-1 (Mejri, ruled 2026-09-04) — the « Audience moyenne / heure » description, in HER terms:
- * Pers_atteintes is « le nombre de personnes détectées par le capteur sur la période » (the day adds
- * its half-hour readings). HOUR-AVG1 (Mejri 15/09) — an hour is the AVERAGE of its two half-hour
- * readings, never their sum, so moyenne/heure = Pers_atteintes ÷ (heures d'ouverture × 2).
+ * FLOW-4 (operator, ruled 2026-09-17) — the « Audience moyenne / heure » description.
+ *
+ * « everything works by the hour; only the readings come each 30 min. » A day ADDS ITS HOUR
+ * VALUES, and an hour is the mean of the half-hours it HAS, so moyenne/heure = Pers_atteintes ÷
+ * heures d'ouverture — no × 2 any more. It supersedes FLOW-1 (« a day is the plain SUM of its
+ * cells », Mejri 04/09) and the HOUR-AVG1 wording that followed from it: dividing by the
+ * half-hours was a correction for a day that summed half-hour readings, and the day no longer
+ * does. « des deux demi-heures » became « de ses demi-heures » for HOUR-AVG2 in the same move —
+ * an hour has the halves it has, and a lone one IS the hour.
  *
  * No trailing period: the page appends « (estimation 14 h). » when the opening hours are inferred.
- * This sentence lived INLINE in both packages until now — twins by convention, agreeing only by
- * coincidence, with nothing to catch a one-sided reword. It is pinned on both sides from here.
+ * BYTE-IDENTICAL twin — the api's template.ts carries the same literal, each side pinned by its
+ * own exact-literal test. Do not reword one without the other.
  */
 export const PER_HOUR_DESC =
-  "Personnes détectées par heure d'ouverture, moyenne des deux demi-heures";
+  "Personnes détectées par heure d'ouverture, moyenne de ses demi-heures";
 
 const esc = (value: string): string =>
   value.replace(

@@ -18,14 +18,15 @@ describe('S01 copy (byte-equality contract with the PDF)', () => {
     );
   });
 
-  // FLOW-1 — her definition of moyenne/heure: Pers_atteintes ÷ heures d'ouverture réelles. The old
-  // « Densité moyenne d'audience » described a LEVEL held over time, which is the reading this lane
-  // removed. Pinned here for the first time: it lived inline in BOTH packages, twins by convention
-  // with nothing to catch a one-sided reword.
+  // FLOW-4 (operator 17/09) — moyenne/heure is Pers_atteintes ÷ heures d'ouverture, the day being
+  // Σ of its HOUR values and an hour the mean of its readings. The « moyenne des deux demi-heures »
+  // wording described FLOW-1's ÷ 2 and no longer describes the figure. Reworded on BOTH sides in
+  // the same commit — the twin test in apps/api pins the same literal.
   it('pins the per-hour description (byte-twin of the api PER_HOUR_DESC)', () => {
     expect(PER_HOUR_DESC).toBe(
-      "Personnes détectées par heure d'ouverture, moyenne des deux demi-heures",
+      "Personnes détectées par heure d'ouverture, moyenne de ses demi-heures",
     );
     expect(PER_HOUR_DESC).not.toContain('Densité');
+    expect(PER_HOUR_DESC).not.toContain('des deux demi-heures'); // FLOW-1's ÷ 2 wording
   });
 });

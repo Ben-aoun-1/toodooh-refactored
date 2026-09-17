@@ -81,7 +81,7 @@ export function TestingReportView({ r }: { r: TestingReport }) {
         <KeyValues
           title="Audience — les KPI de « Mes performances »"
           rows={[
-            ['Audience globale (Σ cases, FLOW-1)', fmt(a.total)],
+            ['Audience globale (Σ des valeurs horaires, FLOW-4)', fmt(a.total)],
             ['Audience moyenne / jour', fmt(a.mean_per_day)],
             ['Audience moyenne / heure d’ouverture', fmt(a.mean_per_hour)],
             ['jours mesurés / estimés', `${a.measured_days} / ${a.estimated_days}`],

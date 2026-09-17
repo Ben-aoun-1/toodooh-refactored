@@ -2,7 +2,7 @@ import { addDays, format, getDay, parseISO } from 'date-fns';
 
 import type { MonthlyStatsDaily } from '../db/schema.js';
 
-import { SLOTS_PER_DAY } from './half-hour-slots.js';
+import { SLOTS_PER_DAY, hourOfSlot } from './half-hour-slots.js';
 import { isMeasuredDay } from './monthly-audience.js';
 import type { DateRange } from './report/derive.js';
 
@@ -84,6 +84,11 @@ export interface PeriodCell {
 
 export interface PeriodDay {
   date: string; // YYYY-MM-DD
+  /**
+   * FLOW-4 — Σ of the day's HOUR values, each the exact mean of the cells it has. POSSIBLY
+   * FRACTIONAL (an hour of 15 and 30 is 22.5) and deliberately not rounded here: the surfaces
+   * round for display. `source` / `hasMeasured` stay CELL-based and are untouched by the fold.
+   */
   audience: number;
   source: 'measured' | 'estimated';
   /**
@@ -99,6 +104,7 @@ export interface PeriodAudience {
   days: PeriodDay[];
   /** The hour-granularity cells of the période — S02's source, and the caption's denominator. */
   cells: PeriodCell[];
+  /** Σ `days[].audience` — fractional whenever one of them is (FLOW-4). Not rounded here. */
   total: number;
   measuredDays: number;
   estimatedDays: number;
@@ -118,6 +124,11 @@ export interface PeriodAudience {
    * is a day whether it arrives as one point or forty-eight, and the slot duration cancels out of
    * the ratio. THIS IS A DEFINITION CHANGE and is the one quantity exempt from slice C's
    * equal-halves bit-identical pin (ruled).
+   *
+   * FLOW-4 (2026-09-17) — the share is now taken PER HOUR, so its denominator is the same quantity
+   * `total` is (Σ hour values, plus the day-granularity history). Within an hour the estimated
+   * part is pro-rata the backup cells' share of that hour's readings. On equal halves of one
+   * source the ratio is byte-identical to FLOW-1's.
    *
    * `null` still means EXACTLY what it meant: the période holds no data point at all. A période
    * that holds data whose total audience is 0 falls back to the point share rather than to null,
@@ -161,22 +172,61 @@ export const emptyBackupGrid = (): BackupGrid => ({
 });
 
 /**
- * FLOW-1 (Mejri, ruled 2026-09-04) — a day's audience is the plain SUM of its cells.
+ * FLOW-4 (operator, ruled 2026-09-17) — a day's audience is the SUM of its HOUR VALUES.
  *
- * A cell is what the sensor counted in that half-hour slot, so the cells PARTITION the day and add
- * up to it. Her User Stories say the same thing from the other end: « Ai_jh : Ai découpé par jour
- * de semaine × heure » — a division of Ai, which only reconciles if the parts sum to the whole.
+ * « everything works by the hour; only the readings come each 30 min. After we calculate the
+ * average which results in the value of the hour, after that everything works by the hour. » The
+ * half-hour cell is a READING, not a unit of audience: two readings describe the same hour, so
+ * they are averaged into it, and only then does the hour become a term of the day.
  *
- * This REVERSES slice C's « a cell is a LEVEL, integrated over the day » for the audience
- * surfaces: that rule made a day `Σ (v × 0.5)`, exactly half of what she and the hub both count.
- * « la somme dans le Hub et Peak Hours est de 274 personnes, contre 137 personnes pour les
- * variables mentionnées » — 274/137 = 2, and this factor was it. Her ruling over the architect's
- * invariant, which survives untouched everywhere else (see the hour collapses, FLOW-2).
+ * ── WHAT IT SUPERSEDES ─────────────────────────────────────────────────────────────────────────
+ * FLOW-1 (Mejri, ruled 2026-09-04) said « a day's audience is the plain SUM of its cells », on the
+ * grounds that a cell is what the sensor counted in that slot and the cells therefore PARTITION
+ * the day: « la somme dans le Hub et Peak Hours est de 274 personnes, contre 137 personnes pour
+ * les variables mentionnées ». That ruling is recorded, not erased — it is what the code did until
+ * today, and it is why the numbers below move. The operator has taken the call knowingly: the hub
+ * itself now folds readings into hours (its #97 / #99), and « keep the readings the same, don't
+ * change history — it's just the calculation that will change. »
  *
- * Integers in, integer out: no weighting and therefore nothing to round.
+ * ── THE RULE ───────────────────────────────────────────────────────────────────────────────────
+ *   1. an hour's value is the EXACT mean of the cells it HAS (HOUR-AVG2, already shipped for the
+ *      grids): a lone half IS the hour (it is never averaged against an absent reading), a
+ *      measured 0 is a value and counts in the mean, an hour with no cell at all is not a term;
+ *   2. the day is the plain sum of those hour values. So are the période, the week and the month —
+ *      they are sums of days.
+ *
+ * Worked example (the operator's own): 09h holds 15 and 30 → the hour is 22.5; 10h holds a lone
+ * 20 → the hour is 20; the day is 42.5. Under FLOW-1 the same cells read 65.
+ *
+ * CONSEQUENCE, expected and accepted: on a full-cadence day every day / week / période / month
+ * audience figure roughly HALVES. Nothing else moves — no reading is rewritten, no history is
+ * touched.
+ *
+ * NOTHING IS ROUNDED HERE. A day is legitimately fractional (42.5), and so is the période total
+ * that sums days. The surfaces round for display (formatIntFr / formatDecimalFr); rounding at this
+ * boundary would bias every sum above it.
  */
-const dayAudience = (dayCells: readonly PeriodCell[]): number =>
-  dayCells.reduce((sum, c) => sum + c.value, 0);
+const dayAudience = (dayCells: readonly PeriodCell[]): number => {
+  let total = 0;
+  for (const hourCells of hoursOfDay(dayCells).values()) total += hourValue(hourCells);
+  return total;
+};
+
+/** The cells of ONE day bucketed by the hour they fall in (`hourOfSlot`), insertion-ordered. */
+const hoursOfDay = (dayCells: readonly PeriodCell[]): Map<number, PeriodCell[]> => {
+  const byHour = new Map<number, PeriodCell[]>();
+  for (const cell of dayCells) {
+    const hour = hourOfSlot(cell.slot);
+    const bucket = byHour.get(hour);
+    if (bucket === undefined) byHour.set(hour, [cell]);
+    else bucket.push(cell);
+  }
+  return byHour;
+};
+
+/** FLOW-4 rule 1 — the EXACT mean of the cells the hour has. Never empty by construction. */
+const hourValue = (hourCells: readonly PeriodCell[]): number =>
+  hourCells.reduce((sum, c) => sum + c.value, 0) / hourCells.length;
 
 /** date-fns getDay: 0 = Sunday → the grid's Monday-first row index. */
 const rowOf = (dateIso: string): number => (getDay(parseISO(dateIso)) + 6) % 7;
@@ -315,17 +365,40 @@ export function periodAudience(input: PeriodAudienceInput): PeriodAudience {
   const estimatedCells = cells.filter((c) => c.source === 'backup').length;
   const dataPoints = cells.length + dayGranularityMeasured;
 
-  // The value-weighted share (see PeriodAudience.estimatedPct). FLOW-1 — a cell's value IS its
-  // audience now, so there is no factor to write out and nothing cancels: both terms below are
-  // people, and so is the day-granularity term they are added to. The RATIO is unchanged by this
-  // lane — the old 0.5 divided out of numerator and denominator alike.
+  // The value-weighted share (see PeriodAudience.estimatedPct). FLOW-4 — it is re-expressed PER
+  // HOUR, because its denominator has to be the same quantity `total` is: a share of « people » is
+  // a lie the moment the two count different people. So each hour contributes its own value (the
+  // mean of its cells), and the estimated part of that value is pro-rata the backup cells' share
+  // of the hour's readings — one measured half and one backup half do not make the hour half
+  // estimated when the backup one carried a sixth of the readings.
+  //
+  // An hour whose cells sum to 0 has nothing to apportion and contributes 0 to BOTH sides (its
+  // value is 0 anyway); the degenerate « data but no audience » case still falls back to the point
+  // share below, so `null` keeps its one meaning.
+  //
+  // With both halves present and of the same source this is the RATIO FLOW-1 computed, byte for
+  // byte: the factor 2 divided out of numerator and denominator alike. Day-granularity history
+  // (the hub's whole-day totals) stays in the denominator exactly as before — it never carried a
+  // per-hour shape to fold.
   let estimatedAudience = 0;
-  let cellAudience = 0;
+  let hourAudience = 0;
+  const cellsByDate = new Map<string, PeriodCell[]>();
   for (const cell of cells) {
-    cellAudience += cell.value;
-    if (cell.source === 'backup') estimatedAudience += cell.value;
+    const forDate = cellsByDate.get(cell.date);
+    if (forDate === undefined) cellsByDate.set(cell.date, [cell]);
+    else forDate.push(cell);
   }
-  const totalAudience = cellAudience + dayGranularityAudience;
+  for (const dayCells of cellsByDate.values()) {
+    for (const hourCells of hoursOfDay(dayCells).values()) {
+      const readings = hourCells.reduce((sum, c) => sum + c.value, 0);
+      if (readings === 0) continue; // nobody to apportion — 0 on both sides
+      const backup = hourCells.reduce((sum, c) => (c.source === 'backup' ? sum + c.value : sum), 0);
+      const value = readings / hourCells.length;
+      hourAudience += value;
+      estimatedAudience += value * (backup / readings);
+    }
+  }
+  const totalAudience = hourAudience + dayGranularityAudience;
 
   return {
     days,

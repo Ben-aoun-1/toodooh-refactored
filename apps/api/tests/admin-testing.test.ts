@@ -157,13 +157,15 @@ describe('ADM-OBS1 — GET /api/admin/testing/screenhosts[/:id] (real Postgres)'
     expect(r.screenhost.name).toBe('Café Tests');
     expect(r.periode).toMatchObject({ from: d1, to: d2, today, estimation_floor: d1 });
 
-    // FLOW-1: a day is the SUM of its cells → d1 = 30, d2 = 30, total 60.
-    expect(r.audience.total).toBe(60);
+    // FLOW-4: a day is the SUM of its HOUR values → d1's 10h is the mean of 10 and 20 (15), d2's
+    // 11h is a lone 30 (30), so the total is 45 where FLOW-1 read 60. A day is legitimately
+    // fractional under this rule; here it happens not to be, and the median of 15 and 30 is.
+    expect(r.audience.total).toBe(45);
     expect(r.audience.day_rows.map((d) => [d.date, d.audience])).toEqual([
-      [d1, 30],
+      [d1, 15],
       [d2, 30],
     ]);
-    expect(r.audience.days).toMatchObject({ n: 2, min: 30, max: 30, median: 30 });
+    expect(r.audience.days).toMatchObject({ n: 2, min: 15, max: 30, median: 22.5 });
     // The raw cells, so a median over any window is answerable without sketches.
     expect(r.audience.cells).toMatchObject({ n: 3, min: 10, max: 30, median: 20 });
     expect(r.audience.measured_cells.n).toBe(3);
@@ -172,9 +174,9 @@ describe('ADM-OBS1 — GET /api/admin/testing/screenhosts[/:id] (real Postgres)'
       { date: d1, slot: 21, value: 20, source: 'measured' },
       { date: d2, slot: 22, value: 30, source: 'measured' },
     ]);
-    // 2 open days × 12 opening hours → 60 / (24 h × 2 half-hours) = 1.25 per opening hour
-    // (HOUR-AVG1: an hour is the mean of its two half-hour readings).
-    expect(r.audience.mean_per_hour).toBe(1.25);
+    // 2 open days × 12 opening hours → 45 / 24 h = 1.875 → 1.88 per opening hour. FLOW-4 divides
+    // by the HOURS: the day already folded its readings into them.
+    expect(r.audience.mean_per_hour).toBe(1.88);
     expect(r.audience.week).toHaveLength(7);
     expect(r.audience.week[0]).toHaveLength(48);
 

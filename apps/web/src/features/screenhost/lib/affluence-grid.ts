@@ -7,6 +7,10 @@
  * (weekly total, daily average, busiest day, peak hour, and the 7 per-day totals) shown as plain
  * numbers. Framed as AUDIENCE / affluence (the venue's foot traffic), never "impressions" (that's
  * the ad side).
+ *
+ * FLOW-4 (operator 2026-09-17) — EVERYTHING here works by the HOUR. An hour is the exact mean of
+ * the readings it has (`hourValue`), and a day, a week and the busiest figure are built from those
+ * hour values, never from the raw half-hour cells.
  */
 
 export const DAY_LABELS = [
@@ -30,8 +34,16 @@ export interface AffluenceSummary {
   peakDayTotal: number;
   peakHourIndex: number | null; // 0..23; null when there is no data
   peakHourTotal: number; // Σ over the 7 days of the hour's value (the exact mean of the halves it has)
-  dayTotals: number[]; // the 7 per-day totals (Monday-first) — the per-day readout
-  maxCell: number; // the single busiest slot (peak audience in one hour)
+  /**
+   * FLOW-4 — the 7 per-day totals (Monday-first), each Σ of that day's HOUR values. Possibly
+   * FRACTIONAL (an hour of 15 and 30 is 22.5); the tiles round for display.
+   */
+  dayTotals: number[];
+  /**
+   * The busiest single HOUR of the week — the operator's 17/09 ruling: the tile names an HOUR
+   * value, not the busiest half-hour cell. Renamed from `maxCell`, which would now lie.
+   */
+  maxHourValue: number;
 }
 
 const argmax = (values: readonly number[]): { index: number; value: number } =>
@@ -63,19 +75,6 @@ export const hourValue = (
 };
 
 export const summarize = (grid: readonly (readonly (number | null)[])[]): AffluenceSummary => {
-  let maxCell = 0;
-  const dayTotals = grid.map((row) => {
-    let sum = 0;
-    for (const v of row) {
-      if (v === null) continue;
-      sum += v;
-      if (v > maxCell) maxCell = v;
-    }
-    return sum;
-  });
-  // DATA1 — « Audience hebdomadaire » IS Σ of the 7 day tiles, by construction: one pass over the
-  // same rows feeds both, so the week can never disagree with the tiles it stands beside.
-  const weeklyTotal = dayTotals.reduce((a, b) => a + b, 0);
   // Slice C — the api serves SLOT columns (7×48, two per hour) since the half-hour grid; the hub's
   // legacy wire was 7×24. « Heure de pointe » is an HOUR either way: on a slot grid the two halves
   // fold into their hour before the argmax, otherwise slot 9 (04h30) printed as « 09h » and no
@@ -85,6 +84,26 @@ export const summarize = (grid: readonly (readonly (number | null)[])[]): Afflue
   // the mean of the halves it HAS (hourValue); a day with no cell in that hour adds nothing.
   const columns = grid[0]?.length ?? 0;
   const perHour = columns > HOURS.length ? Math.ceil(columns / HOURS.length) : 1;
+  // FLOW-4 (operator 17/09) — « everything works by the hour; only the readings come each 30 min »:
+  // a day tile adds the day's HOUR values, not its half-hour cells. It supersedes FLOW-1 (« a day
+  // is the plain SUM of its cells », Mejri 04/09), knowingly — on a full-cadence week every day
+  // tile and the weekly total roughly halve. The busiest figure follows the same ruling: it is the
+  // busiest HOUR, never again a lone half-hour cell. On the legacy 7×24 wire (perHour = 1) an hour
+  // IS its cell, so nothing on that wire moves.
+  let maxHourValue = 0;
+  const dayTotals = grid.map((row) => {
+    let sum = 0;
+    for (const h of HOURS) {
+      const value = hourValue(row, h, perHour);
+      if (value === null) continue;
+      sum += value;
+      if (value > maxHourValue) maxHourValue = value;
+    }
+    return sum;
+  });
+  // DATA1 — « Audience hebdomadaire » IS Σ of the 7 day tiles, by construction: one pass over the
+  // same rows feeds both, so the week can never disagree with the tiles it stands beside.
+  const weeklyTotal = dayTotals.reduce((a, b) => a + b, 0);
   const hourTotals = HOURS.map((h) =>
     grid.reduce((acc, row) => acc + (hourValue(row, h, perHour) ?? 0), 0),
   );
@@ -101,7 +120,7 @@ export const summarize = (grid: readonly (readonly (number | null)[])[]): Afflue
     peakHourIndex: hasData ? peakHour.index : null,
     peakHourTotal: hasData ? peakHour.value : 0,
     dayTotals,
-    maxCell,
+    maxHourValue,
   };
 };
 
