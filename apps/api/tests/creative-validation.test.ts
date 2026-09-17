@@ -22,6 +22,13 @@ import { jpegBytes, minimalPng, pdfBytes, webpBytes } from './helpers/media-byte
 // creative-probe-rules.test.ts pins the same rules everywhere with the probe mocked.
 // UPL-2 (operator 2026-09-16) — the SNIFFED bytes decide; the declared type is advisory and never
 // stored. No business_sectors/zones fixtures anywhere (the exact-seed-count footgun).
+// UPL-4 — WebP-photo conversion is pinned OFF in this file (FFMPEG_PATH unset — the dev/CI
+// posture), so the WebP refusals below are the disabled-state contract on every machine, even one
+// that exports FFMPEG_PATH. The converting path lives in creative-webp-conversion.test.ts.
+vi.mock('../src/lib/webp-to-png.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/lib/webp-to-png.js')>();
+  return { ...actual, isWebpConversionEnabled: () => false };
+});
 
 type GetSessionResult = Awaited<ReturnType<typeof auth.api.getSession>>;
 
@@ -124,7 +131,7 @@ describe('creative upload hardening (CF-SH1 — real Postgres + MinIO)', () => {
     expect(await db.$count(creatives)).toBe(0);
   });
 
-  it('refuses a WebP photo, declared as such (400 MEDIA_KIND_UNSUPPORTED, detected webp)', async () => {
+  it('WebP conversion OFF: refuses a WebP photo, declared as such (400 MEDIA_KIND_UNSUPPORTED, detected webp)', async () => {
     mockSession(await seedUser());
     const res = await upload(app, 'type=photo&duration_seconds=10', {
       filename: 'shot.webp',
@@ -268,7 +275,7 @@ describe('creative upload hardening (CF-SH1 — real Postgres + MinIO)', () => {
       expect(put).toHaveBeenCalledWith(expect.objectContaining({ contentType: 'image/jpeg' }));
     });
 
-    it('WebP bytes named .png and declared image/png → 400 MEDIA_KIND_UNSUPPORTED (detected webp), nothing stored', async () => {
+    it('WebP conversion OFF: WebP bytes named .png and declared image/png → 400 MEDIA_KIND_UNSUPPORTED (detected webp), nothing stored', async () => {
       mockSession(await seedUser());
       const put = vi.spyOn(storage, 'upload');
       const res = await upload(app, 'type=photo&duration_seconds=10', {

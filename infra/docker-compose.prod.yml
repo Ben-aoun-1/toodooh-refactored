@@ -48,6 +48,13 @@ services:
       dockerfile: apps/api/Dockerfile
     restart: unless-stopped
     env_file: [.env]
+    # UPL-4 — a hard memory ceiling for the api container. It runs node, the chromium report
+    # renderer and up to two ffmpeg WebP decodes (each ≤ 128 MB at the 4K pixel budget); a runaway
+    # child is OOM-killed inside this cgroup instead of starving postgres, minio and the hub on the
+    # same box (11.4 GiB; the api idles at ~85 MiB, measured 2026-09-17). Swap is capped to the same
+    # value so the limit cannot be sidestepped by swapping.
+    mem_limit: 2g
+    memswap_limit: 2g
     depends_on:
       postgres:
         condition: service_healthy

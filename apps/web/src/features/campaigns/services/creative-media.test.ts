@@ -28,16 +28,21 @@ const refusal = (body: Record<string, unknown>): ApiError =>
     body,
   });
 
-describe('accept lists (spec-strict — webm/webp are out)', () => {
+describe('accept lists (spec-strict — webm is out; UPL-4: a WebP photo is converted server-side)', () => {
   it('video: MP4 + MOV only, by mime and by extension in both cases', () => {
     expect(VIDEO_ACCEPT).toBe('video/mp4,video/quicktime,.mp4,.mov,.MP4,.MOV');
     expect(VIDEO_ACCEPT.toLowerCase()).not.toContain('webm');
   });
 
-  it('photo: JPEG + PNG only, by mime and by extension in both cases (a « .PNG » is never hidden)', () => {
-    expect(PHOTO_ACCEPT).toBe('image/jpeg,image/png,.jpg,.jpeg,.png,.JPG,.JPEG,.PNG');
+  it('photo: JPEG + PNG + WebP, by mime and by extension in both cases (a « .PNG » is never hidden)', () => {
+    expect(PHOTO_ACCEPT).toBe(
+      'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp,.JPG,.JPEG,.PNG,.WEBP',
+    );
     expect(PHOTO_ACCEPT.split(',')).toEqual(expect.arrayContaining(['.png', '.PNG']));
-    expect(PHOTO_ACCEPT.toLowerCase()).not.toContain('webp');
+    // UPL-4 — the server converts a static WebP photo to PNG, so the picker offers WebP files.
+    expect(PHOTO_ACCEPT.split(',')).toEqual(
+      expect.arrayContaining(['image/webp', '.webp', '.WEBP']),
+    );
   });
 });
 
@@ -93,10 +98,11 @@ describe('creativeUploadErrorMessage (server hardening codes → French toasts)'
   });
 
   it.each([
+    // UPL-4 — a WebP photo only comes back refused when the server could not convert it.
     [
       'photo',
       'webp',
-      'Cette image est au format WebP (même si son nom finit par .png ou .jpg). Enregistrez-la en PNG ou JPEG puis réessayez.',
+      "Cette image WebP n'a pas pu être convertie (image animée ou illisible). Enregistrez-la en PNG ou JPEG puis réessayez.",
     ],
     [
       'photo',
@@ -278,7 +284,10 @@ describe('StepCreative hint copy (source pins — UPL-1: no ratio promised)', ()
     expect(step).not.toContain('16:9');
     expect(step).toContain('`MP4 ou MOV (H.264) · ${');
     expect(step).toContain("'Vidéo : 30 secondes maximum (MP4 / MOV, H.264)'");
-    expect(step).toContain("'JPEG ou PNG'");
+    expect(step).toContain("'JPEG, PNG ou WebP'");
+    expect(step).not.toContain("'JPEG ou PNG'");
+    // UPL-4 — the tips line names WebP too (the server converts it to PNG).
+    expect(step).toContain('Photo : durée de diffusion 10, 20 ou 30 secondes (JPEG / PNG / WebP)');
   });
 
   it('UPL-2 — an unreadable video takes its toast from the bytes (a photo picked as « Vidéo »)', () => {

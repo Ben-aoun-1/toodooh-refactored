@@ -24,8 +24,10 @@ RUN apk add --no-cache chromium nss freetype harfbuzz ca-certificates ttf-freefo
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 # ffmpeg (ffprobe included) for authoritative creative validation (CF-SH1) — same env-gated layer
 # style as chromium above: the binary path rides an ENV the code checks, dev without it degrades.
+# FFMPEG_PATH (UPL-4) turns a WebP photo upload into a stored PNG instead of a refusal.
 RUN apk add --no-cache ffmpeg
 ENV FFPROBE_PATH=/usr/bin/ffprobe
+ENV FFMPEG_PATH=/usr/bin/ffmpeg
 COPY --from=builder /out/node_modules ./node_modules
 COPY --from=builder /repo/apps/api/dist ./dist
 COPY --from=builder /repo/apps/api/package.json ./

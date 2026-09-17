@@ -16,6 +16,7 @@ import { startMonthlyBillingJob } from './lib/monthly-billing.js';
 import { startMonthlyReportJob } from './lib/report/monthly-job.js';
 import { isRecommendationsEnabled } from './lib/report/recommendations.js';
 import { startSpsRecomputeJob } from './lib/sps-score.js';
+import { isWebpConversionEnabled } from './lib/webp-to-png.js';
 import { isSyncEnabled, sweepUnexported } from './lib/wedooh-sync.js';
 import { buildLoggerConfig } from './logger.js';
 import { healthRoute } from './routes/health.js';
@@ -153,6 +154,14 @@ const start = async (): Promise<void> => {
     if (!isMediaProbeEnabled()) {
       app.log.warn(
         'media probe disabled (FFPROBE_PATH unset) — upload codec/ratio/duration checks skip; byte-sniffing still applies',
+      );
+    }
+
+    // UPL-4 — ONE boot warning when ffmpeg is unprovisioned: WebP photos are then REFUSED (the
+    // UPL-2 behaviour) instead of converted to PNG. The docker image always sets FFMPEG_PATH.
+    if (!isWebpConversionEnabled()) {
+      app.log.warn(
+        'WebP photo conversion disabled (FFMPEG_PATH unset) — WebP photo uploads are refused instead of converted to PNG',
       );
     }
   } catch (err) {

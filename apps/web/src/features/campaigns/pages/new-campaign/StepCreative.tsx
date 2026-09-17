@@ -237,7 +237,7 @@ export default function StepCreative({
                 <p className="text-sm text-gray-500">
                   {uploadType === 'video'
                     ? `MP4 ou MOV (H.264) · ${eventMode ? EVENT_SPOT_MAX_SECONDS : MAX_VIDEO_DURATION_SECONDS} secondes maximum`
-                    : 'JPEG ou PNG'}
+                    : 'JPEG, PNG ou WebP'}
                 </p>
                 <span className="inline-flex items-center px-4 py-2.5 mt-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50">
                   Parcourir les fichiers
@@ -334,7 +334,7 @@ export default function StepCreative({
                     ? `Vidéo : ${EVENT_SPOT_MAX_SECONDS} secondes maximum — la grille événementielle diffuse par blocs de 15 s`
                     : 'Vidéo : 30 secondes maximum (MP4 / MOV, H.264)'}
                 </li>
-                <li>Photo : durée de diffusion 10, 20 ou 30 secondes (JPEG / PNG)</li>
+                <li>Photo : durée de diffusion 10, 20 ou 30 secondes (JPEG / PNG / WebP)</li>
                 <li>Votre création sera validée par notre équipe avant diffusion</li>
               </ul>
             </div>

@@ -5,8 +5,9 @@
  * value wins. For a photo the advertiser picks a diffusion slot. Self-contained so the new REST
  * creative path does not depend on the legacy video service.
  *
- * CF-SH1 (spec §1.6) — the accept lists are SPEC-STRICT (MP4/MOV video, JPEG/PNG image; webm/webp
- * out) and the server's hardening error codes map to French toasts here, pinned by unit test.
+ * CF-SH1 (spec §1.6) — the accept lists are SPEC-STRICT (MP4/MOV video, JPEG/PNG image; webm out)
+ * and the server's hardening error codes map to French toasts here, pinned by unit test. UPL-4 —
+ * WebP photos are offered too: the server converts a static WebP to PNG on upload.
  * UPL-1 (operator 2026-09-16) — no aspect-ratio rule any more: every ratio uploads. UPL-2 — the
  * server reads the format from the file's BYTES (the browser's declared type is advisory), and a
  * recognised-but-refused format comes back as MEDIA_KIND_UNSUPPORTED with `detected`, which picks
@@ -17,10 +18,12 @@ import type { CreativeType } from '@/features/campaigns/services/creatives.api';
 
 /**
  * File-input accept lists — the server's spec-strict formats (CF-SH1), by mime AND by extension in
- * both cases (UPL-2): some pickers filter on one or the other only, and hid « .PNG » photos.
+ * both cases (UPL-2): some pickers filter on one or the other only, and hid « .PNG » photos. UPL-4:
+ * a WebP photo is accepted — the server stores it as PNG.
  */
 export const VIDEO_ACCEPT = 'video/mp4,video/quicktime,.mp4,.mov,.MP4,.MOV';
-export const PHOTO_ACCEPT = 'image/jpeg,image/png,.jpg,.jpeg,.png,.JPG,.JPEG,.PNG';
+export const PHOTO_ACCEPT =
+  'image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp,.JPG,.JPEG,.PNG,.WEBP';
 
 // The server's CF-SH1 hardening codes → the app's French toast copy. Anything unmapped falls back
 // to the caller's generic error handling.
@@ -47,9 +50,11 @@ const VIDEO_AS_PHOTO = 'Ce fichier est une vidéo. Choisissez le type « Vidéo 
 const PHOTO_AS_VIDEO = 'Ce fichier est une image. Choisissez le type « Photo » pour la téléverser.';
 
 // UPL-2 — a recognised format the creative type refuses, per (creative type, detected bytes).
+// UPL-4 — the server converts a static WebP photo to PNG, so a photo refused as webp is one it
+// could not convert (an animation, or unreadable bytes).
 const KIND_UNSUPPORTED_BY_TYPE: Record<CreativeType, Partial<Record<string, string>>> = {
   photo: {
-    webp: 'Cette image est au format WebP (même si son nom finit par .png ou .jpg). Enregistrez-la en PNG ou JPEG puis réessayez.',
+    webp: "Cette image WebP n'a pas pu être convertie (image animée ou illisible). Enregistrez-la en PNG ou JPEG puis réessayez.",
     pdf: 'Ce fichier est un PDF, pas une image. Enregistrez votre visuel en PNG ou JPEG puis réessayez.',
     mp4: VIDEO_AS_PHOTO,
     mov: VIDEO_AS_PHOTO,
