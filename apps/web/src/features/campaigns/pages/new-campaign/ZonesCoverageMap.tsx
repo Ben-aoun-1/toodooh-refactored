@@ -5,6 +5,7 @@ import { useEffect, useRef } from 'react';
 import {
   MAP_BADGE_Z_CLASS,
   MAP_CANVAS_CLASSES,
+  MAP_CONTAINER_CLASSES,
   MAP_OVERLAY_Z_CLASS,
   MAP_STACK_CLASSES,
 } from '@/features/campaigns/lib/map-layering';
@@ -99,6 +100,8 @@ const fitToVenues = (map: L.Map, venues: CoverageVenue[]): void => {
  * CF-U4 — Positron tiles, brand markers with name tooltips + app-styled popups, the venue-count
  * badge. MAP-3 — always a full canvas (no collapsed state). The z-isolation discipline is
  * UNCHANGED — every layer class comes from map-layering.ts.
+ * MAP-6 — the leaflet container is absolutely inset in the stack, so its height never hangs on an
+ * ancestor's (the #222 wrapper only has a min-height; `h-full` there painted a 0px map).
  */
 export default function ZonesCoverageMap({
   venues,
@@ -173,7 +176,7 @@ export default function ZonesCoverageMap({
 
   return (
     <div className={`${MAP_STACK_CLASSES} ${MAP_CANVAS_CLASSES}`}>
-      <div ref={containerRef} className="h-full w-full" aria-label="Carte de couverture" />
+      <div ref={containerRef} className={MAP_CONTAINER_CLASSES} aria-label="Carte de couverture" />
 
       {/* CF-U4 — the venue-count badge, always the full sentence (MAP-3: no mini pill). */}
       {!isLoading && !isError && count > 0 && (

@@ -9,6 +9,7 @@ import * as layering from './map-layering';
 import {
   MAP_BADGE_Z_CLASS,
   MAP_CANVAS_CLASSES,
+  MAP_CONTAINER_CLASSES,
   MAP_CONTROL_Z_CLASS,
   MAP_OVERLAY_Z_CLASS,
   MAP_STACK_CLASSES,
@@ -60,6 +61,27 @@ describe('coverage-map layering', () => {
     expect(src).not.toContain('Réduire la carte');
     expect(src).not.toMatch(/\bexpanded\b/);
     expect(src).not.toMatch(/\bonToggle\b/);
+  });
+
+  // MAP-6 — since #222 the canvas sits in a wrapper that has only a MIN-height, so the leaflet
+  // container's `h-full` resolved to auto and the map painted as a 0px-tall, empty bordered box.
+  it('MAP-6 — the leaflet container is absolutely inset, never a percentage height', () => {
+    expect(MAP_CONTAINER_CLASSES).toContain('absolute');
+    expect(MAP_CONTAINER_CLASSES).toContain('inset-0');
+    expect(MAP_CONTAINER_CLASSES).not.toContain('h-full');
+  });
+
+  it('MAP-6 — the stack is positioned, so it is the containing block of the inset container', () => {
+    expect(MAP_STACK_CLASSES).toContain('relative');
+  });
+
+  it('MAP-6 — ZonesCoverageMap renders its leaflet container with the shared classes', () => {
+    const src = readFileSync(
+      join(__dirname, '..', 'pages', 'new-campaign', 'ZonesCoverageMap.tsx'),
+      'utf8',
+    );
+    expect(src).toContain('className={MAP_CONTAINER_CLASSES}');
+    expect(src).not.toContain('className="h-full w-full"');
   });
 
   it('CF-U4 — the internal ladder stays inside the isolate (overlay < badge < controls)', () => {
