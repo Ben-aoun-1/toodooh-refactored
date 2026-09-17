@@ -21,6 +21,7 @@ import {
 import { runDispatch } from '../src/lib/dispatch/dispatch-service.js';
 import { screenhostsRoutes } from '../src/routes/screenhosts.js';
 
+import { campaignTiersOf } from './helpers/cpm-config.js';
 import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 
 // E3 — the refusal cascade (US-2.8), real Postgres, driven through the REAL reject route. Engine
@@ -150,7 +151,7 @@ const seedVenue = async (
 const dispatchNow = async (campaignId: string, name: string, iCible: number) => {
   const result = await runDispatch(
     { id: campaignId, name, startDate: '2024-01-01', endDate: '2024-01-02' },
-    { iCible, cpm: 10, s: 10 },
+    { iCible, cpm: 10, s: 10, tiers: await campaignTiersOf(campaignId) },
   );
   expect(result.status).toBe('OK');
 };

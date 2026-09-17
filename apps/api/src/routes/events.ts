@@ -262,6 +262,9 @@ export const eventsRoutes: FastifyPluginAsync = async (app) => {
         requestId: request.id,
       });
     }
+    // CPM-1 — this prices the MATCH, not a positioning (none exists yet for this caller): the
+    // live config is what a positioning created now would capture. An existing positioning's
+    // ceiling is GET /api/campaigns/:id/cmax, priced at its own CPM.
     const cfg = await getDispatchConfig();
     const result = await computeEventCmax(
       { id: row.id, kickoffAt: row.kickoffAt, endsAt: row.endsAt },

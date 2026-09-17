@@ -3,7 +3,12 @@ import { eq } from 'drizzle-orm';
 import { db } from '../db/client.js';
 import { campaignDispatchAllocation, campaignDispatchPlan } from '../db/schema.js';
 
-import { cpmForCampaign, getDispatchConfig } from './dispatch/config.js';
+import {
+  campaignCpmRates,
+  campaignTTiers,
+  cpmForCampaign,
+  getDispatchConfig,
+} from './dispatch/config.js';
 import { assemblePool } from './dispatch/pool.js';
 import { tForDuration } from './dispatch/thresholds.js';
 
@@ -42,6 +47,14 @@ export const computeCampaignCmax = async (
     endDate: string;
     campaignType: string;
     eventId?: string | null;
+    /** CPM-1 — the campaign's own rates (captured at creation); the ceiling prices at them. */
+    standardCpmTnd: string;
+    eventCpmTnd: string;
+    /** CPM-2 — the campaign's own T tiers (captured at creation); REQUIRED, so no caller can
+     *  fall back to the live T. */
+    t10s: string;
+    t20s: string;
+    t30s: string;
   },
   spotSeconds: number,
 ): Promise<CampaignCmax> => {
@@ -54,9 +67,11 @@ export const computeCampaignCmax = async (
   if (campaign.eventId != null) {
     throw new Error('computeCampaignCmax received an event positioning (EV3 engine boundary)');
   }
+  // CPM-1 / CPM-2 — the CPM and the attention index T are the campaign's own (in effect when it
+  // was created); the live config still supplies F (out of scope by ruling).
   const config = await getDispatchConfig();
-  const t = tForDuration(spotSeconds, config);
-  const cpm = cpmForCampaign(campaign.campaignType, config);
+  const t = tForDuration(spotSeconds, campaignTTiers(campaign));
+  const cpm = cpmForCampaign(campaign.campaignType, campaignCpmRates(campaign));
   // E5.1 (VF US-2.1) — zero targeting lines = the whole network: the pool assembles over every
   // eligible venue and the ceiling prices the full inventory (the old NO_TARGETING zero-fold
   // retired with the status).

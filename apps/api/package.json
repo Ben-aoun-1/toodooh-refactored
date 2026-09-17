@@ -15,6 +15,7 @@
     "promote": "tsx --env-file-if-exists=.env scripts/promote-to-admin.ts",
     "reports:regenerate": "tsx --env-file-if-exists=.env scripts/regenerate-monthly-reports.ts",
     "reconcile:run": "tsx --env-file-if-exists=.env scripts/reconcile-run.ts",
+    "cpm1:restore": "tsx --env-file-if-exists=.env scripts/cpm1-restore-creation-cpm.ts",
     "db:generate": "drizzle-kit generate",
     "audience:backfill": "tsx --env-file-if-exists=.env scripts/backfill-monthly-audience.ts"
   },

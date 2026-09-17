@@ -27,6 +27,8 @@ const clone = (overrides: Partial<CampaignView> = {}): CampaignView => ({
   end_date: null,
   description: null,
   requested_budget: 1500,
+  standard_cpm_tnd: 15,
+  event_cpm_tnd: 15,
   content_validation_status: 'approved',
   submitted_at: null,
   rejected_at: null,

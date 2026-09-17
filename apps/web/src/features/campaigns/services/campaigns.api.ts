@@ -13,6 +13,12 @@ export interface CampaignView {
   end_date: string | null;
   description: string | null;
   requested_budget: number | null;
+  /**
+   * CPM-1 — the campaign's OWN CPMs (TND/1000), captured when it was created; an admin CPM change
+   * never reaches them. Its type picks one (lib/campaign-impressions campaignCpm).
+   */
+  standard_cpm_tnd: number;
+  event_cpm_tnd: number;
   content_validation_status: string | null;
   submitted_at: string | null;
   // CF-Q1 — the admin's mandatory rejection audit, surfaced to the advertiser (« Motif du refus »).

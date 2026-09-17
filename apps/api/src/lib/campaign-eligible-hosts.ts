@@ -13,7 +13,12 @@ import {
 } from '../db/schema.js';
 
 import { ownerApprovedSql } from './approved-owner.js';
-import { cpmForCampaign, getDispatchConfig } from './dispatch/config.js';
+import {
+  campaignCpmRates,
+  campaignTTiers,
+  cpmForCampaign,
+  getDispatchConfig,
+} from './dispatch/config.js';
 import { assemblePool } from './dispatch/pool.js';
 import { tForDuration } from './dispatch/thresholds.js';
 import type { EngineTrace } from './engine-journal/trace.js';
@@ -186,6 +191,11 @@ export const campaignEligibleHosts = async (campaignId: string): Promise<Eligibl
       startDate: campaigns.startDate,
       endDate: campaigns.endDate,
       eventId: campaigns.eventId,
+      standardCpmTnd: campaigns.standardCpmTnd,
+      eventCpmTnd: campaigns.eventCpmTnd,
+      t10s: campaigns.t10s,
+      t20s: campaigns.t20s,
+      t30s: campaigns.t30s,
       spotSeconds: creatives.durationSeconds,
     })
     .from(campaigns)
@@ -195,6 +205,9 @@ export const campaignEligibleHosts = async (campaignId: string): Promise<Eligibl
   if (!row) return { status: 'NOT_FOUND' };
 
   const config = await getDispatchConfig();
+  // CPM-1 — both branches price at the campaign's OWN CPM (in effect when it was created); the
+  // live config still supplies F (the event branch has no T; the standard one reads the row's).
+  const rates = campaignCpmRates(row);
   const spotSeconds =
     row.spotSeconds && row.spotSeconds > 0 ? row.spotSeconds : DEFAULT_SPOT_SECONDS;
   const spotSource = row.spotSeconds && row.spotSeconds > 0 ? 'creative' : 'default';
@@ -210,7 +223,7 @@ export const campaignEligibleHosts = async (campaignId: string): Promise<Eligibl
       .where(eq(events.id, row.eventId))
       .limit(1);
     if (!event) return { status: 'NOT_FOUND' };
-    const cmax = await computeEventCmax(event, config.eventCpmTnd);
+    const cmax = await computeEventCmax(event, rates.eventCpmTnd);
     const allocations = await db
       .select({
         screenhostId: eventAllocations.screenhostId,
@@ -302,8 +315,9 @@ export const campaignEligibleHosts = async (campaignId: string): Promise<Eligibl
     : [];
   const allocationOf = new Map(ownAllocations.map((a) => [a.screenhostId, a]));
 
-  const t = tForDuration(spotSeconds, config);
-  const cpm = cpmForCampaign(row.campaignType, config);
+  // CPM-2 — the attention index T from the campaign's OWN tiers (in effect when it was created).
+  const t = tForDuration(spotSeconds, campaignTTiers(row));
+  const cpm = cpmForCampaign(row.campaignType, rates);
   const { trace, excluded: reasons } = collectingTrace();
   const { pool } = await assemblePool(
     db,

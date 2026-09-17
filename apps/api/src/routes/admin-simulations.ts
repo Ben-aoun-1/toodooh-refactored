@@ -37,6 +37,7 @@ import { momentOf } from '../simulator/tick/clock.js';
 import { launchCampaign, launchEvent } from '../simulator/tick/launch.js';
 import { runTick } from '../simulator/tick/run.js';
 import { simulationState } from '../simulator/tick/state.js';
+import { upgradeSandbox } from '../simulator/upgrade.js';
 import { type WorldParams, generateWorld } from '../simulator/world/spec.js';
 import { actorParams, sandboxIsEmpty, writeWorld } from '../simulator/world/write.js';
 
@@ -213,13 +214,21 @@ export const adminSimulationsRoutes: FastifyPluginAsync<AdminSimulationsOptions>
           await notFound(reply);
           return;
         }
-        if (row.status !== 'ready') {
-          await reply.status(409).send({
+        const notReady = (status: Simulation['status']) =>
+          reply.status(409).send({
             error: 'SIMULATION_NOT_READY',
-            message: `La simulation n'est pas prête (${row.status}).`,
+            message: `La simulation n'est pas prête (${status}).`,
             statusCode: 409,
-            status: row.status,
+            status,
           });
+        if (row.status !== 'ready') {
+          await notReady(row.status);
+          return;
+        }
+        // CPM-1 — a sandbox created before the last schema-changing deploy is migrated before its
+        // pool opens (the boot pass usually got there first; this awaits the same promise).
+        if (!(await upgradeSandbox(row.id, row.dbName, request.log))) {
+          await notReady('failed');
           return;
         }
         await mainDb

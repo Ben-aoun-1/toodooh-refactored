@@ -15,6 +15,7 @@ import {
   sandboxUrl,
 } from './naming.js';
 import { evictSandbox } from './pools.js';
+import { forgetSandboxUpgrade } from './upgrade.js';
 
 // SIM-0 — sandbox database lifecycle. Every statement runs on a max-1 maintenance connection to
 // the server's `postgres` database (CREATE/DROP DATABASE cannot target the connected one).
@@ -119,11 +120,13 @@ export const deleteSimulation = async (simulationId: string, dbName: string): Pr
   await evictSandbox(simulationId);
   await dropSandboxDatabase(dbName);
   await mainDb.delete(simulations).where(eq(simulations.id, simulationId));
+  forgetSandboxUpgrade(simulationId);
 };
 
 /** Boot-time reconciliation: drop prefixed databases with no registry row; mark rows whose
  *  database is gone as failed. Rows still `creating` belong to a running background task and
- *  are skipped. */
+ *  are skipped. The boot sequence then brings the remaining ready sandboxes up to the deployed
+ *  schema (simulator/upgrade.ts). */
 export const sweepOrphans = async (
   log: FastifyBaseLogger,
 ): Promise<{ dropped: number; markedFailed: number }> => {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   PREVUES_LABEL,
+  campaignCpm,
   cpmForCampaignType,
   formatImpressions,
   impressionsDisplay,
@@ -66,5 +67,88 @@ describe('impressionsDisplay — prévues-only', () => {
 
   it('the label is the ONE French literal', () => {
     expect(PREVUES_LABEL).toBe('Impressions prévues');
+  });
+});
+
+// CPM-1 — a campaign keeps the CPM in effect when it was created: its row carries both rates, and
+// the estimate prices at the row's rate for its type. The live pricing-config (what a NEW campaign
+// would pay) is only the fallback for a row that does not carry them.
+describe('CPM-1 — an un-planned campaign is estimated at its OWN CPM', () => {
+  const LIVE = { standard_cpm_tnd: 20, event_cpm_tnd: 30 };
+
+  it('a row carrying its CPMs prices at them, whatever the live pricing says', () => {
+    const std = impressionsDisplay(
+      {
+        status: 'draft',
+        campaign_type: 'standard',
+        planned_impressions: null,
+        requested_budget: 300,
+        standard_cpm_tnd: 15,
+        event_cpm_tnd: 12,
+      },
+      LIVE,
+    );
+    expect(std.prevues).toBe(20000); // ⌊300×1000/15⌋, not ⌊300×1000/20⌋
+
+    const evt = impressionsDisplay(
+      {
+        status: 'pending',
+        campaign_type: 'event',
+        planned_impressions: null,
+        requested_budget: 300,
+        standard_cpm_tnd: 15,
+        event_cpm_tnd: 12,
+      },
+      LIVE,
+    );
+    expect(evt.prevues).toBe(25000); // the row's EVENT rate, never its standard one nor the live 30
+  });
+
+  it('the live pricing is the fallback only for a row without its CPMs', () => {
+    const d = impressionsDisplay(
+      {
+        status: 'draft',
+        campaign_type: 'standard',
+        planned_impressions: null,
+        requested_budget: 300,
+      },
+      LIVE,
+    );
+    expect(d.prevues).toBe(15000);
+    const nulls = impressionsDisplay(
+      {
+        status: 'draft',
+        campaign_type: 'event',
+        planned_impressions: null,
+        requested_budget: 300,
+        standard_cpm_tnd: null,
+        event_cpm_tnd: null,
+      },
+      LIVE,
+    );
+    expect(nulls.prevues).toBe(10000);
+  });
+
+  it('a frozen plan still wins over any CPM', () => {
+    const d = impressionsDisplay(
+      {
+        status: 'active',
+        planned_impressions: 7,
+        requested_budget: 300,
+        standard_cpm_tnd: 15,
+        event_cpm_tnd: 15,
+      },
+      LIVE,
+    );
+    expect(d.prevues).toBe(7);
+  });
+
+  it('campaignCpm: the row first, the live pricing as fallback, null when neither', () => {
+    const row = { standard_cpm_tnd: 15, event_cpm_tnd: 12 };
+    expect(campaignCpm('standard', row, LIVE)).toBe(15);
+    expect(campaignCpm('event', row, LIVE)).toBe(12);
+    expect(campaignCpm('standard', undefined, LIVE)).toBe(20); // not created / not loaded yet
+    expect(campaignCpm('event', {}, LIVE)).toBe(30);
+    expect(campaignCpm('standard', undefined, undefined)).toBeNull();
   });
 });

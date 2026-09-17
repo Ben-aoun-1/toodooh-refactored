@@ -9,7 +9,7 @@ import { accountLabel, notifyAdmins } from '../lib/admin-notifications.js';
 import { MIN_CAMPAIGN_BUDGET_TND } from '../lib/campaign-budget.js';
 import { computeCampaignCmax } from '../lib/campaign-cmax.js';
 import { startDateViolation } from '../lib/campaign-dates.js';
-import { getDispatchConfig } from '../lib/dispatch/config.js';
+import { campaignCpmRates, getDispatchConfig } from '../lib/dispatch/config.js';
 import { computeEventCmax } from '../lib/event-pricing/pricing.js';
 import { walletSpendable } from '../lib/recharges.js';
 import { requireAdvertiser } from '../middleware/require-advertiser.js';
@@ -33,8 +33,9 @@ const sendUnauthenticated = (reply: FastifyReply) =>
   reply.status(401).send({ error: 'UNAUTHENTICATED', message: 'Authentification requise.' });
 
 // One row shape for the gate: the campaign + its creative duration (the C_max spot length).
+// CPM-2 — plus the campaign's own T tiers (the C_max prices at them, never the live config).
 interface GateRow {
-  campaign: CampaignRow & { advertiserId: string };
+  campaign: CampaignRow & { advertiserId: string; t10s: string; t20s: string; t30s: string };
   creativeDurationSeconds: number | null;
   /** CF-SK1 — 'approved' ⇒ this item SKIPS review and activates at confirm (ruling #9). */
   contentValidationStatus: string | null;
@@ -69,11 +70,12 @@ const cartGateReason = async (row: GateRow, leadWorkingDays: number): Promise<st
   if (isEvent && c.eventId !== null) {
     // EV3 — the event ceiling (EV2 pricing, CPM_evt): the classic C_max never prices a
     // positioning (the engine boundary — computeCampaignCmax REFUSES bound rows outright).
+    // CPM-1 — priced at the positioning's OWN event CPM (in effect when it was created).
     const [ev] = await db.select().from(events).where(eq(events.id, c.eventId)).limit(1);
     if (!ev || ev.annule) return 'EVENT_ANNULE';
     const evCmax = await computeEventCmax(
       { id: ev.id, kickoffAt: ev.kickoffAt, endsAt: ev.endsAt },
-      (await getDispatchConfig()).eventCpmTnd,
+      campaignCpmRates(c).eventCpmTnd,
     );
     if (Number(c.requestedBudget) > evCmax.cMaxEvtTnd) return 'BUDGET_EXCEEDS_CMAX';
     return null;
@@ -85,6 +87,11 @@ const cartGateReason = async (row: GateRow, leadWorkingDays: number): Promise<st
       endDate: c.endDate,
       campaignType: c.campaignType,
       eventId: c.eventId,
+      standardCpmTnd: c.standardCpmTnd,
+      eventCpmTnd: c.eventCpmTnd,
+      t10s: c.t10s,
+      t20s: c.t20s,
+      t30s: c.t30s,
     },
     row.creativeDurationSeconds,
   );
@@ -95,7 +102,13 @@ const cartGateReason = async (row: GateRow, leadWorkingDays: number): Promise<st
 const loadGateRow = async (campaignId: string, userId: string): Promise<GateRow | null> => {
   const [row] = await db
     .select({
-      campaign: { ...campaignSelection, advertiserId: campaigns.advertiserId },
+      campaign: {
+        ...campaignSelection,
+        advertiserId: campaigns.advertiserId,
+        t10s: campaigns.t10s,
+        t20s: campaigns.t20s,
+        t30s: campaigns.t30s,
+      },
       creativeDurationSeconds: creatives.durationSeconds,
       contentValidationStatus: creatives.validationStatus,
     })

@@ -492,6 +492,8 @@ export const adminEventsRoutes: FastifyPluginAsync = async (app) => {
     if (!params.success) return invalidField(reply, 'id', 'must be a uuid');
     const [row] = await db.select().from(events).where(eq(events.id, params.data.id)).limit(1);
     if (!row) return sendNotFound(reply);
+    // CPM-1 — the operator's per-MATCH tarification at today's event CPM (what a positioning
+    // created now would pay); existing positionings keep their own CPM.
     const cfg = await getDispatchConfig();
     const result = await computeEventCmax(
       { id: row.id, kickoffAt: row.kickoffAt, endsAt: row.endsAt },

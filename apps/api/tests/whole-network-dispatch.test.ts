@@ -22,6 +22,7 @@ import { runDispatch } from '../src/lib/dispatch/dispatch-service.js';
 import { screenhostMatchesTargeting } from '../src/lib/dispatch/eligibility.js';
 import { adminCampaignsRoutes } from '../src/routes/admin-campaigns.js';
 
+import { campaignTiersOf } from './helpers/cpm-config.js';
 import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 
 // E5.1 (VF US-2.1, canonical) — EMPTY targeting = the whole network. The matcher passes-all on an
@@ -175,7 +176,7 @@ describe('E5.1 — whole-network dispatch semantics (real Postgres)', () => {
     // 36 000 facturable per venue (the E5 hand-computation); 40 000 needs BOTH venues.
     const result = await runDispatch(
       { id: campaignId, name: 'Tout le réseau', startDate: '2024-01-01', endDate: '2024-01-02' },
-      { iCible: 40_000, cpm: 15, s: 10 },
+      { iCible: 40_000, cpm: 15, s: 10, tiers: await campaignTiersOf(campaignId) },
     );
     expect(result.status).toBe('OK');
     const allocated = (await allocationsFor(campaignId)).map((a) => a.screenhostId).sort();
@@ -199,7 +200,7 @@ describe('E5.1 — whole-network dispatch semantics (real Postgres)', () => {
 
     const result = await runDispatch(
       { id: campaignId, name: 'Tout le réseau', startDate: '2024-01-01', endDate: '2024-01-02' },
-      { iCible: 10_000, cpm: 15, s: 10 },
+      { iCible: 10_000, cpm: 15, s: 10, tiers: await campaignTiersOf(campaignId) },
     );
     expect(result.status).toBe('OK');
     const allocated = (await allocationsFor(campaignId)).map((a) => a.screenhostId);

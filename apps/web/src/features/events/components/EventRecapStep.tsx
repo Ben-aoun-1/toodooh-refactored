@@ -6,8 +6,10 @@ import {
   CART_BUDGET_MIN_TND,
   CART_BUDGET_STEP_TND,
 } from '@/features/campaigns/hooks/new-campaign/cart-budget';
+import { useCampaign } from '@/features/campaigns/hooks/useCampaignApi';
 import { useCampaignCmax } from '@/features/campaigns/hooks/useCampaignCmax';
 import { usePricingConfig } from '@/features/campaigns/hooks/usePricingConfig';
+import { campaignCpm } from '@/features/campaigns/lib/campaign-impressions';
 import {
   CMAX_PULLBACK_NOTICE,
   clampBudgetToCmax,
@@ -56,6 +58,8 @@ export default function EventRecapStep({
 }: EventRecapStepProps) {
   const cmax = useCampaignCmax(campaignId);
   const pricing = usePricingConfig();
+  // CPM-1 — the positioning already exists here: it carries the event CPM it captured at creation.
+  const positioning = useCampaign(campaignId);
   const [pullbackNotice, setPullbackNotice] = useState(false);
 
   const value = requestedBudget;
@@ -73,9 +77,10 @@ export default function EventRecapStep({
     }
   }, [cMaxTnd, value, setRequestedBudget]);
 
-  // The event estimate prices at CPM_evt (the event engine's CPM — never the standard one).
-  const impressions =
-    value == null ? null : estimateImpressions(value, pricing.data?.event_cpm_tnd ?? null);
+  // The event estimate prices at CPM_evt (the event engine's CPM — never the standard one): the
+  // positioning's own, the live pricing-config only until its row is loaded.
+  const cpm = campaignCpm('event', positioning.data, pricing.data);
+  const impressions = value == null ? null : estimateImpressions(value, cpm);
 
   const approvedNotice = approvedSpotNotice(spotValidationStatus ?? undefined);
 

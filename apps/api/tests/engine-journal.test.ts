@@ -25,6 +25,7 @@ import { createEngineTrace } from '../src/lib/engine-journal/trace.js';
 import { reconcileCampaignById } from '../src/lib/reconcile/reconcile-service.js';
 import { adminEngineJournalRoutes } from '../src/routes/admin-engine-journal.js';
 
+import { campaignTiersOf } from './helpers/cpm-config.js';
 import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 
 // LOG1 — per-phase pins over the REAL engine (real Postgres): the journal records why the engine
@@ -130,7 +131,7 @@ describe('LOG1 engine journal — per-phase pins (real Postgres)', () => {
 
     const result = await runDispatch(
       { id: campaignId, name: 'LOG1', startDate: '2027-01-04', endDate: '2027-01-08' },
-      { iCible: 5000, cpm: 10, s: 10 },
+      { iCible: 5000, cpm: 10, s: 10, tiers: await campaignTiersOf(campaignId) },
       createEngineTrace('dispatch', campaignId),
     );
     expect(result.status).toBe('OK');
@@ -156,7 +157,7 @@ describe('LOG1 engine journal — per-phase pins (real Postgres)', () => {
     const campaignId = await seedCampaign(advertiser, { start: '2027-01-04', end: '2027-01-08' });
     const result = await runDispatch(
       { id: campaignId, name: 'LOG1', startDate: '2027-01-04', endDate: '2027-01-08' },
-      { iCible: 5000, cpm: 10, s: 10 },
+      { iCible: 5000, cpm: 10, s: 10, tiers: await campaignTiersOf(campaignId) },
       createEngineTrace('dispatch', campaignId),
     );
     expect(result.status).toBe('NO_ELIGIBLE');

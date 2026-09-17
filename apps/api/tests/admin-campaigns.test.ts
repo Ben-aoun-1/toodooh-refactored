@@ -300,16 +300,19 @@ describe('admin campaign moderation — activation keystone (real Postgres)', ()
     }
   });
 
-  // CPM-ADMIN SEAM (Mejri 05/08) — the engine consumes the ADMIN-SAVED CPM: a standard CPM edited
-  // through PATCH /api/admin/dispatch-config (not SQL — the exact write the Tarification page
-  // performs) reprices the NEXT activation. budget 300 @ CPM 20 → i_cible = ⌊300·1000/20⌋ = 15000
-  // (the pre-edit 15 would derive 20000; capacité 30000 still covers). Snapshot/restore mirrors the
-  // event-CPM pin above: the route self-heals an EMPTY singleton, so drop the row again only if
-  // this test's PATCH created it.
-  it('a CPM saved via the admin route reprices the next activation (i_cible = ⌊budget·1000/new_CPM⌋)', async () => {
+  // CPM-ADMIN SEAM (Mejri 05/08), amended by CPM-1 (user rule, 2026-09-17) — the engine consumes
+  // the ADMIN-SAVED CPM for the campaigns CREATED AFTER the save (PATCH /api/admin/dispatch-config,
+  // not SQL — the exact write the Tarification page performs). A campaign that already existed
+  // keeps the CPM in effect at its creation: budget 300 @ 15 → i_cible 20000. One created after
+  // the save derives at 20 → i_cible = ⌊300·1000/20⌋ = 15000 (capacité 30000 still covers).
+  // Snapshot/restore mirrors the event-CPM pin above: the route self-heals an EMPTY singleton, so
+  // drop the row again only if this test's PATCH created it.
+  it('a CPM saved via the admin route prices the campaigns created after it; an existing one keeps its own', async () => {
     const [cfgBefore] = await sql`select standard_cpm_tnd from dispatch_config`;
     try {
-      const { admin, campaignId } = await seedActivatable({ fundTnd: 500 });
+      if (cfgBefore !== undefined)
+        await sql`update dispatch_config set standard_cpm_tnd = '15.000'`;
+      const { admin, campaignId: existing } = await seedActivatable({ fundTnd: 500 });
       mockSession(admin);
 
       const saved = await app.inject({
@@ -319,16 +322,25 @@ describe('admin campaign moderation — activation keystone (real Postgres)', ()
       });
       expect(saved.statusCode).toBe(200);
       expect((saved.json() as { standard_cpm_tnd: number }).standard_cpm_tnd).toBe(20);
+      const { campaignId: created } = await seedActivatable({ fundTnd: 500 });
 
-      const res = await activate(campaignId);
-      expect(res.statusCode).toBe(200);
-      const [plan] = await db
-        .select()
-        .from(campaignDispatchPlan)
-        .where(eq(campaignDispatchPlan.campaignId, campaignId))
-        .limit(1);
-      expect(Number(plan?.cpm)).toBe(20);
-      expect(plan?.iCible).toBe(15000);
+      const planOf = async (campaignId: string) => {
+        const [plan] = await db
+          .select()
+          .from(campaignDispatchPlan)
+          .where(eq(campaignDispatchPlan.campaignId, campaignId))
+          .limit(1);
+        return plan;
+      };
+      expect((await activate(existing)).statusCode).toBe(200);
+      const kept = await planOf(existing);
+      expect(Number(kept?.cpm)).toBe(15);
+      expect(kept?.iCible).toBe(20000);
+
+      expect((await activate(created)).statusCode).toBe(200);
+      const repriced = await planOf(created);
+      expect(Number(repriced?.cpm)).toBe(20);
+      expect(repriced?.iCible).toBe(15000);
     } finally {
       const restore = cfgBefore?.['standard_cpm_tnd'] as string | undefined;
       if (restore !== undefined)
