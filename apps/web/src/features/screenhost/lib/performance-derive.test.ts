@@ -358,6 +358,11 @@ describe('HOST/CAST first-data flags (Mejri ruling)', () => {
     const grid = zeroGrid.map((row) => [...row]);
     grid[3]![14] = 42;
     expect(hasHostData([], grid)).toBe(true);
+    // HOUR-AVG2 — the wire serves a slot with no cell as null: no data, like a 0.
+    const nullGrid = Array.from({ length: 7 }, () => Array<number | null>(48).fill(null));
+    expect(hasHostData([], nullGrid)).toBe(false);
+    nullGrid[1]![3] = 5;
+    expect(hasHostData([], nullGrid)).toBe(true);
   });
 
   it('hasCastData: any earnings line OR any impressions-daily day', () => {

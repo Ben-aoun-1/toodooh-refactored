@@ -67,8 +67,15 @@ const reconciledDate = (line: PerformanceEarningsLine): string => line.reconcile
  * any hub-pushed monthly-stats month OR any non-zero affluence cell. Once true, every HOST
  * metric shows real values (0 rendered as 0) instead of "En attente du premier deal".
  */
-export function hasHostData(months: unknown[], affluenceGrid: number[][]): boolean {
-  return months.length > 0 || affluenceGrid.some((row) => row.some((value) => value > 0));
+export function hasHostData(
+  months: unknown[],
+  affluenceGrid: readonly (readonly (number | null)[])[],
+): boolean {
+  // HOUR-AVG2 — a null slot (no cell) is no data, exactly like a 0.
+  return (
+    months.length > 0 ||
+    affluenceGrid.some((row) => row.some((value) => value !== null && value > 0))
+  );
 }
 
 /**

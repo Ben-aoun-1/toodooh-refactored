@@ -61,7 +61,7 @@ export function provenanceLabel(kind: ProvenanceKind): string {
  * query → all none), so a surface never has to guard the shape itself.
  */
 export function provenanceGrid(
-  grid: readonly (readonly number[])[],
+  grid: readonly (readonly (number | null)[])[],
   sources: readonly (readonly (AffluenceSource | null)[])[],
 ): ProvenanceKind[][] {
   return Array.from({ length: 7 }, (_, day) =>

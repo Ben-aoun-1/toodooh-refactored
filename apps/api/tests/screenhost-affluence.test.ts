@@ -22,7 +22,7 @@ import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 type GetSessionResult = Awaited<ReturnType<typeof auth.api.getSession>>;
 type AffluenceSource = 'measured' | 'backup' | null;
 type AffluenceResponse = {
-  grid: number[][];
+  grid: (number | null)[][];
   has_data: boolean;
   sources: AffluenceSource[][];
   counts: { measured: number; backup: number };
@@ -150,7 +150,7 @@ describe('screenhost affluence read — ?from&to période aggregation (AUD-HOURL
     // …and it says so: no hourly cell exists, so this value is an ESTIMATION whatever the hub
     // had marked on its own rolling slot.
     expect(body.sources[0]?.[18]).toBe('backup');
-    expect(body.grid[2]?.[36]).toBe(0); // Wednesday is not in the période — no cell at all
+    expect(body.grid[2]?.[36]).toBeNull(); // Wednesday is not in the période — no cell at all
     expect(body.sources[2]?.[36]).toBeNull();
     expect(body.counts).toEqual({ measured: 0, backup: 2 }); // slice C — tallies count SLOTS, so an hour-shaped fixture counts twice
     expect(body.has_data).toBe(true);
@@ -198,7 +198,7 @@ describe('screenhost affluence read — ?from&to période aggregation (AUD-HOURL
     // Sat 2026-08-01 .. Sun 2026-08-02 — Wednesday is not in the période.
     const body = (await getRange(sh, '?from=2026-08-01&to=2026-08-02')).json() as AffluenceResponse;
     expect(body.has_data).toBe(false);
-    expect(body.grid.flat().every((v) => v === 0)).toBe(true);
+    expect(body.grid.flat().every((v) => v === null)).toBe(true); // HOUR-AVG2 — no cell = null
     expect(body.counts).toEqual({ measured: 0, backup: 0 });
   });
 
@@ -271,10 +271,10 @@ describe('screenhost affluence read (owner-scoped, real Postgres)', () => {
     expect(body.grid[0]?.[18]).toBe(100); // Monday=row 0
     expect(body.grid[2]?.[36]).toBe(250); // Wednesday=row 2
     expect(body.grid[6]?.[46]).toBe(40); // Sunday=row 6
-    expect(body.grid[1]?.[0]).toBe(0); // untouched slot
+    expect(body.grid[1]?.[0]).toBeNull(); // untouched slot — HOUR-AVG2: no row is null, never 0
   });
 
-  it('returns an all-zero grid + has_data=false for a venue with no affluence', async () => {
+  it('returns an all-null grid + has_data=false for a venue with no affluence', async () => {
     const me = await seedUser();
     const sh = await seedScreenhost(me);
     mockSession(me);
@@ -284,7 +284,53 @@ describe('screenhost affluence read (owner-scoped, real Postgres)', () => {
     const body = res.json() as AffluenceResponse;
     expect(body.has_data).toBe(false);
     expect(body.grid).toHaveLength(7);
-    expect(body.grid.flat().every((v) => v === 0)).toBe(true);
+    expect(body.grid.flat().every((v) => v === null)).toBe(true);
+  });
+
+  // HOUR-AVG2 (operator 17/09) — the client folds an hour as the mean of the halves it HAS, so the
+  // wire must tell « no reading » (null) from « measured 0 » (0). 59 lone halves exist on prod.
+  it('HOUR-AVG2: a lone half-hour row is served as itself, its missing sibling as null; a measured 0 stays 0', async () => {
+    const me = await seedUser();
+    const sh = await seedScreenhost(me);
+    await db.insert(screenhostAffluence).values([
+      // Sunday 01h00 alone (its 01h30 was never pushed).
+      {
+        screenhostId: sh,
+        dayOfWeek: 7,
+        hour: 1,
+        slot: 2,
+        estimatedImpressions: 10,
+        source: 'measured',
+      },
+      // Monday 09h: 17 and a MEASURED 0.
+      {
+        screenhostId: sh,
+        dayOfWeek: 1,
+        hour: 9,
+        slot: 18,
+        estimatedImpressions: 17,
+        source: 'measured',
+      },
+      {
+        screenhostId: sh,
+        dayOfWeek: 1,
+        hour: 9,
+        slot: 19,
+        estimatedImpressions: 0,
+        source: 'measured',
+      },
+    ]);
+    mockSession(me);
+
+    const body = (await get(sh)).json() as AffluenceResponse;
+    expect(body.grid[6]?.[2]).toBe(10);
+    expect(body.grid[6]?.[3]).toBeNull();
+    expect(body.sources[6]?.[3]).toBeNull();
+    expect(body.grid[0]?.[18]).toBe(17);
+    expect(body.grid[0]?.[19]).toBe(0);
+    expect(body.sources[0]?.[19]).toBe('measured');
+    expect(body.grid.flat().filter((v) => v !== null)).toHaveLength(3);
+    expect(body.has_data).toBe(true);
   });
 
   // AFF1 — provenance rides beside the grid: sources[day][hour] mirrors grid's Monday-first shape,
