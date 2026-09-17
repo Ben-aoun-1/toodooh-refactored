@@ -10,7 +10,7 @@ import {
 } from '../db/schema.js';
 
 import { tunisDateOf } from './campaign-dates.js';
-import { campaignCpmRates, cpmForCampaign } from './dispatch/config.js';
+import { campaignCpmRates, campaignTTiers, cpmForCampaign } from './dispatch/config.js';
 import { runDispatch } from './dispatch/dispatch-service.js';
 import { createEngineTrace } from './engine-journal/trace.js';
 import { runEventDispatch } from './event-dispatch/dispatch.js';
@@ -203,9 +203,10 @@ export const prepareActivation = async (
   // Dispatch (reuse the engine). Every DispatchResult case is handled. LOG1 — the production
   // entry constructs the journal collector; runDispatch buffers and flushes it POST-outcome
   // (committed OR rolled-back clôture), so the operator can see WHY an activation refused.
+  // CPM-2 — T derives from the campaign's OWN tiers (in effect when it was created).
   const result = await runDispatch(
     campaign,
-    { iCible, cpm, s },
+    { iCible, cpm, s, tiers: campaignTTiers(campaign) },
     createEngineTrace('dispatch', campaign.id),
   );
   if (result.status === 'NO_WINDOW') return { status: 'NO_WINDOW' };

@@ -16,6 +16,7 @@ import {
 import { runDispatch } from '../src/lib/dispatch/dispatch-service.js';
 import { OCCUPANCY_LOCK_NAMESPACE } from '../src/lib/dispatch/pool.js';
 
+import { campaignTiersOf } from './helpers/cpm-config.js';
 import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 
 // E3 / US-4.4 — pessimistic occupancy locking, real Postgres. The engaged-seconds read now runs
@@ -124,6 +125,7 @@ describe('E3 occupancy locking (US-4.4, real Postgres)', () => {
     const shId = await seedEligibleScreenhost(owner, cat);
     const campaignId = await seedCampaign(advertiser, 'Blocked');
     await db.insert(campaignTargeting).values({ campaignId, categoryId: cat, class: null });
+    const tiers = await campaignTiersOf(campaignId);
 
     // Hold THIS screenhost's occupancy lock from a side transaction.
     let acquired!: () => void;
@@ -140,7 +142,7 @@ describe('E3 occupancy locking (US-4.4, real Postgres)', () => {
     // The dispatch must NOT complete while the lock is held (it blocks before the engagement read)…
     const dispatchP = runDispatch(
       { id: campaignId, name: 'Blocked', startDate: '2024-01-01', endDate: '2024-01-02' },
-      { iCible: 20000, cpm: 10, s: 10 },
+      { iCible: 20000, cpm: 10, s: 10, tiers },
     );
     expect(await settle(dispatchP)).toBe('pending');
 
@@ -166,14 +168,16 @@ describe('E3 occupancy locking (US-4.4, real Postgres)', () => {
     // A (s=30) wants the whole hour (i_cible ≥ capacity → r_i 10 → 300s); B (s=10) wants 160s.
     // Pre-E3, both read zero engagement outside any tx → 300s + 160s = 460s on one screen. With
     // the advisory lock the loser blocks until the winner commits, then nets the winner's seconds.
+    // The tiers are read BEFORE the race so both dispatches start together.
+    const [tiersA, tiersB] = [await campaignTiersOf(a), await campaignTiersOf(b)];
     const [resA, resB] = await Promise.all([
       runDispatch(
         { id: a, name: 'Race A', startDate: '2024-01-01', endDate: '2024-01-02' },
-        { iCible: 20000, cpm: 10, s: 30 },
+        { iCible: 20000, cpm: 10, s: 30, tiers: tiersA },
       ),
       runDispatch(
         { id: b, name: 'Race B', startDate: '2024-01-01', endDate: '2024-01-02' },
-        { iCible: 20000, cpm: 10, s: 10 },
+        { iCible: 20000, cpm: 10, s: 10, tiers: tiersB },
       ),
     ]);
 

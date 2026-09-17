@@ -12,7 +12,7 @@ import {
 import { logger } from '../../logger.js';
 import { NOOP_TRACE, type EngineTrace } from '../engine-journal/trace.js';
 
-import { getDispatchConfig } from './config.js';
+import { type TTiers, getDispatchConfig } from './config.js';
 import { buildPlan } from './plan.js';
 import { assemblePool } from './pool.js';
 import { seuilImpressions, tForDuration } from './thresholds.js';
@@ -20,11 +20,14 @@ import { seuilImpressions, tForDuration } from './thresholds.js';
 const log = logger.child({ module: 'dispatch' });
 
 // E1 (VF) — T is no longer an input: the attention index derives from the spot duration S and the
-// config's t_10s/t_20s/t_30s buckets inside runDispatch (and is snapshotted onto the plan).
+// t_10s/t_20s/t_30s buckets inside runDispatch (and is snapshotted onto the plan).
+// CPM-2 (ruling 4A) — the buckets are the CAMPAIGN's, captured when it was created
+// (campaignTTiers(row)), never the live config: REQUIRED, so no caller can fall back to it.
 export interface DispatchInputs {
   iCible: number;
   cpm: number;
   s: number;
+  tiers: TTiers;
 }
 
 // E5.1 — NO_TARGETING retired (VF US-2.1): zero targeting lines = the whole network, so a
@@ -58,9 +61,11 @@ export const runDispatch = async (
     .limit(1);
   if (existing) return { status: 'ALREADY_DISPATCHED' }; // frozen + irrevocable
 
+  // The live config supplies F, G and R_min (T is the campaign's own since CPM-2).
   const config = await getDispatchConfig();
-  // E1 (VF) — the attention index for THIS campaign's spot duration; snapshotted onto the plan.
-  const t = tForDuration(inputs.s, config);
+  // E1 (VF) — the attention index for THIS campaign's spot duration, from the tiers in effect
+  // when the campaign was created (CPM-2); snapshotted onto the plan.
+  const t = tForDuration(inputs.s, inputs.tiers);
   // E3 (Mariem 2026-07-15 amendment) — the anti-miette seuil is VALUE-based, derived HERE from the
   // campaign's CPM (the same S_min=20 TND rule as redispatch). dispatch_config.seuil_diffusable no
   // longer feeds this path (superseded; the column stays for the admin surface).

@@ -29,6 +29,7 @@ import { assemblePool } from '../src/lib/dispatch/pool.js';
 import { REDISPATCH_HEARTBEAT_TOLERANCE_MS } from '../src/lib/dispatch/redispatch.js';
 import { screenhostsRoutes } from '../src/routes/screenhosts.js';
 
+import { campaignTiersOf } from './helpers/cpm-config.js';
 import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 
 // E2 (VF jours_dispo_i) — owner-declared per-day unavailability: capacity/créneaux/C_max respect
@@ -291,7 +292,7 @@ describe('E2 — jours_dispo_i (real Postgres)', () => {
 
       const result = await runDispatch(
         { id: f.campaignId, name: 'E2', startDate: MON, endDate: TUE },
-        { iCible: 10_000, cpm: 15, s: 10 },
+        { iCible: 10_000, cpm: 15, s: 10, tiers: await campaignTiersOf(f.campaignId) },
       );
       expect(result.status).toBe('OK');
       const [plan] = await db
@@ -325,7 +326,7 @@ describe('E2 — jours_dispo_i (real Postgres)', () => {
 
       const result = await runDispatch(
         { id: f.campaignId, name: 'E2', startDate: MON, endDate: TUE },
-        { iCible: 10_000, cpm: 15, s: 10 },
+        { iCible: 10_000, cpm: 15, s: 10, tiers: await campaignTiersOf(f.campaignId) },
       );
       // CF-HF4 — an EMPTY pool now refuses as NO_ELIGIBLE (saturated: the venue matched the
       // targeting but had no available day) — the refusal, not its label, is the US-2.1
@@ -341,7 +342,8 @@ describe('E2 — jours_dispo_i (real Postgres)', () => {
       const end = plusCalendarDays(start, 1);
       const venue = await seedVenue(cat, { dows: [1, 2, 3, 4, 5, 6, 7] });
       const f = await seedCampaign({ start, end, cat, status: 'draft' });
-      // CPM-1 — the ceiling prices at the campaign's own rates (captured at its insert).
+      // CPM-1 / CPM-2 — the ceiling prices at the campaign's own rates and T tiers (captured at
+      // its insert).
       const [row] = await db.select().from(campaigns).where(eq(campaigns.id, f.campaignId));
       const cmaxInput = {
         id: f.campaignId,
@@ -350,6 +352,9 @@ describe('E2 — jours_dispo_i (real Postgres)', () => {
         campaignType: 'standard',
         standardCpmTnd: row?.standardCpmTnd ?? '',
         eventCpmTnd: row?.eventCpmTnd ?? '',
+        t10s: row?.t10s ?? '',
+        t20s: row?.t20s ?? '',
+        t30s: row?.t30s ?? '',
       };
 
       const before = await computeCampaignCmax(cmaxInput, 10);

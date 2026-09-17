@@ -580,6 +580,10 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         eventId: campaigns.eventId,
         standardCpmTnd: campaigns.standardCpmTnd,
         eventCpmTnd: campaigns.eventCpmTnd,
+        // CPM-2 — the attention index T tiers in effect when the campaign was created.
+        t10s: campaigns.t10s,
+        t20s: campaigns.t20s,
+        t30s: campaigns.t30s,
         creativeId: campaigns.creativeId,
         creativeDurationSeconds: creatives.durationSeconds,
       })
@@ -640,6 +644,9 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         eventId: row.eventId,
         standardCpmTnd: row.standardCpmTnd,
         eventCpmTnd: row.eventCpmTnd,
+        t10s: row.t10s,
+        t20s: row.t20s,
+        t30s: row.t30s,
       },
       spotSeconds,
     );
@@ -755,6 +762,10 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
         eventId: campaigns.eventId,
         standardCpmTnd: campaigns.standardCpmTnd,
         eventCpmTnd: campaigns.eventCpmTnd,
+        // CPM-2 — the attention index T tiers in effect when the campaign was created.
+        t10s: campaigns.t10s,
+        t20s: campaigns.t20s,
+        t30s: campaigns.t30s,
         creativeId: campaigns.creativeId,
         creativeDurationSeconds: creatives.durationSeconds,
       })
@@ -818,7 +829,8 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     // (clôture, renvoi curseur) or a genuine PARTIAL.
     // EV3 — the ceiling forks: event rows price via EV2's engine (the classic C_max throws on
     // them — the engine boundary); the event ceiling needs no creative duration (no T coef).
-    // CPM-1 — both ceilings price at the campaign's OWN CPM (in effect when it was created).
+    // CPM-1 — both ceilings price at the campaign's OWN CPM (in effect when it was created);
+    // CPM-2 — the classic one at its OWN attention index T as well.
     if (isEventRow) {
       const [ev] = existing.eventId
         ? await db.select().from(events).where(eq(events.id, existing.eventId)).limit(1)
@@ -853,6 +865,9 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
           eventId: existing.eventId,
           standardCpmTnd: existing.standardCpmTnd,
           eventCpmTnd: existing.eventCpmTnd,
+          t10s: existing.t10s,
+          t20s: existing.t20s,
+          t30s: existing.t30s,
         },
         existing.creativeDurationSeconds,
       );

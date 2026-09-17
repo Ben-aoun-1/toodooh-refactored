@@ -9,6 +9,7 @@ import {
   campaignDispatchAllocation,
   campaigns,
 } from '../db/schema.js';
+import { campaignTTiers } from '../lib/dispatch/config.js';
 import { runDispatch } from '../lib/dispatch/dispatch-service.js';
 import { createEngineTrace } from '../lib/engine-journal/trace.js';
 import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
@@ -21,7 +22,7 @@ import { requireAdmin, requireAuth } from '../middleware/require-auth.js';
 
 const idParamSchema = z.object({ id: z.uuid() });
 // E1 (VF) — `t` is no longer an input: the attention index derives from S inside runDispatch
-// (tForDuration against the config buckets) and lands on the plan snapshot.
+// (tForDuration against the campaign's own buckets — CPM-2) and lands on the plan snapshot.
 const bodySchema = z.object({
   i_cible: z.number().int().positive(),
   cpm: z.number().positive(),
@@ -87,6 +88,9 @@ export const campaignDispatchRoutes: FastifyPluginAsync = async (app) => {
         eventId: campaigns.eventId,
         startDate: campaigns.startDate,
         endDate: campaigns.endDate,
+        t10s: campaigns.t10s,
+        t20s: campaigns.t20s,
+        t30s: campaigns.t30s,
       })
       .from(campaigns)
       .where(eq(campaigns.id, parsedParams.data.id))
@@ -109,6 +113,9 @@ export const campaignDispatchRoutes: FastifyPluginAsync = async (app) => {
         iCible: parsed.data.i_cible,
         cpm: parsed.data.cpm,
         s: parsed.data.s,
+        // CPM-2 — this trigger dispatches an EXISTING campaign: T comes from the tiers the row
+        // captured when it was created, never the live config (the CPM stays the explicit body).
+        tiers: campaignTTiers(campaign),
       },
       // LOG1 — journal this admin/internal dispatch entry too (flushed inside runDispatch).
       createEngineTrace('dispatch', campaign.id),

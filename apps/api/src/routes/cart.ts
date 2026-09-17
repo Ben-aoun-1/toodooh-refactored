@@ -33,8 +33,9 @@ const sendUnauthenticated = (reply: FastifyReply) =>
   reply.status(401).send({ error: 'UNAUTHENTICATED', message: 'Authentification requise.' });
 
 // One row shape for the gate: the campaign + its creative duration (the C_max spot length).
+// CPM-2 — plus the campaign's own T tiers (the C_max prices at them, never the live config).
 interface GateRow {
-  campaign: CampaignRow & { advertiserId: string };
+  campaign: CampaignRow & { advertiserId: string; t10s: string; t20s: string; t30s: string };
   creativeDurationSeconds: number | null;
   /** CF-SK1 — 'approved' ⇒ this item SKIPS review and activates at confirm (ruling #9). */
   contentValidationStatus: string | null;
@@ -88,6 +89,9 @@ const cartGateReason = async (row: GateRow, leadWorkingDays: number): Promise<st
       eventId: c.eventId,
       standardCpmTnd: c.standardCpmTnd,
       eventCpmTnd: c.eventCpmTnd,
+      t10s: c.t10s,
+      t20s: c.t20s,
+      t30s: c.t30s,
     },
     row.creativeDurationSeconds,
   );
@@ -98,7 +102,13 @@ const cartGateReason = async (row: GateRow, leadWorkingDays: number): Promise<st
 const loadGateRow = async (campaignId: string, userId: string): Promise<GateRow | null> => {
   const [row] = await db
     .select({
-      campaign: { ...campaignSelection, advertiserId: campaigns.advertiserId },
+      campaign: {
+        ...campaignSelection,
+        advertiserId: campaigns.advertiserId,
+        t10s: campaigns.t10s,
+        t20s: campaigns.t20s,
+        t30s: campaigns.t30s,
+      },
       creativeDurationSeconds: creatives.durationSeconds,
       contentValidationStatus: creatives.validationStatus,
     })

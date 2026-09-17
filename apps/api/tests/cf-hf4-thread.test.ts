@@ -26,6 +26,7 @@ import { adminCreativesRoutes } from '../src/routes/admin-creatives.js';
 import { campaignsRoutes } from '../src/routes/campaigns.js';
 import { screenhostsRoutes } from '../src/routes/screenhosts.js';
 
+import { campaignTiersOf } from './helpers/cpm-config.js';
 import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 
 // CF-HF4 — the thread batch:
@@ -277,7 +278,8 @@ describe('CF-HF4 — the thread batch (real Postgres)', () => {
     it('a September cmax is UNAFFECTED by July engagements (pinned)', async () => {
       const { shId } = await seedVenue();
       const sept = await seedCampaign({ ...SEPT, status: 'draft', creative: 'approved' });
-      // CPM-1 — the ceiling prices at the campaign's own rates (captured at its insert).
+      // CPM-1 / CPM-2 — the ceiling prices at the campaign's own rates and T tiers (captured at
+      // its insert).
       const [septRow] = await db.select().from(campaigns).where(eq(campaigns.id, sept.campaignId));
       const septCmaxInput = {
         id: sept.campaignId,
@@ -286,6 +288,9 @@ describe('CF-HF4 — the thread batch (real Postgres)', () => {
         campaignType: 'standard',
         standardCpmTnd: septRow?.standardCpmTnd ?? '',
         eventCpmTnd: septRow?.eventCpmTnd ?? '',
+        t10s: septRow?.t10s ?? '',
+        t20s: septRow?.t20s ?? '',
+        t30s: septRow?.t30s ?? '',
       };
       const before = await computeCampaignCmax(septCmaxInput, 10);
       const july = await seedCampaign({ ...JULY, status: 'active' });
@@ -311,7 +316,7 @@ describe('CF-HF4 — the thread batch (real Postgres)', () => {
       // capacité facturable = 100×20×30×0.6 = 36 000 ≥ 20 000 → coverable by a single venue.
       const result = await runDispatch(
         { id: fresh.campaignId, name: 'HF4 concentre', startDate: SEPT.start, endDate: SEPT.end },
-        { iCible: 20000, cpm: 15, s: 10 },
+        { iCible: 20000, cpm: 15, s: 10, tiers: await campaignTiersOf(fresh.campaignId) },
       );
       expect(result.status).toBe('OK');
       const [plan] = await db
@@ -337,7 +342,7 @@ describe('CF-HF4 — the thread batch (real Postgres)', () => {
       const saturated = await seedCampaign({ ...JULY, status: 'pending', creative: 'approved' });
       const result = await runDispatch(
         { id: saturated.campaignId, name: 'HF4 sature', startDate: JULY.start, endDate: JULY.end },
-        { iCible: 10000, cpm: 15, s: 10 },
+        { iCible: 10000, cpm: 15, s: 10, tiers: await campaignTiersOf(saturated.campaignId) },
       );
       expect(result).toEqual({ status: 'NO_ELIGIBLE', saturated: true });
     });

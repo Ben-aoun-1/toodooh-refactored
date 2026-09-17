@@ -13,7 +13,9 @@ export interface ResolvedDispatchConfig {
   // row captures both at insert; an existing one reads its own copy (campaignCpmRates).
   standardCpmTnd: number;
   eventCpmTnd: number;
-  // E1 (VF) — the attention index T by spot-duration bucket (tForDuration reads these).
+  // E1 (VF) — the attention index T by spot-duration bucket. CPM-2 — prices campaigns CREATED
+  // from now on: a new campaign row captures all three at insert; an existing one reads its own
+  // copy (campaignTTiers).
   t10s: number;
   t20s: number;
   t30s: number;
@@ -60,6 +62,24 @@ export const campaignCpmRates = (row: {
 }): CpmRates => ({
   standardCpmTnd: Number(row.standardCpmTnd),
   eventCpmTnd: Number(row.eventCpmTnd),
+});
+
+// CPM-2 — the attention index T by spot-duration bucket, the shape tForDuration reads.
+export interface TTiers {
+  t10s: number;
+  t20s: number;
+  t30s: number;
+}
+
+// CPM-2 (ruling 4A, 2026-09-17) — THE read home for an existing campaign's T tiers: the ones in
+// effect when the row was created (campaigns.t_10s / t_20s / t_30s, captured by the migration-0075
+// column default). An admin T change never reaches them. For a campaign that EXISTS, tForDuration
+// takes campaignTTiers(row), never getDispatchConfig(). Numeric columns arrive as strings; a query
+// that prices a campaign must SELECT all three columns.
+export const campaignTTiers = (row: { t10s: string; t20s: string; t30s: string }): TTiers => ({
+  t10s: Number(row.t10s),
+  t20s: Number(row.t20s),
+  t30s: Number(row.t30s),
 });
 
 // Read the singleton dispatch config (numeric columns come back as strings → coerce to numbers).

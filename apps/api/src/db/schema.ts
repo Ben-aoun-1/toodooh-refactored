@@ -935,6 +935,22 @@ export const campaigns = pgTable(
     eventCpmTnd: numeric('event_cpm_tnd', { precision: 10, scale: 3 })
       .notNull()
       .default(sql`current_event_cpm_tnd()`),
+    // CPM-2 (ruling 4A, 2026-09-17) — the attention index T tiers in effect WHEN THIS CAMPAIGN WAS
+    // CREATED, frozen like the CPMs above: an admin T change prices only campaigns created after
+    // it, and the draft PATCH contract never carries these. All three are kept because a draft's
+    // spot (its duration S) is editable — read them through campaignTTiers + tForDuration
+    // (lib/dispatch/config.ts). The capture is the DATABASE default (migration 0075:
+    // current_t_*s() reads the dispatch_config singleton at INSERT, 0.60/0.70/0.80 when none).
+    // numeric(4,3) = the plan's t_tier_coef precision. F (f_max_seconds) stays live.
+    t10s: numeric('t_10s', { precision: 4, scale: 3 })
+      .notNull()
+      .default(sql`current_t_10s()`),
+    t20s: numeric('t_20s', { precision: 4, scale: 3 })
+      .notNull()
+      .default(sql`current_t_20s()`),
+    t30s: numeric('t_30s', { precision: 4, scale: 3 })
+      .notNull()
+      .default(sql`current_t_30s()`),
     submittedAt: timestamp('submitted_at', { withTimezone: true }),
     // CF-S1 — the J-3 draft reminder stamp (one reminder per draft; NEVER an auto-delete).
     draftReminderSentAt: timestamp('draft_reminder_sent_at', { withTimezone: true }),
@@ -1151,7 +1167,9 @@ export const dispatchConfig = pgTable(
     // E1 (VF) — the attention index T by spot duration bucket (≤10s / ≤20s / ≤30s). Facturable
     // capacity = Ai × Hi × R × T from E1 on; the planning back-conversion divides by the SAME T.
     // Admin-editable within (0, 1] and t_10s ≤ t_20s ≤ t_30s (a longer spot holds attention
-    // better, VF legend). Defaults are the VF canonical 0,60/0,70/0,80.
+    // better, VF legend). Defaults are the VF canonical 0,60/0,70/0,80. CPM-2 — these price the
+    // campaigns CREATED FROM NOW ON: a campaign snapshots all three at INSERT (campaigns.t_10s /
+    // t_20s / t_30s, migration 0075) and its plan snapshots the T it used when it freezes.
     t10s: numeric('t_10s', { precision: 4, scale: 2 }).notNull().default('0.60'),
     t20s: numeric('t_20s', { precision: 4, scale: 2 }).notNull().default('0.70'),
     t30s: numeric('t_30s', { precision: 4, scale: 2 }).notNull().default('0.80'),

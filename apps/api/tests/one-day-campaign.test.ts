@@ -16,6 +16,7 @@ import {
 } from '../src/db/schema.js';
 import { runDispatch } from '../src/lib/dispatch/dispatch-service.js';
 
+import { campaignTiersOf } from './helpers/cpm-config.js';
 import { resetAuthTables, bothHalves } from './helpers/db-test-setup.js';
 
 // EV1 rider (the CF-HF3 watch-item, ruled LEGAL): a ONE-DAY campaign (start = end). The web's
@@ -111,7 +112,7 @@ describe('one-day campaign (start = end) — the server chain', () => {
 
     const result = await runDispatch(
       { id: campaign?.id ?? '', name: 'Campagne un jour', startDate: DAY, endDate: DAY },
-      { iCible: 3000, cpm: 15, s: 10 },
+      { iCible: 3000, cpm: 15, s: 10, tiers: await campaignTiersOf(campaign?.id ?? '') },
     );
     expect(result.status).toBe('OK');
 

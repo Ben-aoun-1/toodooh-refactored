@@ -117,7 +117,7 @@ export const launchCampaign = async (
   if (!draft) return { error: 'CAMPAIGN_FAILED' };
 
   // The ceiling the wizard shows, from the real engine over the real (synthetic) inventory —
-  // priced at the CPM the draft captured at its insert (CPM-1).
+  // priced at the CPM and the T tiers the draft captured at its insert (CPM-1, CPM-2).
   const cmax = await computeCampaignCmax(
     {
       id: draft.id,
@@ -126,6 +126,9 @@ export const launchCampaign = async (
       campaignType: 'standard',
       standardCpmTnd: draft.standardCpmTnd,
       eventCpmTnd: draft.eventCpmTnd,
+      t10s: draft.t10s,
+      t20s: draft.t20s,
+      t30s: draft.t30s,
     },
     spotSeconds,
   );

@@ -38,7 +38,8 @@ import { planView } from './campaign-dispatch.js';
 //             standard_cpm_tnd) — CPM-1: the rates in effect when it was CREATED, not today's
 //   i_cible = ⌊requested_budget·1000 / cpm⌋        (the advertiser's indicative ask → target impressions)
 //   s       = the linked creative's duration_seconds (the spot length actually airing)
-//   t       = derived INSIDE runDispatch (E1: tForDuration(s, config) — the VF attention index)
+//   t       = derived INSIDE runDispatch (E1: tForDuration(s, tiers) — the VF attention index;
+//             CPM-2: the campaign's OWN tiers, in effect when it was CREATED, not today's)
 // budget (the funding gate) = requested_budget, the advertiser's stated ask.
 
 const idParamSchema = z.object({ id: z.uuid() });
