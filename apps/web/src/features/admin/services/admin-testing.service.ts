@@ -3,6 +3,8 @@ import { apiClient } from '@/lib/api-client';
 // ADM-OBS1 slice A — the admin « Tests » page. Read-only: every number comes from the api's
 // engines (periodAudience, computeSps, computeAmax, the resolved dispatch config); this service
 // only fetches. apiClient prepends '/api'. Both routes are [requireAuth, requireAdmin].
+// ADM-OBS2 (Mejri 17/09) — hour statistics, the creation day and first reading, the status split
+// into « Historique » / « À venir » with pending seconds and event-held hours, the host's share.
 
 export interface TestingScreenhost {
   id: string;
@@ -11,6 +13,24 @@ export interface TestingScreenhost {
   closing_hour: number | null;
   sps_stored: number;
   created_at: string;
+  /** The Tunis calendar day of `created_at` — where « Tout l'historique » starts. */
+  created_date: string;
+}
+
+export type HourState = 'libre' | 'partiel' | 'plein' | 'indisponible' | 'reservee_evenement';
+
+export interface HourStatusRow {
+  date: string;
+  hour: number;
+  state: HourState;
+  /** Σ (reps × spot seconds) of the ACCEPTE and EN_ATTENTE shares. */
+  engaged_seconds: number;
+  /** The EN_ATTENTE part of `engaged_seconds`. */
+  pending_seconds: number;
+  /** F − engaged; null when the day is unavailable or an event holds the hour. */
+  seconds_free: number | null;
+  reps: number;
+  campaigns: number;
 }
 
 export interface Stats {
@@ -22,20 +42,36 @@ export interface Stats {
 }
 
 export interface TestingReport {
-  screenhost: TestingScreenhost;
-  periode: { from: string; to: string; today: string; estimation_floor: string | null };
+  screenhost: Omit<TestingScreenhost, 'created_date'> & { broadcastable_hours: number[] };
+  periode: {
+    from: string;
+    to: string;
+    today: string;
+    created_date: string;
+    first_reading: string | null;
+    estimation_floor: string | null;
+    unavailable_days: string[];
+  };
   audience: {
     total: number;
+    a_max: number;
     measured_days: number;
     estimated_days: number;
     estimated_pct: number | null;
     mean_per_day: number | null;
     mean_per_hour: number | null;
     days: Stats;
-    cells: Stats;
-    measured_cells: Stats;
-    backup_cells: Stats;
-    day_rows: { date: string; audience: number; source: string; has_measured: boolean }[];
+    hours: Stats;
+    measured_hours: Stats;
+    estimated_hours: Stats;
+    day_rows: {
+      date: string;
+      audience: number;
+      source: string;
+      has_measured: boolean;
+      measured_cells: number;
+      backup_cells: number;
+    }[];
     cell_rows: { date: string; slot: number; value: number; source: string }[];
     week: { value: number | null; source: string | null }[][];
   };
@@ -49,15 +85,8 @@ export interface TestingReport {
     weights: Record<string, number>;
     windows_days: Record<string, number>;
   };
-  /** Slice B — the four-state status of every open hour of the période. */
-  status_hours: {
-    date: string;
-    hour: number;
-    state: 'libre' | 'partiel' | 'plein' | 'indisponible';
-    engaged_seconds: number;
-    minutes_free: number | null;
-    campaigns: number;
-  }[];
+  /** The status of every open hour: the elapsed ones of the période, and every one still to come. */
+  status_hours: { past: HourStatusRow[]; future: HourStatusRow[] };
   /** Slice B — the campaigns on this venue over the période (ran fully / disrupted / redispatched / money lost). */
   campaigns: {
     campaign_id: string;
@@ -74,18 +103,10 @@ export interface TestingReport {
     ran_fully: boolean;
     disrupted: boolean;
     received_redispatch: boolean;
-    money_lost_tnd: number;
+    missed_value_tnd: number;
+    host_share_lost_tnd: number | null;
     redirected_to: { screenhost_id: string; added_fact: number }[];
   }[];
-  pricing: {
-    a_max: number;
-    cpm_standard_tnd: number;
-    cpm_event_tnd: number;
-    t: { t10s: number; t20s: number; t30s: number };
-    campaign_lead_working_days: number;
-    broadcastable_hours: number[];
-    unavailable_days: string[];
-  };
   config: Record<string, unknown>;
 }
 

@@ -415,6 +415,47 @@ export function periodAudience(input: PeriodAudienceInput): PeriodAudience {
   };
 }
 
+/**
+ * ADM-OBS2 — one HOUR of the période, as FLOW-4 folds it: the exact mean of the half-hour cells
+ * the hour has (`hourValue`), plus how many of those cells were measured and how many came from
+ * the backup grid. The admin « Tests » page takes its min / median / mean / max over these, so its
+ * statistics are made of the same hour values the day total sums.
+ */
+export interface PeriodHour {
+  date: string; // YYYY-MM-DD
+  hour: number; // 0–23
+  /** POSSIBLY FRACTIONAL (15 and 30 → 22.5), not rounded here — the same contract as a day. */
+  value: number;
+  measuredCells: number;
+  backupCells: number;
+}
+
+/** Every (date, hour) of the période that holds at least one cell, in date then hour order. */
+export function periodHours(cells: readonly PeriodCell[]): PeriodHour[] {
+  const cellsByDate = new Map<string, PeriodCell[]>();
+  for (const cell of cells) {
+    const forDate = cellsByDate.get(cell.date);
+    if (forDate === undefined) cellsByDate.set(cell.date, [cell]);
+    else forDate.push(cell);
+  }
+  const out: PeriodHour[] = [];
+  for (const date of [...cellsByDate.keys()].sort()) {
+    const byHour = hoursOfDay(cellsByDate.get(date) ?? []);
+    for (const hour of [...byHour.keys()].sort((a, b) => a - b)) {
+      const hourCells = byHour.get(hour) ?? [];
+      const backupCells = hourCells.filter((c) => c.source === 'backup').length;
+      out.push({
+        date,
+        hour,
+        value: hourValue(hourCells),
+        measuredCells: hourCells.length - backupCells,
+        backupCells,
+      });
+    }
+  }
+  return out;
+}
+
 /** One aggregated S02 slot: `null` value = the période holds no cell for that (weekday, hour). */
 export interface WeekCell {
   value: number | null;
