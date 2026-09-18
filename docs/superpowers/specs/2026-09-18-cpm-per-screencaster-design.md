@@ -1,7 +1,7 @@
 # CPM per screencaster — design
 
 **Date:** 2026-09-18 · **Lane:** CPM-3 · **Branch:** `feat/cpm-per-screencaster` (from `origin/main` 7f006d1)
-**Status:** design ruled by the operator 2026-09-18; awaiting spec review.
+**Status:** design and Q1 ruled by the operator 2026-09-18; spec approved.
 
 ## 1. Why
 
@@ -65,7 +65,7 @@ non-draft never loses.
    /api/campaigns`, `POST /api/events/:id/positionner`, `POST /api/campaigns/:id/replay`, the
    simulator's world writer, the test fixtures — is covered without touching it, the property
    CPM-1 chose a function default for.
-4. **Existing drafts are NOT repriced by the migration** (see open question Q1).
+4. **Existing drafts are NOT repriced by the migration** (Q1, ruled).
 
 ## 4. API
 
@@ -126,9 +126,9 @@ sandbox screencaster's CPM.
 Per-screencaster T tiers (T stays global, CPM-2 snapshot at creation); a screencaster-facing view
 of their CPM beyond the wizard estimate; CPM history charts; per-venue CPM.
 
-## 9. Open question (needs a ruling before build)
+## 9. Ruled question
 
-**Q1 — drafts at deploy.** The migration gives every screencaster today's global CPM (prod: 10 /
+**Q1 — drafts at deploy. RULED 2026-09-18: recommended — the migration leaves drafts as they are.** The migration gives every screencaster today's global CPM (prod: 10 /
 15 on 2026-09-17 — re-read at deploy), but the drafts restored by CPM-1 on 2026-09-17 still carry
 **15** standard. Recommended: **leave drafts as they are at deploy**; the « drafts follow the
 screencaster » rule applies from each screencaster's first change on the new page. The
