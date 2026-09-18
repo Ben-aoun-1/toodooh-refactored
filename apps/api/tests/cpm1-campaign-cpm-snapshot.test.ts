@@ -140,9 +140,9 @@ describe('CPM-1 — a campaign keeps the CPM in effect when it was created (real
     expect(res.statusCode).toBe(200);
   };
 
-  describe('the capture — the column default reads the config at INSERT time', () => {
-    it('a new row captures the config; a config change leaves it alone and prices the next row', async () => {
-      const advertiser = await seedUser();
+  describe('the capture — the trigger copies the screencaster’s CPM at INSERT time', () => {
+    it('CPM-3 — a new row captures its SCREENCASTER’s CPM; a default change touches neither', async () => {
+      const advertiser = await seedUser(); // created at the pinned default 15 / 15
       const [first] = await db
         .insert(campaigns)
         .values({ advertiserId: advertiser, name: 'Avant', campaignType: 'standard' })
@@ -152,27 +152,34 @@ describe('CPM-1 — a campaign keeps the CPM in effect when it was created (real
 
       await setCpmConfig('20.000', '30.000');
       expect(await rowRates(first?.id ?? '')).toEqual({ standard: 15, event: 15 });
-
       const [second] = await db
         .insert(campaigns)
         .values({ advertiserId: advertiser, name: 'Après', campaignType: 'standard' })
         .returning();
-      expect(second?.standardCpmTnd).toBe('20.000');
-      expect(second?.eventCpmTnd).toBe('30.000');
+      expect(second?.standardCpmTnd).toBe('15.000'); // the default is only for NEW screencasters
+      expect(second?.eventCpmTnd).toBe('15.000');
+
+      const newcomer = await seedUser(); // created after the default moved
+      const [third] = await db
+        .insert(campaigns)
+        .values({ advertiserId: newcomer, name: 'Nouveau', campaignType: 'standard' })
+        .returning();
+      expect(third?.standardCpmTnd).toBe('20.000');
+      expect(third?.eventCpmTnd).toBe('30.000');
     });
 
-    it('with no dispatch_config row a new campaign captures the V1 defaults 15 / 15', async () => {
-      const advertiser = await seedUser();
-      // A non-default config first, so a row that is still read could not pass for the defaults.
+    it('with no dispatch_config row a new screencaster — and its campaign — start at 15 / 15', async () => {
       await setCpmConfig('20.000', '30.000');
-      // Inside a rolled-back transaction: the singleton is back untouched for the next test.
       const rollback = new Error('rollback');
       await expect(
         sql.begin(async (tx) => {
           await tx`delete from dispatch_config`;
+          const [u] = await tx<{ id: string }[]>`
+            insert into users (email, contact_name) values ('cpm3-noconfig@example.com', 'Sans config')
+            returning id`;
           const [row] = await tx<{ standard: string; event: string }[]>`
             insert into campaigns (advertiser_id, name, campaign_type)
-            values (${advertiser}, 'Sans config', 'standard')
+            values (${u?.id ?? ''}, 'Sans config', 'standard')
             returning standard_cpm_tnd::text as standard, event_cpm_tnd::text as event`;
           expect(row).toEqual({ standard: '15.000', event: '15.000' });
           throw rollback;
