@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 
 import AdminLayout from '@/features/admin/components/AdminLayout';
+import { ScreencasterCpmSection } from '@/features/admin/components/screencaster-cpm/ScreencasterCpmSection';
 import { useDispatchConfig, useUpdateCpmConfig } from '@/features/admin/hooks/useDispatchConfig';
 import {
   type BlockPatchResult,
@@ -111,8 +112,14 @@ function ConfigForm({ config }: { config: DispatchConfigView }) {
       <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
         <div className="flex items-center gap-2 mb-4">
           <Coins className="h-5 w-5 text-brand-primary" />
-          <h3 className="text-lg font-semibold text-gray-900">CPM éditable</h3>
+          <h3 className="text-lg font-semibold text-gray-900">
+            CPM par défaut (nouveaux screencasters)
+          </h3>
         </div>
+        <p className="-mt-2 mb-4 text-sm text-gray-500">
+          Le CPM de départ d’un nouveau screencaster. Le modifier ne change pas le CPM des
+          screencasters existants.
+        </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="standard-cpm">
@@ -280,30 +287,33 @@ export default function DispatchConfigManagement() {
   return (
     <AdminLayout
       title="Tarification (CPM) et attention (T)"
-      subtitle="CPM, délai de lancement, indice d'attention et répartition des reversements — chaque bloc a son propre bouton Enregistrer"
+      subtitle="CPM par screencaster, CPM par défaut, délai de lancement, indice d'attention et répartition des reversements"
     >
-      {loading ? (
-        <div className="flex justify-center py-16">
-          <Loader2 className="h-10 w-10 animate-spin text-brand-primary" />
-        </div>
-      ) : config ? (
-        <ConfigForm config={config} />
-      ) : isError ? (
-        // CPM-ADMIN (the INV-1 rule) — a failed config read renders as an ERROR, never as an
-        // empty-but-editable form whose Enregistrer would have nothing to diff against.
-        <div className="max-w-3xl rounded-xl border border-rose-200 bg-rose-50/60 px-6 py-10 text-center">
-          <p className="text-sm font-medium text-rose-600">
-            Impossible de charger la configuration de tarification pour le moment.
-          </p>
-          <button
-            type="button"
-            onClick={refetch}
-            className="mt-4 rounded-full border border-rose-300 bg-white px-5 py-2 text-sm font-semibold text-rose-600 transition-colors hover:bg-rose-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
-          >
-            Réessayer
-          </button>
-        </div>
-      ) : null}
+      <div className="space-y-6">
+        <ScreencasterCpmSection />
+        {loading ? (
+          <div className="flex justify-center py-16">
+            <Loader2 className="h-10 w-10 animate-spin text-brand-primary" />
+          </div>
+        ) : config ? (
+          <ConfigForm config={config} />
+        ) : isError ? (
+          // CPM-ADMIN (the INV-1 rule) — a failed config read renders as an ERROR, never as an
+          // empty-but-editable form whose Enregistrer would have nothing to diff against.
+          <div className="max-w-3xl rounded-xl border border-rose-200 bg-rose-50/60 px-6 py-10 text-center">
+            <p className="text-sm font-medium text-rose-600">
+              Impossible de charger la configuration de tarification pour le moment.
+            </p>
+            <button
+              type="button"
+              onClick={refetch}
+              className="mt-4 rounded-full border border-rose-300 bg-white px-5 py-2 text-sm font-semibold text-rose-600 transition-colors hover:bg-rose-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+            >
+              Réessayer
+            </button>
+          </div>
+        ) : null}
+      </div>
     </AdminLayout>
   );
 }
