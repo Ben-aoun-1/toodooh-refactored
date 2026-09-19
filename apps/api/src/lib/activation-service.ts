@@ -10,6 +10,7 @@ import {
 } from '../db/schema.js';
 
 import { tunisDateOf } from './campaign-dates.js';
+import { cpmFreezeCheck } from './cpm-freeze-guard.js';
 import { campaignCpmRates, campaignTTiers, cpmForCampaign } from './dispatch/config.js';
 import { runDispatch } from './dispatch/dispatch-service.js';
 import { createEngineTrace } from './engine-journal/trace.js';
@@ -58,6 +59,9 @@ export type ActivationOutcome =
   // atomically (nothing persisted); an event annulled between panier and validation refuses.
   | { status: 'EVENT_NMAX_EXCEEDED'; nMax: number }
   | { status: 'EVENT_ANNULE' }
+  // CPM-3 — an admin CPM change landed between the campaign read and the freeze: nothing was
+  // frozen; retryable (the next attempt reads the new CPM). lib/cpm-freeze-guard.ts.
+  | { status: 'CPM_CHANGED' }
   | { status: 'NO_WINDOW' }
   | { status: 'WRONG_STATUS'; currentStatus: string }
   | { status: 'PLAN_MISSING' };
@@ -151,6 +155,9 @@ export const prepareActivation = async (
     return { status: 'NOT_ACTIVATABLE', reason: 'budget_too_low', requestedBudget, cpmTnd: cpm };
   }
   const s = creativeDurationSeconds;
+  // CPM-3 — both engines re-check `cpm` under the advertiser's lock inside their freeze
+  // transaction: a CPM change committed since `campaign` was read refuses the freeze.
+  const cpmCheck = cpmFreezeCheck({ campaignId: campaign.id, advertiserId: campaign.advertiserId });
 
   // Funded gate: SPENDABLE ≥ the advertiser's indicative budget (FIX2 Option A — balance minus
   // engaged unsettled budgets; still NO debit, L-redisp bills at reconciliation). The campaign
@@ -189,7 +196,9 @@ export const prepareActivation = async (
       },
       { id: ev.id, kickoffAt: ev.kickoffAt, endsAt: ev.endsAt },
       cpm,
+      cpmCheck,
     );
+    if (dispatched.status === 'CPM_CHANGED') return { status: 'CPM_CHANGED' };
     if (dispatched.status === 'NMAX_EXCEEDED') {
       return { status: 'EVENT_NMAX_EXCEEDED', nMax: dispatched.nMax ?? 0 };
     }
@@ -208,8 +217,10 @@ export const prepareActivation = async (
     campaign,
     { iCible, cpm, s, tiers: campaignTTiers(campaign) },
     createEngineTrace('dispatch', campaign.id),
+    cpmCheck,
   );
   if (result.status === 'NO_WINDOW') return { status: 'NO_WINDOW' };
+  if (result.status === 'CPM_CHANGED') return { status: 'CPM_CHANGED' };
   // Clôture — NOT a deliverable plan → do NOT activate; the campaign keeps its status.
   if (result.status === 'TOO_THIN') {
     return { status: 'NOT_DELIVERABLE', reason: 'too_thin', nMin: result.nMin, nMax: result.nMax };

@@ -27,6 +27,9 @@ export const CART_REASON_FR: Record<string, string> = {
   NO_DURATION: 'Le spot n’a pas de durée de diffusion.',
   BUDGET_TOO_LOW: 'Le budget est inférieur à une unité CPM — aucune impression ciblable.',
   INSUFFICIENT_BALANCE: 'Le solde est insuffisant pour cette campagne.',
+  // CPM-3 — an admin CPM change raced the confirm: nothing was launched, a new confirm prices at
+  // the new CPM (retryable).
+  CPM_CHANGED: 'Le CPM de cette campagne vient de changer — confirmez de nouveau.',
 };
 
 export const cartReasonFr = (reason: string): string =>

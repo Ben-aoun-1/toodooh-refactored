@@ -324,7 +324,8 @@ export const cartRoutes: FastifyPluginAsync = async (app) => {
         fromStatus: 'draft',
       });
       if (prepared.status !== 'READY') {
-        // EV4 — the event dispatch's refusals ride the same per-item vocabulary.
+        // EV4 — the event dispatch's refusals ride the same per-item vocabulary; so does CPM-3's
+        // retryable CPM_CHANGED (a CPM change raced this freeze — nothing frozen, re-confirm).
         const reason =
           prepared.status === 'NOT_DELIVERABLE'
             ? prepared.reason === 'too_thin'

@@ -273,6 +273,14 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
         statusCode: 409,
       });
     }
+    // CPM-3 — a CPM change raced the freeze (lib/cpm-freeze-guard.ts): nothing frozen, retryable.
+    if (outcome.status === 'CPM_CHANGED') {
+      return reply.status(409).send({
+        error: 'CPM_CHANGED',
+        message: 'Le CPM de cette campagne vient de changer — relancez l’activation.',
+        statusCode: 409,
+      });
+    }
     if (outcome.status === 'NOT_DELIVERABLE') {
       if (outcome.reason === 'too_thin') {
         return reply.status(422).send({

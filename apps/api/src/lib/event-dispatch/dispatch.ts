@@ -303,7 +303,7 @@ export const eventPartialBody = (matchName: string): string =>
   `Votre positionnement « ${matchName} » n'a pas pu être placé en totalité — l'inventaire disponible sur la fenêtre est limité.`;
 
 export interface EventDispatchOutcome {
-  status: 'OK' | 'ALREADY_DISPATCHED' | 'NMAX_EXCEEDED' | 'NO_POOL';
+  status: 'OK' | 'ALREADY_DISPATCHED' | 'NMAX_EXCEEDED' | 'NO_POOL' | 'CPM_CHANGED';
   nMax?: number;
   partial?: boolean;
   allocationIds?: string[];
@@ -315,11 +315,17 @@ export interface EventDispatchOutcome {
  * conservative hour grain, one row per (venue, day, hour, event)). D7 refuses BEFORE any
  * write; a re-run over an already-dispatched positioning short-circuits (the SK1 resume
  * idiom — no re-fill, no duplicate rows, no duplicate notifications).
+ *
+ * CPM-3 — `cpmCheck` is OPT-IN (the activation paths pass it; built by the caller, so this module
+ * keeps its D51 boundary): it re-checks cpmEvtTnd under the advertiser's lock as the write
+ * transaction's FIRST statements; a CPM changed since the caller read it → CPM_CHANGED, nothing
+ * written.
  */
 export const runEventDispatch = async (
   positioning: { id: string; name: string; advertiserId: string; requestedBudget: number },
   event: EventRef,
   cpmEvtTnd: number,
+  cpmCheck?: (tx: FreezeTx, freezeCpm: number) => Promise<boolean>,
 ): Promise<EventDispatchOutcome> => {
   const existing = await db
     .select({ id: eventAllocations.id })
@@ -336,6 +342,7 @@ export const runEventDispatch = async (
   // ONE transaction: allocations + reservations + owner proposals + the D6 alert are
   // all-or-nothing (the classic freeze-tx idiom).
   const allocationIds = await db.transaction(async (tx) => {
+    if (cpmCheck && !(await cpmCheck(tx, cpmEvtTnd))) return null;
     const ids: string[] = [];
     const owners = new Set<string>();
     for (const placement of fill.placements) {
@@ -377,11 +384,13 @@ export const runEventDispatch = async (
     }
     return ids;
   });
+  if (allocationIds === null) return { status: 'CPM_CHANGED' };
 
   return { status: 'OK', partial: fill.partial, allocationIds };
 };
 
-type DbExecutor = typeof db | Parameters<Parameters<(typeof db)['transaction']>[0]>[0];
+type FreezeTx = Parameters<Parameters<(typeof db)['transaction']>[0]>[0];
+type DbExecutor = typeof db | FreezeTx;
 
 /** Reserve every Tunis (day, hour) cell the placed blocs touch — idempotent per cell. */
 export const reserveBlocHours = async (

@@ -136,6 +136,15 @@ export const campaignDispatchRoutes: FastifyPluginAsync = async (app) => {
         statusCode: 409,
       });
     }
+    // CPM-3 — unreachable here: this trigger freezes at its EXPLICIT body CPM and passes no freeze
+    // check (lib/cpm-freeze-guard.ts); handled so every DispatchResult case has an answer.
+    if (result.status === 'CPM_CHANGED') {
+      return reply.status(409).send({
+        error: 'CPM_CHANGED',
+        message: 'Le CPM de cette campagne vient de changer — relancez le dispatch.',
+        statusCode: 409,
+      });
+    }
     // Clôture alerts — NOT frozen, so the campaign stays re-dispatchable (renvoi curseur):
     if (result.status === 'TOO_THIN') {
       return reply.status(422).send({
