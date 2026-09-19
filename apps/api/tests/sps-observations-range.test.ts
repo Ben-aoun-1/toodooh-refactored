@@ -15,7 +15,8 @@ import {
   users,
 } from '../src/db/schema.js';
 import { buildTestingReport } from '../src/lib/admin-testing-report.js';
-import { computeSps, spsObservationsInRange } from '../src/lib/sps-score.js';
+import { spsObservationsInRange } from '../src/lib/sps-observations.js';
+import { computeSps } from '../src/lib/sps-score.js';
 
 import { resetAuthTables } from './helpers/db-test-setup.js';
 

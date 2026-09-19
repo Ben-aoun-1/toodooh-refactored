@@ -28,11 +28,9 @@ import {
   ACCEPTATION_WINDOW_DAYS,
   ACTIVITE_WINDOW_DAYS,
   RESPECT_WINDOW_DAYS,
-  SPS_NEUTRAL,
-  computeSps,
-  spsComputable,
   spsObservationsInRange,
-} from './sps-score.js';
+} from './sps-observations.js';
+import { SPS_NEUTRAL, computeSps, spsComputable } from './sps-score.js';
 
 // ADM-OBS1 — the « Tests » report, extracted VERBATIM from routes/admin-testing.ts (SIM-5,
 // 2026-09-16) so the same report can be read on a simulation's VIRTUAL clock. The only change is
