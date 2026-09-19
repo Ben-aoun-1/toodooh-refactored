@@ -81,6 +81,9 @@ export const adminKeys = {
   /** Resolved dispatch CPM config (admin-editable, new engine: `adminDispatchConfigService.get`). */
   dispatchConfig: () => [...adminKeys.all, 'dispatchConfig'] as const,
 
+  /** CPM-3 — the « CPM par screencaster » table (GET /api/admin/screencasters/cpm). */
+  screencasterCpm: () => [...adminKeys.all, 'screencasterCpm'] as const,
+
   /** End-user list for UserManagement (`adminUserService.getUsers`). */
   users: () => [...adminKeys.all, 'users'] as const,
   /** EL1 — one venue's dispatch-eligibility view (`adminScreenhostService.getEligibility`). */
