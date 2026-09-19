@@ -357,6 +357,12 @@ describe('CPM-1 — a campaign keeps the CPM in effect when it was created (real
       const sourceId = done?.id ?? '';
 
       await adminSetsCpm(admin, 20, 30);
+      // CPM-3 — the global default only seeds FUTURE accounts now; a campaign captures its own
+      // advertiser's CPM at insert, so pin the advertiser's own CPM to get the new rate.
+      await db
+        .update(users)
+        .set({ cpmStandardTnd: '20.000', cpmEventTnd: '30.000' })
+        .where(eq(users.id, advertiser));
 
       mockSession(advertiser, 'advertiser');
       const fresh = await app.inject({
