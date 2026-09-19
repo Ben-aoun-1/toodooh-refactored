@@ -95,7 +95,7 @@ describe('composeScreencasterCpmPatch', () => {
       error: 'Le CPM doit être un nombre strictement positif',
     });
   });
-  it('refuses more than 3 decimals (api parity — numeric(10,3)), 3 decimals stay accepted', () => {
+  it('refuses more than 3 decimals of PRECISION (api parity — Number(n.toFixed(3)) === n), 3 decimals stay accepted', () => {
     expect(composeScreencasterCpmPatch(['a'], '12,3456', '')).toEqual({
       ok: false,
       error: 'Le CPM doit avoir au plus 3 décimales',
@@ -103,6 +103,26 @@ describe('composeScreencasterCpmPatch', () => {
     expect(composeScreencasterCpmPatch(['a'], '12,345', '')).toEqual({
       ok: true,
       body: { user_ids: ['a'], standard_cpm_tnd: 12.345 },
+    });
+  });
+  it('accepts trailing-zero digits the api would too — the check is on the NUMBER, not the typed string', () => {
+    expect(composeScreencasterCpmPatch(['a'], '12,3400', '')).toEqual({
+      ok: true,
+      body: { user_ids: ['a'], standard_cpm_tnd: 12.34 },
+    });
+    expect(composeScreencasterCpmPatch(['a'], '0,0010', '')).toEqual({
+      ok: true,
+      body: { user_ids: ['a'], standard_cpm_tnd: 0.001 },
+    });
+  });
+  it('refuses a rate over the api cap (1 000 000), the cap itself stays accepted', () => {
+    expect(composeScreencasterCpmPatch(['a'], '1000001', '')).toEqual({
+      ok: false,
+      error: 'Le CPM doit être inférieur ou égal à 1 000 000',
+    });
+    expect(composeScreencasterCpmPatch(['a'], '1000000', '')).toEqual({
+      ok: true,
+      body: { user_ids: ['a'], standard_cpm_tnd: 1000000 },
     });
   });
 });

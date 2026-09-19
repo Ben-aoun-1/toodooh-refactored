@@ -57,13 +57,19 @@ export const draftsAffected = (
   selected: ReadonlySet<string>,
 ): number => rows.reduce((sum, r) => (selected.has(r.id) ? sum + r.draft_count : sum), 0);
 
-/** A parsed rate field: no input, an unusable value, more than 3 decimals (api: `numeric(10,3)`),
- * or a usable finite strictly-positive number. */
+/** A parsed rate field: no input, an unusable value, over the api's cap, more than 3 decimals of
+ * PRECISION (api: `numeric(10,3)` — same predicate as the api's `Number(n.toFixed(3)) === n`, not a
+ * count of typed digits, so a trailing-zero input like '12,3400' (= 12.34) is accepted), or a usable
+ * finite strictly-positive number. */
 type ParsedRate =
   | { kind: 'empty' }
   | { kind: 'invalid' }
+  | { kind: 'too-large' }
   | { kind: 'too-many-decimals' }
   | { kind: 'value'; value: number };
+
+/** The api's cap (`apps/api/src/routes/admin-screencaster-cpm.ts` — `numeric(10,3)` headroom). */
+const MAX_CPM_TND = 1_000_000;
 
 const parseRate = (input: string): ParsedRate => {
   const trimmed = input.trim();
@@ -71,8 +77,8 @@ const parseRate = (input: string): ParsedRate => {
   const normalized = trimmed.replace(',', '.');
   const n = Number(normalized);
   if (!Number.isFinite(n) || n <= 0) return { kind: 'invalid' };
-  const decimals = normalized.split('.')[1];
-  if (decimals !== undefined && decimals.length > 3) return { kind: 'too-many-decimals' };
+  if (n > MAX_CPM_TND) return { kind: 'too-large' };
+  if (Number(n.toFixed(3)) !== n) return { kind: 'too-many-decimals' };
   return { kind: 'value', value: n };
 };
 
@@ -86,6 +92,9 @@ export const composeScreencasterCpmPatch = (
   const event = parseRate(eventInput);
   if (standard.kind === 'invalid' || event.kind === 'invalid') {
     return { ok: false, error: 'Le CPM doit être un nombre strictement positif' };
+  }
+  if (standard.kind === 'too-large' || event.kind === 'too-large') {
+    return { ok: false, error: 'Le CPM doit être inférieur ou égal à 1 000 000' };
   }
   if (standard.kind === 'too-many-decimals' || event.kind === 'too-many-decimals') {
     return { ok: false, error: 'Le CPM doit avoir au plus 3 décimales' };
