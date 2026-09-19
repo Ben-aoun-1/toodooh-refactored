@@ -134,9 +134,9 @@ export const prepareActivation = async (
     return { status: 'NOT_ACTIVATABLE', reason: 'content_not_approved', contentValidationStatus };
   }
 
-  // CPM-1 — the campaign's OWN CPM (in effect when it was created), never the live config: an
-  // admin CPM change after the campaign was created does not re-price it here. It feeds both the
-  // classic plan and the event bloc dispatch below.
+  // CPM-1 — the campaign's OWN CPM, never the live config. CPM-3: the copy it carries is its
+  // screencaster's — realigned by an admin change while it is a draft not yet frozen, kept
+  // otherwise. It feeds both the classic plan and the event bloc dispatch below.
   const cpm = cpmForCampaign(campaign.campaignType, campaignCpmRates(campaign));
   const requestedBudget =
     campaign.requestedBudget === null ? null : Number(campaign.requestedBudget);

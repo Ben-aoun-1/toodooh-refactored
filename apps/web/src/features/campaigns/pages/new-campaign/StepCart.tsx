@@ -92,8 +92,8 @@ export default function StepCart({
 }: StepCartProps) {
   const targeting = useCampaignTargeting(draftCampaignId);
   const pricing = usePricingConfig();
-  // CPM-1 — the create-early draft carries the CPM it captured at creation; the estimate prices at
-  // it (the live pricing-config only until the draft row is loaded).
+  // CPM-1 — the create-early draft carries its own CPM (CPM-3: its screencaster's); the estimate
+  // prices at it (the live pricing-config only until the draft row is loaded).
   const draft = useCampaign(draftCampaignId);
   const { data: creatives = [] } = useMyCreatives(userId);
   const previewUrl = useCreativePreviewUrl(creativeId);

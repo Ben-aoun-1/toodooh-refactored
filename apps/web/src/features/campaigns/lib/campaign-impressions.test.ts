@@ -70,8 +70,8 @@ describe('impressionsDisplay — prévues-only', () => {
   });
 });
 
-// CPM-1 — a campaign keeps the CPM in effect when it was created: its row carries both rates, and
-// the estimate prices at the row's rate for its type. The live pricing-config (what a NEW campaign
+// CPM-1 — a campaign's row carries both its rates (CPM-3: its screencaster's), and the estimate
+// prices at the row's rate for its type. The live pricing-config (what a NEW campaign
 // would pay) is only the fallback for a row that does not carry them.
 describe('CPM-1 — an un-planned campaign is estimated at its OWN CPM', () => {
   const LIVE = { standard_cpm_tnd: 20, event_cpm_tnd: 30 };

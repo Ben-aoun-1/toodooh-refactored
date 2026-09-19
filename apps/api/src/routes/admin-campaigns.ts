@@ -35,7 +35,7 @@ import { planView } from './campaign-dispatch.js';
 // DERIVED ACTIVATION: the engine inputs are NO LONGER admin-supplied. Approve = activate derives them
 // from the campaign + config so the operator only ever clicks Approve:
 //   cpm     = the campaign's OWN CPM by type (event_cpm_tnd for an 'event' campaign, else
-//             standard_cpm_tnd) — CPM-1: the rates in effect when it was CREATED, not today's
+//             standard_cpm_tnd) — CPM-1/CPM-3: its own copy (its screencaster's), not the config
 //   i_cible = ⌊requested_budget·1000 / cpm⌋        (the advertiser's indicative ask → target impressions)
 //   s       = the linked creative's duration_seconds (the spot length actually airing)
 //   t       = derived INSIDE runDispatch (E1: tForDuration(s, tiers) — the VF attention index;
@@ -133,8 +133,8 @@ export const adminCampaignsRoutes: FastifyPluginAsync = async (app) => {
       .orderBy(desc(campaigns.createdAt));
     const out = await Promise.all(
       rows.map(async (r) => {
-        // CPM-1 — the campaign's OWN CPM (in effect when it was created), the one its
-        // activation will derive I_cible at — never a CPM the admin saved afterwards.
+        // CPM-1 — the campaign's OWN CPM (CPM-3: its screencaster's, the copy it carries), the
+        // one its activation will derive I_cible at — never the global default.
         const cpm = cpmForCampaign(r.campaign.campaignType, campaignCpmRates(r.campaign));
         const requestedBudget =
           r.campaign.requestedBudget === null ? null : Number(r.campaign.requestedBudget);

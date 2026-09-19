@@ -67,8 +67,9 @@ export const computeCampaignCmax = async (
   if (campaign.eventId != null) {
     throw new Error('computeCampaignCmax received an event positioning (EV3 engine boundary)');
   }
-  // CPM-1 / CPM-2 — the CPM and the attention index T are the campaign's own (in effect when it
-  // was created); the live config still supplies F (out of scope by ruling).
+  // CPM-1 / CPM-2 — the CPM and the attention index T are the campaign's own (CPM-3: the CPM is
+  // its screencaster's, realigned while a draft not yet frozen; T is the one in effect when it was
+  // created); the live config still supplies F (out of scope by ruling).
   const config = await getDispatchConfig();
   const t = tForDuration(spotSeconds, campaignTTiers(campaign));
   const cpm = cpmForCampaign(campaign.campaignType, campaignCpmRates(campaign));

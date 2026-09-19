@@ -8,6 +8,8 @@ import {
   confirmationSummary,
   draftsAffected,
   filterScreencasters,
+  formatCpm,
+  MAX_SCREENCASTERS_PER_CHANGE,
   screencasterName,
   setFilteredSelected,
   toggleSelected,
@@ -47,6 +49,10 @@ describe('filterScreencasters — accent- and case-insensitive over company, con
   });
   it('an empty query keeps everything', () => {
     expect(filterScreencasters(rows, '  ')).toHaveLength(3);
+  });
+  it('folds only the combining accents — a decomposed query matches, ordinary letters stay', () => {
+    expect(filterScreencasters(rows, 'Me\u0301dina').map((r) => r.id)).toEqual(['a']);
+    expect(filterScreencasters(rows, 'zeta').map((r) => r.id)).toEqual(['c']);
   });
 });
 
@@ -116,6 +122,18 @@ describe('composeScreencasterCpmPatch', () => {
       body: { user_ids: ['a'], standard_cpm_tnd: 0.001 },
     });
   });
+  it('refuses more than 500 screencasters at once (the api cap « tout sélectionner » can pass)', () => {
+    const ids = (n: number) => Array.from({ length: n }, (_, i) => `id-${i}`);
+    expect(MAX_SCREENCASTERS_PER_CHANGE).toBe(500);
+    expect(composeScreencasterCpmPatch(ids(501), '10', '')).toEqual({
+      ok: false,
+      error: 'Sélectionnez au plus 500 screencasters à la fois',
+    });
+    expect(composeScreencasterCpmPatch(ids(500), '10', '')).toEqual({
+      ok: true,
+      body: { user_ids: ids(500), standard_cpm_tnd: 10 },
+    });
+  });
   it('refuses a rate over the api cap (1 000 000), the cap itself stays accepted', () => {
     expect(composeScreencasterCpmPatch(['a'], '1000001', '')).toEqual({
       ok: false,
@@ -150,12 +168,32 @@ describe('confirmationSummary — the confirmation text, built from a FROZEN pat
         'terminées gardent leur prix.',
     );
   });
-  it('singular: 1 screencaster, 1 brouillon', () => {
+  it('singular: 1 screencaster, 1 brouillon — « ses » prochaines campagnes', () => {
     expect(confirmationSummary({ user_ids: ['a'], standard_cpm_tnd: 12.5 }, 1)).toBe(
       'Appliquer à 1 screencaster : CPM standard → 12,500 TND / 1000 · CPM événement inchangé. ' +
-        'Le brouillon de ce screencaster (1) passe au nouveau CPM, ainsi que leurs prochaines ' +
+        'Le brouillon de ce screencaster (1) passe au nouveau CPM, ainsi que ses prochaines ' +
         'campagnes. Les campagnes en attente, refusées, programmées, actives et terminées ' +
         'gardent leur prix.',
     );
+  });
+  it('zero drafts: says so, and only the next campaigns take the new CPM', () => {
+    expect(confirmationSummary({ user_ids: ['a'], event_cpm_tnd: 20 }, 0)).toBe(
+      'Appliquer à 1 screencaster : CPM standard inchangé · CPM événement → 20,000 TND / 1000. ' +
+        'Aucun brouillon à re-tarifer ; ses prochaines campagnes prendront le nouveau CPM. ' +
+        'Les campagnes en attente, refusées, programmées, actives et terminées gardent leur prix.',
+    );
+    expect(confirmationSummary({ user_ids: ['a', 'b'], standard_cpm_tnd: 9 }, 0)).toBe(
+      'Appliquer à 2 screencasters : CPM standard → 9,000 TND / 1000 · CPM événement inchangé. ' +
+        'Aucun brouillon à re-tarifer ; leurs prochaines campagnes prendront le nouveau CPM. ' +
+        'Les campagnes en attente, refusées, programmées, actives et terminées gardent leur prix.',
+    );
+  });
+});
+
+describe('formatCpm — the table and the confirmation render a rate the same way', () => {
+  it('3 decimals with a French decimal comma', () => {
+    expect(formatCpm(12.5)).toBe('12,500');
+    expect(formatCpm(15)).toBe('15,000');
+    expect(formatCpm(0.001)).toBe('0,001');
   });
 });

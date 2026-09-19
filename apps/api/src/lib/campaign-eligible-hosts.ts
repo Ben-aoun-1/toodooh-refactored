@@ -205,8 +205,9 @@ export const campaignEligibleHosts = async (campaignId: string): Promise<Eligibl
   if (!row) return { status: 'NOT_FOUND' };
 
   const config = await getDispatchConfig();
-  // CPM-1 — both branches price at the campaign's OWN CPM (in effect when it was created); the
-  // live config still supplies F (the event branch has no T; the standard one reads the row's).
+  // CPM-1 — both branches price at the campaign's OWN CPM (CPM-3: its screencaster's, realigned
+  // while a draft not yet frozen); the live config still supplies F (the event branch has no T;
+  // the standard one reads the row's).
   const rates = campaignCpmRates(row);
   const spotSeconds =
     row.spotSeconds && row.spotSeconds > 0 ? row.spotSeconds : DEFAULT_SPOT_SECONDS;

@@ -8,7 +8,12 @@ import type {
 // and the PATCH body.
 
 /** Accent-, case- and space-insensitive form used by the search. */
-const fold = (s: string): string => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+const fold = (s: string): string =>
+  s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
 
 /** The name the table shows: the company when there is one, else the contact. */
 export const screencasterName = (row: ScreencasterCpmRow): string =>
@@ -71,6 +76,9 @@ type ParsedRate =
 /** The api's cap (`apps/api/src/routes/admin-screencaster-cpm.ts` — `numeric(10,3)` headroom). */
 const MAX_CPM_TND = 1_000_000;
 
+/** The api's cap on one change (`user_ids` 1–500): « tout sélectionner » can exceed it. */
+export const MAX_SCREENCASTERS_PER_CHANGE = 500;
+
 const parseRate = (input: string): ParsedRate => {
   const trimmed = input.trim();
   if (trimmed === '') return { kind: 'empty' };
@@ -88,6 +96,9 @@ export const composeScreencasterCpmPatch = (
   eventInput: string,
 ): { ok: true; body: ScreencasterCpmPatch } | { ok: false; error: string } => {
   if (ids.length === 0) return { ok: false, error: 'Sélectionnez au moins un screencaster' };
+  if (ids.length > MAX_SCREENCASTERS_PER_CHANGE) {
+    return { ok: false, error: 'Sélectionnez au plus 500 screencasters à la fois' };
+  }
   const standard = parseRate(standardInput);
   const event = parseRate(eventInput);
   if (standard.kind === 'invalid' || event.kind === 'invalid') {
@@ -112,8 +123,12 @@ export const composeScreencasterCpmPatch = (
   };
 };
 
-/** Renders a rate with 3 decimals and a French decimal comma, e.g. `12,500 TND / 1000`. */
-const formatRateTnd = (n: number): string => `${n.toFixed(3).replace('.', ',')} TND / 1000`;
+/** A CPM with its 3 decimals and a French decimal comma, e.g. `12,500` — the table and the
+ * confirmation both render through it, so they can never show the same rate two ways. */
+export const formatCpm = (n: number): string => n.toFixed(3).replace('.', ',');
+
+/** e.g. `12,500 TND / 1000`. */
+const formatRateTnd = (n: number): string => `${formatCpm(n)} TND / 1000`;
 
 /**
  * CPM-3 (fix round 1) — the confirmation text, built ONCE from the FROZEN patch `body` a snapshot
@@ -130,14 +145,19 @@ export const confirmationSummary = (body: ScreencasterCpmPatch, draftCount: numb
     body.event_cpm_tnd === undefined
       ? 'CPM événement inchangé'
       : `CPM événement → ${formatRateTnd(body.event_cpm_tnd)}`;
-  const article = draftCount > 1 ? 'Les' : 'Le';
-  const draftWord = draftCount > 1 ? 'brouillons' : 'brouillon';
-  const screencasterDemonstrative = n > 1 ? 'ces screencasters' : 'ce screencaster';
-  const verb = draftCount > 1 ? 'passent' : 'passe';
+  // The possessive follows the SCREENCASTER count (« ses » / « leurs »), the article and the verb
+  // follow the DRAFT count; zero drafts gets its own sentence.
+  const possessive = n > 1 ? 'leurs' : 'ses';
+  const draftsSentence =
+    draftCount === 0
+      ? `Aucun brouillon à re-tarifer ; ${possessive} prochaines campagnes prendront le nouveau CPM.`
+      : `${draftCount > 1 ? 'Les brouillons' : 'Le brouillon'} de ` +
+        `${n > 1 ? 'ces screencasters' : 'ce screencaster'} (${draftCount}) ` +
+        `${draftCount > 1 ? 'passent' : 'passe'} au nouveau CPM, ainsi que ${possessive} ` +
+        `prochaines campagnes.`;
   return (
     `Appliquer à ${n} screencaster${n > 1 ? 's' : ''} : ${standardPart} · ${eventPart}. ` +
-    `${article} ${draftWord} de ${screencasterDemonstrative} (${draftCount}) ${verb} au nouveau ` +
-    `CPM, ainsi que leurs prochaines campagnes. Les campagnes en attente, refusées, programmées, ` +
-    `actives et terminées gardent leur prix.`
+    `${draftsSentence} Les campagnes en attente, refusées, programmées, actives et terminées ` +
+    `gardent leur prix.`
   );
 };

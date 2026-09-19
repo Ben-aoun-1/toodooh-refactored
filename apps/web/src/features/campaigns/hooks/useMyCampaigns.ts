@@ -25,7 +25,7 @@ export interface MyCampaignRow {
   budget: number | null;
   /** CF-U1 — the wire field, riding the edit-mode record so Reprendre rehydrates the budget. */
   requested_budget: number | null;
-  /** CPM-1 — the campaign's own CPMs (captured at creation) — the « prévues » estimate's price. */
+  /** CPM-1 — the campaign's own CPMs (CPM-3: its screencaster's) — the « prévues » price. */
   standard_cpm_tnd: number;
   event_cpm_tnd: number;
   content_validation_status: string | null;

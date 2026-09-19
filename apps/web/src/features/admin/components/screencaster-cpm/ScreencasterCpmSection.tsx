@@ -8,6 +8,7 @@ import {
   allFilteredSelected,
   draftsAffected,
   filterScreencasters,
+  formatCpm,
   screencasterName,
   setFilteredSelected,
   toggleSelected,
@@ -110,8 +111,8 @@ export function ScreencasterCpmSection() {
                     {r.business_type === 'agency' ? 'agence' : 'annonceur'}
                   </td>
                   <td className="py-1.5 pr-4">{STATUS_LABEL[r.status] ?? r.status}</td>
-                  <td className="py-1.5 pr-4 tabular-nums">{r.cpm_standard_tnd.toFixed(3)}</td>
-                  <td className="py-1.5 pr-4 tabular-nums">{r.cpm_event_tnd.toFixed(3)}</td>
+                  <td className="py-1.5 pr-4 tabular-nums">{formatCpm(r.cpm_standard_tnd)}</td>
+                  <td className="py-1.5 pr-4 tabular-nums">{formatCpm(r.cpm_event_tnd)}</td>
                   <td className="py-1.5 pr-4 tabular-nums">{r.draft_count}</td>
                   <td className="py-1.5 pr-4 text-xs text-gray-500">
                     {r.last_change === null

@@ -128,12 +128,45 @@ describe('migration 0076 — the CPM per screencaster (scratch database)', () =>
     expect(trail?.n).toBe(1);
   });
 
-  // Ruling A follow-up (2026-09-19) — the trigger's own read of the advertiser's CPM must lock
-  // FOR KEY SHARE: otherwise a campaign inserted mid-bulk-change (which locks the same row FOR
-  // UPDATE) would not wait and could escape the change by reading the pre-change CPM.
-  it('the trigger locks the advertiser row FOR KEY SHARE', async () => {
-    const [fn] = await client<{ def: string }[]>`
-      select pg_get_functiondef('public.campaigns_capture_screencaster_cpm()'::regprocedure) as def`;
-    expect(fn?.def).toContain('FOR KEY SHARE');
-  });
+  // Ruling A follow-up (2026-09-19) — the trigger's own read of the advertiser's CPM locks FOR KEY
+  // SHARE, so a campaign inserted while a change holds the advertiser row FOR UPDATE WAITS for the
+  // change to commit and captures the NEW CPM, instead of reading the pre-change one. Behaviour,
+  // on two connections: A plays the change (the PATCH's lock + write), B inserts the campaign.
+  // (Without the trigger's lock B still waits — on its FK check, AFTER the BEFORE trigger already
+  // read the old rate — so the captured rate is the assertion that proves the lock; verified by
+  // removing it: B captured 12.500.)
+  it('a campaign inserted during a CPM change waits for it, then captures the new CPM', async () => {
+    const advertiser = ids['advertiser'] ?? '';
+    const other = postgres(url, { max: 1, onnotice: () => undefined });
+    try {
+      await other`select 1`; // connected BEFORE A takes its lock, so B's only wait is A's lock
+      let inserted = false;
+      let insertP: Promise<{ id: string }[]> = Promise.resolve([]);
+      await client.begin(async (tx) => {
+        await tx`select id from users where id = ${advertiser} for update`;
+        await tx`update users set cpm_standard_tnd = '12.000' where id = ${advertiser}`;
+        insertP = other<{ id: string }[]>`
+          insert into campaigns (advertiser_id, name, campaign_type)
+          values (${advertiser}, 'duringChange', 'standard') returning id`.then((rows) => {
+          inserted = true;
+          return rows;
+        });
+        let blocked = false;
+        for (let i = 0; i < 250 && !blocked; i += 1) {
+          const [w] = await tx<{ n: number }[]>`
+            select count(*)::int as n from pg_stat_activity
+            where datname = current_database() and wait_event_type = 'Lock'`;
+          blocked = (w?.n ?? 0) > 0;
+          if (!blocked) await new Promise((resolve) => setTimeout(resolve, 20));
+        }
+        expect(blocked).toBe(true); // B waits on A's FOR UPDATE…
+        expect(inserted).toBe(false);
+      }); // …until A commits
+      const [row] = await insertP;
+      ids['duringChange'] = row?.id ?? '';
+      expect(await campaignRates('duringChange')).toEqual({ standard: '12.000', event: '22.000' });
+    } finally {
+      await other.end();
+    }
+  }, 30_000);
 });

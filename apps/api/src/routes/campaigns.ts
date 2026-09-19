@@ -148,7 +148,8 @@ export const campaignSelection = {
   endDate: campaigns.endDate,
   description: campaigns.description,
   requestedBudget: campaigns.requestedBudget,
-  // CPM-1 — the CPMs in effect when the campaign was created (the web prices its estimate at them).
+  // CPM-1 — the campaign's own CPMs (CPM-3: its screencaster's, realigned while a draft not yet
+  // frozen); the web prices its estimate at them.
   standardCpmTnd: campaigns.standardCpmTnd,
   eventCpmTnd: campaigns.eventCpmTnd,
   submittedAt: campaigns.submittedAt,
@@ -606,7 +607,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
           .status(409)
           .send({ error: 'EVENT_ANNULE', message: 'Cet événement est annulé.' });
       }
-      // CPM-1 — the positioning's own event CPM (in effect when it was created).
+      // CPM-1 — the positioning's own event CPM (CPM-3: its screencaster's; see campaignCpmRates).
       const evCmax = await computeEventCmax(
         { id: ev.id, kickoffAt: ev.kickoffAt, endsAt: ev.endsAt },
         campaignCpmRates(row).eventCpmTnd,
@@ -829,7 +830,7 @@ export const campaignsRoutes: FastifyPluginAsync = async (app) => {
     // (clôture, renvoi curseur) or a genuine PARTIAL.
     // EV3 — the ceiling forks: event rows price via EV2's engine (the classic C_max throws on
     // them — the engine boundary); the event ceiling needs no creative duration (no T coef).
-    // CPM-1 — both ceilings price at the campaign's OWN CPM (in effect when it was created);
+    // CPM-1 — both ceilings price at the campaign's OWN CPM (CPM-3: its screencaster's);
     // CPM-2 — the classic one at its OWN attention index T as well.
     if (isEventRow) {
       const [ev] = existing.eventId

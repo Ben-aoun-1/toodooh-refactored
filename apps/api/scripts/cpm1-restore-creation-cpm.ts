@@ -15,11 +15,13 @@ import { campaignDispatchPlan, campaigns } from '../src/db/schema.js';
 // operator-confirmed rate back on them. Nothing here hard-codes that history: the cutoff and the
 // rate are arguments.
 //
-// Scope, deliberately narrow: classic campaigns (event_id IS NULL) WITHOUT a dispatch plan,
-// created strictly before --created-before, whose standard_cpm_tnd differs from --standard-cpm.
-// Campaigns with a plan already carry plan.cpm (0074); positionings and event_cpm_tnd are never
-// touched; updated_at is preserved (a data correction is not an advertiser edit). The write
-// re-checks the same predicate inside one transaction, so a campaign activated between the
+// Scope, deliberately narrow: classic campaigns (event_id IS NULL) WITHOUT a dispatch plan, NOT in
+// `draft`, created strictly before --created-before, whose standard_cpm_tnd differs from
+// --standard-cpm. Campaigns with a plan already carry plan.cpm (0074); positionings and
+// event_cpm_tnd are never touched; updated_at is preserved (a data correction is not an advertiser
+// edit). Drafts are OUT since CPM-3 (migration 0076): a draft carries its screencaster's CPM and is
+// realigned by every admin change, so a re-run must never pin one back to a creation rate. The
+// write re-checks the same predicate inside one transaction, so a campaign activated between the
 // dry-run and --execute is skipped, and a re-run changes nothing.
 //
 // Usage (prod, after the 0074 deploy):
@@ -91,10 +93,12 @@ export interface RestoreInventory {
   alreadyAtTarget: number;
 }
 
-/** In scope: a never-dispatched classic campaign created strictly before the cutoff. */
+/** In scope: a never-dispatched classic NON-draft campaign created strictly before the cutoff. */
 const inScope = (createdBefore: Date) =>
   and(
     isNull(campaigns.eventId),
+    // CPM-3 — a draft follows its screencaster's CPM (lib/screencaster-cpm.ts), never this script.
+    ne(campaigns.status, 'draft'),
     lt(campaigns.createdAt, createdBefore),
     notExists(
       db
@@ -157,7 +161,7 @@ export const applyCpmRestore = async (inventory: RestoreInventory): Promise<stri
 // ── CLI (console permitted under scripts/) ────────────────────────────────────────────────────
 const printInventory = (inventory: RestoreInventory): void => {
   console.info(
-    `CPM-1 restore — classic campaigns without a plan created before ${inventory.createdBefore.toISOString()} → standard CPM ${inventory.targetStandardCpmTnd}`,
+    `CPM-1 restore — classic non-draft campaigns without a plan created before ${inventory.createdBefore.toISOString()} → standard CPM ${inventory.targetStandardCpmTnd}`,
   );
   for (const row of inventory.rows) {
     console.info(

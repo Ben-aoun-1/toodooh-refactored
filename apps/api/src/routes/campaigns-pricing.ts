@@ -6,9 +6,10 @@ import { screencasterCpmRates } from '../lib/screencaster-cpm.js';
 import { requireAuth } from '../middleware/require-auth.js';
 
 // Advertiser-readable pricing config — the CPM the campaign wizard's Validation step uses to price a
-// budget→impressions estimate (⌊budget·1000/cpm⌋). It projects the SAME resolved dispatch_config
-// singleton the ADMIN surface edits (routes/admin-dispatch-config.ts), via getDispatchConfig — so a
-// config-less DB falls back to the V1 defaults and an admin re-price is reflected here with no lag.
+// budget→impressions estimate (⌊budget·1000/cpm⌋) before the draft exists. For an advertiser it is
+// their OWN CPM (CPM-3 below) — an admin change to it is reflected here with no lag; for any other
+// role it is the global default the ADMIN surface edits (routes/admin-dispatch-config.ts), via
+// getDispatchConfig, so a config-less DB falls back to the V1 defaults.
 // The CPMs are commercial-but-not-secret DISPLAY inputs (they price the advertiser's own estimate),
 // so any authenticated user may read them; requireAuth 401s an anonymous caller. Read-only: the
 // editable knobs stay admin-only. No schema change, no new table — a thin read over the same service.
