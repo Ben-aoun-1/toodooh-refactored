@@ -12,7 +12,9 @@ import type { TestingReport } from '@/features/admin/services/admin-testing.serv
 // ADM-OBS2 (Mejri 19/09) — hours allouées / diffusées / manquées (R6); the missed facturable
 // impressions as a COUNT replace their TND value on screen (R1 — `missed_value_tnd` stays in the
 // JSON); the host's share is « Perte financière du Host (DT) », its % moving into the definition
-// (R2).
+// (R2). Mejri 19/09 (later) — the « impr. manquées — phys. / fact. » column goes: « Impressions non
+// diffusées (nombre) » already shows the facturable count, and its legend line now says what
+// « facturable » means (`impressions_missed_physical` / `_fact` stay in the JSON).
 
 const legend = (pctSh: number | null): [string, string][] => [
   [
@@ -24,12 +26,8 @@ const legend = (pctSh: number | null): [string, string][] => [
     'Heures allouées = heures allouées à cette campagne sur l’établissement déjà passées (= diffusées + manquées) ; Heures diffusées = heures allouées avec au moins une preuve de diffusion (fin de vidéo reçue) ; Heures manquées = heures allouées sans preuve.',
   ],
   [
-    'Impressions physiques / facturables',
-    'physiques = personnes exposées prévues (affluence × répétitions) ; facturables = physiques × T, l’indice d’attention selon la durée du spot.',
-  ],
-  [
     'Impressions non diffusées',
-    'le nombre d’impressions facturables des heures manquées (= impr. manquées fact.) : celles que le redispatch redirige vers d’autres établissements.',
+    'le nombre d’impressions facturables des heures manquées : celles que le redispatch redirige vers d’autres établissements. Facturables = personnes exposées × T, l’indice d’attention selon la durée du spot.',
   ],
   ['Perte financière du Host', hostLossDefinition(pctSh)],
   [
@@ -68,7 +66,6 @@ export function CampaignsOnVenueSection({ r }: { r: TestingReport }) {
                 <th className="pr-4">{CAMPAIGN_HEADER.elapsed}</th>
                 <th className="pr-4">{CAMPAIGN_HEADER.delivered}</th>
                 <th className="pr-4">{CAMPAIGN_HEADER.missed}</th>
-                <th className="pr-4">impr. manquées — phys. / fact. (pers.)</th>
                 <th className="pr-4">verdict</th>
                 <th className="pr-4">{CAMPAIGN_HEADER.missedImpressions}</th>
                 <th className="pr-4">{CAMPAIGN_HEADER.hostLoss}</th>
@@ -85,9 +82,6 @@ export function CampaignsOnVenueSection({ r }: { r: TestingReport }) {
                   <td className="py-0.5 pr-4 tabular-nums">{c.slots_elapsed}</td>
                   <td className="py-0.5 pr-4 tabular-nums">{c.slots_delivered}</td>
                   <td className="py-0.5 pr-4 tabular-nums">{c.slots_missed}</td>
-                  <td className="py-0.5 pr-4 tabular-nums">
-                    {c.impressions_missed_physical} / {c.impressions_missed_fact}
-                  </td>
                   <td className="py-0.5 pr-4">
                     {c.ran_fully ? 'diffusée en entier' : c.disrupted ? 'perturbée' : 'à venir'}
                     {c.received_redispatch ? ' · reçue en redispatch' : ''}
